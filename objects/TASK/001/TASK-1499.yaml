@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-28T17:14:25.050736570Z
+modified_at: 2026-09-29T05:59:47.615816049Z
 req_type: Task
 tags:
 - agent-launch
@@ -140,6 +140,85 @@ comments:
   created_at: 2026-09-28T17:14:25.050736570Z
   modified_at: 2026-09-28T17:14:25.050736570Z
   session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
+- id: 01a0ebbf-729f-7373-ab5f-f7dd010c5b06
+  author: joe
+  content: |
+    OPERATOR DECISION — AIDA_BIN precedence fork RESOLVED (2026-09-28, Joe, in session)
+
+    Joe was presented the fork as three options and answered "agreed" to the stated
+    recommendation. THE DECISION IS OPTION 3 — THE SPLIT. Recorded on both TASK-1499 and
+    BUG-1679 because the two PRs collide on this one mechanism and must be reworked together.
+
+    DECISION
+
+    An environment-supplied `AIDA_BIN` is NEITHER fully trusted configuration NOR flatly ignored.
+    AIDA honors `AIDA_BIN` as the top-precedence source for the coordinating executable ONLY when
+    it can show the value was inherited from a live AIDA-managed parent. Otherwise `AIDA_BIN` is
+    ignored and resolution falls back to the running executable, then PATH.
+
+    This keeps BUG-766's inheritance contract intact (AIDA exports `AIDA_BIN` and prepends its
+    directory to PATH precisely so child agents coordinate through the same build) while denying an
+    arbitrary shell — or a stale export in a shell profile — the ability to silently redirect the
+    binary that spawns agents, writes the `.mcp.json` command field, populates
+    `trusted_session_env`, and takes the drain lock.
+
+    WHAT "CAME FROM AN AIDA PARENT" MUST MEAN — and what it must not pretend to be
+
+    Do NOT implement this as a second plain env var twinned with the first. A bare companion
+    variable is forgeable exactly as cheaply as `AIDA_BIN`, so it would add ceremony and no
+    discrimination. The marker must be checkable against live process state:
+
+        honor AIDA_BIN  iff  the companion marker names a pid that is BOTH
+                             (a) currently alive, AND
+                             (b) an ancestor of the current process
+
+    `aida_core::liveness::walk_ancestor_pids` (aida-core/src/liveness.rs:429) already computes the
+    inclusive ancestor chain and is the intended predicate — no new probe machinery. The exporting
+    side is the existing BUG-766 export site: write the marker beside `AIDA_BIN` there.
+
+    This rule is discriminating in exactly the case that matters: a stale `AIDA_BIN` left in a shell
+    profile, or one inherited from an unrelated tool, cannot name a live AIDA ancestor and is
+    therefore ignored; a genuinely AIDA-spawned child passes trivially.
+
+    STATE THE BOUNDARY HONESTLY IN THE CODE COMMENT
+
+    This is an ACCIDENT boundary, not a security boundary. A hostile local actor running as the same
+    uid can forge any env var and can also simply invoke a different binary directly; no env-level
+    check changes that, and the implementation must not claim otherwise. What it does buy is that
+    ambient environment alone no longer redirects the coordinating binary — which is precisely the
+    P1 the codex reviewer raised on #2226 ("ambient AIDA_BIN replaces trusted self/vendor executable
+    selection"). Under this decision that P1 is ADDRESSED, not overruled: ambient `AIDA_BIN` is no
+    longer honored. It is also not a full endorsement of #2261 as written: #2261's unconditional
+    `AIDA_BIN`-wins precedence must be narrowed to the attributable case.
+
+    CONSEQUENCES FOR THE TWO OPEN PRs
+
+    * #2261 / TASK-1499 — REWORK. Its resolver currently honors an ambient `AIDA_BIN`
+      unconditionally (`aida_bin::process()`, aida-cli-lib/src/aida_bin.rs:229-230). Narrow it to the
+      attributable case above. This is IN ADDITION TO, not instead of, the two already-recorded test
+      defects; see below.
+    * #2226 / BUG-1679 — REWORK to match, not independently. Same resolver, same rule. The recorded
+      P1 is satisfied by the narrowing.
+
+    Neither PR clears on this decision alone. #2261's `Build (ubuntu)` is red on TWO of the branch's
+    OWN new guard tests, both diagnosed and neither CI infrastructure:
+      - `aida_bin::tests::override_running_and_path_precedence_and_layouts` expected `Profile::Debug`
+        for a checkout override, got `Release` (aida-cli-lib/src/aida_bin.rs:292)
+      - `resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup`
+        expected 0 `current_exe()` hits outside lib.rs, found 1 in aida-cli-lib/src/aida_bin.rs
+    Both PRs additionally need a CI re-run on top of main: their existing greens predate the
+    BUG-1689 ci.yml change. Do NOT clear them with `--override-stale-check`.
+
+    The precedence order to implement, for the avoidance of doubt:
+
+        attributable AIDA_BIN  >  on-disk .aida/config.toml override  >  running executable  >  PATH
+
+    If Joe's "agreed" was meant as option 1 or 2 rather than the recommendation, this comment is the
+    thing to correct — it is recorded as option 3 and dated, and the rework briefs will be written
+    from it.
+  created_at: 2026-09-29T05:59:47.615816049Z
+  modified_at: 2026-09-29T05:59:47.615816049Z
+  session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
