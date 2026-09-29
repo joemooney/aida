@@ -1,6 +1,11 @@
 job: performance-guard
-last_run: 2026-09-29T09:32:35.227005912Z
+last_run: 2026-09-29T09:42:49.813546761Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
+failure_trips:
+- trip_id: performance-guard@2026-09-29T09:42:49.813546761Z
+  at: 2026-09-29T09:42:49.813546761Z
+  status: 1
+  audit_error: 'malformed typed doctor output: trailing characters at line 30 column 1'
