@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-29T21:00:35.372259063Z
+modified_at: 2026-09-29T22:27:29.859186716Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -666,6 +666,72 @@ comments:
   created_at: 2026-09-29T21:00:35.372259063Z
   modified_at: 2026-09-29T21:00:35.372259063Z
   session_id: d4e8bbc4-1b41-4770-9f54-8111cb1b7383
+- id: 01a0ef47-b7c3-7a30-bf52-780cafbca270
+  author: joe
+  content: |
+    ## Session #10 — the CI blocker, time-boxed and discharged
+
+    Session #9 left one blocker: CI run 36626825833 failed once on
+    `db::cache_refresh::tests::nested_freshen_in_lock_holder_does_not_wait`
+    (`cache_refresh.rs:427:9`), passing on re-run. The disposition written onto
+    this PR was: spend one focused session on injection reproduction; if that
+    fails, file a tracked bug and merge. That is what happened.
+
+    ### What was eliminated, with evidence
+
+    - **Cross-test sidecar collision.** Re-verified from the source, not inherited:
+      `cache_sidecar_path` -> `shared_cache_path` returns the path unchanged when it
+      is not a symlink, so the sidecar is `<tempdir>/cache.db.refresh.lock`, unique
+      per test.
+    - **`flock` emulated via POSIX record locks** (which *are* released by closing
+      any fd on the inode, and would have explained everything). Ruled out: `/tmp`
+      here is ext4, so `flock` is real and per-open-file-description.
+    - **Misclassified errno.** `is_lock_contended` accepts only `WouldBlock` or an
+      exact raw-OS match; anything else propagates as `Err` and panics differently.
+
+    ### What was found instead — the family is load-sensitive
+
+    Session #9's 120 clean runs filtered on `db::cache_refresh::` only. The filter
+    `db::cache` prefix-matches **both** `db::cache_refresh::` and
+    `db::cached_git_backend::`, which is where the other `RefreshLock` tests live.
+    With four such suites running concurrently on a 6-core host,
+    `db::cached_git_backend::tests::single_flight_four_readers_one_refresh` failed
+    **4/4 workers on the first iteration**: solo the run takes ~140s, under 4x
+    contention ~360s, and readers exhaust the 1500ms `ReadBudget` before the
+    refresh lands, so they serve stale rows with no `gen1` title. That assertion
+    measures wall-clock, not the state machine.
+
+    That is a reproducible, load-dependent failure in this family on a contended
+    host — the same condition CI was under. Filed as **BUG-1729** along with a
+    second, unresolved observation: an out-of-process probe twice saw the refresh
+    `flock` as free while a guard was alive, at host load ~26, and has not
+    reproduced since (0/60 in isolation under load).
+
+    ### What ships here
+
+    Only a test-only diagnostic, in `b06cd3662d`. The flaking assertion now reports
+    **which** of the two `Ok(None)` sources fired and the raw errno, so a
+    recurrence is root-caused from the CI log alone. It cannot itself flake.
+
+    The out-of-process descriptor-lifecycle test is **deliberately not shipped**,
+    though it is proven load-bearing: injecting `existing._file = file` into the
+    nested branch of `try_acquire` makes it fail while **both** shipped tests still
+    pass — a real coverage gap. It is not shipped because it failed twice itself
+    under extreme load, and trading one unexplained CI failure for another is not
+    an improvement. It is preserved verbatim in
+    `docs/plans/2026-09-29-refresh-lock-load-sensitivity.md` and tracked by
+    BUG-1729.
+
+    ### Verification on `b06cd3662d`
+
+    `cargo fmt --all -- --check` clean · `cargo clippy --workspace -- -W
+    clippy::all -D clippy::correctness` exit 0 · `scripts/check-portability.sh`
+    clean · `db::cache_refresh` module 6/6 · full `-p aida-core -p aida-cli-lib
+    --lib` re-run in progress at time of writing; CI on the pushed head is the
+    gating check.
+  created_at: 2026-09-29T22:27:29.859186716Z
+  modified_at: 2026-09-29T22:27:29.859186716Z
+  session_id: b2195326-c6b7-41c7-afb5-aa27b60756e2
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
