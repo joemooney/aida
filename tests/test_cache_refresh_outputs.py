@@ -13,8 +13,10 @@ import pty
 import select
 from pathlib import Path
 import sqlite3
+import struct
 import subprocess
 import tempfile
+import termios
 import time
 
 
@@ -25,6 +27,10 @@ def run(args, root, env, timeout=30):
 
 def run_tty(args, root, env):
     master, slave = pty.openpty()
+    # An unsized pty makes width-sensitive human output truncate its columns, so
+    # an assertion on a row's text would pass or fail depending on the host.
+    # Give it a real window. trace:TASK-1526 | ai:claude
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 200, 0, 0))
     child = subprocess.Popen([str(arg) for arg in args], cwd=root, env=env,
                              stdin=subprocess.DEVNULL, stdout=slave, stderr=subprocess.PIPE)
     os.close(slave)

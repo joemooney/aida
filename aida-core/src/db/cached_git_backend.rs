@@ -3414,7 +3414,7 @@ mod tests {
             let dir = tempdir().unwrap();
             let (backend, store, path) = task_1515_backend(dir.path());
             task_1515_external_retitle(&store, "gen1");
-            if stamp == "" || stamp == "non-ancestor" {
+            if stamp.is_empty() || stamp == "non-ancestor" {
                 backend.cache().set_source_head_sha(stamp).unwrap();
             }
             if stamp == "missing" {
@@ -3792,7 +3792,14 @@ mod tests {
                 Ok(false)
             })
             .unwrap();
-    } // trace:TASK-1526 | ai:codex
+        // Release the holder like every other single-flight test in this file;
+        // leaving it parked leaks the thread and drops its stop channel at an
+        // arbitrary point. trace:TASK-1526 | ai:claude
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+    }
+
+    // trace:TASK-1526 | ai:codex
     #[test]
     fn head_recapture_after_incremental_err_break_stamps_current_head() {
         let dir = tempdir().unwrap();
