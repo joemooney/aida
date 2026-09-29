@@ -59,8 +59,83 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T07:56:03.944682691Z
-modified_at: 2026-09-29T08:08:33.262159323Z
+modified_at: 2026-09-29T08:17:34.197719784Z
 req_type: Bug
+comments:
+- id: 01a0ec3d-95f5-7ff1-a41c-567ff16ddd76
+  author: joe
+  content: |-
+    ADVISOR TRIAGE (2026-09-29) — REJECTED as filed. The gap is real but it is NOT a regression, and
+    the spec's central premise is false against main. Two findings, both checked in source.
+
+    FINDING 1 — THE PREMISE IS FALSE. "Before TASK-1499 the inherited AIDA_BIN covered this case
+    unconditionally" is not true of main. On main (0c3ef5cb6b) AIDA_BIN is WRITTEN and never READ for
+    binary resolution:
+
+        $ grep -rn 'AIDA_BIN' --include=*.rs . | grep -E 'var|env::'   # non-test
+        aida-cli-lib/src/lib.rs:103235:  std::env::set_var("AIDA_BIN", &exe);
+
+    `aida_exe_path` (lib.rs:103180) delegates to `resolve_aida_exe_from(current_exe())`, which tries
+    `current_exe` (stripping a " (deleted)" suffix) and otherwise falls back to the literal "aida" for
+    a PATH search. It consults no environment variable. `git log -S'var_os("AIDA_BIN")'` and
+    `-S'var("AIDA_BIN")'` over lib.rs both return EMPTY — that read has never existed on this line of
+    history.
+
+    TASK-1499 therefore does not narrow a guarantee; it ADDS one where there was none. The whole
+    AIDA_BIN-honoring path is NEW in the PR, in the new `aida-cli-lib/src/aida_bin.rs` (504 added
+    lines), and it arrives already guarded by the live-ancestor check. Coverage goes from ZERO to
+    "covered whenever a live AIDA ancestor is present".
+
+    The unconditional honoring the spec describes exists only in PR #2226's proposed diff, which is
+    SUPERSEDED by #2261 and is to be closed unmerged. The premise was carried in from that diff.
+
+    Consequence: the correct framing is not "a narrowing of BUG-766's guarantee" but "a documented
+    LIMIT on the reach of new coverage". Nothing regresses; a case that was uncovered stays uncovered.
+
+    FINDING 2 — DISPOSITION (b) IS UNIMPLEMENTABLE BY CONSTRUCTION. Do not spend a seat on it.
+    (b) proposes strengthening the PATH prepend "so the coordinating directory stays ahead of an older
+    binary's own directory even when that binary re-prepends". The re-prepend happens inside
+    `export_coordinating_bin_env` (lib.rs:103220) running in the OLDER binary's own `main_entry`. That
+    is already-released code. The coordinating process has EXITED by hypothesis — that exit is the
+    premise of the whole scenario — so no code we can write is running at the moment the old binary
+    prepends its own directory. `prepend_dir_to_path` drops only later occurrences of the SAME dir, so
+    it offers no leverage over a different one. (b) would require editing a binary that already shipped.
+
+    FINDING 3 — THE EXPOSED POPULATION IS EMPTY TODAY AND NEVER CONTAINS A PRE-GUARD BINARY.
+    Step 2 of the scenario ("the ancestor walk finds no live aida, so the override is DECLINED")
+    requires the invoked older binary to HAVE the ancestor walk — i.e. to be post-TASK-1499. Every
+    binary that predates TASK-1499 ignores AIDA_BIN entirely (Finding 1) and resolves to itself no
+    matter what the environment says, so its behaviour is identical with or without this change.
+
+    So the exposure is exactly: two post-TASK-1499 builds coexisting, the older invoked by absolute
+    path from a shell that outlived its exporting parent. That set is EMPTY until #2261 merges, and
+    thereafter contains only binaries that already carry the bulk-store-save guards BUG-766 was written
+    to protect. The harm degrades from BUG-766's "an old binary runs pre-guard bulk store saves" to
+    "a slightly older guarded binary runs" — a different and much smaller claim than the spec makes.
+
+    DISPOSITION: (a) ACCEPT AND DOCUMENT, and it is ALREADY EXECUTED. The honest statement of the
+    limitation shipped in b5e45b66b4 as the module doc of `aida_bin.rs` — that comment-only commit was
+    the fix for the independent review's single P2 finding, and it is what this spec was filed to make
+    sure did not get buried. It did not get buried; it is in the source where the next reader meets it.
+
+    No code work remains, so this does not belong in the approved backlog. Rejecting rather than
+    approving keeps ~30 already-unrouted approved specs from gaining a 31st that no seat should pick up.
+
+    RE-FILE IF, AND ONLY IF, THIS IS OBSERVED: an `aida` command resolving to a build OLDER than the
+    coordinating one, from a shell whose exporting `aida` has exited, with both builds post-TASK-1499.
+    The diagnostic is already in the code: `aida_bin.rs` emits
+    "AIDA_BIN=<path> is set but was not honored because no AIDA parent was found; using <path>".
+    That warning firing in a log IS the observable. A new spec citing it should be sized against
+    disposition (c) only — attribution that outlives the parent, validated against the file on disk
+    rather than a live pid, without reintroducing a forgeable token and without widening
+    SESSION_ENV_NAMES (the allowlist BUG-1624/BUG-1627 exist to keep narrow). (b) is off the table per
+    Finding 2.
+
+    BUG-1723 (`.aida/config.toml` trusted while its sibling `.aida/session-env.sh` is not) remains a
+    separate, still-open question and is NOT dispositioned here.
+  created_at: 2026-09-29T08:17:34.197719784Z
+  modified_at: 2026-09-29T08:17:34.197719784Z
+  session_id: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
 history:
 - id: 01a0ec35-362b-76d0-b55d-6ad0e98a778c
   author: joe
