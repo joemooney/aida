@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T06:12:02.195357726Z
+modified_at: 2026-09-29T06:32:57.942277078Z
 req_type: Task
 tags:
 - agent-launch
@@ -427,6 +427,104 @@ comments:
     Consequence for the integrator: #2261 is approved and merged on its own merits. Do not wait on #2226.
   created_at: 2026-09-29T06:12:02.195357726Z
   modified_at: 2026-09-29T06:12:02.195357726Z
+  session_id: d3b4d739-0433-404d-b8de-30f658d731a8
+- id: 01a0ebdd-d156-70d2-a8fb-a01e1483be62
+  author: joe
+  content: |
+    ADVISOR REVIEW 2026-09-28 (Session #6) — CHANGES REQUESTED on the rework round. One BLOCKING
+    finding, measured, not inferred. Everything else about the change is ACCEPTED.
+
+    WHAT I ACCEPTED — do not redo any of it
+
+    1. The trust rule itself is correct and lands exactly where the brief asked. `decide_override`
+       (aida_bin.rs) is pure and three-valued; `resolve_with_attribution` maps `DeclinedAmbient` and
+       `Absent` to `None` so resolution falls through to running-exe then PATH. Right shape.
+    2. `nearest_aida_ancestor_pid` / `nearest_aida_in_chain` (liveness.rs) are a FAITHFUL mirror of the
+       `nearest_claude_ancestor_pid` (liveness.rs:463) / `nearest_claude_in_chain` (liveness.rs:488)
+       precedent — same `seen`-set cycle guard, same stop-at-pid-1, same self-inclusive chain, same
+       pure/impure split. I diffed them line by line.
+    3. The DO-NOT list was honored. `git status --short` is exactly four files: aida_bin.rs, lib.rs,
+       process_probe.rs, liveness.rs. `SESSION_ENV_NAMES` and both BUG-1624/BUG-1627 guard test files
+       are UNTOUCHED (T6 satisfied by construction). No new environment variable. No config.toml
+       override. No new files.
+    4. The module doc comment carries the BUG-766 rationale, the older-absolute-path regression case,
+       and the accident-boundary-not-security-boundary honesty requirement. All three were asked for and
+       all three are there, in the implementer's own words.
+    5. The self-report is HONEST and I am crediting it: it volunteered unprompted that T1 and T2 pass
+       with the trust check removed and are therefore guards, not proofs, and that T5 is the one
+       non-vacuous test — and it proved T5 by mutation. That is exactly the right way to report
+       non-vacuity. It also correctly declined the T7 secondary finding rather than half-doing it.
+
+    BLOCKING: the change adds TWO FULL PROCESS-TABLE ENUMERATIONS TO EVERY `aida` COMMAND
+
+    `export_coordinating_bin_env` runs at the top of `main_entry` (lib.rs:1031) on every invocation.
+    After this change it calls `nearest_aida_ancestor_pid(std::process::id())` UNCONDITIONALLY, and
+    `aida_bin::process()` — now also scanning — is reached again through `resolve_aida_exe()`.
+    `nearest_aida_ancestor_pid` builds a `System::new_with_specifics(... .with_cmd(UpdateKind::Always))`,
+    which reads `/proc/<pid>/cmdline` and `/proc/<pid>/stat` for EVERY process on the machine, to find
+    an answer that is a walk of at most ~10 ancestors.
+
+    MEASURED on this host (499 live processes), `aida --version`, both debug builds:
+
+        strace -f -e trace=openat, count of /proc/<pid>/cmdline opens
+          main  (/home/joe/ai/aida/target/debug/aida)        0
+          branch (task-1499-2 target/debug/aida)           992      <- 2 x 499
+
+        /usr/bin/time, three runs each
+          main    0.01 s, 0.01 s, 0.01 s
+          branch  0.09 s, 0.10 s, 0.10 s
+
+    That is a 10x slowdown and roughly +90 ms on the hot path of EVERY command, including `--version`,
+    which needs no binary resolution at all. This lands on a project that already has BUG-1674 open as a
+    CONFIRMED live budget breach (`aida show` over its 1000 ms budget on 11.4% of 359 sampled calls) and
+    a `performance-guard` cron running every 6h with `--fail-on-findings`. It would trip it.
+
+    THE FIX — two parts, both required
+
+    (a) MAKE THE SCAN LAZY. `decide_override` only consults `aida_ancestor` when `aida_bin` is `Some`.
+        So the ancestor lookup must not happen at all when `AIDA_BIN` is unset. Change
+        `resolve_with_attribution` / `process()` to take the ancestor as a THUNK rather than a value —
+        e.g. `aida_ancestor: impl FnOnce() -> Option<u32>` — and have `decide_override` call it only on
+        the `Some(path)` arm. Keep `decide_override`'s pure, value-taking signature for the unit tests
+        and add the laziness one level up if that reads cleaner; either way the observable requirement
+        is: AIDA_BIN unset => ZERO process-table scans, back to the measured baseline of 0.
+
+    (b) COMPUTE IT AT MOST ONCE PER PROCESS. `aida_bin::process()` is called from six sites (lib.rs
+        28298, 28540, 31155, 103149, 103197, 103205) and only 103149 is behind a `OnceLock`. Cache the
+        ancestor answer in a `OnceLock<Option<u32>>` so a command that resolves more than once pays for
+        at most one walk. In `export_coordinating_bin_env` specifically, collapse the separate
+        `nearest_aida_ancestor_pid` call and the up-to-three `aida_bin::process()` calls (103197, 103205,
+        and the one reached via `resolve_aida_exe()`) into ONE resolution whose result is reused.
+
+    Target after the fix, and I will re-measure it the same way: 0 cmdline opens with `AIDA_BIN` unset,
+    and at most 499 (one walk) with it set.
+
+    RECOMMENDED, NOT BLOCKING — make the walk O(depth) instead of O(all processes)
+    Even one full enumeration is ~45 ms to answer a ~10-step question, and inside the fleet AIDA_BIN IS
+    set on essentially every child, so that path is the common one, not the rare one. sysinfo 0.30.13
+    has `System::refresh_process_specifics(pid, ...)` (common.rs:400) — I checked the vendored source, it
+    is really there — so the chain can be walked one pid at a time. Do this only if it stays clean; if
+    it would make `nearest_aida_ancestor_pid` diverge from its `nearest_claude_ancestor_pid` precedent in
+    any way beyond the refresh call, leave it and say so. (a) and (b) are what gate the merge.
+
+    NON-BLOCKING NOTES, for the same round since the file is open
+
+    N1. The `DeclinedAmbient` diagnostic at lib.rs:103197 is inside `if let Ok(resolved) = ...`, so when
+        `AIDA_BIN` is set, no AIDA parent is found, AND `process()` errors, the operator gets SILENCE —
+        the one case the old early-return existed to keep reportable. Print the decline even when
+        resolution then fails, or say why that is unreachable.
+    N2. That diagnostic is an `eprintln!` on the pre-dispatch path, so a stale `AIDA_BIN` in a shell
+        profile prints a line on EVERY command, including machine-readable ones whose consumers read
+        stderr. I am not asking to remove it — a silently ignored override is the worse bug, and it
+        correctly cannot fire for AIDA-spawned children, which have an AIDA parent. Just confirm it is
+        once-per-process after fix (b) rather than once per resolution.
+    N3. `nearest_aida_ancestor_pid` and `nearest_aida_in_chain` have `// trace:` lines but no `///` doc
+        comments, where both claude-side precedents carry one explaining the rule. Add them; plain `///`
+        is fine in liveness.rs (the `///`-vs-`//` hook rule is about clap arg structs).
+
+    NOT IN SCOPE, still: the TASK-1262 `current_exe()` allowlist (T7). Correctly deferred.
+  created_at: 2026-09-29T06:32:57.942277078Z
+  modified_at: 2026-09-29T06:32:57.942277078Z
   session_id: d3b4d739-0433-404d-b8de-30f658d731a8
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
