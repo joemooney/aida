@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T06:06:16.660825970Z
+modified_at: 2026-09-29T06:06:17.511958207Z
 req_type: Task
 tags:
 - agent-launch
@@ -395,6 +395,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR #2261 Build (ubuntu) red on two of the branch''s OWN new guard tests. Both diagnosed; neither is CI infrastructure.. No triage reason was given.'
   created_at: 2026-09-29T06:06:16.660824713Z
   modified_at: 2026-09-29T06:06:16.660824713Z
+- id: 01a0ebc5-658a-7a11-aa1a-9647a4aaf39d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1499):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8021605585e7
+    Recorded: 2026-09-28T17:04:15.359902729+00:00
+    Findings:
+    1. aida_bin.rs:292 override_running_and_path_precedence_and_layouts asserts profile==Debug but got Release. NOT a production defect: resolve_candidate picks debug-over-release only when 'dm > rm' (strictly newer mtime, aida_bin.rs ~line 95). The test writes release then debug back-to-back, so on a filesystem whose mtime granularity is coarser than the gap the two stamps are EQUAL, dm > rm is false, and it correctly falls through to Release per the documented default. The test depends on filesystem timestamp resolution. Fix the TEST, not resolve(): set the debug binary's mtime explicitly to a clearly-later instant (e.g. filetime::set_file_mtime, or write debug first then re-stamp it) so 'debug is newer' is asserted deterministically. Do not weaken 'dm > rm' to 'dm >= rm' -- that would silently flip the documented release-by-default contract whenever both stamps tie.
+    2. resolve_aida_exe_tests.rs:57 no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup fails with left:1 right:0 for aida-cli-lib/src/aida_bin.rs. The guard allowlists exactly one file: 'let allowed = usize::from(path == src_dir.join("lib.rs"))'. This branch moved the resolver into the new aida_bin.rs module, which legitimately makes one current_exe() call. The test's own name says 'outside the resolver' and aida_bin.rs IS now the resolver, so the allowlist is simply stale. Fix: allow lib.rs OR aida_bin.rs. Keep it an exact-count assertion (==, not >=) so a second raw lookup in either file still fails the guard.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-29T06:06:17.482390390Z
+  modified_at: 2026-09-29T06:06:17.482390390Z
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
   author: joe
