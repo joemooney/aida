@@ -513,7 +513,7 @@ impl CachedGitBackend {
                 }
                 Ok(None) => {
                     let limit = if migration && !budget.0.is_zero() {
-                        Duration::from_secs(15)
+                        cache_refresh::migration_wait_limit()
                     } else {
                         budget.0
                     };
@@ -3718,6 +3718,12 @@ mod tests {
     #[test]
     fn migration_pending_reader_never_serves_old_schema() {
         use super::super::cache_refresh::*;
+        // The shipped window is 15s. Spending it here puts 15 wall-clock
+        // seconds in every suite run and leaves the upper bound a race against
+        // the runner's scheduler, so pin the constant and measure a short
+        // injected window instead. trace:TASK-1526 | ai:claude
+        assert_eq!(MIGRATION_WAIT, std::time::Duration::from_secs(15));
+        set_migration_wait_limit(Some(std::time::Duration::from_millis(400)));
         let dir = tempdir().unwrap();
         let (backend, store, path) = task_1515_backend(dir.path());
         drop(backend);
@@ -3735,7 +3741,7 @@ mod tests {
             .unwrap_err()
             .is::<AdvisoryCacheUnavailable>());
         assert_eq!(test_counts().get("full_rebuild"), None);
-        let (stop, thread) = held_refresh(path);
+        let (stop, thread) = held_refresh(path.clone());
         let scope = CacheReadScope::new();
         scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
         assert!(backend
@@ -3752,12 +3758,31 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("being upgraded"));
-        assert!(start.elapsed() >= std::time::Duration::from_secs(15));
-        assert!(start.elapsed() < std::time::Duration::from_secs(17));
+        // Bounded by the injected window, not unbounded and not instant. The
+        // ceiling is loose on purpose: it proves the wait ended, and a tight
+        // one only measures how contended the runner was.
+        assert!(start.elapsed() >= std::time::Duration::from_millis(400));
+        assert!(start.elapsed() < std::time::Duration::from_secs(4));
         assert!(!scope.touched());
         stop.send(()).unwrap();
         thread.join().unwrap();
+        // "Re-run shortly" means a NEW invocation, which gets its own wait
+        // budget. Re-using the scope whose deadline the wait above already
+        // spent leaves the migrating read zero tolerance for any transient
+        // contention on the refresh flock, and it then fails instead of
+        // migrating -- the shape this test failed with in CI. Hold the flock
+        // briefly across the re-run so a spent budget cannot pass.
+        // trace:TASK-1526 | ai:claude
+        drop(scope);
+        let _scope = CacheReadScope::new();
+        set_migration_wait_limit(Some(std::time::Duration::from_secs(10)));
+        let (release, holder) = held_refresh(path);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = release.send(());
+        });
         backend.list_summaries(&ListFilter::default()).unwrap();
+        holder.join().unwrap();
         assert!(!backend.cache().migration_pending());
     }
 

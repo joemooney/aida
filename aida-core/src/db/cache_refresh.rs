@@ -125,6 +125,36 @@ pub(super) fn wait_poll(delay: Duration) {
     std::thread::sleep(delay);
 }
 
+/// A reader that finds a pending schema migration waits far longer than an
+/// ordinary bounded read: only a full rebuild can apply the new schema, so the
+/// alternative is failing the invocation outright. Tests drive the window
+/// through `migration_wait_limit` rather than spending it in wall-clock, so the
+/// assertions measure the state machine instead of the runner's scheduler.
+// trace:TASK-1526 | ai:claude
+pub(super) const MIGRATION_WAIT: Duration = Duration::from_secs(15);
+
+#[cfg(test)]
+thread_local! {
+    static MIGRATION_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Per-thread, so libtest's thread-per-test isolation already scopes it.
+// trace:TASK-1526 | ai:claude
+#[cfg(test)]
+pub(super) fn set_migration_wait_limit(limit: Option<Duration>) -> Option<Duration> {
+    MIGRATION_WAIT_OVERRIDE.with(|c| c.replace(limit))
+}
+
+// trace:TASK-1526 | ai:claude
+pub(super) fn migration_wait_limit() -> Duration {
+    #[cfg(test)]
+    if let Some(limit) = MIGRATION_WAIT_OVERRIDE.with(|c| c.get()) {
+        return limit;
+    }
+    MIGRATION_WAIT
+}
+
 /// An advisory read must exit silently instead of serving incompatible rows.
 // trace:TASK-1526 | ai:codex
 #[derive(Debug, thiserror::Error)]
@@ -341,6 +371,34 @@ pub(super) fn test_counts() -> HashMap<&'static str, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // One invocation gets one deadline, so a later read in the SAME scope can
+    // be left with no wait budget at all. A caller modelling a re-run must
+    // open a new scope; a test that re-uses a spent one has zero tolerance for
+    // transient contention and fails on a loaded runner.
+    // trace:TASK-1526 | ai:claude
+    #[test]
+    fn wait_remaining_is_zero_once_the_invocation_deadline_is_spent() {
+        let scope = CacheReadScope::new();
+        assert!(!wait_remaining(Duration::from_millis(40)).is_zero());
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(wait_remaining(MIGRATION_WAIT).is_zero());
+        drop(scope);
+        let _fresh = CacheReadScope::new();
+        assert!(!wait_remaining(MIGRATION_WAIT).is_zero());
+    }
+
+    // The shipped migration window stays 15s; only tests shorten it.
+    // trace:TASK-1526 | ai:claude
+    #[test]
+    fn migration_wait_limit_defaults_to_the_shipped_window() {
+        assert_eq!(migration_wait_limit(), MIGRATION_WAIT);
+        let prev = set_migration_wait_limit(Some(Duration::from_millis(7)));
+        assert_eq!(prev, None);
+        assert_eq!(migration_wait_limit(), Duration::from_millis(7));
+        set_migration_wait_limit(None);
+        assert_eq!(migration_wait_limit(), MIGRATION_WAIT);
+    }
 
     // trace:TASK-1526 | ai:codex
     #[test]
