@@ -123,6 +123,18 @@ cargo test -p aida-core seat_wait
 - Claude Code Channels as an optional Claude-only push route once it leaves research preview.
 - `aida doctor` check: "seat owns live lanes but has no wake mechanism".
 
+## SPIKE-92 findings (2026-09-27)
+
+Research report: [2026-09-27-spike-92-research.md](../research/2026-09-27-spike-92-research.md).
+
+- TUI input during a held hook, Ctrl+C/Esc behavior, actual timeout ceilings, and live continuation dialects were **not measured** on any harness. Do not treat the vendor contract table above as runtime verification.
+- Pending direct interactive probes, recommendation for CR-7 item 6 is `hold=0` for human-present seats; longer holds are headless-only and still need bounded, vendor-specific measurements.
+- Antigravity CLI issue #893 reports `.agents/hooks.json` hooks not executing in `-p` runs authenticated with `GEMINI_API_KEY` on 1.1.22. Current 1.2.12 was not tested; retain resume fallback for that path pending verification.
+- OpenCode docs expose `session.idle` and local plugin discovery, but issue #16626 reports a post-loop re-prompt teardown race in `opencode run`. OpenCode is not installed in the research environment; retain resume fallback for one-shot headless mode pending verification.
+- Codex unmanaged hook definitions require review/trust through `/hooks`; trust is tied to the hook hash, so generated/changed hooks cannot be silently activated through ordinary project scaffolding.
+
+These findings are source-supported but not live measurements. See the report for per-question provenance, caveats, and probe plan.
+
 ## Related
 
 - BUG-1589, TASK-1245, STORY-586, STORY-790, STORY-1051, ADR-26, STORY-712
