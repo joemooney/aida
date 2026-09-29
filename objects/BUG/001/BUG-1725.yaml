@@ -1,0 +1,100 @@
+id: 01a0ec48-673f-7361-96a0-b30935d4ba80
+spec_id: BUG-1725
+agreed_id: BUG-1725
+title: 'Executable-fixture ratchet scans only aida-cli-lib/src/tests, so unix-only test APIs in inline #[cfg(test)] modules break the Windows nightly unguarded'
+description: |-
+  The executable-fixture ratchet (tests/test_executable_fixture_ratchet.py) enforces
+  "use crate::test_exec::mark_executable, never raw set_mode/from_mode" — but
+  `test_test_sources_do_not_set_executable_modes_directly` walks ONE directory:
+
+      source_root = ROOT / "aida-cli-lib/src/tests"
+      for path in source_root.rglob("*.rs"): ...
+
+  Every violation that has actually broken the Windows nightly lives OUTSIDE that directory, in an
+  inline `#[cfg(test)] mod tests` inside a production file at `aida-cli-lib/src/*.rs`. The guard is
+  structurally blind to exactly the place the breakage occurs, so it passes green while the nightly
+  burns. `local_fake_gh_violations` DOES rglob all of `aida-cli-lib/src` — so the blind spot is
+  specific to the direct-mode check, and closing it is a one-line change of `source_root`.
+
+  MEASURED 2026-09-29 on PR #2261 / run 36540603371, job 109314814796. The Windows
+  `Run tests` step failed to COMPILE `aida-cli-lib (lib test)` with 8 errors, all one family:
+
+    aida-cli-lib\src\aida_bin.rs:327      error[E0433] cannot find `unix` in `os`
+                                            (use std::os::unix::fs::PermissionsExt;)
+    aida-cli-lib\src\aida_bin.rs:333      error[E0599] Permissions::from_mode(0o755)
+    aida-cli-lib\src\aida_bin.rs:426      error[E0599] Permissions::from_mode(0o755)
+    aida-cli-lib\src\aida_bin.rs:476      error[E0599] Permissions::from_mode(0o644)
+    aida-cli-lib\src\remote_create.rs:3040 error[E0433] cannot find `unix` in `os`
+    aida-cli-lib\src\remote_create.rs:3055 error[E0599] Permissions::from_mode(0o755)
+    aida-cli-lib\src\remote_create.rs:3062 error[E0599] Permissions::from_mode(0o755)
+    aida-cli-lib\src\remote_create.rs:3065 error[E0599] Permissions::from_mode(0o755)
+
+  Both files are `aida-cli-lib/src/*.rs` with inline test modules. Neither is under
+  `aida-cli-lib/src/tests/`. Neither is in `scripts/portability-allowlist.txt`, and PR #2261 did not
+  touch that allowlist or the rules file — nothing was bypassed or widened. The guards simply cannot
+  see these files.
+
+  THE PORTABILITY RATCHET DOES NOT COVER THIS FAMILY EITHER. `scripts/portability-rules.json` has
+  exactly eight rules — proc-literal, tmp-literal, path-separator-join, path-separator-split,
+  shell-command, prose-classification, toml-path-interpolation, toml-value-interpolation. There is NO
+  rule matching `std::os::unix` or `PermissionsExt`/`from_mode`. So the one guard that scans broadly
+  lacks the pattern, and the one guard that has the pattern scans one directory. That intersection is
+  why this family has held the cross-platform nightly red since 2026-09-23.
+
+  THE FIX IS ALREADY WRITTEN AND UNUSED. `aida-cli-lib/src/test_exec.rs` provides
+
+      pub(crate) fn mark_executable(path: &std::path::Path)   // #[cfg(unix)] inside; no-op on Windows
+      pub(crate) fn write_executable(path: &std::path::Path, body: impl AsRef<str>)
+
+  `mark_executable` already wraps the unix-only block in `#[cfg(unix)]`, which is why the Windows log
+  reports it only as `warning: unused variable: path` at test_exec.rs:20 rather than an error. Callers
+  that route through it are portable today; the eight sites above hand-roll it instead.
+
+  ACCEPTANCE
+
+  AC1. `test_test_sources_do_not_set_executable_modes_directly` scans all of `aida-cli-lib/src`
+       (and ideally every crate's `src`), not just `aida-cli-lib/src/tests`. The one-line
+       `source_root` change is the whole fix; keep the existing `0o555`/non-executable-mode
+       exemption in `direct_executable_mode_changes` exactly as it is.
+  AC2. With AC1 in place and no other change, the ratchet FAILS on today's tree, naming all eight
+       sites above. Prove it by running it before fixing them — a guard that passes on a tree known
+       to be broken is not a guard. Record the observed failure output.
+  AC3. All eight sites route through `crate::test_exec::mark_executable` (or `write_executable`
+       where the fixture is also being created), and no `use std::os::unix::...` remains in either
+       file. Note `aida_bin.rs:476` uses mode 0o644 — NOT executable — so it needs a non-executable
+       portable path, not `mark_executable`; handle it explicitly rather than forcing it to 0o755.
+  AC4. `cargo check --workspace --tests --target x86_64-pc-windows-msvc` no longer reports E0433 or
+       E0599 from these two files. NOTE: that cross-target step cannot fully run on the Linux CI
+       runner — it currently dies with `cc-rs: failed to find tool "lib.exe"` before type-checking,
+       which is why it is `continue-on-error: true` and why it caught nothing. Verify on the
+       Windows runner via the cross-platform nightly, not on Linux.
+  AC5. A regression test asserts the checker itself rejects an inline-`#[cfg(test)]`-module
+       violation in a production-path file, mirroring the existing
+       `test_checker_rejects_a_future_local_fake_gh_copy` self-test.
+
+  SCOPE. This does NOT claim to make the whole cross-platform nightly green — other unrelated
+  failures may remain behind these compile errors, which abort the test binary before anything runs.
+  It closes this one family and the guard gap that let it grow. Re-measure the nightly afterwards
+  before claiming more.
+
+  PROVENANCE. Found by the advisor seat on 2026-09-29 while reading PR #2261's Windows failure before
+  waiving it, per the standing rule that the cross-platform waiver covers the KNOWN breakage and
+  nothing else. Four of the eight sites (`aida_bin.rs`) are NEW in #2261; they were not caught because
+  of the guard gap above, not because anyone bypassed anything. #2261 was judged mergeable on that
+  basis: ubuntu is the only gating job (ADR-62) and it is green, and the nightly was already red on
+  the identical family in `remote_create.rs`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T08:29:23.135646002Z
+modified_at: 2026-09-29T08:29:23.135646002Z
+req_type: Bug
+filed_at:
+  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0c3ef5cb6b
+  vendor: antigravity
+  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
