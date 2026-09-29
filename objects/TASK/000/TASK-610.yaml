@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-25T20:18:59.029758227Z
+modified_at: 2026-09-29T22:06:13.107326458Z
 req_type: Task
 tags:
 - docs
@@ -23,5 +23,10 @@ comments:
   content: Updated the untracked upper-management deck source/output on 2026-09-25. Preserved the Sep 15 published snapshot as a historical baseline, added one Sep 16-25 delta slide with struck-through prior values, refreshed cumulative evidence to code HEAD 99698621ba and aida-store 55e5df2a, updated weekly velocity through partial W39, and regenerated 17-slide PPTX + speaker notes. Verified via LibreOffice PDF conversion, 17 rendered 1600x900 PNGs, contact-sheet review, individual review of slides 2/4/5/9/17, PPTX ZIP integrity, and 17/17 embedded notes. No commit or push performed.
   created_at: 2026-09-25T20:18:59.029745174Z
   modified_at: 2026-09-25T20:18:59.029745174Z
+- id: 01a0ef34-3c73-74f1-814e-9b5973cd6080
+  author: mcp
+  content: Added the supplied aida_arch_logo.png as docs/images/aida-arch-logo.png, center-cropped it to 327x327, and placed it beside the existing AIDA logo on slide 16. Regenerated the 17-slide PPTX and notes, rendered slide 16 through LibreOffice at 1920x1080, and verified PPTX integrity plus 17/17 embedded notes.
+  created_at: 2026-09-29T22:06:13.107319122Z
+  modified_at: 2026-09-29T22:06:13.107319122Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
