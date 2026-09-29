@@ -1,0 +1,28 @@
+id: 01a0ed24-88dc-7852-a1cf-de29a2428d81
+spec_id: TASK-1-189
+title: resolve_aida_exe_tests.rs:57 no_cli_source_outside_the_resolver_uses_raw_curren…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1499, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  resolve_aida_exe_tests.rs:57 no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup fails with left:1 right:0 for aida-cli-lib/src/aida_bin.rs. The guard allowlists exactly one file: 'let allowed = usize::from(path == src_dir.join("lib.rs"))'. This branch moved the resolver into the new aida_bin.rs module, which legitimately makes one current_exe() call. The test's own name says 'outside the resolver' and aida_bin.rs IS now the resolver, so the allowlist is simply stale. Fix: allow lib.rs OR aida_bin.rs. Keep it an exact-count assertion (==, not >=) so a second raw lookup in either file still fails the guard.
+  Reviewed sha: b5e45b66b408c0fbeb48ce516e09588c45e64530
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-29T12:29:49.660941595Z
+modified_at: 2026-09-29T12:29:49.660941595Z
+req_type: Task
+tags:
+- carried-from:TASK-1499
+- finding-hash:78615689
+- from-review:TASK-1499
+- kind:carried-forward
+filed_at:
+  code_sha: 7b47d816d85b0323101fe1c7f320d4a0c989a94f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8dcb6c5d24
+  vendor: antigravity
+  session: 16e65c39-d6d0-43e4-b0bd-98850c441c3e
