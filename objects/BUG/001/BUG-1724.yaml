@@ -54,12 +54,12 @@ description: |
   Relates to BUG-1723 (`.aida/config.toml` read as trusted while its sibling `.aida/session-env.sh` is
   treated as untrusted), which is the other open question about where AIDA is willing to take
   executable-selecting input from.
-status: Approved
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T07:56:03.944682691Z
-modified_at: 2026-09-29T08:08:25.387821513Z
+modified_at: 2026-09-29T08:08:33.262159323Z
 req_type: Bug
 history:
 - id: 01a0ec35-362b-76d0-b55d-6ad0e98a778c
@@ -69,6 +69,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0ec35-54ee-7290-8fad-ccb533937508
+  author: joe
+  timestamp: 2026-09-29T08:08:33.262154561Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Draft
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
@@ -77,3 +84,6 @@ filed_at:
   aida_build_sha: 0c3ef5cb6b
   vendor: antigravity
   session: d3b4d739-0433-404d-b8de-30f658d731a8
+implementation_info:
+  implemented: false
+  reopened_at_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
