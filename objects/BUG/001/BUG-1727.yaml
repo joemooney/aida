@@ -126,7 +126,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T11:40:16.011406979Z
-modified_at: 2026-09-29T12:00:35.841190679Z
+modified_at: 2026-09-29T13:02:35.414281287Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -188,6 +188,78 @@ comments:
   created_at: 2026-09-29T12:00:35.841190679Z
   modified_at: 2026-09-29T12:00:35.841190679Z
   session_id: 16e65c39-d6d0-43e4-b0bd-98850c441c3e
+- id: 01a0ed42-8796-7803-bda4-68e9d74eb453
+  author: joe
+  content: |
+    ## AC1, AC2 and AC3 implemented — PR #2278, commit 1320abf196
+
+    AC4 and AC5 landed earlier on #2276 (commit f381a658cd, trailed `(BUG-1704)`). This commit is
+    trailed `(BUG-1727)` and completes the spec.
+
+    ### Design decision: one method, not two
+
+    `ProcTree::descendant_ages(root) -> Option<Vec<i64>>` is **replaced** by
+    `descendant_age_summary(root) -> Option<DescendantAges>`, where
+    `DescendantAges { ages: Vec<i64>, unsampled: usize }`.
+
+    The alternative — keeping `descendant_ages` and adding a summary beside it — was rejected: it
+    leaves two sources of truth for the same walk, and it leaves AC1's "the existing expectation is
+    updated deliberately" unfulfilled, because the old test would still be asserting the old drop.
+    The method had exactly two consumers in the workspace (`agent_registry.rs` and the liveness tests),
+    so the migration cost was nine assertions.
+
+    `unsampled` counts only descendants the walk **proved** hang off the root. A node whose parent
+    chain never reaches the root — including one broken by a cycle — is still not a descendant and is
+    not counted; `descendant_age_summary_terminates_with_an_unknown_age_node_in_a_cycle` pins that.
+    The root's own missing age is likewise not a descendant signal: the root is excluded from the walk
+    and its liveness comes from the pid probe, not from its age.
+
+    In `seat_has_own_work`, the new arm sits immediately after the missing-root arm it mirrors, ahead
+    of the grace-window early return. Both return `true`, so the position is a readability choice, not
+    a behavioural one.
+
+    ### AC6 honoured
+
+    The `age < secs_since_heartbeat` comparison, its direction and its operands are untouched.
+
+    ### Mutation-proved, not assumed
+
+    Both new behaviours were shown to fail without the change, so neither test advertises coverage it
+    does not have:
+
+    | Mutation | Result |
+    |---|---|
+    | remove the `summary.unsampled > 0` guard | only `seat_has_own_work_is_true_when_a_descendant_cannot_be_aged` fails |
+    | relax `age >= grace_secs` to `age > grace_secs` | only `ages_show_work_self_heals_when_a_young_child_reaches_the_grace_floor` fails |
+
+    The second proof matters for AC3 specifically: no pre-existing test pinned the `age == grace_secs`
+    boundary, so the self-heal was asserted nowhere before this.
+
+    ### Verification
+
+    - `cargo test -p aida-core --lib` — 1245 passed / 0 failed / 2 ignored / **0 filtered out**
+    - `cargo test -p aida-cli-lib --lib` — 7346 passed / 0 failed / 2 ignored / **0 filtered out**
+      (baseline 7343 + the 3 tests added here; the diff adds exactly 3 `#[test]` and removes 0)
+    - `cargo fmt --all -- --check` exit 0 with no output
+    - `scripts/check-portability.sh` exit 0
+    - `cargo clippy -p aida-cli-lib -p aida-core --lib --tests` exit 0; every hit in a changed file
+      falls outside this diff's hunk ranges, checked against `git diff -U0`
+
+    Note for the record: session #9's handoff cited a 7337/2 baseline for `-p aida-cli-lib --lib`. That
+    figure was measured on the `bug-1704` branch, whose base predates work since merged to main; main's
+    baseline is 7343/2. The delta against main reconciles exactly with this diff's +3 tests.
+
+    ### Independent review
+
+    Dispatched to a codex reviewer seat on the PR head with the settled AC6 algebra quoted inline under
+    a do-not-re-derive heading and the out-of-scope list (CPU rules, deleting the grace floor, BUG-1726,
+    PID reuse, the `agent stop` descendant leak) stated up front. Verdict: **approve, no findings at P1,
+    P2 or P3**, with `file:line` citations for the traversal invariant, the guard's reachability, each
+    rewritten liveness assertion against the one it replaces, the AC3 test's fixed-staleness property,
+    and a workspace search for unmigrated `descendant_ages` callers.
+  created_at: 2026-09-29T13:02:35.414281287Z
+  modified_at: 2026-09-29T13:02:35.414281287Z
+  session_id: 0ef5b5ae-9150-427a-a95e-107f233be261
 history:
 - id: 01a0ecf7-4a08-7281-aa60-a98d90a5121d
   author: joe
