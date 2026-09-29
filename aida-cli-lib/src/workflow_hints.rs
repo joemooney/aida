@@ -868,26 +868,15 @@ pub fn after_session_end_with_pr(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use tempfile::TempDir;
 
     /// Serialize tests that mutate `AIDA_HINTS`. cargo runs tests in
     /// parallel within a single process, so without this they trample
     /// each other's env state intermittently.
     fn with_hints_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
-        // BUG-697: shared process-global env lock (was a module-local mutex).
-        let _guard = crate::test_env::env_lock();
-        let prev = std::env::var("AIDA_HINTS").ok();
-        match val {
-            Some(v) => std::env::set_var("AIDA_HINTS", v),
-            None => std::env::remove_var("AIDA_HINTS"),
-        }
-        let result = f();
-        match prev {
-            Some(v) => std::env::set_var("AIDA_HINTS", v),
-            None => std::env::remove_var("AIDA_HINTS"),
-        }
-        result
+        // BUG-697 / TASK-1532: route through EnvVarsGuard. trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HINTS", val)]);
+        f()
     }
 
     fn write_config(dir: &Path, body: &str) {
