@@ -89,7 +89,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T04:56:26.956029730Z
-modified_at: 2026-09-29T12:29:10.208672629Z
+modified_at: 2026-09-29T13:16:04.766531022Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -291,6 +291,45 @@ comments:
   created_at: 2026-09-29T06:00:54.282111264Z
   modified_at: 2026-09-29T06:00:54.282111264Z
   session_id: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
+- id: 01a0ed4e-e11e-71b0-a02f-7215863a4efe
+  author: joe
+  content: |
+    ## Correction to this spec's acceptance disposition — AC2 was overclaimed (BUG-1726 AC4)
+
+    The disposition recorded here reads: *"AC2 satisfied, running AND queued alike, because the rule
+    never reads CPU."* That is too strong, and this comment corrects it where it was made.
+
+    **What not reading CPU actually buys.** It is what makes the rule handle a **queued** build — the
+    case both of the spec's own candidate signals failed, because a build waiting on this host's 2-slot
+    cargo flock consumes no CPU. That part of the claim stands and is the reason a CPU-delta rule must
+    not be substituted.
+
+    **What it does not buy.** It does nothing for a build whose start predates the seat's last
+    heartbeat. Clause 2 (`age < secs_since_heartbeat`) reduces to `child_start > heartbeat`, so a
+    descendant that started *before* the last heartbeat is excluded no matter how much CPU it is
+    burning. Not reading CPU is simply orthogonal to that exclusion.
+
+    **The corrected statement.** AC2 is satisfied for a seat **blocked** on a build — running or queued
+    alike, which is the case AC2's own text describes, since a blocking build stops the tool loop and so
+    stops the heartbeat from advancing past its start. It is **not** satisfied for a build the seat
+    launched detached and then stopped attending to: that seat keeps making tool calls, its heartbeat
+    moves past the build's start, and the build stops counting as work.
+
+    That distinction belonged in the original disposition. It is tracked as BUG-1726, dispositioned
+    accept-and-document, and the consequence is now stated in source at `ages_show_work` and in
+    `docs/cli/06-roles-sessions.md` rather than left implicit.
+
+    **Severity of the gap, for the record:** a stranded build, never a killed one. `agent_stop` hands
+    `terminate_pids_with_grace` the matched registry rows' own pids and nothing else — no negative pgid,
+    no descendant walk — so a build survives its seat being stopped and completes ownerless. Re-verified
+    in source on 2026-09-29 at the post-merge tree; note that the line numbers cited in earlier comments
+    (`lib.rs:31875`, `lib.rs:40498`) have since drifted to 31899 and 40522, which is why the new source
+    note names the functions instead of the lines.
+
+    Provenance: advisor seat, session #11 of the relay, 2026-09-29, implementing BUG-1726 AC4.
+  created_at: 2026-09-29T13:16:04.766531022Z
+  modified_at: 2026-09-29T13:16:04.766531022Z
+  session_id: 0ef5b5ae-9150-427a-a95e-107f233be261
 history:
 - id: 01a0e65f-4718-7fd1-9586-f0a804429302
   author: joe
