@@ -1,0 +1,128 @@
+id: 01a0edd0-fcba-7601-863b-bf7ec2517a5f
+spec_id: BUG-1728
+agreed_id: BUG-1728
+title: 'Windows nightly, first honest measurement since 2026-09-23: 7 test failures in aida-cli-lib --lib (7146 pass), three of four families are repeats of already-completed classes'
+description: |
+  FIRST HONEST MEASUREMENT OF THE WINDOWS NIGHTLY SINCE 2026-09-23
+
+  BUG-1725 (merged as #2280, main 7d85a8057d) closed the compile-error family that had been hiding
+  the entire Windows suite behind a link failure. `cross-platform.yml` run 36585692819 was triggered
+  manually on the merge commit (`gh workflow run cross-platform.yml --ref main`) to re-measure.
+
+  WHAT THE RUN ACTUALLY SHOWS
+
+  | Step | Result |
+  |---|---|
+  | Build all packages (windows-latest) | **success**, 10m40s (14:51:41 -> 15:02:21Z) |
+  | Run tests (windows-latest) | **failure**, 32m14s (15:02:21 -> 15:34:35Z) |
+  | Build (macos-latest) | success |
+  | History index random sweep | success |
+
+  Exactly ONE target failed: `-p aida-cli-lib --lib`.
+
+      test result: FAILED. 7146 passed; 7 failed; 12 ignored; 0 measured; 0 filtered out; in 1461.86s
+
+  Every other Windows test binary in the workspace is green. For contrast, run 36575147707 on
+  447ea8fd48 failed the same step after 3m04s with eight E0433/E0599 errors, before a single test ran.
+  7146 executing Windows tests is the baseline this spec records; it did not exist before #2280.
+
+  (The run's overall conclusion reads `cancelled` because the unrelated `GitLab live forge smoke` job
+  was cancelled at 15:11:28Z. The Windows job ran to completion and reported the result above.)
+
+  THE SEVEN FAILURES, IN FOUR FAMILIES
+
+  Family A -- read-only file handle cannot set times on Windows. THIS IS A RECURRENCE OF BUG-1233.
+    1. aida_bin::tests::override_running_and_path_precedence_and_layouts
+       -> Os { code: 5, PermissionDenied, "Access is denied." }
+    2. aida_bin::tests::rejects_non_executable_override_and_selects_fresh_profile
+       -> Os { code: 5, PermissionDenied, "Access is denied." }
+    Both call `std::fs::File::open(&p)` and then `set_times`/`set_modified` on the resulting handle.
+    `File::open` requests read access only; Windows requires FILE_WRITE_ATTRIBUTES to change
+    timestamps, so the call fails where it succeeds on unix. BUG-1233 fixed exactly this mistake for a
+    DIRECTORY mtime in the scratch_gc test and is `completed`; the class came back on plain files in
+    a different module. Fix shape: open with `File::options().write(true)`, or set times by path.
+    A guard that catches the class -- not just these two sites -- is the valuable part of this family.
+
+  Family B -- test assertions hard-code the unix path separator.
+    3. test_home::tests::raw_home_lookup_scan_catches_std_home_multiline_and_decoy_exemptions
+       -> `assert!(found.iter().any(|p| p.ends_with("foo/home.rs:1")))`. `raw_home_lookup_offenders`
+       renders offender paths with the platform separator, so Windows produces `foo\home.rs:1`.
+       Test-side only; the production scan is correct on both platforms.
+    4. doctor_cmd::bug_1700_worktree_trust_tests::untrusted_parent_is_reported_once_and_is_not_auto_healable
+       -> the test passes `Path::new("/home/op/aida-worktrees")` and asserts the finding summary
+       contains that same forward-slash string, but the observed summary reads
+       `\home\op\aida-worktrees`. Triage question the implementer must answer before editing: is
+       `worktree_trust_findings` re-joining components (production formatting), or is only the
+       assertion wrong? Family B is the class BUG-1599 and BUG-466 each fixed one instance of.
+
+  Family C -- test shells out to a POSIX interpreter.
+    5. remote_create::tests::mirror_hook_forwards_dry_run_spellings_as_preview_only
+       -> Os { code: 3, NotFound, "The system cannot find the path specified." }
+       The `mirror_hook_*` tests invoke `/bin/sh`. These were previously protected by the compile
+       error and have never executed on Windows. Same class as the bash fake-gh harness in BUG-1127
+       and BUG-1443.
+
+  Family D -- needs real triage; may be product, not fixture.
+    6. session_reap::bug_1657_batched_reap_tests::bug_1657_removed_worktree_reaps_without_dangling_entry
+       -> the assertion dumps `git worktree list --porcelain` showing the removed worktree still
+       listed as `prunable gitdir file points to non-existent location`. On unix the entry is gone.
+       Whether the reap path mishandles a prunable-but-present entry on Windows, or the fixture's
+       directory removal does not take effect because a handle is still open, is NOT established.
+       Do not assume this one is test-only.
+    7. aida_bin::tests::declined_override_resolves_to_running_executable_before_path
+       -> `assert_eq!(result.path, running)` got `"aida"`, expected the temp-dir binary path.
+       Resolution fell through past the running-exe candidate to a bare PATH name. The likely cause
+       is that the fixture writes a file named `aida` with no `.exe` extension and/or the
+       executability predicate is unix-mode-based, so Windows never accepts the candidate. This
+       overlaps BUG-1669, which already owns `is_executable` accepting any unix execute bit and the
+       bare/relative-path resolution work. Decide there whether this is a fixture fix or a real
+       resolver gap before touching it here.
+
+  WHY THIS IS A RECORD AND NOT QUEUED WORK
+
+  ADR-47 (approved) defers all cross-platform/Windows work until the queue is emptied, and ADR-62
+  (approved, operator decision 2026-09-27) makes a red Build (windows-latest) non-gating for merges.
+  Filing seven fixes into the drain now would contradict both. This spec exists so the measurement is
+  not lost and so the next person to pick up cross-platform work starts from an enumerated list
+  instead of re-running a 44-minute job to rediscover it. It should be routed only when ADR-47 is
+  lifted or superseded.
+
+  BUG-1556 observed that portability defects arrive about as fast as they are fixed. Families A, B and
+  C are each a REPEAT of a class that already has a completed bug (BUG-1233; BUG-1599/BUG-466;
+  BUG-1127/BUG-1443). That is the strongest available evidence that per-site fixes are not the right
+  investment here and that the leverage is in guards -- which is BUG-1556's thesis, now with a
+  concrete post-measurement list behind it.
+
+  ACCEPTANCE CRITERIA
+
+  AC1. The Windows `-p aida-cli-lib --lib` target passes in `cross-platform.yml`, with the run id and
+       the `test result:` line bearing `0 filtered out` quoted as evidence. A nested `test result:`
+       line does not satisfy this.
+  AC2. Family A is closed by a check that fails on ANY `File::open(..)` followed by a times mutation
+       on the resulting handle, not by editing only the two named tests. The check must be proved to
+       report both current sites on the pre-fix tree and zero after.
+  AC3. For failure 4, the triage question above is answered in a comment on this spec -- production
+       formatting vs assertion -- before the edit, and the answer is cited in the commit.
+  AC4. Failures 6 and 7 are either fixed with a stated root cause or split out with the evidence that
+       made them not-fixture; 7 is cross-referenced to BUG-1669 either way. Neither may be closed by
+       `#[cfg(unix)]`-gating the test, because that would silently drop Windows coverage -- the same
+       trade BUG-1725 rejected for `aida_bin`'s test module.
+  AC5. Each test fixed is mutation-proved: revert the fix, confirm only that test fails.
+  AC6. The baseline in this spec (7146 passed / 7 failed / 12 ignored, run 36585692819) is compared
+       against the closing run, and any test that stopped running rather than started passing is
+       called out.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T15:38:11.514364962Z
+modified_at: 2026-09-29T15:38:11.514364962Z
+req_type: Bug
+filed_at:
+  code_sha: 7d85a8057d6ab4aaf62b3426db351c94ecd93a34
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: bbb293b3-f4f2-43f8-8826-e8243d458597
