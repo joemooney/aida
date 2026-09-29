@@ -1,0 +1,138 @@
+id: 01a0ecf7-290b-7e92-8e0c-959d12c2efce
+spec_id: BUG-1727
+agreed_id: BUG-1727
+title: 'BUG-1704''s work rule fails toward Idle on incomplete evidence: an unsampleable descendant is dropped and a child younger than the grace window is not counted'
+description: |
+  BUG-1704's work rule fails toward **Idle** whenever its evidence is incomplete, while the spec's own
+  AC2 names a false `Idle` as the dangerous direction ("a false 'idle' here gets a working seat
+  stopped"). The root-missing case already fails toward Busy; two sibling cases do not. Found by the
+  fourth independent review round of PR #2276 (2026-09-29), verified in source by the advisor seat,
+  and deliberately NOT blocked on — the PR implements the signed-off design faithfully and these are
+  edges of that design.
+
+  The predicate, as merged (`aida-cli-lib/src/agent_registry.rs`):
+
+      fn seat_has_own_work(tree, seat_pid, secs_since_heartbeat, grace_secs) -> bool {
+          let Some(ages) = tree.descendant_ages(seat_pid) else { return true };   // root missing -> BUSY
+          if secs_since_heartbeat <= grace_secs { return true }                   // -> BUSY
+          ages_show_work(&ages, secs_since_heartbeat, grace_secs)
+      }
+
+      fn ages_show_work(ages, secs_since_heartbeat, grace_secs) -> bool {
+          if secs_since_heartbeat <= grace_secs { return false }
+          ages.iter().any(|age| *age >= grace_secs && *age < secs_since_heartbeat)
+      }
+
+  ## GAP 1 — an unknown-age descendant is dropped, not treated as evidence
+
+  `ProcTree::descendant_ages` (`aida-core/src/liveness.rs:90-118`) pushes an age only when
+  `node.age_secs` is `Some`. A descendant whose age is unknown is silently omitted, so a seat with a
+  live descendant and no usable age reads **Idle**. `liveness.rs:1771-1785` pins that omission, so it
+  is current decided behaviour, not an oversight.
+
+  The fail-safe direction is nonetheless inconsistent: a MISSING ROOT returns `true` (Busy), an
+  UNSAMPLEABLE CHILD contributes nothing (tends to Idle). Both are "the probe could not see", and they
+  resolve opposite ways.
+
+  Production reachability on Linux is essentially nil — `probe_process_tree_uncached`
+  (`liveness.rs:136-158`) sets `age_secs: None` only when `proc.start_time() == 0`, which /proc does
+  not produce for a live process. **This is a robustness and consistency defect, not a live breach**,
+  and its priority reflects that. The module is not Linux-only, and the classifier should not depend
+  on a platform detail for its safety direction.
+
+  The fix does NOT belong in `descendant_ages`: a `Vec<i64>` of ages cannot carry "unknown". Surface
+  the fact to the caller instead (for example, report the count of descendants whose age could not be
+  sampled alongside the ages) and let `seat_has_own_work` return `true` when any live descendant could
+  not be aged — matching the root-missing fail-safe.
+
+  ## GAP 2 — the grace floor excludes a child for the first `work_grace_secs` of its life
+
+  `ages_show_work` requires `age >= grace_secs`. A live descendant younger than the grace window
+  (default 10s) is not evidence of work, so:
+
+      heartbeat 31s stale, sole live descendant started 5s ago
+        -> 31 <= 10? no    -> any(5 >= 10 && ...) = false    -> IDLE, while that child runs
+
+  The grace floor is deliberate and its stated reason is sound (`agent_registry.rs:1662`: "excludes
+  momentary statusline/hook children. Without it, a finished seat can flap Busy on those short-lived
+  processes"). **Do not simply delete it** — that reintroduces the flap it was added to stop.
+
+  Two properties bound the damage and are why this did not block #2276:
+
+    1. The window is at most `grace_secs` wide and **self-heals**: at age 10 the same child satisfies
+       `age >= grace_secs && age < secs_since_heartbeat` and the seat reads Busy again. It is a
+       transient flap, not a persistent false Idle.
+    2. Reaching it needs the child to start more than `threshold_secs - grace_secs` (default 20s)
+       AFTER the seat's last heartbeat, because a child started within `threshold_secs` of the
+       heartbeat is already Busy via rule 2. For an MCP-heartbeat-driven seat that means a delayed or
+       detached spawn.
+
+  The cost when an orchestrator polls inside the window is a **stranded build**, not a killed one:
+  `aida agent stop` signals only registered seat pids (`lib.rs:31875` -> `lib.rs:40498-40522`), so a
+  descendant build survives. Same cost already accepted on BUG-1726.
+
+  ## GAP 3 — the STORY-435 regression test no longer exercises the production shape
+
+  `classify_status_live_lease_is_busy_despite_stale_activity` (`agent_registry.rs:2616-2620`) builds
+  its context with `proc_tree: None`, so it takes the `None => Busy` fallback arm. Production always
+  supplies a tree (`aida-cli-lib/src/lib.rs:76984-76988`), so that arm is never taken in the real CLI
+  and the test no longer demonstrates what it is named for.
+
+  This is a test-fidelity gap, NOT evidence that AC3 regressed. A parked seat that is genuinely quiet
+  reading Idle is what AC1 requires, and AC1 is the spec's primary purpose; the AC1/AC3 tension is
+  resolved in AC1's favour by design. What is missing is a test that pins the STORY-435 intent in the
+  shape production actually uses.
+
+  ## ACCEPTANCE
+
+  AC1. A live descendant whose age cannot be sampled makes the seat read **Busy**, matching the
+       root-missing fail-safe. The existing `liveness.rs:1771-1785` expectation is updated
+       deliberately, with its comment explaining the reversal.
+  AC2. `seat_has_own_work` can distinguish "no descendants" from "descendants I could not age"; the
+       signal reaches it without `descendant_ages` having to encode "unknown" in a `Vec<i64>`.
+  AC3. A unit test pins GAP 2's window explicitly: the young-child case reads Idle, and the SAME
+       child at `age == grace_secs` reads Busy — the self-healing property asserted, not assumed.
+  AC4. The grace floor's tradeoff is documented at `ages_show_work` in one sentence: a child younger
+       than the grace window is not counted, so a seat can read Idle for up to `work_grace_secs`
+       after a delayed spawn.
+  AC5. A regression test pins STORY-435's intent with `proc_tree: Some(..)` — a parked, live-lease
+       seat whose subtree shows qualifying work reads Busy through the production code path.
+       `classify_status_live_lease_is_busy_despite_stale_activity` keeps its `None` case or is renamed
+       to say it covers the unsampled-tree fallback.
+  AC6. No change to the `age < secs_since_heartbeat` comparison, its direction, or its operands. That
+       bound is time-invariant (it reduces to `child_start > heartbeat`) and has been misread by three
+       separate review rounds; it is correct as merged.
+
+  ## OUT OF SCOPE
+
+  - **No CPU-delta or CPU-threshold rule.** BUG-1704's spec forbids it: a build queued behind this
+    host's 2-slot cargo flock consumes no CPU, so a CPU rule reports a working seat finished.
+  - **Not BUG-1726** (a heartbeat landing after a detached build starts). Different window, already
+    filed, already dispositioned accept-and-document.
+  - **Not PID reuse.** The registry is pid-keyed throughout; re-checking a start-time identity is a
+    substrate-wide change, not this rule's business.
+  - **Not the `agent stop` descendant leak.** Recorded on BUG-1726, deliberately unfiled.
+
+  ## ORDERING
+
+  Depends on PR #2276 (BUG-1704) merging; every line cited above lives on the `bug-1704` branch.
+
+  Provenance: filed by the advisor seat, session #9 of the relay, 2026-09-29, from round 4 of the
+  independent review of PR #2276. Reviewer findings R1 and R5 survived verification as GAPs 2 and 1;
+  R2's AC3 verdict was overturned and its test-fidelity observation survived as GAP 3. R3, R4 and R6
+  confirmed the diff healthy.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-29T11:40:16.011406979Z
+modified_at: 2026-09-29T11:40:16.011406979Z
+req_type: Bug
+filed_at:
+  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 0c3ef5cb6b
+  vendor: antigravity
+  session: e30cbbbf-d93e-417b-965f-acd9cc04b4d2
