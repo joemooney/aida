@@ -1,10 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-28T17:07:37.423129687Z
+last_run: 2026-09-29T04:02:57.169491772Z
 last_by:
   seat: advisor
-  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
+  session: 82e35274-2614-44d4-a519-d33e83252c8c
   vendor: antigravity
 result: done
-note: 'Verified healthy 2026-09-28 10:05 MST: / at 77% with 203G free (floor not breached); /run/user/1000 tmpfs at 1% (24M of 7.1G) so BUG-1702''s tmpfs-fill mode is clear too. The trip was the 97%-full condition already reclaimed by deleting target/ in non-main worktrees; no further action. Evidence: df -h / /run/user/1000.'
-due_since: 2026-09-28T21:38:32.031613929Z
-due_reason: on CronJobFailed
+note: 'Resolved before this session: floor is [doctor.disk_headroom] min_free_gib=60, df / now reports 182G free at 80% used. No reclaim needed and the floor stays as configured.'
