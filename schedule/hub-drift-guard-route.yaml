@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: aida-store diverged (gitlab 2638843e48d1 +3, origin a7a69ee66915 +1); local 7e27ac3bb736 already contained both, so reconcile was a fast-forward push to each hub, no union merge and no force-push. aida remote status now clean on main, aida-store and release v0.15.0.
+due_since: 2026-09-29T09:41:20.444734863Z
+due_reason: on CronJobFailed

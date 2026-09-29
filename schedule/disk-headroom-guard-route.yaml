@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Resolved before this session: floor is [doctor.disk_headroom] min_free_gib=60, df / now reports 182G free at 80% used. No reclaim needed and the floor stays as configured.'
+due_since: 2026-09-29T09:41:20.444734863Z
+due_reason: on CronJobFailed

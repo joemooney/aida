@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Real regression, budget NOT changed. Reproduced: aida show 11.4% of 359 calls over the 1000ms budget (tolerated 10%), one call 13118ms against the 5000ms ceiling. Already owned by BUG-1674; structural fix is STORY-1484 (single-flight cache refresh). Full per-binary analysis recorded as a comment on BUG-1674.'
+due_since: 2026-09-29T09:41:20.444734863Z
+due_reason: on CronJobFailed
