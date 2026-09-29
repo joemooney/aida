@@ -23,12 +23,12 @@ description: |
   `PackDrift::Orphan` in `find_orphans`, and have `sync_portable_pack` remove it before writing.
 
   A test would plant that file and assert the drift kind rather than an `Err`.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T03:56:34.334450305Z
-modified_at: 2026-09-29T04:00:40.966667218Z
+modified_at: 2026-09-29T04:31:27.332283590Z
 req_type: Bug
 history:
 - id: 01a0eb4e-c604-75f0-9fe9-968d1ef53e98
@@ -45,6 +45,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0eb6e-9255-7d53-ab65-f51582b11824
+  author: aida-auto-bump
+  timestamp: 2026-09-29T04:31:27.317244929Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0eb6e-9264-7702-930c-fd8d235af418
+  timestamp: 2026-09-29T04:31:27.332282176Z
+  agent: advisor
+  commit_sha: 564b2b96573a30f3eb75e9eb49de8d86f895b224
+  summary: Completed via merge 564b2b96
 filed_at:
   code_sha: 42e58794d8a6696c0f81e358ea5702c490903c29
   branch: main
@@ -53,3 +66,7 @@ filed_at:
   aida_build_sha: 42e58794d8
   vendor: antigravity
   session: 597cd82b-74e5-462d-801c-dc9f77a75cbd
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-29T04:31:27.317184718Z
+  completion_sha: 564b2b96573a30f3eb75e9eb49de8d86f895b224
