@@ -2700,7 +2700,10 @@ mod tests {
     fn classify_status_live_lease_without_proc_tree_is_busy() {
         let now = Utc::now();
         let entry = entry_with(42, now - Duration::minutes(5));
-        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        // The lease path comes from the entry itself: the rule under test is "a live lease
+        // covers this seat's worktree", so duplicating a literal here would add a non-portable
+        // tmp path for no gain. trace:BUG-1704 | ai:claude
+        let ctx = ctx(now, 30, vec![entry.worktree_path.clone()]);
         assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
     }
 
@@ -2709,8 +2712,8 @@ mod tests {
     fn classify_status_live_lease_with_quiet_subtree_is_idle() {
         let now = Utc::now();
         let entry = entry_with(42, now - Duration::minutes(5));
-        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")])
-            .with_work_probe(bug1704_tree(3600), 10);
+        let ctx =
+            ctx(now, 30, vec![entry.worktree_path.clone()]).with_work_probe(bug1704_tree(3600), 10);
         assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Idle);
     }
 
@@ -2719,8 +2722,8 @@ mod tests {
     fn classify_status_live_lease_with_working_subtree_is_busy() {
         let now = Utc::now();
         let entry = entry_with(42, now - Duration::minutes(5));
-        let ctx = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")])
-            .with_work_probe(bug1704_tree(120), 10);
+        let ctx =
+            ctx(now, 30, vec![entry.worktree_path.clone()]).with_work_probe(bug1704_tree(120), 10);
         assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
     }
 
