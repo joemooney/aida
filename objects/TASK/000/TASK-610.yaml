@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-29T23:03:33.586241187Z
+modified_at: 2026-09-29T23:08:46.662632091Z
 req_type: Task
 tags:
 - docs
@@ -33,5 +33,10 @@ comments:
   content: 'Extended the upper-management deck to 19 slides with two seven-day GitHub Actions evidence slides after the Sep 11-15 baseline. Local-MST windows: Sep 16-22 = 1,536 runs, 756 unique SHAs, 1,182 success/354 failure (77.0%), 756 CI/664 merge-hold/116 cross-platform, 6.9m mean; Sep 23-29 = 774 runs, 413 unique SHAs, 648 success/122 failure/4 cancelled (83.7%), 405 CI/265 merge-hold/104 cross-platform, 12.1m mean, Sep 29 partial. Renumbered all later slides/notes, updated evidence date to Sep 29, regenerated both PPTX copies, and visually verified the 19-slide contact sheet plus new slides at 1600x900.'
   created_at: 2026-09-29T23:03:33.586235548Z
   modified_at: 2026-09-29T23:03:33.586235548Z
+- id: 01a0ef6d-82c6-7843-9303-711786f6235b
+  author: mcp
+  content: 'Added delivered-output context to the two weekly CI slides using GitHub''s merged-PR timestamps in local MST: 240 PRs merged Sep 16-22 and 164 PRs merged Sep 23-29. Replaced the lower-value mean-duration tile (duration retained in speaker notes), updated source footers to GitHub Actions + merged-PR APIs, regenerated both PPTX copies, and rendered slides 7-8 for visual verification.'
+  created_at: 2026-09-29T23:08:46.662626600Z
+  modified_at: 2026-09-29T23:08:46.662626600Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
