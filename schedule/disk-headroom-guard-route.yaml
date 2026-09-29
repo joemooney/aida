@@ -1,10 +1,7 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-29T04:02:57.169491772Z
+last_run: 2026-09-29T09:43:40.087483989Z
 last_by:
   seat: advisor
-  session: 82e35274-2614-44d4-a519-d33e83252c8c
+  session: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
   vendor: antigravity
 result: done
-note: 'Resolved before this session: floor is [doctor.disk_headroom] min_free_gib=60, df / now reports 182G free at 80% used. No reclaim needed and the floor stays as configured.'
-due_since: 2026-09-29T09:41:20.444734863Z
-due_reason: on CronJobFailed
