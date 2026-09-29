@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T04:30:22.048735259Z
-modified_at: 2026-09-29T07:33:37.722740Z
+modified_at: 2026-09-29T07:44:35.792289791Z
 req_type: Task
 tags:
 - agent-launch
@@ -531,6 +531,76 @@ comments:
   content: Commit 0c3ef5cb6b references this requirement
   created_at: 2026-09-29T07:33:37.722740Z
   modified_at: 2026-09-29T07:33:37.722740Z
+  session_id: d3b4d739-0433-404d-b8de-30f658d731a8
+- id: 01a0ec1f-65d0-7972-87aa-10522bbb06ec
+  author: joe
+  content: |
+    ADVISOR VERDICT 2026-09-29 (Session #6): APPROVED. Rounds 1-3 satisfy the rework brief. Committed
+    as 28b356a864, merged with origin/main as 1b43b32d4a, pushed to both hubs. CI pending.
+
+    WHAT I VERIFIED MYSELF, BY EXECUTION, RATHER THAN READING THE REPORT
+
+    1. The performance acceptance. I re-ran it in this seat rather than taking the implementer's number,
+       and that mattered: round 2 reported "4 /proc/*/cmdline opens with AIDA_BIN set" and the real
+       figure was 489. The discrepancy was MY FAULT, not the implementer's — the recipe in my brief put
+       `env -u AIDA_BIN` on the grep line instead of on the traced run, so the traced process never had
+       the variable set. It followed the recipe literally and got a number that looked like a pass.
+       Corrected recipe, re-measured by me after the merge, `aida --version` on a 499-process host:
+
+           /proc/<pid>/cmdline opens      before this branch   0
+                                          round 1              992   (two full table enumerations)
+                                          round 2              489   (one, and 0 when AIDA_BIN unset)
+                                          FINAL, unset           0
+                                          FINAL, set             8
+           wall time, unset                                   0.01 s (baseline 0.01 s)
+           wall time, set                                     0.01 s (was 0.07-0.10 s)
+
+       Startup cost is back to the pre-change baseline on BOTH paths. That second path is the one that
+       matters operationally: `export_coordinating_bin_env` sets AIDA_BIN for every child, so inside the
+       fleet essentially every `aida` invocation is a child WITH it set. I had marked the O(depth) walk
+       "recommended, not blocking" in round 2; measuring it is what showed I had mis-scoped it, and I
+       promoted it in round 3 rather than merging a fleet-wide ~80 ms regression.
+
+    2. The full crate suite, twice, in this seat — not trusting the implementer's green.
+           pre-merge   test result: ok. 7282 passed; 0 failed; 2 ignored; finished in 412.70s
+           post-merge  test result: ok. 7334 passed; 0 failed; 2 ignored; finished in 417.08s
+       `cargo fmt --all -- --check` exit 0 after the merge. The merge with origin/main (14 commits) was
+       clean; I checked beforehand that main had not touched `export_coordinating_bin_env`,
+       `aida_exe_path` or `resolve_aida_exe`, and it had not.
+
+    3. The DO-NOT list, by diff rather than by assertion. `git status --short` is exactly four files.
+       `SESSION_ENV_NAMES` appears ZERO times in the diff; neither BUG-1624 nor BUG-1627 guard test file
+       is touched; no new environment variable; no config.toml override; no new files. T6 holds by
+       construction, which is the point of having written it that way.
+
+    4. Non-vacuity. The implementer removed the trust check, confirmed
+       `declined_override_resolves_to_running_executable_before_path` FAILS, and restored it. It also
+       volunteered, unprompted and across all three rounds, which of its tests pass either way (T1, T2)
+       and that the `OnceLock` is not independently testable in-process because its value is shared
+       across the test binary. That is the reporting standard I want and I am recording it as such.
+
+    WHAT THE FINAL SHAPE IS
+    `decide_override` is pure and three-valued (Honored / DeclinedAmbient / Absent). The ancestor lookup
+    is passed as `impl FnOnce() -> Option<u32>` and is invoked ONLY on the `Some(path)` arm, so an unset
+    AIDA_BIN costs nothing at all; the answer is memoised in a `OnceLock<Option<u32>>` so a command that
+    resolves more than once pays for at most one walk. `nearest_aida_ancestor_pid` walks the chain
+    refreshing one pid at a time via `System::refresh_process_specifics` instead of enumerating the
+    table, and delegates selection to the pure `nearest_aida_in_chain`, which mirrors the BUG-752
+    `nearest_claude_in_chain` precedent exactly. `nearest_claude_ancestor_pid` is untouched.
+
+    The doc comments carry all three things the brief demanded: the BUG-766 rationale, the
+    older-absolute-path regression case that makes this an ancestor check rather than simply dropping
+    AIDA_BIN, and the honest statement that this is an ACCIDENT boundary and not a security boundary.
+    The incremental walk's lack of a consistent snapshot is documented too, with its consequence — a
+    racing ancestor exit ends the walk early and DECLINES the override, which is the fail-safe direction.
+
+    STILL OPEN, DELIBERATELY
+    - TASK-1262's `current_exe()` allowlist (the T7 secondary finding) is untouched and still allows one
+      raw call in each of lib.rs and aida_bin.rs. Correctly declined twice rather than half-done.
+    - BUG-1723 (config.toml read as trusted while its sibling session-env.sh is not) remains its own
+      decision and was kept out of scope on purpose.
+  created_at: 2026-09-29T07:44:35.792289791Z
+  modified_at: 2026-09-29T07:44:35.792289791Z
   session_id: d3b4d739-0433-404d-b8de-30f658d731a8
 history:
 - id: 01a0def5-5486-7112-b089-f69b8f60b6cb
