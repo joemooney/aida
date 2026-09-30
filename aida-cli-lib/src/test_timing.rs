@@ -10,10 +10,24 @@
 //! [`assert_within_budget`] makes the host assumption explicit, and splits the
 //! two jobs a single `<` was doing:
 //!
-//! * a **hard ceiling** that no amount of load excuses. A hang is unbounded,
-//!   so any finite ceiling separates it from a merely slow host. This is the
-//!   only thing here that can fail a test, and it is enforced everywhere,
+//! * a **hard ceiling** that no amount of load excuses. This is the only
+//!   thing here that can fail a test, and it is enforced everywhere,
 //!   including on a busy CI runner.
+//!
+//!   It is a *coarse backstop*, not a hang detector: it is checked after the
+//!   operation returns, so a call that never returns is caught by the test
+//!   harness or the CI job timeout, never by this. What it does catch is an
+//!   operation that returns after an order-of-magnitude overrun — notably a
+//!   `scan` grinding on toward its own 600s internal budget, which nothing
+//!   else here would notice.
+//!
+//!   Callers set it near ten times nominal (60s against a ~7s configured
+//!   worst case). That is a deliberate policy choice, and it is not provably
+//!   unreachable: a suspended VM or an extreme scheduler stall could cross it
+//!   with nothing wrong. The trade is accepted because *something* must be
+//!   able to fail or the timing assertion says nothing at all, and at ten
+//!   times nominal a crossing is worth a look on its own. If one ever fires
+//!   on a healthy host, raise it — do not re-gate it on load.
 //! * a tighter **budget** that is a performance signal. Missing it is
 //!   *reported*, never fatal.
 //!
