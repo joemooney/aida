@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T04:23:57.166615264Z
+modified_at: 2026-09-30T04:24:26.766619184Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -240,6 +240,91 @@ comments:
   created_at: 2026-09-30T04:00:39.578455977Z
   modified_at: 2026-09-30T04:00:39.578455977Z
   session_id: 7f350627-1e00-467b-b83d-33b905721517
+- id: 01a0f08e-838e-7af1-a49a-a133e4f81f58
+  author: joe
+  content: |
+    ## Root cause of the CI-only `nested_freshen_in_lock_holder_does_not_wait` failure — proven, not inferred
+
+    The CI diagnostic shipped with TASK-1526 fired on run 36667031503's predecessor and reported a
+    state that looked self-contradictory:
+
+    ```
+    registry_entry=None  direct_flock=Some((WouldBlock, Some(11)))
+    ```
+
+    The in-process registry holds nothing for the sidecar, yet the kernel says a conflicting lock
+    exists. The previous session read that as "a descriptor of ours outlived its guard" and went
+    looking for a leak in `RefreshLock`. **There is no leak in `RefreshLock`.** I read every owner of
+    the sidecar `File` in the module: the only long-lived one is `HeldLock::_file`, it is moved into
+    the registry, and it is dropped when `depth` reaches zero. The other three `open`s in
+    `try_acquire` (the nested branch, the foreign-owner branch, the contended-flock branch) all drop
+    their descriptor on return.
+
+    ### The actual mechanism
+
+    `flock` belongs to the **open file description**, and `fork` duplicates every descriptor into the
+    child. `O_CLOEXEC` — which Rust sets on every `File` — closes the copy at **`exec`, not at
+    `fork`**. So for the width of the fork→exec window, any thread in this process that spawns a
+    subprocess hands the child a second reference to this module's locked open file description. If
+    the holder drops its guard inside that window, the parent's `close()` does **not** release the
+    lock, because the description is still referenced. `try_acquire` then reports contention against
+    an empty registry — exactly the diagnostic above — until the child reaches `exec`.
+
+    ### Demonstration
+
+    Reduced to 25 lines, no aida code involved:
+
+    ```python
+    holder = open(p, "a+"); fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    pid = os.fork()
+    if pid == 0:
+        time.sleep(3); os._exit(0)      # stands in for a descheduled pre-exec child
+    holder.close()                      # the guard drops
+    ```
+
+    ```
+    immediately after the holder closed its fd: WouldBlock errno=11
+    after the forked child exited:              FREE
+    ```
+
+    `errno=11` is `EWOULDBLOCK` — byte-for-byte the CI report.
+
+    ### Why this is CI-only and why it never reproduced on a quiet host
+
+    The `aida-core` lib suite spawns `git` subprocesses continuously and concurrently. On a loaded
+    runner the fork→exec window stretches from microseconds to long enough to straddle a guard drop.
+    That is also why the previous three sessions could not reproduce it locally: it needs a *slow*
+    fork→exec, not merely a slow test.
+
+    ### This is not a production defect
+
+    In production the consequence of a spurious `Ok(None)` is that the caller loses the single-flight
+    race and serves stale or defers — the module's designed degradation. Nothing in `RefreshLock` can
+    stop a sibling thread from forking, and `O_CLOEXEC` is already the strongest available mitigation.
+
+    **The defect is in the assertion.** `assert!(RefreshLock::try_acquire(&path).unwrap().is_some())`
+    demands the lock be free at the instant the last guard drops, which is not something the kernel
+    promises to a multithreaded process that spawns subprocesses. The fix is to wait for the window
+    to close, bounded, and to keep the diagnostic for a descriptor that never comes back.
+
+    ### Bearing on the three acceptance criteria
+
+    - **AC2** — this resolves the "descriptor lifecycle" half of observation B's neighbourhood with
+      evidence, and eliminates the leaked-descriptor hypothesis for *this* failure. Observation B
+      itself (probe reports **free** while a guard is alive) is the opposite direction and is **not**
+      explained by fork inheritance: the child's `open()` creates a new open file description, which
+      `flock` denies against the holder's. B stays open.
+    - **AC1** and **AC3** are untouched by this finding and remain as filed.
+
+    ### One correction to the record
+
+    The bug's "What is already ruled out" list says closing a second descriptor cannot release the
+    holder's lock. That is correct, and it is *not* what happens here — here a second descriptor
+    **keeps** the lock alive past the holder's close. The elimination list was sound; the inference
+    drawn from the diagnostic was not.
+  created_at: 2026-09-30T04:24:26.766619184Z
+  modified_at: 2026-09-30T04:24:26.766619184Z
+  session_id: ef8b326b-58db-4236-9f3e-0769d4790bfa
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
   author: joe
