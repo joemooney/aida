@@ -1,0 +1,40 @@
+id: 01a0f4a5-91a2-7bb2-94f4-b7735adf083a
+spec_id: TASK-1561
+agreed_id: TASK-1561
+title: Make the worktree parent directory configurable so restricted-permission agents need one narrow grant
+description: |
+  OBSERVED: `aida queue work <SPEC>` creates its worktree as a SIBLING of the project root, `<parent>/<repo>-<slug>` — e.g. `/home/joe/ai/aida-bug-1743`. With ~25 live worktrees this scatters them directly across `/home/joe/ai`, alongside unrelated projects.
+
+  WHY IT MATTERS: an agent running WITHOUT `--dangerously-skip-permissions` must be granted access to its worktree. Because the worktrees are siblings, the only grant that covers them is the shared parent `/home/joe/ai` — which also contains every other side project on the machine. That is far broader than the work requires, and it is granted per session, repeatedly. A single dedicated directory would need one narrow grant covering nothing but this repo's worktrees.
+
+  PROPOSAL: make the worktree parent configurable — a `[worktree] root` key in `.aida/config.toml` — and recommend a dedicated sibling FOLDER, `<parent>/<repo>-worktrees/<repo>-<slug>`. Default stays today's sibling path so existing checkouts do not move.
+
+  WHY A SIBLING FOLDER AND NOT NESTING INSIDE THE REPO (`<root>/.worktrees/<slug>`), which would need no new grant at all:
+
+  1. Root resolution would gain a silent fallback. `parent_project_root_for_session` (aida-cli-lib/src/lib.rs:33740) walks UP from cwd for an ancestor holding `.aida/sessions/`. Under the sibling layout the main checkout is never an ancestor of a worktree, so a resolve that fails returns None. Nested, the main checkout IS an ancestor of every worktree, so a failed resolve silently resolves to the real repository instead. That is the exact failure shape BUG-1743 just documented: the phase-3 handshake falling through to the cwd's enclosing project and writing a fabricated `request-changes` verdict for real merged PR #1452 into the operator's checkout, three times across three weeks, unnoticed because `.aida/` is gitignored.
+  2. Tool traversal. `rg`, `find`, `cargo`, and `make check-templates` run from the repo root would descend into 20-60 full checkouts. `.claude/worktrees/` gets away with this only because it is a dotdir most tools skip.
+  3. Disk and cleanup. `cargo clean` / `rm -rf` blast radius at the repo root becomes every worktree's `target/` at once.
+
+  IMPLEMENTATION SIZE: small and already centralised. `pickup_worktree_path` (aida-cli-lib/src/lib.rs:36840) is the single resolver — BUG-1628 deliberately consolidated `session_start`, the `queue work --dry-run` preview, and the auto-complete phase-1 fallback onto it. So: one function, one config key, one doctor hint.
+
+  ## Acceptance
+  - `.aida/config.toml` accepts a `[worktree] root` key; when set, `aida queue work` and every other pickup path create the worktree under it. Verified by asserting the created path, not by reading the config back.
+  - With the key ABSENT, the created path is byte-identical to today's `<parent>/<repo>-<slug>`. An existing checkout that never sets the key sees no change.
+  - Every caller BUG-1628 consolidated onto `pickup_worktree_path` honours the key — including the `--dry-run` preview, which must print the same path the real run creates. Prove this by test, not by inspection: a divergence between preview and reality is the defect BUG-1628 existed to prevent.
+  - The ~25 worktrees already at `<parent>/<repo>-<slug>` keep working when the key is introduced; state explicitly whether they are migrated, left in place, or reported by `aida doctor`, and implement whichever is chosen.
+  - A relative `root` value resolves against a documented, tested base, and a value escaping to an unintended location (`..`, absolute path outside the parent) is either rejected or documented as allowed — decided deliberately, with the decision recorded.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T23:28:06.562496496Z
+modified_at: 2026-09-30T23:28:06.562496496Z
+req_type: Task
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: a7936b63-4f59-4186-b1af-e66aaea312fd
