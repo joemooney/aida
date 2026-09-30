@@ -2,6 +2,25 @@
 
 Date: 2026-09-29 · Spec: BUG-1729 (follow-on from TASK-1526 / PR #2283)
 
+## Status update — 2026-09-29, later the same day (PR #2286)
+
+The sections below are preserved as the investigation record. Two of their
+conclusions have since been superseded; read this first.
+
+- **The harness under "Reproduction harness — NOT shipped, and why" HAS now
+  shipped**, as `cache_refresh::tests::refresh_lock_descriptor_lifecycle_is_visible_to_another_process`
+  (PR #2286). Do not re-add it. The reason it was held back — that it could not
+  be told apart from a genuine transient defect — was resolved: its
+  must-be-FREE assertion now polls the bounded fork window, which is what made
+  it flake, and its must-be-LOCKED assertions were re-derived as unable to pass
+  spuriously.
+- **Prefer the shipped `lock_holders` over this document's `lock_diag`.** The two
+  `lock_diag` copies below are a copy-paste artifact (one carries a doubled
+  `#[cfg(unix)]`, and both match the bare inode rather than `/proc/locks`'s own
+  `MAJ:MIN:INO` key, which can name a lock on another device).
+- **BUG-1729 observation B did not reproduce** in 60 consecutive quiet-host runs
+  or in 4 concurrent `db::cache` workers at load 34. See the spec comments.
+
 ## Why this document exists
 
 PR #2283 was blocked by a single CI failure in
