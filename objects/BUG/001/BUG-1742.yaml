@@ -28,8 +28,32 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:11:23.249054665Z
-modified_at: 2026-09-30T17:41:18.556066246Z
+modified_at: 2026-09-30T17:57:30.137504389Z
 req_type: Bug
+comments:
+- id: 01a0f376-e399-7d43-ad45-aa39cd334a94
+  author: joe
+  content: |
+    Measurement done, all four acceptance bullets answered. Full report: docs/plans/2026-09-30-bug-1742-ci-flake-tally.md. PR #2298.
+
+    AC1 — rate, denominator pinned. 302 completed main/push CI runs since 2026-09-20 (the date window covers more than the 50-run floor, so it governs). 15 excluded as docs-only short-circuits, where `Detect full-CI changes` skips `Run tests` and the suite never runs — the only exclusion, and the reason the denominator is 287, not 302. Result: 12/287 = 4.2%. All 12 failures were the `Run tests` step; none came from fmt, clippy, a guard, or infrastructure. Per-test tally in the report, single occurrences included.
+
+    The rate is not uniform and this spec was filed inside the spike: 2.3% (6/262) before 2026-09-29, 24% (6/25) during 2026-09-29/30. Both numbers are in the report so the next reader neither over- nor under-invests.
+
+    AC3 — NOT one mechanism. Four families, evidenced by panic text that differs in kind: (A) exec of a just-written injected binary, one of which names `Text file busy (os error 26)` outright; (B) a file vanishing under a live `tempfile` root; (C) flock / refresh-lock contention; (D) one genuine regression, which clustered on three consecutive runs and then stopped — a flake does not do that. They share a precondition, CI parallelism, but a shared precondition is not a shared mechanism and the remedies are unrelated. So neither one unified fix nor the five-separate-fixes shape this criterion was written to block.
+
+    AC2 — dispositions. Eight of the nine tests already had a filed spec, and every one of their failures predates its own fix: BUG-1579 (family D, completed 09-22), BUG-1595 (tick_lock, completed 09-24), BUG-1735 (family A, merged 09-30T10:51Z — the failing `bug_1291` call site now carries `trace:BUG-1735`, so the fix landed on the exact line), BUG-1729/BUG-1736 (family C, merged 09-30T11:42Z). Nothing was quarantined, ignored, or retried.
+
+    Exactly one offender was unfiled and still live: `bug_1452_refusal_aftermath_tests::refusal_aftermath_is_parked_held_and_awaiting_visible`, the only test in the window whose most recent failure (36717478815, 12:51Z) postdates every fix above. Filed as BUG-1743 (approved) with both panic texts and both run IDs. It is plausibly the mirror image of BUG-1695 — entries appearing inside a temp tree during teardown there, a file disappearing from one here — and BUG-1743's acceptance makes "unrelated" a claim needing evidence rather than a default.
+
+    What this pass does NOT claim: only 4 runs postdate both same-day fixes, and one failed. Four runs is not evidence that anything was fixed; the 25% that arithmetic yields is noise, not a rate. The attribution rests on the per-family timeline and the call-site evidence, not on a post-fix green streak, because there is not one yet. Re-running the script in a week is what settles it.
+
+    AC4 — repeatable: `scripts/ci-flake-tally.py --since 2026-09-20`, verified to reproduce the tally line for line. It paginates unfiltered on purpose: the server-side branch/event filters AND `gh run list --workflow ci.yml --branch main` both reported their newest run as 2026-09-08, three weeks stale, while the unfiltered listing was current to the minute. A tally built on either would have measured a window ending before this spec's own burst, found nothing, and closed it. `gh run view --log-failed` also returned the checkout teardown instead of the test step, so the script reads the job log endpoint directly.
+
+    Unfiled observation, recorded here rather than filed: the `bug_1291` and `bug_1609` panics printed no `Caused by`, so the errno was never captured and their attribution to family A rests on call-site shape plus fix timing rather than on evidence. A spawn-failure context that always names the OS error would have made this pass a grep instead of an inference. Not filed because BUG-1735's 38-file sweep may already have changed those messages.
+  created_at: 2026-09-30T17:57:30.137504389Z
+  modified_at: 2026-09-30T17:57:30.137504389Z
+  session_id: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
 history:
 - id: 01a0f356-5936-7672-9f0a-c46750090e4b
   author: joe
