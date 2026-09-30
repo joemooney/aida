@@ -175,7 +175,7 @@ pub(crate) fn handle_graph_command(
                 "rejected": rollup.rejected,
             },
         });
-        println!("{}", serde_json::to_string_pretty(&out)?);
+        println!("{}", crate::cache_output::json_pretty(&out)?);
         return Ok(());
     }
 

@@ -905,8 +905,9 @@ mod tests {
     // store HEAD, so the "checked at HEAD" marker must NOT be written. Once
     // the cache can catch up, the marker is written for that HEAD.
     // trace:BUG-1606 | ai:claude
-    // Unix-only: pid 1 stands in for a live foreign writer, which only holds
-    // on Unix (same convention as the BUG-664 cache test).
+    // Unix-only: the stale snapshot is manufactured by holding the refresh
+    // flock on another thread, and flock is a Unix facility.
+    // trace:TASK-1526 | ai:claude
     #[cfg(unix)]
     #[test]
     fn bug_1606_notice_marker_not_written_from_a_stale_cache_snapshot() {
@@ -934,17 +935,12 @@ mod tests {
         }
         let head = store_head_sha(&store_root).unwrap();
 
-        // A live foreign writer (pid 1) holds the cache write lock, so the
-        // read path serves the old snapshot instead of catching up.
-        let lock_info = std::path::PathBuf::from(format!("{}.lock-info", cache_path.display()));
-        let info = aida_core::CacheLockInfo {
-            pid: 1,
-            command: "test-foreign-writer".to_string(),
-            started_at: chrono::Utc::now().to_rfc3339(),
-            user: "test".to_string(),
-            ..Default::default()
-        };
-        std::fs::write(&lock_info, serde_json::to_string(&info).unwrap()).unwrap();
+        // Another thread holds the refresh flock, so this thread loses the
+        // single flight and serves the old snapshot instead of catching up.
+        // TASK-1526 deleted the `.lock-info` sidecar shortcut this used to
+        // rely on; the flock is now the mechanism the read path loses to.
+        // trace:TASK-1526 | ai:claude
+        let foreign = crate::stale_cache_fixture::hold_foreign_refresh(&cache_path);
 
         let storage = Storage::new(&store_root);
         let marker = tmp.path().join(NOTICE_MARKER);
@@ -959,9 +955,9 @@ mod tests {
             "a stale snapshot must not record the marker for the new HEAD"
         );
 
-        // The foreign writer is gone: the read catches up, and the marker is
-        // recorded for exactly this HEAD.
-        std::fs::remove_file(&lock_info).unwrap();
+        // The foreign refresh holder is gone: the read catches up, and the
+        // marker is recorded for exactly this HEAD.
+        drop(foreign);
         maybe_print_upstream_recheck_notice(&storage, &backend);
         assert_eq!(
             backend.cache().source_head_sha().unwrap().as_deref(),

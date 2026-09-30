@@ -15,9 +15,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
-pub use super::cache_lock::{
-    cache_lock_info_path, foreign_writer_holds_lock_at, read_cache_lock_info, CacheLockInfo,
-};
+pub use super::cache_lock::{cache_lock_info_path, read_cache_lock_info, CacheLockInfo};
 use super::cache_lock::{
     clear_dead_owner_lock_info_at, enrich_cache_lock_error, observe_lock_info_file,
     remove_lock_info_at, touch_own_lock_info_at, write_lock_info_at,
@@ -556,6 +554,69 @@ const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 
 // resilient ladder. trace:BUG-681
 const FAST_FAIL_CACHE_RETRY_DELAYS_MS: &[u64] = &[50, 100];
 
+// trace:TASK-1526 | ai:codex
+fn refresh_head_reached(conn: &Connection, target: &str, store_path: &Path) -> Result<bool> {
+    let recorded: Option<String> = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(recorded.is_some_and(|head| {
+        if head == target {
+            return true;
+        }
+        // A previous future snapshot after a force-push must be rebuilt;
+        // "past target" is safe only on the current store lineage.
+        let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
+        !target.is_empty()
+            && !head.is_empty()
+            && !current.is_empty()
+            && crate::git_ops::is_ancestor(store_path, target, &head).unwrap_or(false)
+            && crate::git_ops::is_ancestor(store_path, &head, &current).unwrap_or(false)
+    }))
+}
+
+// One-attempt policy is separate from the legacy advisory 150ms open policy.
+// trace:TASK-1526 | ai:codex
+thread_local! {
+    static READ_REFRESH_ATTEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static HOLDING_WRITE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// trace:TASK-1526 | ai:codex
+pub(super) fn holding_write() -> bool {
+    HOLDING_WRITE.with(|n| n.get() > 0)
+}
+
+// trace:TASK-1526 | ai:codex
+pub(super) struct ReadRefreshAttempt(bool);
+impl ReadRefreshAttempt {
+    pub(super) fn new() -> Self {
+        Self(READ_REFRESH_ATTEMPT.with(|c| c.replace(true)))
+    }
+}
+impl Drop for ReadRefreshAttempt {
+    fn drop(&mut self) {
+        READ_REFRESH_ATTEMPT.with(|c| c.set(self.0));
+    }
+}
+
+// trace:TASK-1526 | ai:codex
+struct HoldingWrite;
+impl HoldingWrite {
+    fn new() -> Self {
+        HOLDING_WRITE.with(|n| n.set(n.get() + 1));
+        Self
+    }
+}
+impl Drop for HoldingWrite {
+    fn drop(&mut self) {
+        HOLDING_WRITE.with(|n| n.set(n.get() - 1));
+    }
+}
+
 thread_local! {
     // Armed by the `aida awaiting --notice` path before the cache is opened, so
     // BOTH the connection open and the summary reads honor the short ladder.
@@ -698,6 +759,7 @@ fn with_cache_write<T, F>(cache_path: &Path, lock_info_path: &Path, action: &str
 where
     F: FnMut() -> Result<T>,
 {
+    let _holding_write = HoldingWrite::new();
     let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;
     let result = with_cache_retry_observed(lock_info_path, action, claimed, f);
     if result.is_ok() {
@@ -735,6 +797,10 @@ where
     let delays = cache_retry_delays();
     let mut attempts = 0usize;
     loop {
+        #[cfg(test)]
+        if holding_write() {
+            super::cache_refresh::test_count("write_attempt");
+        }
         match f() {
             Ok(value) => return Ok(value),
             Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
@@ -744,6 +810,8 @@ where
                         &format!("waiting for sqlite lock: {action} (retry {})", attempts + 1),
                     );
                 }
+                #[cfg(test)]
+                super::cache_refresh::test_count("retry_sleep");
                 std::thread::sleep(delays[attempts]);
                 attempts += 1;
             }
@@ -757,6 +825,10 @@ where
 }
 
 fn cache_retry_delays() -> Vec<Duration> {
+    // trace:TASK-1526 | ai:codex
+    if READ_REFRESH_ATTEMPT.with(|c| c.get()) {
+        return Vec::new();
+    }
     // BUG-681: on the advisory notice path, collapse to the short bounded ladder
     // so a lock-contended open/read fails fast (~150ms) rather than blocking on
     // the full ~25s exponential backoff. An explicit AIDA_CACHE_RETRY_COUNT=0
@@ -818,11 +890,9 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
 
 /// True when `err` is a cache write-lock failure: a raw SQLite busy/locked
 /// error, or the owner-enriched error the retry ladder returns once it is
-/// exhausted. Today only tests branch on it (the incremental refresh treats
-/// a lock error like any other failure and falls back to a full rebuild);
-/// kept for the planned single-flight refresh, which must tell them apart.
+/// exhausted. Strict refresh propagates it without escalation; a tolerant
+/// incremental winner can serve a labelled compatible snapshot after one attempt.
 // trace:TASK-1515 | ai:claude
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn is_cache_lock_error(err: &anyhow::Error) -> bool {
     is_sqlite_lock_error(err)
         || err
@@ -885,6 +955,11 @@ impl CacheTx<'_> {
     }
 }
 
+// trace:TASK-1526 | ai:codex
+#[derive(Debug, thiserror::Error)]
+#[error("the cache schema changed; a compatible projection is required")]
+pub(crate) struct CacheSchemaChanged;
+
 pub struct Cache {
     conn: Mutex<Connection>,
     path: PathBuf,
@@ -897,6 +972,7 @@ pub struct Cache {
     /// stale), so the next freshness check does a full rebuild.
     // trace:TASK-1515 | ai:claude
     migration_pending: AtomicBool,
+    usable_snapshot: AtomicBool,
 }
 
 impl Cache {
@@ -1060,6 +1136,7 @@ impl Cache {
             lock_info_path,
             path,
             migration_pending: AtomicBool::new(migration_pending),
+            usable_snapshot: AtomicBool::new(tables_present),
         };
         // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
@@ -1083,6 +1160,41 @@ impl Cache {
             }
         }
         Ok(cache)
+    }
+
+    // Read-only connection, pinned before reading either metadata or rows.
+    // Closing it releases the transaction, including on every error path.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn read_snapshot(&self) -> Result<Self> {
+        let conn =
+            Connection::open_with_flags(&self.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        conn.busy_timeout(std::time::Duration::ZERO)?;
+        conn.execute_batch("BEGIN DEFERRED")?;
+        if schema_migration_needed(&conn) {
+            self.migration_pending.store(true, Ordering::SeqCst);
+            return Err(CacheSchemaChanged.into());
+        }
+        Ok(Self {
+            conn: Mutex::new(conn),
+            path: self.path.clone(),
+            lock_info_path: self.lock_info_path.clone(),
+            migration_pending: AtomicBool::new(false),
+            usable_snapshot: AtomicBool::new(true),
+        })
+    }
+
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn has_usable_snapshot(&self) -> bool {
+        self.usable_snapshot.load(Ordering::SeqCst)
+    }
+
+    // Another process can finish a pending migration while this handle waits.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn recheck_migration(&self) -> bool {
+        if self.migration_pending() && !schema_migration_needed(&self.conn.lock().unwrap()) {
+            self.migration_pending.store(false, Ordering::SeqCst);
+        }
+        self.migration_pending()
     }
 
     pub fn path(&self) -> &Path {
@@ -1187,7 +1299,7 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
-        self.rebuild_projection(store, source_head_sha, false)
+        self.rebuild_projection(store, source_head_sha, false, None)
     }
 
     /// The one rebuild transaction. TASK-1515: the rows, the hierarchy edges,
@@ -1203,6 +1315,7 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
         force_drop: bool,
+        refresh_store: Option<&Path>,
     ) -> Result<usize> {
         // STORY-632: degree/heft is a pure function of the WHOLE relationship
         // graph, so compute it once over the full store before the row inserts.
@@ -1265,6 +1378,20 @@ impl Cache {
                 // another process has since completed the migration, skip the
                 // redundant drop (the refill below is the same either way).
                 // trace:TASK-1515 | ai:claude
+                // The flock is an optimization; SQLite serializes this check
+                // with the rows, including on filesystems with incoherent flock.
+                // trace:TASK-1526 | ai:codex
+                if let Some(store_path) = refresh_store {
+                    if !schema_migration_needed(&tx)
+                        && refresh_head_reached(&tx, source_head_sha, store_path)?
+                    {
+                        return Ok(tx.query_row(
+                            "SELECT COUNT(*) FROM requirements_cache",
+                            [],
+                            |r| r.get(0),
+                        )?);
+                    }
+                }
                 let drop_first = force_drop || (migration_pending && schema_migration_needed(&tx));
                 if drop_first {
                     tx.execute_batch(DROP_PROJECTION_SQL)
@@ -1319,7 +1446,20 @@ impl Cache {
         };
         // The deferred migration (if any) committed with the rebuild.
         self.migration_pending.store(false, Ordering::SeqCst);
+        self.usable_snapshot.store(true, Ordering::SeqCst);
         Ok(count)
+    }
+
+    // Only freshness-driven rebuilds skip a projection another process has
+    // already committed. Explicit `cache rebuild` remains an unconditional repair.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn rebuild_for_refresh(
+        &self,
+        store: &RequirementsStore,
+        head: &str,
+        store_path: &Path,
+    ) -> Result<usize> {
+        self.rebuild_projection(store, head, false, Some(store_path))
     }
 
     /// Force a schema reset before rebuilding from the authoritative store.
@@ -1339,7 +1479,7 @@ impl Cache {
     ) -> Result<usize> {
         // TASK-1515: the drop now commits with the refill, not before it.
         // trace:TASK-1515 | ai:claude
-        self.rebuild_projection(store, source_head_sha, true)
+        self.rebuild_projection(store, source_head_sha, true, None)
     }
 
     /// Apply an incremental refresh to `to_head` as ONE write transaction.
@@ -1355,7 +1495,12 @@ impl Cache {
     /// retry ladder. Declines immediately while a schema migration is
     /// pending (only a full rebuild may apply it).
     // trace:TASK-1515 | ai:claude
-    pub(crate) fn apply_incremental<F>(&self, to_head: &str, mut apply: F) -> Result<bool>
+    pub(crate) fn apply_incremental<F>(
+        &self,
+        to_head: &str,
+        store_path: &Path,
+        mut apply: F,
+    ) -> Result<bool>
     where
         F: FnMut(&CacheTx<'_>) -> Result<bool>,
     {
@@ -1369,6 +1514,10 @@ impl Cache {
             "refresh cache incrementally",
             || {
                 let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                // trace:TASK-1526 | ai:codex
+                if refresh_head_reached(&tx, to_head, store_path)? {
+                    return Ok(true);
+                }
                 let applied = apply(&CacheTx { conn: &tx })?;
                 if !applied {
                     // Dropping `tx` rolls back every row change.
@@ -4923,8 +5072,12 @@ mod tests {
         holder.execute_batch("ROLLBACK").unwrap();
     }
 
-    // BUG-664: read paths consult `foreign_writer_holds_lock` to decide whether
-    // to serve the last-good snapshot instead of contending for the write lock.
+    // BUG-664 originally had read paths consult `foreign_writer_holds_lock` to
+    // serve the last-good snapshot instead of contending for the write lock.
+    // TASK-1526 deleted that sidecar-based stale shortcut: the sidecar is a
+    // diagnostic and never authorizes stale serving, so the helper survives only
+    // as a test oracle for owner classification. No production read path calls it.
+    // trace:TASK-1526 | ai:claude
     #[test]
     fn foreign_writer_holds_lock_only_for_live_foreign_pid() {
         let dir = tempdir().unwrap();

@@ -680,7 +680,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts, json: bool) -> Result<()> {
     // every record carries its `spec_id`.
     if output == HistoryOutput::Json {
         let payload = events_json(&filtered, window_exhausted, &source);
-        println!("{}", serde_json::to_string_pretty(&payload)?);
+        println!("{}", crate::cache_output::json_pretty(&payload)?);
         return Ok(());
     }
 
@@ -907,7 +907,7 @@ fn run_single_spec_progress(
     match output {
         HistoryOutput::Json => {
             let payload = progression_json(&view, opts, window_exhausted, &source);
-            println!("{}", serde_json::to_string_pretty(&payload)?);
+            println!("{}", crate::cache_output::json_pretty(&payload)?);
             return Ok(());
         }
         _ if filtered.is_empty() => {

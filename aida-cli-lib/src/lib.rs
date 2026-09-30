@@ -25,6 +25,7 @@ mod burndown;
 // trace:TASK-1500 | ai:codex
 mod bypass_confirm;
 mod cache_cmd;
+mod cache_output;
 mod calibration;
 mod changelog;
 mod changelog_cmd;
@@ -1045,8 +1046,11 @@ pub fn main_entry() {
     // `bail!` / `?` / `anyhow!` site automatically gets the highlight
     // without per-site refactoring. Exit code 1 on error, 0 on success.
     // trace:TASK-69 | ai:claude
+    // trace:TASK-1526 | ai:codex
+    let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
     let exit_code: i32 = match run() {
         Ok(()) => 0,
+        Err(err) if err.is::<aida_core::db::cache_refresh::AdvisoryCacheUnavailable>() => 0,
         Err(err) => {
             record_ambiguous_id_refusal(&err);
             let msg = format!("{:?}", err);
@@ -1102,6 +1106,9 @@ pub fn main_entry() {
             exit_code_for_error(&err)
         }
     };
+
+    // trace:TASK-1526 | ai:codex
+    cache_output::finish(&cache_scope, exit_code == 0, &argv);
 
     // STORY-122: append the usage record after the command completed
     // so we capture exit_code / duration_ms. Read the env-side opt-out
@@ -3748,6 +3755,24 @@ fn run() -> Result<()> {
     // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based
     // default stands. trace:STORY-764 | ai:claude
     set_output_format_override(cli.format);
+    // trace:TASK-1526 | ai:codex
+    cache_output::set_toon_cache_output(matches!(
+        &cli.command,
+        Command::History { .. } | Command::Graph { .. }
+    ));
+    // Only human output at a real terminal may perform the pre-C inline full
+    // rebuild. Explicit JSON/TOON and advisory paths stay bounded at a TTY too.
+    // trace:TASK-1526 | ai:codex
+    let advisory = raw_args
+        .iter()
+        .any(|s| s == "--notice" || s == "statusline" || s == "statusbar");
+    let machine = raw_args.iter().any(|s| s == "--json" || s == "--toon") || agent_output_mode();
+    aida_core::db::cache_refresh::configure_read_policy(
+        std::io::IsTerminal::is_terminal(&std::io::stdout()) && !machine && !advisory,
+        advisory.then_some(aida_core::db::cache_refresh::ReadBudget(
+            std::time::Duration::ZERO,
+        )),
+    );
 
     // A global clap flag is syntactically accepted everywhere. Convert an
     // unsupported JSON request into an explicit error before any command can
@@ -6820,7 +6845,7 @@ fn handle_findings_command(
                     .collect();
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
+                    crate::cache_output::json_pretty(&serde_json::json!({
                         "findings": findings_json,
                         "findings_total": findings_total,
                         "punts": punts_json,
@@ -7241,7 +7266,7 @@ fn handle_findings_command(
                             "unannotated": s.categories.unannotated,
                         },
                     });
-                    println!("{}", serde_json::to_string_pretty(&value)?);
+                    println!("{}", crate::cache_output::json_pretty(&value)?);
                 } else {
                     println!("{}", "Calibration stats".bold());
                     println!("  considered:    {}", s.considered);
@@ -7282,7 +7307,7 @@ fn handle_findings_command(
             }
 
             if *json {
-                println!("{}", serde_json::to_string_pretty(&filtered)?);
+                println!("{}", crate::cache_output::json_pretty(&filtered)?);
                 return Ok(());
             }
 
@@ -11010,7 +11035,7 @@ fn handle_advisor_dashboard(
             "in_flight": in_flight_specs,
             "live_sessions": leases_json,
         });
-        println!("{}", serde_json::to_string_pretty(&value)?);
+        println!("{}", crate::cache_output::json_pretty(&value)?);
         return Ok(());
     }
 
@@ -24071,7 +24096,17 @@ fn collect_doctor_findings(
                     safe_heal: true,
                 });
             }
-            _ if is_stray && obs.owner.presumed_alive() => {
+            // trace:TASK-1526 | ai:codex
+            aida_core::LockOwnerState::Unknown if obs.overrun.is_some() => {
+                push(DoctorFinding {
+                    category: "stale-locks".to_string(),
+                    id: lock_info_path.display().to_string(),
+                    summary: format!("cache lock-info for pid {} ({command}) has unknown owner identity and is past its expected duration (diagnostic only)", obs.info.pid),
+                    action: "check the recorded host and process namespace; preserve the record while ownership is unknown".to_string(),
+                    safe_heal: false,
+                });
+            }
+            _ if is_stray && obs.owner == aida_core::LockOwnerState::Alive => {
                 push(DoctorFinding {
                     category: "stale-locks".to_string(),
                     id: lock_info_path.display().to_string(),
@@ -33305,7 +33340,7 @@ fn handle_fasttrack_status(
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&items)?);
+        println!("{}", crate::cache_output::json_pretty(&items)?);
         return Ok(());
     }
 
@@ -66872,7 +66907,7 @@ fn handle_integrate(opts: IntegrateCommandOpts) -> Result<()> {
             .collect();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "focus": focus_label,
                 "queue_depth": queue_rows.len(),
                 "queue": queue_json,
@@ -67936,7 +67971,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             .collect();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "sessions": sessions,
                 "orphaned": orphaned,
                 // STORY-769: last-human-input oracle, null when never stamped.
@@ -76805,6 +76840,12 @@ mod bug_1647_findings_atomic_tests;
 #[path = "tests/bug_1651_promote_queue_cas_tests.rs"]
 mod bug_1651_promote_queue_cas_tests;
 
+// Shared stale-cache fixture for the BUG-1664 / BUG-1670 / BUG-1606 suites.
+// trace:TASK-1526 | ai:claude
+#[cfg(test)]
+#[path = "tests/stale_cache_fixture.rs"]
+mod stale_cache_fixture;
+
 // trace:BUG-1664 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_1664_stale_sweep_tests.rs"]
@@ -78246,7 +78287,7 @@ fn print_status_json(
             "cache".to_string(),
             json!({
                 "fresh": !stale || actual.is_empty(),
-                "rows": cache.requirement_count().unwrap_or(0),
+                "rows": backend.requirement_count().unwrap_or(0),
             }),
         );
 
@@ -78372,7 +78413,7 @@ fn print_status_json(
                 .collect::<Vec<_>>()),
         );
     }
-    println!("{}", serde_json::to_string_pretty(&out)?);
+    println!("{}", crate::cache_output::json_pretty(&out)?);
     Ok(())
 }
 
@@ -81905,13 +81946,14 @@ fn collect_awaiting_report_inner(
         .collect();
 
     // Escalations need the full summary list; findings need a draft-only view.
-    // BUG-1569: the notice backend intentionally opens an unrefreshed cache
-    // snapshot. Calling CachedGitBackend::list_summaries here would freshness-
-    // check and potentially full-rebuild before the targeted protocol lookup.
+    // trace:TASK-1526 | ai:codex
+    // Advisory reads use a zero-wait labelled snapshot. Compatible full-rebuild
+    // cases defer, preserving the no-full-scan notice contract.
     let summaries = if notice_fast {
-        backend
-            .cache()
-            .list_summaries(&aida_core::ListFilter::default())
+        backend.list_summaries_with_budget(
+            &aida_core::ListFilter::default(),
+            aida_core::db::cache_refresh::ReadBudget(std::time::Duration::ZERO),
+        )
     } else {
         backend.list_summaries(&aida_core::ListFilter::default())
     }
@@ -81928,7 +81970,10 @@ fn collect_awaiting_report_inner(
             ..Default::default()
         };
         let draft = if notice_fast {
-            backend.cache().list_summaries(&filter)
+            backend.list_summaries_with_budget(
+                &filter,
+                aida_core::db::cache_refresh::ReadBudget(std::time::Duration::ZERO),
+            )
         } else {
             backend.list_summaries(&filter)
         }
@@ -82474,7 +82519,7 @@ fn handle_awaiting_command(
     let ctx = collect_user_context(&project_root, &store, backend, no_ci);
     let report = collect_awaiting_report(&project_root, backend, &ctx, no_ci);
     if json {
-        println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+        println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
     } else if agent_output_mode() {
         // BUG-695: honor AIDA_AGENT_OUTPUT like `aida integrate`/`ps`/`status` —
         // emit token-efficient TOON (flat scalars + uniform tables) instead of the
@@ -83532,7 +83577,7 @@ fn print_fast_status_json(snap: &FastStatusSnapshot) -> Result<()> {
         "counts": counts,
         "requirements": requirements,
     });
-    println!("{}", serde_json::to_string_pretty(&out)?);
+    println!("{}", crate::cache_output::json_pretty(&out)?);
     Ok(())
 }
 

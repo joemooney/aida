@@ -9,6 +9,8 @@ mod cache;
 #[cfg(feature = "native")]
 mod cache_lock;
 #[cfg(feature = "native")]
+pub mod cache_refresh;
+#[cfg(feature = "native")]
 mod cached_git_backend;
 #[cfg(feature = "native")]
 mod git_backend;

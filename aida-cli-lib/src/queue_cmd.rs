@@ -763,7 +763,7 @@ fn print_queue_mutation_destination(
     if output_format_is_json() {
         println!(
             "{}",
-            serde_json::to_string_pretty(&queue_mutation_destination_json(
+            crate::cache_output::json_pretty(&queue_mutation_destination_json(
                 action, spec_id, title, details
             ))?
         );
@@ -7202,7 +7202,7 @@ pub(crate) fn handle_queue_progress(
     let empty_progress_json = |note: &str| -> Result<()> {
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": 0,
                 "in_progress": 0,
                 "done": 0,
@@ -7454,7 +7454,7 @@ pub(crate) fn handle_queue_progress(
             .into();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": remaining,
                 "in_progress": working,
                 "done": in_flight,
