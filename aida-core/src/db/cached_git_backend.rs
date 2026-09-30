@@ -3560,6 +3560,16 @@ mod tests {
                 let (store, path, barrier) = (store.clone(), path.clone(), barrier.clone());
                 std::thread::spawn(move || {
                     let scope = CacheReadScope::new();
+                    // The property under test is single flight, not latency: exactly one
+                    // reader refreshes and the other three wait for that refresh rather
+                    // than serving stale rows. With the default 1500ms ReadBudget the
+                    // waiters abandon the wait on a loaded host, serve pre-refresh rows,
+                    // and fail the freshness assertions below for a reason that has
+                    // nothing to do with single flight (BUG-1729 AC1). A generous
+                    // per-thread budget makes those assertions load-independent while
+                    // still bounding the test if the refresh never lands. Each reader
+                    // thread owns its own scope, so this configures only itself.
+                    scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(60))));
                     let backend = CachedGitBackend::with_inner_cache_snapshot(
                         GitBackend::new(&store).unwrap(),
                         &path,
@@ -3567,9 +3577,7 @@ mod tests {
                     .unwrap();
                     barrier.wait();
                     test_counts();
-                    let start = std::time::Instant::now();
                     let rows = backend.list_summaries(&ListFilter::default()).unwrap();
-                    assert!(start.elapsed() < std::time::Duration::from_secs(2));
                     assert!(rows.iter().any(|r| r.title == "gen1"));
                     assert_eq!(scope.metadata()["stale"], false);
                     test_counts().get("incremental").copied().unwrap_or(0)
