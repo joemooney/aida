@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-09-30T14:57:58.681991210Z
+modified_at: 2026-09-30T15:17:17.104054783Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -181,6 +181,98 @@ comments:
   created_at: 2026-09-30T14:57:58.681991210Z
   modified_at: 2026-09-30T14:57:58.681991210Z
   session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
+- id: 01a0f2e4-34b0-7530-9f0b-717682988934
+  author: joe
+  content: |
+    ## Rework complete — 2026-09-30 (relay session #12), PR #2296
+
+    Acting on the rework brief in the previous comment. Library and docs untouched, as advised.
+    Commit **`c167e43a37`** on `bug-1693-2`; PR **#2296** open.
+
+    ### AC3 — now met, and mutation-proven
+
+    `tests/test_merge_hold_gate.sh` no longer re-implements the gate. It extracts the `run:` block
+    out of `.github/workflows/merge-hold-gate.yml` and the `script:` block out of
+    `aida-core/templates/gitlab-ci-merge-hold-gate.yml` (whitespace-dedented, via python3) and
+    **executes those bytes** across seven label states, twice — once per shipped gate. It first
+    asserts each extracted script mentions all three label names, so a silently-empty or truncated
+    extraction cannot report a vacuous green.
+
+    Three independent mutations, each measured:
+
+    | mutation | result |
+    |---|---|
+    | `rm .github/workflows/merge-hold-gate.yml` | `FAIL: missing …/merge-hold-gate.yml`, exit 1 |
+    | delete the recorded-without-cleared arm from the GitHub gate | `FAIL: github-gate.sh with labels 'aida:merge-hold-recorded': expected exit 1, got 0` |
+    | `if has_label aida:merge-hold` → `if false` in the GitLab template | `FAIL: gitlab-gate.sh with labels 'aida:merge-hold': expected exit 1, got 0` |
+
+    Tree restored by `cp` from scratchpad after each (no `git stash`), `git status` confirmed clean.
+
+    Wired into `.github/workflows/ci.yml` as **"Run merge-hold gate fixtures"**, deliberately NOT
+    gated on `full_ci`: the test is build-free, and a docs-only PR can still edit the gate's prose.
+
+    Both YAML files now carry a comment saying their gate block is the artifact under test, so the
+    next editor does not move the logic somewhere the fixtures cannot reach it.
+
+    ### Workflow header — restored
+
+    The BUG-1167/ADR-37 block is back verbatim (how to make the check required, `enforce_admins` ON,
+    drain-mode PRs never labelled, job deliberately build-free), with the BUG-1693 three-label
+    rationale added **beside** it rather than replacing it.
+
+    ### 🔴 The `read_hold` caller walk found a real defect — fixed here
+
+    The brief asked me to walk `read_hold`'s callers for the new synthetic `Some`. Results:
+
+    - `list_holds` walks the marker **directory**, so it never reaches the synthetic value — a
+      vanished marker cannot be reported as a live hold with a reason. Correct as written.
+    - `pr_cmd.rs:1968` does `reason.contains(spec)`; the tampering string contains no spec id, so
+      `hold_matches_drive_spec` stays false exactly as before. No behaviour change.
+    - `forge.rs:1693`, `pr_cmd.rs:2192/2459`, `lib.rs:45319/91554/108504` read it as a boolean and
+      **fail closed** — every AIDA merge path refuses a tampered PR. That is the behaviour AC2 wants.
+
+    But **there was no way back out.** With the marker deleted *and* the label dropped — the exact
+    two-command bypass this spec was filed about — `merge-hold clear <pr>` computed
+    `label_only_forge == Absent`, printed *"No merge-hold on PR #N"* and **returned before recording
+    anything**. So the PR was unmergeable through AIDA forever, the doctor reported tampering
+    forever, and no clearance record ever named who released it. A fail-closed with no recorded door
+    is how a control gets bypassed out-of-band again.
+
+    `merge-hold clear <pr>` now recognises that state and records a clearance for it, behind the
+    **same** human-at-an-interactive-terminal floor, via a new `MARKER_MISSING_REASON` (single-sourced
+    so `read_hold`, the clear acknowledgement and the doctor finding all say one thing). The report
+    stops only once that record exists — there is no way to silence it without leaving the record.
+    `emit_release` moved above the early return so the release event is emitted on this path too.
+    Documented in `docs/cli/08-reporting.md`.
+
+    ### New assertions, both mutation-proven
+
+    - `tampered_hold_reads_as_held_until_a_clearance_is_recorded` — a vanished marker reads as held
+      **with the tampering reason**, does not appear in `list_holds`, has no `read_hold_record`, and
+      re-opens only after a recorded clearance. Mutation: drop the `or_else` from `read_hold` →
+      `left: None, right: Some("hold marker missing…")`, FAILED.
+    - The existing clear-handler source scan now pins the door itself, whitespace-normalised so
+      `cargo fmt` cannot break it, and ordered before the no-hold early return. Mutation: remove the
+      `record_clearance` call → *"clear must RECORD a clearance for a hold whose marker went
+      missing"*, FAILED. My first version of this assertion only checked that the constant was
+      *mentioned* and survived the mutation; I replaced it rather than ship coverage that isn't there.
+
+    ### Verification
+
+    `cargo test -p aida-cli-lib --lib merge_hold` → **59 passed / 0 failed**. `cargo fmt --all --
+    --check` clean. `cargo clippy -p aida-cli-lib --all-targets` exit 0. `check-portability.sh`,
+    allowlist-growth, `glyph-lint.sh --block`, `check-trace-headers.py` and
+    `verify-interface-changes.py` all clean. `cargo test --workspace` running locally alongside CI.
+
+    ### Still open for the merge decision
+
+    AC1's `aida merge-hold list` half is now exercised indirectly (the `read_hold`/
+    `unrecorded_marker_removals` semantics are pinned) but the rendered `list` output itself is still
+    not asserted by a test. I judged that acceptable — the tampering line is a `println!` over a
+    tested predicate — but it is the one thing in the acceptance walk I did not close with a test.
+  created_at: 2026-09-30T15:17:17.104054783Z
+  modified_at: 2026-09-30T15:17:17.104054783Z
+  session_id: 691561c0-b5f3-409d-9624-cbac5b961cc4
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
