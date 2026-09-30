@@ -1,0 +1,98 @@
+id: 01a0f117-f9d4-7c93-9c8a-8a8f2003b3b9
+spec_id: BUG-1732
+agreed_id: BUG-1732
+title: 'aida awaiting: the orphaned-in-progress channel reports another project''s In-Progress specs'
+description: |
+  ## Summary
+
+  `collect_awaiting_report`'s `orphaned_in_progress` channel returns In-Progress specs that
+  belong to a **different project** than the `project_root` it was given. On this host it
+  reports six, with IDs and titles from another project entirely — `FR-0281` "WASM gRPC-Web
+  client connection to server", `FR-0283` "WASM browser client user settings persistence via
+  localStorage", `STORY-0326` "GitLab Label Mapping Configuration" — none of which are AIDA's
+  own specs (AIDA numbers its own `FR-1-xxx` / `STORY-1xxx`).
+
+  So `aida awaiting` can tell an operator that work is orphaned in the project they are
+  standing in when that work lives in an unrelated project.
+
+  ## Reproduction
+
+  `aida-cli-lib`'s own test already reproduces it and **fails deterministically** on this host:
+
+  ```
+  RUST_MIN_STACK=8388608 cargo test -p aida-cli-lib --lib empty_state_produces_hidden_report
+  ```
+
+  ```
+  thread '...' panicked at aida-cli-lib/src/tests/story_465_awaiting_report_tests.rs:49:5:
+  fresh project must have nothing awaiting
+  ```
+
+  The test (`story_465_awaiting_report_tests::empty_state_produces_hidden_report`, STORY-465's
+  quiet-day acceptance) builds a `tempdir()` project, opens a backend on an empty store, and
+  asserts `collect_awaiting_report(dir.path(), &backend, &ctx, /* no_ci */ true).is_empty()`.
+  It holds the `EnvVarsGuard` that clears `AIDA_SESSION_ROLE` / `AIDA_AGENT_TYPE` /
+  `AIDA_SESSION_ID`, so ambient session env is not the cause.
+
+  Dumping the report shows **every other channel empty** and only `orphaned_in_progress`
+  populated, each item labelled `since_label: "last-touched time unknown"` — i.e. the spec
+  IDs were not found in the tempdir store's own summaries, which is itself the tell that they
+  came from somewhere else.
+
+  ## Where to look
+
+  `lib.rs:82265` computes the channel from `gather_running_work(project_root)` (`lib.rs:67297`).
+  The obvious suspects are ruled out:
+
+  - `list_leases(project_root)` (`lib.rs:32912`) is strictly project-scoped and returns
+    `Vec::new()` when the leases dir does not exist, which is the case for a fresh tempdir.
+  - `session_manifest::list_all(project_root)` and `pending_approval::list_active(project_root, ..)`
+    are likewise passed the project root.
+
+  So the orphan pass inside `build_running_work` (`lib.rs:67512`) appears to resolve a
+  requirements store **of its own** rather than using the caller's, and with no project at
+  `project_root` it lands on the registry's default project. `aida awaiting` run in a bare
+  temp dir reports exactly that fallback path:
+
+  ```
+  - "-p pacilab: the registry's default project, which is not used implicitly"
+  ```
+
+  **Confirm that specific fallback before fixing** — the reasoning above is elimination, not
+  a read of the offending line.
+
+  ## Why it matters beyond the test
+
+  A cross-project read in the awaiting-you surface is a correctness bug in the operator's
+  primary "does this need me?" view, not only a test-isolation defect. The nearby channels
+  (`unshipped_work`, `pr_attribution_disagreements`) are documented as the same "heavier local
+  probe" tier, so whatever fallback this pass uses is worth checking in them too.
+
+  ## Acceptance
+
+  1. `collect_awaiting_report(project_root, ..)` reports `orphaned_in_progress` items only for
+     specs reachable from `project_root`'s own store; a project root with no store and no
+     leases yields an empty channel.
+  2. `story_465_awaiting_report_tests::empty_state_produces_hidden_report` passes on a host
+     that has a populated registry default project, and a regression test pins that condition
+     explicitly rather than relying on the developer's machine happening to have one.
+  3. The offending fallback is identified by line, and `unshipped_work` and
+     `pr_attribution_disagreements` are checked for the same fallback; each is either shown
+     project-scoped or fixed alongside.
+  4. No channel is fixed by suppressing the `no_ci`/notice-fast path only — the full
+     `aida awaiting` path is the one that must be project-scoped.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T06:54:35.476136149Z
+modified_at: 2026-09-30T06:54:35.476136149Z
+req_type: Bug
+filed_at:
+  code_sha: f175efb67de3af3d244970c7c2fab1baec829a8a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ed89cdb9-e8e6-4595-9c0f-67dc9336aed2
