@@ -1,0 +1,113 @@
+id: 01a0f2c7-18d6-7692-ab7a-47b0c7ff39f9
+spec_id: BUG-1740
+agreed_id: BUG-1740
+title: Orphan classifier reads a defunct (zombie) creator pid as a live harness, stranding a whole fan-out's specs behind possibly_subagent
+description: |
+  ## Summary
+
+  The orphan classifier treats a **defunct (zombie) process as alive**. A zombie still has a
+  `/proc/<pid>` entry and still answers a by-pid liveness probe, so a lease whose creator died
+  three days ago reads as "possibly worked by a subagent — live harness lease in this repo"
+  instead of "abandoned — lease died".
+
+  The softer verdict is not cosmetic: it is the difference between a spec that reads as *someone
+  else is on it* and one that reads as *nobody is on it and the work is stranded*. Three specs
+  sat In-Progress for three days behind the wrong one.
+
+  ## Evidence (2026-09-30, this repository)
+
+  `BUG-1688`, `BUG-1693` and `BUG-1695` are all In-Progress. All three leases name the **same**
+  creator:
+
+  ```
+  $ grep creator_pid .aida/sessions/{01a0e4be89ef,01a0e4bb9258,01a0e5c56e99}.toml
+  creator_pid = 1907632      # BUG-1688
+  creator_pid = 1907632      # BUG-1693
+  creator_pid = 1907632      # BUG-1695
+
+  $ ps -p 1907632 -o pid,lstart,etime,args
+      PID                  STARTED     ELAPSED COMMAND
+  1907632 Fri Sep 25 19:03:43 2026  4-12:40:45 [codex] <defunct>
+  ```
+
+  `1907632` is a **zombie** — exited, never reaped, four and a half days old. It is not doing
+  work and cannot. `ps -p` succeeds, `/proc/1907632` exists, and `kill -0` would succeed, so
+  every by-pid liveness test passes.
+
+  `aida awaiting` (with BUG-1739's fix, which is what made these visible at all) reports all
+  three as:
+
+  ```
+  BUG-1688,"possibly worked by a subagent — lease pid dead, live harness lease in this repo",last touched 64h 41m ago,aida ps
+  ```
+
+  The `possibly_subagent` arm (BUG-1656) exists to avoid calling a live fan-out's children
+  abandoned. That is the right intent — but its "is the harness live" evidence here is a zombie,
+  so the guard fires for a fan-out that has been dead for days.
+
+  ## Why one zombie stranded three specs
+
+  This was ONE fan-out, not three independent strandings — one parent, three children, all
+  claimed within five hours on 2026-09-27/28. When the parent zombied, every child lease
+  inherited the same false "live harness" signal at once. The blast radius of a single unreaped
+  parent is every spec its wave claimed.
+
+  ## What is actually stranded behind it
+
+  Real, uncommitted work — `ahead=0` on every branch, so a commit-only check says "nothing here",
+  which is wrong:
+
+  | spec | worktree | state |
+  |---|---|---|
+  | BUG-1693 | `/home/joe/ai/aida-bug-1693` | **8 files STAGED, 277 insertions / 81 deletions**, incl. `merge_hold.rs` (+174), a new `tests/test_merge_hold_gate.sh`, CI workflow, template and docs. Near-complete. |
+  | BUG-1688 | `/home/joe/ai/aida-bug-1688` | 5 modified scripts, 68 insertions / 97 deletions, plus an untracked 73-line `tests/test_bug_1688_shipped_launch_refusals.sh` |
+  | BUG-1695 | `/home/joe/ai/aida-bug-1695` | clean; no work |
+
+  BUG-1693's changes are **staged**, so `git diff --stat` reports nothing and only
+  `git diff --cached --stat` shows them. Any sweep that judges a stranded worktree by unstaged
+  diff alone will call it empty and delete it.
+
+  ## Acceptance
+
+  1. A process in state `Z` (zombie/defunct) is NOT treated as a live process by the lease
+     liveness check. Read the state field from `/proc/<pid>/stat` (or the platform equivalent)
+     rather than relying on the existence of the pid, `ps -p` succeeding, or `kill -0`.
+  2. `orphaned_in_progress` classifies a lease whose creator is a zombie as **abandoned**, not
+     `possibly_subagent`. The `possibly_subagent` arm must require a creator that is actually
+     runnable.
+  3. The same liveness predicate is used everywhere a pid decides live-vs-dead — `aida ps`'s
+     orphan pass, lease acquisition/stealing, and the awaiting orphan channel. One predicate; if
+     there is more than one today, say where and unify or justify.
+  4. Tempdir/unit tests: a synthetic zombie (fork, exit the child, do not reap) is classified
+     dead; a genuinely live child is classified live; a wholly absent pid is classified dead.
+     Skip on platforms where the probe is not implementable, do not weaken the assertion.
+  5. Prove by mutation that the zombie test fails against today's predicate.
+  6. State whether `creator_pid_start_time` (present on BUG-1695's lease, absent on the other
+     two) already guards pid reuse, and whether a zombie check belongs beside it.
+
+  ## Do not
+
+  - Do not delete or reap the zombie as the fix. The defect is the classifier believing it, not
+    the zombie existing; the next unreaped parent must not strand another wave.
+  - Do not widen this into general lease-GC or stale-worktree cleanup. Adjacent, separate.
+
+  ## Adjacent, do not absorb
+
+  - Recovering BUG-1693's and BUG-1688's stranded WIP is queue hygiene and needs a seat.
+  - ~80 stale worktrees exist repository-wide; cleanup needs operator confirmation and is not
+    this spec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T14:45:29.430268238Z
+modified_at: 2026-09-30T14:45:29.430268238Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 622c849c-8085-4d0c-840e-82dd660b1787
