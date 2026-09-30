@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-09-30T14:45:51.842408606Z
+modified_at: 2026-09-30T14:57:58.681991210Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -91,6 +91,96 @@ comments:
   created_at: 2026-09-30T14:45:51.842408606Z
   modified_at: 2026-09-30T14:45:51.842408606Z
   session_id: 622c849c-8085-4d0c-840e-82dd660b1787
+- id: 01a0f2d2-879a-7371-8946-6008769d13e0
+  author: joe
+  content: |
+    ## Advisor review of the recovered WIP — 2026-09-30 (relay session #11)
+
+    ### Custody first
+
+    The stranded work is **committed and safe**. It was 277 staged-but-uncommitted lines in
+    `/home/joe/ai/aida-bug-1693`, invisible to `git diff --stat` (staged) and to
+    `git rev-list --count main..HEAD` (0). It is now commit **`5f3bd5801c`** on branch
+    `bug-1693-2`, authored by the codex session that wrote it; my commit is custody only.
+
+    **Rebased onto `7c37dd81ac` with ZERO conflicts.** Verified green on current main:
+
+    - `cargo build -p aida-cli-lib` → exit 0
+    - `cargo test -p aida-cli-lib --lib merge_hold` → **58 passed / 0 failed**
+
+    ### Acceptance walk
+
+    | AC | verdict | note |
+    |---|---|---|
+    | 1 — release requires a recorded clearance; a marker that vanishes without one is reported as tampering by `merge-hold list` **and** the doctor | **partial** | `unrecorded_marker_removals` + a `merge-hold-integrity` doctor finding are in and correct. Confirm the `aida merge-hold list` half — `read_hold` now synthesises a "tampering suspected" detail, which reaches `list`, but no test pins that surface. |
+    | 2 — the gate must not pass merely because the label is absent | **met** | The three-label scheme (`aida:merge-hold` / `-recorded` / `-cleared`) is sound: dropping the active label leaves `-recorded` without `-cleared` and the check still fails. Mirrored in the GitLab template. |
+    | 3 — a fixture test proves that removing the marker by hand, and removing the label by hand, **each** fail to release | **NOT MET** | See below. |
+    | 4 — state honestly what this cannot achieve against a same-user agent with an admin token | **met, and well** | `docs/cli/08-reporting.md` says it plainly, including *"it could also forge the cleared label"*, and points at BUG-1669 / ADR-61 for the real boundary. This is the part of the change I'd keep untouched. |
+
+    ### 🔴 AC3: the fixture test does not test the thing
+
+    `tests/test_merge_hold_gate.sh` **re-implements** `has_label` and all three gate conditions
+    inside the test, then asserts against its own copy. Measured, not inferred:
+
+    ```
+    $ grep -cE 'merge-hold-gate\.yml|\.github|workflows|\.aida/merge-holds|merge_hold' tests/test_merge_hold_gate.sh
+    0
+    ```
+
+    Zero references — to the workflow, to the marker directory, to the library. Mutation proof:
+
+    ```
+    $ rm .github/workflows/merge-hold-gate.yml && bash tests/test_merge_hold_gate.sh
+    merge-hold gate fixtures passed
+    exit=0
+    ```
+
+    **The test passes with the gate it claims to test deleted.** It also never removes a marker
+    file, so the first half of AC3 ("removing the marker file by hand") is untested by anything.
+
+    And it is wired into **no** runner — `grep -rln test_merge_hold_gate` over `*.sh`, `*.yml`,
+    `*.rs` and the Makefile returns nothing. It cannot fail in CI because it never executes there.
+
+    ⟹ Two independent reasons AC3 is unmet: the test asserts a copy of the logic, and nothing runs
+    it. This is the same class as the vacuous correspondence test caught on BUG-1739 — a test whose
+    green tells you nothing about the artifact.
+
+    **What would satisfy AC3:** extract the gate body into one shell function that BOTH the workflow
+    and the test source (or have the test parse and execute the `run:` block out of the YAML), so
+    the assertion is against the shipped artifact; add a marker-deletion case that drives the real
+    `merge_hold` code path; and register the script with whatever runner `tests/*.sh` uses.
+
+    ### 🟡 Regression: the workflow lost its operator instructions
+
+    The rewrite deleted the header block that told an operator **how to make the check binding**:
+
+    > `Settings -> Branches -> protect main -> Require status checks -> add merge-hold-gate, with
+    > "Do not allow bypassing" / enforce_admins ON`
+
+    …along with the note that a drain-mode PR is never labelled (so its auto-merge is untouched) and
+    that the job is deliberately build-free so it never stalls a required check. A gate nobody knows
+    how to make required is advisory — which is the exact failure this spec exists to fix. Restore
+    that block; the new BUG-1693 rationale can sit beside it, not replace it.
+
+    ### 🟡 Check before merge
+
+    `read_hold` now returns `Some("hold marker missing without a recorded clearance …")` for a PR
+    that has **no marker file**. Fail-closed is the right instinct, but `read_hold` returning `Some`
+    previously meant "a hold record exists". Walk its callers and confirm none of them treats the
+    synthetic value as a readable hold record (e.g. anything that parses the detail, or reports it
+    as the hold's reason). Not necessarily a bug — but it is an invariant change that no test pins.
+
+    ### Disposition
+
+    Status stays `in-progress`; the branch exists and the work is real and mostly good. Not
+    merge-ready: AC3 is unmet and the workflow header regression must be restored. This is a short
+    rework, not a rewrite — nothing in the library or the docs needs redoing.
+
+    ⚠ The stale lease `01a0e4bb9258` still names the dead creator pid. Nobody is working this. Claim
+    it before picking it up.
+  created_at: 2026-09-30T14:57:58.681991210Z
+  modified_at: 2026-09-30T14:57:58.681991210Z
+  session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
