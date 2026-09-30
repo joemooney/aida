@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:54:35.476136149Z
-modified_at: 2026-09-30T07:33:40.623306971Z
+modified_at: 2026-09-30T07:34:56.443366828Z
 req_type: Bug
 comments:
 - id: 01a0f13b-c28f-71d2-9787-a3df2c15c6ba
@@ -94,6 +94,89 @@ comments:
   content: Commit 15fd965f44 references this requirement
   created_at: 2026-09-30T07:33:40.623306971Z
   modified_at: 2026-09-30T07:33:40.623306971Z
+  session_id: 60a4d7c9-b362-42fb-9013-365d4ddd8e7d
+- id: 01a0f13c-eabb-7013-8e46-7b71eb26dde9
+  author: joe
+  content: |
+    ## Root cause confirmed — and it is not the registry default
+
+    This spec's "Where to look" reasoned by elimination to the registry's default project, and
+    flagged that it was elimination rather than a read. Good call: the conclusion was wrong.
+
+    BUG-1603 already removed registry-default adoption from `resolve_requirements_path_in`
+    (`aida-core/src/project.rs`), so that path cannot fire. The actual ambient input is the
+    **process CWD**.
+
+    `load_store_for_lookup`'s legacy arm (`lib.rs:49639`) called
+    `determine_requirements_path(None)`, which hands the shared resolver `Path::new("")` as its
+    cwd. The local-store probe therefore resolves a **relative** `requirements.db` — against
+    wherever the process is standing, not against the `project_root` it was given. The `-p`
+    option never reaches this function at all, and `REQ_DB_NAME` was honoured for the same reason.
+
+    ### How it was confirmed, not inferred
+
+    1. This host has `/home/joe/ai/aida/requirements.db`, a stale legacy store dated March 2026.
+       Its In-Progress rows are **exactly** the reported IDs: `FR-0281`, `FR-0283`, `EPIC-0288`,
+       `STORY-0326`, `STORY-0327`, `TASK-0344`, `EPIC-0365`, `TASK-0373`.
+    2. The same **unmodified** test binary fails run with cwd `/home/joe/ai/aida` and passes run
+       from a directory with no legacy store. That is the mechanism isolated by environment, with
+       the code held constant.
+    3. The file is **untracked** — which is precisely why the symptom appeared here and never on CI.
+    4. BUG-1574's author had already written the mechanism down in prose and hand-bypassed the
+       fallback for one call site (see `unattended_git_mutation_refusal`'s doc comment: "resolves
+       off the process CWD, not `project_root`"). Nobody generalised it.
+
+    ### Blast radius is wider than `aida awaiting`
+
+    `load_store_for_lookup` has **~70 callers**, every one passing a `project_root` the legacy arm
+    ignored — `aida status`, `aida lint`, `aida deps`, `aida plan`, the drain orchestrator's
+    `self.project_root` paths, `criteria_red_run`'s `main_root`. Any of them could read another
+    project's requirements on a root with no distributed store. Fixing the function rather than the
+    channel is what AC4 was reaching for.
+
+    ### Sibling channels (AC3)
+
+    - `unshipped_work` → `collect_unshipped_work_items(project_root, summaries, ..)` takes its
+      summaries as a **parameter**, filled from the caller's own backend (`lib.rs:81955`). Scoped.
+    - `pr_attribution_disagreements` → `collect_pr_attribution_disagreements(project_root)` reads
+      `drain_state::probe(project_root)` and returns early with no active drain. Scoped.
+
+    Neither touched. Note the split also explains the `since_label: "last-touched time unknown"` on
+    every leaked item: the injected summaries (scoped, empty) knew none of those IDs, while the
+    orphan pass (leaked) did.
+
+    ### One deliberate behaviour change
+
+    An ambient `REQ_DB_NAME` no longer redirects a project-scoped lookup. Not a lost feature: this
+    function never accepted `-p`, so a legacy store outside its project root was already
+    unreachable by any principled route, and legacy `aida init` writes `requirements.db` **into**
+    the project root, which the new probe finds. `REQ_DB_NAME` still works wherever it is the
+    process's own store choice.
+
+    ### On AC2's wording
+
+    AC2 asks the regression test to pin "a host that has a populated registry default project".
+    Since that was the wrong mechanism, the tests pin the real one: a foreign legacy store
+    reachable from the process cwd. **Stating the limit plainly:** the two negative assertions bite
+    only where the cwd really holds such a store — this host, not CI. Making them host-independent
+    would mean mutating the process-wide cwd, which is unsound under a threaded harness. A third
+    test runs everywhere but carries a strictly smaller claim (the resolver's contract, not the
+    wiring to it), and the test file says which claim each one carries.
+
+    Mutation proof: reverting the one changed line and rebuilding fails **three of four** scoped
+    tests, including the pre-existing `story_465_awaiting_report_tests::empty_state_produces_hidden_report`.
+
+    ### Suite
+
+    7368 passed / 1 failed, full `aida-cli-lib` lib suite at `--test-threads=4` from the offending
+    cwd. The one failure is **BUG-1733**, and this run hit it as
+    `bug_1670_stale_cache_callers_tests::rules_sync_keeps_rule_for_spec_approved_after_snapshot` —
+    a *different* test than the one filed there, so that fixture defect is fixture-wide rather than
+    test-specific. Worth adding to BUG-1733.
+
+    PR #2289.
+  created_at: 2026-09-30T07:34:56.443366828Z
+  modified_at: 2026-09-30T07:34:56.443366828Z
   session_id: 60a4d7c9-b362-42fb-9013-365d4ddd8e7d
 history:
 - id: 01a0f118-9432-7330-b34a-c3fa28737dd1
