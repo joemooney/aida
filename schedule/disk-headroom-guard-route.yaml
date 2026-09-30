@@ -1,10 +1,8 @@
 job: disk-headroom-guard-route
-last_run: 2026-09-29T10:34:40.189867308Z
+last_run: 2026-09-30T23:53:28.579824134Z
 last_by:
   seat: advisor
-  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
+  session: ebd9f361-5c58-426c-bd52-cad88aa0059b
   vendor: antigravity
 result: done
-note: 'Re-measured: 158G free on / against min_free_gib = 60, and /run/user/1000 at 24M of 7.1G. The trip was transient during this relay''s cargo builds; no reclamation needed and the floor is not being raised. Prior session reclaimed 251G from non-main worktree target/ dirs; that headroom is holding.'
-due_since: 2026-09-29T15:35:23.152276905Z
-due_reason: on CronJobFailed
+note: 'Reclaimed 86G from 11 stale worktree target/ caches: 89% -> 79%, 101G -> 186G free. Script with six safety rails at .aida/scripts/reclaim-worktree-targets.sh. Product gap filed as TASK-1562: the guard''s own remediation advises ''aida session reap'' (does not touch a kept worktree''s cache) and ''cargo clean'' (clears the SHARED main target the live binary uses) - neither reclaims this space.'
