@@ -2356,6 +2356,16 @@ pub(crate) fn handle_git_backend_command(
             // 2-space-indented line only when rows on that axis were hidden.
             // trace:STORY-441 trace:STORY-584 trace:STORY-723 | ai:claude
             let print_hidden_hints = || {
+                // BUG-1737: scope disclosure for the count, printed under the
+                // open-work lens whether or not the counted STORY-441 /
+                // STORY-584 tier nudges below are opted in. Same dimmed,
+                // 2-space footer idiom. trace:BUG-1737 | ai:claude
+                if let Some(scope) = crate::list_lens_scope_disclosure(open_work_lens) {
+                    println!(
+                        "{}",
+                        format!("  ({scope} — pass --all to see them)").dimmed()
+                    );
+                }
                 for line in list_hidden_hint_lines(
                     show_view_tier_hints,
                     closed_hidden_count,
@@ -2608,6 +2618,15 @@ pub(crate) fn handle_git_backend_command(
                 println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
                 if agent_default_cap.is_some() && total_after_filters > reqs.len() {
                     println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                }
+                // BUG-1737: the notes below enumerate what this view withheld,
+                // which made them read as the complete account — they were not.
+                // Lead with the two tiers that had no line at all, in the same
+                // position the human footer gives it (immediately under the
+                // count), so both surfaces read alike. Static text: no extra
+                // backend query on the agent hot path. trace:BUG-1737 | ai:claude
+                if let Some(scope) = crate::list_lens_scope_disclosure(open_work_lens) {
+                    println!("note: {scope} — `aida list --all` for every spec");
                 }
                 // STORY-723: tell the agent the closed history exists but is
                 // hidden behind the default open lens. trace:STORY-723

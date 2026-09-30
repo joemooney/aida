@@ -84158,6 +84158,42 @@ mod task_1176_superseded_state_tests;
 /// STORY-723: the denominator label for the agent `aida list` `count: N of M`
 /// header — `open` under the default actionable lens (so it reconciles with the
 /// `aida status` active total, which counts all statuses) else plain `matched`.
+/// BUG-1737: the one sentence the default `aida list` view owes the reader —
+/// that it is also withholding the archived and deferred tiers.
+///
+/// The lens already discloses every other class it drops (closed rows via
+/// STORY-723, accepted ADRs via BUG-781, machine-filed drafts via BUG-1498),
+/// each with a count and a flag. Archived and deferred were the only two
+/// omitted silently, which let the disclosed list read as exhaustive: an
+/// operator seeing `count: 30 of 53 open` plus three `note:` lines concluded
+/// the 53 was the project's open backlog. It is not — it is the live slice of
+/// it, and on this repository 1548 archived and 119 deferred rows sat outside
+/// it unmentioned.
+///
+/// This is deliberately NOT the counted STORY-441 / STORY-584 nudge. BUG-783
+/// turned those off by default on purpose ("an explicit open-work request
+/// doesn't need reminding on every invocation that the other two tiers
+/// exist"), and each costs an extra `list_summaries` query that the hot path
+/// skips. That decision stands and `[list] show_hidden_hints` keeps its
+/// meaning. What was missing is scope disclosure for the *count*, which needs
+/// no count — hence a `bool` in and a fixed string out, so wiring it up cannot
+/// add a backend query to the default path.
+///
+/// Gated on the open-WORK lens rather than the bare-list lens so `aida list`
+/// and `aida list open` disclose identically — BUG-788 established that the
+/// explicit `open` alias is a second spelling of the same view and filed their
+/// disagreement as a defect. Every other explicit `--status`, and any
+/// `--all` / `--archived` / `--deferred`, returns `None`: those views are not
+/// hiding these tiers behind the reader's back.
+// trace:BUG-1737 | ai:claude
+fn list_lens_scope_disclosure(open_work_lens: bool) -> Option<&'static str> {
+    open_work_lens.then_some("open lens excludes archived and deferred specs")
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1737_lens_scope_disclosure_tests.rs"]
+mod bug_1737_lens_scope_disclosure_tests;
+
 fn list_count_denom_label(default_open_lens: bool) -> &'static str {
     if default_open_lens {
         "open"
