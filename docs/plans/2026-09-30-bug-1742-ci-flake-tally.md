@@ -41,8 +41,13 @@ test-flake story and not a mixed one.
 **The only exclusion is the 15 docs-only runs.** A docs-only push skips the
 `Run tests` step via `Detect full-CI changes`, so it cannot flake; counting it
 as a clean pass would have reported 4.0% instead of 4.2%. Nothing else was
-dropped: no run was cancelled, timed out, or re-run in the window, and every
-failing run failed on attempt 1.
+dropped: every run in the window reached `completed` with conclusion `success`
+or `failure` — none cancelled, none timed out.
+
+One check the denominator depends on, because a re-run to green would hide a
+failure from the tally without leaving a trace in it: **all 302 `Build` jobs
+ran at `run_attempt` 1.** No red run in this window was re-run into the green
+column behind the count.
 
 ### Per-test tally
 
