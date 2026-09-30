@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:34:09.671709363Z
+modified_at: 2026-09-30T20:37:03.820277714Z
 req_type: Task
 tags:
 - docs
@@ -93,5 +93,10 @@ comments:
   content: 'Updated slide 4''s experiment thesis to: ''As code generation gets cheaper, intent, evidence, and traceability become the critical assets.'' Replaced accountability with traceability in both the displayed slide and speaker notes, regenerated both deck copies, and visually verified the 1920x1080 LibreOffice render.'
   created_at: 2026-09-30T20:34:09.671704774Z
   modified_at: 2026-09-30T20:34:09.671704774Z
+- id: 01a0f408-f8cc-7c91-b484-89026cef3adc
+  author: mcp
+  content: 'Clarified slide 12''s heatmap unit. Replaced the operating-cadence/CPU-occupancy caveat with: ''Each count is a GitHub Actions workflow run started in that three-hour local-time bucket.'' Updated speaker notes to use workflow-run starts consistently, regenerated both deck copies, and visually verified the 1920x1080 slide render.'
+  created_at: 2026-09-30T20:37:03.820273433Z
+  modified_at: 2026-09-30T20:37:03.820273433Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
