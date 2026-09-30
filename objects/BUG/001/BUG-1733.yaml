@@ -48,12 +48,12 @@ description: |
      on BUG-1729/BUG-1731 (four concurrent suites on a 6-core host, load ~24).
   4. If the conclusion is that the fixture's timing assumption is simply too tight, the fix is
      a bounded retry of the handshake with a stated bound, not a longer sleep.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:55:10.618095347Z
-modified_at: 2026-09-30T08:58:54.282335434Z
+modified_at: 2026-09-30T09:17:32.095364439Z
 req_type: Bug
 comments:
 - id: 01a0f13d-2089-7402-bd84-cca09643ac64
@@ -318,6 +318,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f19a-d852-7dd2-b4e6-88936d0e20a8
+  author: joe
+  timestamp: 2026-09-30T09:17:32.114851658Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f175efb67de3af3d244970c7c2fab1baec829a8a
   branch: main
@@ -326,3 +333,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: ed89cdb9-e8e6-4595-9c0f-67dc9336aed2
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-30T09:17:32.095364439Z
+  implemented_by: joe
