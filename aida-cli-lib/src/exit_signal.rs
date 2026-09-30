@@ -691,11 +691,17 @@ mod tests {
             other => panic!("expected Reaped, got {other:?}"),
         };
         // SIGTERM was ignored, so the reap had to wait out the grace window.
+        // This lower bound is a property of the cascade, not of the host.
         assert!(
             elapsed >= Duration::from_millis(250),
             "reap returned before the grace window: {elapsed:?}"
         );
-        assert!(elapsed < Duration::from_secs(5), "reap hung: {elapsed:?}");
+        // The upper bound only catches a hang, so derive it from what the
+        // cascade is actually configured to wait — grace, then the bounded
+        // wait — instead of a magic constant that was *below* the configured
+        // worst case and so failed on any slow host. trace:BUG-1730
+        let hang_budget = config.grace + config.wait_delay + Duration::from_secs(2);
+        crate::test_timing::assert_within_budget(start, hang_budget, "sigkill cascade");
         // The immediate child was killed by SIGKILL (signal 9).
         assert_eq!(status.signal(), Some(9), "expected SIGKILL");
         assert!(!sentinel.exists());

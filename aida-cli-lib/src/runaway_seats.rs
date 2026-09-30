@@ -1706,6 +1706,7 @@ mod tests {
         for i in 0..5 {
             write(&dir, &format!("big-{i}.jsonl"), &one);
         }
+        let fixture_bytes = 5 * one.len() as u64;
         let src = sources(tmp.path());
         let now = t0() + Duration::minutes(60);
         let started = Instant::now();
@@ -1717,10 +1718,19 @@ mod tests {
             &HashMap::new(),
         );
         assert!(!coverage.partial);
-        assert!(
-            started.elapsed().as_secs() < 3,
-            "took {:?}",
-            started.elapsed()
+        // "Bounded" is a claim about work, not about wall clock, so assert the
+        // work directly: exactly one pass over the fixture, no file read twice.
+        // This holds on any host, which the old `elapsed().as_secs() < 3` did
+        // not — it had barely 30% margin and went red under ordinary load.
+        // trace:BUG-1730
+        assert_eq!(coverage.files_scanned, 5);
+        assert_eq!(coverage.bytes_read, fixture_bytes);
+        // The wall clock is still worth a look as a coarse hang guard, but only
+        // where the host was quiet enough for it to mean anything.
+        crate::test_timing::assert_within_budget(
+            started,
+            std::time::Duration::from_secs(3),
+            "watchdog scan of 5 storm transcripts",
         );
         let (_, again) = scan(
             "aida",
@@ -1729,7 +1739,10 @@ mod tests {
             now,
             &HashMap::new(),
         );
+        // `files_scanned` counts files with NEW bytes, so a steady-state
+        // rescan must touch none of them.
         assert_eq!(again.bytes_read, 0);
+        assert_eq!(again.files_scanned, 0);
     }
 
     #[test]
