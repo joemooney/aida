@@ -87,7 +87,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T08:04:08.478585861Z
-modified_at: 2026-09-30T09:21:26.158565726Z
+modified_at: 2026-09-30T09:23:34.011682891Z
 req_type: Bug
 comments:
 - id: 01a0f171-19c2-71a3-8dec-401eb24aa229
@@ -159,6 +159,72 @@ comments:
   created_at: 2026-09-30T08:31:56.354568761Z
   modified_at: 2026-09-30T08:31:56.354568761Z
   session_id: 0241e2a1-f4b6-4cb3-bc08-3f10e52dc315
+- id: 01a0f1a0-5dfb-7ad3-9653-72e3018a1e66
+  author: joe
+  content: |
+    ## Design sketch for AC2 — an extension trait, so the sweep is a suffix rename
+
+    Implementing session (#7). Before touching 100+ call sites I am recording the shape,
+    because the shape is what makes AC2 affordable at all.
+
+    ### The problem with the current API
+
+    `process_retry` exposes two free functions taking `&mut Command`:
+
+    ```rust
+    command_output_retrying_etxtbsy(&mut cmd) -> io::Result<Output>
+    command_status_retrying_etxtbsy(&mut cmd) -> io::Result<ExitStatus>
+    ```
+
+    Routing an existing site through them means **wrapping a multi-line builder expression in a
+    call** — `Command::new(x).current_dir(..).args([..]).output()` becomes
+    `command_output_retrying_etxtbsy(Command::new(x).current_dir(..).args([..]))`. That is a
+    re-indent of every one of ~120 chains, by hand, in a 111k-line `lib.rs`. It is the reason
+    the survey stopped at "inventory" last session.
+
+    ### The shape that makes it mechanical
+
+    Add an extension trait on `std::process::Command` in the same module:
+
+    ```rust
+    pub(crate) trait RetryEtxtbsy {
+        fn output_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::Output>;
+        fn status_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::ExitStatus>;
+        fn spawn_retrying_etxtbsy(&mut self) -> std::io::Result<std::process::Child>;
+    }
+    impl RetryEtxtbsy for std::process::Command { /* delegates to retrying_etxtbsy */ }
+    ```
+
+    Then routing a site is a **pure suffix rename** at the terminal call:
+    `.output()` → `.output_retrying_etxtbsy()`. No re-indent, no expression wrapping, and the
+    call site still reads as a builder chain.
+
+    Three properties that make this safe at scale:
+
+    - **The compiler is the guard.** The trait is implemented for `std::process::Command` and
+      nothing else, so a rename applied to some *other* type's `.output()` fails to compile
+      rather than changing behaviour. A mechanical sweep cannot silently hit the wrong type.
+    - **Additive.** The two free functions stay and keep their four existing callers
+      (incl. `test_exec::output`); nothing is migrated that does not need to be.
+    - **Closes the `.spawn()` gap.** `process_retry` wraps `output` and `status` only, leaving
+      the 12 non-literal `.spawn()` sites with no remedy at all. The trait adds the third method
+      in the same place instead of growing a third free function.
+
+    ### Scope note — this is a private within-module API
+
+    `process_retry` is a private module (`pub(crate)`); the trait changes no public surface, no
+    data model, and no control flow. It is recorded here because AC2's cost is dominated by the
+    call-site ergonomics, not because it re-architects anything.
+
+    ### Correction this fix also owes
+
+    `test_exec.rs:1-5`'s module doc asserts "production invokes installed executables and its
+    spawn sites already retry ETXTBSY". The survey shows **4 of 156** non-literal sites retry.
+    That sentence is the belief that let the filed bug happen; it gets corrected, not just
+    out-voted.
+  created_at: 2026-09-30T09:23:34.011682891Z
+  modified_at: 2026-09-30T09:23:34.011682891Z
+  session_id: bba8597d-14d5-4e73-b72f-031c3ab3e23e
 history:
 - id: 01a0f169-31c7-7f51-920d-eda5cd7829ce
   author: joe
