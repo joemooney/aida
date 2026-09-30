@@ -101,12 +101,12 @@ description: |
      `/proc/locks` + dev/ino diagnostic and the underlying defect is fixed.
   3. Whichever way B resolves, the coverage gap proven above is closed by a test
      that fails under the `existing._file = file` injection.
-status: Completed
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T05:07:36.778220987Z
+modified_at: 2026-09-30T05:08:02.440378977Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -406,6 +406,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a0f0b6-6d08-7cd1-80b3-350ab05c33b3
+  author: joe
+  timestamp: 2026-09-30T05:08:02.440377299Z
+  changes:
+  - field_name: status
+    old_value: Completed
+    new_value: InProgress
 processing_record:
 - id: 01a0f0b6-08ca-7730-ac56-94af622e1f0d
   timestamp: 2026-09-30T05:07:36.778218496Z
@@ -422,5 +429,4 @@ filed_at:
   session: b2195326-c6b7-41c7-afb5-aa27b60756e2
 implementation_info:
   implemented: false
-  completed_at: 2026-09-30T05:07:36.764676808Z
   completion_sha: a0e8a5c6297ec681baefaaffe0315543f9754fa7
