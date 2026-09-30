@@ -1,0 +1,128 @@
+id: 01a0f288-eb51-7171-8954-9164cd769b18
+spec_id: BUG-1739
+agreed_id: BUG-1739
+title: aida awaiting in agent mode counts nine contributors it never renders, hiding three stranded In-Progress specs behind an unexplainable total
+description: |
+  ## Summary
+
+  `aida awaiting` in **agent mode** prints a total that counts nine contributors it never renders.
+  Right now three real items — stranded In-Progress specs with dead lease pids, 45–64 hours old —
+  are counted in the headline and appear nowhere in the output. The human TTY path renders all
+  three in full.
+
+  Every agent session reads agent mode. This has been observed and left unexplained in relay
+  sessions #6, #7 and #8.
+
+  ## Observed (2026-09-30)
+
+  ```
+  $ aida awaiting
+  view: awaiting
+  awaiting: 6
+  findings: 2
+  mail_unread: 0 · mail_urgent: 0 · mail_shared_unread: 0
+  directives_pending: 0
+  unshipped: 0+
+  nightly_red: cross-platform nightly red since 2026-09-23 (run 36714166342, 8 nights)
+  prs[0]{…}: recusal_holds[0]{…}: held_prs[0]{…}: unowned_failing_prs[0]{…}:
+  briefs[0]{…}: unshipped_work[0]{…}: reviewer[0]{…}: escalations[0]{…}:
+  ```
+
+  Six awaiting, eight empty tables, nothing to act on. The 6 decomposes exactly:
+
+  | contributor | value | contributes | rendered in agent mode? |
+  |---|---|---|---|
+  | `findings_total` | 2 | 1 | ✅ |
+  | `nightly_red` | present | 1 | ✅ |
+  | `unshipped_work_scan.complete == false` | — | 1 | ✅ (the `+` in `unshipped: 0+`) |
+  | **`orphaned_in_progress`** | **3** | **3** | ❌ **nothing** |
+
+  Total 6. **Half of it is invisible.**
+
+  The same command on a TTY:
+
+  ```
+  ⚠️ orphaned In-Progress: BUG-1688 — lease pid dead, live harness lease in this repo, last touched 64h 15m ago — `aida ps`
+  ⚠️ orphaned In-Progress: BUG-1693 — … 64h 0m ago
+  ⚠️ orphaned In-Progress: BUG-1695 — … 45h 45m ago
+  ```
+
+  `--json` carries `orphaned_in_progress` too. Agent mode is the only surface that drops it.
+
+  ## The class is nine wide, not one
+
+  `AwaitingReport::total()` (`awaiting_you.rs:1345-1393`) sums 21 contributors. The agent-mode
+  render (`lib.rs:~82845-83006`) emits 12 of them. These nine count toward the headline and have
+  **no agent-mode output at all**:
+
+  `orphaned_in_progress` · `blocked_seats` · `pr_attribution_disagreements` · `cron.due` ·
+  `shelved_total` · `rework_ready` · `stale_approvals` · `blocked_reviews` ·
+  `reviewer_actionable_of_routed` (the BUG-1508 AC4/AC7 summary line, which `total()` adds as its
+  own row)
+
+  Eight of the nine happen to be zero today, which is why the visible gap is 3 rather than larger.
+  The next non-zero one produces the same unexplainable report.
+
+  ## Why this is a defect, not a preference
+
+  `total()` drives `is_empty()`, which drives the hide-when-empty fast path. A non-zero total is a
+  promise that the report says something. In agent mode that promise is broken for nine of the
+  things that can make it non-zero, and the failure is silent: the reader sees a number and empty
+  tables and has no way to learn what the difference was. Three sessions in a row failed to
+  diagnose it from the output.
+
+  The cost is not cosmetic. BUG-1688, BUG-1693 and BUG-1695 have been stranded In-Progress with
+  dead lease pids for up to 64 hours — exactly the condition `aida awaiting` exists to surface —
+  and no agent session could see them.
+
+  This is BUG-1737's family: a count whose contributors the surface does not disclose. BUG-1737
+  fixed a lens that hid a class silently; this is a render that hides nine.
+
+  ## Acceptance
+
+  1. Agent-mode `aida awaiting` renders every contributor `AwaitingReport::total()` counts. A
+     non-zero `total()` must always be attributable to something printed.
+  2. `orphaned_in_progress` renders as a TOON table carrying at least the spec id and the reason
+     the human line gives (dead lease pid / not yet started), plus its `aida ps` next step.
+  3. The remaining eight contributors render in the established agent-mode idiom — a `[0]` table
+     for list-shaped ones, a scalar key for count-shaped ones — so their absence is *shown* rather
+     than inferred, matching how `prs[0]` and `mail_unread: 0` already behave.
+  4. **A test makes the two lists impossible to drift apart.** The bug is that `total()` and the
+     agent render were edited independently for nine contributors; a fix that only adds nine
+     `println!`s re-opens the moment a tenth is added. Pin the correspondence structurally — a
+     source-scanning guard over both sites, or a shared enumeration both consume. State which and
+     why.
+  5. Verified against this repository's live report: the three orphaned specs appear in agent mode,
+     and `awaiting:` reconciles with the rendered rows.
+  6. Tempdir-only tests: a report with a non-zero contributor in each of the nine classes renders a
+     row for it; a fully empty report still takes the hide-when-empty path.
+  7. Prove by mutation that AC4's guard fails when a contributor is added to `total()` without a
+     render, and that each new render's test fails when that render is dropped.
+
+  ## Do not
+
+  - Do not change `total()`'s arithmetic to match the render. The count is correct; the render is
+    incomplete. Removing `orphaned_in_progress` from the total would hide three real stranded specs
+    rather than surface them.
+  - Do not fix this by pointing agents at `--json`. Agent mode is the default an agent session gets,
+    and `--json` already works.
+
+  ## Adjacent, do not absorb
+
+  BUG-1688, BUG-1693 and BUG-1695 are actually stranded and need dispositioning by a seat. That is
+  queue hygiene, not this bug. File or handle separately.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T13:37:34.545659725Z
+modified_at: 2026-09-30T13:37:34.545659725Z
+req_type: Bug
+filed_at:
+  code_sha: b510526ff4e565e30da535b2e80ad42666e54283
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 08266c5d-f39e-4334-b87d-f481a6ba1b02
