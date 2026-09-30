@@ -71,13 +71,21 @@ description: |
 
   Touching `/home/joe/ai/aida/requirements.db`. It is the operator's file and the only copy of
   another project's data. **Ask before moving or deleting it.**
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T07:54:58.091742254Z
-modified_at: 2026-09-30T07:54:58.091742254Z
+modified_at: 2026-09-30T08:23:17.170965052Z
 req_type: Bug
+history:
+- id: 01a0f169-2db2-7990-99d1-e383c5810980
+  author: joe
+  timestamp: 2026-09-30T08:23:17.170963181Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 15fd965f4466d9d7811c5f419244d275c8737826
   branch: main
