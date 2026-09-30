@@ -339,6 +339,9 @@ mod test_exec;
 // trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
 #[cfg(test)]
 mod test_home;
+// trace:BUG-1730 | ai:claude — wall-clock budgets judged against host load.
+#[cfg(test)]
+mod test_timing;
 // trace:TASK-964 | ai:claude — TOON agent-output encoder (token-efficient).
 mod toon;
 mod trace_cmd;
