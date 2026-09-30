@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-30T14:45:51.024436381Z
+modified_at: 2026-09-30T14:58:24.074342051Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -81,6 +81,30 @@ comments:
   created_at: 2026-09-30T14:45:51.024436381Z
   modified_at: 2026-09-30T14:45:51.024436381Z
   session_id: 622c849c-8085-4d0c-840e-82dd660b1787
+- id: 01a0f2d2-eaca-7123-ac4b-71a9d3fa7f41
+  author: joe
+  content: |
+    ## Stranded WIP recovered and committed — 2026-09-30 (relay session #11)
+
+    This spec's work was left uncommitted in `/home/joe/ai/aida-bug-1688` when its parent codex
+    process died unreaped (root cause re-diagnosed on BUG-1740 — it is **not** the zombie pid; see
+    that spec). 5 modified scripts plus an untracked 73-line test were at risk from any worktree
+    sweep.
+
+    Now commit **`72bc040a09`** on branch `bug-1688`: 141 insertions / 97 deletions across
+    `scripts/aida-demo.sh`, the four `scripts/ablations/gate-vs-rule*.sh`, and a new
+    `tests/test_bug_1688_shipped_launch_refusals.sh`. Authorship is codex's; my commit is custody
+    only — **not reviewed, not run, not rebased**.
+
+    Next seat: rebase onto `main` (BUG-1693's sibling branch rebased with zero conflicts, so expect
+    the same), then run the new test and review against acceptance. Note the new test is untracked
+    by any runner — check it is wired in, which BUG-1693's equivalent was not.
+
+    ⚠ The lease `01a0e4be89ef` still names a dead creator pid. Nobody is working this; claim it
+    before picking it up.
+  created_at: 2026-09-30T14:58:24.074342051Z
+  modified_at: 2026-09-30T14:58:24.074342051Z
+  session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
 history:
 - id: 01a0e4aa-0db5-7f03-939f-9b70d4ca32f9
   author: joe
