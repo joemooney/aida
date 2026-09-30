@@ -116,8 +116,77 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:37:34.545659725Z
-modified_at: 2026-09-30T13:37:41.274817110Z
+modified_at: 2026-09-30T13:40:56.685003435Z
 req_type: Bug
+comments:
+- id: 01a0f28c-00ed-7cb1-a2d3-0164c5be9b0d
+  author: joe
+  content: |
+    ## Disposition: approved (relay session #10, independent of the filing session)
+
+    Premise re-measured against the live store and the source, per "re-measure a filed premise
+    before implementing it". **It holds.** Two numeric corrections, neither of which changes the
+    defect or the fix.
+
+    ### Verified
+
+    `aida awaiting` (agent mode) prints `awaiting: 6` with three visible contributors
+    (`findings: 2` -> 1, `nightly_red` -> 1, `unshipped: 0+` -> 1). `--json` on the same invocation
+    carries `orphaned_in_progress` as a 3-element list and `total: 6`. The remaining 3 are that list,
+    and agent mode emits nothing for it. Confirmed live.
+
+    The nine unrendered contributors are exactly as filed. The agent render block ends after the
+    `escalations` table; `orphaned_in_progress`, `blocked_seats`, `pr_attribution_disagreements`,
+    `cron.due`, `shelved_total`, `rework_ready`, `stale_approvals`, `blocked_reviews` and the
+    reviewer summary line have no emitter anywhere in it.
+
+    ### Correction 1 — the arity is 23/14, not 21/12
+
+    `AwaitingReport::total()` sums **23** terms, not 21. The agent render covers **14**, not 12.
+    The gap is 9 either way and the nine names are right, so the acceptance is unaffected — but an
+    implementer who greps for 21 will think they have miscounted. The two the filing folded away are
+    almost certainly the reviewer summary line (counted separately from `reviewer_queue_items`) and
+    the incomplete-scan line (counted separately from `unshipped_work`).
+
+    ### Correction 2 — the reviewer line is an off-by-one, not an absence
+
+    `reviewer_actionable_of_routed` is not a missing table; the `reviewer[N]` table *is* rendered.
+    The contributor is the extra `+1` `total()` adds whenever `reviewer_queue_items` is non-empty
+    (BUG-1508 AC4/AC7). So with any routed reviewer work, agent mode already shows `N` rows against a
+    total that counted `N+1`. AC3's "a `[0]` table for list-shaped, a scalar key for count-shaped"
+    handles it, but the implementer should know this one is a scalar summary line and not reach for a
+    table. Suggest a `reviewer_actionable: <n> of <m> routed` scalar key.
+
+    ### On AC3's token cost — considered and accepted
+
+    Agent mode exists to be token-efficient (the BUG-695 comment at the render site says so), and AC3
+    adds eight always-printed keys/tables that are zero on most invocations. I weighed dropping it to
+    "render only when non-zero" and rejected that: the surface's own established idiom already prints
+    `mail_unread: 0` and eight `[0]` tables, so suppressing exactly the new eight would be the
+    inconsistent choice, and "absence is shown rather than inferred" is the property that stops the
+    next reader re-deriving this bug from scratch. The marginal cost is a handful of lines against a
+    report that already prints ~18. **AC3 stands as written.**
+
+    ### AC4 is the acceptance that matters
+
+    Nine `println!`s fix today and re-open on the tenth contributor. `aida-cli-lib/src/lib.rs` is
+    already in the set of files read as text by `include_str!` source guards, so a guard spanning
+    `total()` in `awaiting_you.rs` and the render in `lib.rs` is an established idiom here and is
+    feasible. Adding `awaiting_you.rs` to that scanned set is fine -- there is no central allowlist.
+
+    Prefer a shared enumeration both sites consume if it can be had without contorting the struct; a
+    source guard is the acceptable fallback. AC4 already requires stating which and why -- do that.
+
+    **A pure-function test never witnesses a wiring bug.** Whatever AC4's mechanism, the test must
+    fail when a contributor is added to `total()` with no render. AC7 demands that mutation. Run it.
+
+    ### Adjacent, confirmed real
+
+    BUG-1688 / BUG-1693 / BUG-1695 are genuinely stranded In-Progress. Confirmed present in the live
+    `--json`. They stay out of this spec's scope.
+  created_at: 2026-09-30T13:40:56.685003435Z
+  modified_at: 2026-09-30T13:40:56.685003435Z
+  session_id: 622c849c-8085-4d0c-840e-82dd660b1787
 filed_at:
   code_sha: b510526ff4e565e30da535b2e80ad42666e54283
   branch: main
