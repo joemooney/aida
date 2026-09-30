@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T10:55:32.061181134Z
+modified_at: 2026-09-30T11:04:38.036002866Z
 req_type: Bug
 comments:
 - id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
@@ -137,6 +137,82 @@ comments:
     right. Approved at `medium`, routed for implementation.
   created_at: 2026-09-30T10:55:13.183587765Z
   modified_at: 2026-09-30T10:55:13.183587765Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+- id: 01a0f1fc-e594-75b2-a022-ad8282dee8d2
+  author: joe
+  content: |
+    ## AC3 — the survey, and the rule that decides each site
+
+    Re-run over the whole crate rather than taken from the filing, which undercounted by one and
+    misattributed one. Keyed by **test name**, not line number, because the lines all moved.
+
+    ### The rule
+
+    The filing framed this as "route every `try_acquire(...).unwrap().unwrap()`". That is wrong,
+    and `refresh_lock_descriptor_lifecycle_is_visible_to_another_process` already carries the
+    argument for why in a comment predating this bug:
+
+    > A fresh tempdir inode no descriptor has ever opened, so unlike the fork-window tests above
+    > there is nothing here for a sibling's child to have inherited: a `None` is a real defect, not
+    > a race, and a bounded retry would only delay reporting it.
+
+    The hazard is not "an acquire in a test". It is **an acquire on a path this process has already
+    opened a descriptor to**, because only then can a sibling thread's `fork` have handed its child
+    an inherited descriptor to the same open file description. So:
+
+    - **First acquire on a fresh tempdir inode → leave bare.** No descriptor to inherit.
+      A `None` is a genuine defect and retrying it only delays the report by the bound.
+    - **Any acquire on a path a previous guard (or production code) already opened → route.**
+
+    `nested_freshen_in_lock_holder_does_not_wait` in `cache_refresh.rs` is the existing proof that
+    the distinction is real and already understood: its *first* acquires are bare, and its
+    *re-acquire after the last guard drops* is the one call already routed through
+    `acquire_past_fork_window`.
+
+    ### The nine `.unwrap().unwrap()` sites, classified
+
+    | site (test) | verdict |
+    |---|---|
+    | `cache_refresh::nested_freshen_in_lock_holder_does_not_wait` (×2) | bare — fresh inode, first + nested |
+    | `cache_refresh::a_forked_child_holds_the_lock_past_its_guard_until_exec` | bare — fresh inode, and the acquire precedes the fork it studies |
+    | `cache_refresh::refresh_lock_descriptor_lifecycle_is_visible_to_another_process` (×2) | bare — fresh inode; already argued in situ |
+    | `cache_refresh::nested_refresh_through_directory_alias_uses_same_registry_entry` (×2) | bare — fresh inode, first + aliased nested |
+    | **`cached_git_backend::held_refresh`** | **ROUTED** |
+    | **`cached_git_backend::nested_freshen_in_lock_holder_does_not_wait`** | **ROUTED** (the site the filing missed) |
+
+    Both routed sites share one fixture, `task_1515_backend`, and that is the whole difference:
+    it runs `CachedGitBackend::open` and three `add_requirement`s, so **production refresh
+    acquires have already opened and closed descriptors to this cache's sidecar** before the test
+    helper asks for it. The `cache_refresh` sites never touch production code, and their sidecars
+    are untouched tempdir inodes. That is why these two flaked in CI and the other seven never
+    have.
+
+    ### The `is_none()` shape — `Ok(None)` **is** the assertion, must never be routed
+
+    `nested_freshen_in_lock_holder_does_not_wait` (×2) and
+    `a_forked_child_holds_the_lock_past_its_guard_until_exec` (×1). Routing any of these through a
+    bounded retry would convert the assertion into a 5s sleep and then still assert `None`, i.e.
+    it would pass for the wrong reason.
+
+    ### Correction to the filing's "production callers"
+
+    The filing (and my own disposition comment, repeating it) listed `cache_refresh.rs:247` as one
+    of "the two callers in production". It is not: line 247 was *inside*
+    `acquire_past_fork_window`, which is `#[cfg(test)]`. `cache_refresh.rs` has **no** production
+    `try_acquire` caller. The production callers are all four in `cached_git_backend.rs`
+    (`freshen_for_read` ×3 and `ensure_cache_fresh` ×1), and all four are untouched — they depend
+    on `Ok(None)` meaning "someone else is refreshing, skip", exactly as the filing's "Do not"
+    section requires.
+
+    ### No new helper
+
+    As the disposition said: `acquire_past_fork_window` was parameterized
+    (`acquire_past_fork_window_within(path, bound) -> Option<(RefreshLock, usize)>`), not
+    duplicated. `acquire_past_fork_window` is now a one-line wrapper passing `FORK_WINDOW_BOUND`,
+    so every pre-existing caller is unchanged and `aida-core` still has exactly one bounded-retry
+    loop.
+  created_at: 2026-09-30T11:04:38.036002866Z
+  modified_at: 2026-09-30T11:04:38.036002866Z
   session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 history:
 - id: 01a0f1f4-4382-78f2-ae3f-290c4b2273ac
