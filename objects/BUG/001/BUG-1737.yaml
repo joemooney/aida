@@ -84,8 +84,92 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:32.604859901Z
-modified_at: 2026-09-30T12:45:32.604859901Z
+modified_at: 2026-09-30T12:58:14.814304680Z
 req_type: Bug
+comments:
+- id: 01a0f264-e99e-7d01-a364-6d39c5aa4e01
+  author: joe
+  content: |
+    ## Independent disposition (advisor, relay #9) — premise re-measured, spec re-scoped, approved
+
+    I filed nothing here; I measured the filed claims against the live store and the code. Three of
+    them do not survive. The residual defect is real but much narrower, and one acceptance criterion
+    as written would have made the surface **worse**.
+
+    ### 1. The printed number is arithmetically honest. It reconciles exactly.
+
+    `aida list` today prints `count: 30 of 53 open`. Measured:
+
+    | slice | count |
+    |---|---|
+    | `aida list --status approved` (live) | 64 |
+    | ...of which accepted ADRs (terminal, hidden by BUG-781) | 32 |
+    | `aida list --status draft` (live, machine-drafts hidden) | 8 |
+    | `aida list --status in-progress` | 13 |
+    | **(64 − 32) + 8 + 13** | **53** ✅ |
+
+    The denominator is not a mystery and is not off by 6x *for the lens it applies*.
+
+    ### 2. The filed claim that the 244 Approved specs "are absent from the number" is FALSE.
+
+    `--all --status approved` = 244, but that set is overwhelmingly shelved already:
+
+    - live: **64** · deferred: **44** · archived: **129**
+
+    Of the 64 live ones, 32 are accepted ADRs — a decision class whose terminal state *is* `Approved`
+    (BUG-781). So the genuinely approved-and-live backlog is **32 specs, and all 32 are inside the
+    53**. They are not missing from the operator's first number; they are most of it.
+
+    This also corrects the standing handoff line "244 specs sit approved but unrouted — this is the
+    real backlog." It is not. 212 of the 244 were explicitly archived or deferred.
+
+    ### 3. AC2 as filed would manufacture a phantom backlog — REMOVED.
+
+    AC2 asked to print the non-terminal total (333) alongside. That figure counts ~250 rows the
+    operator themselves archived or deferred. Printing `333 open` would replace a number that
+    understates nothing with one that overstates by ~10x, and would point `aida-backlog-groom` at a
+    pile of deliberately shelved work. The filed 332/333 figure is not a truer backlog — it is a
+    different error in the opposite direction.
+
+    ### 4. AC4 as filed assumes a JSON envelope that does not exist — REMOVED.
+
+    `aida list --format json` emits a **bare array** of row objects. There is no count field of any
+    kind to disambiguate. Satisfying AC4 means inventing an envelope, which breaks every existing
+    consumer that indexes the array. That is a separate product decision, not a bug fix, and it is
+    out of proportion to the defect.
+
+    ### What IS defective
+
+    `open` is an unqualified lifecycle word, and in AIDA's own vocabulary it means something wider
+    than the lens: `RequirementStatus::open_statuses()` is Draft/Approved/Planned/InProgress/
+    NeedsAttention, with no notion of archived or deferred. The default lens additionally drops
+    **archived** and **deferred** rows — and, uniquely among the classes it hides, says nothing.
+
+    Agent mode (`git_backend_cmd.rs` ~2609-2630) prints three disclosure notes: closed hidden,
+    accepted decisions hidden, machine-filed drafts hidden. An operator reading a count plus an
+    apparently exhaustive list of what was withheld reasonably concludes nothing else was. Two more
+    classes were.
+
+    That is exactly the misread that happened. It is one missing sentence, not a wrong number.
+
+    ### Why not just turn the existing archived/deferred hints on
+
+    They exist (`list_hidden_hint_lines`, `archived_hidden_count`, `deferred_hidden_count`) but are
+    gated behind `show_view_tier_hints`, off by default **deliberately** — BUG-783: "an explicit
+    open-work request doesn't need reminding on every invocation that the other two tiers exist."
+    Each also costs an extra cache query, skipped on the hot path.
+
+    I am not reversing BUG-783. Its decision was about *counted nudges* ("N archived hidden — pass
+    --all"). What is missing here is *scope disclosure for a count*, which needs no count and so
+    costs no query. A static line naming the excluded tiers satisfies this without re-litigating a
+    closed decision and without adding a query to the agent hot path.
+
+    ### Disposition: APPROVED, re-scoped. Acceptance replaced below.
+
+    Priority held at high — cheap, and it already cost one wrong strategic conclusion.
+  created_at: 2026-09-30T12:58:14.814304680Z
+  modified_at: 2026-09-30T12:58:14.814304680Z
+  session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
   branch: main
