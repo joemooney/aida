@@ -101,8 +101,101 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-09-30T14:45:50.198139880Z
+modified_at: 2026-09-30T14:50:48.660410691Z
 req_type: Bug
+comments:
+- id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
+  author: joe
+  content: |
+    ## Advisor disposition (2026-09-30, relay session #11) — premise REFUTED, spec re-scoped
+
+    I re-measured every claim in this spec against the live system before accepting it. The
+    **observed harm is real** (BUG-1688/1693/1695 have read `possibly_subagent` for days while
+    nobody worked them) and the **zombie is real** (`1907632` is state `Z`, 4d13h old). But the
+    mechanism this spec asserts — *the orphan classifier reads the defunct creator pid as a live
+    harness* — **is false**. The creator pid is never consulted for these three leases.
+
+    ### The code path, read end to end
+
+    `lease_state_for` (`aida-core/src/liveness.rs:1084`) reads `creator_pid` in **exactly one
+    branch**:
+
+    ```rust
+    if l.review_verb || l.claim_verb {
+        let alive = l.creator_pid.map(|pid| process_identity_is_alive(...)).unwrap_or(false);
+        ...
+    }
+    if let Some(pid) = l.active_pid { ... }
+    // otherwise: worktree_exists / has_live_claude / age
+    ```
+
+    All three stranded leases carry `review_verb = false`, `claim_verb = false`, **and no
+    `active_pid`**. So `creator_pid = 1907632` is read by nothing. Their `Stale` verdict comes from
+    the age arm (>24h, no live claude in the worktree) — which is **correct**, and would be
+    identical if the zombie had been reaped.
+
+    ### What actually sets `possibly_subagent`
+
+    `possibly_subagent = stale_lease && fanout_active`, and
+    `fanout_active = live_fanout_harness_lease(...)` — any lease with scope `harness-worktree` in
+    `LeaseState::Live`. There is exactly one such lease in this repo:
+
+    ```
+    id           = "01a0c96c2f117c239cfd2acf11a8f59a-3716d304824b58e5"
+    scope        = "harness-worktree"
+    worktree_path = "/home/joe/ai/aida"      # the OPERATOR'S MAIN CHECKOUT
+    started_at   = "2026-09-22T14:01:46Z"    # 8 days old
+    # no active_pid, no creator_pid, review_verb = false, claim_verb = false
+    ```
+
+    With no pid of any kind, `classify_lease_state(worktree_exists=true, has_live_claude, age=8d)`
+    can only return `Live` via `has_live_claude`. `aida ps --json` reports it `live`. And
+    `has_live_claude` is:
+
+    ```rust
+    live_sessions.iter().any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(...)))
+    ```
+
+    The live claude satisfying it is **pid 270203, cwd `/home/joe/ai/aida`, elapsed 2m45s — the
+    session running the report.**
+
+    🔴 **The guard is self-satisfying.** A `harness-worktree` lease pinned to the project root is
+    `Live` whenever *any* claude sits in the project root — the operator's own window, or the very
+    session invoking `aida awaiting`. So `possibly_subagent` fires for *every* stale spec lease in
+    the repo, unconditionally, from the operator's checkout. It is not evidence of a fan-out; it is
+    an echo of the observer.
+
+    That is why these three read as "someone may be on it" for three days: not one dead parent
+    misjudged, but a predicate that cannot return false where it is usually run.
+
+    ### The zombie claim is real, but separate and latent
+
+    Independently reproduced (fork, `_exit(0)`, no reap):
+
+    ```
+    child=276914  kill0=0
+    stat=276914 (zt) Z 276913 ...
+    ```
+
+    `pid_is_alive_impl` is `libc::kill(pid, 0) == 0` (`liveness.rs:746`), so a zombie reads alive.
+    That is a genuine defect — it just reaches `possibly_subagent` through no path here. It bites
+    the branches that *do* read a pid: `review_verb`/`claim_verb` leases (`creator_pid`) and any
+    lease with `active_pid`. Filed separately rather than carried here, so neither fix is gated on
+    the other and neither is credited with the other's evidence.
+
+    ### Disposition
+
+    This spec keeps its ID (it is the thread back to the observed harm and the three stranded
+    specs) and is **re-scoped to the verified root cause**, then approved. Acceptance rewritten —
+    the old AC1/AC2/AC4/AC5 targeted the refuted mechanism and would have shipped a zombie-state
+    probe that left `aida awaiting` reporting exactly the same thing. AC6 (`creator_pid_start_time`)
+    is retained in the new spec for the zombie bug, where it belongs.
+
+    ⚠ **For whoever implements this: verify the fix against the report, not against the unit test.**
+    The refuted mechanism would have passed a green zombie test and changed no output at all.
+  created_at: 2026-09-30T14:50:48.660410691Z
+  modified_at: 2026-09-30T14:50:48.660410691Z
+  session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
