@@ -1,7 +1,7 @@
 id: 01a0f4a5-91a2-7bb2-94f4-b7735adf083a
 spec_id: TASK-1561
 agreed_id: TASK-1561
-title: Make the worktree parent directory configurable so restricted-permission agents need one narrow grant
+title: Move pickup worktrees under <root>/.aida/worktrees/<slug> so restricted-permission agents need no grant beyond the repo
 description: |
   OBSERVED: `aida queue work <SPEC>` creates its worktree as a SIBLING of the project root, `<parent>/<repo>-<slug>` — e.g. `/home/joe/ai/aida-bug-1743`. With ~25 live worktrees these scatter directly across `/home/joe/ai`, alongside every unrelated side project on the machine.
 
@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:28:06.562496496Z
-modified_at: 2026-09-30T23:32:19.164513209Z
+modified_at: 2026-09-30T23:32:21.345181210Z
 req_type: Task
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
