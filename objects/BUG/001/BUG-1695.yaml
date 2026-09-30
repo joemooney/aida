@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-30T16:20:39.113309875Z
+modified_at: 2026-09-30T16:37:58.837768579Z
 req_type: Bug
 comments:
 - id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
@@ -99,6 +99,25 @@ comments:
   created_at: 2026-09-30T14:58:24.991766038Z
   modified_at: 2026-09-30T14:58:24.991766038Z
   session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
+- id: 01a0f32e-15b5-7dd1-a5bd-6c9dcd709d73
+  author: joe
+  content: |
+    Investigation session (relay #15), root-cause phase — evidence recorded so far.
+
+    RULED OUT with measurements, not reasoning:
+    1. A leaked child process from create/seed. Every git invocation in git_ops goes through `Command::output()`, which waits (aida-core/src/git_ops.rs:38). A probe that snapshots the whole store tree (path+inode+mtime ns) immediately after `sandbox_create` returns, sleeps 250ms under 8-thread contention, then re-snapshots, measured ZERO drift across 80 stores: nothing writes under the store after create+seed returns.
+    2. A detached `git gc --auto`. Same probe: no post-return writes. At CLI level a created+seeded store also shows no further mtime movement after the process exits.
+    3. Sandbox-path self-contention. 8 threads x 25 iterations = 200 create+seed+destroy round-trips in one process: 0 failures.
+    4. The shared-temp sweeper (aida-cli-lib/src/test_home.rs:260) only removes `<TEST_HOME_PREFIX><pid>` directories, so it cannot touch a TempDir-owned sandbox root.
+
+    CONTEXT WORTH KNOWING: this is not an isolated flake. `Build (ubuntu-latest)` — a REQUIRED check — failed five separate times on main today (runs 36717478815, 36689141777, 36677337396, 36674309877, 36668166684), each with a different single test failing in `-p aida-cli-lib --lib`. BUG-1695 is one member of a family of load-sensitive failures in that suite.
+
+    ALSO WORTH KNOWING: tempfile's `TempDir::drop` ignores the error from its own recursive remove, so every other test that builds a git repo in a TempDir swallows exactly this failure. `sandbox_destroy` is close to the only place that asserts on it, which is why this one test carries the whole family's visibility.
+
+    IN FLIGHT: three probes (passive foreign-write watch, round-trip hammer, and a forced 30ms race window between emptying a directory level and its rmdir) running concurrently with a full `cargo test --workspace` run, which is the environment the CI failure came from.
+  created_at: 2026-09-30T16:37:58.837768579Z
+  modified_at: 2026-09-30T16:37:58.837768579Z
+  session_id: 2284e676-e7f4-4592-9a21-d700e91d8db2
 history:
 - id: 01a0e478-b08c-7111-84a8-c496042f936f
   author: joe
