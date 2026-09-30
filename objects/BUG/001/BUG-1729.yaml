@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T05:08:19.226486284Z
+modified_at: 2026-09-30T05:19:30.028610309Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -412,6 +412,12 @@ comments:
     Anyone marking this done must close those three first.
   created_at: 2026-09-30T05:08:19.226486284Z
   modified_at: 2026-09-30T05:08:19.226486284Z
+  session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
+- id: 01a0f0c0-eaec-7103-ad05-ec4a1a274858
+  author: joe
+  content: Commit a0e8a5c629 references this requirement
+  created_at: 2026-09-30T05:19:30.028610309Z
+  modified_at: 2026-09-30T05:19:30.028610309Z
   session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
