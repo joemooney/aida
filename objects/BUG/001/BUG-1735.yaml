@@ -1,0 +1,99 @@
+id: 01a0f157-a69e-7781-b1f7-26fe9087355f
+spec_id: BUG-1735
+agreed_id: BUG-1735
+title: 'ETXTBSY spawn failure surfaces as "could not invoke": injected-binary call sites bypass the existing retry helper'
+description: |
+  ## Summary
+
+  `aida_subcmd_queue_add_for_reviewer_using` (`aida-cli-lib/src/lib.rs:46660`) spawns its
+  injected binary with a bare `std::process::Command::…output()`, bypassing
+  `process_retry::command_output_retrying_etxtbsy`. Under suite parallelism the spawn can fail
+  with `ETXTBSY`, and the function reports it as `could not invoke \`aida queue add\`` — which
+  its own test then fails on, because the test is asserting the *other* error arm.
+
+  **This is a missed call site for a remedy the repo already has, not a new mechanism.**
+  `process_retry`'s module doc (`aida-cli-lib/src/process_retry.rs:1-6`) states it exactly:
+
+  > On Unix, executing a file fails with `ETXTBSY` while any process holds it open for
+  > writing. A concurrent fork can briefly inherit that descriptor, so retrying the spawn
+  > handles the race for both real commands and parallel test fixtures.
+  > `trace:BUG-463 trace:BUG-468`
+
+  ## Observed failure (CI, not just a local host)
+
+  `Build (ubuntu-latest)` on PR #2289, run `36686163707`:
+
+  ```
+  ---- bug_1291_orphan_sweep_tests::queue_add_failure_is_propagated stdout ----
+  thread '...' panicked at aida-cli-lib/src/lib.rs:79085:9:
+  could not invoke `aida queue add`
+  ```
+
+  The test (`lib.rs:79045`) writes a fake `failing-aida` via
+  `test_exec::write_executable`, then calls the `_using` function and asserts the error
+  contains `"queue unavailable"` — i.e. it expects the `Ok(o)` non-zero-exit arm
+  (`lib.rs:46675`). It instead hit the `Err(e)` spawn-failure arm (`lib.rs:46679`), which is
+  only reachable when `Command::output()` itself fails. With a freshly written, `sync_all`'d,
+  chmod-755 script, `ETXTBSY` from a sibling thread's inherited write descriptor is the
+  mechanism BUG-463/BUG-468 already documented.
+
+  ## Scope — measured, not estimated
+
+  | | count |
+  |---|---|
+  | `write_executable` call sites in `aida-cli-lib/src` (each one a potential ETXTBSY window) | **52** |
+  | `Command::new(<non-literal>)` sites — i.e. an *injectable* binary path a test can aim at a fixture | **~100** (`exe` 17+8, `gh`-family 33, `program` 12+3, `aida`-family 15, `cli` 4, `glab` 4, …) |
+  | sites actually using `retrying_etxtbsy` / `test_exec::output` | **10** |
+
+  Most of the ~100 spawn stable binaries (`git`, `gh`, `glab`) that are never freshly written,
+  where `ETXTBSY` is impossible. The at-risk subset is specifically the **`_using` /
+  dependency-injection seams**, whose whole purpose is to let a test substitute a
+  just-written fixture. `aida_subcmd_queue_add_for_reviewer_using` is exactly that shape and
+  has now failed in CI.
+
+  ## Relationship to BUG-1733
+
+  Same family, different resource. BUG-1733 is a sibling thread's forked child holding an
+  inherited **flock** descriptor past its guard; this is a sibling thread's forked child
+  holding an inherited **write** descriptor to an executable. Both surface only under
+  `--test-threads=4`, both are properties of the harness rather than of the code under test,
+  and both were previously diagnosed in this repo (BUG-1729 for the flock, BUG-463/BUG-468 for
+  `ETXTBSY`). Worth fixing together or at least with one shared write-up.
+
+  ## Acceptance
+
+  1. `aida_subcmd_queue_add_for_reviewer_using` spawns through
+     `process_retry::command_output_retrying_etxtbsy`, so a transient `ETXTBSY` no longer
+     surfaces as `could not invoke`.
+  2. The `_using` / injected-binary-path spawn sites are **surveyed across the whole crate**
+     (do not work from the two sites named above — the filed list undercounts by
+     construction), and each is either routed through the retry helper or shown to spawn a
+     binary that can never be freshly written.
+  3. A test proves the retry actually engages at the call site — e.g. the helper is exercised
+     with an injected `ETXTBSY` — rather than only asserting the existing happy path.
+  4. `bug_1291_orphan_sweep_tests::queue_add_failure_is_propagated` still fails when the fake
+     binary genuinely exits non-zero, i.e. the fix must not turn a real propagation failure
+     into a pass. Prove this by mutation.
+  5. The survey's findings are recorded on this spec, including the count of sites examined
+     and the count changed.
+
+  ## Caution
+
+  Do not "fix" this by relaxing the test's assertion to accept either error arm. That would
+  discard the very signal this bug is about — the test's job is to prove a non-zero exit
+  propagates, and it can only do that if a spawn failure remains distinguishable.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T08:04:08.478585861Z
+modified_at: 2026-09-30T08:04:08.478585861Z
+req_type: Bug
+filed_at:
+  code_sha: 15fd965f4466d9d7811c5f419244d275c8737826
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ee842845-0934-464c-8a39-5ea927f98a59
