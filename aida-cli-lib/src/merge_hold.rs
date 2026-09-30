@@ -2536,6 +2536,47 @@ mod tests {
         );
     }
 
+    // BUG-1693 AC1: `merge-hold list` must SURFACE a tampered PR, and the
+    // "nothing to see here" early return must not swallow it. The render is a
+    // thin loop over `unrecorded_marker_removals` (tested above), so the one
+    // place a regression could still mislead an operator is the empty-state
+    // conjunct: drop it and the command prints TAMPERING and then claims "No
+    // active merge-holds." in the same breath. Pin both, whitespace-normalised
+    // so `cargo fmt` cannot break the assertion.
+    // trace:BUG-1693 | ai:claude
+    #[test]
+    fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
+        let lib_source = include_str!("lib.rs");
+        let list = lib_source
+            .split("crate::cli::MergeHoldAction::List { json, fix } =>")
+            .nth(1)
+            .and_then(|body| body.split("crate::cli::MergeHoldAction::Add {").next())
+            .expect("list handler must remain inspectable");
+        let squashed = list.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        let render = squashed
+            .find("for pr in &unrecorded_removals {")
+            .expect("list must RENDER the unrecorded marker removals it computed");
+        assert!(
+            squashed[render..].contains("TAMPERING"),
+            "the tampering render must name the condition in the operator's words"
+        );
+
+        let empty = squashed
+            .find(
+                "if live.is_empty() && stale.is_empty() && label_only.is_empty() \
+                   && unrecorded_removals.is_empty() { println!(\"No active merge-holds.\");",
+            )
+            .expect(
+                "the empty-state early return must count unrecorded marker removals, \
+                 or list prints TAMPERING and then claims there are no holds",
+            );
+        assert!(
+            render < empty,
+            "the tampering line must be rendered before the empty-state early return"
+        );
+    }
+
     // BUG-1541: state words parse per forge; anything unrecognised is Unknown
     // and never terminal (fail closed).
     // trace:BUG-1541 | ai:claude

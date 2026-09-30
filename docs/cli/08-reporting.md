@@ -54,9 +54,11 @@ These labels and the local clearance file are evidence and a gate, not a
 security boundary against a process with the same OS user and an admin forge
 token. Such a process can edit local files and forge labels directly; it could
 also forge the cleared label. Genuine enforcement against that principal
-requires the protected-broker boundary described by BUG-1669 and ADR-61. The
+requires a protected broker that holds the forge credential outside the reach
+of the agent it is gating; that boundary is not in place today. The
 interactive clearance path remains the supported human release mechanism.
 <!-- trace:BUG-1693 | ai:codex -->
+<!-- doc-intent: the protected-broker boundary named above is designed in BUG-1669, ADR-61 -->
 
 Local forms use the offset in effect on that date, so they stay right across a daylight-saving change; a local time that falls in a daylight-saving gap or overlap is refused rather than guessed. A few commands also accept extra forms of their own: `digest --since` and `doctor --since` take a git tag or ref, and the `tail` family keeps seconds (`30s`, or a bare number meaning seconds) and spelled-out units (`10min`). Flags named `--since`/`--until` that take a git ref, a tag, or a condition rather than a time (`db reconcile-status`, `doc coverage`, `field-study scan`, `changelog`, `defer --until`) are not time bounds and keep their own meaning.
 
