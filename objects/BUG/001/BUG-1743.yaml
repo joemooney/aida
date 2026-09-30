@@ -34,8 +34,30 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:56:02.256778237Z
-modified_at: 2026-09-30T17:56:18.045464477Z
+modified_at: 2026-09-30T18:00:17.339941942Z
 req_type: Bug
+comments:
+- id: 01a0f379-70bb-77b2-92f0-fe87aea3f176
+  author: joe
+  content: |
+    Bounded static probe from the BUG-1742 measurement session. No reproduction attempted — this only narrows the window and records three ruled-out candidates so the next session does not re-walk them.
+
+    NARROWED: both failures bracket one function, `review_verdict::write_verdict_atomic` (aida-cli-lib/src/review_verdict.rs, trace:BUG-1571). It does: `create_dir_all(dir)` -> write temp `.{name}.tmp-{pid}-{nanos}` -> `rename` into place -> read the file back and compare bytes.
+
+    - 2026-09-26 (run 36285986900): the error text `could not write ...: No such file or directory` is produced only from the staged write/rename arm. So `create_dir_all` had already returned Ok and the directory was gone a few syscalls later.
+    - 2026-09-30 (run 36717478815): the read-back SUCCEEDED and the bytes MATCHED, and then the caller's `is_file()` check a few lines later found nothing.
+
+    So the remover acts inside a window of a handful of syscalls, and it did so twice on the same path. That is a tight constraint and the reproduction harness should be built to it: the useful probe is a tight create/write/stat loop on a temp root under parallel load, not a long-running soak.
+
+    RULED OUT (static, each cheap to re-check):
+    1. A plain env-clobber between parallel tests. `test_env`'s `EnvVarsGuard` serialises every swap on one process-global `ENV_LOCK` (BUG-697, TASK-1559), and nesting panics rather than hangs. NOT ruled out: a test that never routes through that guard, running production code that resolves a project root from `AIDA_PROJECT_ROOT`/`AIDA_DRIVE_ROOT` while another test holds those set to its own temp dir. That is still the leading hypothesis.
+    2. `stranded_sweep` — it walks `.aida/review-verdicts/` but contains no delete call, so the one module that reads this directory by name is not removing from it.
+    3. `focus.rs`'s test helper `tmp_root()` + `remove_dir_all(&root)` — it builds `<temp_dir>/aida-focus-test-<pid>-<nanos>`, which cannot alias a `tempfile` `.tmpXXXXXX` path, so it cannot be the remover.
+
+    Worth knowing while writing the fix: `write_verdict_atomic`'s temp name is `.{file_name}.tmp-{pid}-{nanos}`, and `pid` is identical across every thread of one test binary. Nanosecond nonce makes a collision unlikely but it is the only thing separating two threads staging the same verdict path, so rule it in or out explicitly rather than assuming.
+  created_at: 2026-09-30T18:00:17.339941942Z
+  modified_at: 2026-09-30T18:00:17.339941942Z
+  session_id: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
 history:
 - id: 01a0f375-c9fd-7430-97d1-7d7d981994a8
   author: joe
