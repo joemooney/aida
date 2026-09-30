@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T11:42:52.424733259Z
+modified_at: 2026-09-30T11:43:49.555044356Z
 req_type: Bug
 comments:
 - id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
@@ -279,6 +279,37 @@ comments:
     later seat to discover (BUG-1731's lesson).
   created_at: 2026-09-30T11:04:44.481457259Z
   modified_at: 2026-09-30T11:04:44.481457259Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+- id: 01a0f220-c733-72b3-a27d-32908c182bf1
+  author: joe
+  content: |
+    ## Closed — PR #2292 squash-merged as `b4873ce7f3`
+
+    Required checks both green before merge (`Build (ubuntu-latest)`: pass, `merge-hold-gate`:
+    pass; `Release (${{ matrix.os }})` skipping, not a blocker). `aida pull` auto-bumped the spec.
+    Store pushed, origin + gitlab mirror current. Worktree removed, lease released.
+
+    ### One residual, deliberately NOT filed as a spec
+
+    `aida-cli-lib`'s `acquire_with_retry` (BUG-1733) and `aida-core`'s
+    `acquire_past_fork_window_within` are now two near-identical bounded-retry loops in two crates.
+    That duplication is **not** removable as things stand: both are `#[cfg(test)]`, so neither
+    crate can see the other's, and sharing one would mean exporting a test-support helper from a
+    production crate behind a feature flag. Adding a feature flag to `aida-core` to save ~20 lines
+    of test-helper loop is a worse trade than the duplication, so this is recorded as a known,
+    argued duplication rather than debt to pay down. Revisit only if a *third* crate needs it.
+
+    ### The transferable lesson
+
+    The filing said "route every `try_acquire(...).unwrap().unwrap()`". The survey showed the rule
+    is narrower and sharper: **the hazard needs a path this process has already opened a descriptor
+    to.** Seven of nine sites are first acquires on fresh tempdir inodes where no sibling's fork
+    can have inherited anything, and routing them would have converted "report a real defect now"
+    into "sleep 5s, then report it". The two exposed sites were exactly the two whose fixture runs
+    production refresh acquires first. A blanket sweep would have been wrong in seven places while
+    still fixing the two.
+  created_at: 2026-09-30T11:43:49.555044356Z
+  modified_at: 2026-09-30T11:43:49.555044356Z
   session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 history:
 - id: 01a0f1f4-4382-78f2-ae3f-290c4b2273ac
