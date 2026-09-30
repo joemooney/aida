@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T21:00:26.277371500Z
-modified_at: 2026-09-29T12:30:48.694090606Z
+modified_at: 2026-09-30T01:54:29.373995405Z
 req_type: Spike
 tags:
 - spike:deliverable-produced
@@ -89,4 +89,6 @@ decision_request:
     resolution: set:interactive_hold=long
   recommended: 0
   rationale: The research provides no empirical basis to claim that any harness keeps its prompt editor responsive during a sleeping Stop hook. hold=0 avoids imposing an unknown lock on a human-present seat; resume fallback already exists in CR-7's design. Treat a short grace as an experiment, not a safe measured value, and retain headless fallbacks for Antigravity API-key runs and OpenCode one-shot runs until current-version probes pass.
+  answered: 0
   asked_at: 2026-09-27T21:26:21.207146567Z
+  answered_at: 2026-09-30T01:54:29.373981041Z
