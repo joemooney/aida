@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T05:38:27.141394863Z
+modified_at: 2026-09-30T06:03:49.936303307Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -479,6 +479,69 @@ comments:
   created_at: 2026-09-30T05:20:14.936201058Z
   modified_at: 2026-09-30T05:20:14.936201058Z
   session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
+- id: 01a0f0e9-8130-7ce1-b08b-3f1e8587bcfd
+  author: joe
+  content: |
+    ## AC1 and AC2 both met — evidence (session #14)
+
+    ### AC1 — met via the criterion's second disjunct (PR #2287)
+
+    The wall-clock assertion is replaced by an **injected budget**. Each reader thread
+    configures its own `CacheReadScope` with a 60s `ReadBudget`; `configure` writes a
+    thread-local and every reader already owns its own scope, so this is race-free and
+    needs no env var (which would contend with the env lock). The bare
+    `assert!(start.elapsed() < 2s)` is deleted — `sum::<usize>() == 1` is the real
+    single-flight property and is load-independent.
+
+    **Correction to this spec's Observation A:** the observed failure is *not* the
+    `elapsed < 2s` assert. The waiters return **fast** precisely because they abandoned
+    the wait at `remaining.is_zero()` in `freshen_for_read`'s contended branch and served
+    pre-refresh rows. Both sightings failed at `:3573` (`gen1`), never at the elapsed
+    assert. The fix direction the spec suggested was right; the mechanism description was
+    one step off.
+
+    | Run | Load | Result |
+    |---|---|---|
+    | **Pre-fix**, 4 concurrent `db::cache --test-threads=8` | 32.0 | worker 3 **FAILED** at `:3573`, 3 of its 4 reader threads; **nothing else** in the 169-test filter failed |
+    | Post-fix, 4 concurrent workers | 32.7 | **169/169 in all four** |
+    | Post-fix, 4 more concurrent workers (the AC2 contention load) | 21→28 | **169/169 in all four** |
+    | Solo | quiet | pass, 2.1s |
+
+    **Not vacuous.** Forcing `remaining = Duration::ZERO` in the contended branch —
+    simulating an exhausted budget — still fails the test. The generous budget removes the
+    *environmental* dependency only, not the property.
+
+    A first probe, dropping the cross-thread `existing.owner != owner` guard in
+    `try_acquire`, did **not** fail the test: the winner's refresh completes before the
+    other threads sample staleness. Recorded so nobody retries it as a coverage argument.
+
+    ### AC2 — met via the criterion's FIRST disjunct, not a disposition call
+
+    The previous session recommended dispositioning Observation B as a measurement
+    artifact. That judgment call is **not needed**. AC2's first disjunct is
+    *"the out-of-process lifecycle test is restored and passes 200/200 under the same 4x
+    contention"* — the test shipped in #2286, and it now has that measurement:
+
+    | Condition | Runs | Failures |
+    |---|---|---|
+    | `refresh_lock_descriptor_lifecycle_is_visible_to_another_process`, consecutive, **while 4 `db::cache` suites ran concurrently** (load 21.2 at start, 25.6 at iter 100, 28.4 at end) | **200** | **0** |
+
+    Plus the previous session's 60/60 quiet and 12 further in-suite runs under contention.
+    Total: **272 runs, 0 reproductions of Observation B.**
+
+    Observation B is therefore resolved by the path this spec set out for it: the
+    out-of-process probe is shipped, it is stable under the load at which the original
+    sightings occurred (28 here vs ~26 then), and `lock_holders` makes any recurrence
+    root-causable from a CI log alone. No inode-replacement investigation is warranted.
+
+    ### AC3 — met in #2286
+
+    All three criteria are now closed, so the commit trailer's auto-bump to Completed on
+    `aida pull` is correct for this spec; no `--status in-progress --force` recovery is
+    needed this time.
+  created_at: 2026-09-30T06:03:49.936303307Z
+  modified_at: 2026-09-30T06:03:49.936303307Z
+  session_id: f327dc96-7fec-4a7e-a437-3946498a6fc7
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
   author: joe
