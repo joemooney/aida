@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T05:08:02.440378977Z
+modified_at: 2026-09-30T05:08:19.226486284Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -384,6 +384,35 @@ comments:
   created_at: 2026-09-30T04:40:45.393603122Z
   modified_at: 2026-09-30T04:40:45.393603122Z
   session_id: ef8b326b-58db-4236-9f3e-0769d4790bfa
+- id: 01a0f0b6-ae9a-7471-9408-52663b645181
+  author: joe
+  content: |
+    ## PR #2285 merged — blocker closed, spec deliberately kept open
+
+    `gh pr merge 2285 --squash` landed as `a0e8a5c629` on main. CI evidence at merge:
+    `Build (ubuntu-latest)` **pass** (16m3s) on `e7d1b0a8dd`, `merge-hold-gate` **pass`,
+    mergeStateStatus CLEAN.
+
+    `aida pull` auto-bumped this spec to **Completed** from the commit trailer. That is wrong here,
+    so I reopened it with `aida edit BUG-1729 --status in-progress --force`. #2285 closed the
+    *blocker* (the flaking assertion, now root-caused as the fork/`flock` inheritance window), not
+    the spec. Still open:
+
+    - **AC1** — `single_flight_four_readers_one_refresh` (`cached_git_backend.rs:3573`) asserts on
+      rows that only arrive if the refresh lands inside the default 1500ms `ReadBudget`. Needs a
+      state-machine or injected-budget assertion instead of a wall-clock-dependent one.
+    - **AC2 observation B** — probe reports the sidecar FREE while a guard is alive. NOT explained
+      by fork inheritance (a child's own `open` makes a new open file description, which `flock`
+      denies against the holder's). Both sightings were at host load ~26 during the orphaned-spinner
+      window; needs one quiet-host re-run before investment. Test the inode-replacement hypothesis
+      first, with the now-shipped `lock_holders`.
+    - **AC3** — the out-of-process lifecycle test preserved in
+      `docs/plans/2026-09-29-refresh-lock-load-sensitivity.md`.
+
+    Anyone marking this done must close those three first.
+  created_at: 2026-09-30T05:08:19.226486284Z
+  modified_at: 2026-09-30T05:08:19.226486284Z
+  session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
   author: joe
