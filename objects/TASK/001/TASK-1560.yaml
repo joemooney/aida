@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-09-30T12:45:54.898378131Z
+modified_at: 2026-09-30T12:53:25.928234119Z
 req_type: Task
 comments:
 - id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
@@ -118,6 +118,107 @@ comments:
     independent disposition.
   created_at: 2026-09-30T12:45:54.898378131Z
   modified_at: 2026-09-30T12:45:54.898378131Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+- id: 01a0f260-8128-74b1-9f7a-6c7886b40cf5
+  author: joe
+  content: |
+    ## Scope amendment — the operator asked whether other retained memories need promoting. Yes, and in three directions, not one
+
+    AC2 already says "every memory", so the *sweep* was in scope. Two things were not, and both
+    change the shape of the work.
+
+    ### 1. The scale is 225 files, and the index hides most of them
+
+    `ls` in the memory pack: **225** files — 151 `feedback`, 15 `project`, 11 `reference`.
+    `MEMORY.md`, the index actually loaded into a session, carries roughly **50** pointers; the rest
+    are reachable only through glob lines like "remaining `feedback_*.md` — search filenames before
+    loading bodies".
+
+    So a seat reading the index never learns most of the pack. That is a finding in its own right:
+    before this becomes a migration problem it is already a **discoverability** problem, and it
+    means "the memory pack carries our discipline" was never true even for Claude.
+
+    ⟹ One task cannot hold 225 classifications. **Decompose.** TASK-1560's deliverable should be
+    the routing rule plus a **triage ledger**, with authority to *file* follow-ons rather than
+    absorb them.
+
+    ### 2. Promotion is only one of three dispositions
+
+    | direction | when | destination |
+    |---|---|---|
+    | **promote** | a habit any agent in this seat needs | discipline-doc master, or a gate if mechanically checkable |
+    | **file** | the lesson is "remember that the tool misleads/blocks you" | a spec — BUG-1737 is the worked example |
+    | **retire** | the defect it describes is closed | delete, or demote to a dated note |
+
+    **Retirement is the one nobody has been doing, and it is actively harmful.** Two examples found
+    while answering this:
+
+    - `reference_git_push_dry_run_still_pushes_the_mirror` says the wrapper's mirror step ignores
+      `--dry-run`. **BUG-1706 is `completed`.**
+    - `reference_merged_spec_needs_queue_done_then_aida_pull` overlaps **BUG-1721**, also
+      `completed`.
+
+    The first matters: that lesson is currently loaded as a standing prohibition ("never
+    `git push --dry-run`"). If the defect is fixed, a closed bug is still steering behaviour. I did
+    **not** confirm the current wrapper behaviour — cheap greps found no wrapper and no obvious test
+    — so treat this as *needs verification*, not as *stale*. Asserting it stale without checking
+    would be the same error in the opposite direction.
+
+    ⟹ Add an AC: a memory that names a spec id is checked against that spec's status, and a
+    lesson whose defect is closed is verified against the code before it is retired or kept.
+
+    ### Candidate list, by tier — re-run the survey, this one undercounts
+
+    Found by heuristic grep over 225 files, so it is a starting point and certainly incomplete
+    (the recurring lesson: a filed list undercounts).
+
+    **Tier 1 — gate-able, an agent that read nothing gets stopped:**
+
+    - `feedback_never_switch_branches_in_operators_checkout` — a hook refusing a branch switch in
+      the operator's primary checkout while a session is active. The mechanism exists: a hook
+      already blocks `git reset --hard`. Strongest single item in the pack: it is a rule I broke
+      *after* CLAUDE.md already said "work in an isolated sibling worktree".
+
+    **Tier 4 — file as specs:**
+
+    - `feedback_idle_seat_is_not_a_working_seat` — `aida agent new` returns only when the vendor TUI
+      exits, which it never does, so "process alive" says nothing and the tell is CPU-seconds. Eight
+      launchers sat live for up to 6h10m with every child already finished. Highest cost of anything
+      in the pack.
+    - `feedback_no_mail_storm_to_codex` — `aida mailbox send --to codex` accepts mail for a seat that
+      never polls. The substrate should deliver or refuse, not silently accept into a void.
+    - `feedback_ci_pending_at_handoff_is_not_ci_green` — `aida awaiting` let a red ubuntu read as
+      merge-ready for two sessions.
+    - `feedback_cap_parallel_cargo_builds` + `reference_run_user_tmpfs_is_only_7g` — the build-slot
+      design puts cargo target dirs in a 7G tmpfs and an unbounded fan-out OOM-killed a session.
+      One spec, two symptoms.
+
+    **Tier 2/3 — docs, not gates:**
+
+    - `feedback_no_backticks_in_aida_description_args` — a shell hazard, and the remedy already
+      exists (`--description-from-file`). Belongs in the CLI guide, not a gate.
+
+    ### Revised acceptance (supersedes AC2/AC3 in the description)
+
+    1. The four-tier table lands in the discipline-doc **master**, with the "reveals a product
+       defect → file a spec" escape *and* the retire direction.
+    2. A triage ledger covering all 225 memories records, per entry: tier, disposition
+       (promote / file / retire / keep), and the destination or follow-on id. Recorded as a comment
+       here or as a doc under `docs/plans/`.
+    3. Each memory naming a spec id is checked against that spec's status; any whose defect is
+       closed is verified against the code before retirement or retention.
+    4. Tier-4 items are **filed, not fixed**, within this task. Fixing them is the follow-ons' job.
+    5. Tier-1 candidates are filed as gate specs, with `feedback_never_switch_branches_in_operators_checkout`
+       named explicitly.
+    6. Promoted content must be **repo-agnostic** — discipline docs scaffold into *every* AIDA
+       project, so AIDA's own war stories must not ride along. This is the existing "Do not",
+       restated as acceptance because it is the main way this task can do harm.
+    7. The discoverability finding is addressed or explicitly deferred with a reason: an index that
+       surfaces 50 of 225 entries means most of the pack is unreachable in practice.
+
+    Still `draft`, still needs independent disposition — I filed it and I have now widened it.
+  created_at: 2026-09-30T12:53:25.928234119Z
+  modified_at: 2026-09-30T12:53:25.928234119Z
   session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
