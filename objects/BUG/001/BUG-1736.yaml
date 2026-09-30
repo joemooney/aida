@@ -84,8 +84,60 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T10:55:12.258922376Z
+modified_at: 2026-09-30T10:55:13.183587765Z
 req_type: Bug
+comments:
+- id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
+  author: joe
+  content: |
+    ## Independent disposition — approved
+
+    Filed by the previous seat, so this is a fresh-seat call. I re-derived the premise from the
+    tree rather than from the filing, and it holds:
+
+    - `held_refresh` (`cached_git_backend.rs:3601`) really is the bare `try_acquire().unwrap().unwrap()`,
+      and its waiter really does `ready_rx.recv().unwrap()` at `:3607` with no join-and-resume_unwind.
+      That is exactly the pair BUG-1733 fixed in `aida-cli-lib`, unfixed here.
+    - The "not caused by #2291" argument checks out: `aida-core/Cargo.toml` carries no
+      `aida-cli-lib` dependency, so the `-p aida-core --lib` binary links nothing from that branch.
+
+    ### Two corrections to the filing (AC3's survey must start from these, not from the list above)
+
+    **1. The filed site list undercounts — it missed `cached_git_backend.rs:3884`.**
+    `nested_freshen_in_lock_holder_does_not_wait` does `let _lock = RefreshLock::try_acquire(&path).unwrap().unwrap();`
+    on the test thread itself. It is the *same* shape and the *same* exposure, and it is not in the
+    filing's scope list. (This is BUG-1731's lesson holding for the fourth time: re-run the grep.)
+    Full grep of `aida-core/src`, classified:
+
+    | shape | sites |
+    |---|---|
+    | `.unwrap().unwrap()` — **needs the retry** | `cache_refresh.rs` 567, 569, 619, 770, 776, 870, 873; `cached_git_backend.rs` **3601**, **3884** |
+    | `.unwrap().is_none()` — `Ok(None)` **is** the assertion, must NOT be routed | `cache_refresh.rs` 581, 588, 676 |
+    | production callers — `Ok(None)` means "someone else is refreshing" | `cache_refresh.rs` 247; `cached_git_backend.rs` 467, 529, 546, 600 |
+
+    **2. Do not write a third retry helper. `aida-core` already has one.**
+    `cache_refresh.rs:244 acquire_past_fork_window` is BUG-1729's remedy and already lives in this
+    crate, one module away from both defective sites. But it fails AC1 as written on two counts:
+
+    - its deadline is the `FORK_WINDOW_BOUND` const read *inside* the function, not a parameter, so
+      no test can exhaust it in milliseconds — which is precisely the shape AC1 forbids;
+    - it returns `Option<RefreshLock>` and discards the attempt count, so AC4's `attempts > 1`
+      witness cannot be written against it at all.
+
+    ⟹ The intended fix is to **parameterize the existing helper** (deadline in, attempts out) and
+    route `:3601` and `:3884` through it, keeping `FORK_WINDOW_BOUND` as the default at the call
+    sites. A new `acquire_with_retry` copied from `aida-cli-lib` would leave two near-identical
+    bounded-retry loops in one crate.
+
+    ### ACs stand as filed
+
+    All five are testable, and AC4 correctly refuses N-green-runs as the witness (BUG-1733 priced
+    that instrument at ~7.5h and it is strictly weaker than injection). AC5's mutation requirement
+    and the "this is a test-helper defect, do not widen the `RefreshLock` API" boundary are both
+    right. Approved at `medium`, routed for implementation.
+  created_at: 2026-09-30T10:55:13.183587765Z
+  modified_at: 2026-09-30T10:55:13.183587765Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 history:
 - id: 01a0f1f4-4382-78f2-ae3f-290c4b2273ac
   author: joe
