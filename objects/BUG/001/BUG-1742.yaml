@@ -1,0 +1,40 @@
+id: 01a0f34c-ab71-7050-8481-2d222dab1de5
+spec_id: BUG-1742
+agreed_id: BUG-1742
+title: Build (ubuntu-latest) flakes on main roughly hourly, a different aida-cli-lib test each time
+description: |
+  OBSERVED: `Build (ubuntu-latest)` is a REQUIRED check, and it failed five separate times on `main` on 2026-09-30 alone. Each failure was a DIFFERENT single test inside `-p aida-cli-lib --lib`, with the rest of the ~7,400 passing:
+
+  - run 36717478815 — bug_1452_refusal_aftermath_tests::refusal_aftermath_is_parked_held_and_awaiting_visible (lib.rs:93298)
+  - run 36689141777 — bug_1609_gitlab_reviewer_preflight_tests::pr_base_head_resolves_real_gitlab_mr_branches_via_forge_not_gh (bug_1609_gitlab_reviewer_preflight_tests.rs:68)
+  - run 36677337396 — bug_1291_orphan_sweep_tests::queue_add_failure_is_propagated (lib.rs:79059) AND story1163_forge_dispatch_tests::diff_change_dispatches_gitlab_to_glab (lib.rs:43647)
+  - run 36674309877 — bug_1670_stale_cache_callers_tests::unambiguous_write_resolution_sees_external_collision_under_foreign_lock (stale_cache_fixture.rs:52/59)
+  - run 36668166684 — db::cache_refresh::tests::nested_freshen_in_lock_holder_does_not_wait (cache_refresh.rs:458) AND db::cached_git_backend::tests::migration_pending_reader_never_serves_old_schema
+
+  WHY IT MATTERS: a required check that goes red on main roughly hourly, for a different reason each time, blocks unrelated PRs and — worse — trains every reader to wave a red Linux build through as "probably the flake". That is the mechanism by which a genuine regression ships. BUG-1695 was one member of this family; fixing it alone does not fix the family.
+
+  WHAT IS ALREADY KNOWN (from the BUG-1695 investigation, 2026-09-30):
+  - These are load-sensitive, not deterministic: all 7,400 pass locally (1076s) and in most CI runs.
+  - Several of the named tests are lock/cache/timing tests, which suggests contention sensitivity rather than one shared root cause.
+  - tempfile's `TempDir::drop` discards the error from its own recursive remove, so failures of this shape are swallowed silently almost everywhere; only tests that assert on teardown surface them. The true rate is therefore likely higher than the failure list suggests.
+
+  ## Acceptance
+  - Quantify first: over the last N `main` runs, report the failure rate of `Build (ubuntu-latest)` and the per-test failure tally, so the work is aimed at the tests that actually cost merges rather than the most recently seen one.
+  - Each recurring offender is either fixed at its cause or has a filed spec of its own with the evidence attached; no test is quarantined or retried without that evidence.
+  - State explicitly whether the failures share one mechanism (e.g. contention on a shared lock, temp-root collision, a CI-core-count sensitivity) or are independent. A per-test fix list without that answer is not acceptable, because the shared-mechanism case would make five separate fixes the wrong shape of work.
+  - The measurement is repeatable: whatever query produced the tally is recorded so the next reader can re-run it rather than re-derive it.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T17:11:23.249054665Z
+modified_at: 2026-09-30T17:11:23.249054665Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 2284e676-e7f4-4592-9a21-d700e91d8db2
