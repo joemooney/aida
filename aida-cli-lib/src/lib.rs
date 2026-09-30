@@ -35479,6 +35479,34 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         }
                         _ => None,
                     };
+                    // BUG-1693: a marker deleted outside the human-gated path
+                    // leaves AIDA fail-closed on that PR — `read_hold` reports
+                    // tampering, so every AIDA merge refuses it. The human at
+                    // the terminal needs a door that RECORDS the release rather
+                    // than one that reopens the hole: without this the PR is
+                    // unmergeable forever and no clearance names who released
+                    // it, which is the same silence this spec exists to end.
+                    // trace:BUG-1693 | ai:claude
+                    let tampering_record = if cleared.is_none()
+                        && label_only_record.is_none()
+                        && merge_hold::unrecorded_marker_removals(&root).contains(pr)
+                    {
+                        let record = merge_hold::typed_hold(
+                            *pr,
+                            merge_hold::HoldReasonKind::Unknown,
+                            merge_hold::MARKER_MISSING_REASON,
+                            None,
+                        );
+                        let actor = merge_hold::human_clear_actor(
+                            &record,
+                            &current_user_id(None),
+                            merge_hold::current_principal().as_ref(),
+                        )
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                        Some((record, actor))
+                    } else {
+                        None
+                    };
                     // BUG-1532 criterion 4: a reviewer REFUSAL is normally
                     // released by a fresh APPROVED verdict at the head. The
                     // human at the terminal may still override — this is the
@@ -35523,6 +35551,9 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                             released_by_verdict.clone(),
                         )?;
                     }
+                    if let Some((record, actor)) = &tampering_record {
+                        merge_hold::record_clearance(&root, record, actor)?;
+                    }
                     if let Some((record, actor)) = &label_only_record {
                         merge_hold::record_clearance(&root, record, actor)?;
                     }
@@ -35534,22 +35565,6 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                                 actor.key()
                             );
                         }
-                    }
-                    if matches!(
-                        label_only_forge,
-                        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
-                    ) {
-                        println!(
-                            "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
-                        );
-                        return Ok(());
-                    }
-                    let unlabel = merge_hold::sync_label(&root, *pr, false);
-                    if let Err(err) = &unlabel {
-                        eprintln!(
-                        "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                    );
                     }
                     // STORY-1436: a human clear is the floor's complement —
                     // record the release so floor refusals have a denominator.
@@ -35567,6 +35582,31 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         ev.seat = events::active_seat();
                         events::emit(&root, &ev);
                     };
+                    if matches!(
+                        label_only_forge,
+                        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
+                    ) {
+                        if let Some((record, actor)) = &tampering_record {
+                            emit_release(merge_hold::MARKER_MISSING_REASON);
+                            println!(
+                                "PR #{pr} had a recorded hold placement whose marker went missing with no clearance. Recorded the release as {} ({}); `aida merge-hold list` and `aida doctor` stop reporting it, and the clearance record keeps the evidence.",
+                                actor.key(),
+                                record.detail
+                            );
+                        } else {
+                            println!(
+                                "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
+                            );
+                        }
+                        return Ok(());
+                    }
+                    let unlabel = merge_hold::sync_label(&root, *pr, false);
+                    if let Err(err) = &unlabel {
+                        eprintln!(
+                        "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                    }
                     if existed {
                         if let Some((record, _)) = &cleared {
                             emit_release(&record.detail);

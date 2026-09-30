@@ -1026,10 +1026,7 @@ pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
         .or_else(|| {
             unrecorded_marker_removals(project_root)
                 .contains(&pr)
-                .then(|| {
-                    "hold marker missing without a recorded clearance (tampering suspected)"
-                        .to_string()
-                })
+                .then(|| MARKER_MISSING_REASON.to_string())
         })
 }
 
@@ -1583,6 +1580,15 @@ fn parse_labeled_changes(pin: &PinnedRepo, json: &str) -> Result<Vec<u64>, Strin
 // trace:BUG-1469 | ai:claude
 pub(crate) const LABEL_ONLY_REASON: &str = "label-only (no marker)";
 
+/// The reason shown for a hold AIDA recorded placing whose marker then
+/// disappeared with no clearance record — the tampering shape this spec exists
+/// to make visible. Single-sourced so the `read_hold` synthetic value, the
+/// `merge-hold clear` acknowledgement and the doctor finding all say the same
+/// thing.
+// trace:BUG-1693 | ai:claude
+pub(crate) const MARKER_MISSING_REASON: &str =
+    "hold marker missing without a recorded clearance (tampering suspected)";
+
 /// Which half of a hold exists. `Marker` covers both the marker-only and the
 /// marker+label shapes (the label column says which); `LabelOnly` is a hold a
 /// seat placed with a bare forge label.
@@ -2109,6 +2115,50 @@ mod tests {
         assert!(unrecorded_marker_removals(root).is_empty());
     }
 
+    // BUG-1693: `read_hold` gained a SECOND meaning — it now answers `Some`
+    // for a PR with no marker at all when AIDA recorded placing one. Every
+    // caller reads that as "held", which is the fail-closed behaviour we want
+    // at the merge chokepoint (forge.rs refuses the merge). Pin both halves of
+    // that invariant, and pin that a clearance recorded by the human-gated
+    // path is what re-opens the PR — otherwise a tampered PR is unmergeable
+    // through AIDA forever.
+    // trace:BUG-1693 | ai:claude
+    #[test]
+    fn tampered_hold_reads_as_held_until_a_clearance_is_recorded() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let record = typed_hold(8801, HoldReasonKind::Supervision, "supervised spec", None);
+        write_typed_hold(root, &record).unwrap();
+        std::fs::remove_file(hold_path(root, 8801)).unwrap();
+
+        // Fail closed: the merge chokepoint must still see a hold, and it must
+        // say WHY, not repeat the deleted marker's reason as if it were read.
+        assert_eq!(
+            read_hold(root, 8801).as_deref(),
+            Some(MARKER_MISSING_REASON)
+        );
+
+        // …but the synthetic value must not masquerade as a hold RECORD:
+        // `list_holds` walks the marker directory, so a deleted marker has no
+        // entry and cannot be reported as a live hold with a real reason.
+        assert!(
+            list_holds(root).iter().all(|(pr, _)| *pr != 8801),
+            "a missing marker must not appear as a live hold record"
+        );
+        assert!(read_hold_record(root, 8801).is_none());
+
+        // The human-gated clearance is the door back out. After it, the PR
+        // reads unheld and the tampering report stops.
+        record_clearance(
+            root,
+            &typed_hold(8801, HoldReasonKind::Unknown, MARKER_MISSING_REASON, None),
+            &PrincipalIdentity::human("joe"),
+        )
+        .unwrap();
+        assert!(unrecorded_marker_removals(root).is_empty());
+        assert!(read_hold(root, 8801).is_none());
+    }
+
     // STORY-1165: the label mirror must route to the right forge CLI — gh for
     // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
     fn pin(kind: crate::forge::ForgeKind, origin: &str) -> PinnedRepo {
@@ -2464,6 +2514,26 @@ mod tests {
             "floor, then forge read, then record"
         );
         assert!(clear.contains("merge_hold::LABEL_ONLY_REASON"));
+        // BUG-1693: a marker deleted by hand leaves AIDA fail-closed on that
+        // PR forever unless `merge-hold clear` can RECORD the release. Pin the
+        // door itself, not merely a mention of it: whitespace-normalised so
+        // `cargo fmt` cannot break the assertion, and ordered before the
+        // "nothing to clear" early return a missing marker would otherwise
+        // take. trace:BUG-1693 | ai:claude
+        let squashed = clear.split_whitespace().collect::<Vec<_>>().join(" ");
+        let door = squashed
+            .find(
+                "if let Some((record, actor)) = &tampering_record { \
+                 merge_hold::record_clearance(&root, record, actor)?; }",
+            )
+            .expect("clear must RECORD a clearance for a hold whose marker went missing");
+        let no_hold = squashed
+            .find("No merge-hold on PR #{pr}")
+            .expect("the no-hold early return must remain inspectable");
+        assert!(
+            door < no_hold,
+            "the tampering clearance must be recorded before the no-hold early return"
+        );
     }
 
     // BUG-1541: state words parse per forge; anything unrecognised is Unknown

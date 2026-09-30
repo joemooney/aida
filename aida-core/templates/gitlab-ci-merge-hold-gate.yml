@@ -15,6 +15,10 @@
 # preserved. The job is trivial (label inspection only, no build) so it never
 # stalls a pipeline.
 #
+# The `script:` block below is the shipped artifact that AIDA's own
+# tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
+# against this file rather than against a copy of it. Keep the gate logic here.
+#
 # Include it, don't copy the body, so upstream fixes flow:
 #   include:
 #     - local: '.aida/gitlab-ci-merge-hold-gate.yml'   # scaffolded by `aida init` (STORY-1165 follow-up)

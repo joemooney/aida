@@ -208,6 +208,15 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_mcp_doc_consistency.sh
 
+      # BUG-1693: the merge-hold gate is the server-side half of the
+      # integrity floor, so its fixtures must run against the shipped
+      # workflow/template rather than a copy of the logic. Build-free (it
+      # extracts and executes the YAML `run:` blocks), so it is not gated on
+      # full_ci — a docs-only PR can still touch the gate's prose.
+      # trace:BUG-1693 | ai:claude
+      - name: Run merge-hold gate fixtures
+        run: bash tests/test_merge_hold_gate.sh
+
       # STORY-670: advisor-code-guard PreToolUse hook decision matrix.
       - name: Run advisor-code-guard hook test
         if: steps.changes.outputs.full_ci == 'true'

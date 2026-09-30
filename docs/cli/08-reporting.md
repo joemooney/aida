@@ -43,6 +43,13 @@ Repositories must have all three labels (`aida:merge-hold`,
 `aida:merge-hold-recorded`, and `aida:merge-hold-cleared`) defined before using
 the gate; hold placement/clearance reports forge label update failures.
 
+If a marker disappears without a clearance record, AIDA fails closed on that
+PR: `aida merge-hold list` and `aida doctor --category merge-hold-integrity`
+report it as tampering, and every AIDA merge path refuses it. The way out is
+the same human-gated command — `aida merge-hold clear <pr>` run by a human at
+an interactive terminal records who released it and stops the report. There is
+no way to silence the report without leaving that record.
+
 These labels and the local clearance file are evidence and a gate, not a
 security boundary against a process with the same OS user and an admin forge
 token. Such a process can edit local files and forge labels directly; it could

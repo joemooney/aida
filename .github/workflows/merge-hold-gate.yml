@@ -1,10 +1,33 @@
 name: merge-hold-gate
 
-# BUG-1693: label state alone cannot release a previously held PR. The
-# human-gated `aida merge-hold clear` path adds the clearance label after
-# writing its local clearance record. The recorded label stays on the PR.
-# This is a forge-side integrity check, not protection from an admin token
-# running as the same user; see docs/cli/08-reporting.md.
+# BUG-1167 / ADR-37 Layer 2 — the server-side, un-bypassable half.
+#
+# This check FAILS while a PR carries the `aida:merge-hold` label (which AIDA
+# applies to a supervised drive/guided/operator/decide/unset PR) and PASSES
+# otherwise. Made a *required* status check in branch protection, it blocks even
+# a raw / stale-binary / web-UI `gh pr merge` that never touches AIDA's client
+# chokepoint — closing the concurrent-merger hole regardless of which binary the
+# merger runs. A drain-mode PR is never labelled, so it passes in seconds and its
+# auto-merge is untouched (the granularity the branch-protection concern needs).
+# The job is deliberately trivial (label inspection only, no build) so it never
+# stalls a PR waiting on a required check.
+#
+# To enforce: Settings -> Branches -> protect `main` -> Require status checks ->
+# add `merge-hold-gate`, with "Do not allow bypassing" / enforce_admins ON so the
+# hold binds everyone; clearing the hold (`aida merge-hold clear <pr>`) re-runs
+# this and lets the merge proceed.
+#
+# BUG-1693: label state alone cannot release a previously held PR. `aida
+# merge-hold clear` keeps the persistent `aida:merge-hold-recorded` label and
+# adds `aida:merge-hold-cleared` after writing its local clearance record, so
+# dropping `aida:merge-hold` by hand leaves history without clearance and this
+# check still fails. This is a forge-side integrity check, not protection from
+# an admin token running as the same user; see docs/cli/08-reporting.md.
+#
+# The `run:` block below is the shipped artifact that
+# tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
+# against this file rather than against a copy of it. Keep the gate logic here.
+
 on:
   pull_request:
     types: [opened, reopened, synchronize, labeled, unlabeled]
@@ -25,7 +48,7 @@ jobs:
             printf '%s' "$LABELS" | tr ',' '\n' | grep -Fqx "$1"
           }
           if has_label aida:merge-hold; then
-            echo "::error::This PR has an active aida:merge-hold. Only the human-gated clearance path can release it."
+            echo "::error::This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Only the human-gated \`aida merge-hold clear <pr>\` path can release it."
             exit 1
           fi
           if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then
