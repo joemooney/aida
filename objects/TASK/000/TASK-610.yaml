@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:37:03.820277714Z
+modified_at: 2026-09-30T20:48:48.368719127Z
 req_type: Task
 tags:
 - docs
@@ -98,5 +98,10 @@ comments:
   content: 'Clarified slide 12''s heatmap unit. Replaced the operating-cadence/CPU-occupancy caveat with: ''Each count is a GitHub Actions workflow run started in that three-hour local-time bucket.'' Updated speaker notes to use workflow-run starts consistently, regenerated both deck copies, and visually verified the 1920x1080 slide render.'
   created_at: 2026-09-30T20:37:03.820273433Z
   modified_at: 2026-09-30T20:37:03.820273433Z
+- id: 01a0f413-b8f0-7c42-8ba4-385474d0ff3e
+  author: mcp
+  content: 'Added three editable BUG-180 mechanics deep-dive slides to the backup section (slides 26-28): (1) durable requirement anatomy covering identity/provenance, 8 acceptance criteria, 8 relations, 32 comments, 16 linked commits and 7 trace records; (2) lifecycle state machine grounded in the 92-event ledger and 51 status transitions, including 8 Done→NeedsAttention returns and merge-driven Completed closure; (3) attributable evidence chain from contract through four review records, commits/traces, 7 shell + 2 browser + 87 Rust checks, exact MR head and merge. Updated the backup divider subtitle, shifted reconstruction/model-QA/appendix to slides 29-31, regenerated both decks and notes, and visually verified all three 1920x1080 renders. The lifecycle notes explicitly frame the high transition count as orchestration churn to improve, not a success metric.'
+  created_at: 2026-09-30T20:48:48.368691160Z
+  modified_at: 2026-09-30T20:48:48.368691160Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
