@@ -11,6 +11,7 @@
 //! See `docs/plans/2026-05-21-bug-286-network-retry.md`.
 //! trace:BUG-286 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::time::Duration;
@@ -224,7 +225,8 @@ pub(crate) fn run_with_retry(
     let mut attempt: u32 = 0;
     loop {
         attempt += 1;
-        let out = build().output()?;
+        // trace:BUG-1735 | ai:claude
+        let out = build().output_retrying_etxtbsy()?;
         if out.status.success() || attempt >= config.max_attempts {
             return Ok(out);
         }

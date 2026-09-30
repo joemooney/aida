@@ -22,6 +22,7 @@
 //! there is no new agent transport.
 // trace:TASK-1247 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -914,7 +915,7 @@ fn run_aida(project_root: &Path, args: &[&str]) -> Result<String> {
     let out = std::process::Command::new(crate::aida_exe_path())
         .current_dir(project_root)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|error| {
             anyhow::anyhow!("could not run `{command}`: {:?}: {error}", error.kind())
         })?;

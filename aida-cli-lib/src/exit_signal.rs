@@ -62,6 +62,7 @@
 //!
 //! trace:TASK-329 trace:TASK-298 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
@@ -239,7 +240,8 @@ pub(crate) fn spawn_and_wait_watched(
     if own_process_group {
         set_own_process_group(&mut cmd);
     }
-    let mut child = cmd.spawn()?;
+    // trace:BUG-1735 | ai:claude
+    let mut child = cmd.spawn_retrying_etxtbsy()?;
     // On Unix with `process_group(0)`, the child's pgid equals its pid. Capture
     // it now while the handle is alive; we sweep the group after the loop.
     let group_id = if own_process_group {

@@ -14,6 +14,7 @@
 //!
 //! trace:FR-1-043 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::path::{Path, PathBuf};
@@ -1244,7 +1245,7 @@ pub fn spawn_vendor_headless_with_seat(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok(status)
@@ -1415,7 +1416,7 @@ pub(crate) fn spawn_reviewer_launch_plan(
 ) -> Result<std::process::ExitStatus> {
     std::process::Command::new(&plan.program)
         .args(&plan.args)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", plan.program))
 }
 
@@ -2828,7 +2829,7 @@ pub fn exec_vendor_headless(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .spawn()
+        .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     if vendor != HeadlessVendor::Claude {
         if let Some(id) = lease_id {
@@ -3070,7 +3071,7 @@ pub fn spawn_claude_headless_resume(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
     tee.stop();
     Ok(status)

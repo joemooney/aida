@@ -12,6 +12,7 @@
 // reaches all of it via `crate::`.
 // trace:SPIKE-78 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -610,7 +611,7 @@ pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
 fn agent_cli_detected(program: &str) -> bool {
     std::process::Command::new(program)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -4433,7 +4434,9 @@ pub(crate) fn handle_init_distributed_worktree(
                     .and_then(crate::forge::project_path_of);
                 if let Some(argv) = kind.set_default_branch_cmd(cb, project_ref.as_deref()) {
                     if let Some((prog, args)) = argv.split_first() {
-                        let out = std::process::Command::new(prog).args(args).output();
+                        let out = std::process::Command::new(prog)
+                            .args(args)
+                            .output_retrying_etxtbsy();
                         if let Ok(o) = out {
                             if o.status.success() {
                                 println!("  {} set forge default branch to {}", "Done".green(), cb);

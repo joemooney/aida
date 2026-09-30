@@ -1413,7 +1413,7 @@ mod tests {
             .env("AIDA_BUG_1482_WORKER", "1")
             .env("AIDA_BUG_1482_PROJECT", project.path())
             .stdout(std::process::Stdio::piped())
-            .spawn()
+            .spawn_retrying_etxtbsy()
             .expect("spawn worker");
 
         // Act like `| head`: read lines up through the inbox header (skipping

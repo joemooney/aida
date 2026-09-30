@@ -1,9 +1,14 @@
 //! Shared executable fixtures for tests. Creating the file, syncing it, and
 //! closing its writer before marking it executable narrows the ETXTBSY window;
 //! spawned fixture commands still use the production retry helper.
-//! This is a test-harness concern: production invokes installed executables
-//! and its spawn sites already retry ETXTBSY.
-// trace:BUG-1689 | ai:codex
+//! This is NOT only a test-harness concern. BUG-1735: the earlier claim here —
+//! that production "invokes installed executables and its spawn sites already
+//! retry ETXTBSY" — was false. A whole-crate survey found 4 of 161 non-literal
+//! `Command::new` sites retrying, and the injectable ones (`resolve_gh_binary`
+//! and its `glab` twin honour `AIDA_TEST_*_BINARY`; every `_using` seam takes a
+//! path) sit in exactly the same window as a fixture. Spawn sites now route
+//! through [`crate::process_retry::RetryEtxtbsy`].
+// trace:BUG-1689 trace:BUG-1735 | ai:codex ai:claude
 
 use std::io::Write;
 

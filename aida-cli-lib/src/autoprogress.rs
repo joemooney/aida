@@ -11,6 +11,7 @@
 //! --project <path>`.
 // trace:TASK-1231 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -126,7 +127,7 @@ fn run_aida(root: &Path, args: &[&str]) -> Result<()> {
     let status = std::process::Command::new(exe)
         .current_dir(root)
         .args(args)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to run `aida {}`", args.join(" ")))?;
     anyhow::ensure!(
         status.success(),
@@ -142,7 +143,7 @@ fn ready_specs(root: &Path, max: usize) -> Result<Vec<String>> {
     let out = std::process::Command::new(exe)
         .current_dir(root)
         .args(["list", "--status", "approved", "--format", "json"])
-        .output()
+        .output_retrying_etxtbsy()
         .context("failed to run `aida list`")?;
     anyhow::ensure!(out.status.success(), "`aida list --status approved` failed");
     Ok(select_ready_from_json(

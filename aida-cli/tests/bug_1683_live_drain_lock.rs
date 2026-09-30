@@ -287,7 +287,13 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
             "\"work\"",
             "\"--auto-complete\"",
             "\"--from-pr\"",
-            "cmd.status()",
+            // BUG-1735 routed this spawn through the ETXTBSY retry, and
+            // rustfmt's chain_width then split the receiver onto its own line.
+            // Both needles are kept so the guard still binds the terminal call
+            // to *this* command rather than to any `.status*()` in the body.
+            // trace:BUG-1735 | ai:claude
+            "let status = cmd",
+            ".status_retrying_etxtbsy()",
         ],
     );
     ordered(
@@ -306,7 +312,9 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
             "zen_drive::drive_args(",
             "Command::new(&exe)",
             "cmd.args(&args)",
-            ".status()",
+            // trace:BUG-1735 | ai:claude — see the note above.
+            "let status = cmd",
+            ".status_retrying_etxtbsy()",
         ],
     );
     ordered(

@@ -1,5 +1,6 @@
 //! Local CI-guard parity before an orchestrated implementer branch is published.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -230,7 +231,10 @@ fn run_bounded(command: &mut Command, timeout: Duration) -> Result<Option<Output
             });
         }
     }
-    let mut child = command.spawn().map_err(|err| err.to_string())?;
+    // trace:BUG-1735 | ai:claude
+    let mut child = command
+        .spawn_retrying_etxtbsy()
+        .map_err(|err| err.to_string())?;
     let mut stdout = child.stdout.take().expect("stdout was configured as piped");
     let mut stderr = child.stderr.take().expect("stderr was configured as piped");
     let stdout_reader = std::thread::spawn(move || {

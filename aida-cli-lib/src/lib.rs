@@ -243,6 +243,7 @@ mod presence;
 mod presence_cmd;
 mod process_probe;
 mod process_retry;
+use crate::process_retry::RetryEtxtbsy;
 // BUG-677: the /proc probe + lease/spec liveness classifiers moved to
 // aida-core so aida-tui can compute liveness in-process. Re-export the shared
 // classifier types + fns at the crate root so `crate::LeaseState` /
@@ -28706,7 +28707,7 @@ fn agent_new_bg_dispatch(
     );
 
     let output = command
-        .output()
+        .output_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     // TASK-1498: `--verbose` child-result diagnostics for the `--bg` shape —
     // `claude --bg` returns immediately after handing off, so "exit" here is
@@ -30550,7 +30551,7 @@ fn pr_state_for_spec(project_root: &std::path::Path, spec: &str) -> Option<Strin
             "--limit",
             "5",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -31569,7 +31570,7 @@ fn run_tracked_agent(
     );
 
     let mut child = command
-        .spawn()
+        .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
     let terminal = agent_registry::current_terminal_identity();
@@ -36093,7 +36094,7 @@ fn query_pr_metadata(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(&args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|e| {
             // TASK-50: the install URL belongs to the `not on PATH`
             // case only — that's the one where "go install this" is
@@ -36191,7 +36192,7 @@ fn query_pr_source_branch(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(&args)
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -37464,7 +37465,7 @@ fn session_start(
                             .current_dir(&project_root)
                             .args(["session", "end", &l.id, "--yes", "--skip-ci"])
                             .stdin(std::process::Stdio::null())
-                            .status()
+                            .status_retrying_etxtbsy()
                             .map(|st| st.success())
                             .unwrap_or(false);
                         if !ended {
@@ -39955,7 +39956,7 @@ fn collect_recently_merged_prs_uncached(
             "--json",
             "number,title,mergedAt",
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let Ok(out) = out else { return Vec::new() };
     if !out.status.success() {
         return Vec::new();
@@ -40879,7 +40880,7 @@ pub(crate) fn probe_ci_state_for_branch_github(branch: &str) -> CiProbe {
             "--limit",
             "1",
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let output = match output {
         Ok(o) if o.status.success() => o,
         Ok(o) => {
@@ -41314,7 +41315,7 @@ fn ci_rollup_json_for_branch(branch: &str) -> String {
             "--limit",
             "1",
         ])
-        .output();
+        .output_retrying_etxtbsy();
     match output {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
         _ => String::new(),
@@ -41431,7 +41432,7 @@ fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> Ci
             "--json",
             "databaseId",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()
         .filter(|o| o.status.success())
         .and_then(|o| first_run_id_from_gh_json(&String::from_utf8_lossy(&o.stdout)));
@@ -41450,7 +41451,7 @@ fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> Ci
     // a terminal state.
     let _ = std::process::Command::new(&gh)
         .args(["run", "watch", &run_id])
-        .status();
+        .status_retrying_etxtbsy();
     // Re-probe to classify Green/Red for the end-session decision tree.
     // Keep the re-probe on the caller-injected root. Re-deriving from the
     // process cwd can silently route a GitLab branch through GitHub when the
@@ -43212,7 +43213,7 @@ fn resolve_forge_binary(
             }
             match std::process::Command::new(candidate)
                 .arg("--version")
-                .output()
+                .output_retrying_etxtbsy()
             {
                 Ok(o) if o.status.success() => {
                     if debug {
@@ -43425,7 +43426,12 @@ pub(crate) fn command_output_with_timeout_detail(
     let mut child = match cmd
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        .spawn()
+        // BUG-1735: a bare spawn here turns a transient ETXTBSY into
+        // `SpawnFailed`, which discards the errno and reads as "could not
+        // start". Every bounded-run caller inherits that, so the retry
+        // belongs in the wrapper, not at each call site.
+        // trace:BUG-1735 | ai:claude
+        .spawn_retrying_etxtbsy()
     {
         Ok(child) => child,
         Err(_) => return BoundedCommandOutput::SpawnFailed,
@@ -43544,7 +43550,8 @@ pub(crate) fn forge_lookup_output(
     mut cmd: std::process::Command,
 ) -> std::io::Result<Option<std::process::Output>> {
     match FORGE_LOOKUP_TIMEOUT.with(|c| c.get()) {
-        None => cmd.output().map(Some),
+        // trace:BUG-1735 | ai:claude
+        None => cmd.output_retrying_etxtbsy().map(Some),
         Some(timeout) => {
             let started = std::time::Instant::now();
             match command_output_with_timeout(cmd, timeout) {
@@ -44453,7 +44460,7 @@ fn open_pr_commit_headlines_reference_spec(
             "-q",
             ".commits[].messageHeadline",
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let Ok(out) = out else {
         return false;
     };
@@ -44490,7 +44497,7 @@ fn detect_open_pr_for_spec_by_head_or_commit(
             "-q",
             r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let out = match spawned {
         Ok(o) => o,
         Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
@@ -44599,7 +44606,7 @@ fn all_open_prs_for_spec_via_forge(
             "-q",
             r#".[] | "\(.number)\t\(.headRefName)""#,
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let Ok(out) = out else {
         return Vec::new();
     };
@@ -44638,7 +44645,7 @@ fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<Stri
             "-q",
             ".headRefName",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -44971,7 +44978,7 @@ fn open_pr_review_story_using(
     let Ok(out) = std::process::Command::new(aida)
         .current_dir(project_root)
         .args(["list", "--type", "story", "--format", "json"])
-        .output()
+        .output_retrying_etxtbsy()
     else {
         return None;
     };
@@ -45058,7 +45065,7 @@ fn reviewer_queue_story_ids(project_root: &std::path::Path) -> Option<Vec<String
             "--json",
             "--no-scope",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -45209,7 +45216,7 @@ fn aida_subcmd_add_review_story(
             "--description",
             description,
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         eprintln!(
@@ -45796,7 +45803,7 @@ fn aida_subcmd_add_followup_task(
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(&args)
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         eprintln!(
@@ -46619,7 +46626,7 @@ fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel
     match std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["rel", "add", from, to, "--type", rel_type])
-        .output()
+        .output_retrying_etxtbsy()
     {
         Ok(o) if o.status.success() => {}
         Ok(o) => eprintln!(
@@ -46669,7 +46676,12 @@ fn aida_subcmd_queue_add_for_reviewer_using(
             "--note",
             note,
         ])
-        .output();
+        // The injected `aida` may be a fixture this process just wrote, so a
+        // sibling thread's forked child can still hold a writer descriptor on
+        // it. Without the retry that surfaces as `could not invoke`, which is
+        // the *other* error arm from the non-zero-exit one callers care about.
+        // trace:BUG-1735 | ai:claude
+        .output_retrying_etxtbsy();
     match out {
         Ok(o) if o.status.success() => Ok(()),
         Ok(o) => anyhow::bail!(
@@ -50382,7 +50394,7 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .spawn();
+        .spawn_retrying_etxtbsy();
 }
 
 /// Pure source-label resolver for `aida whoami`'s user-id line. Mirrors
@@ -53706,7 +53718,7 @@ fn detect_merged_pr_with_time(
             "--json",
             "number,mergedAt",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -55140,7 +55152,7 @@ pub(crate) fn copy_to_clipboard(text: &str) -> bool {
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .spawn()
+            .spawn_retrying_etxtbsy()
         else {
             continue;
         };
@@ -56010,7 +56022,7 @@ pub(crate) fn current_branch_head_sha(repo: &std::path::Path) -> Option<String> 
 pub(crate) fn binary_embedded_sha(binary: &std::path::Path) -> Option<String> {
     let output = std::process::Command::new(binary)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !output.status.success() {
         return None;
@@ -58433,7 +58445,7 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
             let pulled = std::process::Command::new(aida)
                 .current_dir(project_root)
                 .arg("pull")
-                .status();
+                .status_retrying_etxtbsy();
             if !matches!(&pulled, Ok(s) if s.success()) {
                 eprintln!(
                     "    {} `aida pull` did not succeed after merging PR-{} — the spec may still \
@@ -60940,7 +60952,10 @@ fn handle_human_audit(project_root: &std::path::Path, inject: bool) -> Result<()
     match human_audit::plan_inject(human_audit::read_pane(project_root)) {
         human_audit::InjectPlan::Inject(argv) => {
             let (program, rest) = argv.split_first().expect("send-keys argv is non-empty");
-            match std::process::Command::new(program).args(rest).status() {
+            match std::process::Command::new(program)
+                .args(rest)
+                .status_retrying_etxtbsy()
+            {
                 Ok(status) if status.success() => {
                     println!(
                         "{} Injected the audit command into the advisor's tmux pane.",
@@ -61569,7 +61584,7 @@ fn self_invoke_aida(args: &[&str]) -> Result<()> {
     let exe = aida_exe_path();
     let status = std::process::Command::new(exe)
         .args(args)
-        .status()
+        .status_retrying_etxtbsy()
         .map_err(|e| anyhow::anyhow!("run `aida {}`: {e}", args.join(" ")))?;
     if !status.success() {
         anyhow::bail!("`aida {}` exited with {status}", args.join(" "));
@@ -69385,7 +69400,7 @@ fn handle_dev_release(bump: &str) -> Result<()> {
     let status = std::process::Command::new(&script)
         .arg(bump)
         .current_dir(&repo)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("Failed to invoke {}", script.display()))?;
     if !status.success() {
         anyhow::bail!(
@@ -73515,7 +73530,7 @@ fn specs_with_open_prs(
                 "pr", "list", "--state", "open", "--search", &spec_id, "--limit", "1", "--json",
                 "number",
             ])
-            .output()
+            .output_retrying_etxtbsy()
             .ok()?;
         if !out.status.success() {
             return None;
@@ -75709,7 +75724,7 @@ fn count_completed_specs_with_open_prs(
             "--json",
             "title,body",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -77387,7 +77402,7 @@ fn collect_pr_facts_uncached(project_root: &std::path::Path, branch: &str) -> Pr
             "-q",
             r#"[(.number|tostring), .title, .url, .state, ([.statusCheckRollup[]?.conclusion] | unique | join(","))] | @tsv"#,
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let out = match out {
         Ok(o) => o,
         Err(e) => {
@@ -79084,6 +79099,66 @@ exit 1
         .unwrap_err();
         assert!(err.to_string().contains("queue unavailable"), "{err}");
     }
+
+    /// AC3: the retry engages at *this* call site, not merely inside the helper's
+    /// own unit test. A live writer descriptor on the freshly written fixture is a
+    /// real `ETXTBSY` (the bare-spawn assertion below proves the window is open),
+    /// which before BUG-1735 took the `Err(e)` arm and reported
+    /// `could not invoke \`aida queue add\``. The retry must instead wait the
+    /// window out and land on the `Ok(o)` non-zero-exit arm the caller cares
+    /// about, so the assertion is on the *propagated stderr*, not on "no error".
+    // trace:BUG-1735 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn queue_add_waits_out_a_writer_descriptor_instead_of_reporting_could_not_invoke() {
+        use std::io::Write as _;
+        use std::os::unix::fs::OpenOptionsExt as _;
+
+        let body = "#!/bin/sh\necho queue unavailable >&2\nexit 23\n";
+        let root = tempfile::tempdir().unwrap();
+        let fake = root.path().join("failing-aida");
+        crate::test_exec::write_executable(&fake, body);
+
+        let mut writer = std::fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_CLOEXEC)
+            .open(&fake)
+            .unwrap();
+        writer.write_all(body.as_bytes()).unwrap();
+        writer.sync_all().unwrap();
+
+        assert_eq!(
+            std::process::Command::new(&fake)
+                .spawn()
+                .err()
+                .and_then(|e| e.raw_os_error()),
+            Some(libc::ETXTBSY),
+            "the writer descriptor must make a bare spawn fail, or this test proves nothing"
+        );
+
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            drop(writer);
+        });
+
+        let err = aida_subcmd_queue_add_for_reviewer_using(
+            root.path(),
+            "STORY-1354",
+            "BUG-1735 test",
+            &fake,
+        )
+        .unwrap_err();
+        release.join().unwrap();
+
+        assert!(
+            err.to_string().contains("queue unavailable"),
+            "the spawn must be retried past ETXTBSY and reach the non-zero-exit arm, got: {err}"
+        );
+        assert!(
+            !err.to_string().contains("could not invoke"),
+            "a transient ETXTBSY must not surface as a spawn failure, got: {err}"
+        );
+    }
 }
 
 /// TASK-833: pure parse of a `gh pr list --json
@@ -79198,7 +79273,7 @@ fn collect_all_pr_head_branches(
             "--json",
             "headRefName",
         ])
-        .output();
+        .output_retrying_etxtbsy();
     let Ok(out) = out else { return set };
     if !out.status.success() {
         return set;
@@ -81226,7 +81301,7 @@ fn gh_pr_is_merged(project_root: &std::path::Path, n: u64) -> Option<bool> {
             "-q",
             ".state",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -89777,7 +89852,7 @@ pub fn resolve_pr_to_spec(
             "-q",
             "[.title, (.commits[].messageHeadline)] | @tsv",
         ]);
-        if let Ok(out) = c.output() {
+        if let Ok(out) = c.output_retrying_etxtbsy() {
             if out.status.success() {
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 let fields = stdout.trim_end().split('\t');
@@ -90022,7 +90097,7 @@ fn ask_ai_review_once<W: std::io::Write + ?Sized>(
     let result = std::process::Command::new(command)
         .current_dir(project_root)
         .args(&args)
-        .output();
+        .output_retrying_etxtbsy();
     match result {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -95634,7 +95709,7 @@ fn record_headless_refusal_finding(
             "--tags",
             &tags,
         ])
-        .output();
+        .output_retrying_etxtbsy();
 }
 
 // trace:BUG-1574 | ai:claude
@@ -96057,7 +96132,7 @@ fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Resul
                 }
                 let status = std::process::Command::new(&exe)
                     .args(&args)
-                    .status()
+                    .status_retrying_etxtbsy()
                     .with_context(|| format!("could not launch the plan session for {s}"))?;
                 if !status.success() {
                     anyhow::bail!(
@@ -96069,7 +96144,7 @@ fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Resul
             PlanPreludeStep::Promote { spec: s } => {
                 let status = std::process::Command::new(&exe)
                     .args(["plan", "promote", &s])
-                    .status()
+                    .status_retrying_etxtbsy()
                     .with_context(|| format!("could not run `aida plan promote {s}`"))?;
                 if !status.success() {
                     anyhow::bail!(
@@ -97305,7 +97380,7 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
         for (k, v) in pipelined_child_env(&result_path) {
             cmd.env(k, v);
         }
-        match cmd.spawn() {
+        match cmd.spawn_retrying_etxtbsy() {
             Ok(child) => {
                 self.pipelined_children.insert(handle.0, child);
                 self.pipelined_result_paths.insert(handle.0, result_path);
@@ -99603,7 +99678,7 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
         for (k, v) in pipelined_child_env(&result_path) {
             cmd.env(k, v);
         }
-        match cmd.spawn() {
+        match cmd.spawn_retrying_etxtbsy() {
             Ok(child) => {
                 self.pipelined_children.insert(handle.0, child);
                 self.pipelined_result_paths.insert(handle.0, result_path);
@@ -100643,7 +100718,7 @@ fn add_draft_bug(
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        .spawn()
+        .spawn_retrying_etxtbsy()
         .ok()?;
     child.stdin.take()?.write_all(description.as_bytes()).ok()?;
     let out = child.wait_with_output().ok()?;
@@ -100789,7 +100864,7 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
         );
         let status = std::process::Command::new(resolve_aida_exe())
             .args(args)
-            .status()
+            .status_retrying_etxtbsy()
             .with_context(|| format!("failed to launch `aida {context}`"))?;
         if !status.success() {
             std::process::exit(status.code().unwrap_or(1));
@@ -100841,7 +100916,7 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
                 .arg(&launch.prompt)
                 .current_dir(&out.path)
                 .env("AIDA_SESSION_ROLE", "implementer")
-                .status()
+                .status_retrying_etxtbsy()
                 .map_err(|e| {
                     anyhow::anyhow!(
                         "failed to launch `{program}` ({e}) — guided mode drives an \
@@ -100972,7 +101047,7 @@ fn do_micro_groom_mode(
     let mode_str = proposal.mode.to_string();
     let status = std::process::Command::new(resolve_aida_exe())
         .args(["edit", display, "--mode", &mode_str])
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to record the confirmed mode via `aida edit --mode`")?;
     if !status.success() {
         anyhow::bail!(
@@ -101374,7 +101449,7 @@ fn run_zen_drive(
         cmd.current_dir(cwd);
     }
     let status = cmd
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to launch the `aida queue work --auto-complete --no-human` drive")?;
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
@@ -101672,7 +101747,7 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
     let exe = aida_exe_path();
     let status = std::process::Command::new(exe)
         .args(auto_complete_queue_add_args(spec))
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to run `aida queue add`")?;
     if !status.success() {
         anyhow::bail!("`aida queue add {spec} --for implementer --no-scope` failed");
@@ -101773,7 +101848,7 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
             "--json",
             "databaseId",
         ])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -104955,7 +105030,7 @@ impl RealPhaseDriver {
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(build_phase3_auto_rebase_args(pr_number))
-            .output();
+            .output_retrying_etxtbsy();
         match status {
             Ok(output) if output.status.success() => {
                 if !output.stdout.is_empty() {
@@ -105093,7 +105168,7 @@ impl RealPhaseDriver {
             .current_dir(worktree_path)
             .args(build_auto_punt_args(&self.spec, &punt.detail, &punt.lean))
             .env("AIDA_SESSION_ROLE", "implementer")
-            .status()
+            .status_retrying_etxtbsy()
             .ok()?;
         if !status.success() {
             return None;
@@ -105702,7 +105777,7 @@ impl RealPhaseDriver {
             // trace:TASK-1169 | ai:claude
             .env(ceiling_key, ceiling_value)
             .stdout(std::process::Stdio::from(log))
-            .status()
+            .status_retrying_etxtbsy()
             .map_err(|e| {
                 PhaseFailure::of(
                     FailureKind::Spawn,
@@ -105810,7 +105885,7 @@ impl RealPhaseDriver {
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(["session", "end", &lease, "--yes", "--skip-ci"])
-            .status()
+            .status_retrying_etxtbsy()
             // A spawn failure here is local subprocess plumbing, not red CI —
             // tag it `Spawn` so the hint says so. trace:BUG-218 | ai:claude
             .map_err(|e| {
@@ -105914,7 +105989,7 @@ impl RealPhaseDriver {
                             let _ = std::process::Command::new(self.aida_exe())
                                 .current_dir(&self.project_root)
                                 .args(["session", "end", &lease, "--yes", "--skip-ci"])
-                                .status();
+                                .status_retrying_etxtbsy();
                         }
                     }
                     Err(e) => log(format!(
@@ -106594,7 +106669,7 @@ impl RealPhaseDriver {
             let _ = std::process::Command::new(self.aida_exe())
                 .current_dir(&self.project_root)
                 .args(["session", "end", &gate_lease, "--yes", "--skip-ci"])
-                .status();
+                .status_retrying_etxtbsy();
         }
 
         Ok(outcome)
@@ -108770,7 +108845,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         "api",
                         &format!("repos/:owner/:repo/commits/{}/check-runs", sha),
                     ])
-                    .output();
+                    .output_retrying_etxtbsy();
 
                 match cmd_output {
                     Ok(output) if output.status.success() => {
@@ -109173,7 +109248,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             let _ = std::process::Command::new(self.aida_exe())
                 .current_dir(&self.project_root)
                 .args(["session", "end", &reviewer_lease, "--yes", "--skip-ci"])
-                .status();
+                .status_retrying_etxtbsy();
         }
 
         // BUG-1186 / ADR-40: post-review integrity guard. A reviewer that moved
@@ -109587,7 +109662,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let mut status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .arg("pull")
-            .status()
+            .status_retrying_etxtbsy()
             .map_err(|e| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::Spawn,
@@ -109609,12 +109684,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             let rebased = std::process::Command::new(self.aida_exe())
                 .current_dir(&self.project_root)
                 .args(["rebase", "--auto"])
-                .status();
+                .status_retrying_etxtbsy();
             if matches!(&rebased, Ok(s) if s.success()) {
                 status = std::process::Command::new(self.aida_exe())
                     .current_dir(&self.project_root)
                     .arg("pull")
-                    .status()
+                    .status_retrying_etxtbsy()
                     .map_err(|e| {
                         auto_complete::PhaseFailure::of(
                             auto_complete::FailureKind::Spawn,
@@ -110024,7 +110099,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             response.reasoning
                         ),
                     ])
-                    .status();
+                    .status_retrying_etxtbsy();
                 Ok(AdvisorOutcome::Resolved {
                     answer,
                     reasoning: response.reasoning.clone(),
@@ -110042,7 +110117,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 let _ = std::process::Command::new(self.aida_exe())
                     .current_dir(&self.project_root)
                     .args(["edit", &self.spec, "--tags", &tags.join(",")])
-                    .status();
+                    .status_retrying_etxtbsy();
                 let _ = std::process::Command::new(self.aida_exe())
                     .current_dir(&self.project_root)
                     .args([
@@ -110058,7 +110133,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             response.reasoning
                         ),
                     ])
-                    .status();
+                    .status_retrying_etxtbsy();
                 Ok(AdvisorOutcome::Escalated {
                     reason: response.reasoning.clone(),
                     category: response
@@ -110608,7 +110683,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // TASK-1169 / ADR-22: bounded, launcher-set background-wait ceiling.
             .env(ceiling_key, ceiling_value)
             .stdout(std::process::Stdio::from(log))
-            .status();
+            .status_retrying_etxtbsy();
         tee.stop();
         match status {
             Ok(s) if s.success() => {}
@@ -110685,7 +110760,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(build_phase3_auto_rebase_args(pr as u64))
-            .status();
+            .status_retrying_etxtbsy();
         match status {
             Ok(s) if s.success() => {
                 record(&mut self.auto_rebase_events, "clean".to_string());
@@ -110745,7 +110820,7 @@ fn failing_ci_log_excerpt(project_root: &std::path::Path, run_id: &str) -> Optio
     let out = std::process::Command::new(gh)
         .current_dir(project_root)
         .args(["run", "view", run_id, "--log-failed"])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;
@@ -111515,7 +111590,7 @@ fn run_aida_db_sync_pull(store_path: &std::path::Path) -> Result<()> {
                         // resolves the store via cwd's project root,
                         // which matches ours.
     let status = cmd
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| "spawn `aida db sync --pull`")?;
     if !status.success() {
         anyhow::bail!("`aida db sync --pull` exited with {}", status);

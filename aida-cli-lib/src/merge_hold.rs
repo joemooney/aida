@@ -15,6 +15,7 @@
 //! auto-merge is unaffected (the granularity the branch-protection concern needs).
 // trace:BUG-1167 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -1939,7 +1940,7 @@ fn run_forge_cli(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
@@ -1955,7 +1956,7 @@ fn run_forge_cli_stdout(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
