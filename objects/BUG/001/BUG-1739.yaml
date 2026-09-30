@@ -111,12 +111,12 @@ description: |
 
   BUG-1688, BUG-1693 and BUG-1695 are actually stranded and need dispositioning by a seat. That is
   queue hygiene, not this bug. File or handle separately.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:37:34.545659725Z
-modified_at: 2026-09-30T13:41:34.549486380Z
+modified_at: 2026-09-30T14:43:07.137925455Z
 req_type: Bug
 comments:
 - id: 01a0f28c-00ed-7cb1-a2d3-0164c5be9b0d
@@ -202,6 +202,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f2c4-ecfa-7541-ac60-adc6c61ae5a2
+  author: aida-auto-bump
+  timestamp: 2026-09-30T14:43:07.130891070Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f2c4-ed01-7480-a535-ff6c278d5e0f
+  timestamp: 2026-09-30T14:43:07.137924685Z
+  agent: aida
+  commit_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  summary: Completed via merge 7c37dd81
 filed_at:
   code_sha: b510526ff4e565e30da535b2e80ad42666e54283
   branch: main
@@ -210,3 +223,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: 08266c5d-f39e-4334-b87d-f481a6ba1b02
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-30T14:43:07.130867031Z
+  completion_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
