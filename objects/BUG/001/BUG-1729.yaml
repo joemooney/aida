@@ -101,12 +101,12 @@ description: |
      `/proc/locks` + dev/ino diagnostic and the underlying defect is fixed.
   3. Whichever way B resolves, the coverage gap proven above is closed by a test
      that fails under the `existing._file = file` injection.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T06:03:49.936303307Z
+modified_at: 2026-09-30T06:16:01.019092636Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -585,6 +585,13 @@ history:
   - field_name: status
     old_value: Completed
     new_value: InProgress
+- id: 01a0f0f4-a8d1-7e00-bcd3-ee71fa41ffec
+  author: aida-auto-bump
+  timestamp: 2026-09-30T06:16:00.977219786Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a0f0b6-08ca-7730-ac56-94af622e1f0d
   timestamp: 2026-09-30T05:07:36.778218496Z
@@ -596,6 +603,11 @@ processing_record:
   agent: product
   commit_sha: 3c088a5dbdb8b0cf9cfa3c8d42fbb5430762bf47
   summary: Completed via merge 3c088a5d
+- id: 01a0f0f4-a8fb-7812-a228-fa22d14bb9ef
+  timestamp: 2026-09-30T06:16:01.019089583Z
+  agent: product
+  commit_sha: f175efb67de3af3d244970c7c2fab1baec829a8a
+  summary: Completed via merge f175efb6
 filed_at:
   code_sha: 8bd9fbb3d667078da412005cdf0c720364458cf2
   branch: main
@@ -606,4 +618,5 @@ filed_at:
   session: b2195326-c6b7-41c7-afb5-aa27b60756e2
 implementation_info:
   implemented: false
+  completed_at: 2026-09-30T06:16:00.977185664Z
   completion_sha: a0e8a5c6297ec681baefaaffe0315543f9754fa7
