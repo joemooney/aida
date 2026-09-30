@@ -89,12 +89,12 @@ description: |
   every AIDA project — see `feedback_memory_pack_hygiene` and
   `feedback_propagate_generic_discipline_via_scaffolding`. Classification is the work; copying
   is the trap.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-09-30T13:13:51.063739930Z
+modified_at: 2026-09-30T13:13:51.941064703Z
 req_type: Task
 comments:
 - id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
@@ -289,6 +289,14 @@ comments:
   created_at: 2026-09-30T13:13:51.063739930Z
   modified_at: 2026-09-30T13:13:51.063739930Z
   session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
+history:
+- id: 01a0f273-3645-73c0-82b9-0b588a27b8c0
+  author: joe
+  timestamp: 2026-09-30T13:13:51.941060560Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
   branch: main
