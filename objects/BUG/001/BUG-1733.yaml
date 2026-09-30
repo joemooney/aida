@@ -53,8 +53,45 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:55:10.618095347Z
-modified_at: 2026-09-30T06:55:19.103947151Z
+modified_at: 2026-09-30T07:35:10.217176479Z
 req_type: Bug
+comments:
+- id: 01a0f13d-2089-7402-bd84-cca09643ac64
+  author: joe
+  content: |
+    ## The fixture defect is fixture-wide, not specific to the filed test
+
+    This spec was filed against
+    `bug_1670_stale_cache_callers_tests::unambiguous_write_resolution_sees_external_collision_under_foreign_lock`.
+    A full `aida-cli-lib` lib suite at `--test-threads=4` (2026-09-30, during BUG-1732) hit the same
+    double-panic under a **different** test in the same module:
+
+    ```
+    ---- bug_1670_stale_cache_callers_tests::rules_sync_keeps_rule_for_spec_approved_after_snapshot stdout ----
+    thread '<unnamed>' (2540069) panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:52:14:
+    fixture: the refresh flock must be free before the holder takes it
+    thread 'bug_1670_stale_cache_callers_tests::rules_sync_keeps_rule_for_spec_approved_after_snapshot' (2539607) panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:59:10:
+    fixture: the refresh holder thread must report ready: RecvError
+    ```
+
+    So the masking is a property of `stale_cache_fixture.rs` rather than of any one caller, and this
+    run also names the real fault outright: `:52`'s precondition — *the refresh flock must be free
+    before the holder takes it* — is what actually fails. Under suite parallelism a sibling test's
+    refresh lock is still held when the fixture asserts the flock is free, and `:59` then reports the
+    absent handshake instead.
+
+    Two consequences for the fix:
+
+    1. The `:59` `RecvError` arm must surface the holder thread's own panic (join the handle and
+       re-raise, or pass the payload through the channel) rather than reporting the missing
+       handshake — that is this spec's ask, unchanged.
+    2. `:52`'s precondition is itself suspect as an assertion. A cross-test flock being busy is a
+       condition of the host, not a defect in the code under test, so it belongs in the fixture's
+       own retry/serialisation rather than as a hard panic. Worth deciding which of the two it is
+       before writing the fix.
+  created_at: 2026-09-30T07:35:10.217176479Z
+  modified_at: 2026-09-30T07:35:10.217176479Z
+  session_id: 60a4d7c9-b362-42fb-9013-365d4ddd8e7d
 history:
 - id: 01a0f118-a43f-7c51-9ad2-c7b608d034c8
   author: joe
