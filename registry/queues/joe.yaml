@@ -32,3 +32,9 @@
   added_by: joe
   added_at: 2026-09-30T10:55:19.020192416Z
   for_role: product
+- user_id: joe
+  requirement_id: 01a0f14f-40ab-70c0-b38a-2e4130fbb215
+  position: 29000
+  added_by: joe
+  added_at: 2026-09-30T11:43:57.084872849Z
+  for_role: product
