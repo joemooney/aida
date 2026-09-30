@@ -4867,7 +4867,7 @@ mod tests {
                 r.pending_briefs.push(PendingBriefItem {
                     agent: "claude".into(),
                     spec_id: "BUG-1".into(),
-                    path: std::path::PathBuf::from("/tmp/brief"),
+                    path: std::env::temp_dir().join("brief"),
                 })
             }),
             ("findings", |r| r.findings_total = 2),
