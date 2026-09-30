@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:25:58.439694991Z
+modified_at: 2026-09-30T20:34:09.671709363Z
 req_type: Task
 tags:
 - docs
@@ -88,5 +88,10 @@ comments:
   content: 'Added an Extra / Backup divider immediately after the main close (new slide 25), followed by a new backup slide explaining the proposed AIDA-vs-no-AIDA reconstruction experiment (slide 26). The experiment gives two fresh agents the same reconstruction task and rubric: the control receives code, commits, and README; the AIDA arm receives those sources plus requirements, acceptance criteria, decisions, relationships, rationale, traces, and retained evidence. It scores intent, architecture, constraints, omissions, confident inventions, and time; reconstruction delta is AIDA-arm score minus control score. The slide explicitly says no result is claimed yet. Reordered the existing model-quality backup to slide 27 and evidence appendix to slide 28. Regenerated both deck copies and notes; verified 28-page 16:9 PDF, full-resolution renders of slides 25-26, sequential footers and notes 1-28, PPTX ZIP integrity, and identical output hashes.'
   created_at: 2026-09-30T20:25:58.439690379Z
   modified_at: 2026-09-30T20:25:58.439690379Z
+- id: 01a0f406-5087-7220-9ba8-69a654765234
+  author: mcp
+  content: 'Updated slide 4''s experiment thesis to: ''As code generation gets cheaper, intent, evidence, and traceability become the critical assets.'' Replaced accountability with traceability in both the displayed slide and speaker notes, regenerated both deck copies, and visually verified the 1920x1080 LibreOffice render.'
+  created_at: 2026-09-30T20:34:09.671704774Z
+  modified_at: 2026-09-30T20:34:09.671704774Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
