@@ -1,0 +1,65 @@
+id: 01a0f4bc-9417-7c31-9998-8ef35e9be46c
+spec_id: TASK-1562
+agreed_id: TASK-1562
+title: Disk-headroom guard advises two commands that cannot reclaim the space; no command reclaims stale worktree target caches
+description: |
+  OBSERVED: the `disk-headroom-guard` routes a due job whose own remediation text says
+  "Reclaim space (stale worktrees via `aida session reap`, `cargo clean`)", but neither
+  suggestion addresses where the space actually is. On 2026-09-30 the host hit 89% (101G
+  free) with **86G sitting in 11 stale `target/` caches inside non-main worktrees** —
+  `aida session reap` removes leases/worktrees (not the cache of a worktree it keeps), and
+  `cargo clean` in a worktree cleans the SHARED `CARGO_TARGET_DIR` that `.aida/session-env.sh`
+  points at the main checkout, i.e. it deletes the live `aida` binary's cache and not the
+  stale one. The operator had to hand-write the delete list twice in two sessions.
+
+  The reclaim is mechanical but has real rails, each of which was needed in practice:
+    1. discover via `git worktree list --porcelain`, so unrelated sibling projects
+       (aida-proxy, quizdom, market-watcher, pacgate, port_manager) are never candidates;
+    2. NEVER the main checkout's `target/` — it holds the live binary and is every
+       worktree's CARGO_TARGET_DIR;
+    3. never `.aida-store`;
+    4. skip a worktree held by a live session lease (PID still running);
+    5. skip a worktree whose branch has an OPEN PR — the operator may still need it to
+       verify that PR (this rail caught aida-bug-1693 and aida-bug-1695 on 2026-09-30,
+       exactly the two the operator had excluded by hand);
+    6. skip a `target/` touched in the last N minutes (a possible in-flight build).
+
+  A working implementation with all six rails is at `.aida/scripts/reclaim-worktree-targets.sh`
+  (operator-local, alongside claude_relay.sh). It reclaimed 86G on 2026-09-30, taking the host
+  89% → 79%. Run dry by default; `--apply` deletes; `--target-pct N` stops early.
+
+  WHY IT MATTERS: the guard currently detects the condition and then advises two commands
+  that do not fix it — one is a no-op for this space and the other is actively wrong (it
+  clears the cache the running fleet depends on). That turns a routed job into hand work
+  under disk pressure, which is when hand work is most likely to delete the wrong thing.
+
+  NOTE ON SCOPE: the script is a candidate to LAND as a command, not the deliverable. The
+  decision to make is whether this becomes `aida worktree reclaim` (or a flag on
+  `aida session reap`), and whether the guard's remediation text should name it.
+
+  ## Acceptance
+  - The disk-headroom guard's remediation text no longer recommends `cargo clean` for this
+    condition, or explains that it targets the shared CARGO_TARGET_DIR and is not the
+    reclaim being asked for.
+  - A single AIDA command reclaims stale worktree `target/` caches with all six rails above,
+    dry-run by default, and reports reclaimable bytes before deleting anything.
+  - The main checkout's `target/` is refused as a candidate by an assertion, not by ordering
+    — a test proves the command leaves it in place even when it is the largest candidate.
+  - A worktree whose branch has an open PR is skipped by default, with an opt-in override.
+  - Verified against a fixture with a main checkout, a live-lease worktree, an open-PR
+    worktree and a stale worktree: exactly the stale one is deleted.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T23:53:14.519131201Z
+modified_at: 2026-09-30T23:53:14.519131201Z
+req_type: Task
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ebd9f361-5c58-426c-bd52-cad88aa0059b
