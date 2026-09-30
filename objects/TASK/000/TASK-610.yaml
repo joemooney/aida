@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:55:41.163222602Z
+modified_at: 2026-09-30T21:13:17.287436388Z
 req_type: Task
 tags:
 - docs
@@ -113,5 +113,10 @@ comments:
   content: Updated QCI case-study completion slide 17 to contrast approximately five seconds of human direction with 2h 04m of machine execution. Used an approximation marker because prompt typing time was not stopwatch-measured, kept both durations on one line with a directional arrow, and updated speaker notes to explain the framing and limitation. Regenerated the source case-study deck, repository asset, both 31-slide presentation copies, and notes; visually verified the integrated 1920x1080 slide and PPTX integrity.
   created_at: 2026-09-30T20:55:41.163218046Z
   modified_at: 2026-09-30T20:55:41.163218046Z
+- id: 01a0f42a-22e7-77e2-9ef1-f8dd43af8669
+  author: mcp
+  content: Added a visual backup slide using the supplied real QCI terminal captures. New slide 29, 'The durable record is inspectable,' places `aida show BUG-180 --verbose --comments` beside `aida history events --id BUG-180 --oneline` as two views of the same durable requirement. The screenshots are intentionally operational texture rather than required reading; labels distinguish accumulated state from ordered lifecycle history. Added repository assets under docs/presentation/assets/qci-bug-180/, shifted reconstruction/model-QA/appendix to slides 30-32, regenerated both decks and notes, and visually verified the 1920x1080 slide with no overlap.
+  created_at: 2026-09-30T21:13:17.287432293Z
+  modified_at: 2026-09-30T21:13:17.287432293Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
