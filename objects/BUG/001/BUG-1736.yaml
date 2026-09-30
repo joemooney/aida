@@ -79,12 +79,12 @@ description: |
   Do not widen the shared `RefreshLock` API to make `Ok(None)` impossible — the two callers in
   production (`cache_refresh.rs:247`, `cached_git_backend.rs:467`) depend on `Ok(None)` meaning
   "someone else is refreshing, skip". This is a **test-helper** defect.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T10:55:13.183587765Z
+modified_at: 2026-09-30T10:55:32.061181134Z
 req_type: Bug
 comments:
 - id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
@@ -146,6 +146,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f1f4-90dd-71e1-8151-663d2fe7a897
+  author: aida-session-start
+  timestamp: 2026-09-30T10:55:32.061180677Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 42a2b8775d6df3bb521f8e2dfd8d53d381534068
   branch: bug-1735
