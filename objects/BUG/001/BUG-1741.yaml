@@ -81,8 +81,94 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-09-30T14:52:07.457282151Z
+modified_at: 2026-09-30T15:22:00.871717410Z
 req_type: Bug
+comments:
+- id: 01a0f2e8-8927-74f2-947e-d6075481c22d
+  author: joe
+  content: |
+    ## ADVISOR DISPOSITION — APPROVED with two amendments (2026-09-30, relay session #13)
+
+    Filed from another seat, so I re-derived every load-bearing claim rather than accepting the
+    write-up. All three hold.
+
+    ### Verified independently
+
+    1. **The predicate.** `aida-core/src/liveness.rs:746` is `libc::kill(pid, 0)`, returning `true`
+       on `rc == 0` and on `EPERM`. Confirmed by reading, not by trusting the line reference.
+    2. **The kernel behaviour.** Reproduced here (fork, `_exit(0)` in the child, parent does not
+       reap): `child=340297 state=Z kill0_errno=0 proc_exists=True`. A zombie answers `0`, so
+       `pid_is_alive` returns `true`. AC1 is a real defect, not a theoretical one.
+    3. **The live corpse.** `/proc/1907632/stat` still reads
+       `1907632 (codex) Z 2943488 ...` — state `Z`, 5 days unreaped. (Note its ppid is **2943488**,
+       not the value quoted in the description; the parent is a live process that never waited.
+       Does not change anything, but correct the number if you cite it.)
+    4. **The existing coverage gap is exactly where the spec says.** `liveness.rs:1480` is
+       `pid_is_alive_false_after_child_reaped` — the *reaped* case is already pinned, the zombie
+       case is the hole. Consistent.
+    5. **AC6's claim is right.** A zombie retains its original start time, so recorded == live and
+       `process_identity_is_alive` waves it through. Nothing to re-litigate.
+
+    ### AMENDMENT A1 — AC7's helper list undercounts; here is the full set
+
+    I re-ran the survey across the workspace instead of working from the filed list, and it is short
+    in both directions. Correct AC7 to this enumeration:
+
+    - `aida-cli-lib/src/process_probe.rs` is a **thin re-export** of the aida-core predicate
+      (BUG-677), not a second implementation. Its ~80 historical call sites — including
+      `last_drain.rs:220` — are fixed for free by fixing `pid_is_alive`. **Do not go looking for a
+      duplicate to patch there.**
+    - Genuinely separate per-pid helpers, as filed: `aida-core/src/worktree_pool.rs:272`,
+      `aida-cli-lib/src/vendor_activity.rs:145`, `aida-cli-lib/src/merge_lock.rs:129`,
+      `aida-cli-lib/src/test_home.rs:151` (test-support).
+    - **NOT filed, production:** `aida-cli-lib/src/exit_signal.rs:434 process_group_alive`. See A2.
+    - **NOT filed, `#[cfg(test)]`:** the `kill(pid, 0)` drain loop at `notify.rs:1294` and the
+      `killpg(pgid, 0)` drain loop at `notify.rs:1355`. Both are bounded 5s polls whose comment
+      already concedes "killed members are reaped by their new parent shortly after". A zombie makes
+      them spin the full window and fail. Low stakes; name them and move on.
+    - `aida-core/src/liveness.rs:393 process_start_time` is a sysinfo single-pid refresh, **not** a
+      liveness decision. Out of scope. Leave it.
+    - `ecc-clone/**` carries its own `pid_is_alive` (`session/daemon.rs:476`). Vendored third-party
+      clone — **explicitly out of scope, do not edit it.**
+
+    ### AMENDMENT A2 — AC7 is unsatisfiable as written for the process-group probe
+
+    AC7 offers two outs: "route them through the one predicate, or justify per helper". For
+    `process_group_alive` the first out does not exist — it takes a **pgid** and probes
+    `kill(-pgid, 0)`; there is no single pid to route, and answering it zombie-correctly would mean
+    enumerating the group's members, i.e. exactly the process-table walk BUG-613 removed.
+
+    So AC7 must accept a **justified carve-out** here, and the justification is already favourable:
+    the only consumer is `sweep_process_group` (`exit_signal.rs:406`), where an all-zombie group
+    costs the full `config.grace` window and then a SIGKILL that lands on a corpse as a no-op.
+    **Bounded latency on exit, no incorrect outcome.** Required deliverable: a comment at
+    `process_group_alive` recording that a zombie-only group reads alive, that the cost is one grace
+    window in `sweep_process_group`, and that closing it would reintroduce the group walk. Do **not**
+    rewrite it.
+
+    ### Sizing and priority
+
+    `medium` is right. The defect is real but **latent today** — the four leases naming the corpse
+    have both `review_verb` and `claim_verb` false and no `active_pid`, so none is currently
+    misclassified. Keep it medium: it is a correctness fix on a `pub` predicate with ~80 downstream
+    callers, not an outage.
+
+    Heft: AC1 is a dozen lines (open `/proc/<pid>/stat`, take the char after the **last** `)`, plus
+    one space). The work is in AC4/AC5 and the AC7 walk, not the fix. Size it **3**.
+
+    ### Two things the implementer should not get wrong
+
+    - **AC1's parse.** The `comm` field is parenthesised and may itself contain spaces **and** `)`.
+      Index from `s.rindex(')')`, never `split_whitespace().nth(2)`. My reproduction above does it
+      correctly if you want the two-liner.
+    - **AC5 is not optional and not satisfiable by inspection.** Revert to `kill(pid, 0)` and watch
+      the zombie test fail. A synthetic-zombie test that passes against the old predicate is
+      advertising coverage that does not exist.
+
+    Standing instruction from the description preserved: **do not reap pid 1907632 as the fix.**
+  created_at: 2026-09-30T15:22:00.871717410Z
+  modified_at: 2026-09-30T15:22:00.871717410Z
+  session_id: 259d97b0-df15-4cdb-8712-e2f54e1a8223
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
