@@ -8,10 +8,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T06:32:07.940435918Z
-modified_at: 2026-06-30T07:10:27.064936616Z
+modified_at: 2026-09-30T13:11:04.405596443Z
 req_type: Story
 tags:
 - cli
 - from-audit
 - front-door
 - ux
+comments:
+- id: 01a0f270-a7d5-7663-95fd-46d02e7fdee8
+  author: joe
+  content: Commit 181bbf4c35 references this requirement
+  created_at: 2026-09-30T13:11:04.405596443Z
+  modified_at: 2026-09-30T13:11:04.405596443Z
+  session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
