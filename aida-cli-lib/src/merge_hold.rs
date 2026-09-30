@@ -478,7 +478,25 @@ fn write_marker(
     }
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)
+    match std::fs::remove_file(clearance_path(project_root, record.pr)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)?;
+    // trace:BUG-1693 | ai:codex
+    let mut event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: record.pr as u32,
+            placed: true,
+            reason: Some(record.detail.clone()),
+        },
+    );
+    event.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &event);
+    Ok(())
 }
 
 /// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
@@ -935,6 +953,29 @@ pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
         .join(format!("PR-{pr}.json"))
 }
 
+/// Local audit signal for a hold placed through AIDA whose marker disappeared
+/// without the human clearance command recording a release.
+// trace:BUG-1693 | ai:codex
+pub(crate) fn unrecorded_marker_removals(project_root: &Path) -> Vec<u64> {
+    use crate::events::EventKind;
+    let mut latest = std::collections::BTreeMap::<u32, bool>::new();
+    for event in crate::events::read_all_with_archive(project_root) {
+        if let EventKind::MergeHoldChanged { pr, placed, .. } = event.kind {
+            latest.insert(pr, placed);
+        }
+    }
+    latest
+        .into_iter()
+        .filter_map(|(pr, placed)| {
+            let pr = u64::from(pr);
+            (placed
+                && !hold_path(project_root, pr).exists()
+                && !clearance_path(project_root, pr).exists())
+            .then_some(pr)
+        })
+        .collect()
+}
+
 pub(crate) fn record_clearance(
     project_root: &Path,
     record: &MergeHoldRecord,
@@ -980,7 +1021,16 @@ pub(crate) fn record_clearance_with_verdict(
 /// which would let a merge through when the marker was present but unreadable —
 /// the exact fail-open class this whole marker exists to prevent.
 pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
-    read_hold_record(project_root, pr).map(|record| record.detail)
+    read_hold_record(project_root, pr)
+        .map(|record| record.detail)
+        .or_else(|| {
+            unrecorded_marker_removals(project_root)
+                .contains(&pr)
+                .then(|| {
+                    "hold marker missing without a recorded clearance (tampering suspected)"
+                        .to_string()
+                })
+        })
 }
 
 /// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
@@ -1020,6 +1070,12 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
 /// client chokepoint never sees). trace on the item below stays a plain comment.
 // trace:BUG-1167 | ai:claude
 pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
+/// Permanent forge-side evidence that this PR has been held at least once.
+// trace:BUG-1693 | ai:codex
+pub(crate) const HOLD_RECORDED_LABEL: &str = "aida:merge-hold-recorded";
+/// Forge-side mirror of the human-gated clearance record.
+// trace:BUG-1693 | ai:codex
+pub(crate) const HOLD_CLEARED_LABEL: &str = "aida:merge-hold-cleared";
 
 /// Whether the forge change currently carries the Layer-2 merge-hold label.
 ///
@@ -1859,15 +1915,14 @@ pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
     }
 }
 
-/// Best-effort mirror of the marker state to the `aida:merge-hold` label on the
-/// change (PR/MR), so Layer 2 can enforce server-side. Failures are swallowed:
-/// the file marker is the source of truth; the label is a convenience mirror and
-/// its absence only weakens Layer 2, never the client chokepoint.
+/// Mirror active hold state and its history/clearance proof to forge labels so
+/// Layer 2 can reject label-only release. Failures are returned to callers;
+/// otherwise a failed clearance-label update could look like a successful clear.
 ///
 /// STORY-1165: forge-routed. GitHub → `gh pr edit --add-label/--remove-label`;
 /// GitLab → `glab mr update --label/--unlabel`; pure-git → no-op (no forge to
-/// label). This is what lets the GitLab merge-hold-gate CI job (the Layer-2
-/// analog of merge-hold-gate.yml) see the label on an MR.
+/// labels. This lets both merge-hold-gate workflows require clearance after a
+/// hold.
 // trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)
 pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), String> {
     sync_label_with(project_root, pr, held, run_forge_cli)
@@ -1977,38 +2032,44 @@ fn sync_label_command(
     use crate::forge::ForgeKind;
     match pin.kind {
         ForgeKind::GitHub => {
-            let flag = if held {
-                "--add-label"
+            let (flag, label) = if held {
+                ("--add-label", format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
             } else {
-                "--remove-label"
+                ("--remove-label", HOLD_LABEL.to_string())
             };
-            Some((
-                "gh",
-                vec![
-                    "pr".into(),
-                    "edit".into(),
-                    pr.to_string(),
-                    "-R".into(),
-                    pin.repo_arg(),
-                    flag.into(),
-                    HOLD_LABEL.into(),
-                ],
-            ))
+            let mut args = vec![
+                "pr".into(),
+                "edit".into(),
+                pr.to_string(),
+                "-R".into(),
+                pin.repo_arg(),
+                flag.into(),
+                label,
+            ];
+            if !held {
+                args.extend(["--add-label".into(), HOLD_CLEARED_LABEL.into()]);
+            }
+            Some(("gh", args))
         }
         ForgeKind::GitLab => {
-            let flag = if held { "--label" } else { "--unlabel" };
-            Some((
-                "glab",
-                vec![
-                    "mr".into(),
-                    "update".into(),
-                    pr.to_string(),
-                    "-R".into(),
-                    pin.repo_arg(),
-                    flag.into(),
-                    HOLD_LABEL.into(),
-                ],
-            ))
+            let (flag, label) = if held {
+                ("--label", format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
+            } else {
+                ("--unlabel", HOLD_LABEL.to_string())
+            };
+            let mut args = vec![
+                "mr".into(),
+                "update".into(),
+                pr.to_string(),
+                "-R".into(),
+                pin.repo_arg(),
+                flag.into(),
+                label,
+            ];
+            if !held {
+                args.extend(["--label".into(), HOLD_CLEARED_LABEL.into()]);
+            }
+            Some(("glab", args))
         }
         ForgeKind::None => None,
     }
@@ -2017,6 +2078,36 @@ fn sync_label_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-1693 | ai:codex
+    #[test]
+    fn unrecorded_manual_marker_removal_is_detected_but_recorded_clear_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let record = typed_hold(4321, HoldReasonKind::Supervision, "fixture", None);
+        write_typed_hold(root, &record).unwrap();
+        let mut placed = crate::events::Event::new(
+            None,
+            "",
+            crate::events::EventKind::MergeHoldChanged {
+                pr: 4321,
+                placed: true,
+                reason: Some("fixture".into()),
+            },
+        );
+        std::fs::remove_file(hold_path(root, 4321)).unwrap();
+        assert_eq!(unrecorded_marker_removals(root), vec![4321]);
+        assert!(read_hold(root, 4321).is_some());
+
+        record_clearance(root, &record, &PrincipalIdentity::human("joe")).unwrap();
+        placed.kind = crate::events::EventKind::MergeHoldChanged {
+            pr: 4321,
+            placed: false,
+            reason: Some("fixture cleared".into()),
+        };
+        crate::events::emit(root, &placed);
+        assert!(unrecorded_marker_removals(root).is_empty());
+    }
 
     // STORY-1165: the label mirror must route to the right forge CLI — gh for
     // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
@@ -2034,7 +2125,8 @@ mod tests {
         let (cli, args) = sync_label_command(&gh, 42, true).unwrap();
         assert_eq!(cli, "gh");
         assert!(
-            args.contains(&"--add-label".to_string()) && args.contains(&HOLD_LABEL.to_string())
+            args.contains(&"--add-label".to_string())
+                && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
         );
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
@@ -2045,7 +2137,10 @@ mod tests {
         let (cli, args) = sync_label_command(&gl, 42, true).unwrap();
         assert_eq!(cli, "glab");
         assert!(args.contains(&"mr".to_string()) && args.contains(&"update".to_string()));
-        assert!(args.contains(&"--label".to_string()) && args.contains(&HOLD_LABEL.to_string()));
+        assert!(
+            args.contains(&"--label".to_string())
+                && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
+        );
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "g/sub/p"),
             "{args:?}"
@@ -2056,6 +2151,9 @@ mod tests {
             args.contains(&"--unlabel".to_string()),
             "unheld → remove the label"
         );
+        assert!(args.contains(&HOLD_LABEL.to_string()));
+        assert!(args.contains(&"--label".to_string()));
+        assert!(args.contains(&HOLD_CLEARED_LABEL.to_string()));
 
         let none = PinnedRepo {
             kind: ForgeKind::None,

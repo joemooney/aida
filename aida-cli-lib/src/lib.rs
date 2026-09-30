@@ -24760,6 +24760,10 @@ fn which_binary(binary: &str) -> Option<std::path::PathBuf> {
 /// the normalizer) is structurally impossible now.
 // trace:BUG-1554 | ai:claude
 static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
+    (
+        &["merge-hold", "merge-hold-integrity"],
+        "merge-hold-integrity",
+    ),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
         &["abandoned-lease", "abandoned-leases", "abandoned"],
@@ -35006,6 +35010,7 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 Ok(None) => "no-forge".to_string(),
                 Err(e) => format!("unknown: {}", e.lines().next().unwrap_or("")),
             };
+            let unrecorded_removals = merge_hold::unrecorded_marker_removals(&root);
             // BUG-1562: re-evaluate each live marker's premise at read time
             // (PR head vs the sha it cites; a rework hold's verdict now
             // approved or closed). FLAG only — never auto-clear.
@@ -35143,6 +35148,7 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         "merge_holds": items,
                         "label_scan": label_scan_state,
                         "label_scan_disagrees": scan_disagrees,
+                        "unrecorded_marker_removals": unrecorded_removals,
                     })
                 );
                 return Ok(());
@@ -35157,6 +35163,12 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .yellow()
                 );
             }
+            for pr in &unrecorded_removals {
+                println!(
+                    "{}",
+                    format!("PR #{pr}: TAMPERING — AIDA recorded a hold placement, but its marker is missing and no clearance record exists.").red()
+                );
+            }
             for pr in &scan_disagrees {
                 println!(
                     "{}",
@@ -35166,7 +35178,11 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     .yellow()
                 );
             }
-            if live.is_empty() && stale.is_empty() && label_only.is_empty() {
+            if live.is_empty()
+                && stale.is_empty()
+                && label_only.is_empty()
+                && unrecorded_removals.is_empty()
+            {
                 println!("No active merge-holds.");
                 return Ok(());
             }
@@ -35496,19 +35512,22 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         }
                         _ => None,
                     };
-                    merge_hold::clear_hold(&root, *pr)?;
+                    // BUG-1693: persist the local clearance before removing
+                    // the marker or changing forge labels. A failed audit
+                    // write must leave the hold in place.
                     if let Some((record, actor)) = &cleared {
-                        if let Err(err) = merge_hold::record_clearance_with_verdict(
+                        merge_hold::record_clearance_with_verdict(
                             &root,
                             record,
                             actor,
                             released_by_verdict.clone(),
-                        ) {
-                            eprintln!(
-                                "  {} could not record who cleared PR #{pr}: {err}",
-                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                            );
-                        }
+                        )?;
+                    }
+                    if let Some((record, actor)) = &label_only_record {
+                        merge_hold::record_clearance(&root, record, actor)?;
+                    }
+                    merge_hold::clear_hold(&root, *pr)?;
+                    if let Some((record, actor)) = &cleared {
                         if record.reason_kind == merge_hold::HoldReasonKind::Recusal {
                             println!(
                                 "Recusal hold on PR #{pr} cleared by {} (independent of the recused author).",
@@ -35558,12 +35577,6 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                     } else if let Some((record, actor)) = &label_only_record {
                         if unlabel.is_ok() {
                             emit_release(&record.detail);
-                            if let Err(err) = merge_hold::record_clearance(&root, record, actor) {
-                                eprintln!(
-                                    "  {} could not record who cleared PR #{pr}: {err}",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                                );
-                            }
                             println!(
                                 "Cleared label-only merge-hold on PR #{pr} (no marker; `aida:merge-hold` label dropped, clearance recorded as {}).",
                                 actor.key()
