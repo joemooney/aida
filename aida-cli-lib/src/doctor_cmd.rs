@@ -335,7 +335,11 @@ pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
 // STORY-462 — `aida doctor`: multi-agent state drift diagnostics + healing.
 // ----------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+// `Default` is every field's zero: a plain `aida doctor` run with no flags. Added
+// so a test can name only the option it cares about and stay compiling when a
+// new flag lands, rather than re-listing every field.
+// trace:BUG-1734 | ai:claude
+#[derive(Debug, Clone, Default)]
 struct DoctorRunOptions {
     heal: bool,
     yes: bool,
@@ -10438,6 +10442,212 @@ hostname = "localhost"
             .output()
             .unwrap();
         assert!(out.status.success(), "git {:?}: {:?}", args, out);
+    }
+
+    /// A git-canonical project root, ready for the BUG-1734 gates: distributed
+    /// config plus a present `.aida-store`. Tempdir-only — nothing here reads
+    /// the developer's machine, which is the point: the condition this check
+    /// names happens to exist on one host, and a test that depended on it would
+    /// pass there and nowhere else.
+    // trace:BUG-1734 | ai:claude
+    fn git_canonical_root_1734(root: &std::path::Path) {
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+    }
+
+    /// AC1: distributed mode + `requirements.db` in the root → one warning
+    /// naming the file and its mtime, wired through to `aida doctor`'s own
+    /// finding list, and never auto-healable.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn legacy_store_in_root_is_flagged_on_a_git_canonical_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        git_canonical_root_1734(root);
+        std::fs::write(root.join("requirements.db"), b"SQLite format 3\0").unwrap();
+
+        let hits = detect_legacy_store_in_root(root);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].name, "requirements.db");
+        assert_eq!(hits[0].len, 16);
+        // AC1 names the mtime. Asserted as a shape, not a value: pinning the
+        // date would only restate the clock the fixture just used.
+        let when = hits[0].modified.as_deref().expect("mtime not reported");
+        assert_eq!(when.len(), 10, "expected YYYY-MM-DD, got {when:?}");
+
+        // Wiring: it reaches the finding list `aida doctor` prints, under the
+        // category the alias table resolves, and is not auto-healable.
+        let store = aida_core::models::RequirementsStore::new();
+        let findings = collect_doctor_findings(root, &store, Some("legacy-store-in-root")).unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].category, "legacy-store-in-root");
+        assert_eq!(findings[0].id, "requirements.db");
+        assert!(!findings[0].safe_heal, "must never be auto-healed");
+        assert!(findings[0].summary.contains("requirements.db"));
+        assert!(findings[0].summary.contains("BUG-1732"));
+
+        // AC4's other half, mechanically: the heal dispatcher has no arm for
+        // this category, so a `--heal` run reports it and leaves the file
+        // alone. Asserted rather than assumed, because sharing
+        // `legacy-store-cruft`'s category would have routed it into a `git rm`.
+        let healed = heal_doctor_finding(root, &findings[0], &DoctorRunOptions::default()).unwrap();
+        assert_eq!(healed.status, "skipped", "{healed:?}");
+        assert!(
+            root.join("requirements.db").exists(),
+            "the heal path removed a file this check must never touch"
+        );
+    }
+
+    /// AC2: the same project with no legacy store in its root says nothing.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_git_canonical_root_without_a_legacy_store_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git_canonical_root_1734(root);
+        assert!(detect_legacy_store_in_root(root).is_empty());
+    }
+
+    /// AC3: in legacy mode the file IS the store, so the check must be silent.
+    ///
+    /// Both legacy shapes: a config that does not declare distributed mode, and
+    /// no `.aida/config.toml` at all. The second is what pins the gate to THIS
+    /// root: swapping the root-local read for `distributed_mode_declared_from`
+    /// climbs to the distributed parent and warns about a file that is not that
+    /// parent's concern.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_legacy_mode_root_with_a_requirements_db_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let declared = dir.path().join("declared-legacy");
+        std::fs::create_dir_all(declared.join(".aida")).unwrap();
+        std::fs::write(
+            declared.join(".aida/config.toml"),
+            "[store]\nmode = \"local\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(declared.join(".aida-store")).unwrap();
+        std::fs::write(declared.join("requirements.db"), b"x").unwrap();
+        assert!(
+            detect_legacy_store_in_root(&declared).is_empty(),
+            "a config that does not declare distributed mode must be silent"
+        );
+
+        // No config at all, nested under a distributed parent. The child gets
+        // its own `.aida-store` so the second gate cannot be what makes this
+        // pass: the only thing left to stop it is gate 1 reading THIS root's
+        // config and finding none.
+        let parent = dir.path().join("distributed-parent");
+        git_canonical_root_1734(&parent);
+        let child = parent.join("legacy-child");
+        std::fs::create_dir_all(child.join(".aida-store")).unwrap();
+        std::fs::write(child.join("requirements.db"), b"x").unwrap();
+        assert!(
+            detect_legacy_store_in_root(&child).is_empty(),
+            "a root with no config of its own must not inherit the parent's mode"
+        );
+    }
+
+    /// The second gate, beyond the filed acceptance: a config that declares
+    /// distributed mode before its store exists is mid-migration, and there the
+    /// legacy file may still be what actually gets read. Telling that operator
+    /// to relocate their live store would be worse than saying nothing.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_distributed_config_with_no_store_yet_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("requirements.db"), b"x").unwrap();
+        // No `.aida-store/` and no `aida-store` branch.
+        assert!(detect_legacy_store_in_root(root).is_empty());
+    }
+
+    /// The partition with `legacy-store-cruft`: a file that detector reports
+    /// (a cruft-shaped name that is TRACKED) is left to it, so one file never
+    /// yields two findings with contradictory remedies — `git rm` there,
+    /// relocate here. An UNTRACKED `requirements.yaml` is invisible to
+    /// `git ls-files` and therefore ours.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_tracked_requirements_yaml_is_left_to_legacy_store_cruft() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        git_canonical_root_1734(root);
+        std::fs::write(root.join("requirements.yaml"), "legacy: store\n").unwrap();
+
+        // Untracked → ours.
+        assert_eq!(
+            detect_legacy_store_in_root(root)
+                .iter()
+                .map(|h| h.name.clone())
+                .collect::<Vec<_>>(),
+            vec!["requirements.yaml".to_string()]
+        );
+
+        // Tracked → theirs, and we stand down.
+        git752(root, &["add", "requirements.yaml"]);
+        git752(root, &["commit", "-qm", "track it"]);
+        assert!(
+            detect_legacy_store_in_root(root).is_empty(),
+            "a tracked cruft-shaped path must be left to legacy-store-cruft"
+        );
+    }
+
+    /// AC4: the operator is told to relocate, and never to delete.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn the_action_says_relocate_and_never_delete() {
+        let hit = LegacyStoreInRoot {
+            name: "requirements.db".to_string(),
+            len: 1_700_000,
+            modified: Some("2026-03-18".to_string()),
+        };
+        let action = legacy_store_in_root_action(&hit);
+        assert!(action.contains("move"), "{action}");
+        assert!(action.contains("do not delete it"), "{action}");
+        // Not merely "mentions delete somewhere": no imperative to delete.
+        assert!(!action.contains("rm "), "{action}");
+        assert!(!action.contains("delete it\n"), "{action}");
+
+        let summary = legacy_store_in_root_summary(&hit);
+        assert!(summary.contains("requirements.db"), "{summary}");
+        assert!(summary.contains("1700000 bytes"), "{summary}");
+        // Labelled UTC: an operator comparing against `ls` (local time) may
+        // otherwise read a one-day discrepancy as a wrong answer.
+        assert!(
+            summary.contains("last modified 2026-03-18 UTC"),
+            "{summary}"
+        );
+        assert!(summary.contains("does not read it"), "{summary}");
+        assert!(summary.contains("BUG-1732"), "{summary}");
+
+        // The mtime is optional, and its absence must not leave a dangling
+        // clause in the middle of the sentence.
+        let no_mtime = LegacyStoreInRoot {
+            modified: None,
+            ..hit
+        };
+        let summary = legacy_store_in_root_summary(&no_mtime);
+        assert!(!summary.contains("last modified"), "{summary}");
+        assert!(summary.contains("bytes) sits in the root"), "{summary}");
     }
 
     /// TASK-752: a distributed/git-canonical project (config declares

@@ -13850,11 +13850,7 @@ fn distributed_mode_declared_from_with_roots(
             // The first `.aida/config.toml` we hit walking up decides the
             // mode — a config without distributed mode means a legacy
             // project, so stop (don't keep walking to a parent project).
-            let declares_distributed = content.lines().any(|l| {
-                let l = l.trim();
-                l.starts_with("mode") && l.contains("distributed")
-            });
-            return declares_distributed.then(|| current.to_path_buf());
+            return config_declares_distributed(&content).then(|| current.to_path_buf());
         }
         current = current.parent()?;
     }
@@ -23749,6 +23745,190 @@ fn is_legacy_store_cruft_path(path: &str) -> bool {
     path == "scaffold-report.html" || (path.starts_with("requirements") && path.ends_with(".yaml"))
 }
 
+/// Whether a `.aida/config.toml` body declares git-canonical (distributed)
+/// mode.
+///
+/// Factored out so the walk-up in `distributed_mode_declared_from_with_roots`
+/// and the ROOT-LOCAL read in [`detect_legacy_store_in_root`] cannot drift on
+/// what "declares distributed" means. They deliberately differ on *where* they
+/// read, and only on that.
+// trace:BUG-1734 | ai:claude
+fn config_declares_distributed(content: &str) -> bool {
+    content.lines().any(|l| {
+        let l = l.trim();
+        l.starts_with("mode") && l.contains("distributed")
+    })
+}
+
+/// Whether `relative` is tracked by git in `project_root`.
+///
+/// `--error-unmatch` makes the question a status code rather than a parse:
+/// a non-zero exit means "not tracked", and so does a git that will not run at
+/// all, which is the answer that keeps [`detect_legacy_store_in_root`] talking
+/// about a file rather than falling silent.
+// trace:BUG-1734 | ai:claude
+fn path_is_tracked(project_root: &std::path::Path, relative: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-files", "--error-unmatch", "--", relative])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// A legacy centralized store sitting in the root of a git-canonical project.
+// trace:BUG-1734 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LegacyStoreInRoot {
+    /// The file's name, relative to the project root.
+    name: String,
+    len: u64,
+    /// Modified time as `YYYY-MM-DD` in **UTC**, or `None` when the platform
+    /// withholds it. UTC rather than local time so the string does not depend
+    /// on the host's zone; the message labels it, because an operator will
+    /// compare it against `ls`, which prints local time and can therefore show
+    /// the previous day.
+    modified: Option<String>,
+}
+
+/// BUG-1734: detect an UNTRACKED legacy store (`requirements.db` /
+/// `requirements.yaml`) in the root of a project whose live store is
+/// git-canonical.
+///
+/// Distinct from [`detect_legacy_store_cruft`] in all three of its parts, which
+/// is why it is its own category rather than another arm of that one:
+///
+/// - **Mechanism.** That detector runs `git ls-files`, so it sees TRACKED paths
+///   only. This file is gitignored, hence untracked, hence invisible to it —
+///   and being invisible is the entire reason the condition survived for months.
+///   This one stats the filesystem.
+/// - **Remedy.** That one's heal is `git rm` (`safe_heal: true`). This file may
+///   be the only copy of another project's data, so the remedy is *relocate*,
+///   never delete, and it must never be auto-healed. `heal_doctor_finding`
+///   dispatches on the category name alone, so a separate category is what
+///   keeps this away from that healer — as defence in depth, not as the only
+///   defence: `heal_doctor_legacy_store_cruft` re-confirms the path is TRACKED
+///   before removing anything, and this detector only ever reports untracked
+///   paths, so sharing the category would have been caught there too. The
+///   separation means this check does not *depend* on that guard staying.
+/// - **Scope.** That one covers `requirements*.yaml` snapshots and
+///   `scaffold-report.html`; this one covers only the two names that are a
+///   *store*. Where the two could overlap — a TRACKED `requirements.yaml` —
+///   this one stands down, so a single file never yields two findings with
+///   contradictory remedies.
+///
+/// Why this matters at all, given distributed mode does not read the file:
+/// BUG-1732 was `load_store_for_lookup` resolving its legacy fallback against
+/// the process CWD instead of the `project_root` it was handed. The defect was
+/// in the code and is fixed there — but it stayed unnoticed for months because
+/// it is only *observable* on a host whose cwd holds a legacy store. CI has no
+/// such file, so CI was green throughout. BUG-1574 is a second data point: its
+/// author hand-bypassed the same fallback for one call site and wrote the hazard
+/// into a doc comment without generalising it. Naming the condition turns the
+/// next cwd-relative resolver to slip through into a configuration smell caught
+/// here rather than a months-later mystery.
+///
+/// Gates, both required:
+///
+/// 1. **Root-local** `.aida/config.toml` declares distributed mode. Deliberately
+///    NOT `distributed_mode_declared_from`, which walks UP and would adopt a
+///    distributed parent's mode for a root that declares nothing itself. This
+///    is a contract choice, stated honestly: `aida doctor` resolves its
+///    `project_root` through a guarded walk-up that always lands on a root
+///    carrying its own `.aida`, so no field scenario is known where the two
+///    disagree for this caller. The root-local read is preferred because the
+///    root is already in hand — re-deriving it can only introduce a way to be
+///    wrong — and the choice is pinned by test rather than left implicit.
+/// 2. **The distributed store is really present** (`.aida-store/`, or the orphan
+///    `aida-store` branch). A config that declares distributed mode before its
+///    store exists is mid-migration, and there the legacy file may still be
+///    what gets read — telling that operator to relocate their live store would
+///    be worse than saying nothing. Mirrors `detect_legacy_store_cruft`'s own
+///    second gate, and beyond the filed acceptance on purpose.
+// trace:BUG-1734 | ai:claude
+fn detect_legacy_store_in_root(project_root: &std::path::Path) -> Vec<LegacyStoreInRoot> {
+    let config = project_root.join(".aida").join("config.toml");
+    let Ok(body) = std::fs::read_to_string(&config) else {
+        return Vec::new();
+    };
+    if !config_declares_distributed(&body) {
+        return Vec::new();
+    }
+    let store_present = project_root.join(".aida-store").is_dir()
+        || branch_exists_anywhere(project_root, "aida-store");
+    if !store_present {
+        return Vec::new();
+    }
+
+    let mut hits = Vec::new();
+    for name in ["requirements.db", "requirements.yaml"] {
+        // Exactly partition with `legacy-store-cruft` so one file can never
+        // produce two findings with contradictory remedies: a path that
+        // detector would report (a cruft-shaped name that is TRACKED) is
+        // theirs, everything else is ours. `requirements.db` is not a
+        // cruft-shaped name at all, so it is always ours and the partition
+        // leaves no gap.
+        if is_legacy_store_cruft_path(name) && path_is_tracked(project_root, name) {
+            continue;
+        }
+        let path = project_root.join(name);
+        // `metadata`, not `exists()`: a dangling symlink is not a store, and
+        // the size and mtime are the whole point of the message.
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        hits.push(LegacyStoreInRoot {
+            name: name.to_string(),
+            len: meta.len(),
+            modified: meta.modified().ok().map(|t| {
+                chrono::DateTime::<chrono::Utc>::from(t)
+                    .format("%Y-%m-%d")
+                    .to_string()
+            }),
+        });
+    }
+    hits
+}
+
+/// The operator-facing summary for a [`LegacyStoreInRoot`].
+///
+/// Split from the detector so a test can pin the wording without a fixture, and
+/// because AC4 is a claim about this string: it must say relocate, and must not
+/// say delete.
+// trace:BUG-1734 | ai:claude
+fn legacy_store_in_root_summary(hit: &LegacyStoreInRoot) -> String {
+    let when = hit
+        .modified
+        .as_deref()
+        .map(|d| format!(", last modified {d} UTC"))
+        .unwrap_or_default();
+    format!(
+        "legacy store `{}` ({} bytes{}) sits in the root of a git-canonical project; \
+         distributed mode does not read it, so it is inert for normal operation, but any \
+         code path that resolves a store relative to the process CWD can still pick it up \
+         (see BUG-1732)",
+        hit.name, hit.len, when
+    )
+}
+
+/// The operator-facing action for a [`LegacyStoreInRoot`].
+///
+/// Says relocate, deliberately not delete: the file may be the only copy of
+/// another project's data. Nothing in this check moves or removes anything, and
+/// the category has no heal arm, so `aida doctor --heal` reports it as
+/// diagnostic-only.
+// trace:BUG-1734 | ai:claude
+fn legacy_store_in_root_action(hit: &LegacyStoreInRoot) -> String {
+    format!(
+        "move `{}` out of the project root (it may be the only copy of another project's \
+         data — relocate it, do not delete it)",
+        hit.name
+    )
+}
+
 /// BUG-563: detect per-clone RUNTIME files wrongly TRACKED on the orphan
 /// `aida-store` branch — `.aida/node.toml` (the strictly-per-clone "I am node N"
 /// pointer), `.aida/dispenser.toml` (per-node id counter), `.aida/*.lock`, and
@@ -24477,6 +24657,22 @@ fn collect_doctor_findings(
         });
     }
 
+    // BUG-1734: an UNTRACKED legacy store in the project root of a git-canonical
+    // project. `legacy-store-cruft` above cannot see it (`git ls-files` lists
+    // tracked paths only, and this file is gitignored), and must not: its heal
+    // is `git rm`, while this file may be the only copy of another project's
+    // data. Diagnostic-only — the category has no heal arm, so `--heal` skips
+    // it. trace:BUG-1734 | ai:claude
+    for hit in detect_legacy_store_in_root(project_root) {
+        push(DoctorFinding {
+            category: "legacy-store-in-root".to_string(),
+            id: hit.name.clone(),
+            summary: legacy_store_in_root_summary(&hit),
+            action: legacy_store_in_root_action(&hit),
+            safe_heal: false,
+        });
+    }
+
     // BUG-563: per-clone RUNTIME files (`.aida/node.toml`, `.aida/dispenser.toml`,
     // `.aida/*.lock`, `.aida/cache.db*`) wrongly TRACKED on the orphan aida-store
     // branch. Each clone's auto-sync rewrites node.toml with its own node id, so
@@ -24688,6 +24884,21 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "requirements-yaml",
         ],
         "legacy-store-cruft",
+    ),
+    // BUG-1734: an untracked legacy store (`requirements.db` /
+    // `requirements.yaml`) in the root of a git-canonical project. Separate
+    // from `legacy-store-cruft` because its remedy is relocate, not `git rm`,
+    // and the heal dispatcher routes on the category name alone.
+    // trace:BUG-1734 | ai:claude
+    (
+        &[
+            "legacy-store-in-root",
+            "legacy-store-root",
+            "root-legacy-store",
+            "requirements-db",
+            "stray-store",
+        ],
+        "legacy-store-in-root",
     ),
     // BUG-563: per-clone runtime files (node.toml / dispenser.toml /
     // *.lock / cache.db*) wrongly tracked on the orphan aida-store branch.
