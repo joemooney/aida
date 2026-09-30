@@ -30,13 +30,21 @@ description: |
   - Upward project-root resolution from inside a nested worktree resolves to THAT worktree, never silently to the enclosing main checkout. Cover `parent_project_root_for_session` and the `find_project_root()` family with a test whose fixture is a worktree nested under a project root that also carries `.aida/`. Prove it by mutation: the test must fail if the resolution falls through.
   - The ~25 worktrees already at `<parent>/<repo>-<slug>` keep working. State explicitly whether they are migrated, left in place, or reported by `aida doctor`, and implement whichever is chosen — do not leave them undefined.
   - `.aida/worktrees/` is covered by the existing `.aida/*` gitignore rule and adds no entries to `git status` in either the main checkout or a nested worktree.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:28:06.562496496Z
-modified_at: 2026-09-30T23:32:21.345181210Z
+modified_at: 2026-09-30T23:32:23.007146351Z
 req_type: Task
+history:
+- id: 01a0f4a9-7b5f-7503-934f-64cad36a9421
+  author: joe
+  timestamp: 2026-09-30T23:32:23.007143701Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
