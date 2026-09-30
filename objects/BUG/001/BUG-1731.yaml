@@ -59,12 +59,12 @@ description: |
   4. No site is converted by deleting the timing assertion outright; a site that should
      lose its assertion instead of gaining a load-aware one is called out explicitly with
      the reason.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:15:06.159495348Z
-modified_at: 2026-09-30T06:16:29.900007314Z
+modified_at: 2026-09-30T06:21:29.543614327Z
 req_type: Bug
 history:
 - id: 01a0f0f5-19cb-7653-8758-f72e35d753ef
@@ -74,6 +74,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f0f9-ac47-7da2-a398-1eca4d2a5f8c
+  author: aida-session-start
+  timestamp: 2026-09-30T06:21:29.543613937Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3c088a5dbdb8b0cf9cfa3c8d42fbb5430762bf47
   branch: main
