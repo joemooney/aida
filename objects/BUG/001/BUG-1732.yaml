@@ -86,7 +86,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:54:35.476136149Z
-modified_at: 2026-09-30T07:34:56.443366828Z
+modified_at: 2026-09-30T07:54:12.626147208Z
 req_type: Bug
 comments:
 - id: 01a0f13b-c28f-71d2-9787-a3df2c15c6ba
@@ -178,6 +178,62 @@ comments:
   created_at: 2026-09-30T07:34:56.443366828Z
   modified_at: 2026-09-30T07:34:56.443366828Z
   session_id: 60a4d7c9-b362-42fb-9013-365d4ddd8e7d
+- id: 01a0f14e-8f12-79f2-af2a-d41199ec55a5
+  author: joe
+  content: |
+    ## Independent pre-merge verification (advisor seat, session #5 of relay)
+
+    Re-verified all four acceptance criteria against the branch rather than against the
+    implementing session's report.
+
+    | AC | Verdict | How it was checked |
+    |---|---|---|
+    | 1 — only specs reachable from `project_root`; bare root ⇒ empty | **met** | Read `resolve_requirements_path_in` (`aida-core/src/project.rs:92`). With both `-p` and `REQ_DB_NAME` `None` it takes the `(None, None)` arm, probes `cwd.join(name)` for `requirements.db` then `requirements.yaml`, and otherwise returns `NoProjectFound`. It never loads the registry on that arm — `from_registry` only calls `registry_path.exists()`, false for `Path::new("")` — so the registry argument is provably inert, as the new comment claims. |
+    | 2 — the pre-existing test passes, and a regression test pins the condition | **met, and more strongly than the branch claimed** | See below. |
+    | 3 — fallback identified by line; siblings checked | **met** | Only one `determine_requirements_path(None)` call remains (`lib.rs:4076`, `aida init --refresh`), which is legitimately cwd-scoped and already guarded by TASK-1486. `collect_unshipped_work_items` resolves no store of its own — it takes `summaries` from the caller plus `project_root`. `collect_pr_attribution_disagreements` uses only `drain_state::probe(project_root)`, `resolve_default_branch_ref(project_root)`, `list_leases(project_root)`. Both project-scoped; neither needed a change. |
+    | 4 — not fixed by suppressing the `no_ci` fast path | **met** | The change is in `load_store_for_lookup` itself, upstream of every channel and of the `no_ci` branch. |
+
+    ### AC2 was under-claimed, and the test file has been corrected
+
+    The file's coverage note said the sibling-discrimination test and the bare-root test "both
+    bite only where the process CWD really does hold a legacy store" — i.e. on the filing host,
+    not CI. That was wrong about the first of the two, in the safe direction. Checked by
+    mutation rather than by reading:
+
+    - Fix reverted, rebuilt, run from a **clean cwd holding no store**:
+      `legacy_lookup_reads_the_project_roots_own_store_not_a_sibling_roots` **FAILS** —
+      `.expect("a legacy store in the project root must still be read")` fires at `:38`, because
+      the pre-fix lookup probed the empty cwd and found nothing.
+    - It also fails from a cwd that *does* hold a store, there via the `assert_eq` on the foreign
+      IDs.
+
+    So it bites on **any** host, in both directions, and is a genuine host-independent regression
+    witness — exactly what AC2 asked for ("rather than relying on the developer's machine
+    happening to have one"). Only `a_project_root_without_a_store_yields_nothing` is genuinely
+    host-dependent. Commit `c00e05e1c3` corrects the two doc comments to say which test carries
+    which claim; no test logic changed.
+
+    ### Mutation proof, both directions, both cwds
+
+    | run | clean cwd | `/home/joe/ai/aida` (holds the stale legacy store) |
+    |---|---|---|
+    | fix reverted | 1 of 3 new tests FAIL | (prior session: 3 of 4 FAIL incl. the pre-existing one) |
+    | fix restored | **3/3 pass** | **4/4 pass**, including `story_465_awaiting_report_tests::empty_state_produces_hidden_report` |
+
+    `cargo fmt --all -- --check`, `check-portability.sh`, `check-trace-headers.py` and
+    `glyph-lint.sh --block` all exit 0 after the comment correction.
+
+    ### The one deliberate behaviour change, re-examined and accepted
+
+    An ambient `REQ_DB_NAME` no longer redirects a project-scoped lookup. I agree with the
+    implementing session's reasoning and am not reverting it: this function never accepted `-p`,
+    every one of its ~70 callers has already resolved a `project_root`, and honouring an ambient
+    env var there is precisely the class of ambient input that caused the bug. Legacy `aida init`
+    writes `requirements.db` into the project root, which the new probe finds, so no supported
+    legacy layout loses access.
+  created_at: 2026-09-30T07:54:12.626147208Z
+  modified_at: 2026-09-30T07:54:12.626147208Z
+  session_id: ee842845-0934-464c-8a39-5ea927f98a59
 history:
 - id: 01a0f118-9432-7330-b34a-c3fa28737dd1
   author: joe
