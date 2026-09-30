@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-30T14:45:52.644477182Z
+modified_at: 2026-09-30T14:58:24.991766038Z
 req_type: Bug
 comments:
 - id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
@@ -78,6 +78,27 @@ comments:
   created_at: 2026-09-30T14:45:52.644477182Z
   modified_at: 2026-09-30T14:45:52.644477182Z
   session_id: 622c849c-8085-4d0c-840e-82dd660b1787
+- id: 01a0f2d2-ee5f-7492-8a0a-b4e2c60382a5
+  author: joe
+  content: |
+    ## Dispositioned: claimed but never worked — 2026-09-30 (relay session #11)
+
+    Measured `/home/joe/ai/aida-bug-1695` directly:
+
+    - `git status --porcelain` → empty
+    - `git diff --cached --stat` → empty (checked explicitly; staged changes are invisible to
+      `git diff --stat`, which is how BUG-1693's 277 lines nearly went unnoticed)
+    - `git rev-list --count origin/main..HEAD` → **0**, HEAD at `bb445e1236`, an unrelated main commit
+
+    Nothing was done. The spec was claimed on 2026-09-28 by a codex fan-out whose parent died, and
+    it has read In-Progress since on the strength of a stale lease. Returning it to `approved` so
+    it re-enters the queue honestly rather than continuing to look like work in flight.
+
+    Unlike its two siblings (BUG-1688, BUG-1693) there is nothing here to recover, so the worktree
+    holds no value beyond the branch. Its removal is still an operator call.
+  created_at: 2026-09-30T14:58:24.991766038Z
+  modified_at: 2026-09-30T14:58:24.991766038Z
+  session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
 history:
 - id: 01a0e478-b08c-7111-84a8-c496042f936f
   author: joe
