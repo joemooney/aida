@@ -82,12 +82,12 @@ description: |
   Do not "fix" this by relaxing the test's assertion to accept either error arm. That would
   discard the very signal this bug is about — the test's job is to prove a non-zero exit
   propagates, and it can only do that if a spawn failure remains distinguishable.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T08:04:08.478585861Z
-modified_at: 2026-09-30T08:31:56.354568761Z
+modified_at: 2026-09-30T09:21:26.158565726Z
 req_type: Bug
 comments:
 - id: 01a0f171-19c2-71a3-8dec-401eb24aa229
@@ -167,6 +167,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f19e-6a8e-77f2-b668-8d6b9e02cdde
+  author: aida-session-start
+  timestamp: 2026-09-30T09:21:26.158565274Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 15fd965f4466d9d7811c5f419244d275c8737826
   branch: main
