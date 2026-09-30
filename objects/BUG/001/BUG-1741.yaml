@@ -1,0 +1,93 @@
+id: 01a0f2cc-eb2e-7523-a19d-3e000807018d
+spec_id: BUG-1741
+agreed_id: BUG-1741
+title: 'pid_is_alive reports a defunct (zombie) process as alive: kill(pid, 0) succeeds until the parent reaps it'
+description: |
+  ## Summary
+
+  `pid_is_alive` reports a **defunct (zombie) process as alive**. On unix it is
+  `libc::kill(pid, 0) == 0` (`aida-core/src/liveness.rs:746`), and the kernel answers `0` for a
+  zombie: the process has exited but its entry survives until the parent reaps it. `/proc/<pid>`
+  also still exists, and `ps -p` still succeeds. Every by-pid liveness probe passes for a process
+  that exited days ago and cannot do work.
+
+  Split out of BUG-1740. **BUG-1740's original theory — that this is what stranded BUG-1688/1693/
+  1695 — was measured and refuted**; see the disposition comment there. This spec makes no claim
+  about those specs. It is filed on its own merits: the predicate is wrong, and the branches that
+  consult a pid inherit the error.
+
+  ## Evidence (2026-09-30)
+
+  Reproduced directly — fork, `_exit(0)` in the child, parent does not reap:
+
+  ```
+  child=276914  kill0=0
+  stat=276914 (zt) Z 276913 276913 276878 0 -1 4227148 ...
+  ```
+
+  State field is `Z`; `kill(pid, 0)` returns `0`; `pid_is_alive` therefore returns `true`.
+
+  A live instance exists in this repository: pid `1907632` is `[codex] <defunct>`, state `Z`,
+  exited 2026-09-25, unreaped 4d13h later. Four session leases still name it as `creator_pid`
+  (`01a0e4bb9258`, `01a0e4be89ef`, `01a0e5c56e99`, `01a0e5b20a62`).
+
+  ## Where it can actually bite
+
+  `creator_pid` / `active_pid` are read by `lease_state_for`
+  (`aida-core/src/liveness.rs:1084`) in two branches:
+
+  - `review_verb || claim_verb` → `process_identity_is_alive(creator_pid, creator_pid_start_time)`
+  - any lease with `active_pid` → same, on the active pid
+
+  A zombie in either position yields `LeaseState::Live`, i.e. a lease held by a dead process is
+  never reclaimed and reads as actively worked. The four leases above happen to have both verbs
+  false and no `active_pid`, so none of them is currently misclassified — the defect is **latent
+  here, not harmless in general**. Establish the full caller set before fixing; `pid_is_alive` and
+  `process_identity_is_alive` are `pub` in `aida-core` and there are several separate pid-liveness
+  helpers across the workspace (`worktree_pool.rs:272`, `vendor_activity.rs:142`,
+  `merge_lock.rs:124`, `test_home.rs:151`).
+
+  ## Acceptance
+
+  1. A process in state `Z` is not reported alive by `pid_is_alive`. Read the state field from
+     `/proc/<pid>/stat` on Linux (mind the `comm` field: it is parenthesised and may contain
+     spaces and `)`, so parse from the **last** `)`, not by splitting on whitespace) or the
+     platform equivalent elsewhere. Keep the O(1) property BUG-613 established — no process-table
+     walk.
+  2. An absent pid stays dead; a genuinely running child stays alive; `pid == 0` stays dead
+     (BUG-613).
+  3. Platforms where process state is not readable degrade to today's behaviour rather than
+     failing closed, and say so in the code. Do not silently start reporting live processes dead
+     on Windows/macOS.
+  4. Tests: synthetic zombie (fork, exit child, do not reap) classified dead; live child
+     classified live; absent pid classified dead. Skip where the probe is not implementable —
+     skip, do not weaken the assertion.
+  5. Prove by mutation that the zombie test fails against today's `kill(pid, 0)` predicate.
+  6. State whether `creator_pid_start_time` (`process_identity_is_alive`, TASK-1284) already
+     covers this. It does **not**: a zombie keeps its original start time, so the recorded and
+     live values match and the pid-reuse guard passes it through. Confirm that in the spec's
+     resolution rather than assuming it, and say whether the zombie check belongs beside it or
+     inside `pid_is_alive`.
+  7. Enumerate the other pid-liveness helpers listed above and either route them through the one
+     predicate or justify, per helper, why a zombie is acceptable there.
+
+  ## Do not
+
+  - Do not reap the zombie as the fix. The defect is the predicate, not this particular corpse.
+  - Do not re-absorb BUG-1740. Its cause is a self-satisfying fan-out guard and is independent of
+    this; fixing one will not move the other's output.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T14:51:50.958131359Z
+modified_at: 2026-09-30T14:51:50.958131359Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 20a8d60d64
+  vendor: antigravity
+  session: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
