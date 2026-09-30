@@ -59,8 +59,75 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T23:50:48.560366490Z
-modified_at: 2026-09-30T01:56:03.455814268Z
+modified_at: 2026-09-30T03:07:09.807982772Z
 req_type: Bug
+comments:
+- id: 01a0f047-c26f-7b32-a974-904d873a475f
+  author: joe
+  content: |
+    ## Root cause
+
+    Both tests assert a bare wall-clock budget, and both budgets were wrong in a way
+    that had nothing to do with the code under test.
+
+    **`exit_signal::tests::sigkill_fires_when_sigterm_is_ignored`** asserted
+    `elapsed < 5s` while configuring the cascade with `grace: 300ms` and
+    `wait_delay: 5_000ms`. The budget sat *below* the cascade's own configured worst
+    case (5.3s) before counting the two `collect_process_tree` /proc scans the reap
+    performs. It was guaranteed to fail on any host slow enough to use its own
+    backstop. The reported 11.67s run is that path.
+
+    **`runaway_seats::tests::the_watchdog_is_bounded_and_spawns_nothing`** asserted
+    `elapsed().as_secs() < 3` over a 5-file, 400-tick storm fixture. Measured here:
+    0.9s idle, **2.19s under 14 CPU burners** — roughly 30% margin. Any real suite
+    run (I/O + temp dirs + 7000 sibling tests) clears 3s without a defect.
+
+    Reproduction note: neither test reproduced under pure CPU load at loadavg 13.5
+    (1.23s and 2.19s, both passing). The original failures came from a full-suite
+    run, which is I/O-bound, not CPU-bound. The mechanism was confirmed by reading
+    the budgets against the configured worst case, not by re-triggering the flake.
+
+    ## Fix
+
+    New `#[cfg(test)] mod test_timing` with `judge_budget(elapsed, budget, load, cpus)`
+    — a pure decision function — and `assert_within_budget` over it. A wall-clock
+    budget is enforced only on a host with at least one core of headroom; over budget
+    on a loaded host it reports and skips, over budget on a quiet host it fails and
+    names the load it was judged against. Either way the message states the
+    precondition instead of a bare duration (AC2/AC3).
+
+    Per test:
+
+    - **sigkill**: the hang guard is now derived from `config.grace + config.wait_delay
+      + 2s` rather than a magic constant, so it can no longer be smaller than what the
+      cascade is configured to wait. The `>= 250ms` lower bound is a property of the
+      cascade, not the host, and is unchanged.
+    - **watchdog**: "bounded" is a claim about *work*, so it is now asserted as work —
+      `files_scanned == 5`, `bytes_read == 5 * fixture`, and on rescan `bytes_read == 0`
+      and `files_scanned == 0`. Those hold on any host. The 3s wall clock is kept only
+      as a coarse hang guard, routed through the load gate.
+
+    ## Verification
+
+    - AC1: both tests, 10 consecutive runs, **10/10 pass** — at loadavg 10.7 on 6
+      cores, i.e. a *harder* condition than the "quiet host" the AC asks for.
+    - Full modules: `exit_signal::` 13/13, `runaway_seats::` 16/16.
+    - `test_timing::` decision table: 6/6.
+    - **Injection proof**: flipping `load > cpus` to `load >= cpus` fails
+      `a_fully_subscribed_host_is_still_judged` (left: OverOnLoadedHost) and nothing
+      else. The boundary is load-bearing, not decorative.
+    - `cargo fmt --all -- --check` clean; `scripts/check-portability.sh` clean.
+
+    ## Scope note
+
+    Five other `assert!(started.elapsed() < N)` sites remain in `aida-cli-lib`
+    (`notify.rs:1152,1259,1391`, `tests/task_1507_history_cache_tests.rs:985`). They
+    are the same shape and `assert_within_budget` is now available to them, but they
+    were not observed failing and are out of this bug's scope. Worth a follow-on if
+    they start flaking.
+  created_at: 2026-09-30T03:07:09.807982772Z
+  modified_at: 2026-09-30T03:07:09.807982772Z
+  session_id: 7f350627-1e00-467b-b83d-33b905721517
 history:
 - id: 01a0ef94-251c-70a2-8d58-7f26874a794c
   author: joe
