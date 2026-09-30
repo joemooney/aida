@@ -1,0 +1,65 @@
+id: 01a0f118-831a-7d13-a191-da0f0d5a5179
+spec_id: BUG-1733
+agreed_id: BUG-1733
+title: stale-cache fixture reports a RecvError instead of the holder thread's real panic under suite parallelism
+description: |
+  ## Summary
+
+  `bug_1670_stale_cache_callers_tests::unambiguous_write_resolution_sees_external_collision_under_foreign_lock`
+  fails under suite parallelism and passes in isolation:
+
+  ```
+  thread '...' panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:59:10:
+  fixture: the refresh holder thread must report ready: RecvError
+  ```
+
+  A second panic in the same run comes from the holder thread itself, at
+  `stale_cache_fixture.rs:52:14` on an `<unnamed>` thread — so the `RecvError` at `:59` is the
+  *consequence*: the holder thread died before it could send `ready`, and the test reports the
+  missing handshake rather than the original failure.
+
+  ## Reproduction
+
+  Full `aida-cli-lib` lib suite, `--test-threads=4`, on a 6-core host:
+
+  ```
+  RUST_MIN_STACK=8388608 cargo test -p aida-cli-lib --lib
+  → test result: FAILED. 7364 passed; 2 failed; 2 ignored; finished in 533.79s
+  ```
+
+  Re-running the same test alone passes, so this is contention-sensitive, not a logic error in
+  the test's subject.
+
+  ## Why it is worth fixing rather than retrying
+
+  The fixture reports the wrong failure. `:59`'s message ("the refresh holder thread must
+  report ready") names the handshake, while the actual fault is whatever panicked at `:52`
+  inside the holder — and that panic's message is lost in the noise of a parallel run. Any
+  future occurrence of this costs a session to re-derive what this one already shows.
+
+  ## Acceptance
+
+  1. The holder thread's failure is surfaced in the test's own failure message — joining the
+     handle and re-reporting its panic, or sending a typed `Result` through the channel — so a
+     `RecvError` at `:59` can never be the whole story again.
+  2. The underlying `:52` panic is identified and either fixed or shown to be a legitimate
+     contention outcome the fixture should tolerate.
+  3. The test passes 50 consecutive runs under the 4-worker contention reproducer documented
+     on BUG-1729/BUG-1731 (four concurrent suites on a 6-core host, load ~24).
+  4. If the conclusion is that the fixture's timing assumption is simply too tight, the fix is
+     a bounded retry of the handshake with a stated bound, not a longer sleep.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T06:55:10.618095347Z
+modified_at: 2026-09-30T06:55:10.618095347Z
+req_type: Bug
+filed_at:
+  code_sha: f175efb67de3af3d244970c7c2fab1baec829a8a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ed89cdb9-e8e6-4595-9c0f-67dc9336aed2
