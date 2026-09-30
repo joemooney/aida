@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-29T23:50:59.958416675Z
+modified_at: 2026-09-30T04:00:39.578455977Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -177,6 +177,69 @@ comments:
   created_at: 2026-09-29T23:50:24.524774587Z
   modified_at: 2026-09-29T23:50:24.524774587Z
   session_id: b2195326-c6b7-41c7-afb5-aa27b60756e2
+- id: 01a0f078-bc9a-7332-ac7b-3b733fe80bf0
+  author: joe
+  content: |
+    ## The diagnostic fired in CI — first hard evidence on the mechanism
+
+    Recurrence on CI run `36666297559` (`Build (ubuntu-latest)`, 2026-09-30T03:59:02Z),
+    on PR #2284, whose diff touches only `aida-cli-lib` test modules and cannot be
+    implicated. `RefreshLock::diagnose_unavailable` (shipped in `b06cd3662d` for
+    exactly this) produced:
+
+    ```
+    thread 'db::cache_refresh::tests::nested_freshen_in_lock_holder_does_not_wait'
+    panicked at aida-core/src/db/cache_refresh.rs:458:9:
+    re-acquire after the last guard dropped returned None;
+      sidecar="/tmp/.tmpeIvvrQ/cache.db.refresh.lock"
+      current_thread=ThreadId(237)
+      registry_entry=None
+      direct_flock=Some((WouldBlock, Some(11)))
+    ```
+
+    ## What this rules in and out
+
+    `registry_entry=None` and `direct_flock=Some((WouldBlock, 11))` together are
+    decisive, and they disagree with each other:
+
+    - **Not a foreign-owned registry entry.** The in-process registry holds nothing
+      for this sidecar. That was the other candidate source of a spurious `Ok(None)`
+      and it is eliminated.
+    - **The OS lock is genuinely still held.** errno 11 is `EWOULDBLOCK`; the kernel
+      is refusing the `flock` because a conflicting lock exists. This is not a
+      misclassified errno and not a registry bookkeeping artifact.
+
+    So the lock survived the guard that owned it. `flock` is per **open file
+    description**, and the sidecar lives in a per-test tempdir
+    (`/tmp/.tmpeIvvrQ/`) so no other test or process is a plausible holder. The
+    remaining explanation is that **a file descriptor on that same open file
+    description was still alive after the guard dropped** — a clone, a `dup`, an
+    `Arc<File>` with a lingering strong reference, or a `File` moved somewhere that
+    outlives the guard. Dropping the registry entry is evidently not sufficient to
+    drop the last handle.
+
+    ## Why this matters beyond the test
+
+    This is the soft-single-flight risk recorded as observation B. A caller can be
+    told the refresh lock is contended when no refresh is in flight, and serve stale
+    rows on that basis. The test is the messenger, not the defect.
+
+    ## Next step, now sharply narrowed
+
+    Session #10 built an out-of-process descriptor-lifecycle probe and proved it
+    load-bearing — injecting `existing._file = file` into the nested branch of
+    `try_acquire` makes it fail while both shipped tests still pass. That injection
+    models **exactly** the mechanism this CI evidence now points at. The probe is
+    preserved verbatim in `docs/plans/2026-09-29-refresh-lock-load-sensitivity.md`.
+
+    Start there: audit every owner of the sidecar `File` in `RefreshLock` /
+    `try_acquire` / the registry entry for a path where the `File` (or a clone of
+    it) outlives the guard. Do not start from the aida-cli-lib fixture entry point
+    recommended earlier — this CI log is a stronger and more specific lead than
+    anything reproduction would add.
+  created_at: 2026-09-30T04:00:39.578455977Z
+  modified_at: 2026-09-30T04:00:39.578455977Z
+  session_id: 7f350627-1e00-467b-b83d-33b905721517
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
   author: joe
