@@ -26,7 +26,12 @@ fn seed_legacy_store(dir: &std::path::Path, spec_id: &str) {
 
 /// A legacy store IS read when it sits in the project root, and the store that
 /// comes back is that root's own — not a different root's that also holds one.
-/// Host-independent: both stores are created by the test.
+///
+/// This is the host-independent regression witness, and it bites on ANY host:
+/// with the fix reverted it fails from a CWD holding no store (the pre-fix
+/// lookup probed the CWD, found nothing, and the `expect` below fires) and it
+/// fails from a CWD holding one (the `assert_eq` fires on that store's foreign
+/// IDs). Verified by mutation in both cwds, not argued.
 #[test]
 fn legacy_lookup_reads_the_project_roots_own_store_not_a_sibling_roots() {
     let scoped = tempfile::TempDir::new().unwrap();
@@ -55,16 +60,18 @@ fn legacy_lookup_reads_the_project_roots_own_store_not_a_sibling_roots() {
 /// store whose eight In-Progress specs (`FR-0281`, `STORY-0326`, …) are exactly
 /// what `aida awaiting` reported.
 ///
-/// NOTE ON COVERAGE: this and the sibling-discrimination test above both bite
-/// only where the process CWD really does hold a legacy store, which is the
-/// filing host and not CI (`requirements.db` is untracked, which is precisely
-/// why the pre-existing
+/// NOTE ON COVERAGE: THIS test bites only where the process CWD really does
+/// hold a legacy store, which is the filing host and not CI
+/// (`requirements.db` is untracked, which is precisely why the pre-existing
 /// `story_465_awaiting_report_tests::empty_state_produces_hidden_report` failed
-/// locally and passed on CI). Asserting it on every host would mean mutating
-/// the process-wide CWD, which is unsound under a threaded test harness. The
-/// argument-level pin below runs everywhere but covers a strictly smaller
-/// claim — the resolver's contract, not this function's wiring to it — so on a
-/// clean host these two pass trivially rather than being witnessed.
+/// locally and passed on CI); on a clean host it passes trivially rather than
+/// being witnessed. Making it bite everywhere would mean mutating the
+/// process-wide CWD, which is unsound under a threaded test harness — so it is
+/// deliberately the weaker of the three, kept because it names the exact
+/// reported symptom. The sibling-discrimination test ABOVE is the one that
+/// carries the host-independent claim, and the argument-level pin BELOW runs
+/// everywhere over a strictly smaller one (the resolver's contract, not this
+/// function's wiring to it).
 #[test]
 fn a_project_root_without_a_store_yields_nothing() {
     let bare = tempfile::TempDir::new().unwrap();
