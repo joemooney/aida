@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T23:50:48.560366490Z
-modified_at: 2026-09-30T03:07:09.807982772Z
+modified_at: 2026-09-30T03:52:31.491293401Z
 req_type: Bug
 comments:
 - id: 01a0f047-c26f-7b32-a974-904d873a475f
@@ -127,6 +127,63 @@ comments:
     they start flaking.
   created_at: 2026-09-30T03:07:09.807982772Z
   modified_at: 2026-09-30T03:07:09.807982772Z
+  session_id: 7f350627-1e00-467b-b83d-33b905721517
+- id: 01a0f071-4a03-7003-b2fc-aa1a3e96a2fe
+  author: joe
+  content: |
+    ## Review round 2 — the gate may excuse, never accuse
+
+    Independent review found that the first cut still had the original bug in it.
+    `load_average().one` is sampled after the measurement and averaged over a
+    minute, so a burst overlapping a short test need not appear in it; and
+    `available_parallelism()` may report a container CPU quota while the load
+    average describes the whole host. That signal is too weak to justify *failing*
+    a test — which is the entire complaint in this bug.
+
+    Resolved by splitting the two jobs one `<` was doing:
+
+    - a **hard ceiling** (60s) that no load excuses, and which is the only verdict
+      that can fail a test. `BudgetVerdict::is_fatal` states it as code and
+      `only_the_ceiling_is_fatal` pins it.
+    - a **budget** that is a performance signal only — reported on stderr as
+      `BUDGET-MISSED` / `BUDGET-SKIPPED` with the load it was measured against.
+
+    The ceiling also closes the reviewer's other worry: a load gate on its own
+    would stop enforcing anything on a busy CI runner, so the fix would have been
+    deleting coverage while claiming to preserve it.
+
+    Second finding, also valid: `scan()` checks a 10s time budget before each file
+    (`runaway_seats.rs:1034`, default `:144`), so the new exact byte/file counters
+    would have measured the cutoff rather than the work on a slow host. Raised
+    `time_budget_ms` out of the way for that test.
+
+    ## Scope extension, deliberate
+
+    `fast_config` is `grace: 2s` + `wait_delay: 5s` = 7s configured worst case, yet
+    `exit_signal::tests::reaps_child_after_sentinel_touch` and
+    `watchdog_trip_reaps_a_running_child` both asserted `elapsed < 5s` — two full
+    seconds BELOW the cascade's own configured wait, so both were guaranteed to
+    fail whenever the backstop ran. This bug recorded them as "ordinary load
+    sensitivity"; they are the same arithmetic error as the two named tests, in the
+    same file. Both now use the same helper. Verified failing at loadavg 13.5
+    immediately before the change and passing after.
+
+    ## Follow-on worth filing (NOT done here)
+
+    The reviewer proposed measuring contention over the test interval — Linux PSI
+    (`/proc/pressure/cpu`) stall-time delta between both ends of the measurement —
+    instead of a post-hoc lagging load average. That is the right instrument and
+    would let a missed budget become fatal again, restoring genuine
+    performance-regression coverage. It is Linux-specific and was not needed once
+    the budget stopped being able to fail a test, so it was left out on purpose.
+    File it if performance-regression detection is ever wanted from these tests.
+
+    Also unaddressed by design: five other `assert!(started.elapsed() < N)` sites
+    in `aida-cli-lib` (`notify.rs:1152,1259,1391`,
+    `tests/task_1507_history_cache_tests.rs:985`). None observed failing;
+    `assert_within_budget` is available to them.
+  created_at: 2026-09-30T03:52:31.491293401Z
+  modified_at: 2026-09-30T03:52:31.491293401Z
   session_id: 7f350627-1e00-467b-b83d-33b905721517
 history:
 - id: 01a0ef94-251c-70a2-8d58-7f26874a794c
