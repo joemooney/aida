@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:48:48.368719127Z
+modified_at: 2026-09-30T20:52:14.527817061Z
 req_type: Task
 tags:
 - docs
@@ -103,5 +103,10 @@ comments:
   content: 'Added three editable BUG-180 mechanics deep-dive slides to the backup section (slides 26-28): (1) durable requirement anatomy covering identity/provenance, 8 acceptance criteria, 8 relations, 32 comments, 16 linked commits and 7 trace records; (2) lifecycle state machine grounded in the 92-event ledger and 51 status transitions, including 8 Done→NeedsAttention returns and merge-driven Completed closure; (3) attributable evidence chain from contract through four review records, commits/traces, 7 shell + 2 browser + 87 Rust checks, exact MR head and merge. Updated the backup divider subtitle, shifted reconstruction/model-QA/appendix to slides 29-31, regenerated both decks and notes, and visually verified all three 1920x1080 renders. The lifecycle notes explicitly frame the high transition count as orchestration churn to improve, not a success metric.'
   created_at: 2026-09-30T20:48:48.368691160Z
   modified_at: 2026-09-30T20:48:48.368691160Z
+- id: 01a0f416-de3f-7c11-865c-1783a9091543
+  author: mcp
+  content: Added vertical padding above the QCI BUG-180 workflow timeline timestamps by moving the timeline and its five nodes down 0.25 inches in the source case-study generator. Regenerated the source PPTX, refreshed the repository slide-2 asset, rebuilt both 31-slide upper-management decks, and visually verified integrated slide 16 at 1920x1080. Lower labels and the summary banner retain clear separation; PPTX integrity and matching output hashes pass.
+  created_at: 2026-09-30T20:52:14.527812784Z
+  modified_at: 2026-09-30T20:52:14.527812784Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
