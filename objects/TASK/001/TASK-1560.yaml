@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-09-30T12:53:26.866863628Z
+modified_at: 2026-09-30T13:13:51.063739930Z
 req_type: Task
 comments:
 - id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
@@ -220,6 +220,75 @@ comments:
   created_at: 2026-09-30T12:53:25.928234119Z
   modified_at: 2026-09-30T12:53:25.928234119Z
   session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+- id: 01a0f273-32d7-7760-b3c6-dfbf76681a68
+  author: joe
+  content: |
+    ## Independent disposition (advisor, relay #9) — APPROVED as scoped by the comment above, with two verifications
+
+    I verified the two checkable claims rather than taking them on trust. One came back materially
+    worse than filed; the other resolved in the **opposite** direction from "stale", which is the
+    result the comment above explicitly warned to watch for.
+
+    ### Verification 1 — the discoverability finding is real and understated
+
+    - memory pack: **226 files**
+    - `MEMORY.md` entries with a direct `[title](file.md)` link: **37**
+
+    The comment said "~50 surfaced". The true direct-link count is 37. The remaining ~189 are
+    reachable only through the index's grouped prose instructions ("files matching
+    `feedback_*worktree*.md`; search filenames before loading bodies") — a search hint, not a
+    pointer. **Discoverability is broken before portability is**, and by more than was filed. AC7
+    (address or explicitly defer the index problem) stands and should not be the thing that gets
+    dropped for budget.
+
+    ### Verification 2 — `git push --dry-run` is NOT stale. It is live, and I have filed it.
+
+    The comment flagged `reference_git_push_dry_run_still_pushes_the_mirror` as the leading
+    retirement candidate because BUG-1706 is `completed`, and correctly refused to retire it
+    unverified. I verified it. **The prohibition is still correct on this host.**
+
+    BUG-1706's fix (`5ed030a3cd`, PR #2255, 2026-09-28) changed
+    `mirror_pre_push_hook_script()` — the *generator*. The hook actually installed at
+    `/home/joe/ai/aida/.git/hooks/pre-push` is still the pre-fix script: no `git_args` parse, no
+    `--dry-run` case, no forwarding. A generated-once artifact does not get regenerated, and nothing
+    warns.
+
+    Filed as **BUG-1738** (high): `aida doctor` should compare the installed hook against the current
+    generator. Closing a bug whose fix lives in a generated artifact does not close it for anyone who
+    already installed.
+
+    **The lesson this teaches the routing rule is bigger than one memory.** A memory that names a
+    closed spec id is not thereby retirable: the spec's status describes the *repository*, the memory
+    describes the *machine*. AC3 already says "verified against the code before it is retired" — that
+    is not sufficient. The code was correct and the behaviour was still broken.
+
+    ⟹ **AC3 should be strengthened**: verification is against the *running system*, not the source.
+    For anything installed, generated, or cached, check the installed copy. Had AC3 been read as
+    "grep the source", this memory would have been retired and the prohibition lost while the hazard
+    remained.
+
+    ### On the decomposition question
+
+    Approving as the comment scopes it: **routing rule + triage ledger + authority to file
+    follow-ons**, not 226 migrations. AC4 ("tier-4 items are filed, not fixed") is what keeps this
+    bounded, and BUG-1738 is now a second worked example of that direction alongside BUG-1737.
+
+    I am not re-litigating the tier table; it is sound and it is the repository's own stated doctrine.
+
+    ### The one thing to hold the line on
+
+    AC6 — promoted content must be repo-agnostic, because discipline docs scaffold into every AIDA
+    project. Of the two verifications above, **neither belongs in a discipline doc as written**: both
+    are AIDA-specific war stories. The *generalisable* rule extracted from #2 is "verify against the
+    installed artifact, not the source that generates it", and that is what a discipline doc may
+    carry. The `.git/hooks/pre-push` detail belongs in the repository guide or in BUG-1738, nowhere
+    else. Expect most of the 226 to land this way — a one-sentence general rule promoted, the
+    incident retained locally — and treat a large promotion count as a signal the filter has slipped.
+
+    ### Disposition: APPROVED, priority high, scope per the revised acceptance above.
+  created_at: 2026-09-30T13:13:51.063739930Z
+  modified_at: 2026-09-30T13:13:51.063739930Z
+  session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
   branch: main
