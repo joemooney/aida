@@ -94,8 +94,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-09-30T12:45:04.726316376Z
+modified_at: 2026-09-30T12:45:54.898378131Z
 req_type: Task
+comments:
+- id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
+  author: joe
+  content: |
+    ## Cross-link: the worked example is BUG-1737
+
+    The description's `BUG-???? (filed alongside this)` is **BUG-1737** — `aida list`'s count
+    reading as the backlog when it is a 6x-narrower active view.
+
+    It is the worked example of the fourth tier: the session-#8 lesson was originally written as a
+    Claude-only memory saying "remember 52 is an active view, the real number is 332". That is the
+    weakest available fix — per-agent, erasable, and it asks every future seat to compensate for a
+    surface that misinforms them. Filing it as a defect means no seat has to remember anything.
+
+    **Use it as the discriminator when classifying the memory pack under AC2:** for each entry, ask
+    whether it is a habit an agent should carry, or a symptom of something the substrate should stop
+    doing. If the latter, it becomes a spec and does not belong in a discipline doc at all.
+
+    Both specs are `draft` deliberately — I filed them, so I must not approve them. They need
+    independent disposition.
+  created_at: 2026-09-30T12:45:54.898378131Z
+  modified_at: 2026-09-30T12:45:54.898378131Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
   branch: main
