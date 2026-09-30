@@ -59,12 +59,12 @@ description: |
   4. No site is converted by deleting the timing assertion outright; a site that should
      lose its assertion instead of gaining a load-aware one is called out explicitly with
      the reason.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:15:06.159495348Z
-modified_at: 2026-09-30T07:09:10.931300907Z
+modified_at: 2026-09-30T07:09:18.972603579Z
 req_type: Bug
 comments:
 - id: 01a0f10b-c915-7eb3-a271-d8c167644dfc
@@ -205,6 +205,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f125-74de-76e1-a8f0-a0513a768e0a
+  author: aida-auto-bump
+  timestamp: 2026-09-30T07:09:18.942244865Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f125-74fc-76e1-b9dd-36cff18cda4a
+  timestamp: 2026-09-30T07:09:18.972600987Z
+  agent: product
+  commit_sha: 15fd965f4466d9d7811c5f419244d275c8737826
+  summary: Completed via merge 15fd965f
 filed_at:
   code_sha: 3c088a5dbdb8b0cf9cfa3c8d42fbb5430762bf47
   branch: main
@@ -217,3 +230,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-30T07:09:10.931300907Z
   implemented_by: joe
+  completed_at: 2026-09-30T07:09:18.942164985Z
+  completion_sha: 15fd965f4466d9d7811c5f419244d275c8737826
