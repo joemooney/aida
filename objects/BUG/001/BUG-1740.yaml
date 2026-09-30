@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-09-30T14:52:08.760252208Z
+modified_at: 2026-09-30T15:29:32.329026737Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -203,6 +203,114 @@ comments:
   created_at: 2026-09-30T14:50:48.660410691Z
   modified_at: 2026-09-30T14:50:48.660410691Z
   session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
+- id: 01a0f2ef-6ca9-7592-a9ef-9f13037f8d22
+  author: joe
+  content: |
+    ## ADVISOR AMENDMENT — the acceptance names the *lesser* of two consumers (2026-09-30, relay #13)
+
+    Re-derived the mechanism before briefing an implementer. The diagnosis is correct and I confirmed
+    every line reference. But `fanout_active` feeds **two** flags, and the spec's acceptance only
+    covers one of them — the one that merely *mislabels*. The other **deletes rows from the report**,
+    and it is hiding **8 of 10** stranded specs in this repository right now.
+
+    ### Verified against the source
+
+    `lib.rs:67952` computes `fanout_active` once, then **two** consumers split on it:
+
+    ```
+    67999:  likely_fanout:      ps_orphan_likely_fanout(stale_lease, fanout_active)  // = !stale_lease && fanout_active
+    68001:  possibly_subagent:  stale_lease && fanout_active
+    ```
+
+    They are complementary halves of the same polluted input. The description quotes the
+    `possibly_subagent` formula correctly; note that `ps_orphan_likely_fanout` at `lib.rs:66619` is
+    `!stale_lease && fanout_active`, so reading only that function is misleading. Both are wrong
+    whenever `fanout_active` is wrong.
+
+    ### 🔴 The half the acceptance does not cover
+
+    `orphaned_in_progress_items` (`lib.rs:67681`) — the bridge from detection to the
+    `aida awaiting` surface — is:
+
+    ```rust
+    orphans.into_iter().filter(|o| !o.likely_fanout)
+    ```
+
+    A `likely_fanout` row is **removed from `aida awaiting` entirely**. Not softened — absent. So the
+    defect has two severities, not one:
+
+    | `stale_lease` | flag set | operator sees |
+    |---|---|---|
+    | `true` (crashed spec-scoped lease) | `possibly_subagent` | row shown, mislabelled "possibly worked by a subagent" |
+    | `false` (flag-only, no spec-scoped lease) | `likely_fanout` | **row silently dropped from `aida awaiting`** |
+
+    The spec describes only the first. The second is strictly worse and is the one that matches the
+    symptom the spec was filed about (work sitting In-Progress for days with nobody looking at it).
+
+    ### Measured here, at `7c37dd81ac`, with no fan-out running and me the only session
+
+    `aida ps --json` → **10** orphaned In-Progress rows.
+    `aida awaiting --json` → **2**.
+
+    The 8 that never reach the operator, all `likely_fanout: true`, all `liveness: "flag-only"`:
+
+    ```
+    BUG-1668  BUG-1681  BUG-1687  STORY-1425  STORY-1479  STORY-1480  TASK-1536  TASK-1555
+    ```
+
+    The 2 that do reach it are the mislabelled pair the description already names:
+
+    ```
+    BUG-1688   abandoned=true  possibly_subagent=true   liveness=stale
+    BUG-1693   abandoned=true  possibly_subagent=true   liveness=stale
+    ```
+
+    (BUG-1695 has since left the set; use the two above.) Corroboration that these are real stranded
+    items and not phantoms: STORY-1479 and STORY-1480 were both offered in this session's own queue
+    at startup.
+
+    With `fanout_active` corrected to `false`, all ten become `likely_fanout: false` and
+    `possibly_subagent: false` — i.e. **`aida awaiting` goes from 2 rows to 10**, all framed as
+    abandoned. That is the real before/after, and it is a much stronger demonstration than AC3's.
+
+    ### Amendments
+
+    **A1 — extend AC3.** As written it asks only for `possibly_subagent: false` on specs that all
+    have `stale_lease == true`, so it never exercises the dropped-entirely path and a fix that
+    special-cased `possibly_subagent` alone would pass it. Require instead: capture
+    `aida ps --json` orphan count vs `aida awaiting --json` orphan count **before and after**, and
+    show that the previously-dropped flag-only specs (the eight named above) now appear in
+    `aida awaiting`. The counts are the acceptance evidence — 10 vs 2 before, 10 vs 10 after.
+
+    **A2 — extend AC5.** The four-corner fixture matrix must assert **both** output flags per corner,
+    not just `possibly_subagent`. Add a fifth corner that is the dropped case specifically:
+    flag-only spec (`stale_lease == false`) + root-pinned harness lease + caller-only liveness →
+    `likely_fanout == false`, and assert it survives `orphaned_in_progress_items`'s filter. That
+    function is already pure and injectable (`since_label_for` is a parameter), so the end-to-end
+    assertion costs nothing extra.
+
+    **A3 — AC6's mutation must witness the drop.** Pin the mutation proof to the `likely_fanout`
+    path: against today's predicate a flag-only spec must be **missing** from
+    `orphaned_in_progress_items`' output, and present after. A mutation proof on the
+    `possibly_subagent` label alone leaves the worse half unwitnessed.
+
+    **A4 — fix the shared input, not either flag.** Both flags are correct given a correct
+    `fanout_active`. Repair `live_fanout_harness_lease` / `lease_state_for`'s
+    caller-is-not-corroboration rule per AC1 and AC2 and both halves fall out. Do **not** patch
+    `ps_orphan_likely_fanout` or the `possibly_subagent` expression at line 68001 — that would fix
+    the symptom at two sites and leave `aida ps`'s own framing (`lib.rs:68387`, `68777`) still wrong.
+
+    ### Unchanged and still binding
+
+    AC1, AC2, AC4 and AC7 stand as written. The "do not" list stands — in particular **do not** add a
+    zombie-state probe here; that is BUG-1741, which I approved separately this session, and it
+    cannot move this output. And AC4 remains the real constraint on any fix: a harness lease backed
+    by a live process that is **not** the caller must keep suppressing the orphan framing.
+
+    Priority `high` is right, and the 8-hidden-of-10 measurement is the reason to keep it there.
+  created_at: 2026-09-30T15:29:32.329026737Z
+  modified_at: 2026-09-30T15:29:32.329026737Z
+  session_id: 259d97b0-df15-4cdb-8712-e2f54e1a8223
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
