@@ -4,6 +4,7 @@
 // trace:BUG-1682 | ai:codex
 
 use super::*;
+use crate::process_retry::RetryEtxtbsy;
 use aida_core::DatabaseBackend;
 use std::collections::BTreeSet;
 use std::process::{Child, Command, Stdio};
@@ -120,7 +121,7 @@ fn spawn(home: &Path, action: &str, index: usize, pause: &str) -> (Process, Path
     } else {
         DEADLINE
     };
-    (Process(cmd.spawn().unwrap(), timeout), ctl)
+    (Process(cmd.spawn_retrying_etxtbsy().unwrap(), timeout), ctl)
 }
 
 fn scenario(name: &str) {

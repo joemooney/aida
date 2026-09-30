@@ -4,6 +4,7 @@
 //! Shared PR-detection/git helpers stay in `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
@@ -2782,7 +2783,7 @@ pub(crate) fn pr_ship_handler(
                     std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
                         .arg("pull")
-                        .status()
+                        .status_retrying_etxtbsy()
                         .context("could not invoke `aida pull`")?,
                 )
             }
@@ -2884,7 +2885,7 @@ pub(crate) fn pr_ship_handler(
                     let end_status = std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
                         .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
-                        .status()
+                        .status_retrying_etxtbsy()
                         .context("could not invoke `aida session end`")?;
                     if !end_status.success() {
                         log_ship_activity(

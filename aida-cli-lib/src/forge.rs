@@ -24,6 +24,8 @@
 //! trace:EPIC-35 trace:SPIKE-49 trace:TASK-1242 | ai:claude+codex
 #![allow(dead_code)] // Providers/trait are wired into call sites in follow-on slice-1 commits.
 
+use crate::process_retry::RetryEtxtbsy;
+
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1263,7 +1265,7 @@ impl GitHubForge {
         Command::new(&gh)
             .current_dir(&self.project_root)
             .args(args)
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 }
@@ -1811,7 +1813,7 @@ impl GitLabForge {
         Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args)
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke `glab` — is the GitLab CLI installed?")
     }
 
@@ -1857,7 +1859,7 @@ impl GitLabForge {
         Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args.iter().map(String::as_str))
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke GitLab's merge API")
     }
 

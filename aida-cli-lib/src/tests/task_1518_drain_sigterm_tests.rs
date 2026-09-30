@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::drain_lock::{drain_lock_path, DrainLock};
+use crate::process_retry::RetryEtxtbsy;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -764,7 +765,7 @@ fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
         .args(["real_sigterm_child_body", "--nocapture", "--test-threads=1"])
         .env(CHILD_ROOT_ENV, &root)
         .env_remove("AIDA_DRAIN_TERM_GRACE_SECS")
-        .output()
+        .output_retrying_etxtbsy()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -873,7 +874,7 @@ fn task_1542_real_sigterm_forwards_and_leaves_stopped_state() {
         ])
         .env(CHILD_STOP_ROOT_ENV, &root)
         .env_remove("AIDA_DRAIN_TERM_GRACE_SECS")
-        .output()
+        .output_retrying_etxtbsy()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);

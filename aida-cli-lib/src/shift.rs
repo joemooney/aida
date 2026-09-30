@@ -57,6 +57,7 @@
 //! with a recording mock: no test launches a drain.
 // trace:STORY-1218 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration as StdDuration, Instant};
@@ -1651,7 +1652,10 @@ impl ShiftExec for RealExec<'_> {
         let project_root = self.project_root.clone();
         let mut detached = || -> Result<(u32, Option<String>)> {
             let mut cmd = wave_command(&exe, argv, &project_root, log)?;
-            let child = cmd.spawn().context("spawning the night-shift wave")?;
+            // trace:BUG-1735 | ai:claude
+            let child = cmd
+                .spawn_retrying_etxtbsy()
+                .context("spawning the night-shift wave")?;
             let pid = child.id();
             // The child is deliberately not waited on: it is its own session
             // and outlives this tick. Dropping the handle does not kill it.

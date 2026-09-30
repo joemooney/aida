@@ -13,6 +13,7 @@
 //! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
 //! recent descendant work from a finished seat.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 
 use aida_core::liveness::ProcTree;
@@ -1987,7 +1988,7 @@ pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
             .args(args)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status();
+            .status_retrying_etxtbsy();
         return;
     }
     match terminal.emulator.as_deref() {
@@ -2059,7 +2060,7 @@ fn current_native_title(terminal: &TerminalIdentity) -> Option<String> {
 fn command_output_trim(program: &str, args: &[&str]) -> Option<String> {
     let output = std::process::Command::new(program)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !output.status.success() {
         return None;

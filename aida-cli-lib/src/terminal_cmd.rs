@@ -3,6 +3,7 @@
 //! `aida session focus` and `aida session send` deliberately act only through
 //! terminal/multiplexer APIs. They never write to a tty device.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::Path;
 use std::process::Command;
 
@@ -425,7 +426,7 @@ fn print_report(report: &TerminalCommandReport, send_refusal_can_fail: bool) -> 
 }
 
 fn run_command(program: &str, args: &[String], label: &str) -> AdapterOutcome {
-    match Command::new(program).args(args).status() {
+    match Command::new(program).args(args).status_retrying_etxtbsy() {
         Ok(status) if status.success() => AdapterOutcome::taken(),
         Ok(status) => AdapterOutcome::refused(format!("{label} failed with status {status}")),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
@@ -437,7 +438,7 @@ fn run_command(program: &str, args: &[String], label: &str) -> AdapterOutcome {
 
 fn run_terminator_command(program: &str, args: &[String], label: &str) -> AdapterOutcome {
     // external-prose-classifier: terminal_cmd::run_terminator_command
-    match Command::new(program).args(args).output() {
+    match Command::new(program).args(args).output_retrying_etxtbsy() {
         Ok(out) if out.status.success() && String::from_utf8_lossy(&out.stdout).contains("true") => {
             AdapterOutcome::taken()
         }

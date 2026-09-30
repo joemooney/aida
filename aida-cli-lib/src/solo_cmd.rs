@@ -3,6 +3,7 @@
 //! from `lib.rs` (SPIKE-78 / STORY-771; pure movement, no behavior change).
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
 /// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
@@ -68,7 +69,10 @@ pub(crate) fn solo_cycle(dry_run: bool) -> Result<()> {
         // shell out to `claude -p` for minutes — without this an operator watches
         // silence and can't tell a working loop from a wedged one.
         // trace:STORY-627 | ai:claude
-        match std::process::Command::new(&exe).args(*args).spawn() {
+        match std::process::Command::new(&exe)
+            .args(*args)
+            .spawn_retrying_etxtbsy()
+        {
             Ok(mut child) => {
                 let started = std::time::Instant::now();
                 let mut next_beat = std::time::Duration::from_secs(SOLO_HEARTBEAT_SECS);

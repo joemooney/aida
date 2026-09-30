@@ -8,6 +8,7 @@
 //! `current_branch_head_sha`, `binary_embedded_sha`) and `eval_subcommand_hint`
 //! stay in main.rs and are reached via `crate::`.
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -636,7 +637,7 @@ fn handle_dev_activate(
         match std::process::Command::new(&dev_bin)
             .args(std::env::args_os().skip(1))
             .env("AIDA_DEV_ACTIVATE_REEXEC", "1")
-            .status()
+            .status_retrying_etxtbsy()
         {
             Ok(status) => std::process::exit(status.code().unwrap_or(1)),
             Err(e) => {
@@ -1140,7 +1141,7 @@ fn handle_dev_status() -> Result<()> {
         println!("Resolved aida: {}", resolved.display());
         if let Ok(out) = std::process::Command::new(&resolved)
             .arg("--version")
-            .output()
+            .output_retrying_etxtbsy()
         {
             let banner = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if !banner.is_empty() {

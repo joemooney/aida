@@ -10,6 +10,7 @@
 //! clone. Each step no-ops when already done, so a failed run is re-runnable.
 // trace:STORY-780 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::io::IsTerminal;
@@ -207,7 +208,7 @@ fn run_in(dir: &Path, program: &str, args: &[&str]) -> Result<()> {
     let status = std::process::Command::new(program)
         .args(args)
         .current_dir(dir)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("could not launch `{program}`"))?;
     if !status.success() {
         bail!("`{program} {}` failed in {}", args.join(" "), dir.display());

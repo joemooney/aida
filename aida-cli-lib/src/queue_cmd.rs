@@ -5,6 +5,7 @@
 //! `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use std::path::Path;
 
@@ -344,7 +345,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display, "--zen"]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display, "--zen"])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
         }
         AdvanceAction::Decision => {
@@ -360,7 +364,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
             println!(
                 "  {} tip: {} drains every ready item at once.",
@@ -7791,7 +7798,7 @@ pub(crate) fn handle_rework_entry(
 fn run_aida_interactive(args: &[&str]) -> Result<()> {
     let status = std::process::Command::new(crate::aida_exe_path())
         .args(args)
-        .status()?;
+        .status_retrying_etxtbsy()?;
     anyhow::ensure!(status.success(), "`aida {}` failed", args.join(" "));
     Ok(())
 }
@@ -8357,12 +8364,12 @@ pub(crate) fn handle_queue_rework(
                         "--tags",
                         "loop-guard,review-recurrence",
                     ])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(finding.success(), "could not file repeated-review finding");
                 let brief = std::process::Command::new(&exe)
                     .current_dir(&root)
                     .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(
                     brief.success(),
                     "could not write repeated-review advisor brief"
@@ -13443,7 +13450,7 @@ pub(crate) fn handle_queue_recover(
         std::process::Command::new(&aida)
             .current_dir(&project_root)
             .args(args)
-            .status()
+            .status_retrying_etxtbsy()
     };
     let run_git =
         |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
@@ -14412,7 +14419,7 @@ pub(crate) fn handle_queue_integrate(
                         let status = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(integrate::promotion_rebase_args(pr, &parent_sha))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match status {
                             Ok(s) if s.success() => {
                                 // The child now forks straight from the default
@@ -14850,7 +14857,7 @@ pub(crate) fn handle_queue_integrate(
                         let rb = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(build_integrate_rebase_args(pr))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match rb {
                             Ok(s) if s.success() => {
                                 println!(
@@ -14921,7 +14928,7 @@ pub(crate) fn handle_queue_integrate(
                 // before the parent loop finishes. trace:BUG-748 | ai:codex
                 .env("AIDA_DRAIN_BORROW", "1")
                 .args(integrate::drive_args(pr_num, integrate_headless))
-                .status();
+                .status_retrying_etxtbsy();
             match status {
                 Ok(s) if s.success() => {
                     integrated_total += 1;

@@ -19,6 +19,7 @@
 //
 // trace:STORY-1051 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -763,7 +764,7 @@ fn launch_redrive(project_root: &std::path::Path, spec: &str) -> Result<()> {
             "--no-human",
             "both",
         ])
-        .status()?;
+        .status_retrying_etxtbsy()?;
     if !status.success() {
         anyhow::bail!(
             "supervisor re-drive for {spec} exited {}",

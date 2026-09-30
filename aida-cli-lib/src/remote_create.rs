@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-537 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -351,7 +352,7 @@ fn is_interactive() -> bool {
 fn is_on_path(bin: &str) -> bool {
     Command::new(bin)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

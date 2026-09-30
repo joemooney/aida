@@ -58,6 +58,7 @@
 //! (advertise) and `tools/call` (reject above-tier calls). See `McpProfile`,
 //! `tool_min_profile`, and `resolve_mcp_profile`.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::cmp::Ordering;
 use std::ffi::OsString;
 use std::io::{self, BufRead, Write};
@@ -255,7 +256,10 @@ fn parse_aida_binary_identity(output: &str) -> Option<McpBinaryIdentity> {
 }
 
 fn query_aida_binary_identity(exe: &Path) -> Option<McpBinaryIdentity> {
-    let out = Command::new(exe).arg("--version").output().ok()?;
+    let out = Command::new(exe)
+        .arg("--version")
+        .output_retrying_etxtbsy()
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -308,7 +312,7 @@ fn exec_mcp_respawn(plan: McpRespawnPlan) -> Result<()> {
 
     #[cfg(windows)]
     {
-        command.spawn().map_err(|e| {
+        command.spawn_retrying_etxtbsy().map_err(|e| {
             anyhow::anyhow!(
                 "failed to spawn MCP self-respawn via {}: {}",
                 plan.exe.display(),

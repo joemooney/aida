@@ -15,6 +15,7 @@
 //!
 //! trace:SPIKE-30 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -54,7 +55,7 @@ pub fn list_agents() -> Option<Vec<ClaudeAgentEntry>> {
     // yields the native `claude` (byte-identical). trace:TASK-1081
     let output = Command::new(crate::session::resolve_agent_program("claude"))
         .args(["agents", "--json"])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !output.status.success() {
         return None;

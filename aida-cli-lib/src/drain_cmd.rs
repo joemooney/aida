@@ -5,6 +5,7 @@
 //! `lib.rs`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -450,7 +451,9 @@ fn handle_shelved_resume(spec: &str, json: bool) -> Result<()> {
     if json {
         cmd.arg("--json");
     }
-    let status = cmd.status().context("launching the resumed drain")?;
+    let status = cmd
+        .status_retrying_etxtbsy()
+        .context("launching the resumed drain")?;
     if status.success() {
         Ok(())
     } else {
@@ -547,7 +550,7 @@ fn handle_drain_start(
         .current_dir(&root)
         .args(&args)
         .env(DRAIN_STOP_ENV, drain_stop_path(&root))
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to run `aida {}`", args.join(" ")))?;
     std::process::exit(status.code().unwrap_or(1));
 }

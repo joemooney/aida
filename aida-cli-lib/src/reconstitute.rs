@@ -18,6 +18,7 @@
 //! never around it). The probe itself never writes to the spec.
 // trace:TASK-1248 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -246,7 +247,7 @@ fn aida_stdout(project_root: &Path, args: &[&str]) -> String {
         .current_dir(project_root)
         .args(args)
         .env("AIDA_OUTPUT_FORMAT", "human")
-        .output()
+        .output_retrying_etxtbsy()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
