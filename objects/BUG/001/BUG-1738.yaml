@@ -80,8 +80,66 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-09-30T13:13:50.215527785Z
+modified_at: 2026-09-30T13:41:15.850923368Z
 req_type: Bug
+comments:
+- id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
+  author: joe
+  content: |
+    ## Disposition: approved (relay session #10, independent of the filing session)
+
+    Premise re-verified directly against this machine. **It holds, exactly as filed.**
+
+    `cat .git/hooks/pre-push` in `/home/joe/ai/aida` is the pre-fix script: `unset GIT_DIR
+    GIT_WORK_TREE`, then a bare `aida remote mirror-push "$1" || true`. No `git_args` capture, no
+    `--dry-run` case, no forwarding. `mirror_pre_push_hook_script()` in `remote_create.rs` has all
+    three. BUG-1706 is `completed` and its defect is live on this host. The standing "never
+    `git push --dry-run` in this checkout" prohibition is **correct and stays**.
+
+    ### One finding that should shorten the implementation
+
+    `remote_create.rs` already has the recognition mechanism AC2 asks for:
+
+    ```rust
+    /// Marker line the installer looks for to recognize (and refresh) its own
+    /// pre-push hook without clobbering a user's custom one.
+    const MIRROR_HOOK_MARKER: &str = "aida remote mirror-push";
+    ```
+
+    Reuse it. Do not invent a second header-comment match -- two recognisers for one artifact drift
+    apart, which is the same class of defect this spec is about. Note the const is currently private;
+    promote it rather than copying the literal into `doctor_cmd.rs`.
+
+    Its doc comment also answers the "why did it not self-heal" question: the installer refreshes a
+    marked hook, but only when `aida remote mirror` is re-run. Nothing re-runs it. That is the whole
+    bug, and it is worth a sentence in the doctor finding's remedy text so the operator understands
+    why a closed fix never arrived.
+
+    ### AC3 and AC4 -- my read, still the implementer's call to state
+
+    AC3: exact match is almost certainly right. The generator emits one fixed string with no
+    interpolation, so any difference is a version difference. Do not build tolerance for drift that
+    has not been observed.
+
+    AC4: **report-only.** Rewriting a file in the operator's `.git/hooks/` is a write outside the
+    store, on an artifact the operator is explicitly invited to hand-edit ("Safe to delete" is in the
+    hook's own header). `heal_doctor_finding`'s safe default arm is the right precedent. The remedy
+    string names `aida remote mirror <name>`, which the operator runs deliberately.
+
+    ### AC5's ordering -- do it in this order, and say so
+
+    Assert the check reports the currently-stale hook **before** re-installing. Once `aida remote
+    mirror` runs, the live evidence is gone and cannot be recreated without hand-reverting the hook.
+    Capture the stale hook's text to the spec or the PR first.
+
+    ### Scope
+
+    Sized smaller than BUG-1739 and independent of it. The "Consider, do not assume" section is
+    correctly fenced -- if other generated-once artifacts share this shape, file separately. **A large
+    follow-on count means this spec was widened into a staleness framework; do not.**
+  created_at: 2026-09-30T13:41:15.850923368Z
+  modified_at: 2026-09-30T13:41:15.850923368Z
+  session_id: 622c849c-8085-4d0c-840e-82dd660b1787
 filed_at:
   code_sha: 181bbf4c35cd8da3e146dbf8aa44253bf2ec86e9
   branch: main
