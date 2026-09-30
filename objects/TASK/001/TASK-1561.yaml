@@ -3,32 +3,39 @@ spec_id: TASK-1561
 agreed_id: TASK-1561
 title: Make the worktree parent directory configurable so restricted-permission agents need one narrow grant
 description: |
-  OBSERVED: `aida queue work <SPEC>` creates its worktree as a SIBLING of the project root, `<parent>/<repo>-<slug>` — e.g. `/home/joe/ai/aida-bug-1743`. With ~25 live worktrees this scatters them directly across `/home/joe/ai`, alongside unrelated projects.
+  OBSERVED: `aida queue work <SPEC>` creates its worktree as a SIBLING of the project root, `<parent>/<repo>-<slug>` — e.g. `/home/joe/ai/aida-bug-1743`. With ~25 live worktrees these scatter directly across `/home/joe/ai`, alongside every unrelated side project on the machine.
 
-  WHY IT MATTERS: an agent running WITHOUT `--dangerously-skip-permissions` must be granted access to its worktree. Because the worktrees are siblings, the only grant that covers them is the shared parent `/home/joe/ai` — which also contains every other side project on the machine. That is far broader than the work requires, and it is granted per session, repeatedly. A single dedicated directory would need one narrow grant covering nothing but this repo's worktrees.
+  WHY IT MATTERS: an agent running WITHOUT `--dangerously-skip-permissions` must be granted access to its worktree. Because the worktrees are siblings, the only grant that covers them is the shared parent `/home/joe/ai` — which also covers every other project there. That is far broader than the work requires, and it must be granted again for each new worktree path. Moving them under the project root removes the problem entirely: the repo is already granted, so a pickup worktree needs NO additional grant.
 
-  PROPOSAL: make the worktree parent configurable — a `[worktree] root` key in `.aida/config.toml` — and recommend a dedicated sibling FOLDER, `<parent>/<repo>-worktrees/<repo>-<slug>`. Default stays today's sibling path so existing checkouts do not move.
+  DECISION (operator, 2026-09-30): worktrees move to `<project_root>/.aida/worktrees/<slug>`.
 
-  WHY A SIBLING FOLDER AND NOT NESTING INSIDE THE REPO (`<root>/.worktrees/<slug>`), which would need no new grant at all:
+  This is not a new convention — it is the one already in use elsewhere in this codebase, and the spec should make it uniform rather than invent a third layout:
+  - `pr_rebase::temp_worktree_path` (aida-cli-lib/src/pr_rebase.rs:389) already builds `<root>/.aida/worktrees/pr-rebase-<N>/`, with the stated rationale that it "stays inside the project (gitignored by the standard `.aida/*` deny-by-default rule) and survives a crash for inspection".
+  - Claude Code's own fan-out worktrees use `.claude/worktrees/agent-<id>` — same shape, same reasoning.
 
-  1. Root resolution would gain a silent fallback. `parent_project_root_for_session` (aida-cli-lib/src/lib.rs:33740) walks UP from cwd for an ancestor holding `.aida/sessions/`. Under the sibling layout the main checkout is never an ancestor of a worktree, so a resolve that fails returns None. Nested, the main checkout IS an ancestor of every worktree, so a failed resolve silently resolves to the real repository instead. That is the exact failure shape BUG-1743 just documented: the phase-3 handshake falling through to the cwd's enclosing project and writing a fabricated `request-changes` verdict for real merged PR #1452 into the operator's checkout, three times across three weeks, unnoticed because `.aida/` is gitignored.
-  2. Tool traversal. `rg`, `find`, `cargo`, and `make check-templates` run from the repo root would descend into 20-60 full checkouts. `.claude/worktrees/` gets away with this only because it is a dotdir most tools skip.
-  3. Disk and cleanup. `cargo clean` / `rm -rf` blast radius at the repo root becomes every worktree's `target/` at once.
+  A sibling `<parent>/aida-worktrees/` folder was considered and rejected: it still costs one grant, and it has no precedent here.
 
-  IMPLEMENTATION SIZE: small and already centralised. `pickup_worktree_path` (aida-cli-lib/src/lib.rs:36840) is the single resolver — BUG-1628 deliberately consolidated `session_start`, the `queue work --dry-run` preview, and the auto-complete phase-1 fallback onto it. So: one function, one config key, one doctor hint.
+  IMPLEMENTATION SIZE: small and already centralised. `pickup_worktree_path` (aida-cli-lib/src/lib.rs:36840) is the single resolver — BUG-1628 deliberately consolidated `session_start`, the `queue work --dry-run` preview, and the auto-complete phase-1 fallback onto it.
+
+  TWO HAZARDS THE MOVE INTRODUCES, both of which this spec must handle rather than discover later:
+
+  1. Repo-root tool traversal. `rg`, `find`, `cargo`, and `make check-templates` run from the project root would descend into 20-60 full checkouts and their `target/` directories. `.aida/` being gitignored does NOT stop any of those tools.
+  2. The main checkout becomes a filesystem ANCESTOR of every worktree. Root resolution here walks UP from cwd (`parent_project_root_for_session`, aida-cli-lib/src/lib.rs:33740, and the `find_project_root()` family), so a resolution that previously terminated at the worktree — or returned None — can now continue up and land on the main checkout instead. BUG-1743 is the live example of what that costs: an ambient fall-through to the cwd's enclosing project wrote a fabricated `request-changes` verdict for real merged PR #1452 into the operator's checkout, three times over three weeks, invisible because `.aida/` is gitignored. The same gitignore that makes `.aida/worktrees/` tidy is what hid that pollution.
 
   ## Acceptance
-  - `.aida/config.toml` accepts a `[worktree] root` key; when set, `aida queue work` and every other pickup path create the worktree under it. Verified by asserting the created path, not by reading the config back.
-  - With the key ABSENT, the created path is byte-identical to today's `<parent>/<repo>-<slug>`. An existing checkout that never sets the key sees no change.
-  - Every caller BUG-1628 consolidated onto `pickup_worktree_path` honours the key — including the `--dry-run` preview, which must print the same path the real run creates. Prove this by test, not by inspection: a divergence between preview and reality is the defect BUG-1628 existed to prevent.
-  - The ~25 worktrees already at `<parent>/<repo>-<slug>` keep working when the key is introduced; state explicitly whether they are migrated, left in place, or reported by `aida doctor`, and implement whichever is chosen.
-  - A relative `root` value resolves against a documented, tested base, and a value escaping to an unintended location (`..`, absolute path outside the parent) is either rejected or documented as allowed — decided deliberately, with the decision recorded.
+  - `aida queue work <SPEC>` and every other pickup path create the worktree at `<project_root>/.aida/worktrees/<slug>`. Verified by asserting the created path on disk, not by reading configuration back.
+  - Every caller BUG-1628 consolidated onto `pickup_worktree_path` uses the new location, INCLUDING the `--dry-run` preview, which must print the same path the real run creates. Proven by test: a divergence between preview and reality is the exact defect BUG-1628 existed to prevent.
+  - A fresh pickup worktree needs no filesystem permission grant beyond the project root itself. Demonstrate with the concrete path, not by assertion in prose.
+  - Repo-root tooling does not descend into the new directory: `rg`/`find` invocations in the repo's own scripts and `make check-templates` skip `.aida/worktrees/`, and a build from the project root does not walk 20-60 nested checkouts. State the measurement (before/after file counts or timing) that shows it.
+  - Upward project-root resolution from inside a nested worktree resolves to THAT worktree, never silently to the enclosing main checkout. Cover `parent_project_root_for_session` and the `find_project_root()` family with a test whose fixture is a worktree nested under a project root that also carries `.aida/`. Prove it by mutation: the test must fail if the resolution falls through.
+  - The ~25 worktrees already at `<parent>/<repo>-<slug>` keep working. State explicitly whether they are migrated, left in place, or reported by `aida doctor`, and implement whichever is chosen — do not leave them undefined.
+  - `.aida/worktrees/` is covered by the existing `.aida/*` gitignore rule and adds no entries to `git status` in either the main checkout or a nested worktree.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:28:06.562496496Z
-modified_at: 2026-09-30T23:28:06.562496496Z
+modified_at: 2026-09-30T23:32:19.164513209Z
 req_type: Task
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
