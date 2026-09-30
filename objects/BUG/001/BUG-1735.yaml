@@ -87,8 +87,78 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T08:04:08.478585861Z
-modified_at: 2026-09-30T08:23:18.215162743Z
+modified_at: 2026-09-30T08:31:56.354568761Z
 req_type: Bug
+comments:
+- id: 01a0f171-19c2-71a3-8dec-401eb24aa229
+  author: joe
+  content: |
+    ## Survey inventory for AC2 — mechanical pass done, dispositioning still owed
+
+    Session #6 did not implement this bug, but ran the whole-crate survey AC2 asks for so the
+    implementing session does not pay for it again. Method: classify every **non-literal**
+    `Command::new(X)` in `aida-cli-lib/src` (a string-literal program cannot be a test fixture),
+    then look ahead within the same builder chain for the terminal call.
+
+    | terminal call | sites |
+    |---|---|
+    | `.output()` | 64 |
+    | `.status()` | 54 |
+    | `.spawn()` | 13 |
+    | routed through `retrying_etxtbsy` / `test_exec::output` | **4** |
+    | unclassified (builder stored in a binding, terminal call out of window) | 21 |
+    | **total non-literal sites** | **156** |
+
+    The spec's filed estimate of "~100 injectable / 10 retrying" was close on the first number
+    and **too generous on the second**: only 4 non-literal sites retry.
+
+    ### 🔑 The `gh`/`glab` family IS injectable — it is not a "stable binary" exemption
+
+    The spec reasoned that most of the ~100 spawn `git`/`gh`/`glab`, "never freshly written,
+    where ETXTBSY is impossible". That is **false for this crate**. `resolve_gh_binary`
+    (`lib.rs:43331`) is `resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")` —
+    an explicit test seam. Any test that `write_executable`s a fake `gh` and points
+    `AIDA_TEST_GH_BINARY` at it puts all ~33 `&gh` / `&gh_bin` / `gh` / `&glab` sites in exactly
+    the same window as the filed one. So AC2's "shown to spawn a binary that can never be
+    freshly written" must be argued **per resolver**, not per program name:
+
+    - `resolve_gh_binary` / the `glab` twin → injectable via env var ⇒ at risk.
+    - `aida_exe_path()` (`lib.rs:103273`) → `/proc/self/exe`, not injectable by itself, but the
+      `_using` wrappers that take an `aida: &Path` parameter are, and that is the filed site.
+    - literal `Command::new("git")` → genuinely exempt (excluded from the 156 by construction).
+
+    ### The four sites that already retry, for reference
+
+    `process_retry::command_output_retrying_etxtbsy` / `command_status_retrying_etxtbsy`
+    (`aida-cli-lib/src/process_retry.rs:34,40`) and `test_exec::output`
+    (`aida-cli-lib/src/test_exec.rs:32`), which just forwards to the first.
+
+    ### AC3 is cheaper than it looks — the injection harness already exists
+
+    `test_exec.rs:37` `fixture_spawn_retries_while_writer_descriptor_is_open` already proves the
+    helper retries a real `ETXTBSY`: it holds an `O_CLOEXEC` writer descriptor open on a
+    freshly-written fixture, drops it after 80ms on another thread, and asserts the spawn
+    succeeds. AC3 wants that shape **at the call site** — the same writer-descriptor trick
+    applied to the fake `aida` binary that
+    `bug_1291_orphan_sweep_tests::queue_add_failure_is_propagated` writes, asserting the
+    `Ok(o)` non-zero-exit arm still wins.
+
+    ### Suggested order for the implementing session
+
+    1. AC1: route `aida_subcmd_queue_add_for_reviewer_using` (`lib.rs:46660`) through
+       `command_output_retrying_etxtbsy`. One line.
+    2. AC4: mutation-prove `queue_add_failure_is_propagated` still fails when the fake binary
+       genuinely exits non-zero (make the fixture exit 0 and watch it fail).
+    3. AC3: the call-site injection test, modelled on `test_exec.rs:37`.
+    4. AC2: disposition the 156. Route the injectable resolvers' sites; for each exempt site
+       record **which resolver** makes it exempt, not which program name.
+
+    The raw per-site inventory (file:line + program expression, grouped by terminal call) was
+    produced by a 20-line classifier and is trivially regenerated; it is not pasted here to keep
+    the spec readable.
+  created_at: 2026-09-30T08:31:56.354568761Z
+  modified_at: 2026-09-30T08:31:56.354568761Z
+  session_id: 0241e2a1-f4b6-4cb3-bc08-3f10e52dc315
 history:
 - id: 01a0f169-31c7-7f51-920d-eda5cd7829ce
   author: joe
