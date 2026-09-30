@@ -741,6 +741,123 @@ mod tests {
         );
     }
 
+    /// Every other test in this module can only re-read `HELD`, so none of them
+    /// can see the thing that actually goes wrong with an `flock`: which open
+    /// file description owns it. A nested acquire opens a SECOND descriptor to
+    /// the same sidecar, and closing that one must not release the holder's
+    /// lock; the registry's own descriptor must close when `depth` reaches
+    /// zero. Both are invisible from inside the process — a duplicate
+    /// descriptor and a released lock leave `HELD` reading identically.
+    ///
+    /// Proven load-bearing rather than assumed: injecting `existing._file =
+    /// file` into `try_acquire`'s nested branch — which closes the LOCKED
+    /// descriptor and registers an unlocked one — fails this test's nested
+    /// assertion while `nested_freshen_in_lock_holder_does_not_wait` and
+    /// `nested_refresh_through_directory_alias_uses_same_registry_entry` both
+    /// still PASS.
+    // trace:BUG-1729 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn refresh_lock_descriptor_lifecycle_is_visible_to_another_process() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("cache.db");
+        let sidecar = super::super::cache_lock::cache_sidecar_path(&path, "refresh.lock");
+
+        // A fresh tempdir inode no descriptor has ever opened, so unlike the
+        // fork-window tests above there is nothing here for a sibling's child
+        // to have inherited: a `None` is a real defect, not a race, and a
+        // bounded retry would only delay reporting it.
+        let outer = RefreshLock::try_acquire(&path).unwrap().unwrap();
+        assert!(
+            externally_locked(&sidecar),
+            "the holder's flock is not visible outside this process; {}",
+            lock_holders(&sidecar)
+        );
+        let inner = RefreshLock::try_acquire(&path).unwrap().unwrap();
+        assert!(inner.is_nested());
+        assert!(
+            externally_locked(&sidecar),
+            "the nested acquire's second descriptor released the holder's \
+             flock when it closed; {}",
+            lock_holders(&sidecar)
+        );
+        drop(outer);
+        assert!(
+            externally_locked(&sidecar),
+            "depth fell to one but the flock was already released; {}",
+            lock_holders(&sidecar)
+        );
+        drop(inner);
+        assert!(
+            externally_free_past_fork_window(&sidecar),
+            "the last guard dropped but its descriptor outlived it; {}",
+            lock_holders(&sidecar)
+        );
+    }
+
+    /// Ask a process that shares no open file description with this one whether
+    /// the sidecar is flocked. `LOCK_NB` from a child is the only honest answer
+    /// available: an in-process probe would be testing its own descriptor table
+    /// against itself, and `fs2`'s `try_lock_exclusive` on a second descriptor
+    /// of ours reports contention the kernel would not report to a stranger.
+    ///
+    /// `python3` is already a hard, CI-green dependency of this module family's
+    /// `#[cfg(unix)]` tests — see
+    /// `cached_git_backend::tests::refresh_holder_exits_without_refresh_returns_deferred`
+    /// — so an unwrapped spawn here adds no new platform requirement.
+    // trace:BUG-1729 | ai:claude
+    #[cfg(unix)]
+    fn externally_locked(sidecar: &Path) -> bool {
+        // `"a"`, never `"w"`: a probe must not truncate the file it is
+        // measuring. The lock is on the description, so the mode is otherwise
+        // irrelevant, and the child's own `open` creates a NEW description —
+        // which is exactly why its `flock` is denied against a real holder.
+        let script = r#"
+import fcntl, sys
+f = open(sys.argv[1], "a")
+try:
+    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    print("free")
+except OSError:
+    print("locked")
+"#;
+        let out = std::process::Command::new("python3")
+            .arg("-c")
+            .arg(script)
+            .arg(sidecar)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "sidecar probe failed: {out:?}");
+        match String::from_utf8_lossy(&out.stdout).trim() {
+            "locked" => true,
+            "free" => false,
+            other => panic!("unexpected probe verdict {other:?}"),
+        }
+    }
+
+    /// The must-be-FREE end of the lifecycle is the one assertion here that a
+    /// concurrent `fork` can defeat without anything being wrong: a sibling
+    /// thread that spawned a subprocess while the guard was alive handed its
+    /// child a duplicate of the locked description, and `O_CLOEXEC` closes that
+    /// copy at `exec`, not at `fork`. So the lock outlives the last guard until
+    /// that child execs. Poll for it the same bounded way
+    /// `acquire_past_fork_window` does. The must-be-LOCKED assertions need no
+    /// such tolerance: an inherited descriptor can only keep the lock held,
+    /// never release it early, so they cannot be made to pass spuriously.
+    // trace:BUG-1729 | ai:claude
+    #[cfg(unix)]
+    fn externally_free_past_fork_window(sidecar: &Path) -> bool {
+        let deadline = std::time::Instant::now() + FORK_WINDOW_BOUND;
+        loop {
+            if !externally_locked(sidecar) {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
     // trace:TASK-1526 | ai:codex
     #[cfg(unix)]
     #[test]
