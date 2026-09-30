@@ -987,10 +987,19 @@ mod tests {
         // ~70 ms in release on the real 18 MB transcript; linear is ~10 ms.
         // Debug builds are slower, so only guard against the pathological
         // shape, not the exact figure.
-        assert!(
-            t0.elapsed() < std::time::Duration::from_secs(5),
-            "backward scan too slow: {:?}",
-            t0.elapsed()
+        // Load-bearing: the pathological shape is the only thing this test
+        // can fail on, so the original 5s literal stays fatal as the ceiling.
+        // A quadratic re-search of the growing buffer is orders of magnitude
+        // over it, and the 2s budget reports the in-between case rather than
+        // accusing a busy host of it. This is the tightest ratio of the set:
+        // 336ms measured in a debug build on a quiet host, so the ceiling is
+        // only ~15x nominal, and a BUDGET-MISSED here under load is expected
+        // rather than suspicious. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            t0,
+            std::time::Duration::from_secs(2),
+            std::time::Duration::from_secs(5),
+            "backward scan of a 7 MiB transcript for the last process-start event",
         );
     }
 

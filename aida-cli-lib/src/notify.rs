@@ -1149,7 +1149,16 @@ mod tests {
             Some(Duration::from_millis(300)),
         )
         .unwrap_err();
-        assert!(started.elapsed() < Duration::from_secs(10), "{err:#}");
+        // What proves the bound *worked* is the `killed` assertion below: a
+        // `sleep 5` allowed to finish would report its own exit status
+        // instead. So this is only a hang guard, and a bare `<` made it a
+        // statement about the host as much as the code. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            started,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
+            "bounded notify command killed at its timeout",
+        );
         assert!(format!("{err:#}").contains("killed"), "{err:#}");
         // A command that finishes inside the bound still succeeds or fails
         // on its own exit status.
@@ -1207,10 +1216,15 @@ mod tests {
             Some(Duration::from_millis(300)),
         )
         .unwrap_err();
-        assert!(
-            started.elapsed() < Duration::from_secs(3),
-            "{:?}",
-            started.elapsed()
+        // The m2 regression — writing the message on the calling thread — is
+        // caught by the `unwrap_err` above, not here: a write that blocked
+        // until `sleep 5` exited would find a child that succeeded, and the
+        // call would return Ok. This is the hang guard. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            started,
+            Duration::from_secs(3),
+            Duration::from_secs(60),
+            "bounded notify stdin write of a 4 MiB message",
         );
         assert!(format!("{err:#}").contains("killed"), "{err:#}");
         // A command that reads the whole large message still succeeds.
@@ -1256,7 +1270,20 @@ mod tests {
             Some(Duration::from_secs(5)),
         )
         .unwrap();
-        assert!(started.elapsed() < Duration::from_secs(4));
+        // Unlike the other bounds here, this one is load-bearing and stays
+        // fatal: nothing else in this test distinguishes returning on the
+        // command's own exit from waiting out the 5s bound, so the original
+        // 4s literal is kept as the ceiling. Nominal is a shell spawn and
+        // exit — 21ms measured in a debug build on a quiet host — so 4s is
+        // ~190x nominal and no host load explains crossing it; the 1s budget
+        // is the performance signal.
+        // trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            started,
+            Duration::from_secs(1),
+            Duration::from_secs(4),
+            "notify command with a background child returning on its own exit",
+        );
         let pid: libc::pid_t = std::fs::read_to_string(&pidfile)
             .unwrap()
             .trim()
@@ -1305,10 +1332,14 @@ mod tests {
                 Some(Duration::from_millis(500)),
             )
             .unwrap_err();
-            assert!(
-                started.elapsed() < Duration::from_secs(3),
-                "{body}: {:?}",
-                started.elapsed()
+            // As above, the `unwrap_err` carries the property: each body
+            // exits 0 on its own after ~7s, so a call that waited would
+            // return Ok. trace:BUG-1731 | ai:claude
+            crate::test_timing::assert_within_budget(
+                started,
+                Duration::from_secs(3),
+                Duration::from_secs(60),
+                &format!("notify group kill for `{body}`"),
             );
             assert!(format!("{err:#}").contains("killed"), "{err:#}");
             let pgid: libc::pid_t = std::fs::read_to_string(&pidfile)
@@ -1388,7 +1419,14 @@ mod tests {
             Some(Duration::from_millis(300))
         )
         .is_err());
-        assert!(started.elapsed() < Duration::from_secs(10));
+        // The `is_err` above carries the property: `sleep 5` exits 0, so a
+        // call that waited it out would succeed. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            started,
+            Duration::from_secs(10),
+            Duration::from_secs(60),
+            "send_direct_bounded returning at its timeout",
+        );
         let state = load_state(root).unwrap();
         assert!(state
             .rules

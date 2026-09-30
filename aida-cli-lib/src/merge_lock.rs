@@ -311,9 +311,16 @@ mod tests {
         // Fresh timestamp but dead same-host pid → reclaimed immediately (no wait).
         let start = Instant::now();
         let _g = acquire(root, "main", Some(10), "steal", Duration::from_millis(200)).unwrap();
-        assert!(
-            start.elapsed() < Duration::from_millis(150),
-            "dead-pid steal is immediate"
+        // The `unwrap` above carries "reclaimed": a holder not recognised as
+        // stale makes `acquire` spin to its 200ms deadline and return Err. So
+        // this is only the "no wait" signal — and at 150ms against a 200ms
+        // deadline it had 33% margin over a host condition, which is how a
+        // correct steal went red under load. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            start,
+            Duration::from_millis(150),
+            Duration::from_secs(60),
+            "steal of a merge lock held by a dead same-host pid",
         );
     }
 
