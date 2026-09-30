@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-30T17:10:54.467112315Z
+modified_at: 2026-09-30T17:20:52.921551479Z
 req_type: Bug
 comments:
 - id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
@@ -143,6 +143,68 @@ comments:
   created_at: 2026-09-30T17:10:54.467112315Z
   modified_at: 2026-09-30T17:10:54.467112315Z
   session_id: 2284e676-e7f4-4592-9a21-d700e91d8db2
+- id: 01a0f355-5cb9-7010-9dbd-030969efa67b
+  author: joe
+  content: |
+    ## Acceptance disposition (advisor review, relay session #16)
+
+    **AC1 — robust destroy, reason recorded: MET.** All three removal sites (`destroy`,
+    `reset`, `create --force`) route through `remove_tree_retrying_dir_not_empty`, which
+    retries a bounded three passes on `ENOTEMPTY` only. The reasoning is recorded as a
+    doc comment on the helper, including the measurements, so a later reader does not
+    "simplify" it away.
+
+    **AC2 — name the writer: NOT MET AS WRITTEN, and it cannot be. Accepted on the
+    criterion's stated intent instead.** The criterion assumes a writer exists. Three
+    probes looked for one and none found it: a create-instant/250ms-later store snapshot
+    (path + inode + mtime ns) showed zero drift across 80 stores under eight-thread
+    contention; a store parked under the shared temp root for 900 s beside the full
+    7,400-test suite recorded no mutation; and a teardown that emptied a level, paused
+    30 ms and looked again, run back to back for 900 s against that suite, never saw an
+    entry return. Supporting: every `aida_core::git_ops` git call goes through
+    `Command::output()`, which waits for the child (`aida-core/src/git_ops.rs:38`), and
+    the temp sweeper at `aida-cli-lib/src/test_home.rs:260` only removes
+    `<TEST_HOME_PREFIX><pid>` dirs, so it cannot reach a `TempDir`-owned sandbox root.
+
+    Being precise about how strong that is: **this is failure to reproduce, not proof of
+    absence.** The original failure fired once in 7,152 tests. 1,800 s of probing not
+    catching it is consistent with "no writer" and also consistent with "a writer rarer
+    than the probe window." So the honest answer is that the writer could not be
+    observed, not that one provably does not exist. That is why the criterion cannot be
+    satisfied literally, and why inventing a culprit to match its wording would have been
+    the wrong disposition.
+
+    What the criterion is actually protecting is stated in its own second sentence: a
+    retry must not mask a genuine leak. **That is now met by construction on both paths,
+    and closing the gap was this session's work.** The first fix diagnosed itself only
+    when it gave up — but the common case is a retry that *succeeds*, and that path was
+    silent. A real leak that cleared inside three passes would have left no trace at all,
+    i.e. exactly the masking forbidden. The retry is therefore now never silent: on
+    success after an `ENOTEMPTY` it reports the pass count and names what blocked the
+    failing pass (snapshotted at the *first* failure, since that is what actually
+    obstructed the removal), while the give-up error keeps naming what is left *now*.
+    Those two lists answer different questions, and the difference between them is the
+    tell between this benign race and a real leak. A first-pass success stays silent, so
+    the warning keeps its signal value.
+
+    Net effect: if a writer does exist, the next occurrence names it in the CI log rather
+    than costing another investigation. The evidence this criterion asked for is now
+    produced automatically instead of being asserted up front.
+
+    **AC3 — deterministic fixtures, no sleeps or polling: MET.** Six tests, remover and
+    backoff injected. Each mutation-proven to fail exactly its own assertion and no
+    other: attempts=1, widening the guard to `Err(e) if true`, emptying the survivor
+    list, collapsing the empty-case branch, silencing the success report, and reporting
+    unconditionally.
+
+    **AC4 — close the leak if it is a leaked child: VACUOUS.** No leaked child was found,
+    so there is nothing to close. Superseded by the AC2 finding above.
+
+    **Disposition: accept.** The premise is recorded as unconfirmed on the spec rather
+    than treated as satisfied.
+  created_at: 2026-09-30T17:20:52.921551479Z
+  modified_at: 2026-09-30T17:20:52.921551479Z
+  session_id: 2741ecd8-b31f-4078-8713-d9760e463b60
 history:
 - id: 01a0e478-b08c-7111-84a8-c496042f936f
   author: joe
