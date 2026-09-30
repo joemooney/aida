@@ -76,11 +76,11 @@ description: |
   the `.claude/` mirrors). If so, say so in a comment and file separately — do not widen this spec
   into a general staleness framework.
 status: Draft
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-09-30T13:13:17.626476738Z
+modified_at: 2026-09-30T13:13:50.215527785Z
 req_type: Bug
 filed_at:
   code_sha: 181bbf4c35cd8da3e146dbf8aa44253bf2ec86e9
