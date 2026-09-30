@@ -54,12 +54,12 @@ description: |
   3. If the behaviour is genuinely environment-specific and cannot be made
      host-independent, the tests are gated on the precondition they need rather
      than left failing.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T23:50:48.560366490Z
-modified_at: 2026-09-30T03:52:31.491293401Z
+modified_at: 2026-09-30T04:22:50.441570815Z
 req_type: Bug
 comments:
 - id: 01a0f047-c26f-7b32-a974-904d873a475f
@@ -200,6 +200,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f08d-0b5e-71c2-aad3-7f0684ef68ad
+  author: joe
+  timestamp: 2026-09-30T04:22:50.462409863Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 8bd9fbb3d667078da412005cdf0c720364458cf2
   branch: main
@@ -208,3 +215,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: b2195326-c6b7-41c7-afb5-aa27b60756e2
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-30T04:22:50.441570815Z
+  implemented_by: joe
