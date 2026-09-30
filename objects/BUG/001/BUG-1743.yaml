@@ -1,0 +1,46 @@
+id: 01a0f375-8c50-7543-a61a-d32bb3e65128
+spec_id: BUG-1743
+agreed_id: BUG-1743
+title: 'A file written under a tempfile temp root disappears mid-test: refusal_aftermath is the live half of BUG-1742'
+description: |
+  OBSERVED: `bug_1452_refusal_aftermath_tests::refusal_aftermath_is_parked_held_and_awaiting_visible` fails in CI when a file it has just written under its own `tempfile` temp root is not there a moment later. Two failures on `main` in the BUG-1742 measurement window (2026-09-20 .. 2026-09-30), and it is the ONLY offender in that window whose most recent failure postdates every fix that landed for the other families.
+
+  The two failures are two faces of the same symptom, on the same path (`<temp root>/.aida/review-verdicts/PR-1452.json`):
+
+  - run 36285986900 (2026-09-26, sha 854b7e26) — the write itself failed:
+    `recording a refusing verdict must succeed: the phase-3 handshake was NOT written to /tmp/.tmpclrg5o/.aida/review-verdicts/PR-1452.json`
+    `Caused by: could not write ...: No such file or directory (os error 2)`
+    i.e. the parent directory was absent at write time.
+  - run 36717478815 (2026-09-30T12:51Z, sha 181bbf4c) — the write SUCCEEDED and the read-back found nothing:
+    `the phase-3 handshake at /tmp/.tmpBukZy7/.aida/review-verdicts/PR-1452.json disappeared immediately after being written — not reporting it as recorded`
+    (aida-cli-lib/src/lib.rs, the BUG-1571 `is_file()` check after `write_verdict_object`)
+
+  `write_verdict_object` already verifies content by reading it back, so between that read-back and the `is_file()` check the file ceased to exist. That is a concurrent deletion of, or under, a live `tempfile::TempDir`, not a write bug.
+
+  WHY IT MATTERS: this is the live half of BUG-1742. The other eight tests in that window are attributable to BUG-1579 / BUG-1595 / BUG-1735 / BUG-1729+BUG-1736, all of which had landed by 2026-09-30T11:42Z; this one failed at 12:51Z, after all of them.
+
+  It is also the likely mirror image of BUG-1695 (`sandbox_create_and_seed_round_trip` flaking on teardown with ENOTEMPTY — entries APPEARING inside a temp tree while it is being removed). BUG-1695's AC2 could not name a writer and was accepted on intent with its premise recorded as UNCONFIRMED. If the same agent is responsible for both, this spec is the second sighting and the better-instrumented one: here the process that loses the file is the one that wrote it, and it already prints the exact path and the moment.
+
+  WHAT IS NOT YET KNOWN: no culprit has been identified. One hypothesis was checked and is NOT supported — `test_env`'s `EnvVarsGuard` serialises every env swap on a single process-global `ENV_LOCK` (BUG-697 / TASK-1559), so a simple env-clobber between parallel tests is already defended against. It remains open whether a test that does NOT route through that guard can read an env-derived project root belonging to another test's temp dir and sweep under it.
+
+  ## Acceptance
+  - Reproduce the disappearance, or record the failure to reproduce honestly as "not reproduced in N attempts under conditions X", never as "no writer exists". A probe window that does not catch a 2-in-287 event is consistent with both.
+  - Identify what removes the path, or instrument the test so the NEXT occurrence names it in the CI log without a further investigation. Naming the culprit is preferred; leaving the next occurrence self-diagnosing is the acceptable floor.
+  - State explicitly whether this shares a mechanism with BUG-1695's ENOTEMPTY teardown failures. Both are temp-tree interference on the same CI host, so "unrelated" is a claim that needs evidence, not a default.
+  - Any fix is proven by mutation: revert it and show the new test fails, per the project's standing rule that a test passing either way advertises coverage that does not exist.
+  - No quarantine, `#[ignore]`, or blanket retry of this test without the evidence above attached.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T17:56:02.256778237Z
+modified_at: 2026-09-30T17:56:02.256778237Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
