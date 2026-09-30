@@ -19,7 +19,7 @@ description: |
   - tempfile's `TempDir::drop` discards the error from its own recursive remove, so failures of this shape are swallowed silently almost everywhere; only tests that assert on teardown surface them. The true rate is therefore likely higher than the failure list suggests.
 
   ## Acceptance
-  - Quantify first: over the last N `main` runs, report the failure rate of `Build (ubuntu-latest)` and the per-test failure tally, so the work is aimed at the tests that actually cost merges rather than the most recently seen one.
+  - Quantify first, with an explicit denominator: over the **last 50 completed `Build (ubuntu-latest)` runs on `main`** (or all runs since 2026-09-20, whichever covers more), report the failure count over the run count as a rate, plus the per-test failure tally. Report the tally even for tests that failed once, and name any run excluded from the denominator and why. `N` is pinned so the next reader's number is comparable to this one rather than a differently-scoped sample; aim the work at the tests that actually cost merges, not the most recently seen one.
   - Each recurring offender is either fixed at its cause or has a filed spec of its own with the evidence attached; no test is quarantined or retried without that evidence.
   - State explicitly whether the failures share one mechanism (e.g. contention on a shared lock, temp-root collision, a CI-core-count sensitivity) or are independent. A per-test fix list without that answer is not acceptable, because the shared-mechanism case would make five separate fixes the wrong shape of work.
   - The measurement is repeatable: whatever query produced the tally is recorded so the next reader can re-run it rather than re-derive it.
@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:11:23.249054665Z
-modified_at: 2026-09-30T17:11:23.249054665Z
+modified_at: 2026-09-30T17:21:35.685052873Z
 req_type: Bug
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
