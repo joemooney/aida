@@ -111,12 +111,12 @@ description: |
 
   BUG-1688, BUG-1693 and BUG-1695 are actually stranded and need dispositioning by a seat. That is
   queue hygiene, not this bug. File or handle separately.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:37:34.545659725Z
-modified_at: 2026-09-30T13:40:56.685003435Z
+modified_at: 2026-09-30T13:40:57.583037484Z
 req_type: Bug
 comments:
 - id: 01a0f28c-00ed-7cb1-a2d3-0164c5be9b0d
@@ -187,6 +187,14 @@ comments:
   created_at: 2026-09-30T13:40:56.685003435Z
   modified_at: 2026-09-30T13:40:56.685003435Z
   session_id: 622c849c-8085-4d0c-840e-82dd660b1787
+history:
+- id: 01a0f28c-046f-7bd0-a568-dfa198113aa4
+  author: joe
+  timestamp: 2026-09-30T13:40:57.583035366Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b510526ff4e565e30da535b2e80ad42666e54283
   branch: main
