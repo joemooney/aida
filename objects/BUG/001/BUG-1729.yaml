@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T04:24:26.766619184Z
+modified_at: 2026-09-30T04:40:45.393603122Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -324,6 +324,65 @@ comments:
     drawn from the diagnostic was not.
   created_at: 2026-09-30T04:24:26.766619184Z
   modified_at: 2026-09-30T04:24:26.766619184Z
+  session_id: ef8b326b-58db-4236-9f3e-0769d4790bfa
+- id: 01a0f09d-7251-7863-8777-eeeae6743788
+  author: joe
+  content: |
+    ## Correction to the previous comment, and PR #2285
+
+    An independent review pushed back on one word in my root-cause comment, correctly. I wrote "root
+    cause"; the honest claim is **the only surviving candidate, which reproduces the signature byte
+    for byte**.
+
+    The review offered "another thread holds the registry entry" as a simpler explanation. That does
+    not fit — the CI report said `registry_entry=None`, so no thread held it, and the review itself
+    concedes another *lock* holder is needed. But "only surviving candidate" is not "proved", and the
+    distinction matters because the next occurrence should settle it from the log rather than from
+    argument. That is what `lock_holders` is for.
+
+    ## PR #2285 (`bug-1729`, 2 commits)
+
+    Ships, in `aida-core/src/db/cache_refresh.rs` only:
+
+    - `acquire_past_fork_window` — a 5s-bounded retry, used by the two assertions that need the lock
+      free. Documented as a coarse backstop, not a measurement.
+    - `a_forked_child_holds_the_lock_past_its_guard_until_exec` — makes the race deterministic.
+      `Command::spawn` does not return until the child reaches `exec`, so the child signals from
+      `pre_exec` over a `pipe2(O_CLOEXEC)` and lingers in `libc::nanosleep` while **another** thread
+      observes the window.
+    - `lock_holders` — `/proc/locks` holders (matched on `MAJ:MIN:INO`, with `comm`, `SELF` vs
+      `other`) plus this process's own descriptors on the same file, folded into
+      `diagnose_unavailable`. **SELF with an empty `own_fds` ⇒ inherited descriptor; SELF with a
+      descriptor still listed ⇒ a real leak.**
+    - `the_diagnostic_names_a_descriptor_no_guard_owns` — injects that leak and pins the report.
+
+    Both new tests are proven load-bearing by injection (zero linger; wrong `/proc/locks` field).
+    `db::cache` 168 tests, 3/3 consecutive runs.
+
+    ## What this does NOT close — BUG-1729 stays open
+
+    - **AC1** — `single_flight_four_readers_one_refresh`'s `ReadBudget` wall-clock assertion
+      (`cached_git_backend.rs:3573`). Untouched, and independent of this mechanism: it is budget
+      exhaustion under contention, not a lock problem.
+      Also in AC1's scope, found while here: `nested_freshen_in_lock_holder_does_not_wait` keeps a
+      bare `assert!(start.elapsed() < 100ms)`. I removed it on the theory that `is_nested()` already
+      proves "does not wait" and the reviewer showed that is **false** — the nested branch is reached
+      only after an `open`, a `canonicalize` and a blocking `HELD.lock()`, so the state says which
+      path was taken, not that it was prompt. Restored. A state-based replacement needs a counter
+      this module does not have.
+    - **AC2 observation B** — an outside probe reporting the sidecar **FREE** while a guard is alive.
+      The opposite direction, and **not** explained by fork inheritance: the child's own `open`
+      creates a new open file description, which `flock` denies against the holder's. Still
+      unexplained, still with no captured `/proc/locks` evidence. `lock_holders` is now the
+      instrument for it, and note the two original sightings were at host load ~26 during the
+      orphaned-spinner window, so they deserve one quiet-host re-run before being treated as real.
+    - **AC3** — the out-of-process lifecycle test in
+      `docs/plans/2026-09-29-refresh-lock-load-sensitivity.md`. Its must-be-locked assertions are
+      sound as written; its final must-be-free assertion needs `acquire_past_fork_window` before it
+      can ship, for exactly the reason this PR documents. With that one change it should be
+      shippable, and it is the test AC3 asks for.
+  created_at: 2026-09-30T04:40:45.393603122Z
+  modified_at: 2026-09-30T04:40:45.393603122Z
   session_id: ef8b326b-58db-4236-9f3e-0769d4790bfa
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
