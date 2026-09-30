@@ -79,12 +79,12 @@ description: |
   Do not widen the shared `RefreshLock` API to make `Ok(None)` impossible — the two callers in
   production (`cache_refresh.rs:247`, `cached_git_backend.rs:467`) depend on `Ok(None)` meaning
   "someone else is refreshing, skip". This is a **test-helper** defect.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T11:04:44.481457259Z
+modified_at: 2026-09-30T11:42:52.424733259Z
 req_type: Bug
 comments:
 - id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
@@ -295,6 +295,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f21f-e7f3-7c50-862f-4dd3c6e5203c
+  author: aida-auto-bump
+  timestamp: 2026-09-30T11:42:52.403877919Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f21f-e808-7e13-b854-29ea72f68c74
+  timestamp: 2026-09-30T11:42:52.424731329Z
+  agent: product
+  commit_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
+  summary: Completed via merge b4873ce7
 filed_at:
   code_sha: 42a2b8775d6df3bb521f8e2dfd8d53d381534068
   branch: bug-1735
@@ -303,3 +316,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: bba8597d-14d5-4e73-b72f-031c3ab3e23e
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-30T11:42:52.403825095Z
+  completion_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
