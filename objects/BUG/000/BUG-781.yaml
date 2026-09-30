@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:38:19.890297076Z
-modified_at: 2026-07-22T06:23:29.326071443Z
+modified_at: 2026-09-30T13:11:03.379316053Z
 req_type: Bug
 tags:
 - aida:list decision lifecycle dx batch:papercuts-0721 followup:BUG-761 from-dogfood
+comments:
+- id: 01a0f270-a3d3-77b1-ab1d-6d564192eb57
+  author: joe
+  content: Commit 181bbf4c35 references this requirement
+  created_at: 2026-09-30T13:11:03.379316053Z
+  modified_at: 2026-09-30T13:11:03.379316053Z
+  session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
 history:
 - id: 019f887e-5827-7432-b9ae-296068c1d13a
   author: aida-auto-bump
