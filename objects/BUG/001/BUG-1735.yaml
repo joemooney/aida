@@ -82,12 +82,12 @@ description: |
   Do not "fix" this by relaxing the test's assertion to accept either error arm. That would
   discard the very signal this bug is about — the test's job is to prove a non-zero exit
   propagates, and it can only do that if a spawn failure remains distinguishable.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T08:04:08.478585861Z
-modified_at: 2026-09-30T10:27:17.499471736Z
+modified_at: 2026-09-30T10:51:41.843032737Z
 req_type: Bug
 comments:
 - id: 01a0f171-19c2-71a3-8dec-401eb24aa229
@@ -360,6 +360,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f1f1-0d87-7542-abc4-62e2ca5bcb03
+  author: aida-auto-bump
+  timestamp: 2026-09-30T10:51:41.831663476Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f1f1-0d93-7552-91a2-51d7d1e08c58
+  timestamp: 2026-09-30T10:51:41.843031317Z
+  agent: product
+  commit_sha: ae84069a3653aaa620ed285369234c7723349b6b
+  summary: Completed via merge ae84069a
 filed_at:
   code_sha: 15fd965f4466d9d7811c5f419244d275c8737826
   branch: main
@@ -368,3 +381,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: ee842845-0934-464c-8a39-5ea927f98a59
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-30T10:51:41.831630931Z
+  completion_sha: ae84069a3653aaa620ed285369234c7723349b6b
