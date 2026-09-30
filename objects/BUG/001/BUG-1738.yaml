@@ -1,0 +1,92 @@
+id: 01a0f272-b03a-7430-8d4b-832900f122f5
+spec_id: BUG-1738
+agreed_id: BUG-1738
+title: A generated pre-push mirror hook never updates after install, so BUG-1706's fix has not reached this machine and git push --dry-run still pushes the mirror
+description: |
+  ## Summary
+
+  `aida remote mirror` writes a pre-push hook into `.git/hooks/pre-push`. That script is
+  **generated once, at install time**, from `mirror_pre_push_hook_script()`
+  (`aida-cli-lib/src/remote_create.rs:1267`). When the generator changes, **already-installed
+  hooks keep running the old script forever**, and nothing — not `aida doctor`, not a version
+  check, not a warning on push — tells the operator.
+
+  A fix that lives in a generated artifact does not reach the artifacts already generated.
+
+  ## Evidence: this is not hypothetical, and the divergence is a known-bad one
+
+  BUG-1706 — "`git push --dry-run` pushes to the gitlab mirror: the wrapper's mirror step ignores
+  the flag, so a no-op command mutates a real remote and can create the divergence it was run to
+  avoid" — is `completed`, fixed in `5ed030a3cd` (PR #2255, 2026-09-28). The fix taught the
+  generated hook to parse the parent `git push` command line, because git runs pre-push for dry
+  runs but omits the flag from the hook environment:
+
+  ```sh
+  case " $git_args " in *" --dry-run "*|*" -n "*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac
+  ```
+
+  The hook installed in `/home/joe/ai/aida/.git/hooks/pre-push` **today**, two days after that
+  merge, is the pre-fix script in full:
+
+  ```sh
+  unset GIT_DIR GIT_WORK_TREE
+  if command -v aida >/dev/null 2>&1; then
+    aida remote mirror-push "$1" || true
+  fi
+  exit 0
+  ```
+
+  No `git_args`, no `--dry-run` case, no forwarding. **On this machine `git push --dry-run` still
+  pushes to the mirror.** BUG-1706 is closed and its defect is still live here — not because the
+  fix is wrong, but because nothing re-installs the hook.
+
+  This was found while verifying whether a standing "never `git push --dry-run`" prohibition had
+  gone stale (TASK-1560). It had not. The prohibition is still correct on this host, for a reason
+  nobody would guess from the bug's `completed` status.
+
+  ## Why this class matters beyond one hook
+
+  Any operator who ran `aida remote mirror` before 2026-09-28 is in this state and has no signal.
+  The failure is silent, it mutates a real remote, and the one command an operator reaches for to
+  *avoid* mutating a remote is the command that triggers it. The blast radius of the next
+  generator change is the same.
+
+  ## Acceptance
+
+  1. `aida doctor` gains a check that compares the installed `.git/hooks/pre-push` against the
+     current `mirror_pre_push_hook_script()` and reports a finding when they differ, naming
+     `aida remote mirror <name>` as the remedy.
+  2. The check fires only when the installed hook is recognisably AIDA's (match on the generated
+     header comment). A hand-written or third-party pre-push hook, or a project with mirroring
+     never configured, must produce no finding — do not offer to overwrite someone else's hook.
+  3. The comparison tolerates benign drift that does not change behaviour if any is identified;
+     otherwise exact match is acceptable and simpler. State which was chosen and why.
+  4. Decide and document whether the finding is `safe_heal`. Rewriting a hook in the operator's
+     `.git/hooks/` is a write outside the store — if in doubt, report-only, consistent with
+     `heal_doctor_finding`'s safe default arm.
+  5. Verified against this repository's real, currently-stale hook: the check reports it, and
+     after `aida remote mirror` re-installs, the check is clean.
+  6. Tempdir-only tests: matching hook → no finding; stale AIDA hook → finding; foreign hook → no
+     finding; absent hook → no finding.
+  7. Prove by mutation that each test fails.
+
+  ## Consider, do not assume
+
+  Whether other generated-once artifacts share this shape (other git hooks, `.aida/` scaffolding,
+  the `.claude/` mirrors). If so, say so in a comment and file separately — do not widen this spec
+  into a general staleness framework.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T13:13:17.626476738Z
+modified_at: 2026-09-30T13:13:17.626476738Z
+req_type: Bug
+filed_at:
+  code_sha: 181bbf4c35cd8da3e146dbf8aa44253bf2ec86e9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 08266c5d-f39e-4334-b87d-f481a6ba1b02
