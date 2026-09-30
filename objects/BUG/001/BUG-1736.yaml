@@ -84,7 +84,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T10:38:16.578409935Z
-modified_at: 2026-09-30T11:04:38.036002866Z
+modified_at: 2026-09-30T11:04:44.481457259Z
 req_type: Bug
 comments:
 - id: 01a0f1f4-471f-7321-ab50-f9fa73c8ba4a
@@ -213,6 +213,72 @@ comments:
     loop.
   created_at: 2026-09-30T11:04:38.036002866Z
   modified_at: 2026-09-30T11:04:38.036002866Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+- id: 01a0f1fc-fec1-7340-9552-0ebbb959034b
+  author: joe
+  content: |
+    ## AC4 / AC5 — evidence, run not reported
+
+    ### AC4 — deterministic injection, not N green runs
+
+    Three tests, all with an injected foreign holder on a separate thread (a same-thread acquire
+    would read as a *nested winner*, not as contention, so it would prove nothing):
+
+    1. **`cache_refresh::bounded_acquire_retries_past_a_foreign_holder_and_then_succeeds`** — the
+       holder signals ready only *after* it has the flock, so attempt 1 cannot succeed; a releaser
+       drops it at 120ms. Asserts the acquire succeeded **and** `attempts > 1`. The `attempts > 1`
+       assertion is what makes this non-vacuous: if the holder ever stopped contending the acquire
+       would win immediately and the test would *fail* rather than quietly pass.
+    2. **`cache_refresh::bounded_acquire_honours_the_callers_bound_rather_than_the_backstop`** —
+       holder never releases; a 30ms bound must return `Ok(None)`. This is the branch a
+       const-only helper can never reach, since no test can wait out 5s.
+    3. **`cached_git_backend::held_refresh_waits_out_a_contended_flock_instead_of_panicking`** —
+       the same injection at **the defective site itself**, asserting `attempts > 1`.
+
+    ### AC2's witness
+
+    **`cached_git_backend::a_dead_holder_is_reported_as_its_own_panic_not_the_waiters_recverror`**
+    spawns a holder that panics without arming the channel, catches the waiter's unwind, and
+    asserts the payload contains the *holder's* message and **not** `RecvError`.
+
+    **Plainly, per AC5: this one is a message witness, not a behaviour witness.** Nothing observable
+    changes for the test that was failing — the suite fails either way. What changes is *which line
+    and which message* the failure names, and since the entire defect being fixed is "CI told us
+    the wrong location", the message *is* the behaviour under test. It is asserted in both
+    directions (the holder's text present, `RecvError` absent) so it cannot pass by accident.
+
+    ### AC5 — mutation matrix, all four rows executed
+
+    | mutation | retries&succeeds | honours bound | held_refresh waits | dead holder |
+    |---|---|---|---|---|
+    | none | pass | pass | pass | pass |
+    | **M1** — retry loop reverted to one bare attempt | **FAIL** `cache_refresh.rs:930` | pass | **FAIL** `cached_git_backend.rs:3681` | pass |
+    | **M2** — `bound` parameter ignored, `FORK_WINDOW_BOUND` read inside | pass | **FAIL** `cache_refresh.rs:977` | pass | pass |
+    | **M3** — `await_holder_ready` reverted to `recv().unwrap().unwrap()` | pass | pass | pass | **FAIL** `cached_git_backend.rs:3753` |
+
+    Every mutation is **isolated**: each fails only the tests that witness it, so no test rides on
+    another's mechanism. Failure messages, quoted:
+
+    - M1: `the holder released after 120ms but the bounded retry gave up`
+    - M2: `gave up after 5.000299155s, so the caller's 30ms bound was ignored in favour of the 5s backstop`
+    - M3: `the waiter raised "called \`Result::unwrap()\` on an \`Err\` value: RecvError" instead of re-raising the holder's own payload`
+
+    **M3 reproduces the filed CI signature verbatim** — `panicked at cached_git_backend.rs:3680:
+    called \`Result::unwrap()\` on an \`Err\` value: RecvError`, on the waiter's line — which is the
+    strongest available confirmation that the right defect was fixed and not merely a nearby one.
+
+    Mutations were applied by `cp` to the scratchpad → python patch → rebuild → run → `cp` back.
+    No `git stash`.
+
+    ### One honest note on the wall-clock assertion
+
+    `bounded_acquire_honours_the_callers_bound_rather_than_the_backstop` asserts `elapsed < 1s`
+    against a 30ms bound. That is a **33× margin above the true value** and sits **166× below** the
+    alternative it discriminates (M2's 5s), so it is not a tight budget and a loaded runner cannot
+    plausibly flake it — but it is a wall-clock assertion, recorded as such rather than left for a
+    later seat to discover (BUG-1731's lesson).
+  created_at: 2026-09-30T11:04:44.481457259Z
+  modified_at: 2026-09-30T11:04:44.481457259Z
   session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 history:
 - id: 01a0f1f4-4382-78f2-ae3f-290c4b2273ac
