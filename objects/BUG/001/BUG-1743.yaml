@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:56:02.256778237Z
-modified_at: 2026-09-30T18:00:17.339941942Z
+modified_at: 2026-09-30T18:17:22.287407456Z
 req_type: Bug
 comments:
 - id: 01a0f379-70bb-77b2-92f0-fe87aea3f176
@@ -57,6 +57,23 @@ comments:
     Worth knowing while writing the fix: `write_verdict_atomic`'s temp name is `.{file_name}.tmp-{pid}-{nanos}`, and `pid` is identical across every thread of one test binary. Nanosecond nonce makes a collision unlikely but it is the only thing separating two threads staging the same verdict path, so rule it in or out explicitly rather than assuming.
   created_at: 2026-09-30T18:00:17.339941942Z
   modified_at: 2026-09-30T18:00:17.339941942Z
+  session_id: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
+- id: 01a0f389-146f-7be3-8d60-23eff468c534
+  author: joe
+  content: |
+    Follow-on to the probe above — the candidate worklist for the leading hypothesis, so the next session starts from a list instead of a grep.
+
+    Hypothesis restated: some code path resolves a project root from `AIDA_PROJECT_ROOT` / `AIDA_DRIVE_ROOT` / `find_project_root()` while a parallel test holds those pointed at ITS temp dir, and then removes under that root. 296 non-test sites read one of those three. Fifteen modules both resolve a root and call `remove_file`/`remove_dir_all`:
+
+    drain_lock, reconstitute, session_reap, doctor_cmd, lib, mcp, pr_cmd, headless_tee, drain_state, queue_cmd, solo_lock, agent_registry, internal_cmd, session (plus tests/agent_launcher_tests).
+
+    Already eliminated from that list: `session_reap`'s `remove_dir_all(admin_dir)` — it removes a git worktree admin directory under `<common_dir>/worktrees/<name>` keyed by a matching `gitdir` file, never anything under `.aida/`.
+
+    Recommended order for the next session, cheapest-first, and note this is static narrowing, NOT a reproduction: prefer the ones that can plausibly run as a side effect of an unrelated command rather than only from an explicit verb, since the failing test never invokes these directly. `drain_state`, `agent_registry`, `solo_lock` and `drain_lock` fit that shape; `doctor_cmd`, `pr_cmd`, `reconstitute` and `internal_cmd` are explicit verbs and are lower yield.
+
+    Caution carried from BUG-1695's AC2: if none of them turns out to be the writer, the honest conclusion is "not identified", not "no writer exists". The second acceptance bullet here was written to accept a self-diagnosing failure as the floor precisely so this spec cannot stall on proving a negative.
+  created_at: 2026-09-30T18:17:22.287407456Z
+  modified_at: 2026-09-30T18:17:22.287407456Z
   session_id: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
 history:
 - id: 01a0f375-c9fd-7430-97d1-7d7d981994a8
