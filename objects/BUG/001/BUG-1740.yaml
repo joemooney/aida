@@ -1,107 +1,114 @@
 id: 01a0f2c7-18d6-7692-ab7a-47b0c7ff39f9
 spec_id: BUG-1740
 agreed_id: BUG-1740
-title: Orphan classifier reads a defunct (zombie) creator pid as a live harness, stranding a whole fan-out's specs behind possibly_subagent
+title: 'possibly_subagent is self-satisfying: a root-pinned harness lease reads Live from the reporting session, so every stale spec claims a fan-out may be on it'
 description: |
   ## Summary
 
-  The orphan classifier treats a **defunct (zombie) process as alive**. A zombie still has a
-  `/proc/<pid>` entry and still answers a by-pid liveness probe, so a lease whose creator died
-  three days ago reads as "possibly worked by a subagent — live harness lease in this repo"
-  instead of "abandoned — lease died".
+  `possibly_subagent` is set by a guard that cannot return false where the command is normally
+  run. It reports "possibly worked by a subagent — live harness lease in this repo" for **every**
+  stale spec lease in the repository, because the "live harness lease" it cites is a
+  `harness-worktree` lease pinned to the **project root**, and that lease is `Live` whenever any
+  claude process sits in the project root — including the operator's own window and the very
+  session invoking `aida awaiting`.
 
-  The softer verdict is not cosmetic: it is the difference between a spec that reads as *someone
-  else is on it* and one that reads as *nobody is on it and the work is stranded*. Three specs
-  sat In-Progress for three days behind the wrong one.
+  The report therefore says *someone may be on it* about work nobody is on, and keeps saying it
+  for as long as the operator has a session open. BUG-1688, BUG-1693 and BUG-1695 sat In-Progress
+  for three days behind this verdict with real uncommitted work in their worktrees.
 
-  ## Evidence (2026-09-30, this repository)
+  ## Evidence (2026-09-30, this repository, verified at `7c37dd81ac`)
 
-  `BUG-1688`, `BUG-1693` and `BUG-1695` are all In-Progress. All three leases name the **same**
-  creator:
-
-  ```
-  $ grep creator_pid .aida/sessions/{01a0e4be89ef,01a0e4bb9258,01a0e5c56e99}.toml
-  creator_pid = 1907632      # BUG-1688
-  creator_pid = 1907632      # BUG-1693
-  creator_pid = 1907632      # BUG-1695
-
-  $ ps -p 1907632 -o pid,lstart,etime,args
-      PID                  STARTED     ELAPSED COMMAND
-  1907632 Fri Sep 25 19:03:43 2026  4-12:40:45 [codex] <defunct>
-  ```
-
-  `1907632` is a **zombie** — exited, never reaped, four and a half days old. It is not doing
-  work and cannot. `ps -p` succeeds, `/proc/1907632` exists, and `kill -0` would succeed, so
-  every by-pid liveness test passes.
-
-  `aida awaiting` (with BUG-1739's fix, which is what made these visible at all) reports all
-  three as:
+  The only `harness-worktree` lease present:
 
   ```
-  BUG-1688,"possibly worked by a subagent — lease pid dead, live harness lease in this repo",last touched 64h 41m ago,aida ps
+  id            = "01a0c96c2f117c239cfd2acf11a8f59a-3716d304824b58e5"
+  scope         = "harness-worktree"
+  worktree_path = "/home/joe/ai/aida"      # the operator's main checkout
+  started_at    = "2026-09-22T14:01:46Z"   # 8 days old
+  # no active_pid, no creator_pid, review_verb = false, claim_verb = false
   ```
 
-  The `possibly_subagent` arm (BUG-1656) exists to avoid calling a live fan-out's children
-  abandoned. That is the right intent — but its "is the harness live" evidence here is a zombie,
-  so the guard fires for a fan-out that has been dead for days.
+  `aida ps --json` reports it `liveness: live`. With no pid of any kind,
+  `classify_lease_state(worktree_exists = true, has_live_claude, age_hours = 8d)`
+  (`aida-core/src/liveness.rs:805`) can only reach `Live` through `has_live_claude`; the age arm
+  would otherwise return `Stale`. `has_live_claude` is
 
-  ## Why one zombie stranded three specs
+  ```rust
+  live_sessions.iter().any(|s| !s.stale_cwd
+      && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)))
+  ```
 
-  This was ONE fan-out, not three independent strandings — one parent, three children, all
-  claimed within five hours on 2026-09-27/28. When the parent zombied, every child lease
-  inherited the same false "live harness" signal at once. The blast radius of a single unreaped
-  parent is every spec its wave claimed.
+  and the process satisfying it was **pid 270203, `comm=claude`, `cwd=/home/joe/ai/aida`,
+  elapsed 2m45s — the session that ran the report.** Note `starts_with`: a root-pinned lease also
+  absorbs every claude in every subdirectory of the checkout.
 
-  ## What is actually stranded behind it
+  Downstream, `live_fanout_harness_lease` (`aida-cli-lib/src/lib.rs:66600`) turns that into
+  `fanout_active`, and the orphan pass sets `possibly_subagent: stale_lease && fanout_active`
+  (`lib.rs:68001`). With `fanout_active` effectively pinned true, the flag degenerates to a
+  restatement of `stale_lease`, which the row already carries.
 
-  Real, uncommitted work — `ahead=0` on every branch, so a commit-only check says "nothing here",
-  which is wrong:
+  Observed: all three stranded specs report `"possibly_subagent": true` in
+  `aida awaiting --json`, with no fan-out running.
 
-  | spec | worktree | state |
-  |---|---|---|
-  | BUG-1693 | `/home/joe/ai/aida-bug-1693` | **8 files STAGED, 277 insertions / 81 deletions**, incl. `merge_hold.rs` (+174), a new `tests/test_merge_hold_gate.sh`, CI workflow, template and docs. Near-complete. |
-  | BUG-1688 | `/home/joe/ai/aida-bug-1688` | 5 modified scripts, 68 insertions / 97 deletions, plus an untracked 73-line `tests/test_bug_1688_shipped_launch_refusals.sh` |
-  | BUG-1695 | `/home/joe/ai/aida-bug-1695` | clean; no work |
+  ## Why the informational framing makes it worse
 
-  BUG-1693's changes are **staged**, so `git diff --stat` reports nothing and only
-  `git diff --cached --stat` shows them. Any sweep that judges a stranded worktree by unstaged
-  diff alone will call it empty and delete it.
+  TASK-1064/BUG-1656 added this arm for a good reason: a real advisor Agent-tool fan-out takes a
+  generic non-spec-linked harness lease, and its children should not be called abandoned. The
+  intent is right. But the softened wording is load-bearing — it is the difference between *someone
+  else is on it* and *nobody is on it and the work is stranded* — and it is being emitted on
+  evidence that is an echo of the observer, so the one case the operator most needs surfaced is
+  the one it hides.
 
   ## Acceptance
 
-  1. A process in state `Z` (zombie/defunct) is NOT treated as a live process by the lease
-     liveness check. Read the state field from `/proc/<pid>/stat` (or the platform equivalent)
-     rather than relying on the existence of the pid, `ps -p` succeeding, or `kill -0`.
-  2. `orphaned_in_progress` classifies a lease whose creator is a zombie as **abandoned**, not
-     `possibly_subagent`. The `possibly_subagent` arm must require a creator that is actually
-     runnable.
-  3. The same liveness predicate is used everywhere a pid decides live-vs-dead — `aida ps`'s
-     orphan pass, lease acquisition/stealing, and the awaiting orphan channel. One predicate; if
-     there is more than one today, say where and unify or justify.
-  4. Tempdir/unit tests: a synthetic zombie (fork, exit the child, do not reap) is classified
-     dead; a genuinely live child is classified live; a wholly absent pid is classified dead.
-     Skip on platforms where the probe is not implementable, do not weaken the assertion.
-  5. Prove by mutation that the zombie test fails against today's predicate.
-  6. State whether `creator_pid_start_time` (present on BUG-1695's lease, absent on the other
-     two) already guards pid reuse, and whether a zombie check belongs beside it.
+  1. A `harness-worktree` lease whose `worktree_path` is the **project root itself** is not, on
+     its own, evidence of an active fan-out. Decide and state the rule: either such a lease is
+     excluded from `live_fanout_harness_lease`, or fan-out liveness must be attributed to a
+     process that is not the caller and not the operator's root session. Whichever is chosen,
+     write down why in the code, next to the predicate.
+  2. The reporting session must never be its own corroboration. `possibly_subagent` must be
+     `false` when the only live process backing the harness lease is the process running the
+     command (or its ancestors).
+  3. With no fan-out running, `aida awaiting --json` run from `/home/joe/ai/aida` reports
+     `possibly_subagent: false` for BUG-1688, BUG-1693 and BUG-1695, and the agent-mode line
+     reads as abandoned rather than possibly-worked. Capture the before/after output in the PR.
+  4. A genuine fan-out still suppresses the orphan framing: a harness lease backed by a live
+     process that is NOT the caller keeps `possibly_subagent: true`. Do not fix this by deleting
+     the arm — TASK-1064's case is real.
+  5. Pure-function tests over lease + live-session fixtures for all four corners: root-pinned
+     lease + caller-only liveness → not a fan-out; root-pinned + a distinct live worker → decided
+     per AC1 and asserted either way; non-root harness worktree + live worker → fan-out;
+     no harness lease → not a fan-out.
+  6. Prove by mutation that at least one new test fails against today's predicate. A test that
+     passes before and after is proving nothing here — see the note below.
+  7. State whether the 8-day-old root-pinned harness lease is itself legitimate, or whether
+     minting a `harness-worktree` lease against the project root is the upstream mistake. If it is,
+     say so and file it; do not fix it here.
 
   ## Do not
 
-  - Do not delete or reap the zombie as the fix. The defect is the classifier believing it, not
-    the zombie existing; the next unreaped parent must not strand another wave.
-  - Do not widen this into general lease-GC or stale-worktree cleanup. Adjacent, separate.
+  - Do not "fix" this by reaping the zombie pid `1907632`, or by adding a zombie-state probe. That
+    was this spec's original (refuted) theory: `creator_pid` is read only under
+    `review_verb || claim_verb`, and all three leases have both false, so the zombie reaches this
+    verdict through no path at all. The zombie-as-alive defect is real and filed separately.
+  - Do not widen into lease GC, stale-worktree cleanup, or the ~80 accumulated worktrees.
+
+  ## ⚠ Verify against the report, not only the unit test
+
+  The refuted mechanism would have shipped a green zombie-state test and changed **no output**.
+  Any fix here must be demonstrated on `aida awaiting --json` in this repository, with the
+  before/after pasted into the PR.
 
   ## Adjacent, do not absorb
 
-  - Recovering BUG-1693's and BUG-1688's stranded WIP is queue hygiene and needs a seat.
-  - ~80 stale worktrees exist repository-wide; cleanup needs operator confirmation and is not
-    this spec.
+  - Recovering BUG-1693's and BUG-1688's stranded WIP is queue hygiene and needs its own seat.
+  - `pid_is_alive` treating a zombie as alive — separate spec.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-09-30T14:50:48.660410691Z
+modified_at: 2026-09-30T14:51:22.793938497Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
