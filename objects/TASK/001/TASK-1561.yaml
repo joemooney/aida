@@ -27,12 +27,12 @@ description: |
   - A relative value (`"../aida-worktrees"`) and a tilde value (`"~/aida-worktrees"`) both resolve the same way here as they already do for the pool path, reusing `expand_worktree_parent_tilde` rather than reimplementing it.
   - Confirm whether `aida doctor` currently reports the unset key in THIS repository, and if it does not, say why. An operator repeatedly accepting folder-trust modals is the exact condition the finding exists to catch, so a silent doctor is part of the defect.
   - Prove the fix by mutation: revert the resolver change and show the new test fails. A test that passes either way advertises coverage that does not exist.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:28:06.562496496Z
-modified_at: 2026-09-30T23:33:53.599574404Z
+modified_at: 2026-09-30T23:45:19.268388566Z
 req_type: Task
 history:
 - id: 01a0f4a9-7b5f-7503-934f-64cad36a9421
@@ -42,6 +42,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f4b5-53a4-75c0-94bb-6be42dc0024c
+  author: aida-session-start
+  timestamp: 2026-09-30T23:45:19.268388119Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
