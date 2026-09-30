@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:16:49.820624524Z
+modified_at: 2026-09-30T20:25:58.439694991Z
 req_type: Task
 tags:
 - docs
@@ -83,5 +83,10 @@ comments:
   content: 'Added the three-slide QCI BUG-180 case study to the upper-management deck as slides 15-17, immediately after the evidence-depth slide. Rendered repository-resident 1920x1080 assets from /home/joe.mooney/ai/foo/presentation/bug-180-codex-workflow.pptx, added embedded and Markdown speaker notes grounded in QCI''s BUG-180 record, GitLab MR 25, exact MR head e2ddf83, and pipeline 3431987, and updated the generator to preserve insertion/order on rebuild. Renamed the existing analytics and home-lab slides as case studies 2 and 3, shifted all later footers/notes, updated total timing to ~22 minutes, and bounded the appendix claim to one deeply traced defect rather than broad productivity evidence. Corrected the source case-study deck from PR-25 to MR-25 and clarified APPROVED as the review verdict while BUG-180''s final AIDA status remains Completed. Final QA: 26-slide PDF, 1920x1080 QCI renders, sequential notes 1-26, correct generated footers, backup 25, appendix 26, valid PPTX ZIP, and identical output deck hashes.'
   created_at: 2026-09-30T20:16:49.820620669Z
   modified_at: 2026-09-30T20:16:49.820620669Z
+- id: 01a0f3fe-d1a7-73e1-bcc8-88581c58662e
+  author: mcp
+  content: 'Added an Extra / Backup divider immediately after the main close (new slide 25), followed by a new backup slide explaining the proposed AIDA-vs-no-AIDA reconstruction experiment (slide 26). The experiment gives two fresh agents the same reconstruction task and rubric: the control receives code, commits, and README; the AIDA arm receives those sources plus requirements, acceptance criteria, decisions, relationships, rationale, traces, and retained evidence. It scores intent, architecture, constraints, omissions, confident inventions, and time; reconstruction delta is AIDA-arm score minus control score. The slide explicitly says no result is claimed yet. Reordered the existing model-quality backup to slide 27 and evidence appendix to slide 28. Regenerated both deck copies and notes; verified 28-page 16:9 PDF, full-resolution renders of slides 25-26, sequential footers and notes 1-28, PPTX ZIP integrity, and identical output hashes.'
+  created_at: 2026-09-30T20:25:58.439690379Z
+  modified_at: 2026-09-30T20:25:58.439690379Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
