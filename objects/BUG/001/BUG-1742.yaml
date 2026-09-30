@@ -23,12 +23,12 @@ description: |
   - Each recurring offender is either fixed at its cause or has a filed spec of its own with the evidence attached; no test is quarantined or retried without that evidence.
   - State explicitly whether the failures share one mechanism (e.g. contention on a shared lock, temp-root collision, a CI-core-count sensitivity) or are independent. A per-test fix list without that answer is not acceptable, because the shared-mechanism case would make five separate fixes the wrong shape of work.
   - The measurement is repeatable: whatever query produced the tally is recorded so the next reader can re-run it rather than re-derive it.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:11:23.249054665Z
-modified_at: 2026-09-30T17:21:57.558854278Z
+modified_at: 2026-09-30T17:41:18.556066246Z
 req_type: Bug
 history:
 - id: 01a0f356-5936-7672-9f0a-c46750090e4b
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f368-105c-78d3-b6bd-d51207e261cc
+  author: aida-session-start
+  timestamp: 2026-09-30T17:41:18.556065807Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
