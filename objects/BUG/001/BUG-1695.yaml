@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T20:04:35.709308377Z
-modified_at: 2026-09-30T16:37:58.837768579Z
+modified_at: 2026-09-30T17:10:54.467112315Z
 req_type: Bug
 comments:
 - id: 01a0e478-ad0f-7b23-b15a-84aa065137dd
@@ -117,6 +117,31 @@ comments:
     IN FLIGHT: three probes (passive foreign-write watch, round-trip hammer, and a forced 30ms race window between emptying a directory level and its rmdir) running concurrently with a full `cargo test --workspace` run, which is the environment the CI failure came from.
   created_at: 2026-09-30T16:37:58.837768579Z
   modified_at: 2026-09-30T16:37:58.837768579Z
+  session_id: 2284e676-e7f4-4592-9a21-d700e91d8db2
+- id: 01a0f34c-3b03-7d23-b616-9920b82e6f41
+  author: joe
+  content: |
+    Root-cause phase closed; fix on PR #2297 (branch `bug-1695-5`, commit e214b87bcd).
+
+    THE FILED DIAGNOSIS IS FALSIFIED. The bug assumed "something is still creating or holding entries under the sandbox root". Three measurements say nothing is:
+
+    - Snapshot the store (path + inode + mtime ns) the instant `sandbox_create` returns, sleep 250ms under eight-thread contention, re-snapshot: ZERO drift across 80 stores.
+    - Park a built store under the shared temp root for 900s while the full 7,400-test `aida-cli-lib` suite runs beside it: no mutation at all.
+    - Empty a directory level, pause 30ms, look again before the `rmdir` — run back to back for 900s against that same suite: no entry ever returned.
+
+    That run finished `7400 passed; 0 failed` in 1076s with all three probes green. Supporting: every git call in `aida_core::git_ops` goes through `Command::output()`, which waits (aida-core/src/git_ops.rs:38); a 200-iteration 8-thread create+seed+destroy hammer produced 0 failures.
+
+    So AC4 is satisfied vacuously — there is no leaked child to close — and a later removal pass finds the tree empty, which is why the remedy is a retry.
+
+    AC2 NEEDS A HUMAN CALL. It asks the fix to name WHAT is still writing. The honest answer is that nothing is; the premise is falsified rather than met. Rather than guess at a culprit to satisfy the wording, the fix makes the diagnostic permanent: the give-up error names the entries that survived, and says "nothing is left under it now" when none did — which is exactly the tell between "a writer is leaking" and "the removal needed another pass". The criterion's stated intent (a bare retry must not mask a genuine leak) is met by construction, but the literal wording is not, and that is the advisor's call, not mine.
+
+    AC1 met: bounded ENOTEMPTY-only retry, reason recorded in a comment at the helper. AC3 met: four fixture tests, no sleeps and no polling (remover and backoff are injected), each mutation-proven to fail only on its own defect.
+
+    SCOPE NOTE: `sandbox reset` and `sandbox create --force` removed their trees identically and carried the same exposure, so all three sites route through the helper.
+
+    SEPARATE ISSUE, NOT COVERED BY ANY SPEC: `Build (ubuntu-latest)` — a REQUIRED check — failed five times on main on 2026-09-30 alone (runs 36717478815, 36689141777, 36677337396, 36674309877, 36668166684), each a different single test in `-p aida-cli-lib --lib`. BUG-1695 was one member of a family. Worth its own spec.
+  created_at: 2026-09-30T17:10:54.467112315Z
+  modified_at: 2026-09-30T17:10:54.467112315Z
   session_id: 2284e676-e7f4-4592-9a21-d700e91d8db2
 history:
 - id: 01a0e478-b08c-7111-84a8-c496042f936f
