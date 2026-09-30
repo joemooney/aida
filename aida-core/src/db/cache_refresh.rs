@@ -242,21 +242,46 @@ fn lock_holders(_sidecar: &Path) -> String {
 // trace:BUG-1729 | ai:claude
 #[cfg(test)]
 pub(super) fn acquire_past_fork_window(cache_path: &Path) -> std::io::Result<Option<RefreshLock>> {
-    let deadline = std::time::Instant::now() + FORK_WINDOW_BOUND;
+    Ok(acquire_past_fork_window_within(cache_path, FORK_WINDOW_BOUND)?.map(|(lock, _)| lock))
+}
+
+/// `acquire_past_fork_window` with the bound supplied by the caller, and the
+/// attempt count returned.
+///
+/// The bound is a parameter rather than a constant read inside the loop so a
+/// test can exhaust it in milliseconds: a helper whose only deadline is the 5s
+/// backstop can be shown to succeed, but never to give up, so the branch that
+/// reports a descriptor which never comes back stays permanently unexercised.
+/// The count is returned for the same reason — "it retried" is otherwise
+/// indistinguishable from "it won on the first attempt", which is what an
+/// injection test has to tell apart.
+// trace:BUG-1736 | ai:claude
+#[cfg(test)]
+pub(super) fn acquire_past_fork_window_within(
+    cache_path: &Path,
+    bound: Duration,
+) -> std::io::Result<Option<(RefreshLock, usize)>> {
+    let deadline = std::time::Instant::now() + bound;
+    let mut attempts = 0usize;
     loop {
+        attempts += 1;
         if let Some(lock) = RefreshLock::try_acquire(cache_path)? {
-            return Ok(Some(lock));
+            return Ok(Some((lock, attempts)));
         }
         let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) else {
             return Ok(None);
         };
-        std::thread::sleep(left.min(Duration::from_millis(20)));
+        std::thread::sleep(left.min(FORK_WINDOW_POLL));
     }
 }
 
 // trace:BUG-1729 | ai:claude
 #[cfg(test)]
-const FORK_WINDOW_BOUND: Duration = Duration::from_secs(5);
+pub(super) const FORK_WINDOW_BOUND: Duration = Duration::from_secs(5);
+
+// trace:BUG-1736 | ai:claude
+#[cfg(test)]
+const FORK_WINDOW_POLL: Duration = Duration::from_millis(20);
 
 impl Drop for RefreshLock {
     fn drop(&mut self) {
@@ -858,6 +883,98 @@ except OSError:
             std::thread::sleep(Duration::from_millis(20));
         }
     }
+
+    /// Hold the flock on another thread until told to release it.
+    ///
+    /// The holder must be a different thread, not merely a different guard:
+    /// `RefreshLock` shares its descriptor with same-thread nested callers by
+    /// design, so a same-thread acquire reads as a nested winner rather than as
+    /// contention. Its own acquire is a bare `try_acquire` because it is the
+    /// first one on a fresh tempdir inode — nothing in this process has ever
+    /// opened a descriptor to it, so there is none for a sibling's child to
+    /// have inherited.
+    // trace:BUG-1736 | ai:claude
+    fn foreign_holder(path: &Path) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let p = path.to_path_buf();
+        let thread = std::thread::spawn(move || {
+            let lock = RefreshLock::try_acquire(&p).unwrap().unwrap();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+            drop(lock);
+        });
+        ready_rx
+            .recv()
+            .expect("the foreign holder died before taking the flock");
+        (release_tx, thread)
+    }
+
+    /// The retry's reason to exist: an acquire that loses the first attempt and
+    /// wins a later one.
+    ///
+    /// Deterministic in the direction that matters — the holder signals ready
+    /// only once it has the flock, so attempt 1 cannot succeed, and
+    /// `attempts > 1` therefore witnesses the loop rather than a lucky
+    /// scheduling. Asserted, not assumed: if the holder ever stopped
+    /// contending, the acquire would win immediately and this test would report
+    /// that instead of quietly passing.
+    // trace:BUG-1736 | ai:claude
+    #[test]
+    fn bounded_acquire_retries_past_a_foreign_holder_and_then_succeeds() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("cache.db");
+        let (release, holder) = foreign_holder(&path);
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(120));
+            let _ = release.send(());
+        });
+
+        let (lock, attempts) = acquire_past_fork_window_within(&path, FORK_WINDOW_BOUND)
+            .unwrap()
+            .expect("the holder released after 120ms but the bounded retry gave up");
+        assert!(
+            attempts > 1,
+            "the acquire won on attempt {attempts}, so the retry loop never ran: \
+             the foreign holder was not contending and this test proves nothing"
+        );
+        assert!(!lock.is_nested(), "won the lock as a nested acquire");
+        drop(lock);
+        releaser.join().unwrap();
+        holder.join().unwrap();
+    }
+
+    /// The bound is the caller's, not `FORK_WINDOW_BOUND`.
+    ///
+    /// This is the half a 5s-const-only helper can never show: that it gives
+    /// up. A test cannot wait out the backstop, so the give-up branch — and the
+    /// diagnostic it carries — would stay unexercised forever.
+    // trace:BUG-1736 | ai:claude
+    #[test]
+    fn bounded_acquire_honours_the_callers_bound_rather_than_the_backstop() {
+        let d = tempfile::tempdir().unwrap();
+        let path = d.path().join("cache.db");
+        let (release, holder) = foreign_holder(&path);
+
+        let start = std::time::Instant::now();
+        let outcome = acquire_past_fork_window_within(&path, Duration::from_millis(30)).unwrap();
+        let elapsed = start.elapsed();
+        let _ = release.send(());
+        holder.join().unwrap();
+
+        assert!(
+            outcome.is_none(),
+            "a flock held for the whole bound was reported as acquired"
+        );
+        // A generous ceiling on purpose: the claim is which order of magnitude
+        // was honoured, not the exact wait, so a loaded runner cannot flake it.
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "gave up after {elapsed:?}, so the caller's 30ms bound was ignored in \
+             favour of the {FORK_WINDOW_BOUND:?} backstop"
+        );
+    }
+
     // trace:TASK-1526 | ai:codex
     #[cfg(unix)]
     #[test]

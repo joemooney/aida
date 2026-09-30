@@ -3593,19 +3593,180 @@ mod tests {
         );
     }
 
-    // trace:TASK-1526 | ai:codex
+    /// What the holder thread reports back: the attempt count it needed to take
+    /// the flock, or why it gave up.
+    // trace:BUG-1736 | ai:claude
+    type HeldReady = std::result::Result<usize, String>;
+
+    /// Hold the refresh flock for `path` on another thread until told to stop.
+    ///
+    /// Not a bare `try_acquire`: unlike the fresh-tempdir acquires in
+    /// `cache_refresh`'s own tests, production code has already opened and
+    /// closed descriptors to *this* cache's refresh sidecar by the time the
+    /// fixture returns, so a sibling test thread that forks during one of those
+    /// windows leaves its child an inherited descriptor to the same open file
+    /// description. The child keeps the flock until it reaches `exec`, and this
+    /// acquire then fails with `Ok(None)` while no test logically holds the
+    /// lock. That is not hypothetical: this helper's acquire panicked on
+    /// ubuntu-latest in run 36702526804.
+    // trace:BUG-1736 | ai:claude
     fn held_refresh(path: PathBuf) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<()>) {
-        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (stop_tx, thread, _attempts) =
+            held_refresh_within(path, super::super::cache_refresh::FORK_WINDOW_BOUND);
+        (stop_tx, thread)
+    }
+
+    /// `held_refresh` with the acquire bound supplied by the caller, and the
+    /// holder's attempt count returned.
+    // trace:BUG-1736 | ai:claude
+    fn held_refresh_within(
+        path: PathBuf,
+        bound: std::time::Duration,
+    ) -> (
+        std::sync::mpsc::Sender<()>,
+        std::thread::JoinHandle<()>,
+        usize,
+    ) {
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<HeldReady>();
         let (stop_tx, stop_rx) = std::sync::mpsc::channel();
         let thread = std::thread::spawn(move || {
-            let _lock = super::super::cache_refresh::RefreshLock::try_acquire(&path)
-                .unwrap()
-                .unwrap();
-            ready_tx.send(()).unwrap();
+            let acquired =
+                super::super::cache_refresh::acquire_past_fork_window_within(&path, bound);
+            let _lock = match acquired {
+                Ok(Some((lock, attempts))) => {
+                    if ready_tx.send(Ok(attempts)).is_err() {
+                        return;
+                    }
+                    lock
+                }
+                Ok(None) => {
+                    let _ = ready_tx.send(Err(format!(
+                        "the refresh flock for {} was still held after {bound:?}; a sibling \
+                         thread's forked child may hold an inherited descriptor to it — see \
+                         BUG-1729. {}",
+                        path.display(),
+                        super::super::cache_refresh::RefreshLock::diagnose_unavailable(&path),
+                    )));
+                    return;
+                }
+                Err(e) => {
+                    let _ = ready_tx.send(Err(format!(
+                        "acquiring the refresh flock for {} errored: {e}",
+                        path.display()
+                    )));
+                    return;
+                }
+            };
             stop_rx.recv().unwrap();
         });
-        ready_rx.recv().unwrap();
-        (stop_tx, thread)
+        let (attempts, thread) = await_holder_ready(ready_rx, thread);
+        (stop_tx, thread, attempts)
+    }
+
+    /// Wait for the holder to arm the ready channel, and attribute a failure to
+    /// the holder rather than to this line.
+    ///
+    /// A bare `ready_rx.recv().unwrap()` turns any panic on the holder thread
+    /// into `RecvError` reported at the *waiter's* location, which names the
+    /// wrong line and discards the holder's message entirely. Joining and
+    /// re-raising the holder's payload puts the real panic — with the real line
+    /// — in the test output.
+    // trace:BUG-1736 | ai:claude
+    fn await_holder_ready(
+        ready_rx: std::sync::mpsc::Receiver<HeldReady>,
+        thread: std::thread::JoinHandle<()>,
+    ) -> (usize, std::thread::JoinHandle<()>) {
+        match ready_rx.recv() {
+            Ok(Ok(attempts)) => (attempts, thread),
+            Ok(Err(why)) => panic!("{why}"),
+            Err(std::sync::mpsc::RecvError) => match thread.join() {
+                Err(payload) => std::panic::resume_unwind(payload),
+                Ok(()) => panic!(
+                    "the refresh holder exited without arming the ready channel and \
+                     without panicking"
+                ),
+            },
+        }
+    }
+
+    /// The defective site, driven through the failure that panicked it in CI.
+    ///
+    /// A foreign thread holds the flock across `held_refresh_within`'s first
+    /// attempt, so the holder it spawns must lose that attempt and win a later
+    /// one. Before the fix this was `try_acquire().unwrap().unwrap()` and the
+    /// `Ok(None)` panicked the holder thread outright.
+    // trace:BUG-1736 | ai:claude
+    #[test]
+    fn held_refresh_waits_out_a_contended_flock_instead_of_panicking() {
+        let dir = tempdir().unwrap();
+        let (_backend, _store, path) = task_1515_backend(dir.path());
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let p = path.clone();
+        let foreign = std::thread::spawn(move || {
+            let lock = super::super::cache_refresh::acquire_past_fork_window(&p)
+                .unwrap()
+                .expect("the foreign holder could not take the flock at all");
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+            drop(lock);
+        });
+        ready_rx
+            .recv()
+            .expect("the foreign holder died before taking the flock");
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(120));
+            let _ = release_tx.send(());
+        });
+
+        let (stop, thread, attempts) =
+            held_refresh_within(path, super::super::cache_refresh::FORK_WINDOW_BOUND);
+        assert!(
+            attempts > 1,
+            "the holder took the flock on attempt {attempts}, so it never had to \
+             wait: the foreign holder was not contending and this test proves nothing"
+        );
+        stop.send(()).unwrap();
+        thread.join().unwrap();
+        releaser.join().unwrap();
+        foreign.join().unwrap();
+    }
+
+    /// A panic on the holder thread must be reported as the holder's panic.
+    ///
+    /// `ready_rx.recv().unwrap()` reports `RecvError` at the *waiter's* line and
+    /// discards the holder's message, which is how the CI failure this bug was
+    /// filed from named the wrong location. The holder's deliberate panic below
+    /// prints one expected line to the suite's stderr; it identifies itself.
+    // trace:BUG-1736 | ai:claude
+    #[test]
+    fn a_dead_holder_is_reported_as_its_own_panic_not_the_waiters_recverror() {
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<HeldReady>();
+        let thread = std::thread::spawn(move || {
+            let _keep_the_sender_alive_until_the_unwind = ready_tx;
+            panic!("BUG-1736 expected panic: holder died before arming the ready channel");
+        });
+
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            await_holder_ready(ready_rx, thread)
+        }))
+        .err()
+        .expect("the waiter returned although the holder never armed the channel");
+        let msg = payload
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| payload.downcast_ref::<&str>().copied())
+            .unwrap_or("<non-string panic payload>")
+            .to_string();
+
+        assert!(
+            msg.contains("holder died before arming the ready channel"),
+            "the waiter raised {msg:?} instead of re-raising the holder's own payload"
+        );
+        assert!(
+            !msg.contains("RecvError"),
+            "the waiter reported its own RecvError rather than the holder's panic: {msg:?}"
+        );
     }
 
     // trace:TASK-1526 | ai:codex
@@ -3881,7 +4042,12 @@ mod tests {
         let (backend, store, path) = task_1515_backend(dir.path());
         task_1515_external_retitle(&store, "gen1");
         let scope = CacheReadScope::new();
-        let _lock = RefreshLock::try_acquire(&path).unwrap().unwrap();
+        // Not a bare `try_acquire`, for the reason given on `held_refresh`: the
+        // fixture has already driven production acquires against this sidecar,
+        // so an inherited descriptor from a sibling thread's fork can make this
+        // return `Ok(None)` with nothing logically holding the lock.
+        // trace:BUG-1736 | ai:claude
+        let _lock = acquire_past_fork_window(&path).unwrap().unwrap();
         test_counts();
         let start = std::time::Instant::now();
         backend.list_summaries(&ListFilter::default()).unwrap();
