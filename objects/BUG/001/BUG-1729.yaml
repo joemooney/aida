@@ -106,7 +106,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T21:54:47.813040039Z
-modified_at: 2026-09-30T05:19:30.028610309Z
+modified_at: 2026-09-30T05:20:14.936201058Z
 req_type: Bug
 comments:
 - id: 01a0ef93-a00c-7120-a667-e5db96df9dbd
@@ -418,6 +418,66 @@ comments:
   content: Commit a0e8a5c629 references this requirement
   created_at: 2026-09-30T05:19:30.028610309Z
   modified_at: 2026-09-30T05:19:30.028610309Z
+  session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
+- id: 01a0f0c1-9a58-7842-9d94-a6eec39025d6
+  author: joe
+  content: |
+    ## AC3 shipped (PR #2286) · AC2-B did not reproduce in 64 runs · AC1 confirmed
+
+    ### AC3 — done, pending merge of #2286
+
+    `refresh_lock_descriptor_lifecycle_is_visible_to_another_process` now ships in
+    `cache_refresh.rs`: a separate process attempts `LOCK_EX | LOCK_NB` on the sidecar, which is the
+    only way to observe a property that is structurally invisible in-process — an `flock` belongs to
+    the open file description, and a duplicate descriptor and a released lock leave `HELD` reading
+    identically.
+
+    Proven load-bearing by two mutation injections. `existing._file = file` in `try_acquire`'s nested
+    branch fails **only** the new test, while `nested_freshen_in_lock_holder_does_not_wait` and
+    `nested_refresh_through_directory_alias_uses_same_registry_entry` both still pass — that was the
+    gap. `mem::forget` on the `HeldLock` at depth zero fails the final assertion reporting
+    `holders=["SELF/pid=…"] own_fds=["8"]`, so both halves of #2285's SELF/own_fds discriminator are
+    now exercised by a test.
+
+    ### AC2 observation B — recommend closing as a measurement artifact
+
+    The probe never once reported the sidecar FREE while a guard was alive:
+
+    | Condition | Runs | AC2-B reproductions |
+    |---|---|---|
+    | Quiet host, load ~2.7, consecutive | 60 | **0** |
+    | 4 concurrent `db::cache` workers, load **34**, 330s each — the documented reproducer | 4 | **0** |
+
+    Load 34 exceeds the ~26 at which both original sightings occurred, and those sightings were both
+    inside the orphaned-spinner window (see `feedback_orphaned_load_generators_poison_every_measurement`).
+    The inode-replacement hypothesis was never reached because there was nothing to explain.
+
+    Recommendation: disposition AC2-B as an artifact of that window. `lock_holders` is now shipped, so
+    a recurrence is root-caused from the log alone without reproduction — the cost of being wrong is low.
+
+    ### AC2/blocker — #2285's fix holds under the original breaking condition
+
+    Every `db::cache_refresh::` test passed in **all four** contended workers at load 34. That is the
+    exact contention that produced the original CI failure.
+
+    ### AC1 — confirmed, and the only remaining failure
+
+    `single_flight_four_readers_one_refresh` failed in **2 of 4** contended workers and nothing else
+    failed in the whole 169-test filter. Its load-sensitive assertions are
+    `cached_git_backend.rs:3571-3574`: a bare `assert!(start.elapsed() < 2s)`, plus
+    `rows.iter().any(|r| r.title == "gen1")` and `scope.metadata()["stale"] == false`, which only hold
+    if the refresh lands inside the default 1500ms `ReadBudget`. Solo the filter is ~165s; at 4x
+    contention ~330s.
+
+    **Correction to the earlier plan:** `assert_within_budget` (shipped by #2284) lives in
+    `aida-cli-lib`, which `aida-core` does **not** depend on — it is not reachable here. The injection
+    point is `CacheReadScope::configure(interactive, budget)`, which writes the thread-local
+    `COLLECTED`, so each reader thread can set a generous budget itself. The `sum == 1` single-flight
+    assertion is already load-independent and should be kept as the real property.
+
+    AC1 is the last open criterion on this spec.
+  created_at: 2026-09-30T05:20:14.936201058Z
+  modified_at: 2026-09-30T05:20:14.936201058Z
   session_id: 4734f594-5e70-4989-8d5b-b2a32b0a1be8
 history:
 - id: 01a0ef47-db3e-75d0-99b2-b700bb884205
