@@ -79,12 +79,12 @@ description: |
     or deferred; that number overstates the backlog by ~10x and is not a truer count.
   - Do not add a count envelope to `--format json`. It emits a bare array today; wrapping it breaks
     every consumer that indexes it. File that separately if it is wanted.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:32.604859901Z
-modified_at: 2026-09-30T13:11:02.459113377Z
+modified_at: 2026-09-30T13:34:43.639724022Z
 req_type: Bug
 comments:
 - id: 01a0f264-e99e-7d01-a364-6d39c5aa4e01
@@ -191,6 +191,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f286-4f99-7192-9ba0-93b7b56bc341
+  author: aida-auto-bump
+  timestamp: 2026-09-30T13:34:43.609364022Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f286-4fb7-74a1-863d-8b4a252a7dac
+  timestamp: 2026-09-30T13:34:43.639721957Z
+  agent: product
+  commit_sha: b510526ff4e565e30da535b2e80ad42666e54283
+  summary: Completed via merge b510526f
 filed_at:
   code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
   branch: main
@@ -199,3 +212,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: a0db2dbf-9f85-48bb-af74-d27c3bcda426
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-30T13:34:43.609282964Z
+  completion_sha: b510526ff4e565e30da535b2e80ad42666e54283
