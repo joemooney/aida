@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:55:10.618095347Z
-modified_at: 2026-09-30T07:35:10.217176479Z
+modified_at: 2026-09-30T07:53:44.073364959Z
 req_type: Bug
 comments:
 - id: 01a0f13d-2089-7402-bd84-cca09643ac64
@@ -92,6 +92,79 @@ comments:
   created_at: 2026-09-30T07:35:10.217176479Z
   modified_at: 2026-09-30T07:35:10.217176479Z
   session_id: 60a4d7c9-b362-42fb-9013-365d4ddd8e7d
+- id: 01a0f14e-1f89-7e81-bd9f-7a0c173ded60
+  author: joe
+  content: |
+    ## The `:52`-vs-`:59` question is settled: `:52` is a legitimate contention outcome
+
+    The prior handoff left open whether `:52`'s precondition ("the refresh flock must be free
+    before the holder takes it") is a real assertion or a host condition misfiled as one. It is
+    a host condition. Evidence, in order of strength:
+
+    **1. The failure is observable only on the RE-ARM path — a perfect 2/2 correlation.**
+
+    `hold_foreign_writer()` is called 8 times across `bug_1670_stale_cache_callers_tests`, plus
+    once in `bug_1664_stale_sweep_tests`. Exactly two tests call it TWICE:
+
+    | test | calls |
+    |---|---|
+    | `unambiguous_write_resolution_sees_external_collision_under_foreign_lock` | **2** |
+    | `rules_sync_keeps_rule_for_spec_approved_after_snapshot` | **2** |
+    | `worker_gc_keeps_directive_for_reopened_spec` | 1 |
+    | `completion_findings_not_duplicated_on_stale_snapshot` | 1 |
+    | `focus_guard_uses_fresh_subtree` | 1 |
+    | `reap_skips_lease_whose_spec_reopened` | 1 |
+    | `bug_1664_stale_sweep_tests`' single caller | 1 |
+
+    Those two are *exactly* the two tests observed hitting the `:52`/`:59` double panic (the one
+    this bug was filed against, and the one the previous session's suite hit instead). No
+    single-call test has ever been reported failing. The re-arm is the only place anything
+    re-acquires the flock after a drop, so it is the only place a not-yet-released lock is
+    *observable*.
+
+    **2. But that correlation alone does NOT pick the cause — and the non-determinism does.**
+
+    Being observable only on re-arm is equally consistent with a plain leak in `RefreshLock`'s
+    drop. What rules that out: a drop leak would be **deterministic**, and this is not. The bug
+    report itself records that re-running the test alone PASSES and it fails only under
+    `--test-threads=4`. A deterministic leak cannot behave that way. What *requires*
+    concurrency to appear is a sibling thread being inside its fork/exec window at the moment
+    the first holder drops.
+
+    **3. That mechanism is already established in this codebase, by BUG-1729.**
+
+    BUG-1729 found the same shape: a sibling thread's pre-exec child inherits the flock's file
+    descriptor, so the OFD-level lock survives the owning guard's `drop` until the child execs
+    or exits. The tell recorded there was `SELF` in `/proc/locks` with an empty `own_fds`. The
+    suite spawns subprocesses from many tests; under 4 workers the window is wide and hit
+    occasionally. Same substrate, same mechanism, different fixture.
+
+    **Conclusion for AC2:** the `:52` panic is a legitimate contention outcome the fixture should
+    tolerate, not a defect in the code under test. A cross-thread fork window is a property of
+    the harness, not of the cache.
+
+    ## What the fix should therefore be
+
+    - **AC1** — the holder reports through a typed channel (`Result<(), String>`), and the
+      `RecvError` arm **joins the handle and `resume_unwind`s the holder's own payload**, so a
+      bare `RecvError` can never again be the whole story.
+    - **AC2 + AC4** — the acquire becomes a **bounded retry with a stated bound** (a deadline
+      plus a poll interval, attempts counted and named in the give-up message), *not* a longer
+      sleep. The give-up message should name the path and the elapsed budget so a genuine
+      deadlock still reads as one.
+    - Note the retry belongs on the **acquire**, not on the handshake: the handshake is not what
+      is flaky; the flock being momentarily busy is.
+
+    ## Caution for whoever implements it
+
+    AC3 asks for 50 consecutive runs under the 4-worker reproducer. Be careful that the retry
+    does not simply mask a real deadlock — the bound must be short enough that a genuinely stuck
+    lock still fails the suite in reasonable time, and the failure message must distinguish
+    "busy for N attempts over the whole budget" from "errored". Do not raise the bound to make
+    AC3 pass; if it needs a long bound to be green, that is a finding, not a tuning knob.
+  created_at: 2026-09-30T07:53:44.073364959Z
+  modified_at: 2026-09-30T07:53:44.073364959Z
+  session_id: ee842845-0934-464c-8a39-5ea927f98a59
 history:
 - id: 01a0f118-a43f-7c51-9ad2-c7b608d034c8
   author: joe
