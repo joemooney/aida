@@ -64,8 +64,125 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:15:06.159495348Z
-modified_at: 2026-09-30T06:21:29.543614327Z
+modified_at: 2026-09-30T06:41:16.565933577Z
 req_type: Bug
+comments:
+- id: 01a0f10b-c915-7eb3-a271-d8c167644dfc
+  author: joe
+  content: |
+    ## Correction to the filed site list: nine sites, not six
+
+    The spec listed six. `grep -rn "elapsed() <" --include=*.rs aida-cli-lib/` on `f175efb67d`
+    returns three more bare timing assertions that the filed list missed:
+
+    | File | Line | Budget | Why it was missed |
+    |---|---|---|---|
+    | `session_liveness.rs` | 991 | 5s | multi-line `assert!`, and the file was not in the surveyed set |
+    | `merge_lock.rs` | 315 | **150ms** | same |
+    | `tests/task_1507_history_cache_tests.rs` | 962 | 5s | same file as the listed `:985`, but a second site in it |
+
+    All nine are converted. `merge_lock.rs:315` is the most load-fragile of the whole set:
+    150ms against `acquire`'s own 200ms deadline is **33% margin over a host condition**.
+
+    ## The distinction that actually mattered: which assertion carries the property
+
+    AC4 asks that no site lose its timing assertion silently. Working the sites showed the
+    sharper question is whether the *clock* is the only witness to the regression, because
+    that decides whether the original literal may become a non-fatal budget or has to stay
+    fatal as the ceiling.
+
+    **Five sites: the clock is redundant — another assertion already fails on the regression.**
+    Converted to `assert_within_budget(started, <original literal>, 60s, ...)`, i.e. the old
+    literal becomes the non-fatal performance budget and 60s becomes the hang guard, matching
+    the four in-tree BUG-1730 callers.
+
+    - `notify.rs:1152` — the `contains("killed")` next to it. A `sleep 5` allowed to finish
+      reports its own exit status instead.
+    - `notify.rs:1211` — the `unwrap_err()`. This is the m2 regression (writing stdin on the
+      calling thread): a write that blocked until `sleep 5` exited would find a child that
+      *succeeded*, so the call returns `Ok` and `unwrap_err` panics.
+    - `notify.rs:1309` — the `unwrap_err()`. Each body (`sleep 7.123 ; true`) exits 0 on its
+      own, so a call that waited it out returns `Ok`.
+    - `notify.rs:1391` — the `is_err()`, same argument.
+    - `merge_lock.rs:315` — the `unwrap()`. A holder not recognised as stale makes `acquire`
+      spin to its 200ms deadline and return `Err`, so `unwrap` panics. The 150ms clock was
+      never the witness for "reclaimed" — only for "without waiting".
+
+    **Four sites: the clock is the only witness.** The original literal is kept as the *fatal
+    ceiling* (so nothing that fails today stops failing — AC4), and a tighter budget is added
+    as the performance signal. Each was measured to confirm the retained fatal bound is not
+    itself load-fragile.
+
+    | Site | Witness the clock uniquely carries | Nominal (debug, quiet host) | Budget | Ceiling (fatal) | Ratio |
+    |---|---|---|---|---|---|
+    | `notify.rs:1259` | returned on the command's own exit, not after the 5s bound | **20.9ms** | 1s | 4s | ~190x |
+    | `task_1507:962` | served without blocking on the held locks (call has a 120s budget to spend) | **16.3ms** | 1s | 5s | ~300x |
+    | `task_1507:985` | fell back *without waiting* on the held indexer lock | **20.0ms** | 1s | 5s | ~250x |
+    | `session_liveness.rs:991` | the backward scan is linear, not quadratic | **336ms** | 2s | 5s | **~15x** |
+
+    `session_liveness.rs:991` is the tightest ratio in the set and the one to watch; its
+    comment says so, and says a BUDGET-MISSED there under load is expected rather than
+    suspicious. Nominals were measured by temporarily forcing each budget to 1ns so the
+    helper reported its own elapsed, then reverting.
+
+    ## AC1's grep predicate — what legitimately remains
+
+    After conversion the grep returns five lines, none of them a timing assertion:
+
+    - `test_timing.rs:3` — the module doc quoting the anti-pattern. (Named in AC1.)
+    - `shift.rs:1003` — production code, a deadline comparison against a variable.
+    - `lib.rs:108730` — production code, `while start_poll.elapsed() < timeout`.
+    - `tests/task_1518_drain_sigterm_tests.rs:455`, `:731` — **bounded-wait loop conditions**,
+      each followed by a real state assertion (`lease_interruption(...).is_some()`). These are
+      already the correct pattern: the clock bounds the wait, it does not judge the code, and
+      a slow host only means more polls. Converting them would be wrong.
+
+    So the precise post-change predicate is that no `assert!` on `<instant>.elapsed()` remains
+    in `aida-cli-lib`:
+
+    ```
+    grep -rn -B2 "elapsed() <" --include=*.rs aida-cli-lib/ | grep "assert!"
+    ```
+
+    which returns exactly one line — `test_timing.rs:3`, the `//!` doc quoting the
+    anti-pattern. Verified on the branch.
+
+    ## Verification
+
+    - Nominals: measured by temporarily forcing each budget to `from_nanos(1)` so the helper
+      reported its own elapsed, then reverting. (Table above.)
+    - Contention (AC3): four concurrent workers over `notify:: merge_lock:: session_liveness::
+      task_1507`, `--test-threads=8`, load **1.3 → 24.3 → 24.4** on 6 cores. **92/92 in all
+      four workers, and zero BUDGET-MISSED/BUDGET-SKIPPED lines** — every site stayed inside
+      even its tightened budget under 4x contention.
+    - `cargo fmt --all -- --check` exit 0; `scripts/check-portability.sh` exit 0; lib-test
+      warning count unchanged at 13 (the two `merge_lock.rs` `must_use` warnings are
+      pre-existing, at `:276` and `:387`, neither touched).
+    - Mutation proofs of the two load-bearing redundancy claims — both panic at the
+      non-timing assertion, exactly as claimed, not at the converted one:
+      - reverting BUG-1623's threaded stdin write to an inline write → panics at
+        `notify.rs:1216`, the `.unwrap_err()`.
+      - giving the merge-lock holder a live pid (`std::process::id()`) → panics at
+        `merge_lock.rs:313`, the `acquire(...).unwrap()`.
+
+    ### ⚠ Side finding: the contention reproducer recipe was running with a 2 MiB stack
+
+    Running the lib-test binary **directly** — the recipe this relay adopted for the BUG-1729
+    reproducer, to avoid cargo build slots — bypasses `.cargo/config.toml`, which sets
+    `RUST_MIN_STACK = "8388608"` at line 10. With the 2 MiB default,
+    `agent_launcher_tests::agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources`
+    (added 2026-09-27 in `7324a5b437`) overflows its stack and **aborts the whole test
+    process** — so no `test result` line is printed at all, and a predicate that greps for
+    failures sees silence rather than red.
+
+    Bracketed: fails at `RUST_MIN_STACK=2097152`, passes at `8388608`. Reproduced on **main's**
+    version of all four touched files, so it is pre-existing and unrelated to this change; CI
+    is unaffected because `cargo test` reads the `[env]` block. The recipe needs
+    `RUST_MIN_STACK=8388608` in front of the binary. Not filed as a product bug — it is a
+    defect in our own reproducer recipe, and it is recorded in the session handoff.
+  created_at: 2026-09-30T06:41:16.565933577Z
+  modified_at: 2026-09-30T06:41:16.565933577Z
+  session_id: ed89cdb9-e8e6-4595-9c0f-67dc9336aed2
 history:
 - id: 01a0f0f5-19cb-7653-8758-f72e35d753ef
   author: joe
