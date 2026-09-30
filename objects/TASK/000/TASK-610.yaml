@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T20:52:14.527817061Z
+modified_at: 2026-09-30T20:55:41.163222602Z
 req_type: Task
 tags:
 - docs
@@ -108,5 +108,10 @@ comments:
   content: Added vertical padding above the QCI BUG-180 workflow timeline timestamps by moving the timeline and its five nodes down 0.25 inches in the source case-study generator. Regenerated the source PPTX, refreshed the repository slide-2 asset, rebuilt both 31-slide upper-management decks, and visually verified integrated slide 16 at 1920x1080. Lower labels and the summary banner retain clear separation; PPTX integrity and matching output hashes pass.
   created_at: 2026-09-30T20:52:14.527812784Z
   modified_at: 2026-09-30T20:52:14.527812784Z
+- id: 01a0f41a-056b-7741-8260-e58f4ed34e03
+  author: mcp
+  content: Updated QCI case-study completion slide 17 to contrast approximately five seconds of human direction with 2h 04m of machine execution. Used an approximation marker because prompt typing time was not stopwatch-measured, kept both durations on one line with a directional arrow, and updated speaker notes to explain the framing and limitation. Regenerated the source case-study deck, repository asset, both 31-slide presentation copies, and notes; visually verified the integrated 1920x1080 slide and PPTX integrity.
+  created_at: 2026-09-30T20:55:41.163218046Z
+  modified_at: 2026-09-30T20:55:41.163218046Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
