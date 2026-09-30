@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:32.604859901Z
-modified_at: 2026-09-30T12:59:04.542954104Z
+modified_at: 2026-09-30T13:11:02.459113377Z
 req_type: Bug
 comments:
 - id: 01a0f264-e99e-7d01-a364-6d39c5aa4e01
@@ -169,6 +169,12 @@ comments:
     Priority held at high — cheap, and it already cost one wrong strategic conclusion.
   created_at: 2026-09-30T12:58:14.814304680Z
   modified_at: 2026-09-30T12:58:14.814304680Z
+  session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
+- id: 01a0f270-a03b-71e2-afed-f532101d60d5
+  author: joe
+  content: Commit 181bbf4c35 references this requirement
+  created_at: 2026-09-30T13:11:02.459113377Z
+  modified_at: 2026-09-30T13:11:02.459113377Z
   session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
 history:
 - id: 01a0f265-4de3-7961-8faf-46cce20cb5eb
