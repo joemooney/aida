@@ -5,86 +5,86 @@ title: aida list's count reads as the backlog but is a 6x-narrower active view (
 description: |
   ## Summary
 
-  `aida list` presents a filtered **active view** with a count that reads as the project's open
-  backlog. It is off by 6x, and the operator read it that way.
+  `aida list`'s default lens silently drops **archived** and **deferred** specs. Every other class
+  it hides is disclosed by a `note:` line; these two are not. The printed count is correct for the
+  lens, but the word `open` is a lifecycle term that in AIDA's own vocabulary
+  (`RequirementStatus::open_statuses()`) knows nothing about archived or deferred — so the figure
+  reads as a statement about the whole backlog, and an operator read it that way.
+
+  > **Re-scoped after independent measurement — see the disposition comment.** The originally filed
+  > premise (a 6x-understated count hiding 244 approved specs) does not hold: the 53 reconciles
+  > exactly, and 212 of those 244 are archived or deferred. Two of the six original acceptance
+  > criteria were removed as actively harmful or out of proportion.
 
   ## Observed (2026-09-30)
 
   ```
   $ aida list
-  count: 30 of 52 open
+  count: 30 of 53 open
+  note: agent default cap — `aida list --all` or `--limit N` to widen
+  note: 2914 closed hidden (open lens) — `aida list --all` or `--status closed`
+  note: 32 accepted decisions hidden (terminal) — `aida list --type decision`
   ```
 
-  "52 open" is the natural reading of that line, and it is wrong as a statement about the
-  backlog. The real non-terminal counts, from `aida list --all --format json` over 4681 objects:
+  Three notes, presenting as an exhaustive account of what was withheld. Also withheld, unmentioned:
+  **1548 archived** and **119 deferred** rows.
 
-  | status | count |
-  |---|---|
-  | Completed | 3450 |
-  | Rejected | 887 |
-  | **Approved** | **244** |
-  | **Draft** | **68** |
-  | **InProgress** | **18** |
-  | Superseded | 11 |
-  | **NeedsAttention** | **2** |
-  | Done | 1 |
-
-  Non-terminal total: **332**. The printed figure is **52**.
-
-  The 244 `Approved`-but-unrouted specs — the actual backlog, and the thing
-  `aida-backlog-groom` exists to work — are absent from the number an operator sees first.
+  The 53 itself is sound: 32 live Approved (64 minus the 32 accepted ADRs BUG-781 hides) + 8 Draft
+  + 13 InProgress = 53.
 
   ## Why this is a defect and not a preference
 
-  The operator asked whether throughput was stalling because the count "has remained about 52
-  for the past several hours" and proposed switching to a stronger model. The premise came
-  straight from this line. The count being flat was in fact explained by a flake chain
-  (BUG-1729 → 1730 → 1731 → 1732 → 1733 → 1735 → 1736, each closure filing ~one follow-on) at a
-  real throughput of 10 merges in 12 h — but no operator could have derived that from
-  `count: 30 of 52 open`, and the figure's scope is not stated anywhere in the output.
+  The operator asked whether throughput had stalled because the count "has remained about 52 for
+  the past several hours", and proposed switching to a stronger model. The premise came from this
+  line. The real cause was a flake chain (BUG-1729 → 1736, each closure filing ~one follow-on) at
+  10 merges in 12 h — a flat *live* count with real throughput behind it.
 
-  A number that invites a wrong strategic conclusion about the project's own health is a
-  correctness problem in an operator surface, not a cosmetic one. The alternative remedy — every
-  agent remembers that 52 is misleading and says so — is per-agent, erasable, and asks each seat
-  to compensate for the surface. See TASK-1560.
+  A surface that lists what it is hiding, incompletely, is worse than one that lists nothing: it
+  invites the reader to treat the list as closed. That is a correctness problem in an operator
+  surface.
 
-  ## What "open" currently means
+  ## Constraint: do not reverse BUG-783
 
-  To be established by the implementer, not guessed: find the predicate behind the `52` and state
-  it. From the sample output it excludes at minimum `Approved` and the 32 hidden accepted
-  decisions (`note: 32 accepted decisions hidden (terminal)`). Whatever it is, it is a *view*, and
-  the fix is to say so.
+  `list_hidden_hint_lines` already knows how to render archived/deferred nudges, gated behind
+  `show_view_tier_hints` (`[list] show_hidden_hints`), **off by default by deliberate decision** —
+  BUG-783: "an explicit open-work request doesn't need reminding on every invocation that the other
+  two tiers exist." Each nudge also costs an extra cache query, skipped on the hot path.
+
+  Do not flip that default. BUG-783 governs *counted nudges*; what is missing here is *scope
+  disclosure*, which needs no count and therefore no query.
 
   ## Acceptance
 
-  1. The count line names its own scope, so the figure cannot be read as the backlog. Either
-     label the view (e.g. `count: 30 shown · 52 active · 332 open`) or name the filter —
-     implementer's call on wording, but the printed number must be unambiguous about what it
-     counts.
-  2. Where a broader figure is cheap to compute, the non-terminal total is shown alongside the
-     active figure, so the approved-but-unrouted backlog is visible without a second command.
-  3. The existing `note: N accepted decisions hidden (terminal)` line's pattern is followed — this
-     surface already has a convention for admitting what it is hiding; extend it rather than
-     invent a second style.
-  4. `--format json` exposes both figures under distinct keys, so a script or agent cannot
-     conflate them either.
-  5. A test pins the rendered line against a fixture store containing at least one spec in each
-     of Approved / Draft / InProgress / Completed, asserting the active and non-terminal figures
-     differ and are separately labelled. Tempdir-only.
-  6. Prove by mutation that the test fails if the two figures are swapped or if the label is
-     dropped.
+  1. Under the default open lens, `aida list` states that archived and deferred specs are excluded,
+     so the count cannot be read as the project-wide open set. Wording is the implementer's call;
+     the line must name **both** tiers and point at the flag that widens the view.
+  2. The disclosure costs **no additional backend query**. It is a static statement of the lens's
+     scope, not a count. Assert this — a test or a documented argument that no `list_summaries`
+     call was added to the default path.
+  3. It follows the existing `note:` convention in the agent-mode render rather than inventing a
+     second style, and appears in the human render's footer idiom on that path.
+  4. `show_view_tier_hints` / `[list] show_hidden_hints` keeps its current default and meaning. An
+     operator who opts in still gets the counted STORY-441/STORY-584 nudges; they are not replaced.
+  5. The disclosure appears **only** under the default open lens. An explicit `--all`, `--archived`,
+     `--deferred`, or `--status` ask must not print it — those views are not hiding those tiers.
+  6. Tempdir-only tests pin the rendered output for: default lens (line present), `--all` (absent),
+     and an explicit `--status` (absent).
+  7. Prove by mutation that each test fails: drop the line; print it unconditionally; name only one
+     of the two tiers.
 
   ## Do not
 
-  Do not change which specs `aida list` *shows* by default. The active view is useful and
-  presumably deliberate; this is about the count's honesty, not its filter. Widening the default
-  listing would be a separate product decision.
+  - Do not change which specs `aida list` shows by default.
+  - Do not print the non-terminal total (333) as a backlog figure. ~250 of those rows are archived
+    or deferred; that number overstates the backlog by ~10x and is not a truer count.
+  - Do not add a count envelope to `--format json`. It emits a bare array today; wrapping it breaks
+    every consumer that indexes it. File that separately if it is wanted.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:32.604859901Z
-modified_at: 2026-09-30T12:58:14.814304680Z
+modified_at: 2026-09-30T12:58:39.472679684Z
 req_type: Bug
 comments:
 - id: 01a0f264-e99e-7d01-a364-6d39c5aa4e01
