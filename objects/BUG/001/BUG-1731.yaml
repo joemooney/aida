@@ -1,0 +1,76 @@
+id: 01a0f0f3-d2af-79f2-be70-3152c39bfd7e
+spec_id: BUG-1731
+agreed_id: BUG-1731
+title: Six bare wall-clock test assertions in aida-cli-lib ignore host load
+description: |
+  ## Summary
+
+  Six test assertions in `aida-cli-lib` gate on a bare wall-clock elapsed budget with no
+  host-load context. BUG-1729 proved this defect class is real, not theoretical: the same
+  shape in `aida-core`'s `single_flight_four_readers_one_refresh` failed reproducibly
+  under 4x suite contention on a 6-core host, and passed on a quiet one. These six are
+  the remaining instances, and unlike the `aida-core` case they have the fix already
+  available in-crate.
+
+  ## The sites
+
+  | File | Line | Budget |
+  |---|---|---|
+  | `aida-cli-lib/src/notify.rs` | 1152 | 10s |
+  | `aida-cli-lib/src/notify.rs` | 1211 | 3s |
+  | `aida-cli-lib/src/notify.rs` | 1259 | 4s |
+  | `aida-cli-lib/src/notify.rs` | 1309 | 3s |
+  | `aida-cli-lib/src/notify.rs` | 1391 | 10s |
+  | `aida-cli-lib/src/tests/task_1507_history_cache_tests.rs` | 985 | 5s |
+
+  ## Why this is cheap
+
+  `crate::test_timing::assert_within_budget` shipped with BUG-1730 and is `pub(crate)` in
+  this same crate. All six sites can reach it — including
+  `src/tests/task_1507_history_cache_tests.rs`, which is `mod`-included at
+  `aida-cli-lib/src/lib.rs:13369` rather than being an integration test. There are
+  already four in-tree callers (`exit_signal.rs:570`, `:664`, `:718`,
+  `runaway_seats.rs:1734`) to copy.
+
+  Note this is the opposite situation from BUG-1729's AC1: `aida-core` does **not** depend
+  on `aida-cli-lib`, so that fix had to inject a `ReadBudget` instead. Here the helper is
+  directly available and no injection is needed.
+
+  ## Scope boundary
+
+  This is a test-robustness change only. If converting a site reveals that the assertion
+  was load-bearing for a real latency guarantee rather than a liveness check, stop and
+  say so on this spec rather than widening the budget silently — that is the distinction
+  BUG-1729 turned on.
+
+  ## Acceptance
+
+  1. All six listed sites assert through `assert_within_budget` (or a documented
+     equivalent that takes host load into account), and no bare
+     `assert!(<instant>.elapsed() < <literal>)` remains in `aida-cli-lib`, verified by
+     `grep -rn "elapsed() <" --include=*.rs aida-cli-lib/` returning only
+     `test_timing.rs` internals and `assert_within_budget` call sites.
+  2. Each converted assertion keeps its original intent: the failure message still
+     identifies which wait exceeded its budget, and the budget passed is the same
+     duration as before unless a change is justified in the commit message.
+  3. `cargo test -p aida-cli-lib` passes, and the converted tests pass under the
+     BUG-1729 contention reproducer (four concurrent suites on this host), demonstrated
+     for at least the `notify.rs` group.
+  4. No site is converted by deleting the timing assertion outright; a site that should
+     lose its assertion instead of gaining a load-aware one is called out explicitly with
+     the reason.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T06:15:06.159495348Z
+modified_at: 2026-09-30T06:15:06.159495348Z
+req_type: Bug
+filed_at:
+  code_sha: 3c088a5dbdb8b0cf9cfa3c8d42fbb5430762bf47
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: f327dc96-7fec-4a7e-a437-3946498a6fc7
