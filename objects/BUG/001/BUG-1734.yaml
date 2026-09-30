@@ -1,0 +1,88 @@
+id: 01a0f14f-40ab-70c0-b38a-2e4130fbb215
+spec_id: BUG-1734
+agreed_id: BUG-1734
+title: 'aida doctor: warn when a legacy requirements store sits in a distributed-mode project root'
+description: |
+  ## Summary
+
+  `aida doctor` should warn when a **legacy requirements store sits in the root of a project
+  that declares distributed mode**. This host has exactly that, and it concealed a real
+  correctness bug for months.
+
+  ## The concrete instance
+
+  ```
+  /home/joe/ai/aida/requirements.db   1.7 MB, dated 2026-03-18
+  /home/joe/ai/aida/.aida/config.toml mode = "distributed"
+  /home/joe/ai/aida/.aida-store/      present
+  ```
+
+  `requirements.db` is matched by `.gitignore:39`, so it is untracked: it never appears in
+  `git status`, never reaches CI, and nothing in the repo announces it. It holds an unrelated
+  project's data — its In-Progress rows are `FR-0281`, `FR-0283`, `EPIC-0288`, `STORY-0326`,
+  `STORY-0327`, `TASK-0344`, `EPIC-0365`, `TASK-0373`.
+
+  ## Why it is worth a check rather than a cleanup
+
+  BUG-1732 (fixed, PR #2289) was `load_store_for_lookup` resolving its legacy fallback against
+  the **process CWD** instead of the `project_root` it was handed. The defect was in the code
+  and is fixed there. But the reason it went unnoticed for months is this file: the bug is
+  only *observable* on a host whose cwd happens to hold a legacy store. CI has no such file,
+  so CI was green throughout, and the symptom surfaced only as `aida awaiting` quietly
+  reporting six specs from a different project.
+
+  Deleting this one file would not prevent a recurrence — it would remove the only local
+  witness to that whole class of defect. The durable fix is a check that **names the
+  condition** wherever it occurs, so the next cwd-relative resolver to slip through is caught
+  as a configuration smell rather than as a months-later mystery.
+
+  BUG-1574 is a second data point: its author hand-bypassed the same fallback for one call
+  site and wrote the hazard into a doc comment, but nobody generalised it. The hazard has now
+  been paid for twice.
+
+  ## Proposed check
+
+  In `aida doctor`, when `.aida/config.toml` declares `mode = "distributed"`, warn if
+  `requirements.db` or `requirements.yaml` exists in the project root. The message should say:
+
+  - which file was found, its size and mtime;
+  - that distributed mode does not read it, so it is inert for normal operation;
+  - that it can still be picked up by any code path that resolves a store relative to the
+    process CWD, and name BUG-1732 as the precedent;
+  - that the remedy is to move it out of the project root, **not** to delete it blindly — it
+    may be the only copy of another project's data (it is, on this host).
+
+  Warning, not an error: a mid-migration project legitimately has both for a while.
+
+  ## Acceptance
+
+  1. `aida doctor` in a distributed-mode project whose root contains `requirements.db` emits a
+     warning naming the file, its mtime, and the reason; exit status is unchanged (warning
+     tier, not failure).
+  2. The same project without such a file emits nothing for this check.
+  3. A project in legacy mode with `requirements.db` in its root emits nothing — there the file
+     is the store.
+  4. The warning text tells the operator to relocate rather than delete, and does not itself
+     move or delete anything.
+  5. A test covers all three of (1), (2) and (3) with a tempdir project; none of them depends
+     on the developer's machine happening to have a stray store.
+
+  ## Explicitly out of scope
+
+  Touching `/home/joe/ai/aida/requirements.db`. It is the operator's file and the only copy of
+  another project's data. **Ask before moving or deleting it.**
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T07:54:58.091742254Z
+modified_at: 2026-09-30T07:54:58.091742254Z
+req_type: Bug
+filed_at:
+  code_sha: 15fd965f4466d9d7811c5f419244d275c8737826
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ee842845-0934-464c-8a39-5ea927f98a59
