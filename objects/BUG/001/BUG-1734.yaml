@@ -76,8 +76,144 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T07:54:58.091742254Z
-modified_at: 2026-09-30T11:44:11.195761444Z
+modified_at: 2026-09-30T12:09:12.930368230Z
 req_type: Bug
+comments:
+- id: 01a0f238-05e2-7bc2-977a-644b277f2dc1
+  author: joe
+  content: |
+    ## Implementation record — `legacy-store-in-root`
+
+    ### Why a new category and not another arm of `legacy-store-cruft`
+
+    The obvious move was to extend TASK-752's existing `legacy-store-cruft` check, which already
+    means "legacy-store artifact in a git-canonical project". It is the wrong home, on three
+    independent counts:
+
+    1. **Mechanism.** That detector runs `git ls-files`, so it sees **tracked** paths only.
+       `requirements.db` is gitignored (`.gitignore:39`) and therefore untracked — and being
+       invisible to that scan *is the reason this condition survived for months*. The new check
+       stats the filesystem.
+    2. **Scope.** `is_legacy_store_cruft_path` matches `requirements*.yaml` and
+       `scaffold-report.html`. It has never matched `requirements.db` at all.
+    3. **Remedy.** That one's heal is `git rm`, `safe_heal: true`. This file may be the only copy
+       of another project's data, so the remedy is *relocate*, never delete, and it must never be
+       auto-healed. `heal_doctor_finding` dispatches on the **category name alone**, so a shared
+       category would have routed it into that healer.
+
+    The two now **exactly partition**, so no file can ever produce two findings with contradictory
+    remedies: a cruft-shaped name that is *tracked* is left to `legacy-store-cruft`; everything
+    else is the new check's. `requirements.db` is not a cruft-shaped name, so it is always the new
+    check's and the partition leaves no gap.
+
+    ### Correction to my own safety argument
+
+    I initially justified the split as *the* thing preventing a `git rm` of this file. **That
+    over-claims.** `heal_doctor_legacy_store_cruft`'s first act is a tracked re-confirm, and the
+    new detector only ever reports untracked paths, so sharing the category would have been caught
+    there too. Measured, not assumed: mutation **M6** below adds
+    `| "legacy-store-in-root"` to that heal arm and the suite stays **green**.
+
+    So the honest statement is *defence in depth*: the separation means this check does not
+    **depend** on that guard staying in place. The doc comment now says exactly that, and the
+    gitignore append that the shared arm would still have performed is the one side effect the
+    separation does avoid. Counts 1–3 above stand on their own.
+
+    ### The second gate, beyond the filed acceptance
+
+    The spec asked to gate on `mode = "distributed"`. That alone is unsafe: a config declaring
+    distributed mode **before its store exists** is mid-migration, and there the legacy file may
+    still be what actually gets read. Telling that operator to relocate their live store would be
+    worse than saying nothing. So the check also requires the distributed store to be really
+    present (`.aida-store/`, or the orphan `aida-store` branch) — mirroring
+    `detect_legacy_store_cruft`'s own second gate. Covered by its own test
+    (`a_distributed_config_with_no_store_yet_is_silent`).
+
+    ### Gate 1 reads the root locally, and that claim is stated at its true strength
+
+    `distributed_mode_declared_from` walks **up** and would adopt a distributed parent's mode for
+    a root declaring nothing itself. The check reads `<root>/.aida/config.toml` directly instead.
+
+    Stated honestly: `aida doctor` resolves `project_root` through a guarded walk-up that always
+    lands on a root carrying its own `.aida`, so **no field scenario is known where the two
+    disagree for this caller**. This is a contract choice — the root is already in hand, and
+    re-deriving it can only add a way to be wrong — pinned by test rather than left implicit. My
+    first version of the AC3 test did not actually discriminate it (gate 2 was masking the
+    difference: the nested child had no `.aida-store`, so it returned empty for the wrong reason,
+    and mutation M3 **passed**). The fixture now gives the child its own `.aida-store` so gate 1 is
+    the only thing left that can stop it, and M3 fails.
+
+    ### Evidence
+
+    **End-to-end against the real instance** — this host is the condition the bug was filed from,
+    so the check was run against it, read-only, no `--heal`:
+
+    ```
+    $ aida doctor --category legacy-store-in-root --json
+    { "total": 1, "findings": [ {
+      "category": "legacy-store-in-root",
+      "id": "requirements.db",
+      "summary": "legacy store `requirements.db` (1712128 bytes, last modified 2026-03-19 UTC) sits
+        in the root of a git-canonical project; distributed mode does not read it, so it is inert
+        for normal operation, but any code path that resolves a store relative to the process CWD
+        can still pick it up (see BUG-1732)",
+      "action": "move `requirements.db` out of the project root (it may be the only copy of another
+        project's data — relocate it, do not delete it)",
+      "safe_heal": false } ] }
+    $ echo $?
+    0
+    ```
+
+    **AC1's "exit status unchanged" is therefore measured, not argued: exit 0 with a finding
+    present.** `--category requirements-db` resolves through the new alias; `--category
+    bogus-category` still exits 1, so the alias addition did not weaken the normalizer's
+    unknown-category error. The file was not touched.
+
+    The mtime is labelled **UTC** deliberately: `ls` on this host prints `Mar 18` (MST) for the
+    same file, and an unlabelled `2026-03-19` would read as a wrong answer.
+
+    **Mutation matrix — six mutations, one row per acceptance claim:**
+
+    | mutation | test that fails |
+    |---|---|
+    | M1 — gate 1 (distributed declaration) dropped | `a_legacy_mode_root_with_a_requirements_db_is_silent` (AC3) |
+    | M2 — gate 2 (store present) dropped | `a_distributed_config_with_no_store_yet_is_silent` |
+    | M3 — root-local read → `distributed_mode_declared_from` | `a_legacy_mode_root_with_a_requirements_db_is_silent` |
+    | M4 — tracked/untracked partition dropped | `a_tracked_requirements_yaml_is_left_to_legacy_store_cruft` |
+    | M5 — action reworded to `rm ...` | `the_action_says_relocate_and_never_delete` (AC4) |
+    | M6 — category shares the cruft heal arm | **none — see the correction above** |
+
+    M1, M2, M3, M4 and M5 each fail **exactly one** test, so no test rides on another's mechanism.
+    `detects_and_heals_legacy_store_cruft_on_git_canonical_project` (TASK-752's own test) passes
+    under every row, which is what shows the partition did not regress the sibling check.
+
+    **AC5** is satisfied by six tests, all tempdir-only: ACs 1, 2 and 3 plus the mid-migration
+    gate, the partition, and the message. None reads the developer's machine — deliberately, since
+    the condition happens to exist on exactly one host and a test that depended on it would pass
+    there and nowhere else.
+
+    **Honest notes on witness strength.** `the_action_says_relocate_and_never_delete` is a message
+    witness (AC4 *is* a claim about a string; asserted in both directions — "move" and "do not
+    delete it" present, `rm ` absent). The `heal_doctor_finding` assertion inside
+    `legacy_store_in_root_is_flagged_on_a_git_canonical_project` pins current behaviour (a heal run
+    reports this category as diagnostic-only and leaves the file in place) but, per M6, does **not**
+    discriminate the category choice; it is kept for what it does pin, not for what I first thought
+    it pinned.
+
+    ### Also changed
+
+    `DoctorRunOptions` gained `#[derive(Default)]` so the heal assertion could name only the option
+    it cares about instead of re-listing every field — a literal would break the next time a flag
+    is added.
+
+    ### Out of scope, untouched
+
+    `/home/joe/ai/aida/requirements.db` was not moved, deleted, or written. The check is read-only
+    and its own action text tells the operator to relocate rather than delete. **It is still the
+    operator's call and the only copy of another project's data.**
+  created_at: 2026-09-30T12:09:12.930368230Z
+  modified_at: 2026-09-30T12:09:12.930368230Z
+  session_id: a0db2dbf-9f85-48bb-af74-d27c3bcda426
 history:
 - id: 01a0f169-2db2-7990-99d1-e383c5810980
   author: joe
