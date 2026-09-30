@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T18:09:36.104919485Z
+modified_at: 2026-09-30T20:16:49.820624524Z
 req_type: Task
 tags:
 - docs
@@ -78,5 +78,10 @@ comments:
   content: 'Updated slide 3 from the supplied July status image to an editable September Accomplishments / October Focus slide while retaining the original branded footer. Evidence reviewed: weekly `aida history --shipped` windows yielded a lower bound of 839 September completion transitions (two windows exhausted before their starts); GitHub recorded 627 September merged PRs; the personal GitLab mirror exposed 634 September commits. September themes: operational autonomy, governable delivery, cross-vendor/GitLab execution, and compounding evidence. October focus derives from active/approved work: cycle-time and reconstitution proof, session-bound authority and protected full-access launches, lane-based parallel delivery and CLI build-speed work, plus cache/merge/review/CI reliability. Regenerated both 23-slide PPTX copies and speaker notes; verified LibreOffice render at 1920x1080, embedded/Markdown notes, slide order, ZIP integrity, and matching deck hashes.'
   created_at: 2026-09-30T18:09:36.104914674Z
   modified_at: 2026-09-30T18:09:36.104914674Z
+- id: 01a0f3f6-729c-71a2-b07f-6fb7cdff3771
+  author: mcp
+  content: 'Added the three-slide QCI BUG-180 case study to the upper-management deck as slides 15-17, immediately after the evidence-depth slide. Rendered repository-resident 1920x1080 assets from /home/joe.mooney/ai/foo/presentation/bug-180-codex-workflow.pptx, added embedded and Markdown speaker notes grounded in QCI''s BUG-180 record, GitLab MR 25, exact MR head e2ddf83, and pipeline 3431987, and updated the generator to preserve insertion/order on rebuild. Renamed the existing analytics and home-lab slides as case studies 2 and 3, shifted all later footers/notes, updated total timing to ~22 minutes, and bounded the appendix claim to one deeply traced defect rather than broad productivity evidence. Corrected the source case-study deck from PR-25 to MR-25 and clarified APPROVED as the review verdict while BUG-180''s final AIDA status remains Completed. Final QA: 26-slide PDF, 1920x1080 QCI renders, sequential notes 1-26, correct generated footers, backup 25, appendix 26, valid PPTX ZIP, and identical output deck hashes.'
+  created_at: 2026-09-30T20:16:49.820620669Z
+  modified_at: 2026-09-30T20:16:49.820620669Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
