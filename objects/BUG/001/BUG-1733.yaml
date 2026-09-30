@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:55:10.618095347Z
-modified_at: 2026-09-30T07:53:44.073364959Z
+modified_at: 2026-09-30T08:04:29.892740101Z
 req_type: Bug
 comments:
 - id: 01a0f13d-2089-7402-bd84-cca09643ac64
@@ -164,6 +164,52 @@ comments:
     AC3 pass; if it needs a long bound to be green, that is a finding, not a tuning knob.
   created_at: 2026-09-30T07:53:44.073364959Z
   modified_at: 2026-09-30T07:53:44.073364959Z
+  session_id: ee842845-0934-464c-8a39-5ea927f98a59
+- id: 01a0f157-fa44-7d40-aef0-71dd9df9abd4
+  author: joe
+  content: |
+    ## Corroboration: this reproduced on CI, not only on the filing host
+
+    `Build (ubuntu-latest)` for PR #2289, run `36686163707`, hit this verbatim:
+
+    ```
+    thread '<unnamed>' (38216) panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:52:14:
+    fixture: the refresh flock must be free before the holder takes it
+
+    thread 'bug_1670_stale_cache_callers_tests::unambiguous_write_resolution_sees_external_collision_under_foreign_lock' (37446)
+      panicked at aida-cli-lib/src/tests/stale_cache_fixture.rs:59:10:
+    fixture: the refresh holder thread must report ready: RecvError
+    ```
+
+    Two things this settles:
+
+    1. **It is not host-specific.** Earlier sessions only ever saw it on the operator's 6-core
+       box, which left open that it was a property of this machine's load. A GitHub-hosted runner
+       reproduced it, so the contention window is intrinsic to the suite, not to the host.
+    2. **It is the originally-filed test this time**, where the previous session saw
+       `rules_sync_keeps_rule_for_spec_approved_after_snapshot`. Combined, both of the
+       *re-arming* tests have now been observed failing and none of the six single-call tests
+       ever has — which is the correlation argued in the previous comment, now with both halves
+       witnessed rather than one.
+
+    This also means **AC3 is cheaper to satisfy than it looks**: the 4-worker local reproducer is
+    no longer the only way to see it. A CI run is a second, independent trigger.
+
+    ## A sibling defect found in the same CI run — see BUG-1735
+
+    The same run failed a second test, `bug_1291_orphan_sweep_tests::queue_add_failure_is_propagated`,
+    with `could not invoke \`aida queue add\``. That is the *same family*: a sibling thread's
+    forked child holding an inherited descriptor past its guard — a **write** descriptor to a
+    freshly written executable fixture, producing `ETXTBSY` on spawn, rather than this bug's
+    **flock** descriptor. Filed as **BUG-1735**, which also notes the repo already carries the
+    remedy (`process_retry::command_output_retrying_etxtbsy`, from BUG-463/BUG-468) and that the
+    offending call site simply bypasses it.
+
+    Whoever picks up BUG-1733 should read BUG-1735 first: if the two are fixed together, the
+    write-up of "inherited descriptor survives its guard under suite parallelism" is worth
+    stating once, in one place, rather than a third time.
+  created_at: 2026-09-30T08:04:29.892740101Z
+  modified_at: 2026-09-30T08:04:29.892740101Z
   session_id: ee842845-0934-464c-8a39-5ea927f98a59
 history:
 - id: 01a0f118-a43f-7c51-9ad2-c7b608d034c8
