@@ -138,8 +138,13 @@ impl RefreshLock {
 /// a descriptor of ours that a concurrent `fork` duplicated into a child which
 /// has not reached `exec` yet (see `acquire_past_fork_window`). Only the first
 /// is a defect here. Naming the holding pids from `/proc/locks`, and this
-/// process's own descriptors on the same inode, separates them from the CI log
+/// process's own descriptors on the same file, NARROWS that from the CI log
 /// alone instead of leaving it to inference.
+///
+/// It is evidence, not an identity check, and a reader should not treat it as
+/// more: `/proc/locks` is read as a whole while it can change underneath, and
+/// a row's pid is the pid that CREATED the lock, which is not necessarily the
+/// process whose descriptor is keeping it alive.
 // trace:BUG-1729 | ai:claude
 #[cfg(all(test, target_os = "linux"))]
 fn lock_holders(sidecar: &Path) -> String {
@@ -147,7 +152,16 @@ fn lock_holders(sidecar: &Path) -> String {
     let Ok(meta) = std::fs::metadata(sidecar) else {
         return "holders=<sidecar stat failed>".to_string();
     };
-    let ino = meta.ino().to_string();
+    // Matching the inode alone can name a lock on an identically numbered
+    // inode on another device, so match `/proc/locks`'s own MAJ:MIN:INO key.
+    let dev = meta.dev();
+    let key = format!(
+        "{:02x}:{:02x}:{}",
+        libc::major(dev),
+        libc::minor(dev),
+        meta.ino()
+    );
+    let ino = meta.ino();
     let me = std::process::id().to_string();
     let mut holders: Vec<String> = Vec::new();
     if let Ok(locks) = std::fs::read_to_string("/proc/locks") {
@@ -161,7 +175,7 @@ fn lock_holders(sidecar: &Path) -> String {
             let (Some(pid), Some(dev_ino)) = (f.get(4), f.get(5)) else {
                 continue;
             };
-            if dev_ino.rsplit(':').next() != Some(ino.as_str()) {
+            if **dev_ino != *key {
                 continue;
             }
             let comm = std::fs::read_to_string(format!("/proc/{pid}/comm"))
@@ -180,13 +194,14 @@ fn lock_holders(sidecar: &Path) -> String {
     let mut own_fds: Vec<String> = Vec::new();
     if let Ok(entries) = std::fs::read_dir("/proc/self/fd") {
         for entry in entries.flatten() {
-            let same = std::fs::metadata(entry.path()).is_ok_and(|m| m.ino().to_string() == ino);
+            let same =
+                std::fs::metadata(entry.path()).is_ok_and(|m| m.ino() == ino && m.dev() == dev);
             if same {
                 own_fds.push(entry.file_name().to_string_lossy().to_string());
             }
         }
     }
-    format!("inode={ino} holders={holders:?} own_fds={own_fds:?}")
+    format!("dev_ino={key} holders={holders:?} own_fds={own_fds:?}")
 }
 
 // trace:BUG-1729 | ai:claude
@@ -214,26 +229,34 @@ fn lock_holders(_sidecar: &Path) -> String {
 /// descriptor that never comes back.
 ///
 /// The bound is a coarse backstop, not a measurement: the window closes as soon
-/// as the racing child reaches `exec`, which is microseconds on an idle host.
-/// The response to a spurious crossing is to raise it.
+/// as the racing child reaches `exec`, which is microseconds on an idle host,
+/// so 5s is already three orders of magnitude of headroom while keeping a real
+/// failure prompt. The response to a spurious crossing is to raise it.
+///
+/// It retries every `Ok(None)`, including a registry entry owned by another
+/// thread, because `try_acquire` does not report which fired. In the tests that
+/// use it no other thread owns the entry, so the only reachable `None` is the
+/// contended `flock`; a caller where that is not true would be masking
+/// cross-thread contention and should assert on `held_by_current_thread`
+/// instead.
 // trace:BUG-1729 | ai:claude
 #[cfg(test)]
 pub(super) fn acquire_past_fork_window(cache_path: &Path) -> std::io::Result<Option<RefreshLock>> {
     let deadline = std::time::Instant::now() + FORK_WINDOW_BOUND;
     loop {
-        match RefreshLock::try_acquire(cache_path)? {
-            Some(lock) => return Ok(Some(lock)),
-            None if std::time::Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(20));
-            }
-            None => return Ok(None),
+        if let Some(lock) = RefreshLock::try_acquire(cache_path)? {
+            return Ok(Some(lock));
         }
+        let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            return Ok(None);
+        };
+        std::thread::sleep(left.min(Duration::from_millis(20)));
     }
 }
 
 // trace:BUG-1729 | ai:claude
 #[cfg(test)]
-const FORK_WINDOW_BOUND: Duration = Duration::from_secs(30);
+const FORK_WINDOW_BOUND: Duration = Duration::from_secs(5);
 
 impl Drop for RefreshLock {
     fn drop(&mut self) {
@@ -542,14 +565,17 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let path = d.path().join("cache.db");
         let outer = RefreshLock::try_acquire(&path).unwrap().unwrap();
+        let start = std::time::Instant::now();
         let inner = RefreshLock::try_acquire(&path).unwrap().unwrap();
-        // `is_nested()` IS the "does not wait" proof, and it is a state
-        // assertion: nested means the acquire took the registry's fast path,
-        // which by construction never blocks. The 100ms wall-clock budget this
-        // replaces measured the runner's scheduler instead, and added nothing
-        // the state already says.
-        // trace:BUG-1729 | ai:claude
         assert!(inner.is_nested());
+        // This budget was briefly removed on the theory that `is_nested()`
+        // already proves "does not wait". It does not: the nested branch is
+        // reached only after an `open`, a `canonicalize`, and a blocking
+        // `HELD.lock()`, so the state says which path was taken and not that
+        // the path was prompt. Restored, and left to AC1's sweep of this
+        // family's wall-clock assertions rather than weakened here.
+        // trace:BUG-1729 | ai:claude
+        assert!(start.elapsed() < Duration::from_millis(100));
         let p = path.clone();
         assert!(
             std::thread::spawn(move || RefreshLock::try_acquire(&p).unwrap().is_none())
@@ -597,29 +623,51 @@ mod tests {
         // observed from the spawning thread. The child announces itself down a
         // plain pipe from `pre_exec` and then lingers, and this thread observes
         // the window while another thread sits inside `spawn`.
+        // `O_CLOEXEC` on both ends is what makes this safe to wait on: it does
+        // NOT stop the child inheriting them at `fork`, so the child can still
+        // write, but it closes them at `exec`. So either the byte arrives, or
+        // the child reached `exec` and the read sees EOF — never an
+        // indefinite block on a write end this process is still holding.
         let mut fds = [0 as libc::c_int; 2];
-        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
         let (read_fd, write_fd) = (fds[0], fds[1]);
         let spawner = std::thread::spawn(move || {
             let mut cmd = std::process::Command::new("true");
-            // SAFETY: after `fork` the child only writes one byte and sleeps.
-            // `write` and `nanosleep` are async-signal-safe, which is the
-            // constraint on a post-fork closure. The window is 2s against the
-            // microseconds of work below.
+            // SAFETY: after `fork` the child calls only `write` and
+            // `nanosleep`, both async-signal-safe, which is the constraint on a
+            // post-fork closure in a multithreaded parent. `std::thread::sleep`
+            // would NOT satisfy it. The window is 2s against the microseconds
+            // of work below.
             unsafe {
                 cmd.pre_exec(move || {
                     let _ = libc::write(write_fd, b"x".as_ptr().cast(), 1);
-                    std::thread::sleep(Duration::from_secs(2));
+                    let ts = libc::timespec {
+                        tv_sec: 2,
+                        tv_nsec: 0,
+                    };
+                    libc::nanosleep(&ts, std::ptr::null_mut());
                     Ok(())
                 });
             }
             cmd.spawn().unwrap().wait().unwrap();
         });
+        // Bounded: a child that dies before writing must fail this test, never
+        // hang it.
+        let mut pfd = libc::pollfd {
+            fd: read_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        assert_eq!(
+            unsafe { libc::poll(&mut pfd, 1, 10_000) },
+            1,
+            "the child neither reported reaching pre_exec nor closed the pipe"
+        );
         let mut byte = [0u8; 1];
         assert_eq!(
             unsafe { libc::read(read_fd, byte.as_mut_ptr().cast(), 1) },
             1,
-            "the child never reported reaching pre_exec"
+            "the child reached exec without reporting from pre_exec"
         );
 
         drop(guard);
@@ -630,11 +678,12 @@ mod tests {
         );
         assert!(report.contains("registry_entry=None"), "{report}");
         assert!(report.contains("WouldBlock"), "{report}");
-        // The lock record keeps the pid that created it, so the holder reads as
+        // The lock record keeps the pid that CREATED it, so the holder reads as
         // this process even though the descriptor keeping it alive belongs to a
-        // child. THAT PAIR IS THE DISCRIMINATOR: a holder of SELF with an empty
-        // `own_fds` is this race; a holder of SELF with a descriptor still
-        // listed is a genuine leak, which is what
+        // child. That pair is what a CI log has to go on: a holder of SELF with
+        // an empty `own_fds` says an inherited descriptor, not a leak here,
+        // though it cannot say whose fork produced it; a holder of SELF with a
+        // descriptor still listed is a leak, which
         // `the_diagnostic_names_a_descriptor_no_guard_owns` pins.
         assert!(report.contains("SELF/pid="), "{report}");
         assert!(report.contains("own_fds=[]"), "{report}");
@@ -673,7 +722,10 @@ mod tests {
         assert!(report.contains("WouldBlock"), "{report}");
         assert!(report.contains("SELF/pid="), "{report}");
         assert!(report.contains("/FLOCK/WRITE"), "{report}");
-        assert!(!report.contains("own_fds=[]"), "{report}");
+        // Positively, not `!contains("own_fds=[]")`: that negation also passes
+        // when the field is missing altogether. A populated list opens with a
+        // quoted descriptor name.
+        assert!(report.contains("own_fds=[\""), "{report}");
         drop(leaked);
         // Observed failing here as a bare `try_acquire` while this file was
         // being written: the sibling fork test above ran concurrently and its
