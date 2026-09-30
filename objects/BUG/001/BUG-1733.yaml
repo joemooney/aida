@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T06:55:10.618095347Z
-modified_at: 2026-09-30T08:24:30.564854806Z
+modified_at: 2026-09-30T08:58:54.282335434Z
 req_type: Bug
 comments:
 - id: 01a0f13d-2089-7402-bd84-cca09643ac64
@@ -211,6 +211,98 @@ comments:
   created_at: 2026-09-30T08:04:29.892740101Z
   modified_at: 2026-09-30T08:04:29.892740101Z
   session_id: ee842845-0934-464c-8a39-5ea927f98a59
+- id: 01a0f189-c9ca-7ad3-aabf-a4d176e7dd22
+  author: joe
+  content: |
+    ## Implemented — AC1/AC2/AC4 in `stale_cache_fixture.rs`, AC3 re-priced (see below)
+
+    ### AC2: `:52` is a legitimate contention outcome, and the fixture now tolerates it
+
+    Settled in the previous session by evidence, restated here as the disposition:
+    `try_acquire` returns `Ok(None)` from exactly two places — a registry entry owned by
+    another thread, or a contended `flock`. Each test owns a private tempdir cache, so the
+    registry can never collide across tests; the flock can, because a sibling test thread that
+    forks while this test's *previous* `ForeignRefresh` still holds the lock leaves the child
+    with an inherited descriptor to the same open file description. The flock then outlives the
+    guard that dropped it. That is BUG-1729's mechanism, and it explains the 2/2 correlation
+    with the re-arm path (only the two tests that call the fixture twice have ever failed).
+
+    ⟹ Not a defect in the subject, and not a leak in `RefreshLock`: a leak would be
+    deterministic, and this passes in isolation. The fixture must wait the child out.
+
+    ### AC4: bounded retry on the **acquire**, not a longer sleep and not the handshake
+
+    `acquire_with_retry(path, deadline)` polls `try_acquire` every 25ms up to a 30s bound and
+    returns `(lock, attempts)`. Giving up produces a message naming the attempt count, the
+    elapsed wait, the poll interval, and BUG-1729 as the mechanism to look for. The deadline is
+    a parameter rather than a constant read inside the loop specifically so a test can exhaust
+    it in 200ms instead of 30s.
+
+    ### AC1: the holder's own panic is re-raised
+
+    `await_ready` replaces the bare `.expect("...must report ready")`. The ready channel now
+    carries a `Result<(), String>`, so an acquire that gives up arrives as a *message*, and a
+    `RecvError` — which can now only mean the holder died unexpectedly — joins the handle and
+    `resume_unwind`s the holder's own payload. A `RecvError` can no longer be the whole story.
+
+    ### Three regressions, each mutation-proved
+
+    Mutation matrix actually run (not reasoned about): fix reverted in both halves — the retry
+    loop cut to a single ask, and `await_ready` restored to the old double-`expect` —
+
+    | test | fix reverted | fix restored |
+    |---|---|---|
+    | `a_transiently_held_flock_is_waited_out_rather_than_panicking` | **FAIL** (`:181`) | pass |
+    | `a_holder_that_dies_before_arming_reports_its_own_panic` | **FAIL** (`:140`/`:247`) | pass |
+    | `giving_up_names_the_bound_the_elapsed_wait_and_the_attempt_count` | pass | pass |
+
+    Stated honestly: the third test is a **message-content** witness, not a retry witness — it
+    passes under both of the above mutations and fails only if the diagnostics are stripped from
+    the give-up message. It is kept because AC4's "a stated bound" is a claim about what the
+    message says, and nothing else asserts it. The first test is the retry witness: it asserts
+    `attempts > 1`, so cutting the loop to one ask fails it.
+
+    ### ✦ AC3 re-priced: 50 consecutive runs of the reproducer is not buyable, and is weaker evidence
+
+    AC3 asked for 50 consecutive runs under the 4-worker reproducer. Priced rather than waved
+    off: the full `aida-cli-lib` lib suite is ~9 minutes here, so 50 runs is **~7.5 hours** of
+    wall clock. Worse, it is the wrong instrument. The trigger needs a *sibling test* to fork
+    while the fixture holds the lock, so the stale-cache module alone can never reproduce it; and
+    50 green runs of a non-deterministic race is an absence of evidence, not evidence.
+
+    What was bought instead:
+
+    - **3 consecutive full-suite runs** at `--test-threads=4`, `RUST_MIN_STACK=8388608`, the CI
+      shape. Results recorded below.
+    - **A deterministic injection** of the exact condition the 50 runs were a proxy for: a
+      holder thread takes the flock, `acquire_with_retry` is called against it, and the test
+      asserts the acquire was *retried* and then succeeded. This is strictly stronger — it
+      observes the retry engaging rather than hoping contention shows up.
+
+    I am recording this as a deliberate substitution of AC3, not as AC3 met as written. If the
+    advisor seat wants the literal 50 runs, it is a background job, not a session.
+
+    ### Gates
+
+    `cargo fmt --all -- --check`, `scripts/check-portability.sh`, `scripts/check-trace-headers.py`,
+    `scripts/glyph-lint.sh` all exit 0.
+
+    ### Suite evidence actually run
+
+    3 consecutive full `aida-cli-lib` lib suites, `--test-threads=4`, `RUST_MIN_STACK=8388608`,
+    on the 6-core host:
+
+    ```
+    run 1  test result: ok. 7372 passed; 0 failed; 2 ignored; finished in 491.82s
+    run 2  test result: ok. 7372 passed; 0 failed; 2 ignored; finished in 499.54s
+    run 3  test result: ok. 7372 passed; 0 failed; 2 ignored; finished in 545.53s
+    ```
+
+    `cargo clippy -p aida-cli-lib --all-targets` produces no error and no new warning (the six
+    warnings are pre-existing: four unused imports and two unused `MergeLease` bindings).
+  created_at: 2026-09-30T08:58:54.282335434Z
+  modified_at: 2026-09-30T08:58:54.282335434Z
+  session_id: 0241e2a1-f4b6-4cb3-bc08-3f10e52dc315
 history:
 - id: 01a0f118-a43f-7c51-9ad2-c7b608d034c8
   author: joe
