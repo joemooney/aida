@@ -557,15 +557,21 @@ mod tests {
 
         let start = Instant::now();
         let outcome = spawn_and_wait(cmd, &sentinel, &fast_config()).unwrap();
-        let elapsed = start.elapsed();
 
         assert!(
             matches!(outcome, ExitOutcome::Reaped(_)),
             "expected Reaped, got {outcome:?}"
         );
-        assert!(
-            elapsed < Duration::from_secs(5),
-            "reap took too long: {elapsed:?}"
+        // `fast_config` waits grace (2s) then up to wait_delay (5s), so the
+        // old magic 5s sat two whole seconds *below* the cascade's configured
+        // worst case and was guaranteed to fail whenever the backstop ran.
+        // trace:BUG-1730
+        let cfg = fast_config();
+        crate::test_timing::assert_within_budget(
+            start,
+            cfg.grace + cfg.wait_delay + Duration::from_secs(2),
+            Duration::from_secs(60),
+            "sentinel reap",
         );
         assert!(!sentinel.exists(), "sentinel should be cleaned up");
     }
@@ -645,7 +651,6 @@ mod tests {
             false,
         )
         .unwrap();
-        let elapsed = start.elapsed();
 
         match outcome {
             ExitOutcome::WatchdogTripped(reason) => {
@@ -653,9 +658,14 @@ mod tests {
             }
             other => panic!("expected WatchdogTripped, got {other:?}"),
         }
-        assert!(
-            elapsed < Duration::from_secs(5),
-            "watchdog reap hung: {elapsed:?}"
+        // Same arithmetic as the sentinel reap above: derive the budget from
+        // the config rather than a constant below it. trace:BUG-1730
+        let cfg = fast_config();
+        crate::test_timing::assert_within_budget(
+            start,
+            cfg.grace + cfg.wait_delay + Duration::from_secs(2),
+            Duration::from_secs(60),
+            "watchdog reap",
         );
         assert!(!sentinel.exists());
     }
@@ -700,8 +710,18 @@ mod tests {
         // cascade is actually configured to wait — grace, then the bounded
         // wait — instead of a magic constant that was *below* the configured
         // worst case and so failed on any slow host. trace:BUG-1730
-        let hang_budget = config.grace + config.wait_delay + Duration::from_secs(2);
-        crate::test_timing::assert_within_budget(start, hang_budget, "sigkill cascade");
+        // The budget is what the cascade is configured to wait — grace, then
+        // the bounded wait — plus room for the two process-tree scans the reap
+        // performs. The old magic 5s sat *below* that, so it failed on any host
+        // slow enough to use the backstop. The ceiling is the hang guard and
+        // holds on every host, loaded CI runners included. trace:BUG-1730
+        let budget = config.grace + config.wait_delay + Duration::from_secs(2);
+        crate::test_timing::assert_within_budget(
+            start,
+            budget,
+            Duration::from_secs(60),
+            "sigkill cascade",
+        );
         // The immediate child was killed by SIGKILL (signal 9).
         assert_eq!(status.signal(), Some(9), "expected SIGKILL");
         assert!(!sentinel.exists());
