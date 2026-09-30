@@ -49623,7 +49623,13 @@ fn build_display_id_lookup(
 /// distributed git-canonical mode first (the default), then falls back
 /// to the legacy YAML/SQLite path. Returns None on any error — caller
 /// renders with "(not found)" placeholders so missing data degrades
-/// gracefully. trace:STORY-98 | ai:claude
+/// gracefully.
+///
+/// Pure with respect to `project_root`: BOTH resolution modes read only stores
+/// reachable from that root, so this can never return another project's
+/// requirements. No process CWD, no `REQ_DB_NAME`, no registry default — see
+/// the legacy arm's comment for what went wrong when it did (BUG-1732).
+// trace:STORY-98 trace:BUG-1732 | ai:claude
 pub(crate) fn load_store_for_lookup(
     project_root: &std::path::Path,
 ) -> Option<aida_core::RequirementsStore> {
@@ -49635,8 +49641,28 @@ pub(crate) fn load_store_for_lookup(
             }
         }
     }
-    // Legacy fallback for projects that haven't migrated.
-    determine_requirements_path(None)
+    // Legacy fallback for projects that haven't migrated. BUG-1732: this used
+    // `determine_requirements_path(None)`, which probes for `requirements.db` /
+    // `requirements.yaml` relative to the PROCESS CWD and honours an ambient
+    // `REQ_DB_NAME` — both of which ignore the `project_root` every one of this
+    // function's ~70 callers went to the trouble of resolving. On a host where
+    // the cwd happens to hold an unrelated legacy store, a project-scoped
+    // lookup silently returned that other project's requirements, which is how
+    // `aida awaiting` came to report six In-Progress specs from a different
+    // project in its orphaned-in-progress channel. BUG-1574's author already
+    // documented this hazard and hand-bypassed the fallback for one call site
+    // (see `unattended_git_mutation_refusal`); this makes the function itself
+    // pure with respect to its argument so no caller has to remember.
+    //
+    // `resolve_requirements_path_in` is reused rather than reimplemented so the
+    // probe ORDER (`requirements.db` before `requirements.yaml`) stays defined
+    // in one place. Passing `project_root` as its cwd and `None` for both the
+    // `-p` option and `REQ_DB_NAME` leaves no ambient input: on that arm the
+    // resolver returns before it ever reads the registry, so the empty registry
+    // path below is inert and is passed to make that unreadability explicit
+    // rather than to imply the registry participates.
+    // trace:BUG-1732 | ai:claude
+    aida_core::resolve_requirements_path_in(project_root, None, None, std::path::Path::new(""))
         .ok()
         .map(Storage::new)
         .and_then(|s| s.load().ok())
@@ -85441,6 +85467,13 @@ mod bug_1602_rel_remove_handler_tests;
 #[path = "tests/bug_1611_lifecycle_authority_tests.rs"]
 mod bug_1611_lifecycle_authority_tests;
 
+// BUG-1732: `load_store_for_lookup` is project-root-scoped, so no
+// project-scoped read can surface another project's requirements.
+// trace:BUG-1732 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1732_store_lookup_scope_tests.rs"]
+mod bug_1732_store_lookup_scope_tests;
+
 // trace:TASK-1468 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_1468_ambiguous_write_ids_tests.rs"]
@@ -95622,9 +95655,12 @@ fn record_headless_refusal_finding(
 /// found within it, both refuse — that is the real BUG-1574 failure mode (a
 /// corrupted/unreadable store, or a since-deleted spec), and must never
 /// silently read as "nothing to check". Deliberately bypasses
-/// [`load_store_for_lookup`]'s legacy-YAML fallback (which resolves off the
-/// process CWD, not `project_root`) so this check is pure w.r.t. its
-/// `project_root` argument.
+/// [`load_store_for_lookup`]'s legacy-YAML fallback entirely: this check
+/// requires the distributed store the config declares, so a legacy store
+/// sitting beside it must not satisfy it. (Until BUG-1732 that fallback also
+/// resolved off the process CWD rather than `project_root`, which is the
+/// hazard this bypass was originally written against; the fallback is now
+/// project-scoped, so only the stricter requirement remains.)
 pub(crate) fn unattended_git_mutation_refusal(
     project_root: &std::path::Path,
     spec: &str,
