@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-30T14:58:24.074342051Z
+modified_at: 2026-09-30T15:26:08.933376461Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -105,6 +105,116 @@ comments:
   created_at: 2026-09-30T14:58:24.074342051Z
   modified_at: 2026-09-30T14:58:24.074342051Z
   session_id: c5c04ef0-c9e3-4c80-811b-4730a2a8aaf1
+- id: 01a0f2ec-5225-72f2-ac23-0937c60451e9
+  author: joe
+  content: |
+    ## ADVISOR REVIEW of branch `bug-1688` @ `72bc040a09` — REWORK REQUIRED (2026-09-30, relay #13)
+
+    Reviewed codex's custody commit against the four acceptance criteria. **This brief IS the advisor
+    hand-off**; the rework seat may implement directly from it.
+
+    Diff is 6 files, +141/-97: the four `scripts/ablations/gate-vs-rule*.sh`, `scripts/aida-demo.sh`,
+    and a new `tests/test_bug_1688_shipped_launch_refusals.sh`.
+
+    **Rebase is clean.** `git merge-tree --write-tree main bug-1688` → exit 0, single tree, no
+    conflict list. Do not budget for a rebase fight.
+
+    ### What is genuinely right — keep it
+
+    - **The four ablation runners.** `exit 78` with a typed
+      `ERROR[AIDA_VENDOR_LAUNCH_REFUSED]` immediately after `set -euo pipefail`, before any argv is
+      built. Fail-closed at the entry point, and the test **executes the shipped scripts themselves**
+      rather than re-implementing them. AC1 and AC2 are met here.
+    - **`scripts/aida-demo.sh` went further than AC1 required and that is better.** `git grep` on the
+      branch confirms the demo now contains **neither** full-access flag and **no** `claude -p` /
+      `command -v claude` invocation at all — only prose mentions at lines 646 and 997. The launch
+      site is deleted, not gated, and the narrative was rewritten honestly ("Real work, no vendor
+      launch, real auto-bump"). Accepted.
+    - **The route audit is an exact-equality check** against a sorted expected list, so it fails both
+      when a new full-access route appears and when one silently vanishes. Right shape.
+
+    ### 🔴 BLOCKER 1 — the test is wired into nothing
+
+    `git grep -ln test_bug_1688_shipped_launch_refusals bug-1688 -- '*.yml' '*.sh' '*.rs' Makefile`
+    returns **empty**. A test nobody runs cannot fail. Register it in `.github/workflows/ci.yml`
+    beside its siblings (`tests/test_advisor_code_gate.sh` at line 220,
+    `tests/test_isolated_home_guard.sh` at 240 are the pattern). It is shell-only and build-free, so
+    like the merge-hold gate fixture it should **not** be gated on `full_ci` — a scripts-only PR must
+    still trip it.
+
+    ### 🔴 BLOCKER 2 — AC2 is vacuous for the demo, in two independent ways
+
+    AC2 asks for "a fixture using recording vendor binaries [that] proves zero vendor launches from
+    each of the five scripts". For the demo it proves nothing:
+
+    1. **The fixture flag never reaches the demo's code.** `--vendor-launch-fixture` calls
+       `demo_refuse_vendor_launch` twice by hand and then `exit 0`, never entering the menu, the
+       queue walkthrough, or the Claude self-test. The test asserts two strings appear — which proves
+       only that a two-line `echo` helper echoes. **Re-add a `claude -p` call to option [1] today and
+       this test still passes.**
+    2. **The recorder could not observe a launch even if it ran.** The shim is exported only as
+       `AIDA_ABLATION_CLAUDE` / `AIDA_ABLATION_CODEX`. The demo never read those variables — it
+       resolved the vendor through **PATH** (`command -v claude`). So `[ -s "$calls" ]` is
+       guaranteed-empty for the demo no matter what the demo does. The zero-launch assertion has no
+       witness on this surface.
+
+    **Required.** Pick one and make it real:
+
+    - *Preferred, and it matches what actually changed:* drop `--vendor-launch-fixture` from the
+      shipped script entirely — a test-only flag on a shipped demo is a production surface carrying a
+      test hook — and replace it with a **source audit** asserting `scripts/aida-demo.sh` contains no
+      vendor invocation (no `claude -p`, no `command -v claude`, no `codex exec`, neither
+      full-access flag). That is the invariant the fix established.
+    - *Or:* keep a behavioural fixture but make it honest — install the recorder into a temp dir as
+      `claude` **and** `codex`, prepend that dir to `PATH`, and drive the demo's real menu surfaces
+      over stdin.
+
+    **Either way, mutation-prove it** (`cp` to scratchpad, mutate, run, `cp` back, confirm
+    `git status` clean — **never `git stash`**): re-insert a `claude -p` invocation into
+    `aida-demo.sh` and watch the test **FAIL**. If it passes, you have shipped coverage that does not
+    exist. Report the mutation and its output in the spec.
+
+    ### Findings to fix in the same pass
+
+    3. **`rg` is a new external dependency.** `mapfile -t ... < <(rg -l ...)` would be the **first**
+       use of ripgrep in any test in this repo (`grep -rln '\brg ' tests/*.sh` → no hits). Use
+       `grep -rl`. As written, a host without `rg` gets an empty array and then a misleading
+       "route audit differs from expected list" message instead of "rg not found".
+    4. **The audit's `sort` is locale-dependent.** The hardcoded `expected_routes` order (`-i2`,
+       `-i3`, `-i4`, then `gate-vs-rule.sh`) is only correct under C collation, where `-` (0x2D)
+       sorts before `.` (0x2E). Under a locale that ignores punctuation the order flips and the test
+       fails spuriously. Use `LC_ALL=C sort` — there is no existing `LC_ALL=C` precedent in
+       `tests/` or `scripts/`, so it needs to be written in deliberately, not assumed.
+    5. **`demo_refuse_vendor_launch "…" || [ "$?" -eq 78 ]`** is a no-op that only suppresses the
+       nonzero status under `set -e`; `|| true` is what is meant. Moot if the fixture flag goes away.
+
+    ### AC3 — substantively met; I widened the audit so you need not repeat it
+
+    The test's audit covers only `*.sh` under `scripts/`. I ran the wider grep over the whole
+    repository for `bypassPermissions|dangerously-bypass-approvals-and-sandbox` (excluding `target/`,
+    `.git/`, and the vendored `ecc-clone/`). Every hit outside the four ablation runners is **prose,
+    not a launch route**: `CHANGELOG.md`, `aida-core/templates/agents.toml:17` (a `#` comment
+    describing the flag), four `aida-core/templates/docs/agents/*.md`, `docs/autonomous-drain.md`,
+    `docs/cli/06-roles-sessions.md`, and assorted `docs/research/`, `docs/plans/`, `docs/spikes/`,
+    `docs/casts/`, `docs/competitive-analysis/` files. **No second shipped launch route exists.**
+
+    Record that result in the spec's resolution to satisfy AC3's "list each one with its
+    disposition". Known limit worth stating rather than fixing: the shipped audit is `.sh`-only under
+    `scripts/`, so a future Rust-side launch site would not trip it.
+
+    ### AC4 — met
+
+    Nothing in the diff touches BUG-1669 or claims a protected boundary.
+
+    ### One thing to record, not to change
+
+    Each ablation runner now has ~200 lines of unreachable body below its `exit 78`. That is the
+    right call for "keep its historical entry point fail-closed" — deleting a research runner's body
+    loses the record of what was run — but say so in the resolution so a later reader does not assume
+    the runner still works.
+  created_at: 2026-09-30T15:26:08.933376461Z
+  modified_at: 2026-09-30T15:26:08.933376461Z
+  session_id: 259d97b0-df15-4cdb-8712-e2f54e1a8223
 history:
 - id: 01a0e4aa-0db5-7f03-939f-9b70d4ca32f9
   author: joe
