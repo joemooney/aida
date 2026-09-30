@@ -40,6 +40,11 @@ const SANDBOX_REMOVE_ATTEMPTS: u32 = 3;
 // trace:BUG-1695 | ai:claude
 const SANDBOX_REMOVE_BACKOFF: std::time::Duration = std::time::Duration::from_millis(50);
 
+/// How many surviving paths a removal diagnostic names. Enough to identify a
+/// writer, few enough that the line stays readable.
+// trace:BUG-1695 | ai:claude
+const SANDBOX_REMOVE_REPORT_ENTRIES: usize = 10;
+
 /// Recursively remove `dir`, retrying ONLY on `ENOTEMPTY`, and naming what
 /// survived when it finally gives up.
 ///
@@ -66,24 +71,55 @@ const SANDBOX_REMOVE_BACKOFF: std::time::Duration = std::time::Duration::from_mi
 /// in two ways. It retries only `ENOTEMPTY`, so an unrelated failure (a
 /// permission error, a busy mount) still fails on the first pass instead of
 /// being swallowed three times over. And because a bare retry WOULD hide a
-/// genuine leak if one ever did appear, the final error names the entries that
-/// survived -- the next occurrence diagnoses itself.
+/// genuine leak if one ever did appear, it is never silent: a retry that
+/// eventually SUCCEEDS still reports the pass count and what had blocked the
+/// failing pass, and a retry that gives up names the entries that survived.
+/// Those two lists answer different questions -- "what blocked the removal"
+/// versus "what is left now" -- and the difference is the tell between this
+/// benign race and a real leak. Without the success report the common case
+/// would pass silently, which is precisely the masking this bug's acceptance
+/// rules out.
 ///
-/// `remove` and `backoff` are injected so the retry, its bound, and its error
-/// text are testable from fixtures, with no sleeping and no polling.
+/// `remove`, `backoff`, and `report` are injected so the retry, its bound, its
+/// diagnostics, and its error text are testable from fixtures, with no sleeping
+/// and no polling.
 // trace:BUG-1695 | ai:claude
 fn remove_tree_retrying_dir_not_empty(
     dir: &std::path::Path,
     attempts: u32,
     backoff: std::time::Duration,
     mut remove: impl FnMut(&std::path::Path) -> std::io::Result<()>,
+    mut report: impl FnMut(String),
 ) -> std::io::Result<()> {
     let attempts = attempts.max(1);
     let mut last: Option<std::io::Error> = None;
+    let mut blocked_by: Option<Vec<String>> = None;
     for attempt in 0..attempts {
         match remove(dir) {
-            Ok(()) => return Ok(()),
+            Ok(()) => {
+                // A silent successful retry is the masking BUG-1695's
+                // acceptance forbids, so say what the failing pass hit.
+                if let Some(blocked) = blocked_by {
+                    let named = if blocked.is_empty() {
+                        "an entry it could no longer see".to_string()
+                    } else {
+                        blocked.join(", ")
+                    };
+                    report(format!(
+                        "sandbox removal at {} needed {} of {attempts} passes -- \
+                         the failed pass was blocked by: {named}",
+                        dir.display(),
+                        attempt + 1,
+                    ));
+                }
+                return Ok(());
+            }
             Err(e) if e.kind() == std::io::ErrorKind::DirectoryNotEmpty => {
+                // Snapshot at the FIRST failure: that is what actually blocked
+                // the removal, which a later pass would no longer show.
+                if blocked_by.is_none() {
+                    blocked_by = Some(surviving_entries(dir, SANDBOX_REMOVE_REPORT_ENTRIES));
+                }
                 last = Some(e);
                 if attempt + 1 < attempts && !backoff.is_zero() {
                     std::thread::sleep(backoff);
@@ -92,7 +128,7 @@ fn remove_tree_retrying_dir_not_empty(
             Err(e) => return Err(e),
         }
     }
-    let survivors = surviving_entries(dir, 10);
+    let survivors = surviving_entries(dir, SANDBOX_REMOVE_REPORT_ENTRIES);
     let detail = if survivors.is_empty() {
         "nothing is left under it now".to_string()
     } else {
@@ -138,9 +174,13 @@ fn surviving_entries(dir: &std::path::Path, limit: usize) -> Vec<String> {
 /// settings: the real recursive remove, three passes, a 50ms backoff.
 // trace:BUG-1695 | ai:claude
 fn remove_sandbox_tree(dir: &std::path::Path) -> std::io::Result<()> {
-    remove_tree_retrying_dir_not_empty(dir, SANDBOX_REMOVE_ATTEMPTS, SANDBOX_REMOVE_BACKOFF, |p| {
-        std::fs::remove_dir_all(p)
-    })
+    remove_tree_retrying_dir_not_empty(
+        dir,
+        SANDBOX_REMOVE_ATTEMPTS,
+        SANDBOX_REMOVE_BACKOFF,
+        |p| std::fs::remove_dir_all(p),
+        |msg| eprintln!("{} {msg}", "warning:".yellow().bold()),
+    )
 }
 
 pub(crate) fn handle_sandbox_command(cmd: &cli::SandboxCommand) -> Result<()> {
@@ -408,6 +448,7 @@ mod tests {
                     Ok(())
                 }
             },
+            |_| {},
         );
 
         assert!(result.is_ok(), "the second pass succeeded: {result:?}");
@@ -433,6 +474,7 @@ mod tests {
                 calls += 1;
                 Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
             },
+            |_| {},
         );
 
         let err = result.expect_err("a permission error is not retried away");
@@ -464,6 +506,7 @@ mod tests {
                 calls += 1;
                 Err(std::io::Error::from(std::io::ErrorKind::DirectoryNotEmpty))
             },
+            |_| {},
         );
 
         let err = result.expect_err("an ENOTEMPTY that never clears must fail");
@@ -495,11 +538,83 @@ mod tests {
             SANDBOX_REMOVE_ATTEMPTS,
             std::time::Duration::ZERO,
             |_| Err(std::io::Error::from(std::io::ErrorKind::DirectoryNotEmpty)),
+            |_| {},
         );
 
         let msg = result
             .expect_err("still an error -- the remove never succeeded")
             .to_string();
         assert!(msg.contains("nothing is left under it now"), "got: {msg}");
+    }
+    /// BUG-1695 acceptance: "a bare retry loop ... would equally mask a genuine
+    /// leak". A retry that GIVES UP already diagnoses itself, but the common
+    /// case is a retry that succeeds -- and if that were silent, a real leak
+    /// that happened to clear within three passes would leave no trace at all.
+    /// So a successful retry reports the pass count and names what blocked the
+    /// pass that failed.
+    // trace:BUG-1695 | ai:claude
+    #[test]
+    fn a_successful_retry_is_not_silent_and_names_what_blocked_it() {
+        let tmp = TempDir::new().unwrap();
+        let store = tmp.path().join("sb");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join("objects/leftover.yaml"), "x").unwrap();
+
+        let mut calls = 0u32;
+        let mut reports: Vec<String> = Vec::new();
+        let result = remove_tree_retrying_dir_not_empty(
+            &store,
+            SANDBOX_REMOVE_ATTEMPTS,
+            std::time::Duration::ZERO,
+            |_| {
+                calls += 1;
+                if calls == 1 {
+                    Err(std::io::Error::from(std::io::ErrorKind::DirectoryNotEmpty))
+                } else {
+                    Ok(())
+                }
+            },
+            |msg| reports.push(msg),
+        );
+
+        assert!(result.is_ok(), "the second pass succeeded: {result:?}");
+        assert_eq!(
+            reports.len(),
+            1,
+            "exactly one diagnostic for the one race, got {reports:?}"
+        );
+        let msg = &reports[0];
+        assert!(
+            msg.contains("needed 2 of 3 passes"),
+            "it must state how many passes the removal took, got: {msg}"
+        );
+        assert!(
+            msg.contains("objects/leftover.yaml"),
+            "it must name what blocked the failed pass, got: {msg}"
+        );
+    }
+
+    /// BUG-1695: the flip side -- a removal that succeeds on its FIRST pass is
+    /// the overwhelmingly common path, and it must stay silent. A warning on
+    /// every `sandbox destroy` would train readers to ignore the one that
+    /// matters.
+    // trace:BUG-1695 | ai:claude
+    #[test]
+    fn a_first_pass_success_reports_nothing() {
+        let tmp = TempDir::new().unwrap();
+        let mut reports: Vec<String> = Vec::new();
+        let result = remove_tree_retrying_dir_not_empty(
+            tmp.path(),
+            SANDBOX_REMOVE_ATTEMPTS,
+            std::time::Duration::ZERO,
+            |_| Ok(()),
+            |msg| reports.push(msg),
+        );
+
+        assert!(result.is_ok());
+        assert!(
+            reports.is_empty(),
+            "no race, so nothing to report -- got {reports:?}"
+        );
     }
 }
