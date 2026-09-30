@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-09-27T21:21:27.946268668Z
+modified_at: 2026-09-30T14:45:51.024436381Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -41,6 +41,46 @@ comments:
   created_at: 2026-09-27T14:58:46.374948559Z
   modified_at: 2026-09-27T14:58:46.374948559Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0f2c7-6d30-71d0-966e-f9c3c5da20a0
+  author: joe
+  content: |
+    ## Stranded In-Progress — diagnosed 2026-09-30, NOT dispositioned
+
+    Surfaced by BUG-1739's fix (merged `7c37dd81ac`) on its first live run. This spec has been
+    In-Progress since 2026-09-27/28 behind a **false liveness signal**, now filed as **BUG-1740**:
+    its lease's `creator_pid = 1907632` is a **zombie** (`[codex] <defunct>`, exited 4.5 days ago,
+    never reaped). A zombie answers every by-pid liveness probe, so `aida ps` and the awaiting
+    orphan channel both read "possibly worked by a subagent — live harness lease in this repo"
+    when nothing is working it.
+
+    BUG-1688, BUG-1693 and BUG-1695 share that one creator pid: **one fan-out, three children,
+    stranded together** — not three independent incidents.
+
+    ### ⚠️ There IS uncommitted work here. Do not delete the worktree.
+
+    `git rev-list --count main..<branch>` is **0** for every one of these branches, so a
+    commit-only check reports "nothing to lose". That is wrong. The work is in the worktrees:
+
+    - `/home/joe/ai/aida-bug-1693` — **8 files STAGED, +277/-81**, including `merge_hold.rs`
+      (+174), a new `tests/test_merge_hold_gate.sh`, the merge-hold-gate CI workflow, the GitLab
+      template and `docs/cli/08-reporting.md`. This looks close to complete.
+      🔴 The changes are **staged**, so `git diff --stat` prints NOTHING and only
+      `git diff --cached --stat` shows them. A sweep judging by unstaged diff will call this empty.
+    - `/home/joe/ai/aida-bug-1688` — 5 modified scripts, +68/-97, plus an untracked 73-line
+      `tests/test_bug_1688_shipped_launch_refusals.sh`.
+    - `/home/joe/ai/aida-bug-1695` — clean, no work.
+
+    ### Why I did not disposition it
+
+    Reverting the status, clearing the lease or removing the worktree all risk the uncommitted
+    work above, and worktree/branch removal needs operator confirmation in this repository. The
+    diagnosis is the deliverable here; the recovery is a seat's call with the operator in the loop.
+
+    Recommended order for whoever takes it: commit or stash-to-a-branch the WIP **first**, verify
+    it builds, then decide status. BUG-1695 (clean) can be dispositioned independently and cheaply.
+  created_at: 2026-09-30T14:45:51.024436381Z
+  modified_at: 2026-09-30T14:45:51.024436381Z
+  session_id: 622c849c-8085-4d0c-840e-82dd660b1787
 history:
 - id: 01a0e4aa-0db5-7f03-939f-9b70d4ca32f9
   author: joe
