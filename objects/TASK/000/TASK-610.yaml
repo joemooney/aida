@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-31T20:47:41.809827697Z
-modified_at: 2026-09-30T01:00:50.373980934Z
+modified_at: 2026-09-30T01:08:29.845541098Z
 req_type: Task
 tags:
 - docs
@@ -53,5 +53,10 @@ comments:
   content: 'Added a new slide 14 after the current slide 13, using the same dark visual language, for daily first-parent commits to main from Sep 11-29 MST. Metrics: 536 main commits, 530 merged PRs, peak 44 on Sep 21, activity all 19 days; bars grouped by the original baseline and two seven-day update periods. Renumbered the deck to 20 slides, updated notes/timing, regenerated both PPTX copies, and visually verified the new slide.'
   created_at: 2026-09-30T01:00:50.373973201Z
   modified_at: 2026-09-30T01:00:50.373973201Z
+- id: 01a0efdb-1e15-7820-a2d0-44a72c496bce
+  author: mcp
+  content: 'Clarified slide 4''s Other* category on-slide and in speaker notes. Other* is the fallback for conventional commit types outside feat/fix/test/docs: integration batches, CI, refactor, performance, build/release, and uncategorized subjects. The slide notes that 106 of W39''s 114 Other* commits were integration batches. Regenerated both PPTX copies and visually verified slide 4.'
+  created_at: 2026-09-30T01:08:29.845537096Z
+  modified_at: 2026-09-30T01:08:29.845537096Z
 archived: true
 archived_at: 2026-06-06T04:19:10.902302419Z
