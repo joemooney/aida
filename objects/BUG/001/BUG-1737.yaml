@@ -1,7 +1,7 @@
 id: 01a0f259-483c-7270-9308-95d5bdc66606
 spec_id: BUG-1737
 agreed_id: BUG-1737
-title: aida list's count reads as the backlog but is a 6x-narrower active view (52 vs 332 non-terminal)
+title: aida list's open lens hides archived and deferred specs without disclosing them, while listing every other class it hides
 description: |
   ## Summary
 
@@ -84,7 +84,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:32.604859901Z
-modified_at: 2026-09-30T12:58:40.483542480Z
+modified_at: 2026-09-30T12:58:47.165609692Z
 req_type: Bug
 comments:
 - id: 01a0f264-e99e-7d01-a364-6d39c5aa4e01
