@@ -1,0 +1,96 @@
+id: 01a0f1e4-c402-7f41-a466-bcdf37b57b40
+spec_id: BUG-1736
+agreed_id: BUG-1736
+title: 'aida-core''s RefreshLock test helpers still panic on a contended flock: BUG-1733''s fix never swept this crate'
+description: |
+  ## Summary
+
+  BUG-1733 established that `RefreshLock::try_acquire` can legitimately return `Ok(None)` from
+  a **contended `flock`**, not only from a registry collision: a sibling test thread that forks
+  while this thread's previous lock is still held leaves the child an inherited descriptor to
+  the same open file description, so the acquire fails although no test logically holds the
+  lock. BUG-1733 fixed this — but only in `aida-cli-lib/src/tests/stale_cache_fixture.rs`, via
+  `acquire_with_retry(path, deadline)`.
+
+  **`aida-core` was never swept.** Its test helpers still do the bare double-unwrap that
+  BUG-1733 proved can panic:
+
+  ```rust
+  // aida-core/src/db/cached_git_backend.rs:3597  fn held_refresh
+  let _lock = super::super::cache_refresh::RefreshLock::try_acquire(&path)
+      .unwrap()
+      .unwrap();          // <-- Ok(None) under a contended flock
+  ready_tx.send(()).unwrap();
+  ```
+
+  ## Observed failure (CI, ubuntu-latest)
+
+  PR #2291, run `36702526804`, job `109845050738`, target `-p aida-core --lib`:
+
+  ```
+  test db::cached_git_backend::tests::migration_pending_reader_never_serves_old_schema ... FAILED
+  thread '<unnamed>' (139340) panicked at aida-core/src/db/cached_git_backend.rs:3603:18:
+  called `Option::unwrap()` on a `None` value
+  thread 'db::cached_git_backend::tests::migration_pending_reader_never_serves_old_schema' (138857)
+    panicked at aida-core/src/db/cached_git_backend.rs:3607:25:
+  called `Result::unwrap()` on an `Err` value: RecvError
+  test result: FAILED. 1285 passed; 1 failed; 2 ignored
+  ```
+
+  Both halves of BUG-1733's signature, together: the holder thread dies on `Ok(None)`, and the
+  waiter then gets `RecvError` on the ready channel and reports **its own** location instead of
+  the holder's panic. BUG-1733's AC1 fix (join the handle on `RecvError` and `resume_unwind` the
+  holder's payload) is likewise absent here.
+
+  ## Not caused by the PR it surfaced on
+
+  #2291 changes `aida-cli-lib` only. `aida-core/Cargo.toml` has no `aida-cli-lib` dependency and
+  the PR touches zero `aida-core` files, so the `-p aida-core --lib` test binary does not link
+  anything from that branch. This is a pre-existing flake that #2291's CI run happened to hit.
+
+  ## Scope — the sites, counted not estimated
+
+  `RefreshLock::try_acquire` callers in `aida-core/src` that `unwrap()` the `Option`:
+  **`cache_refresh.rs`** lines 567, 569, 619, 770, 776, 870, 873 (plus 581, 588, 676 which
+  assert `is_none()` and are a different shape), and **`cached_git_backend.rs`** line 3601.
+  Re-run the grep rather than trusting this list.
+
+  ## Acceptance
+
+  1. `held_refresh` (`cached_git_backend.rs:3597`) waits out a transiently contended `flock`
+     instead of panicking on `Ok(None)`, using the bounded-retry shape BUG-1733 established
+     (deadline passed as a **parameter**, not read from a const inside the loop, so a test can
+     exhaust it in milliseconds).
+  2. When the holder thread dies before arming the ready channel, the waiter re-raises the
+     holder's own panic payload rather than reporting `RecvError` at its own line — BUG-1733's
+     AC1, applied here.
+  3. Every `try_acquire(...).unwrap().unwrap()` site in `aida-core/src` is surveyed and each is
+     either routed through the retry or shown to be a site where `Ok(None)` is the assertion
+     (the `is_none()` shape). Record which.
+  4. The retry is proven by **deterministic injection** — a holder thread takes the flock, the
+     test asserts the acquire was retried (`attempts > 1`) and then succeeded. Do not accept N
+     consecutive green suite runs as the witness; BUG-1733 priced that at ~7.5h and it is the
+     weaker instrument.
+  5. Prove by mutation that each new test fails with the fix reverted, and say plainly if any
+     test is a message witness rather than a behaviour witness.
+
+  ## Do not
+
+  Do not widen the shared `RefreshLock` API to make `Ok(None)` impossible — the two callers in
+  production (`cache_refresh.rs:247`, `cached_git_backend.rs:467`) depend on `Ok(None)` meaning
+  "someone else is refreshing, skip". This is a **test-helper** defect.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T10:38:16.578409935Z
+modified_at: 2026-09-30T10:38:16.578409935Z
+req_type: Bug
+filed_at:
+  code_sha: 42a2b8775d6df3bb521f8e2dfd8d53d381534068
+  branch: bug-1735
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: bba8597d-14d5-4e73-b72f-031c3ab3e23e
