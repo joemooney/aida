@@ -87,7 +87,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T08:04:08.478585861Z
-modified_at: 2026-09-30T09:23:34.011682891Z
+modified_at: 2026-09-30T09:55:59.525069374Z
 req_type: Bug
 comments:
 - id: 01a0f171-19c2-71a3-8dec-401eb24aa229
@@ -224,6 +224,114 @@ comments:
     out-voted.
   created_at: 2026-09-30T09:23:34.011682891Z
   modified_at: 2026-09-30T09:23:34.011682891Z
+  session_id: bba8597d-14d5-4e73-b72f-031c3ab3e23e
+- id: 01a0f1be-0da5-7b03-b373-877a21a1ed16
+  author: joe
+  content: |
+    ## AC5 — the survey's findings, with counts examined and changed
+
+    Implementation landed in one unit (AC1–AC5). Numbers are from the classifier re-run against
+    the final tree, not from the filed estimate.
+
+    ### Counts
+
+    | | count |
+    |---|---|
+    | `Command::new(...)` sites in `aida-cli-lib/src` | **853** |
+    | …with a **string-literal** program (`Command::new("git")`) — exempt by construction | 692 |
+    | …with a **non-literal** program — the surveyed population | **161** |
+    | retrying **before** this change | **4** |
+    | terminal calls **routed by this change** | **141** (69 `output`, 54 `status`, 18 `spawn`) |
+    | files changed | 37 |
+
+    141 > the 161-population delta because the routed set also includes six **helper-level**
+    spawn sites that have no `Command::new` of their own (below) and the 4 new tests.
+
+    ### The exemption argument, stated per resolver — not per program name
+
+    The filed spec reasoned that "most of the ~100 spawn `git`/`gh`/`glab` … where ETXTBSY is
+    impossible." Session #6's survey already showed the `gh`/`glab` half of that is false
+    (`resolve_gh_binary` honours `AIDA_TEST_GH_BINARY`; the `glab` twin honours
+    `AIDA_TEST_GLAB_BINARY`). The final disposition keeps only these exemption classes:
+
+    1. **String-literal program (692).** `Command::new("git")` resolves through `PATH` to an
+       installed binary this process never writes. This is the only *large* exemption, and it is
+       mechanical — no judgement per site.
+    2. **`tokio::process::Command` (1)** — `dev_cmd.rs:2083`, the dev-server child. The trait is
+       implemented for `std::process::Command` only; an async retry is a different change and is
+       not in this bug's scope. Recorded, not silently skipped.
+    3. **The two deliberate bare spawns (2)** — `process_retry.rs` and the new call-site test
+       each assert a bare `spawn()` returns `ETXTBSY` *first*, which is what proves the injected
+       window is genuinely open. Routing them would make both tests vacuous.
+    4. **`.status()` that is not a process status (9)** — `resp.status()` on an HTTP response
+       (`evaluator.rs`), `plan.status()` on `CodeLegPlan`, `p.status()` on `sysinfo::Process`.
+       Classifier false positives, listed so the next survey does not re-litigate them.
+
+    ### 🔑 The finding the `Command::new`-anchored survey was structurally blind to
+
+    Six spawn sites take a **`Command` by parameter**, so no `Command::new` appears anywhere near
+    them and no amount of refining the classifier's program-expression matching would ever have
+    surfaced them. Each one swallows the spawn error into a "could not start" variant that
+    discards the errno — i.e. each is the filed bug, amplified, and each covers *many* call sites
+    at once:
+
+    | helper | was | covers |
+    |---|---|---|
+    | `lib.rs::command_output_with_timeout_detail` | `cmd…spawn()` → `SpawnFailed` | every bounded-run caller (`criteria_red_run`, `gitlab_mirror_link` ×2, `lib.rs` ×3, `maintenance_schedule`) |
+    | `lib.rs::forge_lookup_output` | `cmd.output()` on the no-timeout path | the `gh pr view` / PR-lookup family (`forge.rs` ×4, `lib.rs:43733`) |
+    | `implementer_preflight::run_bounded` | `command.spawn()` | the preflight guard runner |
+    | `schedule_driver::run_bounded` | `cmd.spawn()` | the scheduler's child runs |
+    | `exit_signal::spawn_and_wait_watched` | `cmd.spawn()?` | the drain/agent-gate launches (`lib.rs` ×3) |
+    | `network_retry::run_with_retry` | `build().output()?` | the forge retry wrapper — it retried the *network*, never the spawn |
+
+    **Lesson for the next survey of this shape: anchor on the terminal call, not on the
+    constructor.** A `Command::new`-anchored grep cannot see a function whose job is to spawn
+    somebody else's `Command`, and those are exactly the highest-leverage sites.
+
+    ### Shape of the change
+
+    An extension trait `process_retry::RetryEtxtbsy` on `std::process::Command` (sketch posted
+    earlier in this thread), so routing a site is a suffix rename rather than wrapping a
+    multi-line builder chain. It also adds `spawn_retrying_etxtbsy`, the method the free
+    functions never had — without it the 18 spawn sites had no remedy at all. The two free
+    functions are unchanged and keep their existing callers.
+
+    The sweep was mechanical and **the compiler was the guard**: 127 renames produced exactly two
+    errors, both correct rejections (a `tokio::process::Command`, and an import placed above an
+    inner attribute). Nothing was renamed on a type that could not retry.
+
+    ### Doc correction
+
+    `test_exec.rs`'s module doc asserted "production invokes installed executables and its spawn
+    sites already retry ETXTBSY". 4 of 161 did. That sentence is the belief that let this bug
+    happen, so it is corrected in place rather than just out-voted.
+
+    ### Evidence
+
+    - Full `aida-cli-lib` lib suite, `--test-threads=4`, `RUST_MIN_STACK=8388608`:
+      **7375 passed; 0 failed; 2 ignored** in 510.59s.
+    - `cargo fmt --all -- --check` clean; `cargo clippy -p aida-cli-lib --lib --all-targets`
+      adds no warning (22 lib warnings, down from 23 pre-change; the three flagged in touched
+      files are at lines this diff does not touch and are line-local lints).
+    - `check-portability.sh`, `check-trace-headers.py`, `glyph-lint.sh`, `check-removed-flags.sh`,
+      `check-tui-seam.sh` all exit 0. `cargo build --workspace` clean.
+
+    ### Mutation matrix (AC3 + AC4 witnesses, all run, not reported)
+
+    | mutation | `queue_add_failure_is_propagated` | `queue_add_waits_out_a_writer_descriptor…` |
+    |---|---|---|
+    | none (fix in place) | pass | pass |
+    | M1 — AC1 retry reverted to `.output()` | pass | **FAIL** `lib.rs:79144` |
+    | M2 — fixture changed to `exit 0` | **FAIL** `lib.rs:79090` | pass |
+    | M3 — non-zero-exit arm replaced by `Ok(_) => Ok(())` | **FAIL** `:79086` | **FAIL** `:79137` |
+
+    M1 and M2 are each isolated — one test fails and the other still passes — so neither is
+    riding on the other's mechanism. Both new call-site tests assert the *propagated stderr*, so
+    they cannot pass by merely "not erroring"; and the AC3 test asserts a bare `spawn()` returns
+    `ETXTBSY` before relying on the retry, so it fails loudly rather than silently if the
+    injected window ever stops being real.
+  created_at: 2026-09-30T09:55:59.525069374Z
+  modified_at: 2026-09-30T09:55:59.525069374Z
   session_id: bba8597d-14d5-4e73-b72f-031c3ab3e23e
 history:
 - id: 01a0f169-31c7-7f51-920d-eda5cd7829ce
