@@ -1,0 +1,96 @@
+id: 01a0f259-483c-7270-9308-95d5bdc66606
+spec_id: BUG-1737
+agreed_id: BUG-1737
+title: aida list's count reads as the backlog but is a 6x-narrower active view (52 vs 332 non-terminal)
+description: |
+  ## Summary
+
+  `aida list` presents a filtered **active view** with a count that reads as the project's open
+  backlog. It is off by 6x, and the operator read it that way.
+
+  ## Observed (2026-09-30)
+
+  ```
+  $ aida list
+  count: 30 of 52 open
+  ```
+
+  "52 open" is the natural reading of that line, and it is wrong as a statement about the
+  backlog. The real non-terminal counts, from `aida list --all --format json` over 4681 objects:
+
+  | status | count |
+  |---|---|
+  | Completed | 3450 |
+  | Rejected | 887 |
+  | **Approved** | **244** |
+  | **Draft** | **68** |
+  | **InProgress** | **18** |
+  | Superseded | 11 |
+  | **NeedsAttention** | **2** |
+  | Done | 1 |
+
+  Non-terminal total: **332**. The printed figure is **52**.
+
+  The 244 `Approved`-but-unrouted specs — the actual backlog, and the thing
+  `aida-backlog-groom` exists to work — are absent from the number an operator sees first.
+
+  ## Why this is a defect and not a preference
+
+  The operator asked whether throughput was stalling because the count "has remained about 52
+  for the past several hours" and proposed switching to a stronger model. The premise came
+  straight from this line. The count being flat was in fact explained by a flake chain
+  (BUG-1729 → 1730 → 1731 → 1732 → 1733 → 1735 → 1736, each closure filing ~one follow-on) at a
+  real throughput of 10 merges in 12 h — but no operator could have derived that from
+  `count: 30 of 52 open`, and the figure's scope is not stated anywhere in the output.
+
+  A number that invites a wrong strategic conclusion about the project's own health is a
+  correctness problem in an operator surface, not a cosmetic one. The alternative remedy — every
+  agent remembers that 52 is misleading and says so — is per-agent, erasable, and asks each seat
+  to compensate for the surface. See TASK-1560.
+
+  ## What "open" currently means
+
+  To be established by the implementer, not guessed: find the predicate behind the `52` and state
+  it. From the sample output it excludes at minimum `Approved` and the 32 hidden accepted
+  decisions (`note: 32 accepted decisions hidden (terminal)`). Whatever it is, it is a *view*, and
+  the fix is to say so.
+
+  ## Acceptance
+
+  1. The count line names its own scope, so the figure cannot be read as the backlog. Either
+     label the view (e.g. `count: 30 shown · 52 active · 332 open`) or name the filter —
+     implementer's call on wording, but the printed number must be unambiguous about what it
+     counts.
+  2. Where a broader figure is cheap to compute, the non-terminal total is shown alongside the
+     active figure, so the approved-but-unrouted backlog is visible without a second command.
+  3. The existing `note: N accepted decisions hidden (terminal)` line's pattern is followed — this
+     surface already has a convention for admitting what it is hiding; extend it rather than
+     invent a second style.
+  4. `--format json` exposes both figures under distinct keys, so a script or agent cannot
+     conflate them either.
+  5. A test pins the rendered line against a fixture store containing at least one spec in each
+     of Approved / Draft / InProgress / Completed, asserting the active and non-terminal figures
+     differ and are separately labelled. Tempdir-only.
+  6. Prove by mutation that the test fails if the two figures are swapped or if the label is
+     dropped.
+
+  ## Do not
+
+  Do not change which specs `aida list` *shows* by default. The active view is useful and
+  presumably deliberate; this is about the count's honesty, not its filter. Widening the default
+  listing would be a separate product decision.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T12:45:32.604859901Z
+modified_at: 2026-09-30T12:45:32.604859901Z
+req_type: Bug
+filed_at:
+  code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: a0db2dbf-9f85-48bb-af74-d27c3bcda426
