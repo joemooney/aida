@@ -1,0 +1,106 @@
+id: 01a0f258-db56-72e2-a904-2659762c8826
+spec_id: TASK-1560
+agreed_id: TASK-1560
+title: Route durable session lessons to vendor-neutral homes, not the Claude-only memory pack
+description: |
+  ## Summary
+
+  Durable, cross-session lessons are being written to `~/.claude/projects/<slug>/memory/` — a
+  **Claude-Code-only, operator-erasable** location. A Codex or Antigravity session occupying the
+  same seat never sees them, and `/clear`-ing memory destroys them. The repository's own doctrine
+  already forbids this shape.
+
+  `.aida/discipline/agent-agnostic-vs-claude-specific.md` states the rule:
+
+  > maximize universal gates, minimize per-agent template surface area. Discipline that *must*
+  > hold belongs in a gate (in code, enforced); discipline that merely *aids* onboarding belongs
+  > in docs scaffolded universally plus per-agent setup pointers.
+
+  and classifies `~/.claude/projects/<slug>/memory/` explicitly as the convenience layer that is
+  "not load-bearing for correctness". In practice it is being used as though it were
+  load-bearing: the seat handoff and the memory pack are currently the only carriers for lessons
+  like "never stash for a mutation proof" or "a filed list undercounts".
+
+  ## Observed instance (2026-09-30, relay session #8)
+
+  Two lessons were written to Claude-only memory during a session whose seat a Codex agent could
+  equally have occupied:
+
+  - a sequencing decision the operator explicitly made ("push and open the PR before the local
+    workspace suite finishes, so CI overlaps"), and
+  - a diagnostic habit ("answer *is throughput stuck?* with `aida list --all --format json` +
+    `git log --since=`, not impressions").
+
+  The operator's objection, verbatim: *"you committed to a claude code memory, that would not
+  help a codex session in this seat. how do we convert these memories into behavior that is not
+  dependent on memory erasure or agent specific?"*
+
+  ## What this spec asks for
+
+  **A routing rule, applied, and a migration of what is already mis-filed.** Not a new store —
+  the durable homes already exist and are git-tracked.
+
+  The rule, by tier:
+
+  | tier | test | home |
+  |---|---|---|
+  | must hold, mechanically checkable | could a brand-new agent that read nothing still be stopped? | a **gate** (pre-commit, reviewer phase, `aida doctor` check) |
+  | universal, aids-not-enforces | would any agent in this seat need it? | `aida-core/templates/.aida/discipline/*.md` → `make sync-templates` |
+  | repo-specific fact | is it about *this* codebase's topology? | `docs/agents/aida-repository-guide.md` |
+  | genuinely one-agent | is it about Claude Code's own surface? | stays in the Claude memory pack |
+
+  A lesson that reveals a **product defect** is none of the above: it becomes a spec, because
+  asking every future seat to remember that a CLI misinforms them is the weakest available fix.
+  BUG-???? (filed alongside this) is the worked example.
+
+  ## Acceptance
+
+  1. The routing rule above is written into
+     `aida-core/templates/.aida/discipline/agent-agnostic-vs-claude-specific.md` as an explicit
+     four-tier table with the "reveals a product defect → file a spec" escape, and
+     `make check-templates` passes (mirror regenerated, not hand-edited).
+  2. Every memory currently in `/home/joe/.claude/projects/-home-joe-ai-aida/memory/` is
+     classified against that table. The classification is recorded on this spec as a comment —
+     id, tier, destination — not left implicit.
+  3. Each memory classified as universal discipline is migrated into the appropriate
+     `aida-core/templates/.aida/discipline/*.md` master. Migration means the *content* lands
+     there; the memory file may remain as a pointer but must no longer be the only carrier.
+  4. At least the sequencing rule and the verification-topology rule from session #8 are landed
+     in `git-sync-and-review.md` and the repository guide respectively, since those are the two
+     the operator raised.
+  5. A test or `make check-templates` assertion fails if `.aida/discipline/` and the template
+     master diverge, so a future hand-edit of the mirror is caught. (Verify whether
+     `check-templates` already covers this before adding anything — if it does, cite it and
+     add nothing.)
+  6. No lesson is deleted as part of migration without being reproduced at its destination
+     first.
+
+  ## Explicitly out of scope
+
+  - Building a new cross-agent memory store. The substrate already has three durable surfaces
+    (specs, discipline docs, gates); the defect is routing, not capacity.
+  - The seat-handoff file (`.aida/handoff/<seat>/latest.md`). It is deliberately transient and
+    already vendor-neutral.
+
+  ## Do not
+
+  Do not simply copy the memory pack into `.aida/discipline/`. Most of its entries are
+  *repo-specific facts* or *one-off incident notes*, and the discipline docs are scaffolded into
+  every AIDA project — see `feedback_memory_pack_hygiene` and
+  `feedback_propagate_generic_discipline_via_scaffolding`. Classification is the work; copying
+  is the trap.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-30T12:45:04.726316376Z
+modified_at: 2026-09-30T12:45:04.726316376Z
+req_type: Task
+filed_at:
+  code_sha: b4873ce7f35a871e907dfbcf1e0563fb1071144c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: a0db2dbf-9f85-48bb-af74-d27c3bcda426
