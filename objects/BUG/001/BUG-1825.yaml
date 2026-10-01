@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T23:53:59.975137829Z
-modified_at: 2026-10-01T23:53:59.975137829Z
+modified_at: 2026-10-01T23:54:27.973401835Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,6 +49,11 @@ tags:
 - ci
 - failure-2
 - failure-kind:tool-exit
+relationships:
+- rel_type: Duplicate
+  target_id: 01a0f9c9-705a-7f50-ac86-4cc7da3b680c
+  created_at: 2026-10-01T23:54:27.973387048Z
+  created_by: joe.mooney
 filed_at:
   code_sha: b6e78b658442990ed2d899cb1671c530cdb885ec
   branch: main
