@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T15:06:59.174196092Z
+modified_at: 2026-10-01T15:27:37.033691385Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -546,6 +546,67 @@ comments:
       this state can be read — SQLite cannot do it.
   created_at: 2026-10-01T15:06:59.174196092Z
   modified_at: 2026-10-01T15:06:59.174196092Z
+  session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
+- id: 01a0f814-0649-7431-b448-744770f180b6
+  author: joe
+  content: |
+    Advisor review of round 1e — accepted in substance, three defects reworked as round 1f
+
+    Round 1e implemented the two changes this spec's previous comment ruled on, and committed as
+    `98794c48eb` by the advisor (a dispatched codex agent cannot commit in a linked worktree: the git
+    metadata lives in the main checkout, outside its writable roots).
+
+    **What landed.** `Cache::open` gained an internal `open_at(path, allow_fallback)`, so the fallback can
+    be attempted at most once; when a handle comes up read-only with an unusable projection it re-opens at
+    a private per-store fallback, digest-keyed off the canonicalised original cache path, and returns that
+    instead. `tolerant_read_with_budget`'s re-pin `continue` is bounded. The read-only guidance string was
+    extracted to `cache_read_only_guidance` and is now reused by both the `with_cache_write` refusal and
+    the new bail, so there is one phrasing rather than two.
+
+    **Verified by round 1e:** `unreadable_cache_uses_private_fallback_and_serves_store_rows` green;
+    `cargo test -p aida-core cache` → `178 passed; 0 failed; 1 ignored`; `make build-fast` exit 0;
+    `cargo clippy --workspace -- -W clippy::all -D clippy::correctness` exit 0; `cargo fmt --all -- --check`
+    exit 0. It reported honestly that three of the five required proofs did not run.
+
+    ## Three defects found in review
+
+    1. **The new test mutates process-global state in a parallel suite.** It calls
+       `std::env::set_var("AIDA_CACHE_FALLBACK_DIR", …)` with the matching `remove_var` placed *after* the
+       `recv_timeout(…).expect(…)`, so a regression that trips the five-second bound panics and leaks the
+       variable into every test that runs next. Needs an RAII guard plus a serialization mutex.
+
+    2. **`fallback_cache_paths` creates every candidate directory, including the loser.** It
+       `create_dir_all`s both bases and returns those that succeeded, so a successful fallback into
+       location 1 (the cache's own `.aida/`) still leaves an empty
+       `~/.cache/aida/unwritable-cache-fallback/<digest>/` behind on every open. The candidates must be
+       lazy: create and try one at a time, stop at the first that yields a writable cache.
+
+    3. **The re-pin count bound turns a busy healthy cache into a hard error.** `repin_retries >= 3` then
+       `bail!` applies to the **writable** case too, where the predicate means only "HEAD moved between
+       the refresh and the pin" — a benign race the old unbounded loop always eventually won. Three
+       consecutive losses are reachable on a store being drained, and this converts a read that used to
+       succeed into a failed `aida list`. The read-only arm is correct and stays (that predicate genuinely
+       can never clear, and failing fast with actionable prose is the right answer); the writable case must
+       become a deadline that, on expiry, serves the pinned snapshot **labelled stale** instead of
+       erroring. `StaleServe` is already imported there and the invariant the surrounding comments protect
+       is "never attach `stale: false` to an older snapshot", which a stale label honours.
+
+    ## Still owed, and why it matters
+
+    - The AC4 **clean-decline** test (bounded `Err`, asserting on the message text, not `is_err()`).
+    - The **mutation proof** against the production change.
+    - **`cargo test --workspace`.** Round 1e ran only `-p aida-core cache`. This change adds a new runtime
+      path under `.aida/` (`cache-fallback/`), and the repository's source-scanning guards, reserved-path
+      checks and doctor/prose fixtures are not reachable from a package-scoped run.
+    - The **real-world CLI reproduction**, in the symlink shape rather than a `chmod` of the project's own
+      `.aida/`: move the cache aside, leave a symlink at `<project>/.aida/cache.db`, delete the sidecars,
+      and make only the *target's* directory unwritable. The distinction decides which fallback location is
+      reachable, and a `chmod` of the project's own `.aida/` would correctly decline inside a codex sandbox
+      (which is not granted `~/.cache`) and be misread as the fix failing.
+
+    Round 1f is dispatched with exactly this scope.
+  created_at: 2026-10-01T15:27:37.033691385Z
+  modified_at: 2026-10-01T15:27:37.033691385Z
   session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
