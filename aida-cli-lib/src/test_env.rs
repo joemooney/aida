@@ -102,6 +102,23 @@ pub(crate) fn env_lock() -> EnvLockGuard {
     EnvLockGuard { _inner: inner }
 }
 
+/// True when THIS thread is currently holding [`env_lock`] — i.e. whatever
+/// the ambient env says right now, this test put it there on purpose and no
+/// sibling can change it underneath.
+///
+/// BUG-1743: that distinction is what separates a test that *deliberately*
+/// points an env-derived anchor somewhere (and is therefore serialised
+/// against every other setter) from one that merely *inherited* a sibling's
+/// pin and is about to write into a temp tree it does not own and cannot
+/// keep alive. Only the second is a bug, and only this predicate can tell
+/// them apart: the paths themselves are indistinguishable, since both are
+/// `tempfile` roots under `/tmp`.
+// trace:BUG-1743 | ai:claude
+#[cfg(test)]
+pub(crate) fn holds_env_lock() -> bool {
+    ENV_LOCK_OWNER.load(Ordering::Acquire) == thread_token()
+}
+
 /// RAII guard that sets (or unsets) an env var for the guard's lifetime
 /// and restores the prior value on drop. Holds `ENV_LOCK` for the whole
 /// lifetime — drop the guard before constructing another for a

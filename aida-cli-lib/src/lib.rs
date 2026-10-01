@@ -92387,8 +92387,8 @@ mod task_1450_review_verdict_event_tests {
 
 /// BUG-1536 acceptance criteria 2 + 3 + 5: a test-only, construction-time
 /// refusal to let [`handle_review_record_at`] write outside a tempdir. Every
-/// filesystem write the recording path makes (the review verdict, the
-/// merge-hold marker, the phase-3 handshake) and the one forge call it can
+/// filesystem write the recording path makes *from the resolved root* (the
+/// review verdict and the merge-hold marker) and the one forge call it can
 /// make (`merge_hold::sync_label`, which shells out with the SAME root as its
 /// cwd — see `run_forge_cli`) are scoped to this one `project_root`. So
 /// refusing here, in test builds only, to operate on a root that is not
@@ -92398,7 +92398,19 @@ mod task_1450_review_verdict_event_tests {
 /// looks at the resolved root the call was actually given. Compiled out
 /// entirely in a non-test build (`cfg(test)`), so it costs nothing and
 /// changes no production behavior.
+///
+/// BUG-1743 amends the claim above. It said "every filesystem write ...
+/// including the phase-3 handshake ... are scoped to this one
+/// `project_root`", and for the handshake that was never true: it resolves
+/// its OWN anchor through [`review_pr_handshake_path`], which by design
+/// (BUG-912) prefers ambient `AIDA_REVIEW_VERDICT_FILE` /
+/// `AIDA_PROJECT_ROOT` / `AIDA_DRIVE_ROOT` over the root passed in. This
+/// guard therefore cannot see the handshake write, and a root-under-`/tmp`
+/// check could not have caught the leak anyway, because the root it leaked
+/// to was another test's tempdir — also under `/tmp`. That gap is what
+/// [`assert_handshake_anchor_is_pinned`] closes.
 // trace:BUG-1536 | ai:claude
+// trace:BUG-1743 | ai:claude
 #[cfg(test)]
 fn assert_review_write_root_is_isolated(project_root: &std::path::Path) {
     let tmp = std::env::temp_dir();
@@ -92415,6 +92427,61 @@ fn assert_review_write_root_is_isolated(project_root: &std::path::Path) {
          path in, not an env var.",
         canon_root.display(),
         canon_tmp.display(),
+    );
+}
+
+/// BUG-1743: a test-only refusal to let the phase-3 handshake be written into
+/// a temp tree this test does not own.
+///
+/// [`review_pr_handshake_path`] deliberately prefers ambient
+/// `AIDA_REVIEW_VERDICT_FILE` / `AIDA_PROJECT_ROOT` / `AIDA_DRIVE_ROOT` over
+/// the root the call was given — that is BUG-912's orchestrator anchor and it
+/// is correct in production, where those vars name a real repository. Under
+/// `cargo test` the same preference is a hazard: `std::env` is
+/// process-global, so a sibling test on another thread that pins
+/// `AIDA_PROJECT_ROOT` at its own `tempfile` root redirects this call's
+/// handshake into that root, and when the sibling's `TempDir` drops, the file
+/// this call just wrote and verified ceases to exist. That is precisely the
+/// two-faced flake BUG-1743 was filed for: the write failing with `ENOENT`
+/// when the sibling had already torn down, and the `is_file()` check finding
+/// nothing when it tore down a few syscalls later.
+///
+/// The discriminator is NOT the path — a foreign tempdir and an owned one are
+/// both `/tmp/.tmpXXXXXX`. It is [`test_env::holds_env_lock`]: a test that
+/// pointed the anchor somewhere on purpose did so under an `EnvVarsGuard`,
+/// which holds `ENV_LOCK` for its whole lifetime and so cannot be racing
+/// anyone. A test that resolved a foreign anchor while holding nothing
+/// inherited it from a sibling, by accident, and is the bug.
+///
+/// So: an anchor outside `project_root` is allowed only while this thread
+/// holds the env lock. Otherwise fail here, loudly, naming both paths —
+/// deterministically at the moment of the mistake, instead of as a 2-in-287
+/// CI flake whose message points at a file that no longer exists.
+// trace:BUG-1743 | ai:claude
+#[cfg(test)]
+fn assert_handshake_anchor_is_pinned(project_root: &std::path::Path, handshake: &std::path::Path) {
+    let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    // The handshake's own parents may not exist yet (the writer creates
+    // them), so canonicalize the root and compare against the un-canonical
+    // handshake as well as its existing ancestor.
+    let canon_root = canon(project_root);
+    let inside = handshake.starts_with(project_root) || handshake.starts_with(&canon_root);
+    if inside || test_env::holds_env_lock() {
+        return;
+    }
+    panic!(
+        "BUG-1743: the phase-3 handshake was about to be written to {}, which \
+         is OUTSIDE this call's project root {}, and this thread does not hold \
+         ENV_LOCK. That means an ambient AIDA_REVIEW_VERDICT_FILE / \
+         AIDA_PROJECT_ROOT / AIDA_DRIVE_ROOT was inherited from a SIBLING test \
+         running in parallel, not set by this one. The handshake would land in \
+         that sibling's tempdir and vanish when its TempDir drops — the flake \
+         BUG-1743 is about. Fix the TEST, not this guard: hold a \
+         `test_env::EnvVarsGuard` pinning those three keys (set the roots to \
+         your own tempdir, unset AIDA_REVIEW_VERDICT_FILE) for the whole \
+         window, which also serialises you against every sibling setter.",
+        handshake.display(),
+        canon_root.display(),
     );
 }
 
@@ -92907,6 +92974,9 @@ fn handle_review_record_at(
     // canonical label so `auto_complete::Verdict::parse` accepts it byte-for-byte.
     if let Some(n) = pr {
         let handshake = review_pr_handshake_path(&project_root, n);
+        // trace:BUG-1743 | ai:claude
+        #[cfg(test)]
+        assert_handshake_anchor_is_pinned(&project_root, &handshake);
         // Read back the canonical record rather than rebuilding provenance.
         // Besides keeping the timestamp byte-identical, this carries the
         // full SHA produced by record_verdict's write-boundary normalization
@@ -92991,9 +93061,25 @@ mod story_1405_review_marker_tests {
 
     // A reviewer's claim blocks a merge; recording the verdict (with --pr)
     // clears it, so the same merge gate then lets the merge through.
+    //
+    // BUG-1743: `--pr` also writes the phase-3 handshake, whose anchor is
+    // resolved ambiently (`review_pr_handshake_path`), NOT from the root
+    // passed in. Unpinned, this test wrote
+    // `<real repo>/.aida/review-verdicts/PR-14051.json` into the operator's
+    // checkout on every run — a fabricated APPROVED verdict keyed to a PR
+    // number, invisible because `.aida/` is gitignored. Pin all three keys to
+    // this test's own tempdir; the guard holds `ENV_LOCK` so no sibling can
+    // move them mid-test. See `assert_handshake_anchor_is_pinned`.
+    // trace:BUG-1743 | ai:claude
     #[test]
     fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
         let root = tempdir_root();
+        let root_str = root.path().to_str().expect("tempdir path is utf-8");
+        let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(root_str)),
+            ("AIDA_DRIVE_ROOT", Some(root_str)),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+        ]);
         let mut m = review_marker::Marker::for_this_process(
             14051,
             Some("abc1234"),
@@ -93161,10 +93247,46 @@ mod bug_1452_refusal_aftermath_tests {
     /// forge for a head or the checkout for a branch: the forge lookup is
     /// skipped when `sha` is present, and `current_branch_at` only runs when
     /// `branch` is None.
+    /// BUG-1743: the `--pr` argument below makes this call write a SECOND
+    /// artifact, the phase-3 handshake, and that one does NOT go to the root
+    /// passed in — `review_pr_handshake_path` prefers ambient
+    /// `AIDA_REVIEW_VERDICT_FILE` / `AIDA_PROJECT_ROOT` / `AIDA_DRIVE_ROOT`,
+    /// then the cwd's enclosing project, and only falls back to the explicit
+    /// root. That is BUG-912's orchestrator anchor and is correct in
+    /// production. This test read it ambiently, which made it write outside
+    /// its own tempdir on every single run — measured 40/40 before the pin,
+    /// in two shapes:
+    ///
+    /// - into a SIBLING test's `tempfile` root, whenever a parallel test held
+    ///   `AIDA_PROJECT_ROOT` pinned at its own tempdir. The handshake landed
+    ///   there, the sibling's `TempDir` dropped, and the file this call had
+    ///   just written and read back ceased to exist — the two-faced CI flake
+    ///   BUG-1743 was filed for (`ENOENT` at write time when the sibling had
+    ///   already torn down, `!is_file()` a few syscalls later when it tore
+    ///   down just after).
+    /// - into the REAL repository, via the cwd branch, whenever no sibling
+    ///   held a pin. `/home/joe/ai/aida/.aida/review-verdicts/PR-1452.json`
+    ///   had accumulated three `rounds` of this fixture's payload
+    ///   (`BUG-14520` / `abc123` / "the regression is still open") dated
+    ///   09-25, 09-27 and 09-30. It went unnoticed because `.aida/` is
+    ///   gitignored, so the pollution never showed in `git status`.
+    ///
+    /// Pinning all three keys under one `EnvVarsGuard` fixes both: the anchor
+    /// now resolves to this tempdir, and — because the guard holds `ENV_LOCK`
+    /// for its whole lifetime — no sibling can move it mid-test. The guard is
+    /// what `assert_handshake_anchor_is_pinned` checks for, and the final
+    /// assertion below is the positive half: the handshake is INSIDE `root`.
     // trace:BUG-1452 | ai:claude
+    // trace:BUG-1743 | ai:claude
     #[test]
     fn refusal_aftermath_is_parked_held_and_awaiting_visible() {
         let root = tempfile::tempdir().unwrap();
+        let root_str = root.path().to_str().expect("tempdir path is utf-8");
+        let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(root_str)),
+            ("AIDA_DRIVE_ROOT", Some(root_str)),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+        ]);
         let store = root.path().join(".aida-store");
         std::fs::create_dir_all(root.path().join(".aida")).unwrap();
         std::fs::create_dir_all(&store).unwrap();
@@ -93185,15 +93307,16 @@ mod bug_1452_refusal_aftermath_tests {
         backend.add_requirement(req).unwrap();
         drop(backend);
 
-        // BUG-1536: no env var pinning needed any more, double or otherwise.
-        // `handle_review_record_at` takes its write root as an explicit
-        // parameter and uses it everywhere — the hold, the verdict, and the
-        // forge label call all resolve against exactly this tempdir, by
-        // construction, with no ambient `AIDA_DRIVE_ROOT`/`AIDA_PROJECT_ROOT`
-        // read anywhere in the call. (The earlier version of this test had to
-        // pin BOTH env vars, documented at length, because the merge-hold
-        // write resolved a SEPARATE root that preferred `AIDA_PROJECT_ROOT` —
-        // that second ambient read is gone; see BUG-1536.)
+        // BUG-1536 removed the env pinning this test used to need, on the
+        // grounds that `handle_review_record_at` takes its write root as an
+        // explicit parameter and "uses it everywhere". That is true of the
+        // hold, the verdict and the forge label call — but NOT of the phase-3
+        // handshake `--pr` triggers, which keeps its own ambient resolution
+        // order by design (BUG-912). So the pin above is back, and it is not
+        // the pre-BUG-1536 pin returning: this one exists to stop the
+        // handshake escaping and to hold `ENV_LOCK` against sibling setters,
+        // not to steer the hold. See BUG-1743 and the doc comment above.
+        // trace:BUG-1743 | ai:claude
         handle_review_record_at(
             root.path().to_path_buf(),
             "BUG-14520",
@@ -93259,6 +93382,27 @@ mod bug_1452_refusal_aftermath_tests {
         assert!(
             parked.failure_reason.is_some(),
             "failure_reason-backed NeedsAttention is what `aida awaiting` counts as shelved work"
+        );
+
+        // 4. BUG-1743: the phase-3 handshake landed INSIDE this test's own
+        // tempdir. Asserting the file merely exists would not have caught the
+        // defect — it existed, in someone else's temp tree or in the real
+        // repository, and `handle_review_record_at` had already read it back
+        // and confirmed its bytes. The claim that has to hold is about WHERE.
+        // trace:BUG-1743 | ai:claude
+        let handshake = review_pr_handshake_path(root.path(), 1452);
+        assert!(
+            handshake.starts_with(root.path()),
+            "the phase-3 handshake anchor must resolve inside this test's own \
+             tempdir {}, not {} — an escape here is a file this test cannot \
+             keep alive and did not mean to write",
+            root.path().display(),
+            handshake.display()
+        );
+        assert!(
+            handshake.is_file(),
+            "the phase-3 handshake must be on disk at {}",
+            handshake.display()
         );
     }
 
