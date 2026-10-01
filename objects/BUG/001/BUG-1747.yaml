@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T06:54:20.326907661Z
+modified_at: 2026-10-01T06:57:49.042704385Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -265,6 +265,49 @@ comments:
     the code — reopen it and dispatch the round-2 brief.
   created_at: 2026-10-01T06:54:20.326907661Z
   modified_at: 2026-10-01T06:54:20.326907661Z
+  session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
+- id: 01a0f641-49f2-77b3-919a-649bf2198baa
+  author: joe
+  content: |
+    ## Advisor ruling: limb 4's `aida human` half is deferred; the doctor finding is the whole of round 2
+
+    The signed-off sketch's limb 4 reads: a live hold recorded `Unsynced` becomes "a doctor finding **and**
+    an `aida human` item". Before dispatching round 2 I verified the second half against the round-1
+    branch instead of leaving the implementer to discover it. **The sketch's premise does not hold.**
+
+    - `handle_human_command` (`human_cmd.rs:33`) delegates straight to `handle_list_human`
+      (`lib.rs:60512`).
+    - `handle_list_human` is a **spec**-classification view over the requirement store: specs routed
+      `--for human` (TASK-747) UNIONed with the `human_required` predicate's derivation
+      (SPIKE-57/TASK-746), plus the orthogonal `req.human_only` marker (BUG-564). Every item it can show
+      is a requirement.
+    - `collect_doctor_findings` has no caller outside `doctor_cmd.rs`, and `human_cmd.rs` references
+      neither `doctor` nor `DoctorFinding`.
+
+    There is no existing seam, so the `aida human` half is not a wiring detail — it is a design change.
+    The only two routes are both wrong at this size: minting a spec per unsynced hold (a hold is not a
+    requirement), or widening `aida human` to aggregate doctor findings beside specs (a change to a view
+    governed by two named predicates, with its own drift risk, far outside this bug).
+
+    **Ruling: round 2 delivers the doctor finding only.** That satisfies AC1 and AC6's doctor half and is
+    unit-testable without a forge. The `aida human` surfacing is deferred, unfiled by choice — it should
+    be filed as its own spec only if an operator actually misses a hold in practice, because the doctor
+    check plus the required `merge-hold-gate` check already fail closed once round 1 is in.
+
+    Also corrected in `.aida/handoff/advisor/bug-1747-round2-brief.md` while verifying its premises:
+
+    1. The brief named a `probe_label_definitions*` pair that does not exist. The real entry points are
+       `label_definitions` (`merge_hold.rs:1114`) and the injectable-runner form
+       `label_definitions_with` (`:1127`); both `pub(crate)`, same crate as `doctor_cmd.rs`.
+    2. AC1's timeout requirement has **no reusable helper** to lean on, and the probe's own runner has no
+       deadline today: `run_forge_cli_stdout` (`:2285`) is a bare `.output_retrying_etxtbsy()`.
+       `notify.rs:659 run_command_bounded` cannot be reused (needs a `NotifyConfig`, sets
+       `stdout(Stdio::null())`, so it discards the output the probe parses) though its
+       `process_group(0)` technique is the right model; `drain_signal.rs:294 SignalSource::wait_timeout`
+       is a signal trait, not a child wait. The brief now says to add a bounded sibling rather than give
+       `run_forge_cli_stdout`'s other hold-placement callers a deadline this spec never authorised.
+  created_at: 2026-10-01T06:57:49.042704385Z
+  modified_at: 2026-10-01T06:57:49.042704385Z
   session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
 history:
 - id: 01a0f59e-dece-7160-b758-6d66ee6e27cf
