@@ -12,12 +12,12 @@ description: |
   - A dead-process, clean MR-scoped lease is reclaimed and the reviewer starts.
   - Live or dirty leases still fail closed with actionable diagnostics.
   - GitHub PR and GitLab MR scope forms are covered.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:45.004762908Z
-modified_at: 2026-10-01T23:50:20.004130006Z
+modified_at: 2026-10-01T23:53:58.571235370Z
 req_type: Bug
 tags:
 - cross-project:qci
@@ -46,6 +46,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f9e3-9c2b-7822-bf07-4c1d159cb848
+  author: aida-orchestrator
+  timestamp: 2026-10-01T23:53:58.571241217Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
@@ -58,3 +65,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T23:50:20.004130006Z
   implemented_by: joe.mooney
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: tool-exit
+  detail: 'could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 3/3)'
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0f9dc6a2c --skip-ci`'
+  shelved_by: advisor
+  shelved_at: 2026-10-01T23:53:58.571235370Z
