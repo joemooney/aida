@@ -91,12 +91,12 @@ description: |
   resolved. BUG-1693's immediate unblock is the one-off operator action of defining the two labels on
   `joemooney/aida`. This spec is the durable fix so the next repository to adopt the gate does not
   inherit a silently disabled integrity floor.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T07:10:35.091921029Z
+modified_at: 2026-10-01T07:12:30.784611170Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -370,6 +370,13 @@ history:
   - field_name: status
     old_value: Completed
     new_value: Approved
+- id: 01a0f64e-be40-7630-ad96-3d9a13851c52
+  author: aida-session-start
+  timestamp: 2026-10-01T07:12:30.784610760Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a0f64c-5248-7fe3-875c-4a4948741b0e
   timestamp: 2026-10-01T07:09:52.072048492Z
