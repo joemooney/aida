@@ -49,8 +49,135 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T13:30:52.813859743Z
+modified_at: 2026-10-01T13:38:09.203289808Z
 req_type: Bug
+comments:
+- id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
+  author: joe
+  content: |
+    # Advisor investigation (relay session #14, 2026-10-01) — AC1 partially met, the filed hypothesis is FALSIFIED
+
+    I reproduced the exact filed error and then ran the controls the filing asked for. The
+    concurrency hypothesis on this spec is **not** the cause. Recording what is established,
+    what is falsified, and what is still open, per AC1's "if the real cause turns out to be
+    something other than the concurrency hypothesis, record what it actually is".
+
+    Environment: worktree `/home/joe/ai/aida-worktrees/aida-bug-1752` created by the real
+    `aida queue work BUG-1752`; `aida` = `/home/joe/ai/aida/target/release/aida` (one absolute
+    PATH entry, so every seat runs the SAME binary — a two-binary / two-SCHEMA_VERSION theory is
+    dead). Cache stamp 15, binary `SCHEMA_VERSION` 15, all four `EXPECTED_CACHE_TABLES` present,
+    4705 rows, `journal_mode=wal`.
+
+    ## 1. REPRODUCED (probe 1, 06:31)
+
+    Dispatched `codex exec -C <worktree> --sandbox workspace-write`, no advisor `aida` command
+    running concurrently:
+
+        aida show BUG-1752         -> error: "Failed to drop cache tables for schema migration"  EXIT=1
+        aida comment list BUG-1752 -> error: "Failed to drop cache tables for schema migration"  EXIT=1
+
+    Byte-identical to the filed error.
+
+    ## 2. ROOT CAUSE, first half — the cache is on a READ-ONLY FILESYSTEM under dispatch
+
+    The same probe proved the mechanism directly:
+
+        test -w /home/joe/ai/aida/.aida/cache.db          -> exit 1
+        printf x >> /home/joe/ai/aida/.aida/cache.db-wal  -> "Read-only file system"
+
+    `codex exec --sandbox workspace-write` makes everything OUTSIDE the worktree read-only.
+    `aida queue work` symlinks the cache OUT of the worktree into the main checkout
+    (`.aida/cache.db{,-wal,-shm} -> /home/joe/ai/aida/.aida/...`). Therefore **a dispatched
+    implementer can never write the cache — by construction, not by contention.** This is the
+    same failure shape as the mandatory `--add-dir /run/user/1000/cargo-slots-1000` for cargo's
+    slot lock.
+
+    Reads are entirely unaffected: inside the sandbox, `sqlite3` returned the table list, both
+    `PRAGMA table_info`s, `journal_mode=wal`, the stamp `15` and `count(*)=4705`, all exit 0;
+    `aida cache status` printed `Status: FRESH`. Nothing is unreadable. Only writes are refused.
+
+    ## 3. FALSIFIED — concurrency is neither necessary nor sufficient
+
+    - **Not necessary**: probe 1 failed with no other `aida` process running.
+    - **Not sufficient**: I held a writer open in the main checkout
+      (`sqlite3 .aida/cache.db` with `BEGIN IMMEDIATE` + an upsert into `cache_meta`, transaction
+      held ~150 s) and ran the read in the worktree **unsandboxed** -> `exit 0`. Then I ran the
+      same read **sandboxed, inside the holder's window** -> `aida show`, `aida comment list` and
+      `aida cache status` all `EXIT=0`.
+
+    Also, the filing's second symptom argues against concurrency on its own: `PRAGMA
+    journal_mode=WAL` on a db already in WAL is a no-op returning `wal` and cannot be made to fail
+    by a concurrent reader — it fails when the file or its directory is not writable.
+
+    ## 4. STILL OPEN — the transient trigger (what makes a drop get attempted at all)
+
+    The failure is **intermittent, not deterministic**: three later sandboxed runs (two with no
+    writer, one with a writer held) all succeeded against the same binary, worktree and cache.
+    So it needs BOTH (a) the read-only cache — always true under dispatch — AND (b) some transient
+    state in which the binary decides a drop is required. With stamp 15 == 15,
+    `schema_stamp_is_older` is false (and `schema_stamp_is_older(None)` is also `false`, so a
+    missing stamp is NOT a fail-open path), which leaves `schema_structurally_drifted`.
+
+    Two candidate emitters of this exact string, both in `aida-core/src/db/cache.rs`:
+
+    - `cache.rs:1114` — the "tables are already empty, migrate now" branch. Requires
+      `!projection_has_rows`, but there were 4705 rows, so this is **unlikely** to be the one.
+    - `cache.rs:1398` — the rebuild path, `drop_first = force_drop || (migration_pending &&
+      schema_migration_needed(&tx))`. Reachable with rows present, via a deferred migration.
+
+    Note the probe-1 output carried **no** `warning: cache schema drift while trying to …`
+    line, which rules out the `with_cache_schema_retry` /
+    `rebuild_from_store_after_schema_drift` route (`cached_git_backend.rs:680`) for THIS
+    occurrence — that path always prints the warning first.
+
+    Separately worth fixing on its own merits: `force_drop` at `cache.rs:1398` is **not a
+    migration**, yet a failure there reports "Failed to drop cache tables for schema migration".
+    That is a misleading message independent of this bug (relevant to AC4).
+
+    ## 5. Consequence for the acceptance criteria — AC2 as written cannot be satisfied
+
+    **AC2 ("a migration either waits for its turn … or is performed in a way that does not require
+    DROPping tables out from under a live reader") is the wrong fix for this defect.** Waiting
+    cannot help: under dispatch the filesystem is read-only, so the write will never become
+    possible no matter how long it waits, and a bounded wait just converts an instant error into a
+    slow one. I am amending the criteria as advisor:
+
+    - **AC2 (amended)**: a cache WRITE that is impossible because the cache is not writable must be
+      detected as such (`SQLITE_READONLY` / `EROFS`, or an upfront writability probe) and must not
+      be retried or waited on. It is a permanent condition for that process, not contention.
+    - **AC3 (unchanged, and now the primary criterion)**: a READ command must never fail because a
+      write is impossible. `aida show` / `comment list` / `list` / `search` must serve the existing
+      cache read-only, or fall back to the store. This is the fix.
+    - **AC4 (sharpened)**: the message must name the real condition — the cache is on a read-only
+      filesystem because it is symlinked outside the sandboxed worktree — and must not say
+      "schema migration" when the trigger is `force_drop` or an unwritable cache.
+    - **AC1 (status)**: reproduction achieved but NOT yet deterministic. The deterministic recipe
+      still owed is: make the cache unwritable (`chmod a-w` on the cache dir, or a read-only bind
+      mount — no codex sandbox needed) AND put the cache in a state where a drop is wanted, then
+      assert a read still succeeds. A test can force (b) directly rather than waiting for it:
+      stamp an older `schema_version`, or drop one of the four expected tables to trip
+      `cache_tables_partial`, then make the file unwritable and assert `aida show` still answers.
+      **That is a far cheaper and more honest reproduction than the concurrency recipe AC1
+      originally described, and it does not need a dispatched agent at all.**
+
+    ## 6. Workaround available today (no code change)
+
+    Add the main checkout's `.aida` to the dispatch command so the cache is writable:
+
+        codex exec -C <worktree> --sandbox workspace-write \
+          --add-dir /run/user/1000/cargo-slots-1000 --add-dir /home/joe/ai/aida/.aida ...
+
+    I have NOT adopted this as the fix: it makes every dispatched implementer able to write the
+    shared cache of the main checkout, which is a blast radius I am not willing to grant to make a
+    READ work. AC3 remains the right fix. But it is worth knowing while the bug is open.
+
+    ## Out of scope, confirmed respected
+
+    I changed no code, did not touch the symlinked-cache design, and did not touch
+    `aida cache verify`.
+  created_at: 2026-10-01T13:38:09.203289808Z
+  modified_at: 2026-10-01T13:38:09.203289808Z
+  session_id: 18a9ea2a-80f9-45d1-911a-fe00918a9c00
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
   author: joe
