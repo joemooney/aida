@@ -50,12 +50,12 @@ description: |
   ## Notes
 
   Pre-existing: the Rust walk is untouched by BUG-1750's diff, so this is not a regression from that change — it is a defect that change made visible by doing the equivalent job correctly next to it. Filed from the advisor seat with the measurements above taken on `main` @ `13706fd197`.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T11:26:34.634192022Z
-modified_at: 2026-10-01T11:26:45.162892272Z
+modified_at: 2026-10-01T11:40:25.871200078Z
 req_type: Bug
 history:
 - id: 01a0f737-81aa-7891-ba4a-233a509c77ae
@@ -65,6 +65,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f744-078f-7ec3-9427-ef6efaab1632
+  author: aida-session-start
+  timestamp: 2026-10-01T11:40:25.871199461Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 13706fd1971627dd5bea754efb69af0abac456a6
   branch: main
