@@ -167,7 +167,7 @@ For each document:
 
 ```bash
 # Check if mentioned file paths exist
-grep -oP '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
+grep -oE '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
   file=$(echo "$match" | cut -d: -f2 | tr -d '`')
   [ ! -f "$file" ] && echo "BROKEN PATH: $match"
 done
