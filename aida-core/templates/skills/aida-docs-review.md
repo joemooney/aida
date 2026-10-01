@@ -205,7 +205,7 @@ For every issue found:
 
 Save the report as `docs/review-report.md` with this structure:
 
-```markdown
+````markdown
 # Documentation Review Report
 
 Generated: YYYY-MM-DD
@@ -242,7 +242,7 @@ Issues found: N (N critical, N important, N minor)
 - AIDA ships 15 Claude Code skills
 + AIDA ships 21 Claude Code skills
 ```
-```
+````
 
 ### Step 6: Apply Fixes (Optional)
 
