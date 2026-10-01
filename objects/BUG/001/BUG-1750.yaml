@@ -74,12 +74,12 @@ description: |
   (`d93fabb432`); this spec is about the detector that should have caught it, in keeping with the
   substrate-as-bouncer principle — a guard beats vigilance, and this one had no coverage of a surface
   CI actually runs.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:19:45.093340970Z
-modified_at: 2026-10-01T10:26:51.899597646Z
+modified_at: 2026-10-01T10:28:17.170972489Z
 req_type: Bug
 comments:
 - id: 01a0f700-ad7b-77b3-8b08-762f3401448d
@@ -111,6 +111,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f701-fa92-7193-986c-5165328c577d
+  author: aida-session-start
+  timestamp: 2026-10-01T10:28:17.170971906Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
   branch: main
