@@ -36,8 +36,30 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T02:02:18.772064501Z
-modified_at: 2026-10-01T02:02:34.181013886Z
+modified_at: 2026-10-01T02:02:34.854416517Z
 req_type: Task
+comments:
+- id: 01a0f532-fde6-74e3-9717-6e00cd3ba144
+  author: joe
+  content: |
+    ADVISOR DISPOSITION (2026-09-30, relay #23): APPROVED. This is an OPERATOR DECISION, not an
+    advisor judgement call — Joe approved it explicitly in session when it was offered as one of two
+    outstanding asks ("agree with 2, will you update .aida/config.toml?"). Recorded here because the
+    change alters where every future worktree on this host lands, so the authority for it should be
+    findable later.
+
+    Both prerequisites are merged as of this session: #2301 (BUG-1744) makes `aida doctor` disclose
+    the ~140-unrelated-directory breadth of the covering grant, and #2300 (TASK-1561) makes the
+    configured value authoritative for every worktree creator rather than only the warm pool. Setting
+    the key before TASK-1561 landed would have been honoured inconsistently.
+
+    Value `../aida-worktrees` is relative, which `worktree_placement_path`
+    (aida-core/src/worktree_pool.rs:421) resolves against the project root, giving
+    /home/joe/ai/aida-worktrees. Relative is deliberate over absolute: a clone of this repo elsewhere
+    then gets a sensible parent beside itself instead of pointing at this host's path.
+  created_at: 2026-10-01T02:02:34.854416517Z
+  modified_at: 2026-10-01T02:02:34.854416517Z
+  session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
 history:
 - id: 01a0f532-fb44-7422-9d19-c665f5dfa53d
   author: joe
