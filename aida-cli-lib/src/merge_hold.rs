@@ -1121,7 +1121,101 @@ pub(crate) fn label_definitions(project_root: &Path) -> LabelDefinitions {
         Ok(None) => return LabelDefinitions::NoForge,
         Err(err) => return LabelDefinitions::Unknown(err),
     };
-    label_definitions_with(project_root, &pin, run_forge_cli_stdout)
+    label_definitions_with(project_root, &pin, run_forge_cli_stdout_bounded)
+}
+
+// A doctor probe must not let a hung forge CLI stall diagnostics indefinitely.
+// Keep this separate from the shared runner used by hold placement.
+const LABEL_DEFINITIONS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn run_forge_cli_stdout_bounded(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+) -> Result<(bool, String), String> {
+    run_forge_cli_stdout_bounded_with(project_root, cli, args, LABEL_DEFINITIONS_TIMEOUT)
+}
+
+fn run_forge_cli_stdout_bounded_with(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+    timeout: std::time::Duration,
+) -> Result<(bool, String), String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    let mut command = std::process::Command::new(cli);
+    command
+        .current_dir(project_root)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let stdout = child.stdout.take().expect("piped stdout");
+    let stdout_sender = sender.clone();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = stdout.take(4 * 1024 * 1024).read_to_end(&mut output);
+        let _ = stdout_sender.send((false, result, output));
+    });
+    let stderr = child.stderr.take().expect("piped stderr");
+    let stderr_sender = sender.clone();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = stderr.take(4 * 1024 * 1024).read_to_end(&mut output);
+        let _ = stderr_sender.send((true, result, output));
+    });
+    drop(sender);
+    let deadline = Instant::now() + timeout;
+    let mut status = None;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut stdout_read = false;
+    let mut stderr_read = false;
+    loop {
+        if status.is_none() {
+            status = child
+                .try_wait()
+                .map_err(|e| format!("could not wait for {cli}: {e}"))?;
+        }
+        while let Ok((is_stderr, result, output)) = receiver.try_recv() {
+            result.map_err(|e| format!("could not read {cli} output: {e}"))?;
+            if is_stderr {
+                stderr = output;
+                stderr_read = true;
+            } else {
+                stdout = output;
+                stdout_read = true;
+            }
+        }
+        if let Some(status) = status.as_ref().filter(|_| stdout_read && stderr_read) {
+            let output = if status.success() { stdout } else { stderr };
+            return Ok((
+                status.success(),
+                String::from_utf8_lossy(&output).to_string(),
+            ));
+        }
+        if Instant::now() >= deadline {
+            #[cfg(unix)]
+            unsafe {
+                libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("timed out after {}s", timeout.as_secs()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
 }
 
 fn label_definitions_with(
@@ -2369,6 +2463,128 @@ fn sync_label_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn shell_args(script: String) -> Vec<String> {
+        vec!["-c".into(), script]
+    }
+
+    #[cfg(unix)]
+    fn kill_if_alive(pid: libc::pid_t) {
+        // SAFETY: signal 0 only probes the child pid; SIGKILL is limited to
+        // the pid started by this test.
+        if unsafe { libc::kill(pid, 0) } == 0 {
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    }
+
+    #[cfg(unix)]
+    struct ChildPidGuard(libc::pid_t);
+
+    #[cfg(unix)]
+    impl Drop for ChildPidGuard {
+        fn drop(&mut self) {
+            kill_if_alive(self.0);
+        }
+    }
+
+    // The definition probe intentionally has a distinct bounded runner from
+    // hold placement; timeout coverage keeps the doctor call from hanging.
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_times_out_near_its_injected_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let timeout = std::time::Duration::from_millis(200);
+        let started = std::time::Instant::now();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("sleep 30".into()),
+            timeout,
+        );
+        let elapsed = started.elapsed();
+        assert!(result.is_err(), "expected timeout, got {result:?}");
+        assert_eq!(
+            result.unwrap_err(),
+            format!("timed out after {}s", timeout.as_secs())
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "call took {elapsed:?}"
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        let script = format!("sleep 30 & echo $! > '{}' ; wait", pidfile.display());
+        let timeout = std::time::Duration::from_millis(200);
+        let result =
+            run_forge_cli_stdout_bounded_with(dir.path(), "sh", &shell_args(script), timeout);
+        assert!(result.is_err(), "expected timeout, got {result:?}");
+        let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let _child_guard = ChildPidGuard(pid);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            // SAFETY: signal 0 only probes whether the test grandchild exists.
+            if unsafe { libc::kill(pid, 0) } == -1
+                && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "grandchild {pid} survived timeout"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_returns_stdout_without_waiting_for_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let timeout = std::time::Duration::from_secs(5);
+        let started = std::time::Instant::now();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("printf hello".into()),
+            timeout,
+        );
+        let elapsed = started.elapsed();
+        assert_eq!(result.unwrap(), (true, "hello".into()));
+        assert!(elapsed < timeout / 2, "call took {elapsed:?}");
+    }
+
+    // Unlike run_forge_cli_stdout (used for hold placement), this diagnostic
+    // probe returns stderr on failure so LabelDefinitions::Unknown keeps gh's
+    // actionable error text instead of becoming Unknown("").
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_returns_stderr_for_failing_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("echo OUT; echo ERR >&2; exit 3".into()),
+            std::time::Duration::from_secs(5),
+        )
+        .unwrap();
+        assert!(!result.0);
+        assert!(result.1.contains("ERR"), "{}", result.1);
+        assert!(!result.1.contains("OUT"), "{}", result.1);
+    }
 
     // trace:BUG-1693 | ai:codex
     #[test]

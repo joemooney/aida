@@ -475,6 +475,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
                     safe_heal: false,
                 }),
         );
+        // trace:BUG-1747 | ai:codex
+        findings.extend(merge_hold_label_definition_findings(
+            crate::merge_hold::label_definitions(&project_root),
+        ));
+        // A recorded Unsynced state is the durable observation from the last
+        // sync attempt. Re-syncing with `list --fix` records Synced only after
+        // the forge confirms it; avoid one forge read per hold here.
+        // trace:BUG-1747 | ai:codex
+        findings.extend(unsynced_merge_hold_findings(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -780,6 +789,136 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
     }
     Ok(())
+}
+
+fn merge_hold_label_definition_findings(
+    definitions: crate::merge_hold::LabelDefinitions,
+) -> Vec<DoctorFinding> {
+    use crate::merge_hold::LabelDefinitions;
+    match definitions {
+        LabelDefinitions::Read { missing, .. } => missing
+            .into_iter()
+            .map(|name| DoctorFinding {
+                category: "merge-hold-integrity".into(),
+                id: format!("merge-hold-label-{name}-undefined"),
+                summary: format!("Required merge-hold label `{name}` is undefined; the required `merge-hold-gate` check cannot enforce a hold without it."),
+                action: "aida merge-hold labels --create-missing".into(),
+                safe_heal: false,
+            })
+            .collect(),
+        LabelDefinitions::Unknown(why) => vec![DoctorFinding {
+            category: "merge-hold-integrity".into(),
+            id: "merge-hold-labels-undetermined".into(),
+            summary: format!("Could not determine merge-hold label definitions: {why}"),
+            action: "aida merge-hold labels".into(),
+            safe_heal: false,
+        }],
+        LabelDefinitions::NoForge => Vec::new(),
+    }
+}
+
+fn unsynced_merge_hold_findings(root: &std::path::Path) -> Vec<DoctorFinding> {
+    crate::merge_hold::list_holds(root)
+        .into_iter()
+        .filter_map(|(pr, _)| {
+            let crate::merge_hold::LabelState::Unsynced(err) =
+                crate::merge_hold::read_label_state(root, pr)
+            else {
+                return None;
+            };
+            let mut action = "aida merge-hold list --fix".to_string();
+            if err.contains("missing label definition") {
+                action.push_str("; aida merge-hold labels --create-missing");
+            }
+            Some(DoctorFinding {
+                category: "merge-hold-integrity".into(),
+                id: format!("PR-{pr}-hold-label-unsynced"),
+                summary: format!("PR #{pr} has its Layer 1 hold marker armed, but the forge label never landed; the required `merge-hold-gate` check does not enforce this hold."),
+                action,
+                safe_heal: false,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod bug_1747_tests {
+    use super::*;
+    use crate::merge_hold::{LabelDefinitions, LabelState};
+
+    #[test]
+    fn bug_1747_label_definition_results_map_to_findings() {
+        assert!(
+            merge_hold_label_definition_findings(LabelDefinitions::Read {
+                present: Vec::new(),
+                missing: Vec::new()
+            })
+            .is_empty()
+        );
+        let findings = merge_hold_label_definition_findings(LabelDefinitions::Read {
+            present: Vec::new(),
+            missing: vec!["aida:merge-hold", "aida:merge-hold-recorded"],
+        });
+        assert_eq!(findings.len(), 2);
+        for (finding, name) in findings
+            .iter()
+            .zip(["aida:merge-hold", "aida:merge-hold-recorded"])
+        {
+            assert_eq!(finding.id, format!("merge-hold-label-{name}-undefined"));
+            assert!(finding.summary.contains(name));
+            assert_eq!(finding.action, "aida merge-hold labels --create-missing");
+            assert!(!finding.safe_heal);
+        }
+        let unknown = merge_hold_label_definition_findings(LabelDefinitions::Unknown(
+            "forge unavailable".into(),
+        ));
+        assert_eq!(unknown.len(), 1);
+        assert_eq!(unknown[0].id, "merge-hold-labels-undetermined");
+        assert!(unknown[0].summary.contains("forge unavailable"));
+        assert!(merge_hold_label_definition_findings(LabelDefinitions::NoForge).is_empty());
+    }
+
+    #[test]
+    fn bug_1747_only_unsynced_live_holds_are_findings() {
+        let dir = tempfile::tempdir().unwrap();
+        for pr in [101, 102, 103] {
+            crate::merge_hold::write_hold(dir.path(), pr, "fixture").unwrap();
+        }
+        crate::merge_hold::record_label_state(
+            dir.path(),
+            101,
+            &LabelState::Unsynced("missing label definition(s): aida:merge-hold".into()),
+        )
+        .unwrap();
+        crate::merge_hold::record_label_state(dir.path(), 102, &LabelState::Synced).unwrap();
+        let findings = unsynced_merge_hold_findings(dir.path());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "PR-101-hold-label-unsynced");
+        assert_eq!(
+            findings[0].action,
+            "aida merge-hold list --fix; aida merge-hold labels --create-missing"
+        );
+    }
+
+    // Pin the doctor action sniff to the producer's actual Display wording.
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn bug_1747_definition_missing_display_recommends_provisioning() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::merge_hold::write_hold(dir.path(), 104, "fixture").unwrap();
+        let error = crate::merge_hold::LabelSyncError::DefinitionMissing {
+            names: vec!["aida:merge-hold".into()],
+            detail: "'aida:merge-hold' not found".into(),
+        }
+        .to_string();
+        crate::merge_hold::record_label_state(dir.path(), 104, &LabelState::Unsynced(error))
+            .unwrap();
+        let findings = unsynced_merge_hold_findings(dir.path());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0]
+            .action
+            .ends_with("aida merge-hold labels --create-missing"));
+    }
 }
 
 /// TASK-1473: the light entry path for `aida doctor check runaway-seats`.
