@@ -23,6 +23,18 @@ use super::cache_lock::{
 use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
 use std::collections::{HashMap, HashSet};
 
+static FALLBACK_NOTE_EMITTED: AtomicBool = AtomicBool::new(false);
+
+fn note_cache_fallback(original: &Path, fallback: &Path) {
+    if !FALLBACK_NOTE_EMITTED.swap(true, Ordering::Relaxed) {
+        eprintln!(
+            "note: the AIDA cache at {} is not writable; using a private fallback cache at {}",
+            original.display(),
+            fallback.display()
+        );
+    }
+}
+
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
 /// filter / search views — heavy fields (history, comments, relationships,
@@ -797,7 +809,10 @@ where
     F: FnMut() -> Result<T>,
 {
     if read_only {
-        return Err(anyhow::Error::new(CacheReadOnly { path: cache_path.to_path_buf() }).context(format!("the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout", cache_path.display())));
+        return Err(anyhow::Error::new(CacheReadOnly {
+            path: cache_path.to_path_buf(),
+        })
+        .context(cache_read_only_guidance(cache_path)));
     }
     let _holding_write = HoldingWrite::new();
     let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;
@@ -1006,6 +1021,10 @@ pub(crate) struct CacheReadOnly {
     pub path: PathBuf,
 }
 
+pub(super) fn cache_read_only_guidance(path: &Path) -> String {
+    format!("the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout", path.display())
+}
+
 pub(super) fn is_cache_read_only_error(err: &anyhow::Error) -> bool {
     err.downcast_ref::<CacheReadOnly>().is_some()
 }
@@ -1055,6 +1074,64 @@ fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
         && (!path.exists() || std::fs::OpenOptions::new().append(true).open(path).is_ok())
 }
 
+// trace:BUG-1752 | ai:codex
+fn fallback_cache_paths(original: &Path) -> Vec<PathBuf> {
+    use sha2::{Digest, Sha256};
+    let canonical = if let Ok(path) = std::fs::canonicalize(original) {
+        path
+    } else {
+        let Some(parent) = original.parent() else {
+            return Vec::new();
+        };
+        let Ok(parent) = std::fs::canonicalize(parent) else {
+            return Vec::new();
+        };
+        let Some(name) = original.file_name() else {
+            return Vec::new();
+        };
+        parent.join(name)
+    };
+    let digest = format!(
+        "{:x}",
+        Sha256::digest(canonical.to_string_lossy().as_bytes())
+    );
+    let bases = if let Some(dir) = std::env::var_os("AIDA_CACHE_FALLBACK_DIR") {
+        vec![PathBuf::from(dir)]
+    } else {
+        let Some(home) = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        else {
+            return Vec::new();
+        };
+        vec![
+            {
+                let Some(parent) = original.parent() else {
+                    return Vec::new();
+                };
+                parent.join("cache-fallback")
+            },
+            home.join("aida/unwritable-cache-fallback"),
+        ]
+    };
+    let mut paths = Vec::new();
+    for base in bases {
+        let dir = base.join(&digest);
+        if std::fs::create_dir_all(&dir).is_err() {
+            continue;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).is_err() {
+                continue;
+            }
+        }
+        paths.push(dir.join("cache.db"));
+    }
+    paths
+}
+
 impl Cache {
     /// Open or create the cache at `path`. The schema is applied on every open
     /// (idempotent — `CREATE TABLE IF NOT EXISTS`).
@@ -1086,6 +1163,10 @@ impl Cache {
     // trace:TASK-1478 | ai:claude
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
+        Self::open_at(path, true)
+    }
+
+    fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create cache parent dir: {:?}", parent))?;
@@ -1094,7 +1175,21 @@ impl Cache {
         // trace:BUG-1644 | ai:claude
         let lock_info_path = cache_lock_info_path(&path);
         let read_only = !probe_cache_writable(&path, &lock_info_path);
-        let conn = open_connection_with_retry(&path, &lock_info_path)?;
+        let conn = match open_connection_with_retry(&path, &lock_info_path) {
+            Ok(conn) => conn,
+            Err(err) if read_only && allow_fallback => {
+                for fallback in fallback_cache_paths(&path) {
+                    if let Ok(cache) = Self::open_at(fallback.clone(), false) {
+                        if !cache.read_only {
+                            note_cache_fallback(&path, &fallback);
+                            return Ok(cache);
+                        }
+                    }
+                }
+                return Err(err.context(cache_read_only_guidance(&path)));
+            }
+            Err(err) => return Err(err),
+        };
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
         // None which falls through to "no migration needed".
@@ -1150,6 +1245,16 @@ impl Cache {
         // create/migrate so the steady-state open is read-only. WAL then lets the
         // reader serve the last-good committed snapshot with zero contention.
         let tables_present = cache_tables_present(&conn);
+        if read_only && !tables_present && allow_fallback {
+            for fallback in fallback_cache_paths(&path) {
+                if let Ok(cache) = Self::open_at(fallback.clone(), false) {
+                    if !cache.read_only {
+                        note_cache_fallback(&path, &fallback);
+                        return Ok(cache);
+                    }
+                }
+            }
+        }
         // TASK-1478: a NEWER-but-healthy stamp (version_older false, no drift)
         // does NOT force a migration drop — that's the whole point of the
         // fix. Only "this binary is behind" or "the columns don't match what

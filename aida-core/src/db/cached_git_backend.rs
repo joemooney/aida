@@ -581,6 +581,10 @@ impl CachedGitBackend {
     ) -> Result<T> {
         use super::cache_refresh::{self, StaleServe};
         let mut schema_retries = 0;
+        // HEAD can race the pinned snapshot, but repeated re-pins without a
+        // usable cache cannot make progress (for example when cache metadata
+        // is unreadable). Bound this race retry by count so it cannot spin.
+        let mut repin_retries = 0;
         loop {
             let state = self.freshen_for_read(budget)?;
             let head = self.current_head_sha();
@@ -602,6 +606,13 @@ impl CachedGitBackend {
                 && cache_head.as_deref() != Some(head.as_str())
                 && !cache_refresh::RefreshLock::held_by_current_thread(self.cache.path())
             {
+                if self.cache.is_read_only() {
+                    anyhow::bail!(super::cache::cache_read_only_guidance(self.cache.path()));
+                }
+                repin_retries += 1;
+                if repin_retries >= 3 {
+                    anyhow::bail!("cache snapshot could not be pinned consistently after 3 attempts; retry the command");
+                }
                 continue;
             }
             let value = read(&snapshot)?;
@@ -2910,6 +2921,55 @@ mod tests {
             backend.add_requirement(sample_req(id, title)).unwrap();
         }
         (backend, store_root, cache_path)
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_cache_uses_private_fallback_and_serves_store_rows() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        let connection = rusqlite::Connection::open(&cache_path).unwrap();
+        connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .unwrap();
+        drop(connection);
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", cache_path.display(), suffix));
+        }
+        let cache_dir = cache_path.parent().unwrap();
+        let original = std::fs::metadata(cache_dir).unwrap().permissions();
+        struct Restore(PathBuf, std::fs::Permissions);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let _ = std::fs::set_permissions(&self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(cache_dir.to_path_buf(), original.clone());
+        std::fs::set_permissions(
+            cache_dir,
+            std::fs::Permissions::from_mode(original.mode() & !0o222),
+        )
+        .unwrap();
+        let fallback_root = dir.path().join("forced-fallback");
+        std::env::set_var("AIDA_CACHE_FALLBACK_DIR", &fallback_root);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = CachedGitBackend::open(&store_root, &cache_path)
+                .unwrap()
+                .list_summaries(&ListFilter::default())
+                .unwrap()
+                .len();
+            let _ = tx.send(result);
+        });
+        let result = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("read exceeded five second bound");
+        std::env::remove_var("AIDA_CACHE_FALLBACK_DIR");
+        assert_eq!(result, 3);
+        assert!(fallback_root.exists());
     }
 
     /// External writer: retitle FR-1-001 and FR-1-002 in ONE store commit.
