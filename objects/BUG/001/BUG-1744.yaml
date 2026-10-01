@@ -61,8 +61,82 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:09:51.632713207Z
-modified_at: 2026-10-01T00:14:27.812382109Z
+modified_at: 2026-10-01T00:14:28.749511275Z
 req_type: Bug
+comments:
+- id: 01a0f4d0-058d-7971-bc9a-11cfc58b3319
+  author: joe
+  content: |
+    ADVISOR DISPOSITION — approved (2026-09-30, relay #20).
+
+    Premise re-measured by reading the function, not by trusting the filing:
+    `worktree_trust_findings` (aida-cli-lib/src/doctor_cmd.rs:1604) does
+
+        if trusted.iter().any(|t| parent.starts_with(normalize_path_lexically(t))) {
+            return Vec::new();
+        }
+
+    at line ~1618, and ONLY below that does it branch on `parent_configured` to choose between the
+    "accept the prompt in the configured parent once" action and the "set `[worktree_pool]
+    worktree_parent`" action. So the filing's central claim is exactly right and not an
+    approximation: once any trusted ancestor matches, the `worktree_parent` remediation is
+    unreachable, no matter how wide that ancestor is. Confirmed.
+
+    ARCHITECTURAL CONSTRAINT THE FILING DID NOT ADDRESS — binding on the implementer:
+
+    The function's doc comment states its own design rule: *"Pure verdict … Pure over its inputs so
+    the inheritance rule is testable without a real `~/.claude.json` or a spawned agent — which is
+    what makes this assertable at all, since the modal only appears in an interactive TUI."*
+
+    The filing says "the data needed is already at the call site (`claude_trusted_paths()` plus a
+    count of sibling directories under the trusted ancestor)". The *call site* part is true; the
+    function itself is not given it. **Do NOT read the filesystem inside
+    `worktree_trust_findings`.** Counting directories under the trusted ancestor is filesystem IO
+    and would destroy the one property that makes this check testable at all, trading a measurable
+    regression for the new finding. Compute the breadth at the call site (doctor_cmd.rs:1517) and
+    pass it in as data.
+
+    Consequence the brief must authorize up front: adding a parameter to a pure function with ~8
+    existing call sites means the compiler will flag `bug_1700_worktree_trust_tests` in the same
+    file (lines ~1665, 1677, 1689, 1712, 1724, 1734, 1740, 1762). Those are mechanical updates, but
+    a brief that does not name them costs a round trip. Prefer a small struct or an
+    `Option<TrustBreadth>` over a bare integer so the next addition does not repeat the churn, and
+    so the parameter cannot be misread — a bare `usize` named something like `sibling_count` is
+    exactly the kind of ambiguous parameter that has cost this project review rounds before.
+
+    AC2's ordering trap is ALREADY PINNED BY AN EXISTING TEST — say so in the PR rather than
+    adding a duplicate: `trusted_ancestor_further_up_also_covers` (doctor_cmd.rs:1677) asserts
+    empty for `parent = /home/op/aida-worktrees`, `parent_configured = true`, `trusted = [/home/op]`
+    — i.e. configured AND covered by a broad ancestor. That is precisely the success state AC2
+    protects, and it is the test that will break first if the new condition is not gated on
+    `!parent_configured`. Keeping it GREEN unchanged is the proof; a new test for the same
+    configuration is welcome but is not the witness.
+
+    MUTATION PROOF REQUIRED (standing discipline, restated because this is a "silence" bug and
+    silence is easy to fake): removing the new gate must make a test fail, and removing the
+    `!parent_configured` guard must ALSO make a test fail. A finding that only ever fires in the
+    fixture proves nothing. Both directions, or the coverage is advertised rather than real.
+
+    SCOPE AGREED AS FILED:
+    - Read-only is non-negotiable and already in the acceptance. `scan_agent_worktree_trust` must
+      stay strictly read-only; AIDA never writes `~/.claude.json` and never narrows a grant for the
+      operator.
+    - Informational severity, not a warning that blocks. The broad grant is a defensible operator
+      choice; the defect is that it is invisible, not that it is wrong.
+
+    ON THE FINDING ID (the filing's last bullet, answered so the implementer does not have to
+    guess): **use a NEW id, not a reuse of `worktree-folder-trust`.** The two findings have
+    different remediation, different severity, and — the deciding reason — a reused id makes
+    `aida doctor --heal` and any operator-side suppression keyed on that id silently cover both
+    conditions, so suppressing the noisy one hides the actionable one. Keep `category:
+    "agent-launch"`.
+
+    RELATED: TASK-1561 (merged/pending in #2300) fixed the placement half of this story — the
+    warm-pool fallback now honours `worktree_parent`. This bug is the reporting half: the operator
+    has no signal telling them to set the key in the first place. Sequence after #2300 lands.
+  created_at: 2026-10-01T00:14:28.749511275Z
+  modified_at: 2026-10-01T00:14:28.749511275Z
+  session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
 history:
 - id: 01a0f4d0-01e4-7290-861c-65be9443fd8b
   author: joe
