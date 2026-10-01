@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T03:02:01.837510656Z
+modified_at: 2026-10-01T03:27:47.059340166Z
 req_type: Bug
 comments:
 - id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
@@ -408,6 +408,36 @@ comments:
     which is what makes the Change-3 binding load-bearing rather than cosmetic.
   created_at: 2026-10-01T03:02:01.837510656Z
   modified_at: 2026-10-01T03:02:01.837510656Z
+  session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
+- id: 01a0f580-ff73-7c63-b7b9-0942ae350deb
+  author: joe
+  content: |
+    ADVISOR SIGN-OFF — ROUND 2 (2026-09-30, relay #23). Codex fixed the one defect correctly:
+    `include_str!` replaced by `CARGO_MANIFEST_DIR` + `load_config(repo_root)` at :3467-3470 and
+    :3521-3524, every assertion unchanged. It also answered the merge-layer question I asked rather
+    than guessing: `load_config` reads only the project config, `load_registry` merges the global
+    layer separately, so `registered.len() == 1` stays correctly scoped.
+
+    The round-2 mutation proof is the one I most wanted and it passed: unbinding `hub-drift-guard-route`
+    back to a bare `on = ["CronJobFailed"]` made
+    `bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes` FAIL with "repo route jobs must
+    all be bound to their guard" (exit 101), restored via `cp` and confirmed with `diff -q`. A
+    compile-time copy of the config could not have failed that way, which is the whole argument for the
+    runtime read.
+
+    VERIFIED FROM THIS SEAT after round 2, not from the report: full `aida-cli-lib --lib` aggregate
+    7420 passed / 0 failed / 2 ignored / 0 filtered, exit 0; `bug_1746` 3/0; `maintenance_schedule`
+    49/0; `cargo fmt --all -- --check` exit 0; no new warnings in the touched line ranges.
+
+    Log-reading note for whoever re-verifies: that suite log has 51 `test result:` lines and 50 are
+    nested-harness re-execs printing `1 passed; 7421 filtered out`, so `head` shows what looks like a
+    filtered run. It also carries 4 `error:` lines from fixtures that deliberately provoke git push and
+    merge failures in their own tempdirs. Exit code plus a unique-failed-count audit is the verdict.
+
+    Committed 949a0a3f40, pushed, PR #2303. CI not yet read at sign-off time — merge needs ubuntu +
+    merge-hold-gate green per head SHA.
+  created_at: 2026-10-01T03:27:47.059340166Z
+  modified_at: 2026-10-01T03:27:47.059340166Z
   session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
 history:
 - id: 01a0f4f1-7f72-70f3-a4ba-37985e942c04
