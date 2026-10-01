@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T23:25:23.418148112Z
-modified_at: 2026-10-01T23:55:08.554644840Z
+modified_at: 2026-10-01T23:57:49.520602231Z
 req_type: Bug
 tags:
 - auto-complete
@@ -54,6 +54,12 @@ relationships:
   target_id: 01a0f9e3-a1a7-7a71-8582-b784bbbb20ca
   created_at: 2026-10-01T23:54:28.076126514Z
   created_by: joe.mooney
+comments:
+- id: 01a0f9e7-2250-7323-91c7-23f2e8376e0e
+  author: joe.mooney
+  content: 'Implemented a fail-closed phase-2 fallback for a recorded implementer worktree that has disappeared: continue only when origin/<branch> and the verified PR/MR report the same head SHA. Added matching, missing-evidence, and mismatched-head regression tests. Verified with cargo test -p aida-cli-lib real_phase_driver_wiring_tests and cargo fmt --all -- --check.'
+  created_at: 2026-10-01T23:57:49.520602231Z
+  modified_at: 2026-10-01T23:57:49.520602231Z
 history:
 - id: 01a0f9ca-15d1-7493-af37-b1e6c2b3ce21
   author: joe.mooney
