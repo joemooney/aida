@@ -219,6 +219,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida internal record-no-verify-bypass` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal locking-gate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida internal worktree-scope-gate` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida internal solo-active` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida commit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pull` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida rebase` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

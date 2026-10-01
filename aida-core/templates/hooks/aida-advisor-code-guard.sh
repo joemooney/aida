@@ -17,7 +17,8 @@
 # Suppressed (exit 0, silent) when ANY of:
 #   - the session role is not advisor
 #   - AIDA_AUTO_COMPLETE is set (orchestrator / drain implementer child)
-#   - solo mode is active (~/.aida/solo.toml) — operator sanctioned coding here
+#   - solo mode is active within its TTL, as resolved by `aida internal solo-active` —
+#     operator-sanctioned coding here
 #   - the target file is not code (specs/plans/docs/config are advisor work)
 #   - this session already fired once (per-session marker)
 #
@@ -52,9 +53,6 @@ fi
 if [ -n "${AIDA_AUTO_COMPLETE:-}" ]; then
     exit 0
 fi
-if [ -f "${HOME}/.aida/solo.toml" ]; then
-    exit 0
-fi
 
 # ── Resolve the target file (Write/Edit/MultiEdit all carry file_path) ──
 FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"\K[^"]*' 2>/dev/null || echo "")
@@ -84,6 +82,20 @@ MARKER="${TMPDIR:-/tmp}/aida-advisor-guard-${SESSION_ID}"
 if [ -f "$MARKER" ]; then
     exit 0
 fi
+
+# trace:BUG-1748 | ai:codex
+# Ask the same TTL-aware resolver used by the commit-boundary gate. Resolve
+# only on a code edit that would otherwise fire; missing/stale binaries fail
+# safe by treating solo as off.
+__aida_guard_bin=$(command -v aida 2>/dev/null || true)
+if [ -n "$__aida_guard_bin" ] && "$__aida_guard_bin" internal solo-active --help >/dev/null 2>&1; then
+    if "$__aida_guard_bin" internal solo-active >/dev/null 2>&1; then
+        exit 0
+    fi
+else
+    printf 'aida-advisor-code-guard: could not consult `aida internal solo-active`; treating solo as off.\n' >&2
+fi
+
 touch "$MARKER" 2>/dev/null || true
 
 # ── Soft-block (exit 2): stderr is fed back to the agent so it re-evaluates ──
