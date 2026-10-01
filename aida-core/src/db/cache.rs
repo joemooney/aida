@@ -3177,8 +3177,12 @@ mod tests {
             dep_blocks_only,
         ]);
 
-        assert_eq!(cache.rebuild_from_store(&store, "head").unwrap(), 1);
-        assert_eq!(cache.requirement_count().unwrap(), 1);
+        let expected_rows = store.requirements.len();
+        assert_eq!(
+            cache.rebuild_from_store(&store, "head").unwrap(),
+            expected_rows
+        );
+        assert_eq!(cache.requirement_count().unwrap(), expected_rows);
 
         // Ground truth: the edge-walk over the full store.
         let expected = compute_blocked(&store);
