@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-09-29T10:34:37.853854085Z
+last_run: 2026-10-01T00:17:10.684884397Z
 last_by:
   seat: advisor
-  session: f9e0414b-efe9-4f5d-9dfb-1dba2671664f
+  session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
   vendor: antigravity
 result: done
-note: 'gitlab aida-store was BEHIND origin, fast-forwarded with the tool''s own printed command (git push gitlab origin/aida-store:aida-store, 0fd55f5409..3bf56dcc08). Not a force-push. ''aida remote status'' now reports: all remotes agree on every shared branch and release tag.'
-due_since: 2026-09-29T15:35:23.152276905Z
-due_reason: on CronJobFailed
+note: 'aida-store had drifted on BOTH hubs: gitlab ddff02a2a1cd, origin fe2f4c674b75, local 719a26278b5c. Verified independently with ''git merge-base --is-ancestor <tip> <local>'' for each hub BEFORE pushing: both remote tips are ancestors of local, so this was a pure fast-forward on each hub, not a conflicting history — no union merge was needed and no force-push was used. ''aida remote reconcile'' (dry-run first) agreed: it reported both hubs ''behind local''. Executed; ''aida remote status'' now reports all remotes agree on every shared branch and release tag (main 7c37dd81acf8, aida-store 719a26278b5c, release v0.15.0 580db5b13a31). PATTERN WORTH THE NEXT ADVISOR''S ATTENTION: this job also fired and was closed on 2026-09-29 with the same always-safe fast-forward remediation (that time gitlab was behind origin). Two consecutive days, same mechanical fix, zero judgment required once the ancestor check passes. A guard that routes a HUMAN job daily for a remediation whose safety is machine-checkable is a candidate for a self-heal or for a push-to-all-hubs step on the normal store-write path; see the handoff for the filing decision.'
