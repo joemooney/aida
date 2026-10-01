@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T04:00:24.782804255Z
+modified_at: 2026-10-01T04:07:20.776236820Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -105,6 +105,70 @@ relationships:
   target_id: 01a0e3c3-e95c-7a52-a7f1-ca8ae072444d
   created_at: 2026-10-01T04:00:16.672304663Z
   created_by: joe
+comments:
+- id: 01a0f5a5-37c8-7332-b704-7bb731f65364
+  author: joe
+  content: |
+    ## AC4 architecture sketch — ADVISOR SIGNOFF (advisor seat, 2026-09-30)
+
+    Sketch: `docs/plans/2026-09-30-bug-1747-merge-hold-label-fail-direction.md` (branch `bug-1747`).
+    AC4 is now decided; **AC1, AC2, AC3, AC5 and AC6 are unblocked** and may be implemented against the
+    contract below.
+
+    ### Decision: do NOT block the hold-dependent flow on a failed label sync. Fail LOUD, not closed.
+
+    Three measured facts on `bug-1693-rework` @ `043c1845ab` drove it:
+
+    1. **The 3 clearing sites (`held=false`) already fail closed.** A failed *removal* leaves
+       `aida:merge-hold` on the PR, so `merge-hold-gate` stays red and the merge stays shut
+       (`pr_cmd.rs:2610` says exactly this). Blocking there would strand an operator who cannot release
+       a hold because the release half failed. No change.
+    2. **Layer 1 is already a real gate and does not need the label.** `pr_has_merge_hold`
+       (`lib.rs:45383`) is `marker.is_some() || label_present` — a disjunction, so the marker alone
+       blocks. Every AIDA-mediated merge is still refused when the label never lands.
+    3. **Therefore the fail-open exposure is exactly the merges AIDA never sees** — a bare `gh pr merge`,
+       gated by the required check and nothing else. That hole is **not reachable from the arming site's
+       return value**: the `aida merge-hold place` process has exited long before. Blocking at the sync
+       site cannot close it.
+
+    **Option B (abort the flow / roll back the marker) is rejected as strictly worse than the status
+    quo**: it trades a one-layer failure for a zero-layer failure, and turns a transient forge 502 into
+    "drain proceeds with no hold at all" — the precise outcome this spec calls unacceptable.
+
+    ### Adopted contract (Option C), five limbs
+
+    **Invariant:** the local marker is never sacrificed for the forge label; a hold whose Layer 2 could
+    not be armed is reported as partially armed, exits non-zero when a human asked for it, and remains an
+    open integrity finding until the label lands.
+
+    1. Marker first, always; **never roll it back** on a label failure. State it as a rule, with a test.
+    2. **Type the error** (this is AC3): deterministic `LabelDefinitionMissing { names }` vs transient.
+       Do **not** run the existing 1 s retry on the deterministic class — it cannot succeed.
+    3. **Exit code at the operator site only.** `aida merge-hold place` exits **non-zero** on
+       definition-missing, **0 with a warning** on a transient. The autonomous sites (`lib.rs:92919`,
+       `:105071`, `:109969`) **never** abort their flow. `list --fix` (`:34910`) stays report-only.
+    4. **The durable finding is the fail-closed limb.** `LabelState::Unsynced` is promoted from a log
+       line to a state the `merge-hold-integrity` doctor category reads and that does not clear until the
+       label is observed. A live hold with `Unsynced` becomes a doctor finding and an `aida human` item.
+       This is the only limb that reaches the operator *before* the unsupervised merge.
+    5. **AC2 is the primary fix.** A definition that exists cannot be missing. AC4's answer is
+       deliberately modest so AC1/AC2 are not delayed by it.
+
+    ### Two traps the implementer must not fall into
+
+    - **`ForgeLabel` is the wrong type for AC1.** `ForgeLabel::{Present,Absent,NoForge,Unknown}`
+      (`merge_hold.rs:1394`) is derived `from_fetch` of a pinned change and means "is this label on this
+      PR" — `Absent` is the healthy state of every cleared PR. AC1 needs a **repo-scoped,
+      PR-independent** probe of label *definitions*. Add a distinct type; do not widen `ForgeLabel`.
+    - **Provisioning must cover all three names before any hold is placed.** One undefined name in a
+      comma list exits 1 and lands *neither* label.
+
+    Revisit limb 3 for the autonomous sites only if evidence appears that a drain run armed a
+    Layer-1-only hold and an unsupervised merge then landed. No such evidence exists today, and designing
+    for it now would cost drain availability on every forge hiccup.
+  created_at: 2026-10-01T04:07:20.776236820Z
+  modified_at: 2026-10-01T04:07:20.776236820Z
+  session_id: 3cf06bad-9182-47ec-b230-f602be3b068b
 history:
 - id: 01a0f59e-dece-7160-b758-6d66ee6e27cf
   author: joe
