@@ -727,3 +727,11 @@ blocks:
   range_end: 500
   next: 401
   allocated_at: 2026-10-01T20:07:34.266028503Z
+- node_id: '10'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: ADR
+  range_start: 401
+  range_end: 500
+  next: 401
+  allocated_at: 2026-10-01T20:07:36.190503797Z
