@@ -1,0 +1,73 @@
+id: 01a0f4cb-cb10-77a3-ab00-ab14f82d4ce5
+spec_id: BUG-1744
+agreed_id: BUG-1744
+title: Folder-trust check reports clean when trust came from a broad shared-parent grant, hiding the worktree_parent remediation
+description: |
+  OBSERVED: `doctor_cmd::worktree_trust_findings` (doctor_cmd.rs:1605) asks one boolean
+  question — "does the resolved worktree parent, or an ancestor, carry a Claude Code
+  folder-trust record?" — and stays silent when the answer is yes. Measured in this
+  repository on 2026-09-30: `worktree_parent` is UNSET, so the resolved parent is
+  `/home/joe/ai`, and `~/.claude.json` records `/home/joe/ai` with
+  `hasTrustDialogAccepted: true` (27 of 150 projects trusted). The check is satisfied and
+  `aida doctor` prints nothing — correctly, by its own contract: no modal will appear.
+
+  But the operator's actual problem is the one the check cannot see. Making
+  `/home/joe/ai/aida-bug-1743` usable required granting the SHARED parent `/home/joe/ai`,
+  which also grants every unrelated project under it — aida-proxy, aida-relay, quizdom,
+  market-watcher, pacgate, port_manager, and ~140 more. That broad grant is precisely the
+  outcome `[worktree_pool] worktree_parent` (BUG-1700) exists to let an operator avoid, and
+  it is what prompted TASK-1561.
+
+  The check treats two very different states as the same clean result:
+    1. trusted NARROWLY — the operator set `worktree_parent` and granted that one directory
+       (the success state BUG-1700 designed for);
+    2. trusted INCIDENTALLY — a shared parent covering many unrelated repositories was
+       granted at some point, so worktrees inherit trust as a side effect.
+
+  State 2 silences the very finding whose remediation text would have fixed it: when the key
+  is unset, `worktree_trust_findings` already recommends setting `worktree_parent` to
+  "../aida-worktrees" — it just never reaches that branch once a broad ancestor is trusted.
+
+  WHY IT MATTERS: the folder-trust grant is a security boundary the operator is asked to give
+  once and then forgets. A check that reports "fine" when the boundary is maximally wide gives
+  the operator no signal that a narrower configuration is available, and the only time they
+  find out is when they notice an agent worktree sitting inside a directory they granted for
+  something else. The data needed is already at the call site (`claude_trusted_paths()` plus a
+  count of sibling directories under the trusted ancestor), so this is an added condition on an
+  existing check, not a new subsystem.
+
+  NOT PROPOSED: AIDA writing `~/.claude.json`, or narrowing a grant on the operator's behalf.
+  `scan_agent_worktree_trust` is documented as strictly READ-ONLY and must stay that way — the
+  grant is the operator's to give. This is a reporting gap only.
+
+  ## Acceptance
+  - When the resolved worktree parent is trusted only because an ANCESTOR with unrelated
+    sibling projects is trusted, AND `worktree_parent` is unset, `aida doctor` emits an
+    informational finding naming the trusted ancestor, how many unrelated directories that
+    grant covers, and the `worktree_parent` remediation.
+  - The finding does NOT fire when `worktree_parent` IS set and its directory is trusted —
+    that is the success state BUG-1700 built, and warning there would train the operator to
+    ignore the check. Proven by a test for that exact configuration.
+  - The finding does NOT fire when the trusted directory is the project root's parent and
+    contains no unrelated projects (a single-project parent is not a broad grant).
+  - The check remains read-only: no test may observe a write to `~/.claude.json`.
+  - Verified against a fixture modelling this machine's shape: a trusted ancestor holding the
+    project plus several unrelated sibling repos, `worktree_parent` unset.
+  - Confirm the existing `worktree-folder-trust` finding's id/category are reused or
+    deliberately distinguished, so `aida doctor --heal` behaviour and any suppression keyed on
+    the id stay predictable.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T00:09:51.632713207Z
+modified_at: 2026-10-01T00:09:51.632713207Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: ebd9f361-5c58-426c-bd52-cad88aa0059b
