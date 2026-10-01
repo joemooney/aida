@@ -55,8 +55,79 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T11:26:34.634192022Z
-modified_at: 2026-10-01T11:40:25.871200078Z
+modified_at: 2026-10-01T11:43:35.348058935Z
 req_type: Bug
+comments:
+- id: 01a0f746-ebb4-72f0-a613-a31cd7c0b637
+  author: joe
+  content: |
+    Advisor, relay session #13 — pre-dispatch survey and an independently reproduced baseline.
+
+    ## Baseline re-measured on main @ 13706fd197, in /home/joe/ai/aida
+
+        $ env -i PATH=/usr/bin:/bin HOME=$HOME bash -c 'cd /home/joe/ai/aida && bash scripts/check-portability.sh'
+        exit=1
+        elapsed=232s
+        total output lines                  = 7955
+        lines starting .claude/worktrees/   = 7760
+
+    The 7760 figure in the filing reproduces **exactly**, and the ">120 s" claim is now a measured
+    232 s. 33 nested checkouts under `.claude/worktrees/`.
+
+    ## AC4 is provably safe — do not let a round spend effort re-deriving this
+
+    All 197 allowlist rows yield 71 distinct file paths. Every one of those 71 is tracked
+    (`git ls-files --error-unmatch` succeeds for all; zero untracked). So switching the Rust walk to
+    tracked-only enumeration **cannot** drop an existing row. If a row does stop matching, that is a
+    new fact to report, not a row to delete.
+
+    ## Authorized deviation from AC1's "matching the shell walk"
+
+    The Rust walk will use `git ls-files -z` with **no pathspec**, filtering on `path.suffix == ".rs"`
+    in Python, rather than a `*.rs` pathspec. The shell walk passes directory prefixes because it
+    needs directory scoping; the Rust walk needs none, and git pathspec wildcard semantics are not
+    plain fnmatch — a suffix filter in Python is the unambiguous form. The *contract* (tracked files,
+    documented `rglob` fallback when git is unavailable) is identical, which is what AC1 is about.
+
+    The existing `any(part in {".git", "target"} ...)` guard stays. It is dead on the tracked path but
+    still load-bearing on the fallback path.
+
+    ## The trap this dispatch is built around
+
+    `tests/test_prose_classification_rule.py`'s `findings()` helper builds its fixture in a bare temp
+    dir with `GIT_CEILING_DIRECTORIES=tmp`, so **the fixture is not a git repository**. The moment the
+    Rust walk calls `git ls-files`, all seven existing `findings()`-based tests silently fall through
+    to the `rglob` fallback: the suite stays green while the new code path has zero coverage. The
+    brief therefore requires (a) a `git_repo: bool = True` parameter on `findings()` mirroring
+    `shell_findings()`, so the existing seven exercise the tracked path, (b) one `git_repo=False` test
+    keeping the fallback covered, and (c) a third mutation proof that breaks *only* the tracked
+    enumeration and shows a pre-existing test go red — which is the only thing that can demonstrate
+    (a) actually landed.
+
+    ## AC3 strengthened: the untracked-file test alone does not reproduce the defect
+
+    A file inside a nested worktree **is** tracked — in that worktree's own index — and the reason the
+    current filter misses it is specifically that a linked worktree's `.git` is a *file*. So the brief
+    requires two tests: the untracked-`.rs` mirror of BUG-1750's test, **and** a real reproduction that
+    does `git init` → `git add` → `git commit` → `git worktree add .claude/worktrees/agent-fixture`
+    and asserts no finding path starts with `.claude/`, plus a positive assertion that the top-level
+    tracked finding IS present (an absence-only assertion passes when the whole walk is broken).
+
+    ## Latent cross-platform defect found while writing the brief, fix authorized
+
+    Both test helpers use `root = pathlib.Path(tmp)` and pass it as `cwd`. Once the fixture is a git
+    repo, the script's `ROOT` comes from `git rev-parse --show-toplevel`, which returns the
+    **realpath**, while `tempfile` can hand back a symlinked path (macOS `/tmp` → `/private/tmp`). The
+    script then calls `path.relative_to(root)` and raises `ValueError`. `shell_findings()` carries this
+    latent defect today. The brief authorizes `.resolve()` in both helpers as a one-line defensive fix
+    and requires it be declared in the report's Improvements section.
+
+    Brief: `.aida/handoff/advisor/bug-1753-round1-brief.md`. Dispatched to codex in worktree
+    `/home/joe/ai/aida-worktrees/bug-1753` (branch `bug-1753-portability-tracked-walk`,
+    session `01a0f74405e7`).
+  created_at: 2026-10-01T11:43:35.348058935Z
+  modified_at: 2026-10-01T11:43:35.348058935Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f737-81aa-7891-ba4a-233a509c77ae
   author: joe
