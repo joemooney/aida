@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T01:58:12.819971122Z
+modified_at: 2026-10-01T02:04:16.666383618Z
 req_type: Bug
 comments:
 - id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
@@ -251,6 +251,88 @@ comments:
   created_at: 2026-10-01T00:52:00.402280609Z
   modified_at: 2026-10-01T00:52:00.402280609Z
   session_id: 4c77c80f-dbec-4968-be8b-fd61944ac334
+- id: 01a0f534-8b9a-7231-bb36-9129efb975df
+  author: joe
+  content: |
+    ADVISOR DISPATCH + PINNED DESIGN (2026-09-30, relay #23). Codex holds the implementer seat for
+    this spec; the lease's `role: advisor` is the dispatching seat's, stated explicitly in the brief
+    so the implementer does not refuse on account of it. Worktree /home/joe/ai/aida-bug-1746, branch
+    bug-1746, based on main 543deb6197 (all five of the previous session's PRs merged first).
+
+    ## The implementation, as briefed — four changes
+
+    1. **`command_table()` entry** (`maintenance_schedule.rs:2741`) for `remote mirror-sync`, with
+       `hook_allowed: false`. That table is the single source of truth for the substrate allowlist —
+       `parse_scheduled_command` and `valid_commands` both derive from it — so a job cannot be
+       registered without an entry here. `hook_allowed: false` is load-bearing: the job touches the
+       network and the per-turn hook path must never make a network call.
+
+    2. **`[[schedule.jobs]] name = "hub-mirror-sync"`, `every = "1h"`, enabled**, in this repo's
+       `.aida/config.toml`.
+
+    3. **Bind this repo's four `*-route` triggers** — see the finding below; this is a prerequisite,
+       not a nicety.
+
+    4. **Correct the two stale comments** that bind the fan-out to `aida db sync --push`: this repo's
+       `[store.sync]` comment, and `init_store_mirror_config_section()` (`lib.rs:17277`), which is the
+       ONE function all three `init_cmd.rs` call sites (:4592, :4872, :5455) emit — so the disposition's
+       "three stubs" is three call sites of one function, and the edit must not be triplicated.
+
+    ## Why 1h: the interval relationship IS the answer to acceptance addendum 2
+
+    The cadence interval must stay strictly shorter than `hub-drift-guard`'s 6h. That is what makes
+    the two compose rather than collide: the cadence gets ~6 attempts inside one guard window, so a
+    single transient unreachable hub self-heals long before the guard can trip, and the guard only
+    ever fires on drift that PERSISTED across multiple cadence attempts. So the answer to "which of
+    the two reports a hub outage" is: `hub-drift-guard`, at 6h, and only for drift that outlived six
+    cadence attempts. **No `hub-mirror-sync-route` job is added** — deliberately, and the config
+    comment must say so. A route here would replace a daily ceremony job with a flakier one.
+
+    ## A PREREQUISITE THE FILING AND THE DISPOSITION BOTH MISSED
+
+    `maintenance_schedule.rs:99-100`: a bare `on = ["CronJobFailed"]` **matches every job's failure**.
+    All four of this repo's `*-route` seat jobs use the bare form, and `aida doctor check
+    scheduler-driver` reports all four today — I ran it, verbatim:
+
+    ```
+    - 'disk-headroom-guard-route' fires on ANY job's failure → on = ["CronJobFailed:disk-headroom-guard"]
+    - 'hub-drift-guard-route'     fires on ANY job's failure → on = ["CronJobFailed:hub-drift-guard"]
+    - 'performance-guard-route'   fires on ANY job's failure → on = ["CronJobFailed:performance-guard"]
+    - 'watchdog-route'            fires on ANY job's failure → on = ["CronJobFailed:watchdog"]
+      Total: 4 visible findings
+    ```
+
+    So adding ANY job that can fail transiently would wake all four advisor routes with the wrong
+    evidence — precisely the outcome acceptance addendum 2 forbids. Registering `hub-mirror-sync`
+    without binding these first would have converted one daily zero-judgment job into four spurious
+    ones, and the end-to-end acceptance test would still have passed, because nothing in the filing's
+    ACs looks at routing fan-out.
+
+    Worth recording WHY this was invisible: BUG-1655 built both the binding syntax and the detector
+    for exactly this, and `init_cmd.rs:2621` ships the correctly-bound form in the scaffold. Only
+    this repo's own tracked config drifted from its own scaffold, and the detector that says so has
+    been reporting it into a `doctor` category nobody reads on a cadence. A detector whose findings
+    nobody consumes is indistinguishable from no detector — the same failure shape as the 2026-09-19
+    silent-hub-drift incident that STORY-1367 built these guards to prevent.
+
+    ## Mutation-proof target, binding
+
+    The new test must fail when the TRIGGER is removed with the MECHANISM intact. `mirror_sync_hubs`
+    and `mirror_sync_branches` are already covered by BUG-1676; a test asserting the store branch is
+    in the branch list proves nothing new and passes today. The brief requires asserting that a tick
+    over a registry containing the job actually dispatches the `remote mirror-sync` command (on
+    `cmd.display`, as `bug_1655_trip_disk_guard` does at :5085), and does not when the job is absent
+    or disabled. Plus: a transient failure wakes none of the four routes; no mirror configured means
+    no behaviour change and no network call; and the registered args contain no force flag.
+
+    ## Out of scope, restated as binding in the brief
+
+    `mirror_push_refspecs`'s store skip (`remote_create.rs:1297-1315`) is untouched — removing it IS
+    the rejected per-write fan-out arriving by the back door. `hub-drift-guard` does not learn to
+    self-heal. No force-push, and no force flag on any push path. No new fan-out function.
+  created_at: 2026-10-01T02:04:16.666383618Z
+  modified_at: 2026-10-01T02:04:16.666383618Z
+  session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
 history:
 - id: 01a0f4f1-7f72-70f3-a4ba-37985e942c04
   author: joe
