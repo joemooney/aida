@@ -13,12 +13,6 @@
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0f737-588a-7e92-814e-9393bcfe0cda
-  position: 28000
-  added_by: joe
-  added_at: 2026-10-01T11:40:10.075511722Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 01a0f71a-e7ae-7212-a81c-dbf60ca8898b
   position: 29000
   added_by: joe
