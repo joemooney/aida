@@ -32,8 +32,53 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:28:06.562496496Z
-modified_at: 2026-09-30T23:45:19.268388566Z
+modified_at: 2026-10-01T00:09:26.713869610Z
 req_type: Task
+comments:
+- id: 01a0f4cb-69b9-7260-a14a-1833dbe76679
+  author: joe
+  content: |
+    AC5 answered, and it overturns the framing TASK-1561 inherited. **`aida doctor` is silent in
+    this repository CORRECTLY. The earlier note that "the doctor finding is not surfacing — that
+    is part of the defect" is wrong; do not chase it.**
+
+    `worktree_trust_findings` (doctor_cmd.rs:1605) returns early when the resolved worktree parent,
+    or any ancestor, carries a trust record. This repo sets no `worktree_parent`, so the resolved
+    parent is the project root's own parent, `/home/joe/ai` — and `~/.claude.json` records:
+
+        /home/joe/ai    hasTrustDialogAccepted: true      (27 of 150 projects trusted)
+
+    The check's precondition is satisfied: no folder-trust modal will appear for a worktree nested
+    under `/home/joe/ai`, so there is genuinely nothing to warn about. Measured 2026-09-30.
+
+    ## The separate finding this exposes (NOT fixed in TASK-1561)
+
+    The operator's complaint was never "I keep hitting modals" — it was that making
+    `/home/joe/ai/aida-bug-1743` work **requires granting the shared parent `/home/joe/ai`**,
+    which also grants every unrelated project on the machine (aida-proxy, aida-relay, quizdom,
+    market-watcher, pacgate, port_manager, and ~140 more). That broad grant is precisely the
+    outcome `worktree_parent` exists to let an operator AVOID.
+
+    `worktree_trust_findings` cannot see this, because it only asks "is the resolved parent
+    trusted?" — a boolean. It treats these two as the same clean result:
+
+      * trusted narrowly, because the operator set `worktree_parent` and granted that one dir;
+      * trusted incidentally, because a 150-project shared parent was granted at some point.
+
+    A finding keyed on BREADTH would have surfaced the operator's actual problem: *the resolved
+    worktree parent is trusted, but it is also the parent of N unrelated repositories — set
+    `[worktree_pool] worktree_parent` to narrow the grant.* The data is already in hand at the
+    call site (`claude_trusted_paths()` plus a sibling-directory count), so this is a small
+    addition to an existing check, not a new subsystem.
+
+    Worth noting the ordering trap for whoever takes it: the remediation must not fire when
+    `worktree_parent` IS set and the parent is trusted — that is the success state.
+
+    Filing this as its own spec is the right move; it is a different question (is the grant too
+    broad?) from the one TASK-1561 fixed (does the fallback honour the key at all?).
+  created_at: 2026-10-01T00:09:26.713869610Z
+  modified_at: 2026-10-01T00:09:26.713869610Z
+  session_id: ebd9f361-5c58-426c-bd52-cad88aa0059b
 history:
 - id: 01a0f4a9-7b5f-7503-934f-64cad36a9421
   author: joe
