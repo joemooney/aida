@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-10-01T02:30:08.948167195Z
+modified_at: 2026-10-01T03:33:52.109103313Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -393,6 +393,83 @@ comments:
   created_at: 2026-10-01T02:30:08.948167195Z
   modified_at: 2026-10-01T02:30:08.948167195Z
   session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
+- id: 01a0f586-916d-7e90-bfc2-03bc8ae987e8
+  author: joe
+  content: |
+    ## Rework dispatched (advisor, relay session #24→#6) — with one test-design refinement
+
+    The rework brief pinned last session is dispatched to a codex implementer in
+    `/home/joe/ai/aida-bug-1693`, branch `bug-1693-rework`, based on `origin/bug-1693-2`
+    (PR #2296 head `46e39bbd60`). The fix itself is unchanged from the pinned brief. Two
+    refinements came out of reading the shipped code before dispatching, and both shrink the work.
+
+    ### 1. The brief's open question is already answered by shipped code
+
+    The brief asked the implementer to verify that `gh pr edit` / `glab mr update` accept an add-flag
+    and a remove-flag in one invocation, with a two-call fallback if not. **No verification is needed:
+    the `!held` arm of `sync_label_command` already does exactly that** —
+    `--remove-label aida:merge-hold` together with `--add-label aida:merge-hold-cleared` for GitHub,
+    and `--unlabel` with `--label` for GitLab. The fix is the symmetric twin of code already in
+    production, so the fallback branch is dead weight and was dropped from the dispatch.
+
+    ### 2. Test 2 does not need to invoke the gate — and the version that does cannot be mutation-proved
+
+    The brief asked for the four-step sequence as an end-to-end fixture in
+    `tests/test_merge_hold_gate.sh`, asserting the gate FAILS at the final step. That is the wrong
+    home for it, for a reason worth recording:
+
+    `test_merge_hold_gate.sh` is bash and the writer is Rust, so a fixture there must hand-write the
+    step-4 label set. A hand-written `{recorded}` is the *post-fix* set, so the fixture would pass
+    with the fix reverted — **vacuous coverage of exactly the kind this spec is being reworked for.**
+
+    But the gate's verdict on both relevant label sets is **already pinned against the shipped gate
+    bytes** by that script's own case table:
+
+    ```
+    'aida:merge-hold-recorded|1|dropping the active label by hand leaves history without clearance'
+    'aida:merge-hold-recorded,aida:merge-hold-cleared|0|a recorded clearance releases a previously held PR'
+    ```
+
+    So test 2 only has to prove what the **writer** produces, and the two halves compose:
+
+    - **Test 2 (Rust, in `merge_hold.rs`):** drive `sync_label_command` through hold → clear → hold,
+      then remove `aida:merge-hold` by hand, applying each argv to a label set via a helper that
+      interprets `--add-label`/`--label`/`--remove-label`/`--unlabel` **generically**. Assert the final
+      set is exactly `{aida:merge-hold-recorded}`, for both `ForgeKind::GitHub` and
+      `ForgeKind::GitLab`, with a comment naming the fixture case above as the other half of the proof.
+
+    - **Mutation proof now bites:** revert only the removal and the final set becomes
+      `{recorded, cleared}` — the set the fixture pins as gate **exit 0**, i.e. the bypass reopened.
+      The assert fails for the right reason. The genericity of the helper is what makes this work; a
+      helper that hardcoded the outcome would pass either way, and the brief says so explicitly.
+
+    This keeps the shipped-artifact property (the gate's behaviour is still proven against the real
+    workflow bytes, by the existing fixture) while putting the writer's behaviour where it can be
+    tested against the writer. Net effect: no cross-language plumbing, no `#[cfg(unix)]` guard, no
+    refactor of the YAML block extractor — and a mutation proof that actually discriminates.
+
+    ### Unchanged from the pinned brief
+
+    Root cause (`sync_label_command`'s `held == true` arm never removing `HOLD_CLEARED_LABEL`); the
+    invariant to establish (`cleared` present iff the MOST RECENT hold has a recorded clearance); the
+    decided fix; the prohibition on touching either gate's `run:`/`script:` block or adding generation
+    counters, label timestamps, or API calls to the gate; the one-sentence invariant note in
+    `.github/workflows/merge-hold-gate.yml` and `aida-core/templates/gitlab-ci-merge-hold-gate.yml`;
+    and the out-of-scope list (hold history format, audit record, gate rule strength).
+
+    **PR #2296 must not merge until this lands.** Its checks are green, which is precisely the problem
+    the rework fixes.
+
+    ### Lease note
+
+    `aida queue work BUG-1693 --no-launch` refused from the advisor seat — BUG-1693 is routed to the
+    implementer role, so the advisor queue does not contain it (`help: aida role enter implementer`).
+    No lease is held for this rework. The worktree is the only seat touching the spec, and BUG-1693 is
+    already `in-progress`, so nothing is at risk; recorded here so a later session does not read the
+    absent lease as a reaped one.
+  created_at: 2026-10-01T03:33:52.109103313Z
+  modified_at: 2026-10-01T03:33:52.109103313Z
+  session_id: f00803e7-046a-4f7e-8540-549f9adf7c10
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
