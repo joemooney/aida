@@ -1156,6 +1156,7 @@ pub(crate) fn handle_drain_resume(
                     start_phase,
                     branch,
                     pr,
+                    head_sha: member.as_ref().and_then(|m| m.head_sha.clone()),
                     from_pr: false,
                 })
             };

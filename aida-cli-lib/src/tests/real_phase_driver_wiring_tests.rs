@@ -7,8 +7,8 @@ use super::{
     parse_agent_gates_from_config, prepare_orchestrated_lease_receipt,
     publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
     read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
-    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
-    ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
+    verified_phase2_branch, watchdog_failure_with_committed_work, AgentGateOnFail, PrCreditMatch,
+    RealPhaseDriver, SessionLease, ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -18,6 +18,63 @@ use aida_core::{
 use chrono::{DateTime, Utc};
 use std::process::Command;
 use uuid::Uuid;
+
+fn phase2_metadata(head_ref: &str, head_sha: &str) -> crate::forge::ChangeMetadata {
+    crate::forge::ChangeMetadata {
+        state: crate::forge::ChangeState::Open,
+        title: "fix: regression (BUG-1818)".to_string(),
+        author: Some("tester".to_string()),
+        merged_at: None,
+        base_ref: "main".to_string(),
+        head_ref: head_ref.to_string(),
+        head_sha: head_sha.to_string(),
+        is_draft: false,
+        is_cross_repository: false,
+        head_repo: None,
+    }
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_uses_the_forge_source_branch_not_the_local_staging_branch() {
+    let metadata = phase2_metadata("bug-138", "abc123456789");
+    let branch = verified_phase2_branch(
+        138,
+        "abc123456789",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap();
+    assert_eq!(branch, "bug-138");
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_refuses_an_exact_head_mismatch_with_evidence() {
+    let metadata = phase2_metadata("bug-138", "new-head");
+    let failure = verified_phase2_branch(
+        138,
+        "produced-head",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap_err();
+    assert!(failure.reason.contains("138"));
+    assert!(failure.reason.contains("produced-head"));
+    assert!(failure.reason.contains("new-head"));
+
+    let prefix_only = phase2_metadata("bug-138", "abcdef0123456789");
+    assert!(verified_phase2_branch(
+        138,
+        "abcdef0",
+        &prefix_only,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .is_err());
+}
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new("git")
