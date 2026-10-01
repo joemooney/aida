@@ -79,8 +79,30 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:19:45.093340970Z
-modified_at: 2026-10-01T10:20:03.040923429Z
+modified_at: 2026-10-01T10:26:51.899597646Z
 req_type: Bug
+comments:
+- id: 01a0f700-ad7b-77b3-8b08-762f3401448d
+  author: joe
+  content: |
+    Advisor survey + AC amendment before dispatch (relay session #12). AC1 as filed said the shell file set should be "derived from ci.yml rather than hard-coded". My survey says that is the wrong mechanism, so AC1 is AMENDED to:
+
+    AC1 (amended): the checker scans every tracked `.sh` under `tests/`, `scripts/`, and `aida-core/templates/hooks/`. A SUPERSET of what CI invokes is strictly safer than deriving the set from `ci.yml`: derivation has to parse step conditions correctly to avoid a false negative, whereas a superset cannot miss a newly added unguarded step at all. `aida-core/templates/hooks/` is in scope deliberately and is arguably the most important of the three — those hooks are SCAFFOLDED ONTO USER MACHINES including macOS, so a GNU-only construct there is a shipped defect, not just a CI leg.
+
+    SURVEY — the whole baseline, enumerated. It is small (11 code sites), and three nuances must shape the rule:
+
+    1. MOST `date -d` HITS ARE COMMENTS, NOT CODE. `tests/test_advisor_code_guard.sh:70`, `scripts/pre-release-check.sh:34,40`, `tests/test_pre_release_check_date_parsing.sh:4,5,54`. The shell scan MUST strip `#` line comments the way the existing Rust scan strips `//` via `strip_line_comment`. Otherwise the rule flags the comment explaining a fix — including the one round 1c of BUG-1748 just added, which says "date -d is GNU-only". That trap is on record in this repo already.
+
+    2. TWO SITES ARE CORRECT PORTABLE FALLBACKS and must not be flagged: `scripts/pre-release-check.sh:45` (`if out=$(date -d "$iso" +%s 2>/dev/null); then ... else <BSD form>`) and `scripts/restart-mcp-servers.sh:32` (`stat -c %Y "$1" || stat -f %m "$1"`). Both are deliberate GNU-then-BSD pairs, and `tests/test_pre_release_check_date_parsing.sh` already exists to pin the first one. The rule therefore needs the existing `optout`/`exempt` marker mechanism, and these two should be marked rather than baselined, so the marker's meaning is established by a real use.
+
+    3. GENUINE FINDINGS to baseline, not fix, in this spec: `scripts/release.sh:150` (`date -d "$last_updated" +%s || true` — silently degrades on BSD), `tests/test_restore_git_mtimes.sh:42` and `scripts/multi-clone-harness.sh:1086` (`sed -i` with no backup suffix — BSD requires one), `scripts/restart-mcp-servers.sh:48` (`readlink -f /proc/$pid/exe` — Linux-only by nature, the whole script is), `scripts/glyph-lint.sh:104` plus `aida-core/templates/hooks/aida-advisor-code-guard.sh:58,80` and `aida-core/templates/hooks/aida-git-guardrails.sh:36` (`grep -oP` — BSD grep has no `-P`).
+
+    The three `grep -oP` hook sites are the most consequential thing this audit turns up, since those hooks ship to macOS users and `grep -oP` there fails into `|| echo ""`, i.e. the hook silently no-ops. They are explicitly OUT OF SCOPE for BUG-1750 per its AC4 (baseline + file, do not fix); file them separately once the baseline proves the count.
+
+    MECHANISM NOTES for the implementer: `scripts/check-portability.sh` is one bash wrapper around an inline python heredoc; `scan()` is `root.rglob("*.rs")` with Rust-specific `#[cfg(test)]` / `#[cfg(unix)]` scoping. `scripts/portability-rules.json` is a list of 8 objects whose keys are `id`, `label`, `regex`, and optionally `scope`, `context`, `exempt`, `optout`, `self_evident`; `scope` is `test` or `production` today. The allowlist is tab-separated `rule-id<TAB>path:trimmed source line` and is keyed by line CONTENT, not line number. pyyaml 6.0.1 is available on this host but is NOT needed under the amended AC1.
+  created_at: 2026-10-01T10:26:51.899597646Z
+  modified_at: 2026-10-01T10:26:51.899597646Z
+  session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
 history:
 - id: 01a0f6fa-7060-70c3-bff2-05ea1aaf964e
   author: joe
