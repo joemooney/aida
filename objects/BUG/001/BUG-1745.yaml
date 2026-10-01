@@ -1,0 +1,106 @@
+id: 01a0f4d7-e1eb-78a1-b89e-00acb149ba5f
+spec_id: BUG-1745
+agreed_id: BUG-1745
+title: 'The performance guard''s trip evidence is structurally always absent: its configured command emits no performance_audits, so every trip records audit_error and the routed advisor job has nothing to rea'
+description: |
+  OBSERVED: the performance guard can never record performance evidence. Every trip it writes
+  carries `audit_error` and zero audits, so the advisor seat job it routes — whose prompt says
+  "Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml
+  to confirm the budget in force" — asks the advisor to read evidence that is structurally always
+  absent. Measured on 2026-09-30, not inferred:
+
+  1. The configured command is `doctor check performance --fail-on-findings`
+     (`.aida/config.toml:132`, scaffolded at `aida-cli-lib/src/init_cmd.rs:2541`, defaulted at
+     `aida-cli-lib/src/maintenance_schedule.rs:2796`). It passes NO `--json` and no
+     `--format json`.
+  2. `failure_trip` (`maintenance_schedule.rs:3118`) parses `outcome.stdout` as a
+     `PerformanceAuditEnvelope` (`maintenance_schedule.rs:3112`) and allow-lists
+     `performance_audits`.
+  3. Run as configured, the command emits HUMAN box-drawing text, not JSON. serde_json therefore
+     fails and the trip records
+     `audit_error: "malformed typed doctor output: trailing characters at line 30 column 1"`.
+     That is byte-for-byte the only trip recorded in `.aida-store/schedule/performance-guard.yaml`
+     (trip `performance-guard@2026-09-29T09:42:49.813546761Z`, status 1, zero audits). The
+     recorded symptom and the measured cause agree.
+  4. Adding `--json` does NOT fix it. Measured: `aida doctor check performance
+     --fail-on-findings --json` emits VALID JSON whose top-level keys are exactly
+     `total`, `findings`, `bwrap` — there is no `performance_audits` key. So the flag fix lands
+     on the envelope's OTHER error branch,
+     `Ok(_) => "typed doctor output contained no performance_audits"`
+     (`maintenance_schedule.rs:3148`). Both error branches are reachable; the success branch is not.
+  5. This is specific to the `performance` category, not a limit of `doctor check`. Contrast,
+     measured in the same session: `aida doctor check runaway-seats` prints a real category
+     evidence block — "runaway-seats evidence: verdict ok — 2 file(s) with new bytes, 973979 bytes
+     read, 22 session(s), 0 with unknown timing (11 ms)" plus per-source availability rows.
+     `aida doctor check performance` prints NO performance evidence block at all: only the generic
+     drift line and the Environment section.
+  6. The data exists, on a different code path. `doctor_cmd.rs` builds
+     `report.performance_audits` at lines 596, 656 and 860 via `performance_audit_records(...)`,
+     and `aida-cli-lib/src/schedule_ledger.rs:38` documents `PerformanceAudit` as
+     "Allow-listed performance evidence emitted by `doctor check performance`". It is not emitted
+     by that command. The doc comment states the intended contract and is the clearest statement
+     that this is a defect rather than a design choice.
+
+  WHY IT MATTERS: STORY-1422 ("the usage query exits 0 whether it finds ten calls over budget or
+  none, so BUG-1480's latency guard has no failure mode — give it one") and STORY-1423 ("enable
+  the performance guard in this repo") are both COMPLETED. Their shared point was to turn a
+  silent latency problem into a routed, evidenced signal. The routing works; the evidence channel
+  never did. The consequence is paid by the advisor every 6 hours: on 2026-09-29 the seat had to
+  re-measure `aida show` latency BY HAND (over 1000 ms on 10.7% of 270 calls; a 13118 ms worst
+  call against a 5000 ms ceiling) because the trip carried nothing, and the only reason that
+  disposition was correct is that a human did the guard's job. A guard whose evidence is always
+  absent trains the seat to disposition on memory, which is exactly how a changed measurement
+  SHAPE gets missed.
+
+  Worse, because `--fail-on-findings` gates on the generic finding set rather than on a
+  performance verdict, the guard's own pass/fail is not known to be a performance signal: it
+  exited 0 on 2026-09-30 while BUG-1674's ceiling breach is still open and approved. Whether the
+  category filter narrows `findings` at all was NOT measured and should not be assumed either way.
+
+  NOT PROPOSED: raising any budget, or changing BUG-1674 / STORY-1484. This is an evidence-channel
+  defect only. The standing budget disposition (do not raise; the fix is STORY-1484's single-flight
+  cache refresh) is unaffected and should be preserved.
+
+  RELATED: PRIN-5 ("a coordination surface must distinguish absent evidence from...") is the
+  principle this violates — the ledger does record `audit_error`, which is honest, but the routed
+  PROMPT still instructs the seat to read evidence, so the surface the advisor actually sees does
+  not distinguish the two.
+
+  ## Acceptance
+  - A tripped performance guard records at least one `performance_audits` entry in
+    `.aida-store/schedule/performance-guard.yaml`, with the budget in force, the measured value,
+    the denominator and the breached ceiling or proportion — enough for the advisor to disposition
+    WITHOUT re-measuring by hand.
+  - `aida doctor check performance` emits a category evidence block in human output, in the same
+    shape `runaway-seats` already does, naming the budget, the measured value and the verdict.
+  - The guard's configured command and the ledger's parser agree on one format. Whichever side
+    changes, a test asserts the round trip end to end: run the configured command string, feed its
+    real stdout to `failure_trip`, and assert the trip carries audits and `audit_error: None`.
+    A test that hand-builds the JSON envelope does NOT satisfy this — that is the test shape that
+    let the defect ship (`maintenance_schedule.rs:3959` constructs `"performance_audits": [...]`
+    as a literal, so it passes while the real command emits box-drawing text).
+  - Both existing failure branches stay reachable and tested: malformed output, and well-formed
+    output with no audits. Neither may be silently turned into a success.
+  - The scaffolded default in `init_cmd.rs` and the in-repo `.aida/config.toml` are updated
+    together, or the mismatch is explained. State the migration posture for projects that already
+    scaffolded the old command string.
+  - MUTATION PROOF: reverting the fix must make the new round-trip test fail. A test that passes
+    against both the broken and fixed command advertises coverage that does not exist.
+  - Confirm whether `--fail-on-findings` on the `performance` category gates on performance
+    findings or on the generic finding set, and state the answer in the PR. If it is the generic
+    set, that is a second defect — file it separately rather than widening this one.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T00:23:03.915547857Z
+modified_at: 2026-10-01T00:23:03.915547857Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
