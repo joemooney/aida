@@ -23,15 +23,26 @@ fn doctor_envelope_carries_error_and_performance_audits() {
 // trace:BUG-1745 | ai:codex
 fn built_aida_binary() -> std::path::PathBuf {
     let runner = crate::resolve_aida_exe();
-    let binary = runner
+    // Prove the resolver handed back THIS build's test runner before deriving a
+    // sibling path from it. An ambient AIDA_BIN overrides the resolver, and an
+    // `is_file()` check alone would then happily run a different build's binary
+    // and report its behaviour as ours.
+    let deps = runner.parent().expect("test runner has a parent directory");
+    assert_eq!(
+        deps.file_name().and_then(|name| name.to_str()),
+        Some("deps"),
+        "expected this build's test runner under target/<profile>/deps, got {} \u{2014} \
+         an ambient AIDA_BIN redirects the resolver and would silently exercise \
+         a different binary; unset it and re-run",
+        runner.display()
+    );
+    let binary = deps
         .parent()
-        .and_then(|parent| parent.parent())
-        .map(|target| target.join("aida"))
-        .expect("test runner path has a target/<profile> ancestor");
+        .expect("deps has a target/<profile> parent")
+        .join("aida");
     assert!(
         binary.is_file(),
-        "expected the built aida binary at {} \u{2014} run `cargo build -p aida-cli` first, \
-         and unset AIDA_BIN, which redirects the resolver away from this build",
+        "expected the built aida binary at {} \u{2014} run `cargo build -p aida-cli` first",
         binary.display()
     );
     binary
