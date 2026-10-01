@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T06:42:43.708266630Z
+modified_at: 2026-10-01T06:54:20.326907661Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -238,6 +238,34 @@ comments:
   created_at: 2026-10-01T06:42:43.708266630Z
   modified_at: 2026-10-01T06:42:43.708266630Z
   session_id: fe075416-3272-4d83-b1ea-b5b446e1535e
+- id: 01a0f63e-1aa6-7903-9909-04576fa53b87
+  author: joe
+  content: |
+    ## Advisor decision: BUG-1747 stays ONE spec; round 1's merge must not close it
+
+    Round 1 (PR #2305) satisfies **AC2, AC3, AC4, AC5 and AC6's atomic-failure half**. What remains is
+    **AC1** (the definition probe becomes a `merge-hold-integrity` doctor finding), **AC6's doctor half**
+    (all-present / some-missing / forge-unreachable coverage), and the signed-off sketch's **limb 4**
+    (a live hold recorded `Unsynced` becomes a durable finding). The brief for that work is written and
+    ready: `.aida/handoff/advisor/bug-1747-round2-brief.md`.
+
+    **Considered and rejected: splitting round 2 into a child spec.** It would buy a clean trailer bump
+    at the cost of real churn — the round-2 brief, the `// trace:BUG-1747` markers that round 1 already
+    placed in the same `merge_hold.rs` surface AC1 extends, and the docs paragraph all name BUG-1747.
+    Code in one block tracing to two IDs for one bug is worse bookkeeping than a reopened spec.
+
+    **So: the merge of #2305 carries the `(BUG-1747)` trailer, which on `aida pull` will bump this spec
+    to Completed. That bump is premature and must be reversed in the same session as the merge** —
+    `aida edit BUG-1747 --status approved` plus a comment naming round 2 as the remainder. A trailer
+    alone leaves the spec in-progress; only `aida pull` bumps it, so the window is controllable, but do
+    not rely on nobody pulling.
+
+    Anyone picking this up after the merge: if BUG-1747 reads Completed and
+    `aida doctor check merge-hold-integrity` reports no label-definition finding, the spec is wrong, not
+    the code — reopen it and dispatch the round-2 brief.
+  created_at: 2026-10-01T06:54:20.326907661Z
+  modified_at: 2026-10-01T06:54:20.326907661Z
+  session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
 history:
 - id: 01a0f59e-dece-7160-b758-6d66ee6e27cf
   author: joe
