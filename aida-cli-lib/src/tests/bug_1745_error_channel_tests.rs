@@ -40,6 +40,21 @@ fn built_aida_binary() -> std::path::PathBuf {
         .parent()
         .expect("deps has a target/<profile> parent")
         .join("aida");
+    // `deps` alone only narrows; it cannot prove ownership, since an honored
+    // AIDA_BIN override could in principle sit under some other build's `deps`.
+    // CARGO_MANIFEST_DIR is baked in at compile time and no environment variable
+    // can redirect it, so requiring the binary to live inside THIS checkout is
+    // what actually pins the artifact to this build.
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the crate directory sits inside the workspace root");
+    assert!(
+        binary.starts_with(checkout),
+        "resolved {} outside this checkout at {} \u{2014} the resolver returned a \
+         foreign build (AIDA_BIN or AIDA_BUILD_PROFILE); refusing to measure it",
+        binary.display(),
+        checkout.display()
+    );
     assert!(
         binary.is_file(),
         "expected the built aida binary at {} \u{2014} run `cargo build -p aida-cli` first",
