@@ -53,13 +53,21 @@ description: |
 
   Filed from the advisor seat. BUG-1751 explicitly scoped these out and the implementer independently
   proposed them as follow-ons in its round-1 report, which is the report format earning its keep.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:18.258656630Z
-modified_at: 2026-10-01T13:26:18.258656630Z
+modified_at: 2026-10-01T13:26:26.787611364Z
 req_type: Bug
+history:
+- id: 01a0f7a5-16e3-75e0-8b8d-2505a4c30661
+  author: joe
+  timestamp: 2026-10-01T13:26:26.787607937Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
   branch: main
