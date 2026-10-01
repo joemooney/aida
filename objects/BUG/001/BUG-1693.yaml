@@ -27,10 +27,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-09-30T15:17:17.104054783Z
+modified_at: 2026-10-01T02:01:30.003403409Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0f531-ec33-7132-a493-175d2e1ab916
+  created_at: 2026-10-01T02:01:30.003400328Z
+  created_by: joe
 comments:
 - id: 01a0e3c4-4c7f-7340-bec8-20cbd8f9e0fa
   author: joe
