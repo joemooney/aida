@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0e478-2afd-7970-af85-43c7d289536e
-  position: 2000
-  added_by: joe
-  note: 'Proxy priority: root-cause and deterministically fix the unrelated required CI teardown failure; no dependency or design gate.'
-  added_at: 2026-09-28T02:03:16.897038455Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0d690-9e8a-72f1-a753-ee587125c211
   position: 3000
   added_by: joe
@@ -26,30 +18,6 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0f34c-ab71-7050-8481-2d222dab1de5
-  position: 28000
-  added_by: joe
-  added_at: 2026-09-30T17:40:55.652085985Z
-  for_role: product
-- user_id: joe
-  requirement_id: 01a0f375-8c50-7543-a61a-d32bb3e65128
-  position: 29000
-  added_by: joe
-  added_at: 2026-09-30T18:18:52.009861451Z
-  for_role: product
-- user_id: joe
-  requirement_id: 01a0f4a5-91a2-7bb2-94f4-b7735adf083a
-  position: 30000
-  added_by: joe
-  added_at: 2026-09-30T23:44:28.317492398Z
-  for_role: advisor
-- user_id: joe
-  requirement_id: 01a0f4cb-cb10-77a3-ab00-ab14f82d4ce5
-  position: 31000
-  added_by: joe
-  added_at: 2026-10-01T01:02:31.786072181Z
-  for_role: advisor
 - user_id: joe
   requirement_id: 01a0f4da-13bb-7721-9b9d-6558022ab1da
   position: 32000
