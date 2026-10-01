@@ -76,12 +76,12 @@ description: |
   - MUTATION PROOF: reverting the fan-out change must make the new end-to-end staleness test fail.
     A test that passes with origin-only pushing proves nothing.
   - Projects with no `mirror_remotes` configured see no behaviour change and no new network calls.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T03:27:47.059340166Z
+modified_at: 2026-10-01T03:52:06.634753232Z
 req_type: Bug
 comments:
 - id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
@@ -454,6 +454,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f597-44cd-7b43-858e-b319853b27cf
+  author: aida-auto-bump
+  timestamp: 2026-10-01T03:52:06.606042655Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f597-44ea-7031-9213-d915a74eea2f
+  timestamp: 2026-10-01T03:52:06.634750928Z
+  agent: advisor
+  commit_sha: 54c950a8075025c16c706581f9364eeaacf07e5a
+  summary: Completed via merge 54c950a8
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
@@ -462,3 +475,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-01T03:52:06.605960938Z
+  completion_sha: 54c950a8075025c16c706581f9364eeaacf07e5a
