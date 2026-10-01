@@ -997,6 +997,22 @@ impl std::fmt::Display for SoftSignpostShown {
 
 impl std::error::Error for SoftSignpostShown {}
 
+/// BUG-1745: the command already wrote its COMPLETE typed document (JSON/TOON)
+/// to stdout with the failure reason inside it. The global renderer must not
+/// append a second document to stdout, and must not print a human `Error:` —
+/// the payload already carries the reason. Exit code only.
+// trace:BUG-1745 | ai:codex
+#[derive(Debug)]
+pub(crate) struct TypedPayloadEmitted;
+
+impl std::fmt::Display for TypedPayloadEmitted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("typed payload already emitted")
+    }
+}
+
+impl std::error::Error for TypedPayloadEmitted {}
+
 /// STORY-737 (delight #4): should `aida history` hide the stateless internal
 /// META prompt-template rows? Yes by default — they're plumbing seeded by
 /// `aida init`, not user-authored work, and drown a fresh project's one real
@@ -1014,6 +1030,10 @@ fn history_should_exclude_meta(include_meta: bool, type_filter: Option<&str>) ->
     !asked_for_meta
 }
 
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1745_error_channel_tests.rs"]
+mod bug_1745_error_channel_tests;
 #[cfg(test)]
 #[path = "tests/story_737_delight_tests.rs"]
 mod story_737_delight_tests;
@@ -1068,7 +1088,9 @@ pub fn main_entry() {
             // The exit code is unchanged (this only moves the OUTPUT channel),
             // and the human-at-a-TTY path below is byte-identical to before.
             // trace:TASK-972
-            if agent_output_mode() {
+            if err.downcast_ref::<TypedPayloadEmitted>().is_some() {
+                // Print nothing on either channel. trace:BUG-1745 | ai:codex
+            } else if agent_output_mode() {
                 println!("{}", agent_error_block(&err, &msg));
             } else if err.downcast_ref::<SoftSignpostShown>().is_some() {
                 // STORY-737 (delight #5): the command already rendered a soft,

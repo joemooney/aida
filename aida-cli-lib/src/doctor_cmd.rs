@@ -385,6 +385,11 @@ struct DoctorReport {
     // trace:BUG-1573 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     performance_audits: Vec<schedule_ledger::PerformanceAudit>,
+    /// BUG-1745: the failure reason, carried INSIDE the single stdout document
+    /// instead of appended to it as a second document.
+    // trace:BUG-1745 | ai:codex
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
     /// STORY-1462: what the runaway-seat watchdog could and could not see.
     // trace:STORY-1462 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -400,9 +405,40 @@ impl DoctorReport {
             healed: Vec::new(),
             bwrap: Some(bwrap_status_line()),
             performance_audits: Vec::new(),
+            error: None,
             runaway_seats: None,
         }
     }
+}
+
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_test_envelope() -> String {
+    let mut report = DoctorReport::from_findings(vec![DoctorFinding {
+        category: "performance".into(),
+        id: "synthetic".into(),
+        summary: "synthetic finding".into(),
+        action: "inspect".into(),
+        safe_heal: false,
+    }]);
+    report.error = Some("synthetic failure reason".into());
+    report
+        .performance_audits
+        .push(schedule_ledger::PerformanceAudit {
+            command: "synthetic".into(),
+            budget_ms: 1,
+            over_budget: 1,
+            denominator: 1,
+            proportion_millipercent: 1_000,
+            tolerated_millipercent: 0,
+            window_hours: 1,
+            worst_ms: Some(2),
+            excluded_samples: 0,
+            lineage_scoped: false,
+            ceiling_ms: None,
+            ceiling_breached: false,
+        });
+    serde_json::to_string_pretty(&report).unwrap()
 }
 
 fn is_zero_usize(n: &usize) -> bool {
@@ -827,23 +863,33 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
 // trace:TASK-1544 | ai:codex
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
-    let report = match category {
+    let mut report = match category {
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         _ => unreachable!("only store-free categories dispatch here"),
     };
+    let failing = fail_on_findings && !report.findings.is_empty();
+    let reason = failing.then(|| {
+        format!(
+            "{} finding(s) in {category} — failing because --fail-on-findings was requested",
+            report.findings.len()
+        )
+    });
     if json {
+        // The reason rides INSIDE the one document on stdout. trace:BUG-1745
+        report.error = reason.clone();
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         render_doctor_report(&report, false)?;
     }
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in {category} — failing because --fail-on-findings was requested",
-            report.findings.len()
-        );
+    match reason {
+        None => Ok(()),
+        // Typed path: stdout already carries the reason, so the global renderer
+        // must stay silent.
+        // trace:BUG-1745 | ai:codex
+        Some(_) if json => Err(anyhow::Error::new(crate::TypedPayloadEmitted)),
+        Some(msg) => Err(anyhow::anyhow!("{msg}")),
     }
-    Ok(())
 }
 
 // trace:TASK-1544 | ai:codex
