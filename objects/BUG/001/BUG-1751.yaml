@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:30.734561229Z
-modified_at: 2026-10-01T12:18:57.519437266Z
+modified_at: 2026-10-01T12:34:15.916260983Z
 req_type: Bug
 comments:
 - id: 01a0f767-4d6f-7981-a19f-b786871ab108
@@ -133,6 +133,90 @@ comments:
     `01a0f76583e9`).
   created_at: 2026-10-01T12:18:57.519437266Z
   modified_at: 2026-10-01T12:18:57.519437266Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
+- id: 01a0f775-50ec-76d0-a037-4bc8db667cdc
+  author: joe
+  content: |
+    Advisor review — round 1 **accepted in substance; three findings, rework dispatched as round 1b.**
+    The parser semantics are right, the tests are good, the allowlist edit is exact.
+
+    ## Re-verified by the advisor, not taken on report
+
+    - `bash tests/test_git_guardrails_parse.sh` → exit 0, four `ok` rows (blocked reset, allowed
+      status, escaped-quote command still blocked, non-Bash payload allowed).
+    - `scripts/portability-allowlist.txt`: `git diff --numstat` = **0 added / 3 deleted** — exactly rows
+      220–222; 223–228 untouched, as AC4 and the filing's out-of-scope list require.
+    - `.github/workflows/ci.yml`: the new step sits beside the existing hook-test step with the same
+      `if: steps.changes.outputs.full_ci == 'true'` and deliberately no `runner.os` guard.
+    - The escaped-quote rows do real work: with the old `[^"]*` parse the destructive command truncates
+      at the first `"` and the hook allows it.
+
+    ## Finding 1 — a MEASURED 19–40× latency regression on a PreToolUse hook
+
+    The round-1 helper scans the payload character by character with `substr()` in interpreted awk.
+    Measured on the real hook with a 400 KB payload in three shapes, against `main` as baseline:
+
+    | payload | main (`grep -oP`) | round 1 |
+    |---|---|---|
+    | `file_path` **before** a 400 KB `content` | 66 ms | 60 ms |
+    | `file_path` **after** a 400 KB `content` | 124 ms | **2327 ms** |
+    | looked-up key **absent** (400 KB `command`) | 55 ms | **2254 ms** |
+
+    This hook fires on every `Write`/`Edit`/`MultiEdit` and the guardrails hook on every Bash call. A
+    2.3-second stall is not acceptable for a tripwire, and **nothing in the payload contract guarantees
+    `file_path` precedes `content`** — the 60 ms row is luck, not design. The fix for a silently broken
+    guard must not be a visibly slow one.
+
+    Rework keeps the semantics identical (whole input, escape-aware, unescaping `\" \\ \/ \n \r \t`,
+    `\uXXXX` left as-is, empty when absent) and changes only **how the key is located**: awk's native
+    `match(text, "\"" wanted "\"[ \t\r\n]*:[ \t\r\n]*\"")` evaluated in C, with the interpreted
+    escape-aware scan running only over the **value**. A miss means the key is absent — which alone
+    removes the 2254 ms row. A hit must be verified to be a key rather than text inside another value
+    (the character before `RSTART`, skipping whitespace, is `{` or `,`); the old `grep -oP` had the same
+    exposure with no guard at all, so that is an improvement, not a regression being introduced.
+
+    Acceptance is a **re-measurement with the advisor's exact payload generator**, reported as three
+    numbers against the three baselines, target within ~2×. Plus a correctness regression test driving
+    the hook with the key behind ~200 KB of content — and explicitly **no wall-clock assertion in the
+    test**, because a timing assert flakes under load. Correctness in the test; the measurement is the
+    performance evidence.
+
+    ## Finding 2 — the helper reads a global instead of its documented input
+
+    The brief specified `__aida_json_field <field-name>` with JSON on **stdin**. Round 1 implemented
+    `printf '%s' "$INPUT" | awk ...` *inside* the function, so it depends on a global named nowhere in
+    its signature and cannot be exercised in isolation. Functionally fine at both call sites, but it is
+    an **undeclared interface deviation** — the Deviations section exists exactly so a change like this
+    gets reviewed rather than noticed later. Rework moves to the specified signature with the three
+    call sites piping; the byte-identity assertion still has to pass.
+
+    ## Finding 3 — the PCRE shim rejects more than PCRE
+
+    Both test shims do `case "$arg" in *P*)`, rejecting **any** argument containing a capital `P`,
+    patterns included. It passes today only because none of the ten `grep -qE`/`grep -oE` policy
+    patterns in `aida-git-guardrails.sh` happens to contain a capital `P`. The next one that does would
+    fail this test for a reason unrelated to PCRE. Narrowed to option-shaped arguments only.
+
+    ## A trap BUG-1753 created today, caught here on its first outing
+
+    Round 1 reported `scripts/check-portability.sh` exit 0. True — and **vacuous for the new file**:
+    `tests/test_git_guardrails_parse.sh` was still **untracked**, and as of BUG-1753 (merged
+    `30018209f0` earlier this session) the gate enumerates **tracked files only**. The advisor
+    `git add`ed it and re-ran: still exit 0, so the file is clean and no rework is needed. But the
+    lesson is general and now lives in the brief: **a tracked-file walk cannot see what git cannot see,
+    so `git add` a new file before quoting a gate result about it.** The same applies to the shell walk
+    BUG-1750 added.
+
+    ## Follow-ons the implementer proposed — both already recorded as advisor candidates
+
+    `.aida/setup.sh`'s `grep -oP` (plus the fact that `.aida/` is outside the shell walk's three
+    scanned prefixes, so it is not even baselined) and the `grep -oP` recipes in the scaffolded skills
+    `aida-code-review.md` / `aida-docs-review.md`. Noted in the pre-dispatch comment above; the advisor
+    files them, not the implementer.
+
+    Rework brief: `.aida/handoff/advisor/bug-1751-round1b-rework-brief.md`.
+  created_at: 2026-10-01T12:34:15.916260983Z
+  modified_at: 2026-10-01T12:34:15.916260983Z
   session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f71b-7b10-7081-a022-78d9602ba33a
