@@ -9137,7 +9137,14 @@ pub(crate) fn resolve_queue_work_plan(
     // Composes with STORY-66/STORY-90 (auto-queue at PR-create) which
     // produce these stories. trace:TASK-85 | ai:claude
     if let Some((forge, n)) = parse_review_scope(arg) {
-        let matches: Vec<aida_core::QueueEntry> = entries
+        // Auto-queue writes under the producer's queue identity. Reviewers may
+        // run under a role-scoped or ordinary identity, so resolve PR/MR
+        // hand-offs from every queue file using the same reviewer-route
+        // semantics as the writer. trace:BUG-1817 | ai:codex
+        let review_entries = queue_role_fallback::queue_entries_routed_to_role(
+            storage, "reviewer", /* include_completed */ false,
+        )?;
+        let matches: Vec<aida_core::QueueEntry> = review_entries
             .iter()
             .filter(|e| {
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
@@ -9165,16 +9172,39 @@ pub(crate) fn resolve_queue_work_plan(
                 // classifier the review-envelope guard uses.
                 let why =
                     crate::classify_review_story_lookup(&entries, &store, forge, n).describe();
+                let identities = storage.queue_users().unwrap_or_default();
+                let searched = if identities.is_empty() {
+                    "no persisted queue identities".to_string()
+                } else {
+                    format!(
+                        "queue identities [{}] for role reviewer",
+                        identities.join(", ")
+                    )
+                };
                 anyhow::bail!(
-                    "no queued review story for {} ({}) — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) after searching {}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
                     why,
+                    searched,
                     n,
                     n
                 );
             }
-            1 => {
-                let entry = matches.into_iter().next().unwrap();
+            _ => {
+                // Legacy retries may have left duplicates. Select the same
+                // stable canonical story every time instead of blocking phase
+                // 3; auto-queue will stop creating new duplicates.
+                let persisted = find_main_worktree_root()
+                    .ok()
+                    .and_then(|root| drain_state::DrainState::read(&root))
+                    .and_then(|state| state.review_spec);
+                let canonical =
+                    canonical_review_story(&store, forge, n, None, persisted.as_deref())
+                        .and_then(|req| matches.iter().find(|e| e.requirement_id == req.id))
+                        .or_else(|| matches.iter().min_by_key(|e| e.requirement_id))
+                        .cloned()
+                        .expect("non-empty matches");
+                let entry = canonical;
                 let req = store
                     .requirements
                     .iter()
@@ -9204,26 +9234,6 @@ pub(crate) fn resolve_queue_work_plan(
                     anchor_display,
                     anchor_title: req.title.clone(),
                 });
-            }
-            _ => {
-                let label = format_review_label(forge, n);
-                let mut msg = format!(
-                    "{} matches {} queued review stories — pass the specific spec_id instead:",
-                    label,
-                    matches.len()
-                );
-                for e in &matches {
-                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    {
-                        let id = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or("?");
-                        msg.push_str(&format!("\n  · {} — {}", id, req.title));
-                    }
-                }
-                anyhow::bail!(msg);
             }
         }
     }

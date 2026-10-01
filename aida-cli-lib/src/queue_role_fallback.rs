@@ -226,6 +226,40 @@ pub(crate) fn other_user_queue_entry_count<S: QueueFiles + ?Sized>(
     collect_foreign_entries(src, user_id, include_completed).len()
 }
 
+/// Read every persisted queue identity and return entries routed to `role`.
+/// This is intentionally caller-independent: a producer may write a reviewer
+/// hand-off under its own queue identity, while the reviewer runs under a
+/// different role-scoped identity. trace:BUG-1817 | ai:codex
+pub(crate) fn queue_entries_routed_to_role<S: QueueFiles + ?Sized>(
+    src: &S,
+    role: &str,
+    include_completed: bool,
+) -> Result<Vec<QueueEntry>> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for user in src.queue_file_users()? {
+        let Ok(entries) = src.queue_entries_for(&user, include_completed) else {
+            continue;
+        };
+        for entry in entries {
+            let routed = entry
+                .for_role
+                .as_deref()
+                .is_some_and(|r| crate::canonical_role_name(r).eq_ignore_ascii_case(role));
+            if routed && seen.insert(entry.requirement_id) {
+                out.push(entry);
+            }
+        }
+    }
+    out.sort_by(|a, b| {
+        a.position
+            .cmp(&b.position)
+            .then_with(|| canonical_user_id(&a.user_id).cmp(&canonical_user_id(&b.user_id)))
+            .then_with(|| a.requirement_id.cmp(&b.requirement_id))
+    });
+    Ok(out)
+}
+
 /// Who else, if anyone, has this spec queued. Powers the diagnostic that
 /// replaces the misleading "the lease may have been lost" guess when a spec
 /// is simply sitting in a peer's queue file.

@@ -2865,6 +2865,98 @@ fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env
     assert!(err.contains("none is a review story"), "{err}");
 }
 
+/// BUG-1817: reviewer hand-offs are visible across queue identities, and
+/// legacy duplicates resolve deterministically instead of blocking launch.
+#[test]
+fn review_pickup_cross_user_duplicates_choose_canonical_story() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let storage = Storage::new(&root);
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let mut newer =
+        aida_core::Requirement::new("Review PR-457: duplicate".to_string(), String::new());
+    newer.spec_id = Some("STORY-902".to_string());
+    newer.status = RequirementStatus::Approved;
+    let mut canonical =
+        aida_core::Requirement::new("Review PR-457: canonical".to_string(), String::new());
+    canonical.spec_id = Some("STORY-901".to_string());
+    canonical.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store
+        .requirements
+        .extend([newer.clone(), canonical.clone()]);
+    backend.save(&store).unwrap();
+    for (user, req) in [("producer-a", newer), ("producer-b", canonical)] {
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: user.into(),
+                requirement_id: req.id,
+                position: 0,
+                added_by: user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("reviewer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+
+    let plan = resolve_queue_work_plan(
+        &storage,
+        "ordinary-user",
+        Some("PR-457"),
+        None,
+        false,
+        false,
+        false,
+        None,
+    )
+    .expect("cross-user duplicate review stories should resolve");
+    assert_eq!(plan.anchor_display, "STORY-901");
+    assert_eq!(plan.review_target, Some((ReviewForge::GitHub, 457)));
+}
+
+/// BUG-1817: GitHub PR and GitLab MR stories share the same selector policy.
+#[test]
+fn canonical_review_story_is_forge_symmetric() {
+    let mut pr = aida_core::Requirement::new("Review PR-8: github".into(), String::new());
+    pr.spec_id = Some("STORY-8".into());
+    pr.status = RequirementStatus::Approved;
+    let mut mr = aida_core::Requirement::new("Review MR-8: gitlab".into(), String::new());
+    mr.spec_id = Some("STORY-9".into());
+    mr.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.extend([pr, mr]);
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitHub, 8, None, None)
+            .unwrap()
+            .display_id(),
+        "STORY-8"
+    );
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitLab, 8, None, None)
+            .unwrap()
+            .display_id(),
+        "STORY-9"
+    );
+
+    let mut duplicate =
+        aida_core::Requirement::new("Review PR-8: persisted retry".into(), String::new());
+    duplicate.spec_id = Some("STORY-10".into());
+    duplicate.status = RequirementStatus::Approved;
+    store.requirements.push(duplicate);
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitHub, 8, None, Some("STORY-10"))
+            .unwrap()
+            .display_id(),
+        "STORY-10",
+        "a persisted canonical choice must win on retry"
+    );
+}
+
 /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
 /// function, so it can be exercised exhaustively with no Storage, worktree,
 /// or launcher. A deliberate PR-hold parks the spec Done + dequeued with a
