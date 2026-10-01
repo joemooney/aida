@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-10-01T03:33:52.109103313Z
+modified_at: 2026-10-01T03:59:12.120893739Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -469,6 +469,119 @@ comments:
     absent lease as a reaped one.
   created_at: 2026-10-01T03:33:52.109103313Z
   modified_at: 2026-10-01T03:33:52.109103313Z
+  session_id: f00803e7-046a-4f7e-8540-549f9adf7c10
+- id: 01a0f59d-c2f8-7422-bb35-e39768b686cb
+  author: joe
+  content: |
+    ## Round-1 review of the rework — the rework is CORRECT, but #2296 is still merge-blocked by a defect neither review found
+
+    Commit `043c1845ab`, pushed to `bug-1693-2` (PR #2296 now at that head). Authored by a codex
+    implementer; reviewed here by the advisor seat, which authored none of it.
+
+    ### The rework itself: APPROVED
+
+    The reviewer's finding is closed correctly and minimally.
+
+    - **The fix.** Both arms of `sync_label_command` now drop `HOLD_CLEARED_LABEL` in the same
+      invocation that applies the hold — `--remove-label` for GitHub (`:2055`), `--unlabel` for GitLab
+      (`:2081`). Exactly the symmetric twin of the `!held` arm. Neither gate's `run:`/`script:` block
+      was touched, no generation counters, no API calls added to the gate.
+    - **Test 1** extends the per-forge argv assertions with `windows(2)` adjacency pair checks — which
+      is stronger than the `contains` style around it, since it pins flag/value adjacency rather than
+      mere presence.
+    - **Test 2** (`a_second_hold_drops_the_stale_clearance_so_manual_label_removal_cannot_release`)
+      implements the refined design: `apply_label_args` interprets `--add-label`/`--label`/
+      `--remove-label`/`--unlabel` **generically** off the argv, so the final set is *computed*, not
+      asserted as a literal. It drives `[true, false, true]` through the real writer, removes
+      `HOLD_LABEL` by hand, and `assert_eq!`s the whole set against `{aida:merge-hold-recorded}` for
+      both forge kinds, citing the `test_merge_hold_gate.sh` fixture case that pins the gate's FAIL on
+      that set. The two halves compose as intended.
+    - **Mutation proof** reported as failing with `{recorded, cleared}` when the removal is reverted —
+      the state the fixture pins as gate **exit 0**. The genericity of the helper is what makes it
+      discriminate, and it does.
+
+    **Verified from the reviewing seat, not from the implementer's numbers:**
+    `cargo test -p aida-cli-lib --lib merge_hold` → **exit 0, 61 passed / 0 failed** (7362 filtered
+    out); `bash tests/test_merge_hold_gate.sh` → **exit 0**, "7 label states x 2 shipped gates".
+
+    ### MERGE-BLOCKING, pre-existing in #2296 and NOT introduced by the rework: the two new labels do not exist on this repo, and `gh` fails closed-then-open
+
+    `gh pr edit --add-label` / `--remove-label` **exit non-zero when a named label is not defined in
+    the repository**, and the operation is **atomic — no label is applied**. Verified empirically
+    against merged PR #2301 on `joemooney/aida`:
+
+    | probe | result |
+    |---|---|
+    | `--remove-label aida:merge-hold-cleared` (undefined in repo) | **exit 1**, `'aida:merge-hold-cleared' not found` |
+    | `--remove-label aida:merge-hold` (defined in repo, absent on PR) | **exit 0** — idempotent |
+    | `--add-label aida:zz-probe-delete-me` (undefined) | **exit 1**, not created |
+    | `--add-label "aida:merge-hold,aida:merge-hold-recorded"` | **exit 1**, and `aida:merge-hold` did **not** land — labels after: `[]` |
+
+    So the discriminator is whether the label is **defined in the repository**, not whether it is on
+    the PR. And `joemooney/aida` defines exactly one of the three:
+
+    ```
+    $ gh label list --repo joemooney/aida --search aida
+    aida:merge-hold   Supervised merge hold — merge-hold-gate fails while present   #B60205
+    ```
+
+    `HOLD_RECORDED_LABEL` and `HOLD_CLEARED_LABEL` are **new in #2296** (`merge_hold.rs:1072`/`:1075`,
+    both `trace:BUG-1693`); `main` today uses only `HOLD_LABEL` (`main:merge_hold.rs:1022`), which
+    exists — so holds land correctly on main right now.
+
+    **Consequence of merging #2296 as-is.** The `held == true` arm's first action becomes
+    `--add-label "aida:merge-hold,aida:merge-hold-recorded"` → exit 1 → `sync_label_with` retries once
+    (`:1968-1986`), records `LabelState::Unsynced`, returns `Err`. **No label lands at all.** The
+    required `merge-hold-gate` check then inspects an unlabelled PR and **passes**. Layer 1 (the local
+    marker) still holds, but Layer 2 — the un-bypassable half, the entire point of ADR-37 — is off for
+    every supervised PR. That is BUG-1236's regression verbatim, and `sync_label_with`'s own doc
+    comment names it: *"Before this the label silently never landed on three supervised PRs while the
+    required merge-hold-gate check read pass."*
+
+    This is **strictly worse than BUG-1693 itself**: BUG-1693 needs a contrived hold→clear→hold
+    sequence plus a manual label deletion, whereas this breaks the **first** hold on **every** PR.
+
+    The rework adds one more instance of the same class (`--remove-label aida:merge-hold-cleared`), but
+    it is only reachable once the `--add-label` failure above is resolved, so the rework is not the
+    cause and reverting it would not help.
+
+    ### Why no review caught it
+
+    `#2296`'s own docs state the precondition in prose — `docs/cli/08-reporting.md:42-44`:
+    *"Repositories must have all three labels … defined before using the gate; hold
+    placement/clearance reports forge label update failures."* Nothing enforces, provisions, or checks
+    it. A survey of the branch found **no** creation path: no `gh label create`, no label-existence
+    probe, no `init` scaffolding, and the `merge-hold-integrity` doctor check
+    (`doctor_cmd.rs:430-444`) only reports unrecorded *marker* removals. `aida github labels
+    --create-missing` (`tracker_cmd.rs:1009`) provisions the **requirement taxonomy** from
+    `config.labels.types/priorities/statuses`, not these three names — a plausible source of operator
+    confusion. Forge asymmetry worth noting: GitLab's API auto-creates a label on application, so
+    `glab mr update --label` tends to self-provision; **GitHub hard-fails**, so the GitHub path is the
+    exposed one. (The GitLab auto-create behaviour is from the branch survey and is *not* something I
+    verified against a live GitLab.)
+
+    ### Disposition
+
+    1. **#2296 remains merge-blocked**, now on a different and more serious finding than the
+       reviewer's. The rework is approved on its own terms and is pushed.
+    2. **Hard merge prerequisite — one operator command on his own repo** (forge-side, no code):
+       define the two missing labels. Until this runs, merging #2296 silently disables the merge-hold
+       gate on this repository.
+    3. **The silent fail-open is itself a defect and gets its own spec** — a documented precondition
+       that, when unmet, quietly disables the un-bypassable half of an integrity floor is not an
+       acceptable contract. Filed separately rather than widening #2296: it wants a
+       `merge-hold-integrity` doctor probe for the three label definitions plus a provisioning path.
+
+    ### Mirror note
+
+    The push to origin succeeded (`46e39bbd60..043c1845ab`). The **gitlab mirror rejected it
+    non-fast-forward**: `gitlab/bug-1693-2` sits at `8c575565`, the abandoned earlier attempt (3 ahead
+    / 9 behind the new head), which is also what the stale *local* `bug-1693-2` ref pointed at and why
+    `git fetch origin bug-1693-2:bug-1693-2` was rejected at the start of this session. Deliberately
+    **not** force-pushed — it is a feature branch that disappears when #2296 merges. Not drift in
+    `main` or the store.
+  created_at: 2026-10-01T03:59:12.120893739Z
+  modified_at: 2026-10-01T03:59:12.120893739Z
   session_id: f00803e7-046a-4f7e-8540-549f9adf7c10
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
