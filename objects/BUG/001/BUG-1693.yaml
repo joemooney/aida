@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-10-01T02:01:30.003403409Z
+modified_at: 2026-10-01T02:30:08.948167195Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -279,6 +279,120 @@ comments:
   created_at: 2026-09-30T15:17:17.104054783Z
   modified_at: 2026-09-30T15:17:17.104054783Z
   session_id: 691561c0-b5f3-409d-9624-cbac5b961cc4
+- id: 01a0f54c-3b34-7372-ad35-7c5c3328a3c2
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF (2026-09-30, relay #23) — PR #2296, head 46e39bbd6079.
+
+    ## Verdict: the reviewer's finding is CONFIRMED, and it is merge-blocking
+
+    I reproduced it by reading the shipped artifacts rather than by taking the review's word for it.
+    It defeats this spec's own primary acceptance in the repeated-hold case, so #2296 does not merge
+    as it stands. Rework is small and well-localized — see below; the design is decided, so this does
+    not need another round trip through me before implementation.
+
+    ## The exact sequence that bypasses the gate
+
+    Gate logic, `.github/workflows/merge-hold-gate.yml` (the `run:` block, which is also the artifact
+    `tests/test_merge_hold_gate.sh` extracts and executes):
+
+    1. `aida:merge-hold` present → FAIL
+    2. `recorded` && !`cleared` → FAIL
+    3. `cleared` && !`recorded` → FAIL
+    4. otherwise → PASS
+
+    Walk a PR through two holds:
+
+    | step | labels | gate |
+    |---|---|---|
+    | hold #1 applied | `merge-hold`, `recorded` | FAIL (rule 1) ✓ |
+    | `aida merge-hold clear` | `recorded`, `cleared` | PASS (rule 4) ✓ correct |
+    | **hold #2 applied** | `merge-hold`, `recorded`, `cleared` | FAIL (rule 1) ✓ |
+    | **`aida:merge-hold` removed by hand** | `recorded`, `cleared` | **PASS (rule 4) ✗** |
+
+    The last row is the bypass. The gate releases the PR on the strength of the clearance recorded
+    for hold #1, and **no clearance was ever recorded for hold #2**. That is precisely the hole this
+    spec exists to close — "label state alone cannot release a previously held PR", per the
+    workflow's own BUG-1693 comment. The fix closes it for the first hold and reopens it for every
+    subsequent one.
+
+    ## Root cause: the WRITER, not either gate
+
+    `merge_hold.rs:2033`, `sync_label_command`. On `held == true` it emits
+    `--add-label aida:merge-hold,aida:merge-hold-recorded` (GitHub) / `--label …` (GitLab) and
+    **never removes `HOLD_CLEARED_LABEL`**. So a stale clearance survives the next hold.
+
+    Both gates read label state only, and both are correct *given* a sound invariant. The invariant
+    they need, and which nothing currently establishes, is:
+
+    > **`aida:merge-hold-cleared` is present if and only if the MOST RECENT hold has a recorded
+    > clearance.**
+
+    Today `cleared` instead means "some hold was once cleared", which is not a useful thing for a
+    gate to know.
+
+    ## The fix — decided; implement exactly this
+
+    **Remove `HOLD_CLEARED_LABEL` in the same operation that applies a hold.** In
+    `sync_label_command`, the `held == true` arm must drop the clearance label as well as add the
+    hold and recorded labels:
+
+    - GitHub: add `--remove-label aida:merge-hold-cleared` alongside the existing `--add-label`.
+      `gh pr edit` accepts both flags in one invocation — **verify that against the installed `gh`
+      and say so in your report** rather than assuming it.
+    - GitLab: the matching `--unlabel aida:merge-hold-cleared` alongside `--label`. Verify `glab mr
+      update` accepts both in one call.
+
+    If either CLI will not take both in one invocation, fall back to two calls and **apply the hold
+    first**. Both intermediate states fail closed, which is worth stating in a comment: a partial
+    result of `{merge-hold, recorded, cleared}` fails rule 1, and `{recorded}` fails rule 2. There is
+    no interleaving that yields a passing gate.
+
+    **Do NOT change either gate's `run:` block to fix this.** The gate is deliberately
+    label-inspection-only with no build and no API call — the workflow comment calls that out as a
+    design property so it never stalls a PR waiting on a required check. Fixing the writer repairs
+    BOTH gates (GitHub and the GitLab template) without touching either, and without teaching a
+    required check to make network calls. Resist generation counters in label names and timestamp
+    comparisons via the API; they buy nothing here and cost the gate's triviality.
+
+    ## Required tests
+
+    The reviewer is right that the existing fixtures pass and do not cover this. Two new tests, and
+    note the first is a WRITER test — the gate cannot distinguish the two `{recorded, cleared}`
+    states by labels alone, which is exactly why the invariant has to be established at the write
+    side:
+
+    1. **Writer:** `sync_label_command(pin, pr, held = true)` emits the clearance-label removal, for
+       **both** `ForgeKind::GitHub` and `ForgeKind::GitLab`. The existing arms at `:2179` / `:2192`
+       are the pattern to extend.
+    2. **End-to-end, in `tests/test_merge_hold_gate.sh`:** the full four-step sequence in the table
+       above, asserting the gate FAILS at the final step. Because the fix drops `cleared` when hold
+       #2 is applied, the final label set is `{recorded}` and rule 2 fires. Build the fixture from
+       the label sets the writer actually produces, not from hand-written literals — otherwise the
+       test pins the fixture rather than the behaviour.
+
+    **MUTATION PROOF, required:** revert only the clearance-label removal and show test 2 FAILS (the
+    gate passes when it must not). A test that passes either way advertises coverage that does not
+    exist. Revert by copying the file aside and copying it back, then `diff -q` — **never `git
+    stash`**, whose pop can restore unrelated autostashed work.
+
+    ## Also update, in the same commit
+
+    The invariant above is what makes the gates' label-only logic sound, so write it down where a
+    future reader will find it: the BUG-1693 comment block in `.github/workflows/merge-hold-gate.yml`
+    and the matching comment in `aida-core/templates/gitlab-ci-merge-hold-gate.yml`. One sentence
+    each. Note the template is the source of truth under the template architecture — if the repo
+    carries a generated mirror of it, run `make sync-templates` and `make check-templates` rather
+    than editing the mirror.
+
+    ## What is NOT in scope
+
+    The local audit record and clearance history are fine as shipped; this is purely the forge-side
+    label invariant. Do not widen this into a redesign of the hold history format. Do not weaken any
+    gate rule. The docs-only commit on the head (46e39bbd) is unaffected.
+  created_at: 2026-10-01T02:30:08.948167195Z
+  modified_at: 2026-10-01T02:30:08.948167195Z
+  session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
