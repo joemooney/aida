@@ -1,0 +1,36 @@
+id: 01a0f974-903f-7663-ba06-4890bea49673
+spec_id: BUG-1819
+agreed_id: BUG-1819
+title: Seed from-pr reviewer with verified terminal CI state
+description: |
+  A fresh `aida queue work <spec> --from-pr --auto-complete` can verify an open PR/MR and exact green head during re-entry, skip phases 1 and 2, then immediately refuse phase 3 because orchestration state contains no terminal CI result for that known head.
+
+  Observed in qci#BUG-205 on MR !26: GitLab reported pipeline 3439928 success at the exact MR head, but reviewer preflight refused with `this run has no terminal CI result for a known head`.
+
+  ## Required behavior
+  - `--from-pr` reconciliation records the exact PR/MR head and terminal CI result it verified.
+  - When re-entry begins at reviewer, phase 3 consumes that verified state rather than requiring an earlier in-process phase-2 record.
+  - The verifier rejects stale or non-terminal pipeline evidence and names both expected and observed heads.
+  - GitHub and GitLab paths behave consistently.
+  - Regression coverage reproduces direct phase-3 re-entry on an already-green change.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T21:52:41.023690139Z
+modified_at: 2026-10-01T21:52:41.023690139Z
+req_type: Bug
+tags:
+- auto-complete
+- ci
+- cross-project:qci
+- from-pr
+- reviewer
+execution_mode: drain
+filed_at:
+  code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d0d20a762
+  vendor: codex
