@@ -687,3 +687,11 @@ blocks:
   range_end: 508
   next: 409
   allocated_at: 2026-10-01T20:07:19.427341309Z
+- node_id: '10'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: STORY
+  range_start: 1541
+  range_end: 1640
+  next: 1541
+  allocated_at: 2026-10-01T20:07:27.076908067Z
