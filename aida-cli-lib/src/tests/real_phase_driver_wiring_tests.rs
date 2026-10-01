@@ -3,12 +3,13 @@ use super::{
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
     dispatched_branch_head_sha, ensure_implementer_branch_pushed, find_orchestrated_lease,
     head_commit_message, headless_log_is_zero_bytes, lease_path, list_leases,
-    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
-    parse_agent_gates_from_config, prepare_orchestrated_lease_receipt,
-    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
-    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
-    verified_phase2_branch, watchdog_failure_with_committed_work, AgentGateOnFail, PrCreditMatch,
-    RealPhaseDriver, SessionLease, ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
+    missing_implementer_worktree_push_gate, orchestrated_lease_receipt_path,
+    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
+    pushed_branch_commits_ahead_default, read_commits_in_range, resolve_shelve_gate_range,
+    try_open_orchestrator_pr_for_no_pr_worktree, verified_phase2_branch,
+    watchdog_failure_with_committed_work, AgentGateOnFail, PrCreditMatch, RealPhaseDriver,
+    SessionLease, ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -564,6 +565,45 @@ fn phase2_push_guard_failure_leaves_worktree_intact_and_ahead() {
     assert!(err.reason.contains("could not push implementer branch"));
     assert!(worktree.exists());
     assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "1");
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_accepts_removed_worktree_when_published_heads_match() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, Some("abc123"), Some("ABC123"))
+        .unwrap();
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_without_remote_evidence() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, None, Some("abc123"))
+        .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("origin branch `bug-1823`"));
+    assert!(err.reason.contains("could not be verified as published"));
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_when_published_heads_differ() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(
+        &gone,
+        "bug-1823",
+        2317,
+        Some("local-head"),
+        Some("pr-head"),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("local-head"));
+    assert!(err.reason.contains("pr-head"));
 }
 
 #[test]

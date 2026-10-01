@@ -106628,6 +106628,44 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
     }
 }
 
+/// Decide whether phase 2 can safely continue after phase 1 removed its
+/// recorded worktree. Both durable views must identify the same published
+/// commit; otherwise the push/teardown guard has lost the evidence it needs.
+// trace:BUG-1823 | ai:codex
+fn missing_implementer_worktree_push_gate(
+    worktree: &std::path::Path,
+    branch: &str,
+    pr: u32,
+    remote_head: Option<&str>,
+    pr_head: Option<&str>,
+) -> Result<(), auto_complete::PhaseFailure> {
+    let evidence_failure = |detail: &str| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!(
+                "implementer worktree `{}` disappeared before phase-2 CI/teardown, and {detail}",
+                worktree.display()
+            ),
+        )
+    };
+    let remote_head = remote_head
+        .filter(|head| !head.trim().is_empty())
+        .ok_or_else(|| {
+            evidence_failure(&format!(
+                "origin branch `{branch}` could not be verified as published"
+            ))
+        })?;
+    let pr_head = pr_head
+        .filter(|head| !head.trim().is_empty())
+        .ok_or_else(|| evidence_failure(&format!("PR/MR {pr} head could not be read")))?;
+    if !remote_head.eq_ignore_ascii_case(pr_head) {
+        return Err(evidence_failure(&format!(
+            "origin branch `{branch}` is at `{remote_head}` while PR/MR {pr} is at `{pr_head}`"
+        )));
+    }
+    Ok(())
+}
+
 impl RealPhaseDriver {
     fn ensure_implementer_branch_pushed(
         &self,
@@ -106648,6 +106686,26 @@ impl RealPhaseDriver {
                 "internal: implementer worktree not recorded before the CI phase",
             ));
         };
+        if !worktree.is_dir() {
+            let pr = self.pr_number.ok_or_else(|| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!(
+                        "implementer worktree `{}` disappeared before phase-2 CI/teardown and no verified PR/MR was recorded",
+                        worktree.display()
+                    ),
+                )
+            })?;
+            let remote_head = dispatched_branch_head_sha(&self.project_root, branch);
+            let pr_head = pr_head_sha_best_effort(self, pr);
+            return missing_implementer_worktree_push_gate(
+                worktree,
+                branch,
+                pr,
+                remote_head.as_deref(),
+                pr_head.as_deref(),
+            );
+        }
         ensure_implementer_branch_pushed(worktree, branch, self.json)
     }
 
