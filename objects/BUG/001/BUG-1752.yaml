@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T14:04:12.491835486Z
+modified_at: 2026-10-01T14:28:49.494676298Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -245,6 +245,107 @@ comments:
   created_at: 2026-10-01T14:04:12.491835486Z
   modified_at: 2026-10-01T14:04:12.491835486Z
   session_id: 18a9ea2a-80f9-45d1-911a-fe00918a9c00
+- id: 01a0f7de-32d6-7560-a4a5-46cd28272f5d
+  author: joe
+  content: |
+    # Advisor ruling #2 — the red test asserts something SQLite cannot do; split it in two
+
+    Round 1c implemented the probe ruling correctly (one write probe in `Cache::open`, carried as a
+    `read_only` flag, `with_cache_write` returning a typed `CacheReadOnly` before the sidecar write,
+    no retry ladder). It also caught a regression I had flagged in its brief: the earlier WIP keyed two
+    `cached_git_backend` early returns on `migration_pending()` — TASK-1515's deferred-drop flag, which
+    is set on perfectly writable caches — so a writable cache with a pending migration would never have
+    rebuilt. Both now key on the read-only state. Committed as **`2bb0d0fb1e`** (still no completing
+    trailer).
+
+    But the round ended RED again, on a new error:
+
+        query read-only snapshot: SQLITE_READONLY_DIRECTORY
+
+    Three rounds have now stalled in the same place, so I stopped accepting diagnoses and ran the
+    experiment myself. The result reframes the remaining work.
+
+    ## The experiment
+
+    A WAL database in a `chmod a-w` directory, read with the `sqlite3` CLI. Two states, three open
+    modes:
+
+    | state | default open | `mode=ro` | `immutable=1` |
+    |---|---|---|---|
+    | **`-wal`/`-shm` present, a live connection holding them** | **count = 1, exit 0** | **count = 1, exit 0** | **`no such table: t`** |
+    | **no `-wal`/`-shm` on disk** (last connection closed, checkpointed, removed them) | `attempt to write a readonly database (8)` | same, exit 8 | count = 1, exit 0 |
+
+    ## Three findings, in order of importance
+
+    **1. The reproduction in `old_stamp_in_unwritable_cache_keeps_committed_readable_rows` is
+    unachievable as written, and that is not the implementer's fault.** The test drops the `Cache`
+    before `chmod`ing. Dropping closes the connection, which checkpoints and **deletes `-wal` and
+    `-shm`**. It then asserts the cache still serves committed rows from a read-only directory with no
+    `-shm` — row 2 of the table. **SQLite cannot do that.** A WAL-mode database needs to create the
+    `-shm` even to read, and creating it is a directory write. No code in `cache.rs` can make that
+    succeed. Three rounds have been asked to implement an impossibility.
+
+    **2. `immutable=1` must never be used here.** It is the obvious workaround for row 2 and it is a
+    correctness landmine: in row 1 it reported **`no such table: t`** — it ignores the `-wal` entirely
+    and serves whatever was last checkpointed into the main file. A cache that silently answers from a
+    stale snapshot is worse than one that declines. **Banned.** If a later round proposes it, reject on
+    this evidence.
+
+    **3. Both states are real, and they want different answers.** Row 1 is the common dispatch case —
+    the main checkout is in active use, so `cache.db-shm` and `cache.db-wal` exist (they exist in
+    `/home/joe/ai/aida/.aida` right now). That is why my session-#14 sandbox probes read
+    `count(*) = 4705` happily. Row 2 is the quiet-main case. So:
+
+    - **Row 1 is the bug.** The read was always going to work; what broke it was *us* — the sidecar
+      write in `with_cache_write`, reached from `Cache::open`. The probe fix addresses exactly this,
+      and this is the case that must serve committed rows.
+    - **Row 2 is not a bug to fix in the cache.** It is the case amended **AC3(b)** already covers:
+      the cache cannot be served, so fall back to the authoritative git store. The requirement is that
+      it declines *cleanly*, with the AC4 message, never a raw
+      `attempt to write a readonly database`.
+
+    ## Ruling: split the red test in two
+
+    **Test A — the cache serves (row 1).** Keep a second live connection open across the `chmod`, so
+    `-wal`/`-shm` exist and are live, exactly as under a real dispatch. Assert `Cache::open` succeeds,
+    the snapshot serves the committed rows, the on-disk stamp is preserved, `migration_pending` is set,
+    and **no write is attempted**. This is the faithful reproduction AC1 asked for, and the experiment
+    proves it is achievable.
+
+    **Test B — clean decline (row 2).** No live connection, so no `-shm`. Assert the failure carries
+    the AC4 message and is classified read-only — not a raw SQLite write error — and that the
+    caller falls back to the store.
+
+    `empty_old_stamp_in_unwritable_cache_defers_migration` belongs to case A for the same reason and
+    needs the same live-connection fixture; its `None` stamp is the same missing-`-shm` artifact.
+
+    ## What that leaves outstanding on BUG-1752
+
+    1. Split the two tests per the ruling above and make both green.
+    2. **AC3(b): the `search` fallback** — still the only one of the four unrouted; `show`, `list` and
+       `comment list` already reach `inner`.
+    3. The unusable-projection fallback (row 2) to the authoritative store.
+    4. **AC5 mutation proof** — `cp` aside, revert, RED, restore, GREEN, `diff -q`. Never `git stash`.
+    5. `make build-fast` (round 1c interrupted it and said so), and re-run `cargo test -p aida-core
+       cache`. Clippy (`-W clippy::all -D clippy::correctness`) and `cargo fmt --all -- --check` both
+       came back **exit 0** this round and are accepted.
+
+    Note on the round-1c test log: it reported 3 failures, of which
+    `cache_blocked_flag_matches_edge_walk` is unrelated parallel-test interference, not a regression —
+    the earlier WIP had already tightened that test's assertions. Confirm it passes in isolation before
+    treating it as fallout.
+
+    ## Dispatch gotcha recorded for every future round
+
+    **`codex exec` cannot commit in a linked worktree.** A linked worktree's git metadata lives in
+    `<main>/.git/worktrees/<name>/`, which is outside `--sandbox workspace-write`'s writable roots, so
+    `git` fails to create `index.lock` with `Read-only file system`. Round 1c did the work and could
+    not commit it. This is the same class of problem as BUG-1752 itself. **The dispatching advisor must
+    commit the result**, or the round's work is stranded in the working tree. I committed it as
+    `2bb0d0fb1e`.
+  created_at: 2026-10-01T14:28:49.494676298Z
+  modified_at: 2026-10-01T14:28:49.494676298Z
+  session_id: 1169fc8c-9e1a-48b3-b948-ec0cce4c6920
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
   author: joe
