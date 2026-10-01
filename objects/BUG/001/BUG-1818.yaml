@@ -20,12 +20,12 @@ description: |
   - No-upstream local branches work when orchestration state has a verified change identifier.
   - Exact-head mismatch and multiple matches fail actionably.
   - Regression tests reproduce the qci failure.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:08:01.413414878Z
-modified_at: 2026-10-01T20:08:01.413414878Z
+modified_at: 2026-10-01T23:09:40.437273613Z
 req_type: Bug
 tags:
 - auto-complete
@@ -33,6 +33,14 @@ tags:
 - cross-project:qci
 - forge-resolution
 - rework
+history:
+- id: 01a0f9bb-0cdb-7722-a18a-09b7e2cb4608
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-01T23:09:40.443298219Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
