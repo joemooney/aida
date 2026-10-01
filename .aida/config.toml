@@ -271,3 +271,23 @@ enabled = true
 # [capture]
 # criterion_test_floor_pct = 50
 
+
+# Worktree placement (BUG-1700 / TASK-1561). Every AIDA-minted worktree — pooled
+# or not, from `aida session start`, `aida queue work`, pickup's fallback, or the
+# orchestrator — lands under this ONE directory instead of as a sibling of the
+# project root. The value is RELATIVE, which `worktree_placement_path`
+# (aida-core/src/worktree_pool.rs) resolves against the project root, so this
+# resolves to ../aida-worktrees beside the checkout; an absolute value would be
+# used as given, but relative keeps a clone elsewhere sensible instead of
+# pointing at this host's paths. The directory need not exist — `git worktree
+# add` creates it.
+#
+# Why it is set here: the historical sibling layout scattered worktrees directly
+# into the checkout's parent, so the folder-trust grant that lets an agent launch
+# in them had to cover that whole parent — ~140 unrelated directories on this
+# host (`aida doctor` discloses the breadth; see BUG-1744). Nesting them under
+# one directory lets a single narrow grant cover all of them. Forward-only:
+# worktrees created before this was set are not moved and keep working.
+# trace:TASK-1563 | ai:claude
+[worktree_pool]
+worktree_parent = "../aida-worktrees"
