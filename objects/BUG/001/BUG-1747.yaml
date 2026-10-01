@@ -96,16 +96,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T04:00:09.513929007Z
+modified_at: 2026-10-01T04:00:15.281615190Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
-relationships:
-- rel_type:
-    custom: discovered-from
-  target_id: 01a0e3c3-e95c-7a52-a7f1-ca8ae072444d
-  created_at: 2026-10-01T04:00:09.513926314Z
-  created_by: joe
 filed_at:
   code_sha: 54c950a8075025c16c706581f9364eeaacf07e5a
   branch: main
