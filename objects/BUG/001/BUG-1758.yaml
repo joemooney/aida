@@ -1,0 +1,103 @@
+id: 01a0f8a7-e6b1-7b62-a5a9-99d1e8ad51e2
+spec_id: BUG-1758
+agreed_id: BUG-1758
+title: Malformed nested fences in aida-docs-review hide a shipped bash recipe from the portability gate and render wrongly
+description: |
+  OBSERVED (2026-10-01, relay advisor session #17, while reviewing BUG-1757's round 1): a malformed
+  fence sequence in a scaffolded skill both renders wrongly and hides a shipped shell recipe from the
+  portability gate BUG-1757 just added.
+
+  ## The site
+
+  `aida-core/templates/skills/aida-docs-review.md`, around lines 240–261:
+
+      ### README.md
+      ```diff
+      - AIDA ships 15 Claude Code skills
+      + AIDA ships 21 Claude Code skills
+      ```
+      ```        <- line 245: a stray bare closer
+
+  A `markdown`-tagged block opened earlier nests a **same-length** ```` ```diff ```` block inside
+  itself. CommonMark has no same-length nesting — a fence is closed by the first bare marker at least
+  as long as its opener — so the bare ``` on line 244 closes the **outer** `markdown` block, and the
+  stray bare ``` on line 245 then **re-opens** a new, untagged fence.
+
+  ## Consequence
+
+  From line 245 the fence polarity is inverted for the rest of the file. The genuine
+
+      ```bash
+      git commit -m "docs: fix N issues from documentation review
+      …
+      ```
+
+  block at lines **255–261** is therefore read as the *contents* of an untagged fence rather than as a
+  shell block, and BUG-1757's markdown pass never scans it. A tagged, shipped, runnable recipe in one
+  of the two files that motivated the whole portability effort is invisible to the gate built to see
+  it.
+
+  The same inversion affects rendering: anything relying on a markdown renderer shows this region
+  wrongly too.
+
+  ## This is a document defect, not a scanner defect
+
+  Verified during BUG-1757's review. The scanner is faithful to CommonMark, and it agrees exactly with
+  an independent reference implementation written by the advisor seat: both measure 207 files / 406
+  shell-tagged blocks / 1362 interior lines under `aida-core/templates/`, and both report precisely
+  BUG-1755's two sites when pointed at pre-fix content. So the 1362 figure is a slight **undercount**
+  of what should be in scope, and the cause is this file.
+
+  A repo-wide check found **exactly two** tagged fence lines appearing inside an already-open fence,
+  both in this file (line 241 `​```diff` inside a `markdown` block, line 255 `​```bash` inside the
+  accidentally-reopened untagged fence). There are no other instances under `aida-core/templates/`.
+
+  ## Acceptance criteria
+
+  1. The fences around lines 240–261 of `aida-core/templates/skills/aida-docs-review.md` are
+     well-formed: the outer illustrative block uses a **longer** fence than the inner one it quotes
+     (four backticks outside, three inside), and the stray bare closer is removed. Do not change any
+     prose, any command, or the meaning of the example.
+  2. Prove the polarity is fixed: after the change, a scan for "tagged fence lines appearing inside an
+     already-open fence" over tracked `.md` under `aida-core/templates/` returns **zero**, down from
+     two. State both numbers.
+  3. Prove the hidden block is now in scope: BUG-1757's markdown pass scans **more** interior lines
+     than before, and the `bash` block at (currently) lines 255–261 is among them. State the new
+     interior-line total against the previous **1362**, and account for the difference.
+  4. `bash scripts/check-portability.sh` exits 0 and `--check-allowlist-growth origin/main` exits 0,
+     with `scripts/portability-allowlist.txt` unchanged. If bringing the block into scope surfaces a
+     finding, give it a **per-row judgment** — debt or correct idiom — and fix or baseline
+     accordingly. Do not bulk-regenerate the allowlist.
+  5. `make check-templates` exits 0 and `.claude/skills/aida-docs-review/SKILL.md` is still a symlink
+     to the master. **Edit the master only** — never a generated mirror.
+  6. Survey the rest of the repository for the same shape and report the count, so this is not fixed
+     one file at a time. If other tracked `.md` outside `aida-core/templates/` has the same defect,
+     say how many and whether fixing them belongs here or in a separate spec; do not silently widen.
+
+  ## Out of scope
+
+  - Teaching the gate to warn about unbalanced or nested fences. That is a plausible follow-on — a
+    document that silently hides a block from the ratchet is the kind of thing a ratchet should notice
+    — but it needs its own measurement and its own spec. Note the limitation; do not build it here.
+  - Any change to the skill's instructions, to BUG-1757's pass, or to the two recipes BUG-1755 fixed.
+
+  ## Notes
+
+  Filed from the advisor seat during BUG-1757's round-1 review, which was accepted. The finding came
+  out of asking what the new gate does **not** see, rather than only confirming what it does — the
+  measurement that validated the pass is the same one that exposed this.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T18:09:08.273778360Z
+modified_at: 2026-10-01T18:09:08.273778360Z
+req_type: Bug
+filed_at:
+  code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: af6e8c72-539b-41ba-ae4c-6a1d493d0ce5
