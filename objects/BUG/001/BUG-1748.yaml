@@ -1,0 +1,79 @@
+id: 01a0f5c2-85a8-76d2-8b31-37e998622293
+spec_id: BUG-1748
+agreed_id: BUG-1748
+title: 'The advisor code guard is silently disabled by a STALE ~/.aida/solo.toml: the hook tests file existence while aida solo status honours the TTL, so the seat tripwire has not fired since 2026-09-23'
+description: |
+  OBSERVED (2026-09-30, relay advisor session #9): the advisor code guard is disabled on this
+  machine and has been since 2026-09-23, silently.
+
+  `.claude/hooks/aida-advisor-code-guard.sh` suppresses itself with:
+
+  ```bash
+  if [ -f "${HOME}/.aida/solo.toml" ]; then
+      exit 0
+  fi
+  ```
+
+  That tests only that the FILE EXISTS. The file itself carries both an `active` flag and a TTL:
+
+  ```toml
+  active = true
+  set_at = "2026-09-22T16:25:16.979235162+00:00"
+  ttl_secs = 86400
+  ```
+
+  `ttl_secs = 86400` expired on 2026-09-23. `aida solo status` correctly reports **`solo mode off`**.
+  The hook still reads the stale file and exits 0, so the advisor role tripwire never fires.
+
+  ## Why this matters
+
+  The guard's own header documents it as "substrate-as-bouncer for the advisor=specs-not-code
+  invariant", chosen deliberately over a CLAUDE.md rule because "prose does not bind a confident LLM
+  under load". A guard that silently stops binding is worse than no guard: the seat boundary reads as
+  enforced while nothing enforces it, and `aida solo status` and the hook disagree about the same
+  state. Solo mode is specifically the operator's *time-boxed* opt-in to advisor coding; a TTL that
+  only the CLI honours makes the box permanent for every hook consumer.
+
+  This is also a correctness trap for any future hook: `~/.aida/solo.toml` is not a boolean file, and
+  `test -f` is never the right read of it.
+
+  ## Acceptance criteria
+
+  1. The guard treats solo mode as active only when it is **actually** active — `active = true` AND
+     `set_at + ttl_secs` is in the future. A stale or expired `solo.toml` must NOT suppress the guard.
+  2. The hook and `aida solo status` agree on the same file in all four states: absent, active,
+     expired, `active = false`. A test asserts the agreement rather than each side separately.
+  3. The resolution lives in ONE place that both the CLI and the hook consume, so a third consumer
+     cannot reintroduce the divergence. If the hook must stay shell-only, it calls the CLI (or a
+     dedicated `aida solo status --quiet` exit-code form) rather than re-parsing the TOML.
+  4. Audit every other `test -f`/existence check against a TTL-bearing or flag-bearing substrate file
+     and report the list. Fix any that have the same shape; file the rest.
+  5. Mutation proof: with an EXPIRED `solo.toml` present, an advisor-role edit to a `.rs` file must
+     fire the guard. Revert the fix, confirm the test goes red, restore.
+
+  ## Out of scope
+
+  Do not change the guard's soft-block/fire-once-per-session behaviour, its suppression list
+  (docs/specs/config/`.claude`/`.codex`), or the `AIDA_AUTO_COMPLETE` escape hatch. This is a
+  staleness bug in one predicate, not a redesign of the tripwire.
+
+  ## Notes
+
+  Found while establishing whether the advisor seat was operator-sanctioned to write code this
+  session. The authoritative answer was "no" (`aida solo status` → off); the hook's answer would have
+  been "yes". The discrepancy is the defect.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T04:39:21.256433944Z
+modified_at: 2026-10-01T04:39:21.256433944Z
+req_type: Bug
+filed_at:
+  code_sha: ef0c0905b569b305beb7b907cf6e7d9e1a4b17f3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: daeb8598-0fad-4d16-94b8-01ba69c8465a
