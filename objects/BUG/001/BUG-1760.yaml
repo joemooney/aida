@@ -1,0 +1,108 @@
+id: 01a0f8b3-8d31-7302-9d51-903a268402d0
+spec_id: BUG-1760
+agreed_id: BUG-1760
+title: Agent skill pack under .agents/skills can drift from the template masters with no guard, so make check-templates fails on a clean checkout and agents read superseded recipes
+description: |
+  OBSERVED (2026-10-01, relay advisor session #18, while pre-measuring BUG-1758's AC5): the portable
+  agent skill pack under `.agents/skills/` had been **stale for three days** and nothing detected it.
+
+  ## Measurement
+
+  On clean `main` @ `f3cde6e60e`, with `git status --porcelain` empty:
+
+  ```
+  $ make check-templates
+    DRIFT (modified): .agents/skills/aida-docs-review/SKILL.md
+    Run 'make sync-templates' to fix.
+  make[1]: *** [Makefile:424: check-agent-skills] Error 1
+  make: *** [Makefile:429: check-templates] Error 1
+  ```
+
+  The drift was the **superseded** recipe BUG-1755 fixed:
+
+  ```
+  $ diff aida-core/templates/skills/aida-docs-review.md .agents/skills/aida-docs-review/SKILL.md
+  170c173
+  < grep -oE '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
+  ---
+  > grep -oP '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
+  ```
+
+  Pack copy mtime `2026-09-28 20:55`, master mtime `2026-10-01 10:58`. `make sync-templates` rewrote
+  **two** files (`aida-code-review`, `aida-docs-review`) and `make check-templates` then exited 0 with
+  the tracked tree still clean.
+
+  ## Why nothing caught it
+
+  `.agents/` is gitignored (`.gitignore:194`); `git ls-files .agents/` returns **0** paths, and the
+  directory holds **55** untracked regular-file copies. A repo-wide search for enforcement finds
+  `make check-agent-skills` (which is `cargo run -q -p aida-core --example agent_skill_pack -- check`)
+  and nothing else:
+
+  ```
+  $ grep -rln 'agent_skill_pack|check-templates' --include=*.yml --include=*.yaml --include=*.rs --include=*.sh .
+  aida-core/examples/agent_skill_pack.rs
+  aida-cli-lib/src/tests/story_1476_acceptance_trust_tests.rs   # does not reference the pack or drift
+  ```
+
+  No workflow, no test, and no hook runs `check-templates` or `check-agent-skills`. Regeneration is a
+  manual `make sync-templates` that a session has to remember. Nothing in the three merges that touched
+  template masters since 2026-09-28 (BUG-1751, BUG-1754, BUG-1755) prompted it.
+
+  ## Consequence
+
+  This is **not** a shipping defect — the pack is untracked, so no user receives it. The cost is local
+  and it is paid by agents:
+
+  1. A dispatched agent (or any tool pointed at `.agents/skills/`) can read **superseded** instructions.
+     For three days the pack served the exact `grep -oP` recipe BUG-1755 was filed to remove.
+  2. `make check-templates` fails on a clean checkout for a reason unrelated to the change in hand, so
+     any spec with a "`make check-templates` exits 0" acceptance criterion is unsatisfiable without a
+     step nobody wrote down. BUG-1758's AC5 hit this; the brief had to be rewritten around it.
+
+  ## Acceptance criteria
+
+  1. Decide and record which of these the project wants, with the reasoning on this spec:
+     (a) a guard that fails when the pack drifts, or (b) regeneration that cannot be forgotten, or
+     (c) a documented rule that `make check-templates` is not a clean-checkout invariant.
+  2. If (a) or (b): the chosen mechanism runs without a human remembering it — a pre-commit/pre-push
+     hook, a CI step, or a test — and is proven by **mutation**: edit a template master, show the
+     mechanism goes red (or regenerates), restore, show it goes green. A mechanism that passes before
+     and after the mutation proves nothing.
+  3. If the mechanism lives in CI, state which leg runs it. Only `Build (ubuntu-latest)` is required by
+     branch protection; macOS and windows are advisory and do not run the hook tests, the portability
+     gate, or the prose fixtures.
+  4. Whatever is chosen, `make check-templates` exits 0 on a clean checkout of `main` afterwards, and
+     `git status --porcelain` stays empty (the pack must remain untracked — do not solve this by
+     committing 55 generated files).
+  5. State how many template masters changed between 2026-09-28 and the fix without a regeneration, so
+     the frequency is on the record rather than assumed.
+
+  ## Out of scope
+
+  - Changing what the pack contains, or whether `.agents/skills/` should exist at all (TASK-1520
+    established it).
+  - Tracking the pack in git. If the chosen answer is to track it, that is a different spec with its own
+    argument; say so rather than doing it here.
+
+  ## Notes
+
+  Filed from the advisor seat. Found by taking a spec's acceptance criterion literally and running it on
+  a clean checkout before dispatching, rather than assuming the baseline was green. Related: BUG-1758
+  (whose AC5 exposed this), BUG-1755 (whose fix was the drifted content), TASK-1520 (which created the
+  pack).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T18:21:51.793308105Z
+modified_at: 2026-10-01T18:21:51.793308105Z
+req_type: Bug
+filed_at:
+  code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: f30df840-cbe8-450a-bc3c-59a41927a710
