@@ -12,9 +12,3 @@
   note: proxy groom 2026-09-25
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0f71a-e7ae-7212-a81c-dbf60ca8898b
-  position: 29000
-  added_by: joe
-  added_at: 2026-10-01T12:16:42.870720382Z
-  for_role: advisor
