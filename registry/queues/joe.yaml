@@ -33,3 +33,10 @@
   note: advisor-cleared at filing
   added_at: 2026-10-01T21:52:44.926375318Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0f974-9fcc-7502-a352-b32f6d20abde
+  position: 31000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-10-01T21:52:47.620991518Z
+  for_role: implementer
