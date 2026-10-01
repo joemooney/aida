@@ -1,0 +1,69 @@
+id: 01a0f7a4-d44b-7440-bb98-df06da6d3fe3
+spec_id: BUG-1754
+agreed_id: BUG-1754
+title: The shell portability walk does not scan .aida/, so two GNU-only grep -oP sites in .aida/setup.sh are neither flagged nor baselined
+description: |
+  OBSERVED (2026-10-01, relay advisor session #13, while fixing BUG-1751): the shell portability
+  walk added by BUG-1750 enumerates tracked files under exactly three prefixes — `tests/`,
+  `scripts/` and `aida-core/templates/hooks/`. **`.aida/` is not among them**, and `.aida/setup.sh`
+  contains two GNU-only `grep -oP` sites that are therefore not flagged and not even baselined:
+
+      .aida/setup.sh:109:    REQ_COUNT=$(./target/debug/aida list 2>/dev/null | tail -1 | grep -oP '\d+' || echo "0")
+      .aida/setup.sh:188:    REQ_COUNT=$($AIDA_CMD list 2>/dev/null | tail -1 | grep -oP '\d+' || echo "?")
+
+  Both are `|| echo` fallbacks, so on macOS they degrade to a wrong count rather than an error — the
+  same silent-wrong-value shape as BUG-1751, though with far lower stakes (a displayed number, not a
+  guard decision).
+
+  ## Two distinct problems, and the second is the important one
+
+  1. The two `grep -oP` sites. `grep -oP '\d+'` has a trivial portable form (`grep -o '[0-9][0-9]*'`,
+     or `grep -oE '[0-9]+'`).
+  2. **The gate's prefix list is a coverage gap.** BUG-1750 chose a tracked-file superset over
+     deriving the set from `ci.yml`, with the reasoning that a superset cannot miss a newly added
+     unguarded step. That reasoning holds for the three prefixes it covers, but `.aida/` was simply
+     never considered, and it holds shipped-adjacent shell: `.aida/setup.sh`, `.aida/scripts/`, and
+     the discipline pack. The fix for (1) is three characters; the fix for (2) decides whether the
+     next `.aida/` shell script gets caught.
+
+  ## Acceptance criteria
+
+  1. The two `.aida/setup.sh` sites use a portable integer match. No `grep -P`, no `grep -oP`.
+  2. `scripts/check-portability.sh`'s shell walk also scans tracked shell under `.aida/`. State on
+     this spec how many additional files that brings into scope and how many new findings appear.
+  3. Any pre-existing GNU-only finding newly surfaced by (2) is **either fixed or baselined with a
+     per-row judgment** — re-read each row and say whether it is debt or a correct idiom, per the
+     BUG-1750 ruling that baselining correct code is a defect, not bookkeeping. Do not bulk-regenerate
+     the allowlist.
+  4. `bash scripts/check-portability.sh` exits 0 in the operator's checkout, and
+     `--check-allowlist-growth origin/main` exits 0.
+  5. A test proves the walk now reaches `.aida/` — the mirror of the existing prefix tests.
+  6. Mutation proof: remove `.aida/` from the prefix list and show that test red.
+
+  ## Out of scope
+
+  The `grep -oP` recipes in `aida-core/templates/skills/aida-code-review.md:63` and
+  `aida-docs-review.md:170` — those are documented recipes for an agent to run, a different surface
+  with a different failure mode, filed separately.
+
+  ## Notes
+
+  Surfaced by BUG-1751's repo-wide survey (`git ls-files | xargs grep -n 'grep -oP\|grep -P'`), which
+  found six shipped sites where the filing listed three. Consistent with the standing lesson: grep
+  the whole tree, a filed list undercounts. Filed from the advisor seat; BUG-1751 explicitly scoped
+  these out rather than widening mid-dispatch.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T13:26:09.739615850Z
+modified_at: 2026-10-01T13:26:09.739615850Z
+req_type: Bug
+filed_at:
+  code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d93fabb432
+  vendor: antigravity
+  session: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
