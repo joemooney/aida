@@ -19,12 +19,6 @@
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0f4da-13bb-7721-9b9d-6558022ab1da
-  position: 32000
-  added_by: joe
-  added_at: 2026-10-01T01:57:55.014452341Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 01a0f531-ec33-7132-a493-175d2e1ab916
   position: 33000
   added_by: joe
@@ -32,9 +26,3 @@
   added_at: 2026-10-01T02:01:30.785217424Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0f532-bf14-7e22-ab80-ef7fb140d022
-  position: 34000
-  added_by: joe
-  added_at: 2026-10-01T02:02:40.849650899Z
-  for_role: advisor
