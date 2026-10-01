@@ -3,12 +3,12 @@ spec_id: BUG-1822
 agreed_id: BUG-1822
 title: aida drain start passes mutually exclusive auto-complete and drain flags
 description: 'Reproduction from qci on 2026-10-01: run ''aida drain start --role implementer --vendor codex --no-human both --max-failures 2 --max-runtime 6h''. The wrapper prints that it expands to ''aida queue work --auto-complete --drain ...'' and exits code 2 because --auto-complete and --drain are mutually exclusive. Expected: aida drain start launches the canonical queue-wide drain successfully, using only the supported drain-mode flag set. Acceptance: the wrapper command starts a live drain; its generated command contains no mutually exclusive flags; add a regression test for the exact invocation.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T23:00:08.168356045Z
-modified_at: 2026-10-01T23:36:38.432154792Z
+modified_at: 2026-10-01T23:38:11.247080440Z
 req_type: Bug
 tags:
 - cli
@@ -22,6 +22,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f9d5-27b5-7fa1-899c-a45fdc88965e
+  author: joe.mooney
+  timestamp: 2026-10-01T23:38:11.253314387Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
   branch: main
@@ -29,3 +36,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 6d0d20a762
   vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-01T23:38:11.247080440Z
+  implemented_by: joe.mooney
