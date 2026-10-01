@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:21.256433944Z
-modified_at: 2026-10-01T10:18:11.173960801Z
+modified_at: 2026-10-01T10:24:54.936403121Z
 req_type: Bug
 comments:
 - id: 01a0f695-f1b4-7030-9349-cc9941b3aa8b
@@ -99,6 +99,25 @@ comments:
     AC coverage: AC1 `internal_cmd.rs` SoloActive arm + the hook's resolver call. AC2 the four-state agreement matrix in `tests/test_advisor_code_guard.sh` (one boolean per row drives the hook's exit code, `internal solo-active`'s exit code, and `aida solo status`'s stdout; all three must agree). AC3 the shared `presence::current_solo` resolver, with `aida solo status` ruled out above. AC4 the audit recorded in the preceding comment — one defective site, nothing further filed. AC5 the mutation proofs above.
   created_at: 2026-10-01T08:46:13.826356069Z
   modified_at: 2026-10-01T08:46:13.826356069Z
+  session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
+- id: 01a0f6fe-e498-7810-987e-c929dd05cf7d
+  author: joe
+  content: |
+    In-situ confirmation after merge (relay session #12). Merged as d93fabb432 via PR #2307 (two commits: ad0c9e62f9 the fix, 03750b469b a cross-platform follow-up). Required CI green at the final head 03750b469bc4 — Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS; branch protection on main requires exactly those two. Local `cargo test --workspace` 7444 passed / 0 failed, cargo_exit=0, zero `test result: FAILED` lines, at ad0c9e62f9; the later commit touches only a shell script that is not in the cargo suite, so that result still covers the merged Rust surface.
+
+    Windows and macOS are advisory and both failed: macOS on `db::cached_git_backend::tests::refresh_holder_exits_without_refresh_returns_deferred` (1285 passed / 1 failed) and Windows on 13 tests across `aida_bin.rs`, `doctor_cmd.rs`, `sandbox_cmd.rs`, `remote_create.rs`, `test_home.rs`, `session_reap`, `task_1561_*` and `cached_git_backend.rs` (7231/13 and 1255/1). None of those files are touched by this change, and both legs failed an earlier `Run tests` step so they never reached the advisor-code-guard step at all. That is the ADR-47 deferred cross-platform red that BUG-1728 carries; not re-raised.
+
+    THE PROOF THAT MATTERS, run on the operator's own machine with the original stale flag still on disk (`active = true`, `set_at = 2026-09-22T16:25:16Z`, `ttl_secs = 86400`):
+
+      aida internal solo-active            → exit 1 (off — correct for an expired flag)
+      the hook, real HOME, role=advisor, a .rs path → exit 2, the real soft-block message,
+                                               and zero occurrences of "could not consult"
+
+    So the tripwire that had been silently off since 2026-09-23 is live again, it is resolving solo through the TTL rather than falling back, and `aida solo status` ("solo mode off") now agrees with it. Note the ordering gotcha this surfaced: before `make build-fast` the on-PATH binary (`target/release/aida`, dev-activated) predated the merge, so the hook took its fail-safe path — fired with the diagnostic line. That is the designed behaviour and is itself a demonstration that the fail-safe direction is right, but it means a dev-activated checkout must be rebuilt before the resolver answers rather than the fallback.
+
+    FOLLOW-ON FILED: BUG-1750 (approved, medium) — the portability checker scans Rust only, so the GNU-only `date -d` that round 1c removed could reach a PR unflagged. Caught here by review reading the CI matrix, not by any gate.
+  created_at: 2026-10-01T10:24:54.936403121Z
+  modified_at: 2026-10-01T10:24:54.936403121Z
   session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
 history:
 - id: 01a0f5c2-e6ed-7f82-a78a-e7b4a1174dbb
