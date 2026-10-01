@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:23:03.915547857Z
-modified_at: 2026-10-01T00:58:00.891016196Z
+modified_at: 2026-10-01T04:54:48.982797132Z
 req_type: Bug
 comments:
 - id: 01a0f4f7-a4d7-7730-b792-ff64d53d9d02
@@ -103,6 +103,12 @@ comments:
   created_at: 2026-10-01T00:57:45.431018944Z
   modified_at: 2026-10-01T00:57:45.431018944Z
   session_id: 4c77c80f-dbec-4968-be8b-fd61944ac334
+- id: 01a0f5d0-ad96-7d01-8c72-44e614300782
+  author: joe
+  content: Commit c88a46ba9b references this requirement
+  created_at: 2026-10-01T04:54:48.982797132Z
+  modified_at: 2026-10-01T04:54:48.982797132Z
+  session_id: daeb8598-0fad-4d16-94b8-01ba69c8465a
 history:
 - id: 01a0f4f7-a862-7d02-8d14-632eded72602
   author: joe
