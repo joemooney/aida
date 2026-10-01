@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:30.734561229Z
-modified_at: 2026-10-01T12:34:15.916260983Z
+modified_at: 2026-10-01T12:44:55.723367026Z
 req_type: Bug
 comments:
 - id: 01a0f767-4d6f-7981-a19f-b786871ab108
@@ -217,6 +217,98 @@ comments:
     Rework brief: `.aida/handoff/advisor/bug-1751-round1b-rework-brief.md`.
   created_at: 2026-10-01T12:34:15.916260983Z
   modified_at: 2026-10-01T12:34:15.916260983Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
+- id: 01a0f77f-142b-74d2-bebd-d90f1cd0ebc1
+  author: joe
+  content: |
+    Advisor review — round 1b **accepted on the code**; three *test* findings, dispatched as round 1c.
+
+    ## Finding 1 fixed, measurement reproduced by the advisor
+
+    Running the real hook on the advisor's own payloads:
+
+    | payload (400 KB) | main baseline | round 1 | round 1b |
+    |---|---|---|---|
+    | `file_path` before `content` | 66 ms | 60 ms | **57 ms** |
+    | `file_path` after `content` | 124 ms | 2327 ms | **66 ms** |
+    | key absent | 55 ms | 2254 ms | **25 ms** |
+
+    Exits unchanged (2 / 2 / 0). **Faster than baseline on every row.** The locator now uses awk's
+    native `match()` with the interpreted escape-aware scan confined to the value. Findings 2 (stdin
+    interface) and 3 (narrowed PCRE shims) also landed. All five verification commands exit 0.
+
+    ## The implementer's mutation proof 1 was not reproducible — and the advisor settled it
+
+    Round 1b reported that substituting round 1's full character scan yielded ~50 ms, i.e. that the
+    advisor's 2.3 s figure did not reproduce. The advisor extracted **round 1's awk program verbatim**
+    from its own report and ran it standalone on the same payloads:
+
+        ROUND1-awk-only late:   2237 ms
+        ROUND1-awk-only absent: 2272 ms
+
+    So the regression was real and the implementer's mutant was unfaithful — almost certainly it kept
+    the new native locator. No code action; the conclusion was already established by direct
+    measurement. The lesson is the standing one: **re-run the measurement yourself**, and do not report
+    a proof you did not reproduce.
+
+    ## Finding 1 (round 1c) — mutation proof 3 targeted the wrong line
+
+    Disabling the escape **translation** leaves the value as `/repo/x\"y.rs`, which still ends in `.rs`,
+    so the decision does not move. The discriminating mutation is the escape-aware **skip**.
+    Advisor-verified on the extracted helper:
+
+    | mutation | value yielded | decision |
+    |---|---|---|
+    | none | `/repo/x\"y.rs` | exit 2 |
+    | `if (c == "\\" && i < length(text)) {` → `if (0) {` | `/repo/x\\\` | exit 0 |
+
+    A proof owed, not a fix.
+
+    ## Finding 2 — the unescaping translation ships UNVERIFIED
+
+    With the skip in place, an undecoded value keeps its backslashes and still reaches the same
+    decision, so nothing in either test witnesses the `\" \\ \/ \n \r \t` decoding that AC1 requires.
+    The advisor found and verified a payload where decoding changes the decision:
+
+    | helper state | `"file_path":"/repo/docs\/x.rs"` yields | decision |
+    |---|---|---|
+    | current | `/repo/docs/x.rs` | matches `*/docs/*` suppression → **exit 0** |
+    | translation removed, skip kept | `/repo/docs\/x.rs` | `*/docs/*` does not match → falls to `.rs` → **exit 2** |
+
+    `\/` is legal JSON that real producers emit, so this is a realistic payload. Round 1c adds the row
+    and its mutation proof.
+
+    ## Finding 3 — the "key-shaped string content is ignored" row is a tautology
+
+    Round 1b added it as an *Improvement* and then reported that removing the `{`-or-`,` key-position
+    check did not turn it red. It cannot turn red. **In well-formed JSON a key-shaped string inside a
+    value has its quotes escaped**, so the raw text reads `file_path\":\"` and the locator pattern
+    `"<field>"[ \t\r\n]*:[ \t\r\n]*"` requires an unescaped `"` exactly where the `\` sits. The pattern
+    can never match inside a string value. Advisor-verified empirically with that exact payload:
+
+        current:                      -> /repo/real.md
+        key-position check -> if (0): -> /repo/real.md      (identical)
+
+    Disposition: **delete the row**, and **keep the check** with a comment stating plainly that valid
+    JSON escapes the quotes of any nested key, so the branch is unreachable from well-formed input and
+    is deliberately untested. An honest comment beats a green row that proves nothing. This is the
+    BUG-1750 round-1c defect — a test whose assertion cannot fail — caught before it shipped this time.
+
+    ### The transferable shape
+
+    Two of three findings this round are the same thing: **an improvement offered without a proof that
+    it can fail.** The declare-your-improvements rule surfaced both, which is the second consecutive
+    spec where that section earned its place. Worth hardening into the brief template: *every*
+    improvement must arrive with the mutation that would make it red, or be labelled explicitly as
+    defence that cannot be exercised.
+
+    Rework brief: `.aida/handoff/advisor/bug-1751-round1c-rework-brief.md`. Also note: round 1b's first
+    dispatch **refused to implement**, reading the worktree's advisor role file — the worktree was
+    created from the advisor session. Fixed by a `SEAT DECLARATION` block at the top of the brief plus
+    `AIDA_SESSION_ROLE=implementer` on the dispatch. Both are now in the 1b and 1c briefs and belong in
+    every future rework brief.
+  created_at: 2026-10-01T12:44:55.723367026Z
+  modified_at: 2026-10-01T12:44:55.723367026Z
   session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f71b-7b10-7081-a022-78d9602ba33a
