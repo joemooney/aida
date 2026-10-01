@@ -86,13 +86,21 @@ description: |
   Filed from the advisor seat during BUG-1757's round-1 review, which was accepted. The finding came
   out of asking what the new gate does **not** see, rather than only confirming what it does — the
   measurement that validated the pass is the same one that exposed this.
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:09:08.273778360Z
-modified_at: 2026-10-01T18:09:08.273778360Z
+modified_at: 2026-10-01T18:09:15.395240375Z
 req_type: Bug
+history:
+- id: 01a0f8a8-0283-73c3-a579-e443d63dda09
+  author: joe
+  timestamp: 2026-10-01T18:09:15.395238240Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
   branch: main
