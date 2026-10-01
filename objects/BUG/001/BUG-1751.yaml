@@ -40,13 +40,21 @@ description: |
   ## Notes
 
   Filed from the advisor seat per BUG-1750's AC4 ("report, do not fix"), once BUG-1750's baseline proved the count. Not part of the ADR-47 / BUG-1728 deferred cross-platform CI measurement: this is shipped product behaviour on a supported platform, not a red test leg.
-status: Draft
-priority: Medium
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:30.734561229Z
-modified_at: 2026-10-01T10:55:30.734561229Z
+modified_at: 2026-10-01T10:56:08.464367912Z
 req_type: Bug
+history:
+- id: 01a0f71b-7b10-7081-a022-78d9602ba33a
+  author: joe
+  timestamp: 2026-10-01T10:56:08.464363769Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
   branch: main
