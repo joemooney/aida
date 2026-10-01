@@ -61,7 +61,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:09:51.632713207Z
-modified_at: 2026-10-01T01:05:49.490836472Z
+modified_at: 2026-10-01T01:18:50.541264072Z
 req_type: Bug
 comments:
 - id: 01a0f4d0-058d-7971-bc9a-11cfc58b3319
@@ -205,6 +205,77 @@ comments:
     never ran. The brief forbids `AIDA_CARGO_NO_SLOT=1` and tells it to stop and say so instead.
   created_at: 2026-10-01T01:05:49.490836472Z
   modified_at: 2026-10-01T01:05:49.490836472Z
+  session_id: bd5b7250-f30f-4343-a65e-d910027e5721
+- id: 01a0f50a-f2ad-75d1-b800-f233c2450cef
+  author: joe
+  content: |
+    ADVISOR REVIEW — round 1, REQUEST CHANGES (2026-09-30, relay #22). Implementer: codex, worktree
+    /home/joe/ai/aida-bug-1744. Diff: 183 insertions / 20 deletions, `aida-cli-lib/src/doctor_cmd.rs`
+    only, as scoped.
+
+    **Accepted in substance.** The design landed as pinned: `covering_trusted_ancestor` extracted (one
+    copy of the lexical rule, used by both the pure verdict and the call site),
+    `TrustBreadth { unrelated_dirs }` passed in, `worktree_trust_findings` still filesystem-free, all IO
+    confined to `count_unrelated_child_dirs` at the call site, new id `worktree-folder-trust-breadth`,
+    `safe_heal: false`, both gates present with the `>= 1` threshold.
+
+    **The mutation proof is real and was reported honestly**, which is the part that mattered most on a
+    silence bug:
+    - remove the emit branch → `broad_ancestor_with_unset_parent_discloses_the_narrow_remediation` failed
+    - remove the `!parent_configured` gate → `configured_and_trusted_stays_silent_even_under_a_broad_grant` failed
+    - remove the `>= 1` gate → `single_project_parent_is_not_a_broad_grant` failed
+
+    All nine BUG-1700 call sites took a bare `None` and `bug_1700_worktree_trust` stayed at 11 passed /
+    0 failed with no other edit, so `trusted_ancestor_further_up_also_covers` (:1677) is the AC2 witness
+    as intended — no duplicate test was needed.
+
+    FIVE DEFECTS, all sent back as a round-2 brief:
+
+    1. **BLOCKING — a doc comment and a trace marker were orphaned onto the wrong item.** `TrustBreadth`
+       and `covering_trusted_ancestor` were inserted BETWEEN `worktree_trust_findings`'s `/// Pure
+       verdict: …` block and the function, so the struct now carries a function's description AND
+       `// trace:BUG-1700 | ai:claude`, while `worktree_trust_findings` is left with no doc comment and
+       no trace marker at all. A trace marker on the wrong item is worse than a missing one, because it
+       reads as deliberate. The doc comment was also padded with a sentence restating the line above it;
+       told to restore the original wording verbatim.
+
+    2. **BLOCKING — a new compiler warning, reported as absent.** `count_unrelated_child_dirs` contains a
+       dead shadow `let ancestor = normalize_path_lexically(ancestor);` that is never read;
+       `cargo check -p aida-cli-lib --all-targets` emits `unused variable: ancestor` at
+       doctor_cmd.rs:1536. The verdict said "no new warnings identified". **I re-ran it rather than
+       taking the claim** — this is exactly the standing rule that a codex verdict is only as good as
+       what it actually ran. Round 2 must paste the output of a line-range-scoped grep that prints
+       nothing, and the pre-existing `DoctorReport is more private` warning at :892 is explicitly marked
+       as not theirs.
+
+    3. **BLOCKING — AC4's read-only test is missing**, and this one is MY fault, not the implementer's.
+       My round-1 attention budget confined it to doctor_cmd.rs, and the temp-home redirect it needed
+       lives in `test_env.rs`/`test_home.rs`. It said so plainly instead of faking the test, which is the
+       right behaviour. Round 2 supplies the API inline: `crate::test_env::EnvVarsGuard::set(&[("HOME",
+       path)])` bound to a named local (not `_`, which drops immediately), with `crate::home_dir()`
+       resolving `$HOME` under `cfg(test)`. Pinned that the fixture must mark the project root's PARENT
+       trusted so the scan takes the COVERED branch — the one that now does filesystem work; a test that
+       takes the untrusted early return proves nothing about whether the new counting code writes. And
+       pinned that the assertion is byte-for-byte content equality, not `exists()`.
+
+    4. **BLOCKING (quality) — `breadth.is_some_and(|b| …)` followed by `breadth.expect("checked
+       above")`.** The `expect` exists only because the option is interrogated twice. It cannot fire
+       today, which is what makes it dangerous: a panic path inside `aida doctor` that outlives the next
+       edit of the line above it. A single `if let Some(breadth)` removes it with no behaviour change.
+
+    5. **Consistency — the new summary is three capitalised sentences** ("No folder-trust modal will
+       appear: … This is only a narrowing suggestion.") while its sibling finding 40 lines below is one
+       lowercase clause. The two strings print side by side in one `aida doctor` report, so the mismatch
+       is operator-visible. Told to lead with the operator's actual problem (the grant is wider than the
+       work needs) rather than with the reassurance, keeping all three required facts and both existing
+       `contains` assertions green.
+
+    My round-1 brief also contained one error worth recording so it is not repeated: it told the
+    implementer to run `cargo build --profile fast`, which does not exist here — the repository spells it
+    `make build-fast`. Codex correctly reported that as a blocker. It was never a real one (`cargo test`
+    builds what is needed), and round 2 drops the step and says whose mistake it was.
+  created_at: 2026-10-01T01:18:50.541264072Z
+  modified_at: 2026-10-01T01:18:50.541264072Z
   session_id: bd5b7250-f30f-4343-a65e-d910027e5721
 history:
 - id: 01a0f4d0-01e4-7290-861c-65be9443fd8b
