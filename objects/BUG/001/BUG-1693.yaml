@@ -22,12 +22,12 @@ description: |
   4. State explicitly what this design can and cannot achieve against an agent running as the same user with an admin forge token. If genuine enforcement requires the protected-broker boundary of BUG-1669 and ADR-61, say so and record the honest limit rather than implying the gap is closed.
 
   Out of scope: implementing the protected broker itself, and any change to who may merge.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-10-01T04:23:35.380971391Z
+modified_at: 2026-10-01T04:24:31.665198281Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -663,3 +663,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f5b4-f29b-7bb1-9e1a-a909fdf1af43
+  author: aida-auto-bump
+  timestamp: 2026-10-01T04:24:31.643470612Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f5b4-f2b1-7c91-82f4-ded175978cb8
+  timestamp: 2026-10-01T04:24:31.665187886Z
+  agent: aida
+  commit_sha: ef0c0905b569b305beb7b907cf6e7d9e1a4b17f3
+  summary: A prior clearance label lets a later hold pass after its active label is removed.
+  review_verdict: request-changes
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-01T04:24:31.643411873Z
+  completion_sha: ef0c0905b569b305beb7b907cf6e7d9e1a4b17f3
