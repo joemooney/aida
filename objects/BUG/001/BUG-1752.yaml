@@ -44,12 +44,12 @@ description: |
   ## Notes
 
   Filed from the advisor seat. Discovered because the dispatched implementer REPORTED the failure in its deviations section instead of guessing the requirement — worth noting as evidence that asking for an explicit deviations section pays for itself.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T17:00:31.853230454Z
+modified_at: 2026-10-01T17:00:36.977134653Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -630,6 +630,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f869-29fd-7341-ba82-a42c14e2a301
+  author: aida-auto-bump
+  timestamp: 2026-10-01T17:00:36.733250029Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f869-2af1-72a2-916c-14b0e2381ee5
+  timestamp: 2026-10-01T17:00:36.977130460Z
+  agent: advisor
+  commit_sha: 1660445110fb576615eb87027a282f8fb9589613
+  summary: Completed via merge 16604451
 filed_at:
   code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
   branch: main
@@ -642,3 +655,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T17:00:31.853230454Z
   implemented_by: joe
+  completed_at: 2026-10-01T17:00:36.733175800Z
+  completion_sha: 1660445110fb576615eb87027a282f8fb9589613
