@@ -66,13 +66,21 @@ description: |
   while reconciling `aida human` / `aida awaiting` entries by hand, which is itself the signal: the
   reconciliation only caught it because a human-shaped pass went looking at worktrees the detector
   never mentions.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T15:12:41.984679155Z
-modified_at: 2026-10-01T15:12:41.984679155Z
+modified_at: 2026-10-01T15:12:50.175362535Z
 req_type: Bug
+history:
+- id: 01a0f806-7dff-7563-851a-653665aac473
+  author: joe
+  timestamp: 2026-10-01T15:12:50.175359175Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
   branch: main
