@@ -235,8 +235,18 @@ def load_allowlist() -> set[tuple[str, str]]:
 
 def scan() -> list[tuple[str, str, int, str, str]]:
     findings: list[tuple[str, str, int, str, str]] = []
-    for path in sorted(root.rglob(f"*{RS_EXT}")):
-        if any(part in {".git", "target"} for part in path.parts):
+    # trace:BUG-1753 | ai:codex
+    # Nested linked worktrees have a .git file, so a path-component filter cannot exclude them.
+    try:
+        tracked = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            check=True, capture_output=True,
+        ).stdout.decode(errors="replace").split("\0")
+        rust_paths = [root / rel for rel in tracked if rel and (root / rel).suffix == RS_EXT]
+    except (OSError, subprocess.CalledProcessError):
+        rust_paths = list(root.rglob(f"*{RS_EXT}"))
+    for path in sorted(rust_paths):
+        if any(part in {".git", "target"} for part in path.parts) or not path.is_file():
             continue
         rel = path.relative_to(root).as_posix()
         lines = path.read_text(errors="replace").splitlines()
