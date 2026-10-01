@@ -53,12 +53,12 @@ description: |
 
   Filed from the advisor seat. BUG-1751 explicitly scoped these out and the implementer independently
   proposed them as follow-ons in its round-1 report, which is the report format earning its keep.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:18.258656630Z
-modified_at: 2026-10-01T17:58:30.897698996Z
+modified_at: 2026-10-01T17:59:03.876361732Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -244,6 +244,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f89e-adbc-7733-a3fc-c5f977780997
+  author: aida-auto-bump
+  timestamp: 2026-10-01T17:59:03.868392675Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f89e-adc4-7f12-beab-97f185506343
+  timestamp: 2026-10-01T17:59:03.876360935Z
+  agent: advisor
+  commit_sha: f3cde6e60e24e992989a3062364cad56bb28d712
+  summary: Completed via merge f3cde6e6
 filed_at:
   code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
   branch: main
@@ -256,3 +269,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T17:58:30.897698996Z
   implemented_by: joe
+  completed_at: 2026-10-01T17:59:03.868367545Z
+  completion_sha: f3cde6e60e24e992989a3062364cad56bb28d712
