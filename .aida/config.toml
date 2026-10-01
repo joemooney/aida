@@ -20,12 +20,11 @@ workflow_hints = true
 enabled = false
 
 # STORY-760: store-sync fan-out. This project mirrors to a personal GitLab
-# (gitlab.joemooney.com) alongside github `origin`. Listing it here makes every
-# `aida db sync --push` push the store to BOTH hubs, so a clone can't silently
-# leave one behind. Best-effort: while the store is mid-reconcile (BUG-700
-# employer-content scrub), the gitlab leg will WARN as non-fast-forward — that is
-# expected and self-heals once the histories are reconciled. Check drift anytime
-# with `aida remote status`.
+# (gitlab.joemooney.com) alongside GitHub `origin`. Store fan-out runs from
+# `aida db sync --push`, `aida pull`, `aida remote mirror-sync`, and the
+# `hub-mirror-sync` scheduled cadence below. Each path pushes by fast-forward
+# only; a non-fast-forward mirror is reported for deliberate reconciliation.
+# Check drift anytime with `aida remote status`.
 [store.sync]
 mirror_remotes = ["gitlab"]
 
@@ -136,7 +135,7 @@ enabled = true
 [[schedule.jobs]]
 name = "performance-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:performance-guard"]
 prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 enabled = true
 
@@ -176,10 +175,20 @@ command = "doctor check remote-drift --fail-on-findings"
 every = "6h"
 enabled = true
 
+# BUG-1746: retry mirror fan-out hourly, strictly more often than the 6h drift
+# guard, giving about six recovery attempts before escalation. There is no
+# hub-mirror-sync-route: transient hub failures must not route to a seat; the
+# 6h hub-drift-guard remains the escalation path for persistent drift.
+[[schedule.jobs]]
+name = "hub-mirror-sync"
+command = "remote mirror-sync"
+every = "1h"
+enabled = true
+
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:hub-drift-guard"]
 prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
 enabled = true
 
@@ -218,7 +227,7 @@ enabled = true
 [[schedule.jobs]]
 name = "disk-headroom-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:disk-headroom-guard"]
 prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
 enabled = true
 
@@ -254,7 +263,7 @@ enabled = true
 [[schedule.jobs]]
 name = "watchdog-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:watchdog"]
 prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 enabled = true
 
