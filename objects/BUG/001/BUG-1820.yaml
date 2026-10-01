@@ -12,12 +12,12 @@ description: |
   - A dead-process, clean MR-scoped lease is reclaimed and the reviewer starts.
   - Live or dirty leases still fail closed with actionable diagnostics.
   - GitHub PR and GitLab MR scope forms are covered.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:45.004762908Z
-modified_at: 2026-10-01T23:49:41.007310418Z
+modified_at: 2026-10-01T23:50:20.004130006Z
 req_type: Bug
 tags:
 - cross-project:qci
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f9e0-466a-7050-8b16-ffde8925d66a
+  author: joe.mooney
+  timestamp: 2026-10-01T23:50:20.010376054Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
@@ -47,3 +54,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 6d0d20a762
   vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-01T23:50:20.004130006Z
+  implemented_by: joe.mooney
