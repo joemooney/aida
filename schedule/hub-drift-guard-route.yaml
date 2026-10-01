@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-01T14:10:52.828611030Z
+last_run: 2026-10-01T17:01:58.997171393Z
 last_by:
   seat: advisor
-  session: 1169fc8c-9e1a-48b3-b948-ec0cce4c6920
+  session: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
   vendor: antigravity
 result: done
-note: 'Advisor: resolved, no action. ''aida remote status'' now reports all remotes agree on main (b785274c7b94), aida-store (54e98857590b) and release v0.15.0 (580db5b13a31). The routed trip is 13h stale; the drift it recorded was cleared by the end-of-session ''aida db sync --push''. No force-push was used or needed.'
-due_since: 2026-10-01T16:46:35.302908105Z
-due_reason: on CronJobFailed:hub-drift-guard
+note: 'Resolved, no action. aida remote status: all remotes agree on every shared branch and release tag — main at 1660445110fb on both gitlab and origin (the BUG-1752 merge), aida-store at 48d7bb45eb87 on both, release v0.15.0 at 580db5b13a31 on both. The trip was the known origin-only drift from routine store writes (BUG-1746); it clears on aida db sync --push, which this session ran. No force-push, nothing reconciled by hand.'
