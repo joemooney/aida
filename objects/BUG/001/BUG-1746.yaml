@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T02:04:16.666383618Z
+modified_at: 2026-10-01T03:02:01.837510656Z
 req_type: Bug
 comments:
 - id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
@@ -332,6 +332,82 @@ comments:
     self-heal. No force-push, and no force flag on any push path. No new fan-out function.
   created_at: 2026-10-01T02:04:16.666383618Z
   modified_at: 2026-10-01T02:04:16.666383618Z
+  session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
+- id: 01a0f569-6b6d-7ef0-ae8a-2f98e4f99c52
+  author: joe
+  content: |
+    ADVISOR REVIEW — ROUND 1 (2026-09-30, relay #23). Codex implemented; I reviewed. Diff: 200
+    insertions over `.aida/config.toml`, `aida-cli-lib/src/lib.rs`,
+    `aida-cli-lib/src/maintenance_schedule.rs`. Round 2 requested for one defect; everything else
+    accepted.
+
+    ## Accepted, and verified from this seat rather than from codex's numbers
+
+    - `cargo fmt --all -- --check` exit 0
+    - `bug_1746` → 3 passed / 0 failed
+    - `maintenance_schedule` → 49 passed / 0 failed
+    - **whole `aida-cli-lib --lib` suite → 7420 passed / 0 failed**
+
+    That last run is the one worth recording as a lesson. Codex changed shared scaffold text in
+    `lib.rs` (`init_store_mirror_config_section`) but ran only the `maintenance_schedule` and
+    `bug_1746` filters. Neither filter can reach the tests that assert scaffold content — those live
+    in `init_cmd`'s module and in the scaffold parity test. It happened to be clean, but **the filters
+    it ran could not have established that**, which is the same shape as the source-scanning-guard
+    lesson: a filtered run cannot reach a test that inspects a different surface. Rule for this
+    file: a change to `init_*_config_section()` text requires the crate suite, not a module filter.
+
+    The config diff is right: all four routes bound, `hub-mirror-sync` at 1h with the
+    interval-relationship rationale written into the comment, explicitly no `-route` job and the
+    reason stated, and the `[store.sync]` comment rewritten to name all four fan-out triggers. It
+    also correctly DROPPED the stale BUG-700 mid-reconcile caveat ("the gitlab leg will WARN as
+    non-fast-forward — expected and self-heals"), whose premise expired: relay #21 measured both hubs
+    at an identical SHA.
+
+    Two credits. Codex flagged that the scaffold's claim about non-fast-forward mirror legs ("WARNS
+    and is skipped — it never fails the sync") was **inaccurate** for `aida remote mirror-sync`,
+    which bails non-zero when a hub push fails; I had asked it to report the discrepancy rather than
+    silently reword, and it did, so the correction is deliberate. It also independently reported that
+    `doctor check scheduler-driver` reads `/home/joe/ai/aida/.aida/config.toml` rather than the
+    worktree's — which I had established separately on TASK-1563 by removing the key and getting a
+    byte-identical finding. Two independent measurements agreeing is worth more than either alone.
+
+    ## Round-2 defect: the wrong mechanism for a dogfood assertion
+
+    The two new tests load this repo's own config with
+    `include_str!("../../.aida/config.toml")` (`:3467`, `:3520`). This repo already documents the
+    right idiom **1700 lines below in the same file** —
+    `this_repo_keeps_the_performance_guard_pair_registered_and_enabled` (~`:5209`), whose doc comment
+    names this exact job ("a dogfood regression test over this repo's OWN `.aida/config.toml`, not a
+    fixture", STORY-1423 criterion 3) and reads the real file at RUNTIME via
+    `env!("CARGO_MANIFEST_DIR")` + `load_config(repo_root)`.
+
+    Why the difference matters, heaviest first:
+
+    1. **`include_str!` is compile-time**, so it makes this crate's test target fail to *compile*
+       without a repo-root `.aida/config.toml` — a file outside the crate. A vendored or packaged
+       `aida-cli-lib` stops building. The one pre-existing out-of-crate `include_str!`
+       (`agent_launcher_tests.rs:2979`) pulls a template from `aida-core/`, a workspace crate; that
+       is not the same thing as repo-root operator state.
+    2. **It bypasses `load_config`**, so the test does not exercise the loader the product uses to
+       decide what runs.
+    3. **Two idioms for one job is how drift starts** — the same defect TASK-1561 just spent a PR
+       removing, where two copies of the worktree placement rule existed and one went unmaintained.
+
+    Round 2 keeps every assertion unchanged and swaps only the loading mechanism, plus a mutation
+    proof that specifically pins the runtime read: unbind one route in the real config and show
+    `bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes` FAILS. A compiled-in copy
+    could not fail that way, which is exactly the property `include_str!` would have made
+    untestable.
+
+    ## Substance of the tests, accepted
+
+    `bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes` is the acceptance-addendum-2
+    test and it is built correctly: a fake executor returns status 1, the tick emits a real
+    `CronJobFailed` named `hub-mirror-sync`, and the assertion is that **none** of the four route
+    ledgers acquire a `due_since`. That is the right witness — it fails if any route is left unbound,
+    which is what makes the Change-3 binding load-bearing rather than cosmetic.
+  created_at: 2026-10-01T03:02:01.837510656Z
+  modified_at: 2026-10-01T03:02:01.837510656Z
   session_id: 6663ec7a-be85-417d-ba2d-94a22495eb19
 history:
 - id: 01a0f4f1-7f72-70f3-a4ba-37985e942c04
