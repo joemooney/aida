@@ -1,0 +1,93 @@
+id: 01a0f4da-13bb-7721-9b9d-6558022ab1da
+spec_id: BUG-1746
+agreed_id: BUG-1746
+title: Routine store writes push only to origin, so a configured mirror hub drifts every session and the hub-drift guard routes a daily human job for a pure fast-forward
+description: |
+  OBSERVED: routine AIDA store writes push the `aida-store` branch to `origin` only. The
+  configured mirror hub is never pushed, so `gitlab` falls behind by exactly one session's worth
+  of writes, the `hub-drift-guard` trips, and it routes a HUMAN job to the advisor seat whose
+  remediation is always the same machine-checkable fast-forward. Proven end to end in one session
+  on 2026-09-30, by observation and then by the inverse:
+
+  1. Start of session: `aida remote status` reported `aida-store ✗ DIVERGED` — gitlab at
+     ddff02a2a1cd, origin at fe2f4c674b75, local at 719a26278b5c. Both hub tips were verified with
+     `git merge-base --is-ancestor <tip> <local>` to be ANCESTORS of local, i.e. a pure
+     fast-forward on each hub, never a conflicting history. `aida remote reconcile --execute`
+     pushed both; status went to "all remotes agree on every shared branch and release tag".
+  2. I then made 6 ordinary store writes in the normal course of advisor work — two
+     `aida edit --status approved`, two `aida comment add`, three `aida schedule done`, one
+     `aida add`.
+  3. Immediately after, with no other actor involved: `aida-store ⇡ BEHIND (6 commits)` —
+     `origin 6faea95c6a7d` (current, carrying all 6), `gitlab 719a26278b5c` (exactly where step 1
+     left it, 6 behind). So every one of those writes pushed to origin and NONE to gitlab.
+  4. The inverse confirms the trigger rather than merely correlating with it: `aida db sync --push`
+     printed "Pushing to origin/aida-store... / Mirroring aida-store → gitlab... / Mirror push
+     complete." and status returned to in-sync at 6faea95c6a7d on BOTH hubs. No other command was
+     run between the two observations.
+
+  ROOT CAUSE, as the configuration itself documents: `.aida/config.toml:30` sets
+  `[store.sync] mirror_remotes = ["gitlab"]`, and the comment above it (STORY-760, lines 22-26)
+  states the contract precisely — "Listing it here makes every `aida db sync --push` push the
+  store to BOTH hubs". The fan-out is bound to that ONE explicit command. The routine write path
+  that every `aida edit`, `aida comment add`, `aida add` and `aida schedule done` goes through
+  pushes origin only. Nothing in the write path, and nothing in `aida schedule tick`, ever runs
+  `aida db sync --push` — so in normal use the mirror is only ever current by coincidence.
+
+  WHY IT MATTERS: this converts a configured durability guarantee into a daily human chore, and
+  the chore is pure ceremony. The hub-drift job was closed on 2026-09-29 (gitlab behind origin,
+  fast-forwarded with the tool's own printed command) and again on 2026-09-30 (this session, both
+  hubs behind local). Two consecutive days, same always-safe remediation, zero judgment required
+  once the ancestor check passes. Every such job spends an advisor seat and, worse, trains the
+  seat that hub-drift alerts are routine noise — which is exactly the state in which a REAL
+  divergence (a genuinely non-fast-forward gitlab tip, the case the config comment warns about
+  after a history rewrite) gets waved through.
+
+  The stated purpose of the mirror is that "a clone can't silently" lose the store. A mirror that
+  is a day stale does not deliver that; it delivers the appearance of it.
+
+  NOT PROPOSED: force-pushing a shared branch, ever. Nor removing the guard — the guard is
+  correct and is what surfaced this. The guard should keep firing for genuine non-fast-forward
+  divergence; it should simply stop firing for drift the write path could have prevented.
+
+  DESIGN NOTE (for the advisor who dispositions this): there is a real fork here, and it should be
+  decided before implementation rather than during it. Fanning out on every write makes each store
+  write depend on a second network hop — slower, and newly able to fail on a hub outage, which
+  matters because store writes sit in the path of ordinary commands. The alternative is to fan out
+  on a boundary (session end, or the `schedule tick`) and leave individual writes local-plus-origin.
+  The second is probably right, but it is a judgment call about where latency is acceptable, not a
+  detail. Decide it explicitly; a half-answer here produces a guard that fires less often for
+  reasons nobody can state.
+
+  ## Acceptance
+  - In normal use, with `[store.sync] mirror_remotes` configured, the mirror hub does not fall
+    behind across a session of ordinary store writes. Demonstrated by the step 2/3 sequence above:
+    make several ordinary writes through `aida edit` / `aida comment add` / `aida add`, then assert
+    `aida remote status` reports every configured hub in sync without any explicit
+    `aida db sync --push`.
+  - The chosen fan-out point is stated in the PR with its latency and failure-mode trade-off, and
+    the config comment at `.aida/config.toml:22-26` (and the matching scaffold in `init_cmd.rs`)
+    is corrected so it describes what actually happens rather than `aida db sync --push` alone.
+  - A hub that is unreachable or that rejects the push does NOT fail the store write or lose the
+    local commit. The write succeeds, the drift is reported, and the guard remains the backstop.
+    A test covers the unreachable-hub path explicitly.
+  - A genuine NON-fast-forward mirror tip still trips `hub-drift-guard` and still routes to the
+    advisor — the guard must not be weakened into silence. Proven by a test with a divergent,
+    non-ancestor hub tip.
+  - MUTATION PROOF: reverting the fan-out change must make the new end-to-end staleness test fail.
+    A test that passes with origin-only pushing proves nothing.
+  - Projects with no `mirror_remotes` configured see no behaviour change and no new network calls.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T00:25:27.739056324Z
+modified_at: 2026-10-01T00:25:27.739056324Z
+req_type: Bug
+filed_at:
+  code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
