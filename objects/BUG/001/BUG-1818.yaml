@@ -20,12 +20,12 @@ description: |
   - No-upstream local branches work when orchestration state has a verified change identifier.
   - Exact-head mismatch and multiple matches fail actionably.
   - Regression tests reproduce the qci failure.
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:08:01.413414878Z
-modified_at: 2026-10-01T23:21:43.483321758Z
+modified_at: 2026-10-01T23:25:21.924979073Z
 req_type: Bug
 tags:
 - auto-complete
@@ -54,6 +54,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f9c9-6a84-7b12-95ff-d65c6522d614
+  author: aida-orchestrator
+  timestamp: 2026-10-01T23:25:21.924987412Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
@@ -71,4 +78,12 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-10-01T23:21:43.118437405Z
   implemented_by: joe.mooney
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: tool-exit
+  detail: 'could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 2/2)'
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0f9bb2d61 --skip-ci`'
+  shelved_by: advisor
+  shelved_at: 2026-10-01T23:25:21.924979073Z
 interface_changes: {}
