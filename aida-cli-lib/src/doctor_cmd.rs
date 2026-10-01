@@ -1541,33 +1541,16 @@ fn resolve_worktree_parent(
 
 /// Resolve `.` and `..` components WITHOUT touching the filesystem.
 ///
-/// Deliberately lexical, not `canonicalize`: the comparison this feeds must work
-/// for a configured directory that does not exist yet, and must not follow
-/// symlinks differently on the two sides. A leading `..` that would escape the
-/// root is kept, so a relative path cannot silently become something else.
+/// TASK-1561: delegates to `worktree_pool::normalize_path_lexically`. This used
+/// to be a second copy; the placement rule needs the same normalisation for the
+/// same reason (a relative `worktree_parent` is the shipped example, and the
+/// resulting path is both printed and lexically compared), and two copies of a
+/// path rule is how `worktree_parent` came to be honoured by the pool and by
+/// nothing else.
 // trace:BUG-1700 | ai:claude
+// trace:TASK-1561 | ai:claude
 fn normalize_path_lexically(path: &std::path::Path) -> std::path::PathBuf {
-    use std::path::Component;
-    let mut out = std::path::PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => match out.components().next_back() {
-                // A real directory name is popped.
-                Some(Component::Normal(_)) => {
-                    out.pop();
-                }
-                // At the root, `..` is the root itself (`/..` is `/` on POSIX),
-                // so it is dropped rather than kept.
-                Some(Component::RootDir) | Some(Component::Prefix(_)) => {}
-                // A RELATIVE path with nothing to pop must KEEP the `..`;
-                // dropping it would turn one path into a different one.
-                _ => out.push(component.as_os_str()),
-            },
-            other => out.push(other.as_os_str()),
-        }
-    }
-    out
+    aida_core::worktree_pool::normalize_path_lexically(path)
 }
 
 /// Paths with an accepted Claude Code folder-trust record, from `~/.claude.json`. `None` when the

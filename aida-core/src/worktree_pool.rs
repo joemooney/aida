@@ -402,30 +402,100 @@ fn next_pool_name(pool: &Pool, project_root: &Path) -> (String, usize) {
     }
 }
 
-// Where a newly created pool worktree lands. `parent_dir` is the opt-in
-// `[worktree_pool] worktree_parent`: when set, every worktree is nested under
-// that ONE directory so a single folder-trust grant covers all of them. When
-// unset the historical sibling layout is preserved exactly, so nothing moves
-// under a live fleet. A relative `parent_dir` resolves against the project root
-// (an absolute one is used as given).
+/// Where a newly created AIDA worktree lands — the SINGLE placement rule for
+/// every worktree this crate or the CLI mints, pooled or not.
+///
+/// `parent_dir` is the opt-in `[worktree_pool] worktree_parent`: when set, every
+/// worktree is nested under that ONE directory so a single folder-trust grant
+/// covers all of them. When unset the historical sibling layout is preserved
+/// exactly, so nothing moves under a live fleet. A relative `parent_dir`
+/// resolves against the project root (an absolute one is used as given).
+///
+/// TASK-1561: public because the pool was NOT the only creator. The CLI's
+/// pickup fallback (`pickup_worktree_path`) open-coded the sibling half of this
+/// rule and never consulted `worktree_parent`, so every worktree minted when the
+/// warm pool could not serve one escaped the trusted parent. Two copies of a
+/// placement rule is how that happened; there is now one.
 // trace:BUG-1700 | ai:claude
-fn pool_path_for(project_root: &Path, name: &str, parent_dir: Option<&Path>) -> PathBuf {
+// trace:TASK-1561 | ai:claude
+pub fn worktree_placement_path(
+    project_root: &Path,
+    name: &str,
+    parent_dir: Option<&Path>,
+) -> PathBuf {
     if let Some(parent) = parent_dir {
         let base = if parent.is_absolute() {
             parent.to_path_buf()
         } else {
             project_root.join(parent)
         };
-        return base.join(name);
+        // TASK-1561: normalise, because this path is PRINTED (the `queue work
+        // --dry-run` preview) and COMPARED (git's worktree registry, and the
+        // folder-trust check's lexical `starts_with`). The documented relative
+        // example is `"../aida-worktrees"`, so the raw join spells the parent
+        // `<root>/../aida-worktrees` while `git worktree add` records
+        // `<root-parent>/aida-worktrees`. Preview and reality then disagree as
+        // strings for the same directory — the exact divergence BUG-1628
+        // consolidated these paths to prevent — and BUG-1700's trust comparison
+        // needed its own normaliser for the same reason.
+        //
+        // Lexical, not `canonicalize`: the directory need not exist yet. The
+        // caveat is a `..` that crosses a SYMLINKED project root, where the
+        // kernel would resolve it against the link target instead; the lexical
+        // reading is chosen deliberately because it is the one the operator
+        // wrote, and because it is what the folder-trust check already compares,
+        // so the single-grant guarantee holds.
+        return normalize_path_lexically(&base.join(name));
     }
     // Siblings of the project root (../aida-pool-<slug>-<n>), matching AIDA's
     // existing `../aida-<slug>` worktree convention. Falls back to nesting
     // under the root if it has no parent (a filesystem root — never in
     // practice).
+    //
+    // NOT normalised: with the key unset this must stay byte-identical to the
+    // historical layout so nothing moves under a live fleet, and a project root
+    // that itself contains `..` would otherwise come back respelled.
     match project_root.parent() {
         Some(parent) => parent.join(name),
         None => project_root.join(name),
     }
+}
+
+/// Resolve `.` and `..` components WITHOUT touching the filesystem.
+///
+/// Deliberately lexical, not `canonicalize`: the comparisons this feeds must work
+/// for a directory that does not exist yet, and must not follow symlinks
+/// differently on the two sides. A leading `..` that would escape a relative root
+/// is kept, so one path cannot silently become a different one.
+///
+/// TASK-1561: lives here, beside the placement rule, because the two always
+/// travel together — a configured `worktree_parent` is relative in the shipped
+/// example, and every consumer of the resulting path either prints it or
+/// lexically compares it.
+// trace:BUG-1700 | ai:claude
+// trace:TASK-1561 | ai:claude
+pub fn normalize_path_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                // A real directory name is popped.
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                // At the root, `..` is the root itself (`/..` is `/` on POSIX),
+                // so it is dropped rather than kept.
+                Some(Component::RootDir) | Some(Component::Prefix(_)) => {}
+                // A RELATIVE path with nothing to pop must KEEP the `..`;
+                // dropping it would turn one path into a different one.
+                _ => out.push(component.as_os_str()),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Acquire a worktree from the pool: prefer an idle clean tree (reset-not-
@@ -484,7 +554,7 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         }
 
         let (name, _) = next_pool_name(pool, project_root);
-        let path = pool_path_for(project_root, &name, opts.parent_dir.as_deref());
+        let path = worktree_placement_path(project_root, &name, opts.parent_dir.as_deref());
         // A configured worktree_parent may not exist yet; `git worktree add`
         // will not create intermediate directories for us.
         // trace:BUG-1700 | ai:claude
@@ -829,7 +899,7 @@ mod tests {
     fn pool_path_defaults_to_sibling_of_project_root() {
         let root = Path::new("/work/myrepo");
         assert_eq!(
-            pool_path_for(root, "aida-pool-myrepo-0", None),
+            worktree_placement_path(root, "aida-pool-myrepo-0", None),
             PathBuf::from("/work/aida-pool-myrepo-0"),
             "unset worktree_parent must preserve the historical sibling layout"
         );
@@ -840,7 +910,7 @@ mod tests {
     fn pool_path_uses_absolute_configured_parent() {
         let root = Path::new("/work/myrepo");
         assert_eq!(
-            pool_path_for(
+            worktree_placement_path(
                 root,
                 "aida-pool-myrepo-0",
                 Some(Path::new("/trusted/aida-worktrees"))
@@ -856,8 +926,11 @@ mod tests {
     fn pool_path_resolves_relative_configured_parent_against_project_root() {
         let root = Path::new("/work/myrepo");
         assert_eq!(
-            pool_path_for(root, "aida-pool-myrepo-0", Some(Path::new("../wt"))),
-            PathBuf::from("/work/myrepo/../wt/aida-pool-myrepo-0")
+            worktree_placement_path(root, "aida-pool-myrepo-0", Some(Path::new("../wt"))),
+            // TASK-1561: normalised, not `/work/myrepo/../wt/...` — this path is
+            // printed and lexically compared, so it must be spelled the way git
+            // and the folder-trust check spell it.
+            PathBuf::from("/work/wt/aida-pool-myrepo-0")
         );
     }
 
@@ -874,8 +947,8 @@ mod tests {
         let (name_b, _) = next_pool_name(&Pool::default(), b);
         assert_ne!(name_a, name_b, "names are namespaced by project slug");
         assert_ne!(
-            pool_path_for(a, &name_a, Some(shared)),
-            pool_path_for(b, &name_b, Some(shared)),
+            worktree_placement_path(a, &name_a, Some(shared)),
+            worktree_placement_path(b, &name_b, Some(shared)),
             "two repos sharing one worktree_parent must not collide"
         );
     }
