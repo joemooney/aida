@@ -1,0 +1,91 @@
+id: 01a0f6fa-2a45-7b53-a4f2-b2505881106d
+spec_id: BUG-1750
+agreed_id: BUG-1750
+title: The portability checker scans Rust only, so a GNU-only construct in a tests/*.sh harness script reaches a PR unflagged — and fails silently and inverted on the macOS matrix leg
+description: |
+  OBSERVED (2026-10-01, relay advisor session #12, while reviewing BUG-1748's PR #2307): the
+  portability detector scans Rust only, so a GNU-only construct in a `tests/*.sh` harness script
+  reaches a PR unflagged — and the resulting failure is silent and inverted rather than loud.
+
+  ## The concrete instance
+
+  BUG-1748's new four-state agreement matrix computed a fixture timestamp with
+  `date -u -d '2 days ago'`. `date -d` is GNU-only. CI's `build` job is `runs-on: ${{ matrix.os }}`
+  across ubuntu / windows / macos, and `.github/workflows/ci.yml`'s
+  `Run advisor-code-guard hook test` step is gated only on `full_ci` — it has no
+  `runner.os == 'Linux'` guard, unlike the bwrap step above it. So that line runs on macOS, where
+  BSD `date` rejects `-d`.
+
+  The failure mode is what makes this worth a detector rather than vigilance: `date` errors,
+  `$expired` is empty, the fixture is written as `set_at = ""`, `DateTime::parse_from_rfc3339("")`
+  fails, and `presence::current_solo`'s `.unwrap_or(now)` substitutes NOW — so the row asserting
+  "an expired flag reads as off" would silently have been exercising an ACTIVE flag, failing as
+  `expected 1, got 0` and pointing nowhere near the real cause. A fixture that quietly becomes a
+  different fixture is worse than one that errors.
+
+  It was caught by advisor review reading the CI matrix, not by any gate. It did not even show up as
+  red on the PR, because both non-Linux legs failed an earlier `Run tests` step (broad pre-existing
+  cross-platform failures, ADR-47 / BUG-1728) and never reached the step in question.
+
+  ## The gap
+
+  `scripts/check-portability.sh` describes itself as flagging "Linux-only assumptions in **Rust test
+  code**". `scripts/portability-rules.json` holds 8 rules — `proc-literal`, `tmp-literal`,
+  `path-separator-join`, `path-separator-split`, `shell-command`, `prose-classification`,
+  `toml-path-interpolation`, `toml-value-interpolation` — all keyed to Rust source. The string `.sh`
+  does not appear in the rules file at all, and `scripts/portability-allowlist.txt` has no entry for
+  any shell script.
+
+  Meanwhile `tests/*.sh` is a real, growing CI surface that runs on all three matrix legs: at least
+  `test_mcp_stdio.sh`, `test_history_templates.sh`, `test_mcp_doc_consistency.sh`,
+  `test_merge_hold_gate.sh`, `test_advisor_code_guard.sh` and `test_advisor_code_gate.sh` are invoked
+  with no `runner.os` guard. Nothing checks any of them for GNU-only constructs.
+
+  ## Acceptance criteria
+
+  1. The portability checker gains a shell scope covering the `tests/*.sh` harness scripts (and any
+     other `.sh` invoked unguarded by `ci.yml`), with the file set derived from `ci.yml` rather than
+     hard-coded, so a newly added unguarded step cannot silently escape the scan.
+  2. At least a `gnu-only-coreutils` rule that flags the constructs that actually differ on BSD:
+     `date -d`, `date --date`, `sed -i` without a backup suffix, `readlink -f`, `mktemp -d` without a
+     template, `grep -P`/`grep -oP`, `stat -c`, `base64 -w`. The rule must flag `date -d` on
+     BUG-1748's pre-fix line specifically — use it as the fixture.
+  3. Pre-existing instances are baselined into `scripts/portability-allowlist.txt` rather than fixed
+     in this spec, and the existing `--check-allowlist-growth` gate then prevents new ones. The
+     allowlist is keyed by source line CONTENT, not line number, so the entries must be the trimmed
+     source lines.
+  4. Report, do not fix: the audit output lists every existing violation found in the shell harness.
+     Two are already known and are NOT in scope here — the advisor code guard hook's own `grep -oP`
+     (BSD grep has no `-P`), and whatever the scan finds in the MCP/stdio scripts. File what the
+     audit finds; fix nothing beyond the rule and the baseline.
+  5. Mutation proof: with the new rule in place, re-introduce `date -u -d '2 days ago'` into
+     `tests/test_advisor_code_guard.sh` and show the checker flags it; remove it and show the checker
+     passes.
+
+  ## Out of scope
+
+  Do not add `runner.os == 'Linux'` guards to the `ci.yml` steps — keeping those tests on all three
+  legs is deliberate. Do not attempt to fix the broad pre-existing cross-platform test failures on
+  windows/macos; ADR-47 governs those and BUG-1728 carries the measurement.
+
+  ## Notes
+
+  Filed by the advisor seat, not by an implementer. The BUG-1748 slip itself is already fixed on main
+  (`d93fabb432`); this spec is about the detector that should have caught it, in keeping with the
+  substrate-as-bouncer principle — a guard beats vigilance, and this one had no coverage of a surface
+  CI actually runs.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T10:19:45.093340970Z
+modified_at: 2026-10-01T10:19:45.093340970Z
+req_type: Bug
+filed_at:
+  code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
