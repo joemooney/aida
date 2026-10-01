@@ -57,13 +57,62 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:09.739615850Z
-modified_at: 2026-10-01T17:39:15.878904392Z
+modified_at: 2026-10-01T17:39:52.131872893Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a0f6fa-2a45-7b53-a4f2-b2505881106d
   created_at: 2026-10-01T13:26:27.700032145Z
   created_by: joe
+comments:
+- id: 01a0f88d-1ac3-7100-89ca-808e70188fbe
+  author: joe
+  content: |
+    Closed — merged as `8c8f9a2d02` (PR #2312). One dispatch round, no rework.
+
+    ## AC2's numbers
+
+    `git ls-files -- .aida` → **33 tracked files**. The walk inspects a file only if it has a `.sh` suffix
+    or a `^#!.*\bsh` shebang, so exactly **one** new file comes into scope: `.aida/setup.sh`. Everything
+    else tracked under `.aida/` is `.md`, `.yaml`, `.yml` or `.toml` with no shebang — `config.toml`, the
+    27-file `discipline/` pack, `docker-compose*.yml`, `reserved-paths.toml`.
+
+    There is exactly **one** shell-scoped rule (`gnu-only-coreutils`), and over `.aida/setup.sh` it yields
+    exactly **two** findings: lines 109 and 188, the two sites AC1 fixes.
+
+    ## AC3 resolved as a recorded no-op
+
+    After AC1 there are **zero** residual findings under `.aida/`, so nothing was baselined and
+    `scripts/portability-allowlist.txt` is untouched. Stating that explicitly rather than leaving it
+    implicit: AC3 asked for a per-row judgment on anything newly surfaced, and the judgment is that both
+    newly surfaced rows were debt and were fixed. Baselining correct code is a defect; there was no
+    incorrect code left to baseline.
+
+    ## The structural half, which was the point
+
+    The prefix list existed in **two** places — `shell_roots`, fed to `git ls-files`, and a redundant
+    second guard reachable only through the `rglob` fallback when `git ls-files` fails. They could drift,
+    and a drifted fallback path is the kind of thing that only shows up on the machine where
+    `git ls-files` failed. The second guard is now derived from `shell_roots`, so the next prefix is added
+    once.
+
+    ## Verified by the advisor, independently of the round's verdict
+
+    - `bash scripts/check-portability.sh` → exit 0
+    - `bash scripts/check-portability.sh --check-allowlist-growth origin/main` → exit 0
+    - `grep -c "grep -oP" .aida/setup.sh` → 0 (the rule asserts an exact count, so a comment naming the
+      construct would have re-broken the gate it explains)
+    - `python3 -m unittest tests.test_prose_classification_rule -v` → Ran 18 tests, OK
+    - `bash tests/test_portability_growth.sh` → exit 0
+    - **AC6 mutation proof, run by the advisor**: `.aida` removed from the prefix list →
+      `FAILED (failures=1)`; restored by `cp` with a clean `diff -q` → `OK`. No `git stash`.
+
+    `cargo test --workspace` deliberately **not** run: no Rust changed, no new CLI subcommand, no new
+    source file, so none of the full-suite triggers apply. Recorded as a decision, not a silent skip.
+    CI on `bc2566fc83`: `Build (ubuntu-latest)` pass (18m28s), `merge-hold-gate` pass.
+  created_at: 2026-10-01T17:39:52.131872893Z
+  modified_at: 2026-10-01T17:39:52.131872893Z
+  session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
 history:
 - id: 01a0f7a5-05ca-7783-99f3-e98b4d562049
   author: joe
