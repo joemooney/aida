@@ -1,0 +1,67 @@
+id: 01a0f737-588a-7e92-814e-9393bcfe0cda
+spec_id: BUG-1753
+agreed_id: BUG-1753
+title: check-portability.sh scans nested git worktrees, so it fails in the operator's own checkout with 7760 foreign findings and passes only in CI
+description: |
+  OBSERVED (2026-10-01, relay advisor session #12, measured right after BUG-1750 merged as 13706fd197): `scripts/check-portability.sh` FAILS in the operator's main checkout and PASSES in CI, because its Rust walk scans nested git worktrees that are not part of the working tree.
+
+  ## Measured, not inferred
+
+      $ cd /home/joe/ai/aida && bash scripts/check-portability.sh ; echo $?
+      1
+      $ grep -c '^\.claude/worktrees' <output>
+      7760
+
+  Three of those 7,760, verbatim:
+
+      .claude/worktrees/agent-a193bf52e51d37130/aida-cli-lib/src/advisor.rs:685: tmp literal: project_root: "/tmp/x".to_string(),
+      .claude/worktrees/agent-a193bf52e51d37130/aida-cli-lib/src/advisor.rs:706: tmp literal: project_root: "/tmp/x".to_string(),
+      .claude/worktrees/agent-a193bf52e51d37130/aida-cli-lib/src/advisor.rs:741: tmp literal: production ... "/tmp/x".to_string(),
+
+  There are 33 directories under `.claude/worktrees/`, each a full checkout: `ls .claude/worktrees/*/aida-cli-lib/src/lib.rs | wc -l` → 33. The same command exits 0 in a clean linked worktree and in CI, where no nested worktrees exist.
+
+  ## Root cause
+
+  `scan()` enumerates with `root.rglob(f"*{RS_EXT}")` and filters only on `any(part in {".git", "target"} for part in path.parts)`. A linked worktree's `.git` is a FILE, not a directory, so no path component equals `.git`, and nothing excludes `.claude/worktrees/`. Every nested checkout's Rust sources are therefore scanned as if they were this working tree's code.
+
+  Two consequences:
+
+  1. **The gate's verdict depends on which branches you happen to have checked out locally.** Findings from another branch's code are reported against this tree and are not in this tree's allowlist, so the gate fails for reasons that have nothing to do with your change. That is a guard that lies.
+  2. **It is unusable locally:** the run takes over 120 seconds here versus roughly 2 seconds in a clean worktree.
+
+  Consequence 2 is why this matters more than tidiness. BUG-1750 exists because a GNU-only `date -d` reached a PR; part of why nobody caught it locally is that **this gate cannot be run in the operator's own checkout**. A gate that only works in CI is a gate the author cannot use before pushing.
+
+  ## The fix already exists in the same file
+
+  BUG-1750's shell walk, merged in `13706fd197`, enumerates with `git ls-files -z -- <prefixes>` and falls back to `rglob` only when git is unavailable. Tracked-only enumeration excludes nested worktrees, untracked scratch files and build output for free. The Rust walk should be made consistent with it.
+
+  ## Acceptance criteria
+
+  1. The Rust walk enumerates TRACKED files (`git ls-files`), matching the shell walk added by BUG-1750, with the same documented fallback when git is unavailable.
+  2. `bash scripts/check-portability.sh` exits 0 in a checkout that has nested worktrees under `.claude/worktrees/`, and the run completes in a time comparable to a clean worktree. State both measurements on the spec.
+  3. A test proves a nested worktree's (or any untracked) `.rs` file is NOT scanned — the mirror of the untracked-`.sh` test BUG-1750 added, so the two walks are pinned by symmetric tests.
+  4. `scripts/portability-allowlist.txt` is NOT regenerated or grown by this change. The tracked-file set is a subset of what was scanned before, so every existing row must still match; if any row stops matching, that means it was pointing at worktree-sourced code and the row itself was wrong — report that rather than deleting it silently.
+  5. Mutation proof: revert the enumeration to `rglob` and show the nested-worktree test goes red.
+
+  ## Out of scope
+
+  Do not change any rule, any regex, or the allowlist's contents. Do not delete the stale worktrees to make the symptom go away — the gate must be correct in a checkout that has them, since the dispatch workflow creates worktrees as a matter of course.
+
+  ## Notes
+
+  Pre-existing: the Rust walk is untouched by BUG-1750's diff, so this is not a regression from that change — it is a defect that change made visible by doing the equivalent job correctly next to it. Filed from the advisor seat with the measurements above taken on `main` @ `13706fd197`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T11:26:34.634192022Z
+modified_at: 2026-10-01T11:26:34.634192022Z
+req_type: Bug
+filed_at:
+  code_sha: 13706fd1971627dd5bea754efb69af0abac456a6
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d93fabb432
+  vendor: antigravity
+  session: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
