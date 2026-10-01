@@ -89,12 +89,12 @@ description: |
   - Confirm whether `--fail-on-findings` on the `performance` category gates on performance
     findings or on the generic finding set, and state the answer in the PR. If it is the generic
     set, that is a second defect — file it separately rather than widening this one.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:23:03.915547857Z
-modified_at: 2026-10-01T05:05:34.414216283Z
+modified_at: 2026-10-01T05:56:53.063235102Z
 req_type: Bug
 comments:
 - id: 01a0f4f7-a4d7-7730-b792-ff64d53d9d02
@@ -124,6 +124,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f609-80bf-7ae1-b660-6bb17eed6aa4
+  author: aida-auto-bump
+  timestamp: 2026-10-01T05:56:53.055224921Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f609-80c7-7583-88de-fa3dc430b4fc
+  timestamp: 2026-10-01T05:56:53.063233807Z
+  agent: aida
+  commit_sha: 3f68acaa1a2af4831c36151583877e53bc2adf1b
+  summary: Completed via merge 3f68acaa
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
@@ -132,3 +145,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-01T05:56:53.055197640Z
+  completion_sha: 3f68acaa1a2af4831c36151583877e53bc2adf1b
