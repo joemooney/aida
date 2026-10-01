@@ -1,0 +1,80 @@
+id: 01a0f5c2-adad-7001-bec7-a03defeea987
+spec_id: BUG-1749
+agreed_id: BUG-1749
+title: 'aida doctor check has no TOON rendering: in agent mode without --json it prints human box text to stdout, then the agent error path appends a TOON document to the same stream'
+description: |
+  OBSERVED (2026-09-30): `aida doctor check <category>` has no TOON rendering at all. In agent mode
+  without `--json` it prints human box-drawing text to stdout, and when the command also fails, the
+  global agent-mode error path appends a TOON `error:` block to that same stdout — so stdout holds
+  human text followed by a TOON document and parses as neither.
+
+  `doctor_check_store_free_light` (`aida-cli-lib/src/doctor_cmd.rs:817-822`) branches on the local
+  `--json` bool only:
+
+  ```rust
+  if json {
+      println!("{}", serde_json::to_string_pretty(&report)?);
+  } else {
+      render_doctor_report(&report, false)?;   // human box-drawing text
+  }
+  ```
+
+  There is no third arm for TOON, and the branch never consults `agent_output_mode()`. Agent mode
+  auto-activates on any non-TTY stdout (`lib.rs:2546`, `None => !stdout_is_tty`), so **every scripted
+  `aida doctor check` call without `--json` is already in agent mode** and already gets the wrong
+  renderer. A developer at a TTY cannot reproduce it.
+
+  ## Relationship to BUG-1745
+
+  Same contract, different function — this is the follow-on the BUG-1745 architecture sketch records
+  as out of scope in its §2.6, and the advisor seat signed that scoping off. BUG-1745 fixes the
+  *composition* defect on the `--json` path (the reason now rides inside the one JSON document).
+  This spec fixes the *missing renderer*: `doctor check` should honour the three-mode contract
+  adopted in §4 of
+  `docs/plans/2026-09-30-bug-1745-error-channel-output-contract.md`:
+
+  | mode | stdout | error channel |
+  |---|---|---|
+  | human (TTY or `--format human`) | human text | stderr, red `Error:` |
+  | TOON (agent mode, no format pin) | one TOON document | stdout, inside it as `error:` |
+  | JSON (`--json` / `--format json`) | one JSON object | stdout, inside it as `"error"` |
+
+  Do **not** start this before BUG-1745 lands — it builds on the `error` field and the
+  `TypedPayloadEmitted` marker that BUG-1745 introduces, and the two touch adjacent lines of the same
+  function.
+
+  ## Acceptance criteria
+
+  1. `doctor check` selects its renderer from the resolved output mode, not from the local `--json`
+     bool alone: human → box text, TOON (agent mode, no pin) → one TOON document, JSON → one JSON
+     object. `--json` and `--format json` must agree.
+  2. In agent mode with no format pin and a failing `--fail-on-findings`, stdout holds **exactly one**
+     TOON document whose `error:` carries the reason. Assert by parsing captured stdout, not by eyeballing.
+  3. `--format human` still yields box-drawing text with the error on stderr even when stdout is a
+     pipe — the escape hatch STORY-764/BUG-707 established stays intact.
+  4. Audit the other `doctor check` categories that reach a renderer this way (`performance`,
+     `remote-drift`, `disk-headroom`, `runaway-seats`, `scheduler-driver`, `agent-launch`) and state
+     which were affected; a fix for one category that leaves siblings broken does not satisfy this.
+  5. Mutation proof: revert the renderer selection, confirm the new agent-mode test goes red, restore.
+
+  ## Out of scope
+
+  No budget changes (BUG-1674 / STORY-1484 untouched). No change to the configured command string
+  `"doctor check performance --fail-on-findings"` — it is an identity predicate at
+  `maintenance_schedule.rs:3146` and load-bearing in nine places. No change to the scaffolded or
+  in-repo `.aida/config.toml`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T04:39:31.501218455Z
+modified_at: 2026-10-01T04:39:31.501218455Z
+req_type: Bug
+filed_at:
+  code_sha: ef0c0905b569b305beb7b907cf6e7d9e1a4b17f3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: daeb8598-0fad-4d16-94b8-01ba69c8465a
