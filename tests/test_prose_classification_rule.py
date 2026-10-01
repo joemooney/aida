@@ -20,6 +20,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check-portability.sh"
 RULES = ROOT / "scripts" / "portability-rules.json"
 RULE_ID = "prose-classification"
+SHELL_RULE_ID = "gnu-only-coreutils"
 
 POSITIVE = {
     # BUG-1295: typed rebase causes recovered from `aida pr rebase` prose.
@@ -201,7 +202,7 @@ NEGATIVE = {
 }
 
 
-def findings(sources: dict[str, str]) -> list[str]:
+def findings(sources: dict[str, str], *, raw: bool = False) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
         (root / "scripts").mkdir()
@@ -220,11 +221,50 @@ def findings(sources: dict[str, str]) -> list[str]:
             env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": tmp,
                  "HOME": tmp},
         )
-        return [
-            line.split("\t", 1)[1]
-            for line in result.stdout.splitlines()
-            if line.startswith(f"{RULE_ID}\t")
-        ]
+        lines = result.stdout.splitlines()
+        if raw:
+            return lines
+        return [line.split("\t", 1)[1] for line in lines if line.startswith(f"{RULE_ID}\t")]
+
+
+def shell_findings(files: dict[str, str], *, git_repo: bool = True,
+                   untracked: dict[str, str] | None = None,
+                   rules: list[dict] | None = None,
+                   raw: bool = False) -> tuple[list[str], str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "scripts").mkdir()
+        if rules is None:
+            shutil.copy(RULES, root / "scripts" / "portability-rules.json")
+        else:
+            import json
+            (root / "scripts" / "portability-rules.json").write_text(json.dumps(rules))
+        (root / "scripts" / "portability-allowlist.txt").write_text("")
+        (root / "tests").mkdir()
+        for name, body in files.items():
+            path = root / "tests" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(textwrap.dedent(body).lstrip())
+        if untracked:
+            for name, body in untracked.items():
+                path = root / "tests" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(textwrap.dedent(body).lstrip())
+        if git_repo:
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            tracked_paths = [f"tests/{name}" for name in files]
+            subprocess.run(["git", "add", "--", *tracked_paths], cwd=root, check=True)
+        result = subprocess.run(
+            ["bash", str(CHECK), "--print-findings"], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": tmp, "HOME": tmp},
+        )
+        lines = result.stdout.splitlines()
+        if not raw:
+            lines = [line for line in lines if line.startswith(f"{SHELL_RULE_ID}\t")]
+        return lines, result.stderr
 
 
 class ProseClassificationRuleTest(unittest.TestCase):
@@ -260,6 +300,76 @@ class ProseClassificationRuleTest(unittest.TestCase):
 
         rule = next(r for r in json.loads(RULES.read_text()) if r["id"] == RULE_ID)
         self.assertEqual(rule["scope"], "production")
+
+    def test_shell_rule_flags_bug_1748_pre_fix_line(self):
+        # trace:BUG-1750 | ai:codex
+        found, _ = shell_findings({
+            "fixture.sh": "expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\n"
+        })
+        self.assertTrue(found)
+
+    def test_shell_comments_and_fallback_marker_are_immune(self):
+        found, _ = shell_findings({
+            "comment.sh": "# expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\n",
+            "fallback.sh": "# portable-fallback: BSD date uses -v for relative dates.\n"
+                           "expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\n",
+        })
+        self.assertEqual(found, [])
+
+    # Scope isolation must inspect raw output; rule-filtered helpers hide leaks.
+    def test_shell_rule_scope_does_not_cross_file_types(self):
+        rust_findings = findings({
+            "fixture": 'fn f() { let _ = "date -u -d "; }'
+        }, raw=True)
+        self.assertFalse(any(line.startswith(f"{SHELL_RULE_ID}\t") for line in rust_findings))
+        shell, _ = shell_findings({
+            "fixture.sh": 'if error.contains("thing") && echo "/tmp"; then\n'
+        }, raw=True)
+        self.assertFalse(any(line.startswith(("proc-literal\t", "tmp-literal\t",
+                                              "prose-classification\t")) for line in shell))
+
+    def test_date_attached_and_equal_forms_are_flagged(self):
+        for command in ('date --date="2 days ago"', 'date -d"$iso"'):
+            with self.subTest(command=command):
+                found, _ = shell_findings({"fixture.sh": f"{command} +%s\n"})
+                self.assertEqual(len(found), 1, found)
+
+    def test_attached_stat_and_base64_flags_are_flagged(self):
+        for command in ("stat -c%Y file", "base64 -w0 file"):
+            with self.subTest(command=command):
+                found, _ = shell_findings({"fixture.sh": f"{command}\n"})
+                self.assertEqual(len(found), 1, found)
+
+    def test_sed_backup_suffix_remains_portable(self):
+        found, _ = shell_findings({"fixture.sh": "sed -i.bak 's/a/b/' file\n"})
+        self.assertEqual(found, [])
+
+    def test_git_ls_files_path_and_untracked_files(self):
+        found, _ = shell_findings(
+            {"tracked.sh": "date -d yesterday +%s\n"},
+            untracked={"untracked.sh": "date -d yesterday +%s\n"},
+        )
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("tracked.sh", found[0])
+        self.assertNotIn("untracked.sh", "\\n".join(found))
+
+    def test_non_git_fallback_still_scans_shell_fixture(self):
+        found, _ = shell_findings(
+            {"fixture.sh": "date -d yesterday +%s\n"}, git_repo=False
+        )
+        self.assertEqual(len(found), 1, found)
+
+    def test_shell_rule_rejects_unsupported_rule_fields(self):
+        import json
+
+        rules = json.loads(RULES.read_text())
+        shell_rule = next(rule for rule in rules if rule["id"] == SHELL_RULE_ID)
+        shell_rule["context"] = {"regex": "x", "before": 1}
+        _, stderr = shell_findings({"fixture.sh": "echo ok\n"}, rules=rules)
+        self.assertIn(
+            "shell-scoped portability rules cannot set context, exempt, or self_evident",
+            stderr,
+        )
 
 
 if __name__ == "__main__":

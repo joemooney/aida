@@ -29,6 +29,8 @@ fi
 
 # Portable mtime: GNU stat (-c %Y) on Linux, BSD stat (-f %m) on macOS
 mtime() {
+    # trace:BUG-1750 | ai:codex
+    # portable-fallback: BSD stat reads the modification time with -f %m.
     stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
 }
 

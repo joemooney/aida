@@ -11,7 +11,7 @@ usage() {
 usage: scripts/check-portability.sh [--print-findings] [--check-allowlist-growth BASE_REF]
 
 Flags Linux-only assumptions in Rust test code that are not behind an
-explicit Unix/Linux cfg, plus production-scope rules (e.g. control flow that
+explicit Unix/Linux cfg, shell portability issues, plus production-scope rules (e.g. control flow that
 classifies on another component's message text; see STORY-1382). Baseline entries live in scripts/portability-allowlist.txt
 as tab-separated `rule-id<TAB>path:trimmed source line` records.
 USAGE
@@ -65,6 +65,7 @@ python3 - "$ROOT" "$ALLOWLIST" "$RULES" "$PRINT_FINDINGS" <<'PY'
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 root = pathlib.Path(sys.argv[1])
@@ -79,13 +80,20 @@ print_findings = sys.argv[4] == "1"
 # matches the line or the line above it.
 PATTERNS = []
 for item in json.loads(rules_path.read_text()):
+    scope = item.get("scope", "test")
+    if scope == "shell" and any(
+        field in item for field in ("context", "exempt", "self_evident")
+    ):
+        raise SystemExit(
+            "error: shell-scoped portability rules cannot set context, exempt, or self_evident"
+        )
     context = item.get("context") or {}
     PATTERNS.append(
         {
             "id": item["id"],
             "label": item["label"],
             "regex": re.compile(item["regex"]),
-            "scope": item.get("scope", "test"),
+            "scope": scope,
             "context": re.compile(context["regex"]) if context.get("regex") else None,
             "before": int(context.get("before", 0)),
             "exempt": re.compile(item["exempt"]) if item.get("exempt") else None,
@@ -93,8 +101,8 @@ for item in json.loads(rules_path.read_text()):
             "optout": re.compile(item["optout"]) if item.get("optout") else None,
         }
     )
-if any(rule["scope"] not in {"test", "production"} for rule in PATTERNS):
-    raise SystemExit("error: portability rule scope must be `test` or `production`")
+if any(rule["scope"] not in {"test", "production", "shell"} for rule in PATTERNS):
+    raise SystemExit("error: portability rule scope must be `test`, `production`, or `shell`")
 HAS_PRODUCTION_RULES = any(rule["scope"] == "production" for rule in PATTERNS)
 
 LINUX_CFG_RE = re.compile(
@@ -118,6 +126,24 @@ def strip_line_comment(line: str) -> str:
         elif ch == '"':
             in_string = True
         elif ch == "/" and i + 1 < len(line) and line[i + 1] == "/":
+            return line[:i]
+    return line
+
+
+def strip_shell_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    escaped = False
+    for i, ch in enumerate(line):
+        if escaped:
+            escaped = False
+        elif ch == "\\" and not in_single:
+            escaped = True
+        elif ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
             return line[:i]
     return line
 
@@ -227,6 +253,8 @@ def scan() -> list[tuple[str, str, int, str, str]]:
             in_test_scope = test_file or idx in test_scoped
             stripped = raw.strip()
             for rule in PATTERNS:
+                if rule["scope"] == "shell":
+                    continue
                 if rule["scope"] == "test":
                     if not in_test_scope or idx in linux_lines:
                         continue
@@ -250,6 +278,50 @@ def scan() -> list[tuple[str, str, int, str, str]]:
                     continue
                 findings.append((rule["id"], rel, idx, rule["label"], stripped))
                 break
+
+    # trace:BUG-1750 | ai:codex
+    # Shell rules have their own walk: Rust cfg scoping has no meaning here.
+    # This set is deliberately recursive over tracked files under the three
+    # prefixes: tracked-only excludes untracked worktrees/build output, while
+    # recursion catches subdirectories such as scripts/ablations/.
+    shell_rules = [rule for rule in PATTERNS if rule["scope"] == "shell"]
+    if shell_rules:
+        shell_roots = ("tests", "scripts", "aida-core/templates/hooks")
+        try:
+            tracked = subprocess.run(
+                ["git", "-C", str(root), "ls-files", "-z", "--", *shell_roots],
+                check=True, capture_output=True,
+            ).stdout.decode(errors="replace").split("\0")
+            candidates = [root / rel for rel in tracked if rel]
+        except (OSError, subprocess.CalledProcessError):
+            candidates = [p for folder in shell_roots for p in (root / folder).rglob("*") if p.is_file()]
+        for path in sorted(set(candidates)):
+            if any(part in {".git", "target"} for part in path.parts) or not path.is_file():
+                continue
+            rel = path.relative_to(root).as_posix()
+            if not (rel.startswith("tests/") or rel.startswith("scripts/") or rel.startswith("aida-core/templates/hooks/")):
+                continue
+            if path.suffix != ".sh":
+                try:
+                    with path.open(errors="replace") as source:
+                        first_line = source.readline()
+                except OSError:
+                    continue
+                if not re.match(r"^#!.*\bsh(?:\s|$)", first_line):
+                    continue
+            lines = path.read_text(errors="replace").splitlines()
+            for idx, raw in enumerate(lines, start=1):
+                code = strip_shell_comment(raw)
+                stripped = raw.strip()
+                for rule in shell_rules:
+                    if not rule["regex"].search(code):
+                        continue
+                    if rule["optout"] and any(
+                        rule["optout"].search(w) for w in lines[max(0, idx - 2) : idx]
+                    ):
+                        continue
+                    findings.append((rule["id"], rel, idx, rule["label"], stripped))
+                    break
     return findings
 
 
@@ -273,7 +345,8 @@ if new_findings:
         "make it portable, or shrink/regenerate the baseline only for existing debt. "
         "For prose-classification: branch on a typed field (enum, exit code, error "
         "variant) instead of the message text, or mark a real external-tool "
-        "contract with `// external-prose-classifier: <site>`.",
+        "contract with `// external-prose-classifier: <site>`. A deliberate GNU/BSD "
+        "fallback pair may use `# portable-fallback: <reason>`.",
         file=sys.stderr,
     )
     sys.exit(1)
