@@ -53,8 +53,70 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:53:14.519131201Z
-modified_at: 2026-10-01T00:13:40.982376892Z
+modified_at: 2026-10-01T00:13:42.229079383Z
 req_type: Task
+comments:
+- id: 01a0f4cf-4fd5-7042-bc9d-329e14f37b51
+  author: joe
+  content: |
+    ADVISOR DISPOSITION — approved (2026-09-30, relay #20).
+
+    Premises re-measured in code, not taken on the filing's word:
+    - `aida-cli-lib/src/init_cmd.rs:2651` carries the scaffolded guard prompt verbatim:
+      "Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) …". Confirmed.
+    - `aida-cli-lib/src/doctor_cmd.rs:1385` repeats `(cargo clean)` in the doctor finding.
+      Both surfaces need the text change, not just the schedule template.
+    - The "actively wrong" half is confirmed at `aida-cli-lib/src/lib.rs:42066`, which documents
+      that the session env exports `CARGO_TARGET_DIR` to **the parent's** `target/` "so cargo
+      reuses that build". So `cargo clean` run inside a session worktree deletes the main
+      checkout's cache — the live `aida` binary's — and leaves the stale worktree cache the
+      guard is complaining about fully intact. The advice is not merely unhelpful; it is the
+      one command that makes the next build slowest while reclaiming none of the 86G.
+    - `machine_readiness.rs:217` has a THIRD copy of the same wrong advice
+      ("reclaim Rust artifacts with cargo clean --target-dir <target_dir(root)>"). It at least
+      names an explicit --target-dir, so it is less dangerous, but it is still pointed at the
+      main cache. Include it in the sweep or state why it is out of scope.
+
+    DESIGN FORK RESOLVED (the spec left this open; resolving it so the implementer does not
+    have to re-litigate it):
+
+    **`aida worktree reclaim`, NOT a flag on `aida session reap`.**
+
+    Rationale: `aida worktree` already exists as the workspace layer that mirrors `git worktree`
+    (add/enter/exit/list), and every one of the six rails is a *worktree-discovery* rail — the
+    candidate set comes from `git worktree list --porcelain`, the exclusions are "the main
+    checkout", "`.aida-store`", "a branch with an open PR". None of those are lease concepts.
+    `session reap` is about leases and their lifecycle; a stale `target/` can and does outlive
+    every lease that ever touched it, which is exactly why reap cannot see it. Putting reclaim
+    on reap would force reap to grow worktree-enumeration logic it otherwise has no reason to
+    have, and would make "reap" mean two unrelated things.
+
+    Consequence for acceptance: the live-lease rail (#4) becomes a *consultation* of the session
+    layer from the worktree layer, not shared ownership. Keep it read-only.
+
+    ACCEPTANCE ADDENDA (treat as binding, alongside the six bullets already filed):
+    - Fix all remediation surfaces found above (init_cmd scaffold, doctor_cmd finding,
+      machine_readiness remedy) or justify each omission in the PR.
+    - A project that has ALREADY scaffolded the old prompt text into its `.aida/config.toml`
+      keeps working — the text change must not become a config-compat break. State the
+      migration posture explicitly (most likely: template-only change, existing configs
+      keep their stale prose until re-scaffolded; say so rather than leaving it implicit).
+    - Dry-run must be the default and must print reclaimable bytes per candidate plus a total
+      before anything is deleted.
+    - The main-checkout refusal is proven by a test in which the main `target/` is the LARGEST
+      candidate, so ordering cannot be what saves it (already filed; restating because it is
+      the single most important test in the spec).
+
+    NOT IN SCOPE, deliberately: any automatic/scheduled deletion. The guard routes a job to a
+    human; this command is what the human then runs. Do not wire it into the guard's own
+    execution path.
+
+    Reference implementation with all six rails (operator-local, proven to reclaim 86G on
+    2026-09-30, host 89% → 79%): `.aida/scripts/reclaim-worktree-targets.sh`. It is a
+    behavioural spec, not code to vendor.
+  created_at: 2026-10-01T00:13:42.229079383Z
+  modified_at: 2026-10-01T00:13:42.229079383Z
+  session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
 history:
 - id: 01a0f4cf-4af6-7b01-b92a-98b2f93c6fda
   author: joe
