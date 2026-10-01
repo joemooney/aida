@@ -222,6 +222,11 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_advisor_code_guard.sh
 
+      # BUG-1751: portable JSON parsing in the git guardrails PreToolUse hook.
+      - name: Run git-guardrails parse test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_git_guardrails_parse.sh
+
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test

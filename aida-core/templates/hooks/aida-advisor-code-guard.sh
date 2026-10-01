@@ -42,6 +42,46 @@ trap __aida_hook_unexpected_error ERR
 
 INPUT=$(cat)
 
+# Deliberately duplicated in aida-git-guardrails.sh: scaffolded hooks are
+# self-contained, so keep this parser byte-identical in both templates.
+__aida_json_field() {
+    local field="$1"
+    awk -v wanted="$field" '
+    { text = text (NR > 1 ? "\n" : "") $0 }
+    END {
+        pattern = "\"" wanted "\"[ \t\r\n]*:[ \t\r\n]*\""
+        from = 1
+        while (from <= length(text) && match(substr(text, from), pattern)) {
+            start = from + RSTART - 1
+            before = start - 1
+            while (before > 0 && substr(text, before, 1) ~ /[ \t\r\n]/) before--
+            # Valid JSON escapes quotes of nested keys, so this branch is unreachable
+            # for well-formed input and is deliberately untested; retain malformed-input defense.
+            if (before == 0 || (substr(text, before, 1) != "{" && substr(text, before, 1) != ",")) {
+                from = start + RLENGTH
+                continue
+            }
+            i = start + RLENGTH
+            value = ""
+            while (i <= length(text)) {
+                c = substr(text, i, 1)
+                if (c == "\"") { printf "%s", value; exit }
+                if (c == "\\" && i < length(text)) {
+                    e = substr(text, i + 1, 1)
+                    if (e == "\"" || e == "\\" || e == "/") value = value e
+                    else if (e == "n") value = value "\n"
+                    else if (e == "r") value = value "\r"
+                    else if (e == "t") value = value "\t"
+                    else if (e == "u") value = value "\\u" # Leave \uXXXX escapes as-is.
+                    else value = value "\\" e
+                    i += 2
+                } else { value = value c; i++ }
+            }
+            exit
+        }
+    }'
+}
+
 # ── Gate only advisor sessions ──
 if [ "${AIDA_SESSION_ROLE:-}" != "advisor" ]; then
     exit 0
@@ -55,7 +95,7 @@ if [ -n "${AIDA_AUTO_COMPLETE:-}" ]; then
 fi
 
 # ── Resolve the target file (Write/Edit/MultiEdit all carry file_path) ──
-FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"\K[^"]*' 2>/dev/null || echo "")
+FILE_PATH=$(printf '%s' "$INPUT" | __aida_json_field file_path)
 if [ -z "$FILE_PATH" ]; then
     exit 0
 fi
@@ -77,7 +117,8 @@ case "$FILE_PATH" in
 esac
 
 # ── Per-session fire-once marker, keyed by the Claude session id ──
-SESSION_ID=$(echo "$INPUT" | grep -oP '"session_id"\s*:\s*"\K[^"]*' 2>/dev/null || echo "nosession")
+SESSION_ID=$(printf '%s' "$INPUT" | __aida_json_field session_id)
+SESSION_ID=${SESSION_ID:-nosession}
 MARKER="${TMPDIR:-/tmp}/aida-advisor-guard-${SESSION_ID}"
 if [ -f "$MARKER" ]; then
     exit 0

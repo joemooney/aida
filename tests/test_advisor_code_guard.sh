@@ -162,6 +162,42 @@ rm -f "$FAKEHOME/.aida/solo.toml"
 # 9. advisor + no file_path (Bash-like input) → allow (0)
 assert_exit "no file_path → allowed" 0 "$(run "$(printf "$NOFILE" S7)")"
 
+# BUG-1751: prove the parser works when grep has no PCRE support.
+REAL_GREP=$(command -v grep)
+PCRE_SHIM="$TMP/no-pcre"
+mkdir -p "$PCRE_SHIM"
+cat >"$PCRE_SHIM/grep" <<EOF
+#!/bin/sh
+for arg do case "\$arg" in --perl-regexp|-*P*) echo 'PCRE unavailable' >&2; exit 2;; esac; done
+exec "$REAL_GREP" "\$@"
+EOF
+chmod +x "$PCRE_SHIM/grep"
+run_pcre() {
+    printf '%s' "$1" | PATH="$PCRE_SHIM:$PATH" TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1
+    echo $?
+}
+assert_exit "PCRE unavailable: advisor code still soft-blocks" 2 "$(run_pcre "$(printf "$RS" pcre-a)")"
+assert_exit "PCRE unavailable: advisor .md allowed" 0 "$(run_pcre "$(printf "$MD" pcre-md)")"
+assert_exit "PCRE unavailable: same session remains fire-once" 0 "$(run_pcre "$(printf "$RS" pcre-a)")"
+assert_exit "PCRE unavailable: first distinct session soft-blocks" 2 "$(run_pcre "$(printf "$RS" pcre-b)")"
+assert_exit "PCRE unavailable: second distinct session soft-blocks" 2 "$(run_pcre "$(printf "$RS" pcre-c)")"
+assert_exit "escaped quote in file_path still reaches code decision" 2 "$(run_pcre '{"session_id":"escaped-path","tool_input":{"file_path":"/repo/x\\\"y.rs"}}')"
+# A late key after a large unrelated value still reaches the same policy decision.
+python3 - "$TMP/late-key.json" <<'PYJSON'
+import json, pathlib, sys
+payload = {"session_id": "late-key", "tool_input": {"content": "x" * 200_000, "file_path": "/repo/late.rs"}}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(payload))
+PYJSON
+late_key_actual=$(env AIDA_SESSION_ROLE=advisor TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" <"$TMP/late-key.json" >/dev/null 2>&1; echo $?)
+assert_exit "file_path after 200 KB content still soft-blocks" 2 "$late_key_actual"
+# A JSON-escaped slash in a docs path must be decoded before suppression.
+assert_exit "escaped slash decodes before docs suppression" 0 "$(run_pcre '{"session_id":"escaped-slash","tool_input":{"file_path":"/repo/docs\/x.rs"}}')"
+
+# The self-contained hook copies must keep their parser implementation identical.
+awk '/^__aida_json_field\(\) \{/ { p=1 } p { print } p && /^\}/ { exit }' "$PROJECT_ROOT/aida-core/templates/hooks/aida-advisor-code-guard.sh" >"$TMP/guard-parser"
+awk '/^__aida_json_field\(\) \{/ { p=1 } p { print } p && /^\}/ { exit }' "$PROJECT_ROOT/aida-core/templates/hooks/aida-git-guardrails.sh" >"$TMP/git-parser"
+if diff -q "$TMP/guard-parser" "$TMP/git-parser" >/dev/null; then echo "ok   - hook JSON helper definitions are byte-identical"; else echo "FAIL - hook JSON helper definitions differ"; fail=1; fi
+
 rm -rf "$TMP" "$FAKEHOME"
 if [ "$fail" -ne 0 ]; then
     echo "ADVISOR CODE GUARD: FAILURES"
