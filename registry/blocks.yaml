@@ -671,3 +671,11 @@ blocks:
   range_end: 1916
   next: 1817
   allocated_at: 2026-10-01T20:07:15.825481959Z
+- node_id: '10'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: TASK
+  range_start: 1615
+  range_end: 1714
+  next: 1615
+  allocated_at: 2026-10-01T20:07:17.719347Z
