@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:41.023690139Z
-modified_at: 2026-10-01T23:30:27.918481258Z
+modified_at: 2026-10-01T23:40:36.501677959Z
 req_type: Bug
 tags:
 - auto-complete
@@ -26,6 +26,12 @@ tags:
 - cross-project:qci
 - from-pr
 - reviewer
+comments:
+- id: 01a0f9d7-5f15-72c0-bcc6-831559548c3d
+  author: joe.mooney
+  content: 'Implemented verified --from-pr CI evidence handoff: GitHub captures headRefOid with the PR rollup, GitLab captures the newest pipeline sha, reconciliation accepts only terminal green evidence for the exact PR/MR and head, and ResumeEntry seeds that proof into direct reviewer re-entry. Stale/nonterminal evidence names expected and observed heads and re-enters at phase 2. Verified with targeted BUG-1819, from_pr, CI action, drain resume, and forge test suites plus cargo check/fmt.'
+  created_at: 2026-10-01T23:40:36.501677959Z
+  modified_at: 2026-10-01T23:40:36.501677959Z
 history:
 - id: 01a0f9cd-b3e9-74d1-8fc2-c1b55a7ac24e
   author: aida-orchestrator-phase1
