@@ -3175,6 +3175,53 @@ fn failure_trip(
     })
 }
 
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_performance_argv() -> &'static [&'static str] {
+    command_table()
+        .iter()
+        .find(|(key, _)| *key == ["doctor check performance --fail-on-findings"])
+        .map(|(_, command)| command.args)
+        .expect("performance failure command is registered")
+}
+
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_failure_trip(
+    stdout: String,
+    status: i32,
+) -> Option<schedule_ledger::FailureTrip> {
+    let command = command_table()
+        .iter()
+        .find(|(key, _)| *key == ["doctor check performance --fail-on-findings"])
+        .map(|(_, command)| command.clone())
+        .expect("performance failure command is registered");
+    let task = Task {
+        name: "bug-1745-test".into(),
+        kind: JobKind::Substrate,
+        seats: Vec::new(),
+        command: Some(command),
+        prompt: None,
+        interval: None,
+        on: Vec::new(),
+        when: None,
+        when_raw: None,
+        quiet_hours: None,
+        enabled: true,
+        source: JobSource::Project,
+        problem: None,
+    };
+    failure_trip(
+        &task,
+        Utc::now(),
+        &TaskOutcome {
+            status,
+            stdout,
+            stderr: String::new(),
+        },
+    )
+}
+
 fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
     use aida_core::file_lock::is_lock_contended;
     use fs2::FileExt;
