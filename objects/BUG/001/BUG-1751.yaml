@@ -40,12 +40,12 @@ description: |
   ## Notes
 
   Filed from the advisor seat per BUG-1750's AC4 ("report, do not fix"), once BUG-1750's baseline proved the count. Not part of the ADR-47 / BUG-1728 deferred cross-platform CI measurement: this is shipped product behaviour on a supported platform, not a red test leg.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:30.734561229Z
-modified_at: 2026-10-01T12:44:55.723367026Z
+modified_at: 2026-10-01T13:23:40.394364665Z
 req_type: Bug
 comments:
 - id: 01a0f767-4d6f-7981-a19f-b786871ab108
@@ -325,6 +325,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f7a2-8cd1-7572-95e4-309c131eb558
+  author: aida-auto-bump
+  timestamp: 2026-10-01T13:23:40.369505302Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f7a2-8cea-7203-b8f9-0cea0b627cc2
+  timestamp: 2026-10-01T13:23:40.394363122Z
+  agent: advisor
+  commit_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
+  summary: Completed via merge b785274c
 filed_at:
   code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
   branch: main
@@ -333,3 +346,7 @@ filed_at:
   aida_build_sha: d93fabb432
   vendor: antigravity
   session: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-01T13:23:40.369429517Z
+  completion_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
