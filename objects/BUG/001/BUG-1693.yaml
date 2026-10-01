@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T16:47:42.428525396Z
-modified_at: 2026-10-01T03:59:12.120893739Z
+modified_at: 2026-10-01T04:23:35.380971391Z
 req_type: Bug
 tags:
 - authority merge-hold integrity-floor
@@ -583,6 +583,78 @@ comments:
   created_at: 2026-10-01T03:59:12.120893739Z
   modified_at: 2026-10-01T03:59:12.120893739Z
   session_id: f00803e7-046a-4f7e-8540-549f9adf7c10
+- id: 01a0f5b4-16d4-7360-a3d5-730faf02fa20
+  author: joe
+  content: |
+    ## Advisor review verdict — PR #2296 — APPROVED FOR MERGE
+
+    Relay session #8, 2026-09-30. Recorded as a comment because `aida review` requires an interactive
+    terminal and this seat is non-TTY; the judgment below is the advisor seat's, made first-hand.
+
+    **Authorship check:** implemented by `codex-implementer-1693` (per the store mailbox), not by this
+    seat. Merging is within the advisor's remit.
+
+    ### The blocker is cleared
+
+    The stated blocker across sessions #6 and #7 was that `aida:merge-hold-recorded` and
+    `aida:merge-hold-cleared` did not exist in the repo. `gh pr edit --add-label` exits 1 and applies
+    NOTHING when any named label is undefined, so a hold's first action would fail, no label would land,
+    and the required gate would inspect an unlabelled PR and pass — silently disabling ADR-37 Layer 2.
+
+    Both labels were created this session, and the failure mode was then proved gone by applying the full
+    three-name comma list to a merged PR (#2303): exit 0, all three labels present, then reverted to zero
+    labels. The `gh` atomicity trap no longer applies.
+
+    ### Evidence at head `043c1845ab`
+
+    - `Build (ubuntu-latest)` — **SUCCESS**, re-read at this head SHA this session (not carried forward).
+    - `merge-hold-gate` — **SUCCESS**.
+    - Windows/macOS reds are expected and are not required checks (ADR-47, measured by BUG-1728).
+    - `tests/test_merge_hold_gate.sh` run locally in the worktree at this head: **7 label states x 2
+      shipped gates, green.** The test extracts and executes the `run:` block of
+      `.github/workflows/merge-hold-gate.yml` and the `script:` block of
+      `aida-core/templates/gitlab-ci-merge-hold-gate.yml`, so it tests the shipped bytes, not a copy.
+
+    ### The security property actually holds
+
+    The fixture table covers the real attack, not a proxy for it:
+
+    - `aida:merge-hold-recorded` alone -> **exit 1** ("dropping the active label by hand leaves history
+      without clearance"). This is the attack BUG-1693 was filed about: an agent drops the active label,
+      and the persistent recorded label still refuses the merge. **Layer 2 has teeth.**
+    - `aida:merge-hold-cleared` alone -> exit 1 (a forged clearance with no recorded hold).
+    - all three labels -> exit 1 (a clearance cannot release a still-active hold).
+    - `recorded` + `cleared` -> exit 0 (the legitimate release path works).
+    - no labels -> exit 0 (a PR that was never held passes).
+
+    The script also carries an anti-vacuous-green guard: it asserts the extracted gate mentions all three
+    label names, so a truncated extraction cannot exit 0 for every fixture and report a meaningless pass.
+
+    ### Mutation proof — the test has teeth
+
+    Line 56 of the GitHub gate (`has_label aida:merge-hold-recorded && ! has_label
+    aida:merge-hold-cleared`) was mutated to reference a label that never appears. The suite then failed
+    with exactly the right case:
+
+    ```
+    FAIL: github-gate.sh with labels 'aida:merge-hold-recorded': expected exit 1, got 0
+          (dropping the active label by hand leaves history without clearance)
+    ```
+
+    The file was copied aside with `cp` and restored (`diff -q` identical, worktree clean), and the suite
+    re-run green. So the coverage is real: removing Layer 2 reds this test rather than passing either way.
+
+    ### Verdict
+
+    **Approve and merge.** The forge half of the integrity floor is verified first-hand here; the
+    local-marker half is covered by the `merge_hold` unit tests, which the green ubuntu workspace run at
+    this exact head SHA exercised.
+
+    Note for the follower: BUG-1747 is stacked on this branch because `HOLD_RECORDED_LABEL` and
+    `HOLD_CLEARED_LABEL` exist only here. Once this merges, rebase `bug-1747` onto main.
+  created_at: 2026-10-01T04:23:35.380971391Z
+  modified_at: 2026-10-01T04:23:35.380971391Z
+  session_id: 208c9442-4bcd-4f11-9451-5bd90b99d5c5
 history:
 - id: 01a0e3c4-3e96-7950-8853-6173b8caa711
   author: joe
