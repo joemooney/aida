@@ -26,8 +26,20 @@ fn project_with_config(body: Option<&str>) -> (tempfile::TempDir, PathBuf) {
     (dir, root)
 }
 
+/// Writes `parent` as a TOML *literal* string (single quotes), which performs no
+/// escape processing. A basic (double-quoted) string would eat the backslashes in a
+/// Windows path like `C:\Users\op\aida-worktrees` as escape sequences — `\U` is an
+/// invalid TOML escape, so the config would fail to parse rather than carry the path
+/// the test meant. Literal strings are what the TOML spec itself recommends for
+/// Windows paths.
+// trace:TASK-1561 | ai:claude
 fn config(parent: &str) -> String {
-    format!("[worktree_pool]\nworktree_parent = \"{parent}\"\n")
+    assert!(
+        !parent.contains('\''),
+        "a TOML literal string cannot contain a single quote, so this parent cannot be \
+         expressed without escaping: {parent}"
+    );
+    format!("[worktree_pool]\nworktree_parent = '{parent}'\n")
 }
 
 // AC2 — the regression that must NOT happen. With the key unset the path is
