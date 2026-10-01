@@ -22,12 +22,12 @@ description: |
   - Role-user and ordinary-user routes both resolve what auto-queue wrote.
   - GitHub and GitLab use the same selection behavior.
   - Regression tests reproduce the qci failure.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:07:58.670503081Z
-modified_at: 2026-10-01T22:12:17.665873058Z
+modified_at: 2026-10-01T23:00:47.353327128Z
 req_type: Bug
 tags:
 - auto-complete
@@ -40,6 +40,11 @@ comments:
   content: 'Implementation sketch (advisor-cleared headless pickup): add one deterministic canonical review-story selector over non-terminal store rows plus all queue identities; rank exact covered-spec matches first, then stable SPEC-ID. Reuse it in auto-queue and PR/MR pickup, re-queue an existing unqueued canonical story, and persist the selected review SPEC-ID in drain state for retry reuse. Add focused regressions for duplicate selection, cross-user reviewer routing, persistence, and PR/MR symmetry. trace:BUG-1817 | ai:codex'
   created_at: 2026-10-01T22:06:42.568747955Z
   modified_at: 2026-10-01T22:06:42.568747955Z
+- id: 01a0f9b2-ea79-7f51-a27b-6a4ab9f55887
+  author: joe.mooney
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a0f986 exited with code 1 after 302ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1817` isn''t queued. Status is Done (work finished on a branch).. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1817 was not advanced. No triage reason was given.'
+  created_at: 2026-10-01T23:00:47.353323103Z
+  modified_at: 2026-10-01T23:00:47.353323103Z
 history:
 - id: 01a0f97f-f541-77f3-aa2d-8effc9abc7f9
   author: aida-orchestrator-phase1
@@ -62,6 +67,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a0f9b2-ea79-7f51-a27b-6a337081b000
+  author: joe.mooney
+  timestamp: 2026-10-01T23:00:47.353308635Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
@@ -80,14 +92,6 @@ implementation_info:
     git diff --check
   implemented_at: 2026-10-01T22:11:37.816784365Z
   implemented_by: joe.mooney
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: launch-refused
-  detail: 'phase 1 child session 01a0f986 exited with code 1 after 302ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1817` isn''t queued. Status is Done (work finished on a branch).. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1817 was not advanced'
-  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1817`.'
-  shelved_by: advisor
-  shelved_at: 2026-10-01T22:12:17.665873058Z
 interface_changes:
   cli:
   - '`aida pr auto-queue-review` now reuses and requeues one canonical non-terminal PR/MR review story across retries and queue identities.'
