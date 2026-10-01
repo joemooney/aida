@@ -9,6 +9,12 @@ See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
 and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
 <!-- trace:STORY-1477 | ai:codex -->
 
+Merge-hold gate checks now require recorded clearance for any PR carrying the
+persistent `aida:merge-hold-recorded` label; local event history reports marker
+deletion without clearance. The same-user/admin-token limit and protected-broker
+boundary are documented in [reporting](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:BUG-1693 | ai:codex -->
+
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
 keep git and the spec store coherent, and leave durable traces for the

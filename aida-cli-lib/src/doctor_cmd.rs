@@ -426,6 +426,22 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let mut hidden_completed_without_commit = 0;
     let mut performance_audits = Vec::new();
 
+    // trace:BUG-1693 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "merge-hold-integrity")? {
+        findings.extend(
+            crate::merge_hold::unrecorded_marker_removals(&project_root)
+                .into_iter()
+                .map(|pr| DoctorFinding {
+                    category: "merge-hold-integrity".to_string(),
+                    id: format!("PR-{pr}-marker-missing"),
+                    summary: format!("PR #{pr} has a recorded hold placement, but its marker disappeared without a clearance record."),
+                    action: format!("inspect the PR and local .aida/events.jsonl; keep or restore the hold unless a human clearance was recorded"),
+                    safe_heal: false,
+                }),
+        );
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-673: the completed-without-commit integrity check runs git scans
     // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
     // `collect_doctor_findings` path (which `aida status` calls on every

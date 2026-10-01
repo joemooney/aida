@@ -29,6 +29,37 @@ Every flag that bounds a window in time takes the same forms, whichever command 
 - **A zone-less ISO datetime** (`2026-05-01T10:00`, `2026-05-01 10:00`) — that local wall-clock time.
 - **RFC3339** (`2026-05-01T10:00:00Z`, `…+02:00`) — the explicit zone wins.
 
+## Merge-hold gate and clearance limits
+
+The required `merge-hold-gate` check uses three forge labels. An active
+`aida:merge-hold` always fails. A persistent `aida:merge-hold-recorded` label
+means the PR was held previously; the check passes after release only when
+`aida:merge-hold-cleared` is also present. `aida merge-hold clear <pr>` keeps
+the existing human-at-an-interactive-terminal floor, writes the local JSON
+clearance record, removes the active label, and adds the clearance label.
+Removing the active label alone, or deleting the local marker alone, cannot
+make this check pass. The same rule is in the GitLab template.
+Repositories must have all three labels (`aida:merge-hold`,
+`aida:merge-hold-recorded`, and `aida:merge-hold-cleared`) defined before using
+the gate; hold placement/clearance reports forge label update failures.
+
+If a marker disappears without a clearance record, AIDA fails closed on that
+PR: `aida merge-hold list` and `aida doctor --category merge-hold-integrity`
+report it as tampering, and every AIDA merge path refuses it. The way out is
+the same human-gated command — `aida merge-hold clear <pr>` run by a human at
+an interactive terminal records who released it and stops the report. There is
+no way to silence the report without leaving that record.
+
+These labels and the local clearance file are evidence and a gate, not a
+security boundary against a process with the same OS user and an admin forge
+token. Such a process can edit local files and forge labels directly; it could
+also forge the cleared label. Genuine enforcement against that principal
+requires a protected broker that holds the forge credential outside the reach
+of the agent it is gating; that boundary is not in place today. The
+interactive clearance path remains the supported human release mechanism.
+<!-- trace:BUG-1693 | ai:codex -->
+<!-- doc-intent: the protected-broker boundary named above is designed in BUG-1669, ADR-61 -->
+
 Local forms use the offset in effect on that date, so they stay right across a daylight-saving change; a local time that falls in a daylight-saving gap or overlap is refused rather than guessed. A few commands also accept extra forms of their own: `digest --since` and `doctor --since` take a git tag or ref, and the `tail` family keeps seconds (`30s`, or a bare number meaning seconds) and spelled-out units (`10min`). Flags named `--since`/`--until` that take a git ref, a tag, or a condition rather than a time (`db reconcile-status`, `doc coverage`, `field-study scan`, `changelog`, `defer --until`) are not time bounds and keep their own meaning.
 
 ---
