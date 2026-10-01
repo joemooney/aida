@@ -61,7 +61,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:09:51.632713207Z
-modified_at: 2026-10-01T01:02:49.237774768Z
+modified_at: 2026-10-01T01:05:49.490836472Z
 req_type: Bug
 comments:
 - id: 01a0f4d0-058d-7971-bc9a-11cfc58b3319
@@ -137,6 +137,75 @@ comments:
   created_at: 2026-10-01T00:14:28.749511275Z
   modified_at: 2026-10-01T00:14:28.749511275Z
   session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+- id: 01a0f4ff-07b2-7691-ae69-df5c4d330f95
+  author: joe
+  content: |
+    ADVISOR → IMPLEMENTER DISPATCH (2026-09-30, relay #22). Seat: codex, worktree
+    /home/joe/ai/aida-bug-1744, branch bug-1744. The brief states explicitly that codex holds the
+    IMPLEMENTER seat and that the session lease's `role: advisor` is the dispatching seat, not its own
+    — without that sentence a dispatched implementer refuses to implement in an advisor-created
+    worktree.
+
+    DESIGN PINNED IN THE BRIEF, so a reviewer judges the diff against a stated contract rather than
+    against taste. These resolve the shape questions #20's disposition left to the implementer:
+
+    1. **One copy of the lexical match rule.** The inline
+       `trusted.iter().any(|t| parent.starts_with(normalize_path_lexically(t)))` is extracted to
+       `covering_trusted_ancestor(parent, trusted) -> Option<PathBuf>`, because BOTH the pure verdict
+       and the new call-site breadth computation need to know WHICH trusted entry covers the parent. A
+       second copy of a path rule is precisely how `worktree_parent` came to be honoured by the pool
+       and by nothing else (TASK-1561's own commit comment says so).
+
+    2. **`TrustBreadth { unrelated_dirs: usize }`, passed as `Option<TrustBreadth>`.** A bare numeric
+       parameter was forbidden outright. The covering ancestor path is deliberately NOT a field: the
+       pure function re-derives it from the helper, so the struct cannot carry a stale path and the
+       pure/impure split stays legible.
+
+    3. **`worktree_trust_findings` stays filesystem-free**, as #20 required. All IO is in
+       `count_unrelated_child_dirs`, called only from `scan_agent_worktree_trust`.
+
+    4. **Both gates named, and the threshold fixed at `unrelated_dirs >= 1`** so the implementer does
+       not invent a magic number. AC3 ("a single-project parent is not a broad grant") is exactly the
+       `== 0` case, and one unrelated project already means the grant is wider than the work needs.
+       `breadth == None` stays silent, matching this check's existing "unknown reads as unknown" rule.
+
+    5. **New finding id `worktree-folder-trust-breadth`**, category `agent-launch` retained,
+       `safe_heal: false`. Informational severity is expressed in the WORDING — `DoctorFinding` has no
+       severity field and the brief forbids adding one.
+
+    6. **Counting rule made deterministic and testable:** direct children only, `is_dir()` by
+       `file_type()` (no symlink following, no `canonicalize`), dot-prefixed names skipped, the project
+       root and the resolved worktree parent excluded, any `read_dir` error → 0 (an unreadable
+       directory must never read as a broad grant).
+
+    MECHANICAL CHURN AUTHORIZED UP FRONT, per #20's warning that an unauthorized compiler-flagged file
+    costs a round trip: the nine `worktree_trust_findings` call sites in `bug_1700_worktree_trust_tests`
+    (doctor_cmd.rs ~1665/1677/1689/1712/1724/1734/1740/1762/1772) each take a `None` 4th argument and
+    **nothing else changes about them**. Verified before dispatch that every one of those sites passes
+    `parent_configured: true`, except the `unset` arm of
+    `action_differs_on_whether_a_parent_is_configured` which passes an EMPTY trusted list — so no
+    existing site can reach the new branch, and all nine must stay green on the appended `None` alone.
+    That is what makes `trusted_ancestor_further_up_also_covers` (:1677) the honest AC2 witness rather
+    than a new duplicate test.
+
+    MUTATION PROOF demanded in three directions, with the failing test named in the reply: remove the
+    emit branch (test 1 fails), remove the `!parent_configured` gate (test 2 fails), remove the `>= 1`
+    gate (test 3 fails). Silence bugs make fake coverage easy, so a finding that only ever fires in its
+    own fixture proves nothing.
+
+    SEQUENCING NOTE, correcting #20's "sequence after #2300 lands": that was a LOGICAL ordering, not a
+    textual one. #2300's only `doctor_cmd.rs` hunk replaces the body of `normalize_path_lexically`
+    (:1541-1573) with a delegation to `worktree_pool::normalize_path_lexically`. BUG-1744 touches
+    `scan_agent_worktree_trust` (:1514), `worktree_trust_findings` (:1604+) and the test module
+    (:1660+) — disjoint hunks that git merges cleanly. Branched off main rather than stacking on an
+    unmerged PR, and verified the overlap by reading #2300's diff rather than assuming it.
+
+    Codex was given `--add-dir /run/user/1000/cargo-slots-1000`; without it a sandboxed seat cannot
+    flock the machine-wide cargo slot and either loops on a lock it can never take or reports tests it
+    never ran. The brief forbids `AIDA_CARGO_NO_SLOT=1` and tells it to stop and say so instead.
+  created_at: 2026-10-01T01:05:49.490836472Z
+  modified_at: 2026-10-01T01:05:49.490836472Z
+  session_id: bd5b7250-f30f-4343-a65e-d910027e5721
 history:
 - id: 01a0f4d0-01e4-7290-861c-65be9443fd8b
   author: joe
