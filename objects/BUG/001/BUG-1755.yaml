@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:18.258656630Z
-modified_at: 2026-10-01T17:45:57.408283320Z
+modified_at: 2026-10-01T17:53:16.578048330Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -130,6 +130,98 @@ comments:
   created_at: 2026-10-01T17:41:26.954266645Z
   modified_at: 2026-10-01T17:41:26.954266645Z
   session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
+- id: 01a0f899-6122-7d70-8e70-ff9527ca423f
+  author: joe
+  content: |
+    Round 1 accepted, no rework. Advisor closing verdict — PR #2313, branch `bug-1755` @ `98697416c1`,
+    one dispatch round. **Every proof below was re-run by this seat, not taken on the implementer's
+    report.**
+
+    ## AC1 — equivalence measured, and the naive replacement the spec suggested would have been wrong
+
+    The spec warned that `grep -oE 'trace:[A-Z]+-[0-9]+' | sed 's/^trace://'` "is not obviously
+    equivalent to `\K`". It is not — **as literally written it does not work at all**, and the reason is
+    worth recording.
+
+    With `-r` over a directory, grep prefixes every match with its filename, so the line is
+    `path:trace:ID`, and `sed 's/^trace://'` anchored at `^` never matches. The two forms both emit 682
+    lines over `aida-core/src/` and **every one of them differs**. The equivalence only holds once `-h`
+    suppresses the prefix:
+
+    | site | old form | new form | `cmp` |
+    |---|---|---|---|
+    | trace scan, `-h` on both sides | **405** unique IDs | **405** unique IDs | **byte-identical** |
+    | docs path scan | **123** lines | **123** lines | **byte-identical** |
+
+    Measured with **GNU grep 3.11 at `/usr/bin/grep`**, with `aida-core/src/` standing in for the
+    scaffolded generic `src/` (this repo has no top-level `src/`; the shipped path is unchanged). The
+    absolute path matters: this host's interactive `grep` is a shell **function wrapping ugrep 7.8.4**,
+    whose multi-file output ordering is unstable, and a first pass through it reported site 2 as
+    differing when the content was identical and only the file order had changed. A measurement taken
+    through the wrong binary would have sent this round back for nothing.
+
+    The docs-review expression was already valid ERE, so only the flag letter changes. Its filename
+    prefix is **load-bearing** — the next line is `cut -d: -f2` — so `-h` is deliberately not added
+    there.
+
+    ## The portability fix was the smaller of the two defects
+
+    Forcing the equivalence to be real exposed a second, independent bug in the same command, and it was
+    not macOS-specific. Because the loop received `aida-core/src/ai/client.rs:STORY-725` instead of
+    `STORY-725`, `aida show` could never resolve it. End-to-end over a three-file directory, running the
+    recipe's own loop:
+
+    ```
+    OLD (as shipped):  6 inputs -> 6 ORPHAN TRACE     100% false positives
+    NEW:               4 inputs -> 0 ORPHAN TRACE
+    ```
+
+    The old form also fails to deduplicate, because the path makes one ID distinct per file — 6 lines
+    for 4 IDs. So on Linux, with GNU grep and no portability problem at all, the traceability step
+    reported **every trace comment in the tree as an orphan**. That is a worse failure than the empty
+    result this bug was filed for: an empty result is a false reassurance, this was a false alarm on
+    everything.
+
+    Adding `-h` was ruled **in scope** under the spec's own "only the two commands", and is a
+    precondition for the replacement being simultaneously functional and provably equivalent.
+
+    **The trap worth remembering: the defect is invisible on a single file.** GNU grep omits the
+    filename prefix when `-r` is given exactly one path, so a one-file spot check passes and a realistic
+    `src/` does not. The first attempt at this proof used `aida-core/src/conflict.rs` and returned
+    `0 of 13` orphans for *both* forms — it looked like the old form was fine. Only a multi-file
+    directory distinguishes them.
+
+    ## AC3 and the rest, all re-run by this seat
+
+    - `bash scripts/check-portability.sh` → exit **0**
+    - `--check-allowlist-growth origin/main` → exit **0**; `scripts/portability-allowlist.txt`
+      byte-identical to `origin/main`
+    - `grep -c 'grep -oP'` on both files → **0**. No explanatory comment names the construct, because a
+      source-scanning gate asserts an exact count and would be re-broken by the comment explaining it.
+    - `make check-templates` → exit 0, `All templates OK!`; both `.claude/skills/*/SKILL.md` still
+      symlinks to the masters
+    - `git diff --numstat` → exactly `1 1` per file, two files, nothing under `.claude/`
+
+    `cargo test --workspace` **deliberately skipped**, recorded as a decision: no Rust change, no new
+    CLI subcommand, no new source file. CI's `Build (ubuntu-latest)` runs it regardless.
+
+    ## Survey completeness — the filed list did not undercount this time
+
+    A tracked-file sweep of the **whole repo** for `grep -P` returns five paths beyond the two masters,
+    none in scope:
+
+    - the two `.claude/skills/*/SKILL.md` **symlinks** — the same two sites counted twice
+    - `scripts/glyph-lint.sh:104` — a genuine GNU-only site, but a dev-only script `aida init` does not
+      ship, and **already a recorded acceptance** at `scripts/portability-allowlist.txt:221`
+    - `tests/test_prose_classification_rule.py:405` — a fixture string that must stay as it is
+
+    ## AC2
+
+    Already decided in the comment above this one and filed as **BUG-1757**. Not re-derived, and the
+    gate is not widened in this PR.
+  created_at: 2026-10-01T17:53:16.578048330Z
+  modified_at: 2026-10-01T17:53:16.578048330Z
+  session_id: af6e8c72-539b-41ba-ae4c-6a1d493d0ce5
 history:
 - id: 01a0f7a5-16e3-75e0-8b8d-2505a4c30661
   author: joe
