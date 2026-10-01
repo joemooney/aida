@@ -1,0 +1,70 @@
+id: 01a0f7a4-f592-79e2-baf3-acbaa495740f
+spec_id: BUG-1755
+agreed_id: BUG-1755
+title: Two scaffolded skills ship grep -oP recipes, so on macOS their review steps produce empty results instead of findings
+description: |
+  OBSERVED (2026-10-01, relay advisor session #13, from BUG-1751's repo-wide survey): two
+  **scaffolded skills** ship `grep -oP` inside recipes they instruct an agent to run:
+
+      aida-core/templates/skills/aida-code-review.md:63
+        grep -oP 'trace:\K[A-Z]+-[0-9]+' --include="*.rs" -r src/ | sort -u | while read id; do
+      aida-core/templates/skills/aida-docs-review.md:170
+        grep -oP '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
+
+  `aida init` scaffolds these skills onto user machines, macOS included. On macOS BSD grep rejects
+  `-P`, so the command fails and the loop body never executes.
+
+  ## Why this is a different disposition from BUG-1751
+
+  BUG-1751 was urgent because the failure was **silent and inverted**: a guard read an empty field and
+  took its allow branch, so the tripwire never fired and nobody could tell. Here the failure is
+  **visible to the agent running the recipe** — grep prints an error and the pipeline produces
+  nothing, so an attentive agent notices and adapts. The cost is a degraded skill step on macOS, not
+  a security-shaped hole.
+
+  It still matters: a skill step that silently produces an empty result set can make a review report
+  "no untraced code found" when the truth is "the command did not run". That is the same
+  false-reassurance shape, one level up.
+
+  ## Also worth deciding, not just fixing
+
+  These are `.md` files, so **no gate scans them** — the shell walk added by BUG-1750 covers `.sh`
+  files and files with a `sh` shebang under three prefixes. A shipped recipe inside a skill's prose is
+  invisible to the portability ratchet. Fixing the two sites without deciding that question leaves
+  the next one to be found by hand, as these were.
+
+  ## Acceptance criteria
+
+  1. Both sites use a portable form. `trace:\K[A-Z]+-[0-9]+` becomes a two-stage
+     `grep -oE 'trace:[A-Z]+-[0-9]+' | sed 's/^trace://'` or equivalent; the docs-review pattern
+     likewise. Verify each replacement produces byte-identical output to the GNU form on this repo and
+     state the compared counts on this spec.
+  2. A decision is recorded (not necessarily implemented) on whether fenced shell inside
+     `aida-core/templates/skills/*.md` should be in scope for the portability gate. If the answer is
+     yes, file it as its own spec rather than widening this one.
+  3. `bash scripts/check-portability.sh` still exits 0.
+
+  ## Out of scope
+
+  `.aida/setup.sh` and the shell walk's prefix list — filed separately. Do not change any skill's
+  instructions, only the two commands.
+
+  ## Notes
+
+  Filed from the advisor seat. BUG-1751 explicitly scoped these out and the implementer independently
+  proposed them as follow-ons in its round-1 report, which is the report format earning its keep.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T13:26:18.258656630Z
+modified_at: 2026-10-01T13:26:18.258656630Z
+req_type: Bug
+filed_at:
+  code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d93fabb432
+  vendor: antigravity
+  session: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
