@@ -45588,6 +45588,51 @@ mod task_192_fail_closed_fact_tests {
     }
 }
 
+fn canonical_review_story<'a>(
+    store: &'a RequirementsStore,
+    forge: ReviewForge,
+    number: u64,
+    covered_specs: Option<&[String]>,
+    preferred_spec: Option<&str>,
+) -> Option<&'a aida_core::Requirement> {
+    let expected: std::collections::BTreeSet<String> = covered_specs
+        .unwrap_or_default()
+        .iter()
+        .map(|id| id.to_ascii_uppercase())
+        .collect();
+    let covered = |req: &aida_core::Requirement| {
+        req.relationships
+            .iter()
+            .filter(|rel| rel.rel_type.to_string().eq_ignore_ascii_case("implements"))
+            .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+            .filter_map(|r| r.spec_id.as_deref().or(r.agreed_id.as_deref()))
+            .map(|id| id.to_ascii_uppercase())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let mut candidates: Vec<_> = store
+        .requirements
+        .iter()
+        .filter(|req| {
+            !is_terminal_status(&req.status) && review_title_matches(&req.title, forge, number)
+        })
+        .collect();
+    candidates.sort_by_key(|req| {
+        let coverage_rank = if covered_specs.is_some() && covered(req) != expected {
+            1
+        } else {
+            0
+        };
+        let display = req.display_id();
+        let preferred_rank = if preferred_spec.is_some_and(|id| id.eq_ignore_ascii_case(&display)) {
+            0
+        } else {
+            1
+        };
+        (coverage_rank, preferred_rank, display.to_ascii_uppercase())
+    });
+    candidates.into_iter().next()
+}
+
 /// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
 /// regardless of whether the child invocation colored its output. Keep it
 /// minimal — we only need the SGR shape `aida add` emits.
@@ -47149,6 +47194,9 @@ struct AutoQueueOutcome {
     /// auto-bump Done → Completed. Populated on Filed; empty otherwise.
     /// trace:TASK-267 | ai:claude
     covered_specs: Vec<String>,
+    /// Canonical story selected or filed for this change request.
+    /// trace:BUG-1817 | ai:codex
+    review_spec: Option<String>,
 }
 
 impl AutoQueueOutcome {
@@ -47158,6 +47206,7 @@ impl AutoQueueOutcome {
             summary: s.into(),
             pr_number: None,
             covered_specs: Vec::new(),
+            review_spec: None,
         }
     }
     fn already_exists(s: impl Into<String>) -> Self {
@@ -47166,6 +47215,7 @@ impl AutoQueueOutcome {
             summary: s.into(),
             pr_number: None,
             covered_specs: Vec::new(),
+            review_spec: None,
         }
     }
     /// STORY-106: attach the PR number that this outcome refers to. Used
@@ -47181,6 +47231,10 @@ impl AutoQueueOutcome {
         self.covered_specs = specs;
         self
     }
+    fn with_review_spec(mut self, spec: impl Into<String>) -> Self {
+        self.review_spec = Some(spec.into());
+        self
+    }
     /// Skip the user shouldn't care about (review session, no PR-producing
     /// branch). Rendered dim. trace:TASK-74 | ai:claude
     fn skipped_by_design(s: impl Into<String>) -> Self {
@@ -47189,6 +47243,7 @@ impl AutoQueueOutcome {
             summary: s.into(),
             pr_number: None,
             covered_specs: Vec::new(),
+            review_spec: None,
         }
     }
     /// Skip the user might want to act on (missing tool, gh failed, queue
@@ -47199,6 +47254,7 @@ impl AutoQueueOutcome {
             summary: s.into(),
             pr_number: None,
             covered_specs: Vec::new(),
+            review_spec: None,
         }
     }
 }
@@ -47401,34 +47457,6 @@ fn try_auto_queue_pr_review(
     if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), None) {
         return AutoQueueOutcome::skipped_by_design(reason);
     }
-    let open_story = open_pr_review_story(project_root, pr.number);
-    let queued_story_ids = reviewer_queue_story_ids(project_root).unwrap_or_default();
-    match review_story_queue_decision(open_story, &queued_story_ids) {
-        ReviewStoryQueueDecision::Skip(_) => {
-            return AutoQueueOutcome::already_exists(format!(
-                "PR #{} already has a `Review PR-{}` story queued — skipping",
-                pr.number, pr.number
-            ))
-            .with_pr(pr.number);
-        }
-        ReviewStoryQueueDecision::Requeue(story_id) => {
-            let note = format!("re-queued by auto-queue-review for PR #{}", pr.number);
-            if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &story_id, &note) {
-                return AutoQueueOutcome::skipped_needs_attention(format!(
-                    "auto-queue: review story {story_id} exists for PR #{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
-                    pr.number
-                ))
-                .with_pr(pr.number);
-            }
-            return AutoQueueOutcome::filed(format!(
-                "re-queued existing {} → reviewer queue (PR #{})",
-                story_id, pr.number
-            ))
-            .with_pr(pr.number);
-        }
-        ReviewStoryQueueDecision::Create => {}
-    }
-
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
     // BUG-85: split into "delivered" (subject `(REQ-ID)` parens) and
     // "referenced" (body content / trace comments). Only delivered IDs count
@@ -47470,6 +47498,51 @@ fn try_auto_queue_pr_review(
     // fix ("add a `(REQ-ID)` trailer") is obvious. trace:BUG-776 | ai:claude
     if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), Some(spec_ids.len())) {
         return AutoQueueOutcome::skipped_by_design(reason);
+    }
+
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        let storage = Storage::new(store_path);
+        if let Ok(store) = storage.load() {
+            let persisted =
+                drain_state::DrainState::read(project_root).and_then(|state| state.review_spec);
+            if let Some(existing) = canonical_review_story(
+                &store,
+                review_forge,
+                pr.number,
+                Some(&spec_ids),
+                persisted.as_deref(),
+            ) {
+                let existing_id = existing.display_id();
+                let note = format!(
+                    "auto-queue retry reused canonical review story; covers {} spec{}",
+                    spec_ids.len(),
+                    if spec_ids.len() == 1 { "" } else { "s" }
+                );
+                if let Err(err) =
+                    aida_subcmd_queue_add_for_reviewer(project_root, &existing_id, &note)
+                {
+                    return AutoQueueOutcome::skipped_needs_attention(format!(
+                        "auto-queue: canonical review story {existing_id} exists for {} but reviewer queue insertion failed: {err}",
+                        format_review_label(review_forge, pr.number)
+                    ))
+                    .with_pr(pr.number)
+                    .with_specs(spec_ids)
+                    .with_review_spec(existing_id);
+                }
+                return AutoQueueOutcome::already_exists(format!(
+                    "{} #{} reuses canonical review story {}",
+                    format_review_label(review_forge, pr.number)
+                        .split_once('-')
+                        .map(|(prefix, _)| prefix)
+                        .unwrap_or("PR"),
+                    pr.number,
+                    existing_id
+                ))
+                .with_pr(pr.number)
+                .with_specs(spec_ids)
+                .with_review_spec(existing_id);
+            }
+        }
     }
 
     let session_short: &str = &session_id[..session_id.len().min(8)];
@@ -47572,6 +47645,7 @@ fn try_auto_queue_pr_review(
     ))
     .with_pr(pr.number)
     .with_specs(spec_ids)
+    .with_review_spec(new_id)
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
@@ -109108,6 +109182,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &uuid::Uuid::now_v7().to_string(),
                 AutoQueueOrigin::SessionEnd,
             );
+            if let Some(review_spec) = outcome.review_spec.as_deref() {
+                drain_state::set_review_spec(&self.project_root, review_spec);
+            }
             match outcome.status {
                 // Minted now (the resume case) or couldn't mint (gh down) —
                 // surface it. AlreadyExists (normal drain) / by-design skips

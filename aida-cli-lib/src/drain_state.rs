@@ -136,6 +136,11 @@ pub(crate) struct DrainState {
     // trace:STORY-1054 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) current_vendor: Option<String>,
+    /// Canonical review story selected for the current PR/MR. Persisting this
+    /// makes phase-3 retries reuse the same hand-off even when legacy duplicate
+    /// stories exist in different queue identities. trace:BUG-1817 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) review_spec: Option<String>,
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
@@ -320,6 +325,7 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
             stopped_at: None,
             stopped_reason: None,
@@ -349,6 +355,7 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
             stopped_at: None,
             stopped_reason: None,
@@ -377,6 +384,7 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
             stopped_at: None,
             stopped_reason: None,
@@ -945,6 +953,16 @@ fn set_phase_inner_with_tuning(
             },
         ),
     );
+}
+
+/// Persist the canonical phase-3 hand-off chosen by auto-queue. Best-effort,
+/// matching the rest of the drain observability state. trace:BUG-1817 | ai:codex
+pub(crate) fn set_review_spec(project_root: &Path, review_spec: &str) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    state.review_spec = Some(review_spec.to_string());
+    let _ = state.write(project_root);
 }
 
 /// BUG-286: append a retry event to the live drain-state file. Best-effort —
@@ -2000,6 +2018,7 @@ mod tests {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
             stopped_at: None,
             stopped_reason: None,
@@ -2556,6 +2575,17 @@ mod tests {
             liveness,
             crate::pr_ship::ReviewerLiveness::OnThisPr,
             "PR-1948's live sibling-spec reviewer must be found regardless of which spec's run it belongs to"
+        );
+    }
+
+    #[test]
+    fn review_spec_round_trips_for_retry_reuse() {
+        let dir = tempfile::tempdir().unwrap();
+        single_state().write(dir.path()).unwrap();
+        set_review_spec(dir.path(), "STORY-1817");
+        assert_eq!(
+            DrainState::read(dir.path()).unwrap().review_spec.as_deref(),
+            Some("STORY-1817")
         );
     }
 
