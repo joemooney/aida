@@ -52,12 +52,12 @@ description: |
   found six shipped sites where the filing listed three. Consistent with the standing lesson: grep
   the whole tree, a filed list undercounts. Filed from the advisor seat; BUG-1751 explicitly scoped
   these out rather than widening mid-dispatch.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:09.739615850Z
-modified_at: 2026-10-01T17:39:11.345316433Z
+modified_at: 2026-10-01T17:39:15.878904392Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -86,6 +86,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f88c-8d1f-78a2-bfd2-d7e43dadd310
+  author: aida-auto-bump
+  timestamp: 2026-10-01T17:39:15.871529024Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f88c-8d26-78e1-9d7a-a0051ed62476
+  timestamp: 2026-10-01T17:39:15.878903366Z
+  agent: advisor
+  commit_sha: 8c8f9a2d026bfb26d1d9843674eb91614f733a2c
+  summary: Completed via merge 8c8f9a2d
 filed_at:
   code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
   branch: main
@@ -98,3 +111,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T17:39:11.345316433Z
   implemented_by: joe
+  completed_at: 2026-10-01T17:39:15.871502381Z
+  completion_sha: 8c8f9a2d026bfb26d1d9843674eb91614f733a2c
