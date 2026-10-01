@@ -27,13 +27,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:07:58.670503081Z
-modified_at: 2026-10-01T22:05:07.771645712Z
+modified_at: 2026-10-01T22:06:42.568760704Z
 req_type: Bug
 tags:
 - auto-complete
 - cross-project:qci
 - queue-identity
 - reviewer
+comments:
+- id: 01a0f981-6788-7132-97eb-29593accd8a1
+  author: mcp
+  content: 'Implementation sketch (advisor-cleared headless pickup): add one deterministic canonical review-story selector over non-terminal store rows plus all queue identities; rank exact covered-spec matches first, then stable SPEC-ID. Reuse it in auto-queue and PR/MR pickup, re-queue an existing unqueued canonical story, and persist the selected review SPEC-ID in drain state for retry reuse. Add focused regressions for duplicate selection, cross-user reviewer routing, persistence, and PR/MR symmetry. trace:BUG-1817 | ai:codex'
+  created_at: 2026-10-01T22:06:42.568747955Z
+  modified_at: 2026-10-01T22:06:42.568747955Z
 history:
 - id: 01a0f97f-f541-77f3-aa2d-8effc9abc7f9
   author: aida-orchestrator-phase1
