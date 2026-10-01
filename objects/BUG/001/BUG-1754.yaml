@@ -57,8 +57,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:09.739615850Z
-modified_at: 2026-10-01T13:26:22.410982538Z
+modified_at: 2026-10-01T13:26:27.700035360Z
 req_type: Bug
+relationships:
+- rel_type: References
+  target_id: 01a0f6fa-2a45-7b53-a4f2-b2505881106d
+  created_at: 2026-10-01T13:26:27.700032145Z
+  created_by: joe
 history:
 - id: 01a0f7a5-05ca-7783-99f3-e98b4d562049
   author: joe
