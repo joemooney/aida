@@ -1,0 +1,35 @@
+id: 01a0f974-9fcc-7502-a352-b32f6d20abde
+spec_id: BUG-1820
+agreed_id: BUG-1820
+title: Resolve MR-scoped stale leases before headless steal
+description: |
+  A direct reviewer pickup with `--steal` can fail closed before reclaiming a clean stale MR-scoped lease because the guard attempts to resolve synthetic scope `MR-N` as a requirement and reports `store unreadable or spec unknown`.
+
+  Observed in qci#TASK-207 for MR-26. The stale lease and worktree were clean and could be ended safely with `aida session end`, after which the same reviewer pickup succeeded without `--steal`.
+
+  ## Acceptance
+  - `aida queue work <review-story> --role reviewer --steal` recognizes MR/PR synthetic scopes without requiring a requirement lookup.
+  - A dead-process, clean MR-scoped lease is reclaimed and the reviewer starts.
+  - Live or dirty leases still fail closed with actionable diagnostics.
+  - GitHub PR and GitLab MR scope forms are covered.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T21:52:45.004762908Z
+modified_at: 2026-10-01T21:52:45.004762908Z
+req_type: Bug
+tags:
+- cross-project:qci
+- headless
+- reviewer
+- session
+- steal
+execution_mode: drain
+filed_at:
+  code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d0d20a762
+  vendor: codex
