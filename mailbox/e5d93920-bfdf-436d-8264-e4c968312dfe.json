@@ -1,0 +1,17 @@
+{
+  "id": "e5d93920-bfdf-436d-8264-e4c968312dfe",
+  "thread_id": "e5d93920-bfdf-436d-8264-e4c968312dfe",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1790820995452,
+  "body": "Review of PR-2296 finished — verdict: RequestChanges.\n\nCovered specs: BUG-1693 — PARTIAL (repeat hold after clearance passes after the new active label is removed; see review comment).\nFlagged findings: major gate bypass at .github/workflows/merge-hold-gate.yml:54-62; old cleared label survives new hold placement at aida-cli-lib/src/merge_hold.rs:2041-2043.\nLeftover questions: please independently disposition the repeated-hold failure and determine the rework route; I am not approving or merging this product-linked work.\nPR: https://github.com/joemooney/aida/pull/2296",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "legacy"
+}
