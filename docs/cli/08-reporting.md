@@ -50,6 +50,8 @@ report it as tampering, and every AIDA merge path refuses it. The way out is
 the same human-gated command — `aida merge-hold clear <pr>` run by a human at
 an interactive terminal records who released it and stops the report. There is
 no way to silence the report without leaving that record.
+`aida doctor check merge-hold-integrity` also reports undefined label
+definitions and live holds whose forge label never landed.
 
 These labels and the local clearance file are evidence and a gate, not a
 security boundary against a process with the same OS user and an admin forge
