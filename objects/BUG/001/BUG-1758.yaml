@@ -86,12 +86,12 @@ description: |
   Filed from the advisor seat during BUG-1757's round-1 review, which was accepted. The finding came
   out of asking what the new gate does **not** see, rather than only confirming what it does — the
   measurement that validated the pass is the same one that exposed this.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:09:08.273778360Z
-modified_at: 2026-10-01T18:38:32.125254521Z
+modified_at: 2026-10-01T18:38:37.655370227Z
 req_type: Bug
 history:
 - id: 01a0f8a8-0283-73c3-a579-e443d63dda09
@@ -115,6 +115,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f8c2-e64f-7f30-aa2c-3ca442aa4d5c
+  author: aida-auto-bump
+  timestamp: 2026-10-01T18:38:37.647903311Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f8c2-e657-7522-99ce-1f929046cbb0
+  timestamp: 2026-10-01T18:38:37.655369427Z
+  agent: advisor
+  commit_sha: 6d0d20a762baf0b1bb893be3f73db0196b248635
+  summary: Completed via merge 6d0d20a7
 filed_at:
   code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
   branch: main
@@ -127,3 +140,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T18:38:32.125254521Z
   implemented_by: joe
+  completed_at: 2026-10-01T18:38:37.647881387Z
+  completion_sha: 6d0d20a762baf0b1bb893be3f73db0196b248635
