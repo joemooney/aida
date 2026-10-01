@@ -67,7 +67,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:21.256433944Z
-modified_at: 2026-10-01T08:30:17.012414791Z
+modified_at: 2026-10-01T08:46:13.826356069Z
 req_type: Bug
 comments:
 - id: 01a0f695-f1b4-7030-9349-cc9941b3aa8b
@@ -75,6 +75,31 @@ comments:
   content: 'AC4 audit complete: the advisor code guard was the only defective existence check against a TTL-bearing flag file. `roles/$role.toml` is a plain role-definition file without an active flag or TTL, so its existence check is correct. No additional specs were filed.'
   created_at: 2026-10-01T08:30:17.012388069Z
   modified_at: 2026-10-01T08:30:17.012388069Z
+- id: 01a0f6a4-8b42-7cd0-9ee4-06027a1125ec
+  author: joe
+  content: |
+    Advisor review verdict (relay session #12, 2026-10-01) — APPROVED after one rework round. PR #2307, branch `bug-1748-solo-ttl-guard`, commit `ad0c9e62f9`.
+
+    DESIGN RULING, decided before dispatch. The effective-solo resolver already existed and was already shared: `presence::current_solo`, which the vendor-agnostic commit-boundary gate (`advisor_code_gate.rs`, STORY-684) has always called. The Claude PreToolUse hook was the ONLY consumer re-implementing the read. AC3 is therefore satisfied by routing the hook through the existing resolver, not by writing a new one.
+
+    Two sub-rulings worth keeping:
+
+    1. `aida solo status` is NOT a usable substitute for the hook, despite AC3 naming a `--quiet` form of it as an option. `solo_cmd.rs:300-335` resolves a project root and probes the solo LOOP lock first; its `Running` and `Stale` branches print about the loop and never consult `current_solo` at all. The hook needs the MODE answer. So the fix is a new hidden `aida internal solo-active` (exit 0 = active, 1 = off, prints nothing) that deliberately resolves no project root and loads no store, because the hook runs from an arbitrary cwd on every advisor code edit.
+
+    2. The solo check moved to AFTER the fire-once marker check (so an already-fired session costs no subprocess) and BEFORE the marker is touched (so a solo-sanctioned edit still does not consume the marker — unchanged behaviour).
+
+    FAIL-SAFE DIRECTION, decided deliberately: no `aida` on PATH, or one too old to support the subcommand, reads as solo OFF, so the guard FIRES, with one diagnostic line on stderr. The entire defect being fixed is a guard that failed silently open; failing closed is the honest direction. Practically unreachable anyway, since `AIDA_SESSION_ROLE=advisor` is itself set by AIDA's own session-context hook.
+
+    WHAT THE REVIEW CAUGHT (round 1 → 1b). Round 1 was correct on substance; I returned it for three things. (a) The fail-safe branch I had specified shipped with ZERO tests — the same gap that sent BUG-1747 round 2a back. It mattered more than it looked: when the resolver cannot be consulted the hook fires, i.e. `exit 2`, which is exactly what the `absent`/`expired`/`inactive` rows already expect, so three of four hook rows were satisfiable by "the resolver was never consulted" rather than "the resolver said off". Fixed by asserting per row that the hook did NOT emit its fallback diagnostic, plus a dedicated case pinning the fail-safe with an ACTIVE flag on disk (which proves the direction is deliberate, not coincidental). (b) A local `AIDA_BIN` shadowed the exported session variable of the same name set by `.aida/session-env.sh` — renamed `__aida_guard_bin`, matching the `__aida_*` convention in `aida-pre-commit.sh`. I explicitly did NOT let it start honouring the ambient `AIDA_BIN`: no other scaffolded hook does, and that precedent is out of scope here. (c) The reworded header comment said solo is active "after its TTL" — the opposite of the code, which is the same class of mistake that produced this bug.
+
+    MUTATION PROOFS — all three re-run by me, not taken from the implementer's report. Restoring the pre-fix existence test reddens `expired hook agrees with solo state false (expected 2, got 0)` and the `inactive` row. Forcing the fallback branch reddens the `active` row's exit code plus all four "consulted the resolver" checks. Making the fail-safe `exit 0` reddens the dedicated case. All restorations byte-identical per `diff -q`; no mutation string survives in the tree.
+
+    MY OWN BRIEF'S TWO ERRORS, for the record, since both showed up as reported anomalies. The round-1 brief named `cargo test -p aida-cli-lib bug_1502_format_json_audit`, which matches zero tests — the guard is an integration test in a different package, `aida-cli/tests/bug_1502_format_json_audit.rs` (`cargo test -p aida-cli --test bug_1502_format_json_audit`, 9 passed). And it demanded `cargo clippy --workspace --all-targets -- -D warnings`, which is stricter than the gate; CI runs `cargo clippy --workspace -- -W clippy::all -D clippy::correctness`, which is exit 0 here. The six `aida-core` lints the implementer reported are pre-existing and not gated.
+
+    AC coverage: AC1 `internal_cmd.rs` SoloActive arm + the hook's resolver call. AC2 the four-state agreement matrix in `tests/test_advisor_code_guard.sh` (one boolean per row drives the hook's exit code, `internal solo-active`'s exit code, and `aida solo status`'s stdout; all three must agree). AC3 the shared `presence::current_solo` resolver, with `aida solo status` ruled out above. AC4 the audit recorded in the preceding comment — one defective site, nothing further filed. AC5 the mutation proofs above.
+  created_at: 2026-10-01T08:46:13.826356069Z
+  modified_at: 2026-10-01T08:46:13.826356069Z
+  session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
 history:
 - id: 01a0f5c2-e6ed-7f82-a78a-e7b4a1174dbb
   author: joe
