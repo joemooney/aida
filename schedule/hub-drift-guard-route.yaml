@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Advisor: resolved, no action. ''aida remote status'' now reports all remotes agree on main (b785274c7b94), aida-store (54e98857590b) and release v0.15.0 (580db5b13a31). The routed trip is 13h stale; the drift it recorded was cleared by the end-of-session ''aida db sync --push''. No force-push was used or needed.'
+due_since: 2026-10-01T16:46:35.302908105Z
+due_reason: on CronJobFailed:hub-drift-guard
