@@ -1,0 +1,57 @@
+id: 01a0f71a-e7ae-7212-a81c-dbf60ca8898b
+spec_id: BUG-1751
+agreed_id: BUG-1751
+title: Three scaffolded hooks parse stdin with grep -oP, so on macOS the advisor code guard and the git guardrails silently no-op instead of gating
+description: |
+  OBSERVED (2026-10-01, relay advisor session #12, surfaced by BUG-1750's shell portability baseline): three SCAFFOLDED hooks parse their JSON stdin with `grep -oP`, which BSD grep does not support. On macOS these hooks silently no-op instead of doing their job.
+
+  ## The sites
+
+  - `aida-core/templates/hooks/aida-advisor-code-guard.sh:58`
+    `FILE_PATH=$(echo "$INPUT" | grep -oP '"file_path"\s*:\s*"\K[^"]*' 2>/dev/null || echo "")`
+  - `aida-core/templates/hooks/aida-advisor-code-guard.sh:80`
+    `SESSION_ID=$(echo "$INPUT" | grep -oP '"session_id"\s*:\s*"\K[^"]*' 2>/dev/null || echo "nosession")`
+  - `aida-core/templates/hooks/aida-git-guardrails.sh:36`
+    `COMMAND=$(echo "$INPUT" | grep -oP '"command"\s*:\s*"\K[^"]*' 2>/dev/null || echo "")`
+
+  All three are now baselined under `gnu-only-coreutils` in `scripts/portability-allowlist.txt`, so this is recorded debt rather than an unknown.
+
+  ## Why it matters more than a red CI leg
+
+  These are not test scripts. `aida init` SCAFFOLDS them onto user machines, macOS included, and the failure is silent in the worst possible direction:
+
+  - Advisor code guard: `grep -oP` fails, `|| echo ""` yields an empty `FILE_PATH`, and the hook's very next branch is `if [ -z "$FILE_PATH" ]; then exit 0; fi`. **The tripwire never fires on macOS, for any edit.** That is the same class of defect as BUG-1748 — a guard that reads as enforced while nothing enforces it — except BUG-1748 was one machine's stale file and this is every macOS user, permanently.
+  - Git guardrails: an empty `COMMAND` means the guardrail cannot classify the command it is meant to gate, so it passes everything.
+
+  BUG-1748 fixed a guard that failed open because of a stale TTL; this is the same guard failing open on an entire platform for a different reason.
+
+  ## Acceptance criteria
+
+  1. All three sites parse their field without PCRE. The replacement must work on BSD grep and GNU grep alike and must handle the real input shape: a JSON object on one line or many, with the field value possibly containing escaped quotes. Prefer a single shared helper over three independent rewrites; these hooks already share a provenance and a style.
+  2. The parse is exercised by a test that drives the hook with PCRE unavailable — e.g. a PATH shim whose `grep` rejects `-P` — proving the new path does not secretly depend on it. Assert the hook still resolves the field and still reaches its real decision, not merely that it exits 0.
+  3. `tests/test_advisor_code_guard.sh`'s existing decision matrix stays green, including BUG-1748's four-state solo agreement rows and the fail-safe case.
+  4. The three `gnu-only-coreutils` rows for these files are removed from `scripts/portability-allowlist.txt` as the fix lands, and `scripts/check-portability.sh` still exits 0.
+  5. Mutation proof: with the fix in place, the PCRE-unavailable test must go red if the parse is reverted to `grep -oP`.
+
+  ## Out of scope
+
+  Do not change any hook's decision logic, suppression list, soft-block message, fire-once behaviour, or escape hatches. This is a parsing-portability fix. Do not touch the other six baselined `gnu-only-coreutils` rows (`scripts/release.sh`, `scripts/glyph-lint.sh`, `scripts/restart-mcp-servers.sh`, `scripts/multi-clone-harness.sh`, `scripts/ablations/ryo-friction-benchmark.sh`, `tests/test_restore_git_mtimes.sh`) — those are scripts, not scaffolded user-facing hooks, and they are separate debt.
+
+  ## Notes
+
+  Filed from the advisor seat per BUG-1750's AC4 ("report, do not fix"), once BUG-1750's baseline proved the count. Not part of the ADR-47 / BUG-1728 deferred cross-platform CI measurement: this is shipped product behaviour on a supported platform, not a red test leg.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T10:55:30.734561229Z
+modified_at: 2026-10-01T10:55:30.734561229Z
+req_type: Bug
+filed_at:
+  code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d93fabb432
+  vendor: antigravity
+  session: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
