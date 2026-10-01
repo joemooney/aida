@@ -380,6 +380,10 @@ impl CachedGitBackend {
     /// rebuild.
     // trace:BUG-636 | ai:claude
     fn ensure_cache_fresh(&self) -> Result<()> {
+        // trace:BUG-1752 | ai:codex
+        if self.cache.is_read_only() {
+            return Ok(());
+        }
         // TASK-1515: an incremental refresh declines when HEAD moves while it
         // reads the changed objects (it cannot stamp one HEAD on rows that may
         // come from a later one). On a busy store that is common, so retry the
@@ -458,6 +462,11 @@ impl CachedGitBackend {
         loop {
             let head = self.current_head_sha();
             let migration = self.cache.recheck_migration();
+            // trace:BUG-1752 | ai:codex
+            // A read-only cache must serve its committed projection without rebuilding.
+            if self.cache.is_read_only() && self.cache.has_usable_snapshot() {
+                return Ok(None);
+            }
             if migration && budget.0.is_zero() {
                 return Err(cache_refresh::AdvisoryCacheUnavailable.into());
             }
@@ -572,8 +581,12 @@ impl CachedGitBackend {
     ) -> Result<T> {
         use super::cache_refresh::{self, StaleServe};
         let mut schema_retries = 0;
+        // A busy store can keep moving HEAD between refresh and pin. Wait only
+        // for the normal read budget, then serve the pinned rows with a stale
+        // label rather than failing a read.
+        let repin_deadline = std::time::Instant::now() + budget.0;
         loop {
-            let state = self.freshen_for_read(budget)?;
+            let mut state = self.freshen_for_read(budget)?;
             let head = self.current_head_sha();
             let snapshot = match self.cache.read_snapshot() {
                 Ok(snapshot) => snapshot,
@@ -593,7 +606,15 @@ impl CachedGitBackend {
                 && cache_head.as_deref() != Some(head.as_str())
                 && !cache_refresh::RefreshLock::held_by_current_thread(self.cache.path())
             {
-                continue;
+                if self.cache.is_read_only() {
+                    anyhow::bail!(super::cache::cache_read_only_guidance(self.cache.path()));
+                }
+                if std::time::Instant::now() >= repin_deadline {
+                    state = Some(cache_refresh::RefreshState::Deferred);
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    continue;
+                }
             }
             let value = read(&snapshot)?;
             let state = if state == Some(cache_refresh::RefreshState::WorkerRunning) {
@@ -663,8 +684,15 @@ impl CachedGitBackend {
             .inner
             .load()
             .context("Failed to load git store for cache schema-drift rebuild")?;
-        self.cache
-            .rebuild_from_store_after_schema_drift(&store, &head)?;
+        self.cache.rebuild_from_store_after_schema_drift(&store, &head)
+            .map_err(|err| {
+                if super::cache::is_cache_read_only_error(&err) || super::cache::is_cache_unwritable_error(&err) {
+                    anyhow::anyhow!(
+                        "the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout: {err}",
+                        self.cache.path().display()
+                    )
+                } else { err }
+            })?;
         Ok(())
     }
 
@@ -2894,6 +2922,136 @@ mod tests {
             backend.add_requirement(sample_req(id, title)).unwrap();
         }
         (backend, store_root, cache_path)
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_cache_uses_private_fallback_and_serves_store_rows() {
+        use std::os::unix::fs::PermissionsExt;
+        let mut env =
+            crate::test_env::EnvVarsGuard::snapshot(&["AIDA_CACHE_FALLBACK_DIR", "XDG_CACHE_HOME"]);
+        env.unset_key("AIDA_CACHE_FALLBACK_DIR");
+        let dir = tempdir().unwrap();
+        let (backend, store_root, project_cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        let locked_dir = dir.path().join("linked-cache-target");
+        std::fs::create_dir_all(&locked_dir).unwrap();
+        let cache_path = locked_dir.join("cache.db");
+        std::fs::rename(&project_cache_path, &cache_path).unwrap();
+        std::os::unix::fs::symlink(&cache_path, &project_cache_path).unwrap();
+        let connection = rusqlite::Connection::open(&cache_path).unwrap();
+        connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .unwrap();
+        drop(connection);
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", cache_path.display(), suffix));
+        }
+        let cache_dir = cache_path.parent().unwrap();
+        let original = std::fs::metadata(cache_dir).unwrap().permissions();
+        struct Restore(PathBuf, std::fs::Permissions);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let _ = std::fs::set_permissions(&self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(cache_dir.to_path_buf(), original.clone());
+        std::fs::set_permissions(
+            cache_dir,
+            std::fs::Permissions::from_mode(original.mode() & !0o222),
+        )
+        .unwrap();
+        let unused_fallback_home = dir.path().join("fallback-home");
+        env.set_key("XDG_CACHE_HOME", unused_fallback_home.as_os_str());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let thread_cache_path = project_cache_path.clone();
+        std::thread::spawn(move || {
+            let result = CachedGitBackend::open(&store_root, &thread_cache_path)
+                .unwrap()
+                .list_summaries(&ListFilter::default())
+                .unwrap()
+                .len();
+            let _ = tx.send(result);
+        });
+        let result = rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("read exceeded thirty second bound");
+        assert_eq!(result, 3);
+        let fallback_parent = project_cache_path.parent().unwrap().join("cache-fallback");
+        let fallback_root = std::fs::read_dir(&fallback_parent)
+            .unwrap()
+            .next()
+            .expect("location one was not created")
+            .unwrap()
+            .path();
+        assert!(fallback_root.join("cache.db").exists());
+        assert!(
+            !unused_fallback_home.exists(),
+            "unused location two must not be created"
+        );
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_cache_declines_when_configured_fallback_is_unavailable() {
+        use std::os::unix::fs::PermissionsExt;
+        let mut env = crate::test_env::EnvVarsGuard::snapshot(&["AIDA_CACHE_FALLBACK_DIR"]);
+        let dir = tempdir().unwrap();
+        let (backend, store_root, project_cache_path) = task_1515_backend(dir.path());
+        drop(backend);
+        let locked_dir = dir.path().join("linked-cache-target");
+        std::fs::create_dir_all(&locked_dir).unwrap();
+        let cache_path = locked_dir.join("cache.db");
+        std::fs::rename(&project_cache_path, &cache_path).unwrap();
+        std::os::unix::fs::symlink(&cache_path, &project_cache_path).unwrap();
+        let connection = rusqlite::Connection::open(&cache_path).unwrap();
+        connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .unwrap();
+        drop(connection);
+        for suffix in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{}", cache_path.display(), suffix));
+        }
+        let cache_dir = cache_path.parent().unwrap();
+        let original = std::fs::metadata(cache_dir).unwrap().permissions();
+        struct Restore(PathBuf, std::fs::Permissions);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let _ = std::fs::set_permissions(&self.0, self.1.clone());
+            }
+        }
+        let _restore = Restore(cache_dir.to_path_buf(), original.clone());
+        std::fs::set_permissions(
+            cache_dir,
+            std::fs::Permissions::from_mode(original.mode() & !0o222),
+        )
+        .unwrap();
+        let unavailable = dir.path().join("fallback-is-a-file");
+        std::fs::write(&unavailable, b"block directory creation").unwrap();
+        env.set_key("AIDA_CACHE_FALLBACK_DIR", unavailable.as_os_str());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let thread_cache_path = project_cache_path.clone();
+        std::thread::spawn(move || {
+            let result = CachedGitBackend::open(&store_root, &thread_cache_path)
+                .and_then(|backend| backend.list_summaries(&ListFilter::default()).map(|_| ()))
+                .map_err(|err| format!("{err:#}"));
+            let _ = tx.send(result);
+        });
+        let result = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("unavailable fallback check exceeded five second bound");
+        let message = result.expect_err("unreadable cache unexpectedly opened");
+        assert!(
+            message.contains(&project_cache_path.display().to_string()),
+            "{message}"
+        );
+        assert!(
+            message.contains("Grant write access")
+                || message.contains("run the command from the main checkout"),
+            "{message}"
+        );
     }
 
     /// External writer: retitle FR-1-001 and FR-1-002 in ONE store commit.
