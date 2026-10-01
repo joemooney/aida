@@ -6,6 +6,8 @@
 # AIDA also preserves `aida:merge-hold-recorded` across clearance and adds
 # `aida:merge-hold-cleared` through the human-gated clear path. Removing only
 # the active label therefore cannot release a previously held MR.
+# Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
+# the most recent hold has a recorded clearance; this makes label-only gate logic sound.
 #
 # To make it un-bypassable (the point of Layer 2), turn on the project's
 # "Pipelines must succeed" merge check (Settings → Merge requests), so a labelled

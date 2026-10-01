@@ -2052,7 +2052,13 @@ fn sync_label_command(
                 flag.into(),
                 label,
             ];
-            if !held {
+            if held {
+                // Both partial-failure interleavings fail closed: {hold, recorded,
+                // cleared} fails gate rule 1; {recorded} fails rule 2. No
+                // interleaving yields a passing gate.
+                // trace:BUG-1693 | ai:codex
+                args.extend(["--remove-label".into(), HOLD_CLEARED_LABEL.into()]);
+            } else {
                 args.extend(["--add-label".into(), HOLD_CLEARED_LABEL.into()]);
             }
             Some(("gh", args))
@@ -2072,7 +2078,13 @@ fn sync_label_command(
                 flag.into(),
                 label,
             ];
-            if !held {
+            if held {
+                // Both partial-failure interleavings fail closed: {hold, recorded,
+                // cleared} fails gate rule 1; {recorded} fails rule 2. No
+                // interleaving yields a passing gate.
+                // trace:BUG-1693 | ai:codex
+                args.extend(["--unlabel".into(), HOLD_CLEARED_LABEL.into()]);
+            } else {
                 args.extend(["--label".into(), HOLD_CLEARED_LABEL.into()]);
             }
             Some(("glab", args))
@@ -2178,6 +2190,9 @@ mod tests {
             args.contains(&"--add-label".to_string())
                 && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
         );
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--remove-label" && w[1] == HOLD_CLEARED_LABEL));
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
             "{args:?}"
@@ -2191,6 +2206,9 @@ mod tests {
             args.contains(&"--label".to_string())
                 && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
         );
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--unlabel" && w[1] == HOLD_CLEARED_LABEL));
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "g/sub/p"),
             "{args:?}"
@@ -2214,6 +2232,58 @@ mod tests {
             sync_label_command(&none, 42, true).is_none(),
             "pure-git has no forge to label"
         );
+    }
+
+    // trace:BUG-1693 | ai:codex
+    #[test]
+    fn a_second_hold_drops_the_stale_clearance_so_manual_label_removal_cannot_release() {
+        use crate::forge::ForgeKind;
+        use std::collections::BTreeSet;
+
+        fn apply_label_args(labels: &mut BTreeSet<String>, argv: &[String]) {
+            let mut index = 0;
+            while index + 1 < argv.len() {
+                let add = match argv[index].as_str() {
+                    "--add-label" | "--label" => true,
+                    "--remove-label" | "--unlabel" => false,
+                    _ => {
+                        index += 1;
+                        continue;
+                    }
+                };
+                for label in argv[index + 1].split(',') {
+                    if add {
+                        labels.insert(label.to_string());
+                    } else {
+                        labels.remove(label);
+                    }
+                }
+                index += 2;
+            }
+        }
+
+        fn run_sequence(kind: ForgeKind) {
+            let repo_origin = match kind {
+                ForgeKind::GitHub => "git@github.com:o/r.git",
+                ForgeKind::GitLab => "https://gitlab.com/g/sub/p.git",
+                ForgeKind::None => unreachable!(),
+            };
+            let repo = pin(kind, repo_origin);
+            let mut labels = BTreeSet::new();
+            for held in [true, false, true] {
+                let (_, args) = sync_label_command(&repo, 42, held).unwrap();
+                apply_label_args(&mut labels, &args);
+            }
+            labels.remove(HOLD_LABEL);
+
+            // tests/test_merge_hold_gate.sh case
+            // 'aida:merge-hold-recorded|1|dropping the active label by hand leaves history without clearance'
+            // proves the shipped gate fails on this set.
+            assert_eq!(labels, BTreeSet::from([HOLD_RECORDED_LABEL.to_string()]));
+        }
+
+        run_sequence(ForgeKind::GitHub);
+        run_sequence(ForgeKind::GitLab);
     }
 
     // TASK-1455: the pin comes from origin; enterprise / self-managed hosts

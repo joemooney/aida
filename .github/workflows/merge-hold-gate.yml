@@ -23,6 +23,8 @@ name: merge-hold-gate
 # dropping `aida:merge-hold` by hand leaves history without clearance and this
 # check still fails. This is a forge-side integrity check, not protection from
 # an admin token running as the same user; see docs/cli/08-reporting.md.
+# Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
+# the most recent hold has a recorded clearance; this makes label-only gate logic sound.
 #
 # The `run:` block below is the shipped artifact that
 # tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
