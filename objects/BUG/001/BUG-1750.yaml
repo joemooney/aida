@@ -79,7 +79,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:19:45.093340970Z
-modified_at: 2026-10-01T10:56:10.296846422Z
+modified_at: 2026-10-01T10:59:21.485744269Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -107,6 +107,31 @@ comments:
     MECHANISM NOTES for the implementer: `scripts/check-portability.sh` is one bash wrapper around an inline python heredoc; `scan()` is `root.rglob("*.rs")` with Rust-specific `#[cfg(test)]` / `#[cfg(unix)]` scoping. `scripts/portability-rules.json` is a list of 8 objects whose keys are `id`, `label`, `regex`, and optionally `scope`, `context`, `exempt`, `optout`, `self_evident`; `scope` is `test` or `production` today. The allowlist is tab-separated `rule-id<TAB>path:trimmed source line` and is keyed by line CONTENT, not line number. pyyaml 6.0.1 is available on this host but is NOT needed under the amended AC1.
   created_at: 2026-10-01T10:26:51.899597646Z
   modified_at: 2026-10-01T10:26:51.899597646Z
+  session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
+- id: 01a0f71e-6d0d-7571-97d8-1b9f831e7b48
+  author: joe
+  content: |
+    Advisor review verdict (relay session #12, 2026-10-01) — APPROVED after two rework rounds. PR #2308, branch `bug-1750-shell-portability-scan`, commit `500407b077`.
+
+    ARCHITECTURE RULINGS, decided before dispatch and upheld. (a) A separate shell walk, not shell files forced through the Rust walk: none of the `#[cfg(test)]` / `#[cfg(unix)]` scoping means anything for shell, and reusing it would silently mis-scope. `test`/`production` rules stay Rust-only so their existing baseline remains valid; a `shell` rule never sees a `.rs` file. (b) AC1 as filed said to derive the file set from `ci.yml`; I amended it to a recursive TRACKED-file superset over `tests/`, `scripts/` and `aida-core/templates/hooks/` — derivation has to parse step conditions correctly to avoid a false negative, a superset cannot miss a newly added unguarded step at all, and `git ls-files` also excludes the 33 untracked worktrees on this host for free. (c) `aida-core/templates/hooks/` is in scope deliberately and is the most important of the three, because those hooks ship to user machines; a GNU-only construct there is a shipped defect, not a red CI leg. The implementer independently chose recursive `git ls-files` over my flat globs — the better call, which is how `scripts/ablations/ryo-friction-benchmark.sh` was found — but did not declare it in round 1; I required it be declared and commented so nobody narrows it back.
+
+    WHAT THE REVIEW CAUGHT.
+
+    Round 1 → 1b, five findings. The two that matter: (1) TWO BASELINED ROWS WERE CORRECT CODE, not debt — `scripts/multi-clone-harness.sh:1170` and `tests/test_pre_release_check_no_runs.sh:125` both already fall back to the BSD `date -v` form, exactly the pattern the rule exists to encourage. Baselining them mislabels correct code as a known defect and invites a future reader to "fix" something already right; they now carry `# portable-fallback:` markers and the baseline dropped from 11 rows to 9. (2) THE SHARED TEST HELPER WAS BROADENED, weakening two existing assertions: `findings()` used to filter to `prose-classification`, and returning all rules' findings meant a POSITIVE prose fixture could pass because `proc-literal` or `tmp-literal` fired instead — green with the prose rule completely broken. Also: `shell_findings` built its fixture tree with no git repo, so `git ls-files` failed and every new test exercised the `rglob` FALLBACK while the primary path had zero coverage; the `date --date=` and `date -d"$x"` spellings escaped the regex although AC2 names `--date`; and `shell` rules silently ignored `context`/`exempt`/`self_evident`, now a load-time error.
+
+    Round 1b → 1c, one finding, and it is the instructive one: THE FIX FOR FINDING 2 TURNED THE SCOPE-ISOLATION TEST INTO A TAUTOLOGY. Restoring `findings()`'s filter meant its elements could never start with `gnu-only-coreutils\t`, and `shell_findings`'s filter meant its elements could never start with `proc-literal\t`; both `assertFalse(any(...))` calls were unfailable. The test would have stayed green with scope isolation removed entirely. That omission was mine too — round 1b demanded five mutation proofs and none targeted this test, so nothing forced the question. Round 1c added an opt-in `raw=True` view that leaves every existing caller's contract untouched, and proved the test fails in both directions.
+
+    The standing lesson, restated: a vacuous test is worse than no test, and a fix to one assertion can silently void another. Ask of every assertion you touch, which regression does this witness — and prove it by mutation.
+
+    MUTATION PROOFS — six, all re-run by me rather than taken from the implementer's report. Reintroducing `date -u -d` into `tests/test_advisor_code_guard.sh` reddens the scanner and names the line; breaking comment stripping reddens the comment-immunity test; relaxing the date alternative reddens the attached-form fixture; breaking the `prose-classification` regex reddens six positive fixtures (proving the helper's filter is load-bearing); forcing shell rules into the Rust walk reddens the scope test at line 324 with `AssertionError: True is not false` (I ran this one myself end to end — mutate, red, `cp` restore, `diff -q` byte-identical, `grep -c 'if False'` = 0, green again); forcing Rust rules into the shell walk reddens its second assertion.
+
+    COMMENT IMMUNITY was the predictable trap and it was handled: most `date -d` occurrences in this tree are prose explaining that `date -d` is GNU-only, including the comment BUG-1748 added hours earlier. `strip_shell_comment` is quote-aware, and `--print-findings` yields zero comment lines.
+
+    AC coverage: AC1 the shell walk + tracked-file set + shebang pickup (amended as above). AC2 `gnu-only-coreutils` with the attached/`=` forms and the `sed -i.bak` exclusion pinned by a negative fixture. AC3 nine baseline rows generated from `--print-findings`, never hand-written, with `--check-allowlist-growth` already wired. AC4 reported and not fixed; BUG-1751 filed from the advisor seat for the three scaffolded-hook `grep -oP` sites once the baseline proved the count. AC5 the six mutation proofs above.
+
+    ALSO FILED THIS SESSION, both from this work: BUG-1751 (approved, high) — the three hook `grep -oP` sites, where on macOS the parse fails into `|| echo ""`, the hook reads an empty field and exits 0, so the advisor tripwire never fires at all; same failure class as BUG-1748 but platform-wide. BUG-1752 (approved, high) — the dispatched implementer could not read this very spec: `aida show` and `aida comment list` failed in the worktree with `Failed to drop cache tables for schema migration`, because `aida queue work` symlinks the worktree's `cache.db`/`-shm`/`-wal` into the main checkout, so every worktree shares one SQLite cache with the advisor seat. Nothing was lost only because this brief carried the whole survey inline — luck, not design. The concurrency explanation is recorded there as a HYPOTHESIS to reproduce, not as established root cause.
+  created_at: 2026-10-01T10:59:21.485744269Z
+  modified_at: 2026-10-01T10:59:21.485744269Z
   session_id: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
 history:
 - id: 01a0f6fa-7060-70c3-bff2-05ea1aaf964e
