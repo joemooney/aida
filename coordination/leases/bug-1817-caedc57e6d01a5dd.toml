@@ -1,0 +1,12 @@
+scope = "BUG-1817"
+node_id = "4"
+clone_path = "/home/joe.mooney/ai/aida"
+host = "spock"
+pid = 1134977
+pid_start_time = "2026-10-01T22:05:10+00:00"
+agent = "implementer"
+started_at = "2026-10-01T22:05:14.236611310+00:00"
+heartbeat_at = "2026-10-01T22:05:14.236611310+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
