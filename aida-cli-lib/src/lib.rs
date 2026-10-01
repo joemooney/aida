@@ -17270,20 +17270,26 @@ fn init_autopilot_config_section() -> &'static str {
      # ask = \"auto\"\n"
 }
 
-/// The `[store.sync] mirror_remotes` scaffold — commented. Store pushes go to
-/// `origin` only by default; listing extra remotes here fans every store push
-/// out to additional hubs (drift prevention). Best-effort per mirror leg.
+/// The `[store.sync] mirror_remotes` scaffold — commented. Automatic store
+/// pushes go to `origin` only by default; explicit sync commands and an
+/// opt-in `hub-mirror-sync` schedule can update configured mirror hubs.
 // trace:TASK-1096 | ai:claude
+// trace:BUG-1746 | ai:codex
 fn init_store_mirror_config_section() -> &'static str {
-    "\n# Store-sync fan-out (STORY-760). By default `aida db sync --push` (and the\n\
-     # auto-push paths) push the orphan store ONLY to `origin`. List extra remote\n\
-     # names here to mirror every store push to additional hubs (e.g. a personal\n\
-     # GitLab), so a clone can't silently leave one remote behind. Best-effort: a\n\
-     # non-fast-forward or unreachable mirror leg WARNS and is skipped — it never\n\
-     # fails the sync. Check drift anytime with `aida remote status`.\n\
-     #\n\
-     # [store.sync]\n\
-     # mirror_remotes = [\"gitlab\"]\n"
+    r#"
+# Store-sync fan-out (STORY-760). By default automatic store pushes send
+# the orphan store to `origin` only. Mirror hubs are also updated by
+# `aida db sync --push`, `aida pull`, `aida remote mirror-sync`, or an
+# opt-in `hub-mirror-sync` schedule job. Register that job hourly (strictly
+# shorter than any drift guard interval) so transient failures get retries;
+# no mirror-sync route job is intended, since `hub-drift-guard` escalates
+# drift that persists. A non-fast-forward mirror-sync failure exits non-zero
+# and must be reconciled deliberately; ordinary store writes remain best-effort.
+# Check drift anytime with `aida remote status`.
+#
+# [store.sync]
+# mirror_remotes = ["gitlab"]
+"#
 }
 
 // trace:TASK-1522 | ai:antigravity

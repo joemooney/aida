@@ -2891,6 +2891,17 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
+        // which seat made the store writes; keep it off the per-turn hook path.
+        // trace:BUG-1746 | ai:codex
+        (
+            &["remote mirror-sync"],
+            ScheduledCommand {
+                display: "remote mirror-sync",
+                args: &["remote", "mirror-sync", "--json"],
+                hook_allowed: false,
+            },
+        ),
         // STORY-1218: the night-shift tick. Never on the per-turn hook path:
         // a hook must not be able to launch a drain. The tick itself is a
         // no-op unless this clone's local layer enables it.
@@ -3419,6 +3430,160 @@ mod tests {
             Some(raw) => build_config(raw, JobSource::Project),
             None => Ok(None),
         }
+    }
+
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_mirror_sync_is_scheduled_but_hook_forbidden() {
+        let cmd = parse_scheduled_command("remote mirror-sync").unwrap();
+        assert_eq!(cmd.display, "remote mirror-sync");
+        assert_eq!(cmd.args, &["remote", "mirror-sync", "--json"]);
+        assert!(!cmd.hook_allowed, "mirror sync makes a network call");
+        assert!(!cmd.args.contains(&"--force") && !cmd.args.contains(&"-f"));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        tick_with_executor(
+            tmp.path(),
+            config(vec![task("hub-mirror-sync", "1h", "remote mirror-sync")]),
+            &mut state,
+            at(12),
+            true,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+        assert!(
+            seen.borrow().is_empty(),
+            "hook ticks must skip network jobs"
+        );
+    }
+
+    // This pins the cadence trigger itself: command allowlisting alone must
+    // not cause a run when the project has no enabled cadence registration.
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_cadence_dispatches_only_when_registered_and_enabled() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let parsed = load_config(repo_root).unwrap().unwrap();
+        let registered: Vec<Task> = parsed
+            .tasks
+            .into_iter()
+            .filter(|t| t.name == "hub-mirror-sync")
+            .collect();
+        assert_eq!(registered.len(), 1, "repo must register the mirror cadence");
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        tick_with_executor(
+            tmp.path(),
+            config(registered),
+            &mut state,
+            at(12),
+            false,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+        assert_eq!(&*seen.borrow(), &["remote mirror-sync"]);
+
+        for tasks in [
+            Vec::new(),
+            vec![{
+                let mut disabled = task("hub-mirror-sync", "1h", "remote mirror-sync");
+                disabled.enabled = false;
+                disabled
+            }],
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = ScheduleState::default();
+            let seen = Rc::new(RefCell::new(Vec::new()));
+            tick_with_executor(
+                tmp.path(),
+                config(tasks),
+                &mut state,
+                at(12),
+                false,
+                ok_exec(Rc::clone(&seen)),
+            )
+            .unwrap();
+            assert!(
+                seen.borrow().is_empty(),
+                "absent or disabled cadence must not dispatch"
+            );
+        }
+    }
+
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let parsed = load_config(repo_root).unwrap().unwrap();
+        assert!(
+            build_unbound_route_findings(&parsed.tasks).is_empty(),
+            "repo route jobs must all be bound to their guard"
+        );
+        let route_names = [
+            "hub-drift-guard-route",
+            "disk-headroom-guard-route",
+            "performance-guard-route",
+            "watchdog-route",
+        ];
+        let routes: Vec<Task> = parsed
+            .tasks
+            .into_iter()
+            .filter(|t| route_names.contains(&t.name.as_str()))
+            .collect();
+        assert_eq!(
+            routes.len(),
+            4,
+            "all four repository route jobs are in fixture"
+        );
+
+        // The fake executor models an unreachable/rejecting mirror; tick must
+        // persist the failure as CronJobFailed under the cadence job's name.
+        let tmp = tempfile::tempdir().unwrap();
+        let mut run_state = ScheduleState::default();
+        tick_with_executor(
+            tmp.path(),
+            config(vec![task("hub-mirror-sync", "1h", "remote mirror-sync")]),
+            &mut run_state,
+            at(12),
+            false,
+            |_root, _cmd| {
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: String::new(),
+                    stderr: "mirror unavailable".into(),
+                })
+            },
+        )
+        .unwrap();
+        let events = events::read_all(tmp.path());
+        assert!(
+            events.iter().any(|event| matches!(
+                &event.kind,
+                EventKind::CronJobFailed { job, error, .. }
+                    if job == "hub-mirror-sync" && error.contains("mirror unavailable")
+            )),
+            "failed cadence run must emit its own CronJobFailed: {events:?}"
+        );
+
+        bug_1655_route(tmp.path(), routes, &events);
+        let store = store_root(tmp.path());
+        let due: Vec<_> = route_names
+            .iter()
+            .filter(|name| {
+                schedule_ledger::load(&store, name).is_some_and(|l| l.due_since.is_some())
+            })
+            .collect();
+        assert!(
+            due.is_empty(),
+            "transient mirror outage must not route guard jobs: {due:?}"
+        );
     }
 
     // trace:STORY-1218 | ai:claude
