@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T07:29:04.551393354Z
+modified_at: 2026-10-01T07:37:44.694326289Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -403,6 +403,65 @@ comments:
     is stderr not stdout) and one test pinning the sniff to a real `LabelSyncError::DefinitionMissing`.
   created_at: 2026-10-01T07:29:04.551393354Z
   modified_at: 2026-10-01T07:29:04.551393354Z
+  session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
+- id: 01a0f665-d7f6-7d62-94d3-5c2fc4c2707a
+  author: joe
+  content: |
+    ## Advisor review of round 2b: ACCEPTED. Round 2 pushed as PR #2306
+
+    Branch `bug-1747-r2` @ `6e0515d8ee`, pushed to origin **and** the gitlab mirror
+    (`mirrored 1 ref(s) → gitlab: bug-1747-r2@6e0515d8ee53`). PR:
+    https://github.com/joemooney/aida/pull/2306
+
+    Round 2b delivered exactly what the rework brief asked and nothing more: the bound was made
+    injectable (`run_forge_cli_stdout_bounded_with`), with the un-suffixed wrapper still passing the 5 s
+    `LABEL_DEFINITIONS_TIMEOUT`, so **production behaviour is unchanged** while the timeout tests cost
+    ~200 ms instead of 5 s each. Test counts moved 69→73 on `merge_hold` and 236→237 on `doctor`.
+
+    ### Verified first-hand
+
+    - **Both mutation proofs re-run by me**, not carried from the implementer's report:
+      - Disabling the deadline (`if false && Instant::now() >= deadline`) turns
+        `forge_definition_probe_times_out_near_its_injected_bound` red with the verbatim
+        `expected timeout, got Ok((true, ""))` — and, more telling than the message,
+        `finished in 30.01s`: without the bound the call runs the child's full lifetime. That is the
+        hang AC1 exists to prevent, demonstrated.
+      - Breaking the sniff predicate (`contains("zzz-never-matches")`) turns
+        `bug_1747_definition_missing_display_recommends_provisioning` red on
+        `assertion failed: findings[0].action.ends_with("aida merge-hold labels --create-missing")`.
+      - Both restored with `cp` and confirmed byte-identical with `diff -q`; the mutation strings grep
+        to 0 afterwards.
+    - **No leaked load generators.** The timeout tests spawn `sleep 30`; after both mutation runs,
+      every live `sleep` on the host is an unrelated long-running seat's (3600/3000/300/8/3/infinity).
+      The tests carry a `ChildPidGuard` whose `Drop` reaps the grandchild on the failure path.
+    - **The guards hold**: `git diff | grep collect_doctor_findings` is empty (so `aida status` is
+      untouched), and the shared `run_forge_cli_stdout` has no diff hunk.
+    - `cargo fmt --all -- --check` exit 0. No `trace:` marker landed on a `///` line.
+
+    ### The one thing I checked rather than assumed, and accepted
+
+    The sniff pin now constructs a **real** `LabelSyncError::DefinitionMissing`, takes its
+    `.to_string()`, and feeds that through `record_label_state` — so the predicate is pinned to the
+    producer's wording instead of to a string the test wrote itself. I had separately traced that round
+    trip by hand first: `Display` (`merge_hold.rs:2244`) emits the substring, `detail` is already
+    `stderr.lines().next()` so the message is one line, and `record_label_state`'s `err.lines().next()`
+    therefore preserves it. The redundant second alternative was removed.
+
+    ### Residual, accepted rather than spent as a third round
+
+    In `forge_definition_probe_timeout_kills_the_whole_process_group`, the `ChildPidGuard` is
+    constructed *after* the `result.is_err()` assertion, so if that assertion ever fails the grandchild
+    leaks. It is a `sleep 30`, it self-terminates, and it only happens on an already-failing test.
+    Recorded, not reworked.
+
+    ### Status
+
+    Not merged yet. Awaiting CI at `6e0515d8ee` **and** the local `cargo test --workspace`, running
+    concurrently per the push-first policy. Merge only when both are green. On merge the `(BUG-1747)`
+    trailer will auto-complete this spec — and **this time that is correct**: AC1, AC6 and limb 4 are
+    the last open acceptance, with the `aida human` half formally deferred in an earlier comment.
+  created_at: 2026-10-01T07:37:44.694326289Z
+  modified_at: 2026-10-01T07:37:44.694326289Z
   session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
 history:
 - id: 01a0f59e-dece-7160-b758-6d66ee6e27cf
