@@ -1,0 +1,78 @@
+id: 01a0f8af-eac6-75d2-a641-ddaf701ad9d6
+spec_id: BUG-1759
+agreed_id: BUG-1759
+title: Scaffolded skill aida-evaluate.md is truncated mid-example with an unterminated fence and no trailing newline
+description: |
+  OBSERVED (2026-10-01, relay advisor session #18, from BUG-1758's AC6 repo-wide fence survey):
+  `aida-core/templates/skills/aida-evaluate.md` — a scaffolded skill shipped to user machines by
+  `aida init` — is **truncated mid-sentence** and has **no trailing newline**.
+
+  ## Measurement
+
+  ```
+  bytes=4323  ends_with_newline=False  total lines=172  (wc -l reports 171)
+  line 169  '## Example Session'
+  line 170  ''
+  line 171  '```'          <- opens an untagged fence
+  line 172  'User: /aida-evaluate FR-0042'   <- last line, no newline, fence never closed
+  ```
+
+  A repo-wide scan of all **835** tracked `.md` for "file ends with an unterminated fence" returns
+  exactly **two** paths, and they are the same file twice:
+  `aida-core/templates/skills/aida-evaluate.md` (the master) and
+  `.claude/skills/aida-evaluate/SKILL.md` (its symlink). No other tracked markdown in the repository
+  has an unterminated fence.
+
+  ## Consequence
+
+  The `## Example Session` section promises a worked example and delivers one line of it. Any markdown
+  renderer shows an unterminated code block. The file is one of 207 scaffolded templates that
+  `aida init` copies into a user's project, so the truncation ships.
+
+  This is **not** a gate defect and it does **not** hide anything from BUG-1757's markdown pass: the
+  unterminated fence is untagged and is the last block in the file, so no shell-tagged content sits
+  after it. Interior-line scope is unaffected (confirmed: the 1362/1367 figures on BUG-1758 do not move
+  when this file is considered).
+
+  ## Acceptance criteria
+
+  1. The `## Example Session` section is complete: the example session is finished with enough turns to
+     illustrate the skill's actual flow, and its fence is closed.
+  2. The file ends with a trailing newline.
+  3. A repo-wide scan of tracked `.md` for "file ends with an unterminated fence" returns **zero**,
+     down from two. State both numbers. (Two, not one, because the `.claude/skills` mirror is a symlink
+     to the same bytes — fixing the master fixes both.)
+  4. `make check-templates` exits 0 and `.claude/skills/aida-evaluate/SKILL.md` is still a symlink to
+     the master. **Edit the master only.**
+  5. `bash scripts/check-portability.sh` exits 0 and `scripts/portability-allowlist.txt` is unchanged.
+     Completing the example must not introduce a GNU-only command; if it would, use the portable form.
+  6. State the interior-line total BUG-1757's markdown pass sees before and after. It should not change
+     unless the completed example adds a shell-tagged fence, in which case say so and account for it.
+
+  ## Out of scope
+
+  - The fence-polarity defect in `aida-core/templates/skills/aida-docs-review.md` — that is BUG-1758.
+  - Teaching the portability gate to warn about unterminated or illegally nested fences. Both BUG-1758
+    and this spec are evidence that such a check would pay for itself, but it needs its own
+    measurement and spec.
+
+  ## Notes
+
+  Filed from the advisor seat while pre-measuring BUG-1758. BUG-1758's AC6 asks for a repo-wide survey
+  of the same *shape*; this is a different defect found by the same sweep, filed separately rather than
+  silently widening BUG-1758's scope. Related: BUG-1758, BUG-1757, BUG-1755.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T18:17:53.606632960Z
+modified_at: 2026-10-01T18:17:53.606632960Z
+req_type: Bug
+filed_at:
+  code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: f30df840-cbe8-450a-bc3c-59a41927a710
