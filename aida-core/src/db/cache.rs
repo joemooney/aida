@@ -6436,7 +6436,7 @@ mod tests {
     // trace:BUG-1752 | ai:codex
     #[cfg(unix)]
     #[test]
-    fn old_stamp_in_unwritable_cache_keeps_committed_readable_rows() {
+    fn old_stamp_in_unwritable_cache_with_live_wal_keeps_committed_rows() {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempdir().unwrap();
         let path = dir.path().join("cache.db");
@@ -6447,6 +6447,13 @@ mod tests {
         let old = (current_schema_version_num() - 1).to_string();
         cache.set_meta(META_KEY_SCHEMA_VERSION, &old).unwrap();
         drop(cache);
+
+        // Keep WAL shared memory live across chmod. A WAL reader can only
+        // attach to a read-only directory when another connection owns -shm.
+        let wal_keeper = Connection::open(&path).unwrap();
+        wal_keeper
+            .execute_batch("BEGIN DEFERRED; SELECT * FROM cache_meta;")
+            .unwrap();
 
         let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
         let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
@@ -6470,6 +6477,9 @@ mod tests {
                 stamp == old,
                 "read-only open must preserve the on-disk stamp"
             );
+            drop(snapshot);
+            drop(cache);
+            drop(wal_keeper);
             Ok::<_, anyhow::Error>(())
         })();
         // Restore permissions even when an assertion fails, so the tempdir can
@@ -6482,7 +6492,7 @@ mod tests {
     // trace:BUG-1752 | ai:codex
     #[cfg(unix)]
     #[test]
-    fn empty_old_stamp_in_unwritable_cache_defers_migration() {
+    fn empty_old_stamp_in_unwritable_cache_with_live_wal_defers_migration() {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempdir().unwrap();
         let path = dir.path().join("cache.db");
@@ -6491,6 +6501,12 @@ mod tests {
         let conn = Connection::open(&path).unwrap();
         set_meta_on(&conn, META_KEY_SCHEMA_VERSION, &old).unwrap();
         drop(conn);
+        // The cache handle under test is opened later; this second connection
+        // preserves the live WAL shared-memory region through the chmod.
+        let wal_keeper = Connection::open(&path).unwrap();
+        wal_keeper
+            .execute_batch("BEGIN DEFERRED; SELECT * FROM cache_meta;")
+            .unwrap();
         let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
         let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
         let result = (|| {
@@ -6503,6 +6519,8 @@ mod tests {
             anyhow::ensure!(cache.migration_pending());
             let got = cache.get_meta(META_KEY_SCHEMA_VERSION)?;
             anyhow::ensure!(got.as_deref() == Some(old.as_str()));
+            drop(cache);
+            drop(wal_keeper);
             Ok::<_, anyhow::Error>(())
         })();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode)).unwrap();
