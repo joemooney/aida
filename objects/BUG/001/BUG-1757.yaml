@@ -59,12 +59,12 @@ description: |
   then filed separately rather than widening that spec mid-flight. The full reasoning, including why each
   of the three narrowing constraints is motivated by the measurement rather than by caution, is in the
   decision comment on BUG-1755.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T17:41:17.340950779Z
-modified_at: 2026-10-01T18:22:45.630262924Z
+modified_at: 2026-10-01T18:22:50.440880114Z
 req_type: Bug
 comments:
 - id: 01a0f8a8-aec0-7710-9cff-ac1c10c7b96d
@@ -216,6 +216,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0f8b4-7241-77f2-be25-969601bd5f6e
+  author: aida-auto-bump
+  timestamp: 2026-10-01T18:22:50.433423754Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0f8b4-7248-7361-828d-d71729fbf37d
+  timestamp: 2026-10-01T18:22:50.440879259Z
+  agent: advisor
+  commit_sha: ec2a4eff5202399c6674664d025596d4d84b06c4
+  summary: Completed via merge ec2a4eff
 filed_at:
   code_sha: 8c8f9a2d026bfb26d1d9843674eb91614f733a2c
   branch: main
@@ -228,3 +241,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T18:22:45.630262924Z
   implemented_by: joe
+  completed_at: 2026-10-01T18:22:50.433398546Z
+  completion_sha: ec2a4eff5202399c6674664d025596d4d84b06c4
