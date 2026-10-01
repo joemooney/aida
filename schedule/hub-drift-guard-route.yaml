@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Resolved, no action. aida remote status: all remotes agree on every shared branch and release tag — main at 1660445110fb on both gitlab and origin (the BUG-1752 merge), aida-store at 48d7bb45eb87 on both, release v0.15.0 at 580db5b13a31 on both. The trip was the known origin-only drift from routine store writes (BUG-1746); it clears on aida db sync --push, which this session ran. No force-push, nothing reconciled by hand.'
+due_since: 2026-10-01T22:48:35.527646716Z
+due_reason: on CronJobFailed:hub-drift-guard
