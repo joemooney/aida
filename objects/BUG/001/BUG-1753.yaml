@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T11:26:34.634192022Z
-modified_at: 2026-10-01T11:43:35.348058935Z
+modified_at: 2026-10-01T11:48:08.183311963Z
 req_type: Bug
 comments:
 - id: 01a0f746-ebb4-72f0-a613-a31cd7c0b637
@@ -127,6 +127,78 @@ comments:
     session `01a0f74405e7`).
   created_at: 2026-10-01T11:43:35.348058935Z
   modified_at: 2026-10-01T11:43:35.348058935Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
+- id: 01a0f74b-1577-77d3-a0f2-f13d991174a5
+  author: joe
+  content: |
+    Advisor review — round 1: **accepted in substance, two findings, rework dispatched as round 1b.**
+
+    ## Everything the implementer claimed, re-verified by the advisor independently
+
+    - `python3 -m unittest tests/test_prose_classification_rule.py` → **16 tests, OK, 2.1 s**.
+    - **AC2 re-measured by the advisor**, running the fixed script read-only against the operator's
+      main checkout (33 nested worktrees under `.claude/worktrees/`):
+
+          before (advisor, main @ 13706fd197):  exit=1, 232s, 7760 .claude/worktrees findings
+          after  (fixed script, same checkout): exit=0,   9s
+          after  (clean worktree):              exit=0,   9s
+
+      AC2 met. 232 s → 9 s, exit 1 → exit 0, in the checkout that has the nested worktrees.
+    - **Mutation proof 1 re-run by the advisor.** Enumeration reverted to `rglob` →
+      `test_rust_walk_skips_nested_linked_worktree` red at line 338,
+      `AssertionError: True is not false`, output containing
+      `.claude/worktrees/agent-fixture/src/bug_1295.rs` rows **and** the top-level `src/bug_1295.rs`
+      rows — so the positive half of the assertion is load-bearing and the test cannot pass on a dead
+      walk. Restored; `diff -q` clean; `grep -c MUTATION` = 0.
+    - **Mutation proof 3 re-run by the advisor** — the one that mattered most. `rust_paths = []` turns
+      **all six** positive subcases of the pre-existing `test_each_positive_fixture_matches` red
+      (`AssertionError: [] is not true : bug_1435 was not flagged`). That is the proof the
+      `git_repo=True` change on `findings()` actually landed and the seven pre-existing tests now
+      exercise the **tracked** path rather than silently falling through to `rglob`. The trap the
+      round-1 brief was built around did not fire.
+    - AC4: allowlist unchanged, `diff -q` clean, as the pre-dispatch survey predicted.
+    - AC3 implemented as both tests, and the nested-worktree test additionally asserts
+      `(root/".claude/worktrees/agent-fixture/.git").is_file()` — it pins the actual mechanism, not
+      just the symptom. Good.
+
+    ## Finding 1 — the tracked walk crashes on a deleted-but-tracked `.rs` file (regression)
+
+    `git ls-files` lists **index entries**, not existing files. Reproduced by the advisor against the
+    round-1 script: a fixture with two tracked `.rs` files, one removed from the worktree without
+    staging the deletion, makes the gate die with
+
+        FileNotFoundError: [Errno 2] No such file or directory: '.../src/gone.rs'
+        exit=1
+
+    This is a regression the change introduced — `rglob` could only ever yield files that exist. It
+    matters more than it looks: the entire purpose of BUG-1753 is making the gate usable in the
+    author's own checkout *before* pushing, and a gate that dies on a half-finished `rm` is not usable
+    there. **The sibling shell walk already carries the guard**
+    (`... or not path.is_file(): continue`); the Rust loop has only the `.git`/`target` half. Rework
+    requires the one-line symmetry, a test asserting returncode 0 and no `Traceback` in stderr (plus a
+    positive assertion so it cannot pass on a dead walk), and a mutation proof.
+
+    ## Finding 2 — `GIT_CEILING_DIRECTORIES` no longer matches the resolved root
+
+    The round-1 `.resolve()` improvement is correct, but it left `"GIT_CEILING_DIRECTORIES": tmp`
+    holding the **unresolved** path at every call site. Where `tempfile` returns a symlinked path
+    (macOS `/tmp` → `/private/tmp`) the ceiling matches no ancestor of `cwd`, so it stops working.
+    Harmless wherever a `git init` already happened inside the fixture — but **not** on the
+    `git_repo=False` path, where the ceiling is the only thing between the fixture and a real
+    repository higher up the tree. If git finds one,
+    `test_non_git_fallback_still_scans_rust_fixture` quietly stops testing the fallback and tests the
+    tracked path instead. That is the "a fixture that silently becomes a different fixture" failure
+    mode again. Fix: pass the resolved `str(root)`.
+
+    ## Deviations/Improvements as reported
+
+    Deviations: none. Improvements: the `.resolve()` change in both helpers, declared as asked — which
+    is how finding 2 became visible. The report-format requirement to declare improvements earned its
+    keep for the second spec in a row.
+
+    Rework brief: `.aida/handoff/advisor/bug-1753-round1b-rework-brief.md`.
+  created_at: 2026-10-01T11:48:08.183311963Z
+  modified_at: 2026-10-01T11:48:08.183311963Z
   session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f737-81aa-7891-ba4a-233a509c77ae
