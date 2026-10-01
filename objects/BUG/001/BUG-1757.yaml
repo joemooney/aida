@@ -59,12 +59,12 @@ description: |
   then filed separately rather than widening that spec mid-flight. The full reasoning, including why each
   of the three narrowing constraints is motivated by the measurement rather than by caution, is in the
   decision comment on BUG-1755.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T17:41:17.340950779Z
-modified_at: 2026-10-01T17:41:26.333855409Z
+modified_at: 2026-10-01T18:00:12.730876867Z
 req_type: Bug
 history:
 - id: 01a0f88e-8abd-70c0-8a11-e02e918be0ba
@@ -74,6 +74,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0f89f-baba-7c53-8687-312c10aba723
+  author: aida-session-start
+  timestamp: 2026-10-01T18:00:12.730876457Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8c8f9a2d026bfb26d1d9843674eb91614f733a2c
   branch: main
