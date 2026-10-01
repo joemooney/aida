@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:08:01.413414878Z
-modified_at: 2026-10-01T23:09:40.437273613Z
+modified_at: 2026-10-01T23:20:53.466356729Z
 req_type: Bug
 tags:
 - auto-complete
@@ -33,6 +33,12 @@ tags:
 - cross-project:qci
 - forge-resolution
 - rework
+comments:
+- id: 01a0f9c5-51da-71c1-a628-54ba461eed28
+  author: joe.mooney
+  content: 'Implemented phase-1 PR/MR + exact-head persistence in drain state and phase-2 identifier-first verification. Phase 2 now validates open state, spec attribution, exact produced head, realigns to the forge source branch, supports no-upstream staging worktrees without repushing the local branch, and refuses ambiguous/mismatched lookups with IDs and evidence. Verification: cargo test -p aida-cli-lib --lib bug_1818 --no-fail-fast (3 passed); cargo test -p aida-cli-lib --lib real_phase_driver_wiring_tests --no-fail-fast (51 passed); cargo check -p aida-cli-lib --tests; cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-10-01T23:20:53.466356729Z
+  modified_at: 2026-10-01T23:20:53.466356729Z
 history:
 - id: 01a0f9bb-0cdb-7722-a18a-09b7e2cb4608
   author: aida-orchestrator-phase1
