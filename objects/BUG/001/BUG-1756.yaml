@@ -71,8 +71,51 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T15:12:41.984679155Z
-modified_at: 2026-10-01T15:12:50.175362535Z
+modified_at: 2026-10-01T18:24:54.812532600Z
 req_type: Bug
+comments:
+- id: 01a0f8b6-581c-76d0-8132-8bab9cd079b7
+  author: joe
+  content: |
+    Advisor pre-survey for the long-deferred `aida human` grooming pass (relay session #18, 2026-10-01).
+    Deferred four sessions now; this records the cheap part so the next pass starts from facts.
+
+    All **five** `reviews-awaiting` entries are unmerged local branches with **no PR, on either hub**:
+
+    | branch | head | ahead of main | behind main | last commit |
+    |---|---|---|---|---|
+    | `claude/bug-1668` | `01b1d151ae` | 1 | 92 | 2026-09-26 |
+    | `bug-1688` | `72bc040a09` | 1 | 76 | 2026-09-30 |
+    | `claude/task-1455` (PRIN-5) | `ffa34c8939` | 13 | 171 | 2026-09-23 |
+    | `claude/story-1425` | `731d643410` | 2 | 155 | 2026-09-24 |
+    | `task-1536` | `04edf36625` | 1 | 85 | 2026-09-27 |
+
+    Four of the five are a **single commit** 76–155 commits behind main. Only `claude/task-1455` (PRIN-5)
+    carries real volume at 13 commits, and it is the oldest and furthest behind at 171.
+
+    Two findings the next pass should not have to rediscover:
+
+    1. **Every one of these is the live evidence BUG-1756 is about.** BUG-1756 says the unshipped-work
+       detector excludes local-only committed branches; here are five, 1–13 commits each, none pushed and
+       none with a PR. Whoever takes BUG-1756 should use this table as the fixture rather than inventing
+       one, and should re-run the OVER-reporting fixtures from BUG-1187, BUG-1576, BUG-1531 and TASK-1445
+       against it (BUG-1756 AC2) — the detector family has been fixed four times for crying wolf, and five
+       genuinely-unshipped branches is exactly the input that distinguishes a real signal from the noise
+       those four closed.
+
+    2. **"Behind by N" is not a rebase estimate.** Session #16's lesson stands: diffstat overlap predicted a
+       brutal rebase on a stranded WIP and the real merge had **zero** conflicts. Do not disposition any of
+       these on the `behind` column. Test-merge each into a throwaway branch first; four of them are one
+       commit, so it is minutes of work, not a project.
+
+    Recommended disposition order for the grooming pass, cheapest-first: the four single-commit branches
+    (`bug-1688`, `task-1536`, `claude/bug-1668`, `claude/story-1425`) test-merged and dispositioned
+    individually, then `claude/task-1455`/PRIN-5 on its own. `aida review <SPEC>` needs a TTY, so an
+    autonomous session cannot clear these through that path — they need either the operator or a
+    disposition recorded directly on each spec.
+  created_at: 2026-10-01T18:24:54.812532600Z
+  modified_at: 2026-10-01T18:24:54.812532600Z
+  session_id: f30df840-cbe8-450a-bc3c-59a41927a710
 history:
 - id: 01a0f806-7dff-7563-851a-653665aac473
   author: joe
