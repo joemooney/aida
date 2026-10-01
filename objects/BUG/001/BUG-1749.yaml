@@ -68,13 +68,57 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:31.501218455Z
-modified_at: 2026-10-01T04:39:50.834025404Z
+modified_at: 2026-10-01T04:59:03.447650766Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0f4d7-e1eb-78a1-b89e-00acb149ba5f
   created_at: 2026-10-01T04:39:50.834019269Z
   created_by: joe
+comments:
+- id: 01a0f5d4-8f97-7d21-9e54-9a3dcf535d8f
+  author: joe
+  content: |
+    Advisor note (2026-09-30, relay session #9) — AC4's audit is already done. Record it here so the
+    implementer does not re-derive it.
+
+    I grepped every `doctor_check_*_light` function in `aida-cli-lib/src/doctor_cmd.rs` while reviewing
+    BUG-1745's diff. **Three functions share the identical print-then-`bail!` shape**, not one:
+
+    | function | line | shape |
+    |---|---|---|
+    | `doctor_check_runaway_seats_light` | 782 | prints the envelope, then `bail!` on `fail_on_findings` |
+    | `doctor_check_disk_headroom_light` | 827 | prints the envelope, then `bail!` on `fail_on_findings` |
+    | `doctor_check_store_free_light` | 848 | **fixed by BUG-1745** |
+
+    So BUG-1745 fixes one of three. The other two are the same defect: in agent mode their `bail!` reaches
+    `lib.rs:1088`, which appends a TOON `error:` block to a stdout that already holds a complete document.
+
+    **Why they are latent rather than actively broken, and why they still need fixing.** Only the
+    performance command's stdout is parsed today — `failure_trip`'s `is_performance` predicate
+    (`maintenance_schedule.rs:3146`) gates parsing on the display string
+    `"doctor check performance --fail-on-findings"`, so `disk-headroom` and `runaway-seats` trips record no
+    `audit_error` because nothing attempts to parse them. Their stdout is equally unparseable; there is
+    simply no consumer yet. The moment anything parses them — a new scheduled job, a wrapper script, an
+    agent loop — the BUG-1745 defect reappears, and it will again be invisible at a TTY.
+
+    **Scope guidance:** fix all three in this spec, via the mechanism BUG-1745 introduces
+    (`DoctorReport.error` + the `TypedPayloadEmitted` marker). The per-function change is ~6 lines and
+    mechanical; the pattern is in BUG-1745's commit. Do **not** reopen BUG-1745 to add them — its
+    acceptance is performance-scoped and it has shipped its own mutation proof.
+
+    Prefer extracting the shared shape over copying it three times: all three functions are
+    `report → print → fail_on_findings` and differ only in which report they build and which category
+    string they name. A single helper that takes the report and the category would make the invariant
+    ("the reason goes inside the one document; the global renderer stays silent") true by construction
+    rather than by three correct copies.
+
+    **Also still true for this spec:** none of the three has a TOON arm — they branch on the local `--json`
+    bool only — which is this spec's primary defect. The renderer selection and the error-channel fix land
+    naturally in the same helper.
+  created_at: 2026-10-01T04:59:03.447650766Z
+  modified_at: 2026-10-01T04:59:03.447650766Z
+  session_id: daeb8598-0fad-4d16-94b8-01ba69c8465a
 history:
 - id: 01a0f5c2-efb8-7a02-ae49-98b0e6972676
   author: joe
