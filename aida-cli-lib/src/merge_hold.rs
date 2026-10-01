@@ -1074,6 +1074,208 @@ pub(crate) const HOLD_RECORDED_LABEL: &str = "aida:merge-hold-recorded";
 // trace:BUG-1693 | ai:codex
 pub(crate) const HOLD_CLEARED_LABEL: &str = "aida:merge-hold-cleared";
 
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MergeHoldLabel {
+    pub name: &'static str,
+    pub color: &'static str,
+    pub description: &'static str,
+}
+
+pub(crate) const MERGE_HOLD_LABELS: [MergeHoldLabel; 3] = [
+    MergeHoldLabel {
+        name: HOLD_LABEL,
+        color: "B60205",
+        description: "Supervised merge hold — merge-hold-gate fails while present",
+    },
+    MergeHoldLabel {
+        name: HOLD_RECORDED_LABEL,
+        color: "B60205",
+        description: "Supervised merge hold was recorded — persists across clearance",
+    },
+    MergeHoldLabel {
+        name: HOLD_CLEARED_LABEL,
+        color: "0E8A16",
+        description: "Recorded merge hold has a human-gated clearance",
+    },
+];
+
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LabelDefinitions {
+    Read {
+        present: Vec<&'static str>,
+        missing: Vec<&'static str>,
+    },
+    NoForge,
+    Unknown(String),
+}
+
+pub(crate) fn label_definitions(project_root: &Path) -> LabelDefinitions {
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    if kind == crate::forge::ForgeKind::None {
+        return LabelDefinitions::NoForge;
+    }
+    let pin = match resolve_pinned_repo(project_root, kind) {
+        Ok(Some(pin)) => pin,
+        Ok(None) => return LabelDefinitions::NoForge,
+        Err(err) => return LabelDefinitions::Unknown(err),
+    };
+    label_definitions_with(project_root, &pin, run_forge_cli_stdout)
+}
+
+fn label_definitions_with(
+    root: &Path,
+    pin: &PinnedRepo,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> LabelDefinitions {
+    use crate::forge::ForgeKind;
+    let (cli, args) = match pin.kind {
+        ForgeKind::GitHub => (
+            "gh",
+            vec![
+                "label".into(),
+                "list".into(),
+                "-R".into(),
+                pin.repo_arg(),
+                "--json".into(),
+                "name".into(),
+                "--limit".into(),
+                "200".into(),
+            ],
+        ),
+        ForgeKind::GitLab => (
+            "glab",
+            vec!["label".into(), "list".into(), "-R".into(), pin.repo_arg()],
+        ),
+        ForgeKind::None => return LabelDefinitions::NoForge,
+    };
+    let output = match runner(root, cli, &args) {
+        Ok((true, out)) => out,
+        Ok((false, out)) => return LabelDefinitions::Unknown(out),
+        Err(err) => return LabelDefinitions::Unknown(err),
+    };
+    let names: Vec<String> = if pin.kind == ForgeKind::GitHub {
+        match serde_json::from_str::<Vec<serde_json::Value>>(&output) {
+            Ok(rows) => match rows
+                .iter()
+                .map(|row| {
+                    row.get("name")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_owned)
+                })
+                .collect::<Option<Vec<_>>>()
+            {
+                Some(names) => names,
+                None => {
+                    return LabelDefinitions::Unknown(
+                        "gh label list output did not contain a name for every row".into(),
+                    )
+                }
+            },
+            Err(err) => {
+                return LabelDefinitions::Unknown(format!(
+                    "could not parse gh label list output: {err}"
+                ))
+            }
+        }
+    } else {
+        output.lines().map(str::to_owned).collect()
+    };
+    let exists = |name: &&str| {
+        if pin.kind == ForgeKind::GitHub {
+            names.iter().any(|candidate| candidate == *name)
+        } else {
+            names.iter().any(|line| line_defines(line, name))
+        }
+    };
+    let present = MERGE_HOLD_LABELS
+        .iter()
+        .map(|l| l.name)
+        .filter(exists)
+        .collect();
+    let missing = MERGE_HOLD_LABELS
+        .iter()
+        .map(|l| l.name)
+        .filter(|n| !exists(n))
+        .collect();
+    LabelDefinitions::Read { present, missing }
+}
+
+// GitLab emits decorated raw lines. A label match is valid only when its next
+// character cannot continue a label identifier (for example, a longer label).
+fn line_defines(line: &str, name: &str) -> bool {
+    line.match_indices(name).any(|(start, _)| {
+        line[start + name.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !(ch.is_alphanumeric() || matches!(ch, '-' | '_' | ':')))
+    })
+}
+
+pub(crate) fn create_label_command(
+    pin: &PinnedRepo,
+    label: MergeHoldLabel,
+) -> (&'static str, Vec<String>) {
+    use crate::forge::ForgeKind;
+    let args = match pin.kind {
+        ForgeKind::GitHub => vec![
+            "label".into(),
+            "create".into(),
+            label.name.into(),
+            "-R".into(),
+            pin.repo_arg(),
+            "--color".into(),
+            label.color.into(),
+            "--description".into(),
+            label.description.into(),
+            "--force".into(),
+        ],
+        ForgeKind::GitLab => vec![
+            "label".into(),
+            "create".into(),
+            "-R".into(),
+            pin.repo_arg(),
+            "--name".into(),
+            label.name.into(),
+            "--color".into(),
+            label.color.into(),
+            "--description".into(),
+            label.description.into(),
+        ],
+        ForgeKind::None => Vec::new(),
+    };
+    (pin.kind.cli_name(), args)
+}
+
+pub(crate) fn provision_label_definitions(
+    root: &Path,
+    pin: &PinnedRepo,
+    missing: &[&'static str],
+) -> Vec<(&'static str, Result<(), String>)> {
+    MERGE_HOLD_LABELS
+        .iter()
+        .filter(|label| missing.contains(&label.name))
+        .map(|label| {
+            let (cli, args) = create_label_command(pin, *label);
+            let result = match run_forge_cli(root, cli, &args) {
+                Ok((true, _)) => Ok(()),
+                Ok((false, output))
+                    if pin.kind == crate::forge::ForgeKind::GitLab
+                        && output.to_ascii_lowercase().contains("already exists") =>
+                {
+                    Ok(())
+                }
+                Ok((false, output)) => {
+                    Err(output.lines().next().unwrap_or("non-zero exit").to_string())
+                }
+                Err(err) => Err(err),
+            };
+            (label.name, result)
+        })
+        .collect()
+}
+
 /// Whether the forge change currently carries the Layer-2 merge-hold label.
 ///
 /// This is intentionally a live forge read rather than marker metadata: an
@@ -1930,7 +2132,62 @@ pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
 /// labels. This lets both merge-hold-gate workflows require clearance after a
 /// hold.
 // trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)
-pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), String> {
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LabelSyncError {
+    /// A named label is not DEFINED in the repository. Deterministic and
+    /// operator-fixable; never retried.
+    DefinitionMissing {
+        names: Vec<String>,
+        detail: String,
+    },
+    Other(String),
+}
+
+impl LabelSyncError {
+    pub(crate) fn is_definition_missing(&self) -> bool {
+        matches!(self, Self::DefinitionMissing { .. })
+    }
+}
+
+impl std::fmt::Display for LabelSyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DefinitionMissing { names, detail } => write!(f, "{detail}; missing label definition(s): {}. Run `aida merge-hold labels --create-missing`.", names.join(", ")),
+            Self::Other(message) => f.write_str(message),
+        }
+    }
+}
+
+fn classify_label_sync_failure(stderr: &str, candidates: &[&str]) -> LabelSyncError {
+    let names: Vec<String> = candidates
+        .iter()
+        .filter(|name| stderr.contains(&format!("'{}' not found", name)))
+        .map(|name| (*name).to_string())
+        .collect();
+    if names.is_empty() {
+        LabelSyncError::Other(
+            stderr
+                .lines()
+                .next()
+                .unwrap_or("label update failed")
+                .trim()
+                .to_string(),
+        )
+    } else {
+        LabelSyncError::DefinitionMissing {
+            names,
+            detail: stderr
+                .lines()
+                .next()
+                .unwrap_or("label definition missing")
+                .trim()
+                .to_string(),
+        }
+    }
+}
+
+pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), LabelSyncError> {
     sync_label_with(project_root, pr, held, run_forge_cli)
 }
 
@@ -1946,7 +2203,7 @@ pub(crate) fn sync_label_with(
     pr: u64,
     held: bool,
     runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
-) -> Result<(), String> {
+) -> Result<(), LabelSyncError> {
     let kind = crate::forge::resolve_forge_kind(project_root);
     // TASK-1455: pin the repo; an unresolvable one refuses (and is recorded
     // as unsynced) instead of letting `gh`/`glab` guess from the cwd.
@@ -1958,13 +2215,14 @@ pub(crate) fn sync_label_with(
             if held {
                 let _ = record_label_state(project_root, pr, &LabelState::Unsynced(err.clone()));
             }
-            return Err(err);
+            return Err(LabelSyncError::Other(err));
         }
     };
     let Some((cli, args)) = sync_label_command(&pin, pr, held) else {
         return Ok(());
     };
     let mut last_err = String::new();
+    let mut sync_error = None;
     for attempt in 0..2 {
         match runner(project_root, cli, &args) {
             Ok((true, _)) => {
@@ -1974,6 +2232,20 @@ pub(crate) fn sync_label_with(
                 return Ok(());
             }
             Ok((false, stderr)) => {
+                let classified = classify_label_sync_failure(
+                    &stderr,
+                    &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL],
+                );
+                if classified.is_definition_missing() {
+                    last_err = stderr
+                        .lines()
+                        .next()
+                        .unwrap_or("label definition missing")
+                        .trim()
+                        .to_string();
+                    sync_error = Some(classified);
+                    break;
+                }
                 last_err = stderr
                     .lines()
                     .next()
@@ -1990,7 +2262,8 @@ pub(crate) fn sync_label_with(
     if held {
         let _ = record_label_state(project_root, pr, &LabelState::Unsynced(last_err.clone()));
     }
-    Err(format!("`{cli} {}` failed: {last_err}", args.join(" ")))
+    let legacy = format!("`{cli} {}` failed: {last_err}", args.join(" "));
+    Err(sync_error.unwrap_or(LabelSyncError::Other(legacy)))
 }
 
 fn run_forge_cli(
@@ -2234,6 +2507,216 @@ mod tests {
         );
     }
 
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn held_github_label_update_is_one_atomic_comma_list() {
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let (_, args) = sync_label_command(&repo, 9, true).unwrap();
+        // An undefined member of the comma list exits 1 and applies neither label,
+        // so provisioning must cover all three definitions before any hold is placed.
+        assert_eq!(
+            args[args.iter().position(|arg| arg == "--add-label").unwrap() + 1],
+            format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}")
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_sync_failure_classification_matches_forge_diagnostics() {
+        assert_eq!(
+            classify_label_sync_failure(
+                "'aida:merge-hold-cleared' not found",
+                &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]
+            ),
+            LabelSyncError::DefinitionMissing {
+                names: vec![HOLD_CLEARED_LABEL.into()],
+                detail: "'aida:merge-hold-cleared' not found".into()
+            }
+        );
+        assert!(matches!(
+            classify_label_sync_failure("HTTP 502", &[HOLD_LABEL]),
+            LabelSyncError::Other(_)
+        ));
+        assert_eq!(
+            classify_label_sync_failure(
+                "'aida:merge-hold' not found and 'aida:merge-hold-recorded' not found",
+                &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]
+            ),
+            LabelSyncError::DefinitionMissing {
+                names: vec![HOLD_LABEL.into(), HOLD_RECORDED_LABEL.into()],
+                detail: "'aida:merge-hold' not found and 'aida:merge-hold-recorded' not found"
+                    .into()
+            }
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_definition_failure_skips_retry_but_transient_retries() {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["remote", "add", "origin", "git@github.com:o/r.git"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        let definition_calls = std::cell::Cell::new(0);
+        let err = sync_label_with(dir.path(), 42, true, |_, _, _| {
+            definition_calls.set(definition_calls.get() + 1);
+            Ok((false, "'aida:merge-hold-cleared' not found".into()))
+        })
+        .unwrap_err();
+        assert_eq!(definition_calls.get(), 1);
+        assert!(err.is_definition_missing());
+        let transient_calls = std::cell::Cell::new(0);
+        let _ = sync_label_with(dir.path(), 43, false, |_, _, _| {
+            transient_calls.set(transient_calls.get() + 1);
+            Ok((false, "HTTP 502".into()))
+        });
+        assert_eq!(transient_calls.get(), 2);
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_definition_failure_keeps_the_local_hold_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["remote", "add", "origin", "git@github.com:o/r.git"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(44, HoldReasonKind::Supervision, "test", None),
+        )
+        .unwrap();
+        let err = sync_label_with(dir.path(), 44, true, |_, _, _| {
+            Ok((false, "'aida:merge-hold-cleared' not found".into()))
+        })
+        .unwrap_err();
+        assert!(hold_path(dir.path(), 44).exists());
+        assert!(read_hold(dir.path(), 44).is_some());
+        assert!(matches!(
+            read_label_state(dir.path(), 44),
+            LabelState::Unsynced(_)
+        ));
+        assert!(err.is_definition_missing());
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn merge_hold_label_create_argv_covers_registry_with_force_and_metadata() {
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        for label in MERGE_HOLD_LABELS {
+            let (cli, args) = create_label_command(&repo, label);
+            assert_eq!(cli, "gh");
+            assert_eq!(args[0..3], ["label", "create", label.name]);
+            assert!(args
+                .windows(2)
+                .any(|w| w == ["-R", repo.repo_arg().as_str()]));
+            assert!(args.windows(2).any(|w| w == ["--color", label.color]));
+            assert!(args
+                .windows(2)
+                .any(|w| w == ["--description", label.description]));
+            assert!(args.contains(&"--force".into()));
+        }
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn repo_label_definition_probe_maps_output_without_treating_failures_as_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let all = serde_json::to_string(
+            &MERGE_HOLD_LABELS
+                .iter()
+                .map(|l| serde_json::json!({"name": l.name}))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let LabelDefinitions::Read { missing, .. } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, all.clone())))
+        else {
+            panic!("expected read")
+        };
+        assert!(missing.is_empty());
+        let partial = format!(r#"[{{"name":"{}"}}]"#, HOLD_LABEL);
+        let LabelDefinitions::Read { missing, .. } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, partial.clone())))
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+        assert!(matches!(
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((false, String::new()))),
+            LabelDefinitions::Unknown(_)
+        ));
+        assert!(matches!(
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, "not json".into()))),
+            LabelDefinitions::Unknown(_)
+        ));
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn github_probe_does_not_treat_longer_labels_as_the_base_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let only_long_names =
+            r#"[{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]"#;
+        let LabelDefinitions::Read { present, missing } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| {
+                Ok((true, only_long_names.into()))
+            })
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_LABEL]);
+        assert_eq!(present, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn gitlab_probe_does_not_treat_longer_labels_as_the_base_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitLab, "git@gitlab.com:o/r.git");
+        let only_long_names = "aida:merge-hold-recorded\naida:merge-hold-cleared\n";
+        let LabelDefinitions::Read { present, missing } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| {
+                Ok((true, only_long_names.into()))
+            })
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_LABEL]);
+        assert_eq!(present, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+    }
+
     // trace:BUG-1693 | ai:codex
     #[test]
     fn a_second_hold_drops_the_stale_clearance_so_manual_label_removal_cannot_release() {
@@ -2424,7 +2907,7 @@ mod tests {
             panic!("an unpinned forge call must never be made")
         })
         .unwrap_err();
-        assert!(err.contains("unpinned"), "{err}");
+        assert!(format!("{err}").contains("unpinned"), "{err}");
         assert!(matches!(read_label_state(root, 5), LabelState::Unsynced(_)));
     }
 
@@ -3141,7 +3624,7 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(calls.get(), 2, "one retry");
-        assert!(err.contains("502"), "{err}");
+        assert!(format!("{err}").contains("502"), "{err}");
         assert_eq!(
             read_label_state(root, 7),
             LabelState::Unsynced("gh: HTTP 502 bad gateway".to_string())

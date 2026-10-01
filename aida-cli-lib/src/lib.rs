@@ -34900,6 +34900,95 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
     // trace:BUG-1188 | ai:codex
     let root = find_main_worktree_root()?;
     match action {
+        crate::cli::MergeHoldAction::Labels {
+            create_missing,
+            json,
+        } => {
+            let kind = forge::resolve_forge_kind(&root);
+            if kind == forge::ForgeKind::None {
+                print_merge_hold_no_forge(*json);
+                return Ok(());
+            }
+            let definitions = merge_hold::label_definitions(&root);
+            let missing = match definitions {
+                merge_hold::LabelDefinitions::Read { missing, .. } => missing,
+                merge_hold::LabelDefinitions::NoForge => {
+                    print_merge_hold_no_forge(*json);
+                    return Ok(());
+                }
+                merge_hold::LabelDefinitions::Unknown(detail) => {
+                    if *json {
+                        println!(
+                            "{}",
+                            serde_json::json!({"status":"unknown", "labels":{}, "error":detail})
+                        );
+                    } else {
+                        println!("Could not determine merge-hold label definitions: {detail}");
+                    }
+                    anyhow::bail!("could not determine merge-hold label definitions");
+                }
+            };
+            let pin = merge_hold::resolve_pinned_repo(&root, kind)
+                .map_err(|err| anyhow::anyhow!(err))?
+                .ok_or_else(|| anyhow::anyhow!("could not determine forge repository"))?;
+            let mut statuses: std::collections::BTreeMap<String, String> =
+                merge_hold::MERGE_HOLD_LABELS
+                    .iter()
+                    .map(|label| {
+                        (
+                            label.name.to_string(),
+                            if missing.contains(&label.name) {
+                                "missing".to_string()
+                            } else {
+                                "present".to_string()
+                            },
+                        )
+                    })
+                    .collect();
+            let mut failures = Vec::new();
+            if *create_missing {
+                for (name, result) in merge_hold::provision_label_definitions(&root, &pin, &missing)
+                {
+                    match result {
+                        Ok(()) => {
+                            statuses.insert(name.into(), "created".into());
+                        }
+                        Err(error) => {
+                            statuses.insert(name.into(), "failed".into());
+                            failures.push(format!("{name}: {error}"));
+                        }
+                    }
+                }
+            }
+            if *json {
+                let status = if failures.is_empty() { "ok" } else { "unknown" };
+                if failures.is_empty() {
+                    println!(
+                        "{}",
+                        serde_json::json!({"status":status, "labels":statuses})
+                    );
+                } else {
+                    println!(
+                        "{}",
+                        serde_json::json!({"status":status, "labels":statuses, "error":failures.join("; ")})
+                    );
+                }
+            } else {
+                for (name, status) in &statuses {
+                    println!("{name}: {status}");
+                }
+                if !missing.is_empty() && !*create_missing {
+                    println!("Provision missing definitions with `aida merge-hold labels --create-missing`.");
+                }
+                for failure in &failures {
+                    println!("Could not provision {failure}");
+                }
+            }
+            if !failures.is_empty() {
+                anyhow::bail!("one or more merge-hold label definitions could not be provisioned");
+            }
+            Ok(())
+        }
         crate::cli::MergeHoldAction::List { json, fix } => {
             let holds = merge_hold::list_holds(&root);
             // TASK-1455 / TASK-189: ONE pinned forge read per hold answers
@@ -35413,6 +35502,10 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 Ok(()) => println!(
                     "Merge-hold placed on PR #{pr} (marker written, `aida:merge-hold` label applied). Release with `aida merge-hold clear {pr}`."
                 ),
+                Err(err) if err.is_definition_missing() => {
+                    println!("Merge-hold marker written for PR #{pr} and Layer 1 is armed, but Layer 2 is not armed because the forge label definitions are missing: {err}");
+                    return Err(anyhow::anyhow!(err));
+                }
                 Err(err) => println!(
                     "Merge-hold marker written for PR #{pr}, but the label did not apply: {err} — retry with `aida merge-hold list --fix`."
                 ),
@@ -35701,6 +35794,14 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 }
             }
         }
+    }
+}
+
+fn print_merge_hold_no_forge(json: bool) {
+    if json {
+        println!("{}", serde_json::json!({"status":"no_forge", "labels":{}}));
+    } else {
+        println!("No forge is configured; there are no merge-hold labels to provision.");
     }
 }
 
