@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:08:01.413414878Z
-modified_at: 2026-10-01T23:21:43.448573084Z
+modified_at: 2026-10-01T23:21:43.483321758Z
 req_type: Bug
 tags:
 - auto-complete
@@ -64,6 +64,11 @@ filed_at:
   vendor: codex
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-cli-lib --lib bug_1818 --no-fail-fast
+    cargo test -p aida-cli-lib --lib real_phase_driver_wiring_tests --no-fail-fast
+    cargo check -p aida-cli-lib --tests
+    cargo fmt --all -- --check
   implemented_at: 2026-10-01T23:21:43.118437405Z
   implemented_by: joe.mooney
 interface_changes: {}
