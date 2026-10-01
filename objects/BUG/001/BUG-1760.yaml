@@ -96,7 +96,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:21:51.793308105Z
-modified_at: 2026-10-01T18:22:18.489356737Z
+modified_at: 2026-10-01T18:30:31.611423064Z
 req_type: Bug
 comments:
 - id: 01a0f8b3-f579-7513-8100-0183cfc5c782
@@ -125,6 +125,49 @@ comments:
     to approve.
   created_at: 2026-10-01T18:22:18.489356737Z
   modified_at: 2026-10-01T18:22:18.489356737Z
+  session_id: f30df840-cbe8-450a-bc3c-59a41927a710
+- id: 01a0f8bb-7bbb-7e80-87e7-a2e850a54f6e
+  author: joe
+  content: |
+    **A second, worse finding, measured after filing: the drift check reports a false green when the pack
+    is entirely absent.**
+
+    A linked worktree created by `aida queue work` does **not** contain `.agents/` at all — it is gitignored
+    (`.gitignore:194`), so `git worktree add` never materialises it:
+
+    ```
+    $ cd /home/joe/ai/aida-worktrees/aida-bug-1758
+    $ ls -d .agents
+    ls: cannot access '.agents': No such file or directory
+    $ ls .agents/skills 2>/dev/null | wc -l
+    0
+    $ make check-agent-skills
+      OK: .agents/skills (aida-* pack matches aida-core/templates)
+    exit=0
+    ```
+
+    So `check-agent-skills` prints **"matches"** for a pack that does not exist, and `make check-templates`
+    reports `All templates OK!`. Absent is being read as agreement.
+
+    Why this matters more than the drift:
+
+    1. **The guard cannot fail where the work happens.** Implementers work in linked worktrees. A spec with
+       a `make check-templates` acceptance criterion gets a green from a worktree no matter what it did to a
+       template master. BUG-1758's round 1 hit exactly this: the implementer edited a master, ran
+       `make check-templates`, got `All templates OK!`, and reported AC5 as passing "including the
+       `.agents/skills` pack check" — there was no pack to check. The change was correct and the round was
+       accepted, but the AC5 evidence was vacuous and only re-running it in the worktree revealed that.
+    2. **It is the same class of defect as PRIN-5** — "a coordination surface must distinguish absent
+       evidence from negative evidence." This is a check that cannot tell *no pack* from *a matching pack*.
+    3. It also means the three-day drift in the main checkout was the **detectable** case. The undetectable
+       case is the common one.
+
+    This should fold into AC1/AC2 rather than becoming a third spec: whatever mechanism is chosen must
+    report **absent** distinctly from **matches**, and the mutation proof in AC2 must include *removing* the
+    pack directory, not only modifying a file in it. A mechanism that stays green when the artifact it
+    guards is deleted is not a guard.
+  created_at: 2026-10-01T18:30:31.611423064Z
+  modified_at: 2026-10-01T18:30:31.611423064Z
   session_id: f30df840-cbe8-450a-bc3c-59a41927a710
 history:
 - id: 01a0f8b3-abff-77d2-a69c-dabe4b43776a
