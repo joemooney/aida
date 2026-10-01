@@ -14,13 +14,34 @@ fn doctor_envelope_carries_error_and_performance_audits() {
     assert_eq!(decoded["performance_audits"].as_array().unwrap().len(), 1);
 }
 
+// Locate the built `aida` binary through the process-wide hardened resolver
+// rather than a raw OS executable lookup: TASK-1262's architecture guard keeps every
+// such lookup inside the resolver, and its allowlist is exact — the guard greps for
+// the literal call, so naming it here would trip it too. Under
+// `cargo test` the resolver returns target/<profile>/deps/<runner>, so the
+// binary sits two levels up.
+// trace:BUG-1745 | ai:codex
+fn built_aida_binary() -> std::path::PathBuf {
+    let runner = crate::resolve_aida_exe();
+    let binary = runner
+        .parent()
+        .and_then(|parent| parent.parent())
+        .map(|target| target.join("aida"))
+        .expect("test runner path has a target/<profile> ancestor");
+    assert!(
+        binary.is_file(),
+        "expected the built aida binary at {} \u{2014} run `cargo build -p aida-cli` first, \
+         and unset AIDA_BIN, which redirects the resolver away from this build",
+        binary.display()
+    );
+    binary
+}
+
 // trace:BUG-1745 | ai:codex
 #[test]
 fn performance_command_stdout_round_trips_into_failure_trip() {
     let argv = crate::maintenance_schedule::bug_1745_performance_argv();
-    let test_exe = std::env::current_exe().unwrap();
-    let binary = test_exe.parent().unwrap().parent().unwrap().join("aida");
-    let output = std::process::Command::new(binary)
+    let output = std::process::Command::new(built_aida_binary())
         .args(argv)
         .output()
         .expect("run built aida binary with captured stdout");
