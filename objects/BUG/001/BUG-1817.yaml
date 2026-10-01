@@ -22,18 +22,26 @@ description: |
   - Role-user and ordinary-user routes both resolve what auto-queue wrote.
   - GitHub and GitLab use the same selection behavior.
   - Regression tests reproduce the qci failure.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T20:07:58.670503081Z
-modified_at: 2026-10-01T20:07:58.670503081Z
+modified_at: 2026-10-01T22:05:07.771645712Z
 req_type: Bug
 tags:
 - auto-complete
 - cross-project:qci
 - queue-identity
 - reviewer
+history:
+- id: 01a0f97f-f541-77f3-aa2d-8effc9abc7f9
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-01T22:05:07.777914524Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
