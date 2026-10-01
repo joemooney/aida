@@ -81,8 +81,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T00:25:27.739056324Z
+modified_at: 2026-10-01T00:25:37.555137475Z
 req_type: Bug
+comments:
+- id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
+  author: joe
+  content: |
+    Mechanism identified in the same session that closed the hub-drift-guard-route due job (2026-09-30). That job's closing note records the two-consecutive-day pattern; this spec records WHY. Cross-reference: the guard itself is working correctly and should be preserved — see the NOT PROPOSED section.
+  created_at: 2026-10-01T00:25:37.555137475Z
+  modified_at: 2026-10-01T00:25:37.555137475Z
+  session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
