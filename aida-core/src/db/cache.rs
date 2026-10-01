@@ -786,10 +786,19 @@ fn remove_corrupt_cache_files(path: &Path) {
 // observation, dead-owner cleanup, release) uses that one path, so a symlink
 // changing mid-write cannot leak this process's record at a second location.
 // trace:BUG-1644 | ai:claude
-fn with_cache_write<T, F>(cache_path: &Path, lock_info_path: &Path, action: &str, f: F) -> Result<T>
+fn with_cache_write<T, F>(
+    cache_path: &Path,
+    lock_info_path: &Path,
+    action: &str,
+    read_only: bool,
+    f: F,
+) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
+    if read_only {
+        return Err(anyhow::Error::new(CacheReadOnly { path: cache_path.to_path_buf() }).context(format!("the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout", cache_path.display())));
+    }
     let _holding_write = HoldingWrite::new();
     let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;
     let result = with_cache_retry_observed(lock_info_path, action, claimed, f);
@@ -991,6 +1000,16 @@ impl CacheTx<'_> {
 #[error("the cache schema changed; a compatible projection is required")]
 pub(crate) struct CacheSchemaChanged;
 
+#[derive(Debug, thiserror::Error)]
+#[error("the AIDA cache at {path} is not writable")]
+pub(crate) struct CacheReadOnly {
+    pub path: PathBuf,
+}
+
+pub(super) fn is_cache_read_only_error(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<CacheReadOnly>().is_some()
+}
+
 pub struct Cache {
     conn: Mutex<Connection>,
     path: PathBuf,
@@ -1004,6 +1023,36 @@ pub struct Cache {
     // trace:TASK-1515 | ai:claude
     migration_pending: AtomicBool,
     usable_snapshot: AtomicBool,
+    read_only: bool,
+}
+
+// trace:BUG-1752 | ai:codex
+// Probe actual filesystem writes once per handle; permission bits do not account for mounts/sandboxes.
+fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
+    static NEXT_PROBE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    fn probe_dir(dir: &Path) -> bool {
+        use std::io::Write;
+        let n = NEXT_PROBE.fetch_add(1, Ordering::Relaxed);
+        let probe = dir.join(format!(".aida-write-probe-{}-{n}", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(mut f) => {
+                let result = f.write_all(b"probe").is_ok();
+                drop(f);
+                let _ = std::fs::remove_file(probe);
+                result
+            }
+            Err(_) => false,
+        }
+    }
+    let lock_dir = lock_info_path.parent().unwrap_or_else(|| Path::new("."));
+    let db_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    probe_dir(lock_dir)
+        && probe_dir(db_dir)
+        && (!path.exists() || std::fs::OpenOptions::new().append(true).open(path).is_ok())
 }
 
 impl Cache {
@@ -1044,6 +1093,7 @@ impl Cache {
         // BUG-1644: resolve the shared lock-info sidecar once for this handle.
         // trace:BUG-1644 | ai:claude
         let lock_info_path = cache_lock_info_path(&path);
+        let read_only = !probe_cache_writable(&path, &lock_info_path);
         let conn = open_connection_with_retry(&path, &lock_info_path)?;
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
@@ -1123,11 +1173,15 @@ impl Cache {
         // trace:TASK-1515 | ai:claude
         let mut migration_pending = false;
         if needs_migration_drop {
-            if projection_has_rows(&conn) {
+            if read_only || projection_has_rows(&conn) {
                 migration_pending = true;
             } else {
-                let outcome =
-                    with_cache_write(&path, &lock_info_path, "migrate empty cache schema", || {
+                let outcome = with_cache_write(
+                    &path,
+                    &lock_info_path,
+                    "migrate empty cache schema",
+                    read_only,
+                    || {
                         let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
                         // Re-check under the write lock: another process may
                         // have migrated, or rebuilt rows into the old tables,
@@ -1153,28 +1207,38 @@ impl Cache {
                         )?;
                         tx.commit()?;
                         Ok(EmptyMigration::Migrated)
-                    });
+                    },
+                );
                 let outcome = match outcome {
                     Ok(value) => value,
                     // The tables may be readable even when lock metadata or a
                     // migration write cannot be created. Keep their committed
                     // contents and stamp unchanged; a later writer retries.
-                    Err(err) if is_cache_unwritable_error(&err) => {
+                    Err(err)
+                        if read_only
+                            || is_cache_read_only_error(&err)
+                            || is_cache_unwritable_error(&err) =>
+                    {
                         migration_pending = true;
                         EmptyMigration::NowHasRows
                     }
-                    Err(err) => return Err(err.context(format!(
-                        "the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). Grant write access to its .aida directory or run from the main checkout",
-                        path.display()
-                    ))),
+                    Err(err) => return Err(err),
                 };
                 migration_pending = outcome == EmptyMigration::NowHasRows;
             }
+        } else if !tables_present && read_only {
+            migration_pending = true;
         } else if !tables_present {
-            with_cache_write(&path, &lock_info_path, "apply cache schema", || {
-                conn.execute_batch(SCHEMA_SQL)
-                    .context("Failed to apply cache schema")
-            })?;
+            with_cache_write(
+                &path,
+                &lock_info_path,
+                "apply cache schema",
+                read_only,
+                || {
+                    conn.execute_batch(SCHEMA_SQL)
+                        .context("Failed to apply cache schema")
+                },
+            )?;
         }
         let cache = Cache {
             conn: Mutex::new(conn),
@@ -1182,6 +1246,7 @@ impl Cache {
             path,
             migration_pending: AtomicBool::new(migration_pending),
             usable_snapshot: AtomicBool::new(tables_present),
+            read_only,
         };
         // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
@@ -1195,7 +1260,7 @@ impl Cache {
         // newer cache leaves the newer binary's higher stamp in place instead
         // of clobbering it back down (which would make the newer binary
         // rebuild its own healthy cache on its next open).
-        if !needs_migration_drop {
+        if !needs_migration_drop && !read_only {
             let target_version: String = on_disk_version_num
                 .map(|v| v.max(current_version_num))
                 .unwrap_or(current_version_num)
@@ -1228,6 +1293,7 @@ impl Cache {
             lock_info_path: self.lock_info_path.clone(),
             migration_pending: AtomicBool::new(false),
             usable_snapshot: AtomicBool::new(true),
+            read_only: self.read_only,
         })
     }
 
@@ -1243,6 +1309,10 @@ impl Cache {
             self.migration_pending.store(false, Ordering::SeqCst);
         }
         self.migration_pending()
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     pub fn path(&self) -> &Path {
@@ -1261,6 +1331,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "set cache metadata",
+            self.read_only,
             || set_meta_on(&conn, key, value),
         )?;
         Ok(())
@@ -1325,17 +1396,25 @@ impl Cache {
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, &self.lock_info_path, "truncate cache", || {
-            // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
-            // the DELETEs so truncate stays a valid recovery verb even when a
-            // torn migration left a table missing — the DELETE would otherwise
-            // error with `no such table: requirements_fts` before anything
-            // could heal.
-            // trace:BUG-757 | ai:claude
-            conn.execute_batch(SCHEMA_SQL)?;
-            conn.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "truncate cache",
+            self.read_only,
+            || {
+                // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
+                // the DELETEs so truncate stays a valid recovery verb even when a
+                // torn migration left a table missing — the DELETE would otherwise
+                // error with `no such table: requirements_fts` before anything
+                // could heal.
+                // trace:BUG-757 | ai:claude
+                conn.execute_batch(SCHEMA_SQL)?;
+                conn.execute_batch(
+                    "DELETE FROM requirements_cache; DELETE FROM requirements_fts;",
+                )?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 
@@ -1417,85 +1496,92 @@ impl Cache {
         let count = {
             let conn = self.conn.lock().unwrap();
             let migration_pending = self.migration_pending();
-            with_cache_write(&self.path, &self.lock_info_path, "rebuild cache", || {
-                // TASK-1515: IMMEDIATE takes the write lock at BEGIN, so a
-                // contended rebuild fails (and enters the unchanged retry
-                // ladder) before doing any work, never mid-transaction.
-                let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
-                // The pending flag was probed at open, without the lock. If
-                // another process has since completed the migration, skip the
-                // redundant drop (the refill below is the same either way).
-                // trace:TASK-1515 | ai:claude
-                // The flock is an optimization; SQLite serializes this check
-                // with the rows, including on filesystems with incoherent flock.
-                // trace:TASK-1526 | ai:codex
-                if let Some(store_path) = refresh_store {
-                    if !schema_migration_needed(&tx)
-                        && refresh_head_reached(&tx, source_head_sha, store_path)?
-                    {
-                        return Ok(tx.query_row(
-                            "SELECT COUNT(*) FROM requirements_cache",
-                            [],
-                            |r| r.get(0),
-                        )?);
+            with_cache_write(
+                &self.path,
+                &self.lock_info_path,
+                "rebuild cache",
+                self.read_only,
+                || {
+                    // TASK-1515: IMMEDIATE takes the write lock at BEGIN, so a
+                    // contended rebuild fails (and enters the unchanged retry
+                    // ladder) before doing any work, never mid-transaction.
+                    let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                    // The pending flag was probed at open, without the lock. If
+                    // another process has since completed the migration, skip the
+                    // redundant drop (the refill below is the same either way).
+                    // trace:TASK-1515 | ai:claude
+                    // The flock is an optimization; SQLite serializes this check
+                    // with the rows, including on filesystems with incoherent flock.
+                    // trace:TASK-1526 | ai:codex
+                    if let Some(store_path) = refresh_store {
+                        if !schema_migration_needed(&tx)
+                            && refresh_head_reached(&tx, source_head_sha, store_path)?
+                        {
+                            return Ok(tx.query_row(
+                                "SELECT COUNT(*) FROM requirements_cache",
+                                [],
+                                |r| r.get(0),
+                            )?);
+                        }
                     }
-                }
-                let drop_first = force_drop || (migration_pending && schema_migration_needed(&tx));
-                if drop_first {
-                    tx.execute_batch(DROP_PROJECTION_SQL).context(
-                        if force_drop && !(migration_pending && schema_migration_needed(&tx)) {
-                            "Failed to drop cache tables for forced rebuild"
-                        } else {
-                            "Failed to drop cache tables for schema migration"
-                        },
-                    )?;
-                }
-                // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
-                // the DELETEs so `aida cache rebuild` is always a valid
-                // recovery verb — a torn migration that left a table missing
-                // used to make even the rebuild error (`no such table:
-                // requirements_fts`) before it could recreate anything.
-                // trace:BUG-757 | ai:claude
-                tx.execute_batch(SCHEMA_SQL)?;
-                tx.execute_batch(
+                    let drop_first =
+                        force_drop || (migration_pending && schema_migration_needed(&tx));
+                    if drop_first {
+                        tx.execute_batch(DROP_PROJECTION_SQL).context(
+                            if force_drop && !(migration_pending && schema_migration_needed(&tx)) {
+                                "Failed to drop cache tables for forced rebuild"
+                            } else {
+                                "Failed to drop cache tables for schema migration"
+                            },
+                        )?;
+                    }
+                    // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
+                    // the DELETEs so `aida cache rebuild` is always a valid
+                    // recovery verb — a torn migration that left a table missing
+                    // used to make even the rebuild error (`no such table:
+                    // requirements_fts`) before it could recreate anything.
+                    // trace:BUG-757 | ai:claude
+                    tx.execute_batch(SCHEMA_SQL)?;
+                    tx.execute_batch(
                     "DELETE FROM requirements_cache; DELETE FROM requirements_fts; DELETE FROM hierarchy_edges;",
                 )?;
-                let mut count = 0usize;
-                for req in &store.requirements {
-                    let d = degrees.get(&req.id).copied().unwrap_or_default();
-                    let status_override = epic_status.get(&req.id).map(String::as_str);
-                    insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
-                    count += 1;
-                }
-                for (parent, child, author) in &hierarchy_edges {
-                    tx.execute(
-                        "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
+                    let mut count = 0usize;
+                    for req in &store.requirements {
+                        let d = degrees.get(&req.id).copied().unwrap_or_default();
+                        let status_override = epic_status.get(&req.id).map(String::as_str);
+                        insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
+                        count += 1;
+                    }
+                    for (parent, child, author) in &hierarchy_edges {
+                        tx.execute(
+                            "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
                          VALUES (?1, ?2, ?3)",
-                        params![parent.to_string(), child.to_string(), author.to_string()],
-                    )?;
-                }
-                // TASK-1515: stamp freshness in the SAME transaction as the rows.
-                set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
-                set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
-                // TASK-1478: a full rebuild just regenerated EVERY row via THIS
-                // binary's own `insert_one`, so the projected data now IS exactly
-                // this binary's schema — unlike `Cache::open`'s steady-state path
-                // (which touches no rows), the max-of-two/no-downgrade rule does not
-                // apply here. Stamp unconditionally, even if that LOWERS the
-                // version: an older binary rebuilding a cache a newer binary had
-                // stamped higher must leave behind an OLDER stamp, precisely so the
-                // newer binary's next `open()` sees `version_older = true` and does
-                // its own migration-drop-and-refill — restoring the columns the
-                // older binary's rebuild just left NULL (see the comment on
-                // `insert_one`). Without this, that refill would depend on some
-                // unrelated future version bump instead of firing exactly once,
-                // right after the older binary's rebuild — not on every subsequent
-                // alternating open (a plain open leaves a healthy, non-dropped cache
-                // stamp alone; only an actual rebuild changes it).
-                set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
-                tx.commit()?;
-                Ok(count)
-            })?
+                            params![parent.to_string(), child.to_string(), author.to_string()],
+                        )?;
+                    }
+                    // TASK-1515: stamp freshness in the SAME transaction as the rows.
+                    set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
+                    set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+                    // TASK-1478: a full rebuild just regenerated EVERY row via THIS
+                    // binary's own `insert_one`, so the projected data now IS exactly
+                    // this binary's schema — unlike `Cache::open`'s steady-state path
+                    // (which touches no rows), the max-of-two/no-downgrade rule does not
+                    // apply here. Stamp unconditionally, even if that LOWERS the
+                    // version: an older binary rebuilding a cache a newer binary had
+                    // stamped higher must leave behind an OLDER stamp, precisely so the
+                    // newer binary's next `open()` sees `version_older = true` and does
+                    // its own migration-drop-and-refill — restoring the columns the
+                    // older binary's rebuild just left NULL (see the comment on
+                    // `insert_one`). Without this, that refill would depend on some
+                    // unrelated future version bump instead of firing exactly once,
+                    // right after the older binary's rebuild — not on every subsequent
+                    // alternating open (a plain open leaves a healthy, non-dropped cache
+                    // stamp alone; only an actual rebuild changes it).
+                    set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+                    tx.commit()?;
+                    Ok(count)
+                },
+            )?
         };
         // The deferred migration (if any) committed with the rebuild.
         self.migration_pending.store(false, Ordering::SeqCst);
@@ -1565,6 +1651,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "refresh cache incrementally",
+            self.read_only,
             || {
                 let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
                 // trace:TASK-1526 | ai:codex
@@ -1607,6 +1694,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "upsert cached requirement",
+            self.read_only,
             || upsert_requirement_on(&conn, req),
         )?;
         Ok(())
@@ -1647,6 +1735,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "recompute epic status",
+            self.read_only,
             || set_epic_status_on(&conn, epic_id, &status_str),
         )?;
         Ok(())
@@ -1671,6 +1760,7 @@ impl Cache {
             &self.path,
             &self.lock_info_path,
             "delete cached requirement",
+            self.read_only,
             || delete_requirement_on(&conn, id),
         )
     }
@@ -6555,6 +6645,7 @@ mod tests {
             cache.path(),
             cache.lock_info_path(),
             "bug-1644 test write",
+            cache.is_read_only(),
             || {
                 ran = true;
                 let info = read_cache_lock_info(&main_cache)?
