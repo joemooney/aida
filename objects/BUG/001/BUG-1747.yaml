@@ -96,7 +96,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T07:12:30.784611170Z
+modified_at: 2026-10-01T07:29:04.551393354Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -347,6 +347,62 @@ comments:
     `grep -n 'label_definitions' aida-cli-lib/src/doctor_cmd.rs` returns nothing on `main`.
   created_at: 2026-10-01T07:10:35.091921029Z
   modified_at: 2026-10-01T07:10:35.091921029Z
+  session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
+- id: 01a0f65d-e827-7c82-b7e5-72e4761ccdfb
+  author: joe
+  content: |
+    ## Advisor review of round 2 (AC1 + limb 4): accepted on substance, REQUEST_CHANGES on test coverage
+
+    Implemented by codex in `/home/joe/ai/aida-worktrees/bug-1747-r2` (branch `bug-1747-r2`, based on
+    `b6dd78aebe`). Three files, +210/-1: `doctor_cmd.rs`, `merge_hold.rs`, `docs/cli/08-reporting.md`.
+
+    ### Verified first-hand (not carried from the implementer's report)
+
+    - The probe is **not** on the hot path: `git diff doctor_cmd.rs | grep collect_doctor_findings` is
+      empty, so `aida status` is untouched. AC1's slow-path constraint is met.
+    - The probe→findings mapping is extracted as a pure function over `LabelDefinitions`, so the
+      all-present / some-missing / unreachable cases are tested with no forge. AC6's doctor half is met.
+    - `Unknown(why)` emits its own finding carrying `why` — never silently a pass. `NoForge` emits none.
+    - Limb 4 filters on `Unsynced` **only**, via a let-else, so a legacy marker reading `Unknown` does
+      not fire. The test fixture includes a third hold with no recorded state, which exercises exactly
+      that. No per-hold forge read — the finding derives from recorded state, as required.
+    - The timeout went into a **new sibling** `run_forge_cli_stdout_bounded`; the shared
+      `run_forge_cli_stdout` is unchanged, so hold-placement callers did not silently gain a deadline.
+      `process_group(0)` + `killpg` means the kill reaches grandchildren.
+
+    ### One intentional divergence I checked rather than assumed, and it is RIGHT
+
+    The new runner returns **stderr** on failure where its sibling returns stdout. That is correct:
+    `label_definitions_with` feeds the failure string straight into `LabelDefinitions::Unknown(out)`, and
+    `gh` writes errors to stderr — so the sibling's shape would have produced `Unknown("")`, an empty
+    reason that AC1's "clear could-not-determine" cannot be built on. Kept, but it must be pinned (below).
+
+    ### Why I am not merging this as-is
+
+    **`run_forge_cli_stdout_bounded` has zero tests.** Grepping for it and for
+    `LABEL_DEFINITIONS_TIMEOUT` returns only the definitions and the single call site. It is the riskiest
+    code in the diff — two reader threads, a poll loop, and an `unsafe { libc::killpg }` — and it is the
+    whole mechanism behind AC1's "degrade rather than hang". BUG-1674 is the standing reminder of the
+    cost of an unbounded doctor call. `notify.rs` already tests this exact shape in three places, so the
+    pattern exists and is not being invented.
+
+    Second, smaller: `unsynced_merge_hold_findings` decides whether to append
+    `--create-missing` by sniffing the recorded error for `"missing label definition"`, and its test
+    **hand-writes that fixture string** — the test asserts against text the test itself authored, so it
+    cannot fail if the producer's wording changes. I verified the round trip does hold today
+    (`DefinitionMissing`'s `Display` at `merge_hold.rs:2244` emits the substring, `detail` is already
+    single-line, so `record_label_state`'s `err.lines().next()` preserves it). It works; it is simply
+    unprotected.
+
+    ### Disposition
+
+    REQUEST_CHANGES, dispatched as `.aida/handoff/advisor/bug-1747-round2b-rework-brief.md`. **Tests
+    only — no behaviour change**, plus one small refactor making the bound injectable so the timeout
+    tests cost ~200 ms instead of 5 s each. Four runner tests (times out near the bound with an elapsed
+    assertion, the process group dies, the happy path does not wait out the deadline, a failure's message
+    is stderr not stdout) and one test pinning the sniff to a real `LabelSyncError::DefinitionMissing`.
+  created_at: 2026-10-01T07:29:04.551393354Z
+  modified_at: 2026-10-01T07:29:04.551393354Z
   session_id: 5d5a5947-a9fb-4a28-b60b-977e2ee12dee
 history:
 - id: 01a0f59e-dece-7160-b758-6d66ee6e27cf
