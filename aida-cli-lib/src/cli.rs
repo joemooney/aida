@@ -170,6 +170,16 @@ pub enum InternalCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Inspect or provision the three repository-level merge-hold label definitions.
+    // trace:BUG-1747 | ai:codex
+    Labels {
+        /// Create any definitions that are missing from this repository.
+        #[clap(long)]
+        create_missing: bool,
+        /// Emit one JSON document.
+        #[clap(long)]
+        json: bool,
+    },
     /// List every active merge-hold: marker-backed holds AND holds that exist
     /// only as the `aida:merge-hold` label (shown as `label-only (no marker)`).
     /// Each row is the held PR + the hold reason. A marker whose PR merged or

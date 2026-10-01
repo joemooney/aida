@@ -39,9 +39,10 @@ the existing human-at-an-interactive-terminal floor, writes the local JSON
 clearance record, removes the active label, and adds the clearance label.
 Removing the active label alone, or deleting the local marker alone, cannot
 make this check pass. The same rule is in the GitLab template.
-Repositories must have all three labels (`aida:merge-hold`,
-`aida:merge-hold-recorded`, and `aida:merge-hold-cleared`) defined before using
-the gate; hold placement/clearance reports forge label update failures.
+Run `aida merge-hold labels` to see which definitions exist and
+`aida merge-hold labels --create-missing` to provision them. A hold placed
+while a definition is missing still writes the local marker (Layer 1 holds),
+but `aida merge-hold add` exits non-zero to report that Layer 2 is not armed.
 
 If a marker disappears without a clearance record, AIDA fails closed on that
 PR: `aida merge-hold list` and `aida doctor --category merge-hold-integrity`
