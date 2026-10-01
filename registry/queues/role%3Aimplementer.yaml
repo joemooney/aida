@@ -105,14 +105,6 @@
   for_role: implementer
   added_by_machine: spock
 - user_id: role:implementer
-  requirement_id: 01a0f9c9-705a-7f50-ac86-4cc7da3b680c
-  position: 402000
-  added_by: role:implementer
-  note: Reproduced during BUG-1818 drain; phase 1 removed a clean worktree before phase-2 branch verification.
-  added_at: 2026-10-01T23:26:05.990433136Z
-  for_role: implementer
-  added_by_machine: spock
-- user_id: role:implementer
   requirement_id: 01a0f974-903f-7663-ba06-4890bea49673
   position: 403000
   added_by: role:implementer
