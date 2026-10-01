@@ -1,0 +1,110 @@
+id: 01a0f59e-4531-7c30-b4ce-8920f500854d
+spec_id: BUG-1747
+agreed_id: BUG-1747
+title: Merge-hold gate labels are never provisioned or probed, so a missing label definition silently disables the un-bypassable half of the integrity floor
+description: |
+  The merge-hold gate (ADR-37 Layer 2) depends on three forge label *definitions* existing in the
+  repository: `aida:merge-hold`, `aida:merge-hold-recorded`, `aida:merge-hold-cleared`. BUG-1693
+  (PR #2296) introduces the latter two. Nothing in AIDA provisions them, probes for them, or warns
+  when they are missing — and when they are missing the failure is **fail-open on the integrity
+  floor**, which is the unacceptable direction.
+
+  ## Verified behaviour
+
+  `gh pr edit --add-label` / `--remove-label` exit **non-zero when a named label is not defined in
+  the repository**, and the operation is **atomic — no label is applied**. Probed against merged
+  PR #2301 on `joemooney/aida` on 2026-09-30:
+
+  - `--remove-label aida:merge-hold-cleared` (undefined) -> exit 1, `'aida:merge-hold-cleared' not found`
+  - `--remove-label aida:merge-hold` (defined, not on the PR) -> exit 0, idempotent
+  - `--add-label aida:zz-probe-delete-me` (undefined) -> exit 1, label NOT created
+  - `--add-label "aida:merge-hold,aida:merge-hold-recorded"` -> exit 1, and `aida:merge-hold`
+    did **not** land; labels after the call: `[]`
+
+  So the discriminator is definition-in-repo, not presence-on-PR, and one undefined name in a
+  comma list poisons the whole call.
+
+  ## The fail-open chain
+
+  `sync_label_with` (`aida-cli-lib/src/merge_hold.rs:1946-1997`) runs the argv, retries once after
+  1s, then records `LabelState::Unsynced(err)` and returns `Err`. The hold label therefore never
+  reaches the forge. The required `merge-hold-gate` check inspects an unlabelled PR and **passes**.
+  Layer 1 (the local marker) still holds, but Layer 2 — the un-bypassable half — is silently off for
+  every supervised PR.
+
+  This is BUG-1236's regression, which `sync_label_with`'s own doc comment names: "Before this the
+  label silently never landed on three supervised PRs while the required merge-hold-gate check read
+  pass." The retry/record machinery exists because of BUG-1236, but an unsynced marker is a *report*,
+  not a gate: nothing blocks a merge on it.
+
+  ## Why the current contract is not enough
+
+  The precondition is documented in prose only, at `docs/cli/08-reporting.md:42-44`: "Repositories
+  must have all three labels (`aida:merge-hold`, `aida:merge-hold-recorded`, and
+  `aida:merge-hold-cleared`) defined before using the gate; hold placement/clearance reports forge
+  label update failures." There is no command given, no colour/description guidance, and no check.
+
+  A survey of the BUG-1693 branch found **no** provisioning or probing path:
+
+  - No `gh label create` / `glab label create` / labels-endpoint call on any merge-hold path.
+  - `sync_label_command` (`merge_hold.rs:2032`) builds argv only; no existence pre-flight.
+  - The `merge-hold-integrity` doctor check (`doctor_cmd.rs:430-444`) reports only
+    `unrecorded_marker_removals` — no label-definition probe.
+  - `init_cmd.rs` has no forge-label scaffolding, and no Rust file references
+    `merge-hold-gate.yml` or `gitlab-ci-merge-hold-gate.yml`.
+  - `aida github labels --create-missing` (`tracker_cmd.rs:1009`, `:1050`) provisions the
+    **requirement taxonomy** from `config.labels.types/priorities/statuses` — the three
+    `aida:merge-hold*` names are not in that set. Its existence is a plausible source of operator
+    confusion, since `docs/getting-started.md:266` advertises it.
+  - Forge asymmetry: GitLab's API auto-creates a label on application, so `glab mr update --label`
+    tends to self-provision; GitHub hard-fails. The GitHub path is the exposed one. (From the branch
+    survey — not verified against a live GitLab.)
+
+  Contrast `.github/workflows/cross-platform.yml:360`, which already uses the idempotent
+  create-before-use pattern this path lacks.
+
+  ## Acceptance criteria
+
+  1. `aida doctor check merge-hold-integrity` probes the pinned forge repo for all three label
+     definitions and reports a finding naming each missing one plus the exact remediation command.
+     The probe must not be on a slow path and must degrade to a clear "could not determine" rather
+     than a false pass when the forge is unreachable or the token lacks scope.
+  2. A provisioning path creates any missing merge-hold label definitions idempotently (re-running
+     is a no-op, and two concurrent agents racing it both succeed), with the colour/description the
+     existing `aida:merge-hold` label carries.
+  3. A hold whose label sync fails because a definition is missing is **distinguishable** in the
+     error from any other sync failure, and says what to run. Today every failure collapses to one
+     opaque string.
+  4. Decide and record whether a failed label sync should **block** the hold-dependent flow rather
+     than only recording `Unsynced` — i.e. whether Layer 2 being unavailable should fail closed. This
+     is the architectural question in the spec and wants an advisor sketch + signoff before
+     implementation; do not implement a blocking change without it.
+  5. `docs/cli/08-reporting.md:42-44` replaced by the command and the doctor check, not prose.
+  6. Tests: the atomic-failure behaviour (one undefined name in a comma list applies nothing) pinned
+     as a unit test against the argv builder's contract, and the doctor probe covered for
+     all-present / some-missing / forge-unreachable.
+
+  ## Relationship to BUG-1693
+
+  Not a regression from BUG-1693's rework; the rework adds one more instance of the same class
+  (`--remove-label aida:merge-hold-cleared`) but is unreachable until the `--add-label` failure is
+  resolved. BUG-1693's immediate unblock is the one-off operator action of defining the two labels on
+  `joemooney/aida`. This spec is the durable fix so the next repository to adopt the gate does not
+  inherit a silently disabled integrity floor.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T03:59:45.457882144Z
+modified_at: 2026-10-01T03:59:45.457882144Z
+req_type: Bug
+tags:
+- merge-hold authority integrity-floor fail-open
+filed_at:
+  code_sha: 54c950a8075025c16c706581f9364eeaacf07e5a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: f00803e7-046a-4f7e-8540-549f9adf7c10
