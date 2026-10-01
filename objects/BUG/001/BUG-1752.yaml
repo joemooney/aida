@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T13:38:09.203289808Z
+modified_at: 2026-10-01T14:04:12.491835486Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -177,6 +177,73 @@ comments:
     `aida cache verify`.
   created_at: 2026-10-01T13:38:09.203289808Z
   modified_at: 2026-10-01T13:38:09.203289808Z
+  session_id: 18a9ea2a-80f9-45d1-911a-fe00918a9c00
+- id: 01a0f7c7-a94b-7602-999f-683eb865e8e9
+  author: joe
+  content: |
+    # Advisor ruling after rounds 1 and 1b — stop catching per call site, probe writability once
+
+    Two implementation rounds both came back **incomplete** and honest about it. Both took the same
+    approach — catch `is_cache_unwritable_error` at each call site that failed — and both leaked. Round
+    1b's own words: *"the error still escapes `Cache::open`, so the unwritable path is not handled
+    correctly."*
+
+    I ran the failing test myself to get the panic site neither round reported
+    (`cargo test -p aida-core --lib old_stamp_in_unwritable_cache_keeps_committed_readable_rows`,
+    `RUST_BACKTRACE=1`):
+
+        called `Result::unwrap()` on an `Err` value: reopen read-only cache
+        Caused by:
+            0: Failed to write cache lock info at <tmp>/cache.db.lock-info
+            1: Permission denied (os error 13)
+
+        frames: write_lock_info_at  <-  with_cache_write  <-  Cache::open
+
+    So the escape is a `with_cache_write` reached from **`Cache::open` itself**, on the rows-present
+    path, that neither of the three catches (`cache.rs:655`, `cache.rs:1162`,
+    `cached_git_backend.rs:678`) covers.
+
+    ## Ruling: one upfront probe, not N catches
+
+    Catching at call sites is whack-a-mole here, and the two failed rounds are the evidence. Every
+    write path in `cache.rs` funnels through `with_cache_write`, which begins with
+
+        let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;   // cache.rs:763
+
+    and `cache_lock_info_path` resolves the **symlink** (`cache_sidecar_path` ->
+    `shared_cache_path`, deliberately, BUG-1644), so the sidecar lives in the read-only `<main>/.aida`
+    under dispatch. **A dispatched implementer therefore fails every cache write at the sidecar, before
+    SQLite is touched.** That is one chokepoint, and it is the right place to decide.
+
+    Implement instead:
+
+    1. **Probe once, in `Cache::open`**: is the cache writable? Test the lock-info sidecar's directory
+       and the db file, not just the db — SQLite also needs to create `-wal`/`-shm` in that directory.
+       Carry the answer as a field on `Cache` (e.g. `read_only: bool`).
+    2. **`with_cache_write` returns early** when that flag is set, with a typed "cache is read-only"
+       outcome — never attempting the sidecar write, never entering the retry ladder (amended AC2:
+       this is permanent for the process, not contention).
+    3. **Every caller then has exactly one decision to make**, and the compiler shows you all of them:
+       a read skips the work and serves what is committed; a write surfaces the AC4 message.
+
+    This is provable in a way the per-site approach is not: with a single flag, a test that flips it
+    exercises every path, and there is no "did we catch them all?" question left open.
+
+    Keep from the rounds so far (all accepted): the classifier's code set, the AC4 message wording, and
+    **both tests and their fixture topology** — the fixture is faithful and the red test is a correct
+    reproduction, which is exactly what AC1 asked for.
+
+    ## State
+
+    WIP committed to branch `bug-1752` as **`9de03791e8`** (deliberately **without** the completing
+    `(BUG-1752)` trailer, so it cannot mark the spec done at merge). One test red, as described. Spec
+    stays **In Progress**; worktree `/home/joe/ai/aida-worktrees/aida-bug-1752` retained as the
+    reproduction environment.
+
+    Still owed: AC3(b) fallback for `search`, the AC5 mutation proof, and `make build-fast` /
+    `cargo test -p aida-core cache` / workspace clippy, none of which either round completed.
+  created_at: 2026-10-01T14:04:12.491835486Z
+  modified_at: 2026-10-01T14:04:12.491835486Z
   session_id: 18a9ea2a-80f9-45d1-911a-fe00918a9c00
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
