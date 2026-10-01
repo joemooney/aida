@@ -272,3 +272,11 @@
   added_at: 2026-09-28T16:00:10.276304979Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0f9b2-5168-79d1-adf9-d37145d21898
+  position: 401000
+  added_by: role:implementer
+  note: Operator requested approve and implement all open specs; reproduced from qci drain startup.
+  added_at: 2026-10-01T23:00:11.527144447Z
+  for_role: implementer
+  added_by_machine: spock
