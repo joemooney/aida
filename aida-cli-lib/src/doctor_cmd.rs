@@ -1514,11 +1514,37 @@ fn cargo_slot_findings(
 fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let configured = crate::worktree_pool_config_worktree_parent(project_root);
     let resolved = resolve_worktree_parent(project_root, configured.as_deref());
-    worktree_trust_findings(
-        &resolved,
-        configured.is_some(),
-        claude_trusted_paths().as_deref(),
-    )
+    let parent = normalize_path_lexically(&resolved);
+    let trusted = claude_trusted_paths();
+    let breadth = trusted.as_deref().and_then(|trusted| {
+        covering_trusted_ancestor(&parent, trusted).map(|ancestor| TrustBreadth {
+            unrelated_dirs: count_unrelated_child_dirs(&ancestor, project_root, &parent),
+        })
+    });
+    worktree_trust_findings(&resolved, configured.is_some(), trusted.as_deref(), breadth)
+}
+
+// trace:BUG-1744 | ai:codex
+fn count_unrelated_child_dirs(
+    ancestor: &std::path::Path,
+    project_root: &std::path::Path,
+    worktree_parent: &std::path::Path,
+) -> usize {
+    let Ok(entries) = std::fs::read_dir(ancestor) else {
+        return 0;
+    };
+    let project_root = normalize_path_lexically(project_root);
+    let worktree_parent = normalize_path_lexically(worktree_parent);
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            let entry_path = normalize_path_lexically(&entry.path());
+            !entry.file_name().to_string_lossy().starts_with('.')
+                && entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && entry_path != project_root
+                && entry_path != worktree_parent
+        })
+        .count()
 }
 
 /// The directory newly created pool worktrees land in — mirrors `worktree_pool::pool_path_for`'s
@@ -1595,6 +1621,28 @@ fn claude_trusted_paths() -> Option<Vec<std::path::PathBuf>> {
     )
 }
 
+/// Breadth of unrelated directories covered by a trusted ancestor.
+// trace:BUG-1744 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TrustBreadth {
+    /// Direct child directories of the covering trusted ancestor that are neither
+    /// the project root nor the resolved worktree parent — the unrelated projects
+    /// the one grant also covers.
+    unrelated_dirs: usize,
+}
+
+/// Find the trusted ancestor that covers the resolved worktree parent.
+// trace:BUG-1744 | ai:codex
+fn covering_trusted_ancestor(
+    parent: &std::path::Path,
+    trusted: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
+    trusted
+        .iter()
+        .map(|path| normalize_path_lexically(path))
+        .find(|path| parent.starts_with(path))
+}
+
 /// Pure verdict: does `parent` (or an ancestor of it) carry a trust record?
 ///
 /// Pure over its inputs so the inheritance rule is testable without a real `~/.claude.json` or a
@@ -1605,6 +1653,7 @@ fn worktree_trust_findings(
     parent: &std::path::Path,
     parent_configured: bool,
     trusted: Option<&[std::path::PathBuf]>,
+    breadth: Option<TrustBreadth>,
 ) -> Vec<DoctorFinding> {
     let Some(trusted) = trusted else {
         return Vec::new();
@@ -1616,10 +1665,22 @@ fn worktree_trust_findings(
     // an already-trusted directory would be reported as untrusted. Normalise
     // both sides before comparing. trace:BUG-1700 | ai:claude
     let parent = normalize_path_lexically(parent);
-    if trusted
-        .iter()
-        .any(|t| parent.starts_with(normalize_path_lexically(t)))
-    {
+    if let Some(ancestor) = covering_trusted_ancestor(&parent, trusted) {
+        if let Some(breadth) = breadth {
+            if !parent_configured && breadth.unrelated_dirs >= 1 {
+                let finding = DoctorFinding {
+                    category: "agent-launch".to_string(),
+                    id: "worktree-folder-trust-breadth".to_string(),
+                    summary: format!(
+                        "the grant on {} also covers {} unrelated directories, though nothing is broken today",
+                        ancestor.display(), breadth.unrelated_dirs
+                    ),
+                    action: "set `[worktree_pool] worktree_parent` in .aida/config.toml to one directory (e.g. \"../aida-worktrees\") and accept the folder-trust prompt there once".to_string(),
+                    safe_heal: false,
+                };
+                return vec![finding];
+            }
+        }
         return Vec::new();
     }
     let parent = parent.as_path();
@@ -1665,7 +1726,8 @@ mod bug_1700_worktree_trust_tests {
         assert!(worktree_trust_findings(
             Path::new("/home/op/aida-worktrees"),
             true,
-            Some(&trusted)
+            Some(&trusted),
+            None
         )
         .is_empty());
     }
@@ -1677,7 +1739,8 @@ mod bug_1700_worktree_trust_tests {
         assert!(worktree_trust_findings(
             Path::new("/home/op/aida-worktrees"),
             true,
-            Some(&trusted)
+            Some(&trusted),
+            None
         )
         .is_empty());
     }
@@ -1686,7 +1749,12 @@ mod bug_1700_worktree_trust_tests {
     #[test]
     fn untrusted_parent_is_reported_once_and_is_not_auto_healable() {
         let trusted = vec![PathBuf::from("/home/op/other")];
-        let f = worktree_trust_findings(Path::new("/home/op/aida-worktrees"), true, Some(&trusted));
+        let f = worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            None,
+        );
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].category, "agent-launch");
         assert_eq!(f[0].id, "worktree-folder-trust");
@@ -1709,8 +1777,13 @@ mod bug_1700_worktree_trust_tests {
     fn string_prefix_sibling_is_not_treated_as_trusted() {
         let trusted = vec![PathBuf::from("/home/op/aida-worktrees")];
         assert_eq!(
-            worktree_trust_findings(Path::new("/home/op/aida-worktrees2"), true, Some(&trusted))
-                .len(),
+            worktree_trust_findings(
+                Path::new("/home/op/aida-worktrees2"),
+                true,
+                Some(&trusted),
+                None
+            )
+            .len(),
             1,
             "a sibling sharing a string prefix must not inherit trust"
         );
@@ -1721,7 +1794,7 @@ mod bug_1700_worktree_trust_tests {
     // trace:BUG-1700 | ai:claude
     #[test]
     fn unknown_trust_is_silent() {
-        assert!(worktree_trust_findings(Path::new("/home/op/wt"), true, None).is_empty());
+        assert!(worktree_trust_findings(Path::new("/home/op/wt"), true, None, None).is_empty());
     }
 
     // With no worktree_parent configured the advice is to configure one; with
@@ -1731,13 +1804,14 @@ mod bug_1700_worktree_trust_tests {
     #[test]
     fn action_differs_on_whether_a_parent_is_configured() {
         let trusted: Vec<PathBuf> = Vec::new();
-        let configured = worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&trusted));
+        let configured =
+            worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&trusted), None);
         assert!(
             configured[0].action.contains("ONCE"),
             "configured: {}",
             configured[0].action
         );
-        let unset = worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted));
+        let unset = worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted), None);
         assert!(
             unset[0].action.contains("worktree_parent"),
             "unset must point at the setting: {}",
@@ -1759,7 +1833,7 @@ mod bug_1700_worktree_trust_tests {
             "precondition: the raw path must NOT lexically match, or this test proves nothing"
         );
         assert!(
-            worktree_trust_findings(unnormalised, true, Some(&trusted)).is_empty(),
+            worktree_trust_findings(unnormalised, true, Some(&trusted), None).is_empty(),
             "an already-trusted directory reached via `..` must not be reported"
         );
     }
@@ -1772,7 +1846,8 @@ mod bug_1700_worktree_trust_tests {
             worktree_trust_findings(
                 Path::new("/home/joe/ai/aida/../aida-worktrees2"),
                 true,
-                Some(&trusted)
+                Some(&trusted),
+                None
             )
             .len(),
             1,
@@ -1833,6 +1908,136 @@ mod bug_1700_worktree_trust_tests {
             PathBuf::from("/work/myrepo/../wt"),
             "relative resolves against the project root, as the pool does"
         );
+    }
+}
+
+#[cfg(test)]
+mod bug_1744_trust_breadth_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn broad_ancestor_with_unset_parent_discloses_the_narrow_remediation() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        let findings = worktree_trust_findings(
+            Path::new("/home/op"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 5 }),
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "worktree-folder-trust-breadth");
+        assert_eq!(findings[0].category, "agent-launch");
+        assert!(findings[0].summary.contains("/home/op"));
+        assert!(findings[0].summary.contains('5'));
+        assert!(findings[0].action.contains("worktree_parent"));
+        assert!(!findings[0].safe_heal);
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn configured_and_trusted_stays_silent_even_under_a_broad_grant() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 5 })
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn single_project_parent_is_not_a_broad_grant() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 0 })
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn unknown_breadth_is_silent() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(
+            worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted), None).is_empty()
+        );
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn an_untrusted_parent_still_reports_the_original_finding_id() {
+        let trusted = vec![PathBuf::from("/home/op/other")];
+        let findings = worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 9 }),
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "worktree-folder-trust");
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn counts_only_unrelated_sibling_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        let worktrees = root.path().join("worktrees");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::create_dir(&worktrees).unwrap();
+        for name in ["one", "two", "three", ".hidden"] {
+            std::fs::create_dir(root.path().join(name)).unwrap();
+        }
+        std::fs::write(root.path().join("file"), b"file").unwrap();
+        assert_eq!(
+            count_unrelated_child_dirs(root.path(), &project, &worktrees),
+            3
+        );
+    }
+
+    // An ancestor we cannot list must not be reported as a broad grant.
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn an_unreadable_ancestor_counts_as_no_breadth() {
+        let root = tempfile::tempdir().unwrap();
+        let missing_ancestor = root.path().join("never-created");
+        let project = root.path().join("project");
+        let worktrees = root.path().join("worktrees");
+        assert_eq!(
+            count_unrelated_child_dirs(&missing_ancestor, &project, &worktrees),
+            0
+        );
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn the_trust_scan_never_writes_the_claude_config() {
+        let fake_home = tempfile::tempdir().unwrap();
+        let project_root = tempfile::tempdir().unwrap();
+        let trusted_parent = project_root.path().parent().unwrap();
+        let config_path = fake_home.path().join(".claude.json");
+        let config = serde_json::json!({
+            "projects": {
+                trusted_parent.to_string_lossy().as_ref(): {
+                    "hasTrustDialogAccepted": true
+                }
+            }
+        });
+        std::fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+        let before = std::fs::read(&config_path).unwrap();
+        let fake_home_path = fake_home.path().to_str().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", fake_home_path)]);
+
+        drop(scan_agent_worktree_trust(project_root.path()));
+
+        assert_eq!(std::fs::read(&config_path).unwrap(), before);
     }
 }
 
