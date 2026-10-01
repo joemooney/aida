@@ -1,7 +1,7 @@
 id: 01a0f4d7-e1eb-78a1-b89e-00acb149ba5f
 spec_id: BUG-1745
 agreed_id: BUG-1745
-title: 'The performance guard''s trip evidence is structurally always absent: its configured command emits no performance_audits, so every trip records audit_error and the routed advisor job has nothing to rea'
+title: 'Performance guard records no performance_audits: its configured command emits none, so every trip is an audit_error and the routed advisor job has no evidence'
 description: |
   OBSERVED: the performance guard can never record performance evidence. Every trip it writes
   carries `audit_error` and zero audits, so the advisor seat job it routes — whose prompt says
@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:23:03.915547857Z
-modified_at: 2026-10-01T00:23:03.915547857Z
+modified_at: 2026-10-01T00:23:17.814215356Z
 req_type: Bug
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
