@@ -29,12 +29,12 @@ description: |
   - State explicitly whether this shares a mechanism with BUG-1695's ENOTEMPTY teardown failures. Both are temp-tree interference on the same CI host, so "unrelated" is a claim that needs evidence, not a default.
   - Any fix is proven by mutation: revert it and show the new test fails, per the project's standing rule that a test passing either way advertises coverage that does not exist.
   - No quarantine, `#[ignore]`, or blanket retry of this test without the evidence above attached.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T17:56:02.256778237Z
-modified_at: 2026-09-30T18:19:24.546642490Z
+modified_at: 2026-10-01T01:58:01.782040828Z
 req_type: Bug
 comments:
 - id: 01a0f379-70bb-77b2-92f0-fe87aea3f176
@@ -90,6 +90,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f52e-d32d-7ec2-930b-6ca53624c73f
+  author: aida-auto-bump
+  timestamp: 2026-10-01T01:58:01.773980310Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0f52e-d336-78c1-8202-8eaef20c29ec
+  timestamp: 2026-10-01T01:58:01.782039197Z
+  agent: product
+  commit_sha: a2791591cabde5f28bd2f481cc0427bd98b7a797
+  summary: Completed via merge a2791591
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
@@ -98,3 +111,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: 189f57aa-1d7e-440d-9ac3-9dbed07d8d0e
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-01T01:58:01.773976639Z
+  completion_sha: a2791591cabde5f28bd2f481cc0427bd98b7a797
