@@ -64,8 +64,136 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T17:41:17.340950779Z
-modified_at: 2026-10-01T18:00:12.730876867Z
+modified_at: 2026-10-01T18:09:59.488184556Z
 req_type: Bug
+comments:
+- id: 01a0f8a8-aec0-7710-9cff-ac1c10c7b96d
+  author: joe
+  content: |
+    Round 1 **accepted, no rework**. PR #2314, branch `bug-1757` @ `221d3c5a88`, one dispatch round.
+    **Every proof below was re-run by this seat**, and two of the three mutations are the reviewer's, not
+    the implementer's.
+
+    ## AC2 — the measured scope, and the spec's own number was wrong
+
+    | | |
+    |---|---|
+    | tracked `.md` under `aida-core/templates/` | **207** |
+    | shell-tagged fenced blocks | **406**, over **71** files |
+    | interior lines scanned | **1362** |
+
+    All **406** are tagged `bash`. There is **not one** ```` ```sh ````, ```` ```shell ```` or
+    ```` ```console ```` block in the repository today. The implementation still accepts all four, as
+    this spec requires, but the consequence is that three of the four tags are exercised **only** by the
+    new tests — so they are asserted explicitly rather than assumed, which is the right response to that
+    fact.
+
+    Tag census, for the record: `bash` 406, untagged 124, `text` 49, `json` 24, `markdown` 10, `toml` 5,
+    `rust` 4, `yaml` 1, `ini` 1.
+
+    **This spec's own "258 bash-tagged fences" figure was wrong** and the implementer said so in its
+    verdict rather than quoting it back. It matches neither 406 (`aida-core/templates/`) nor 316
+    (`templates/skills/` alone). Corrected here.
+
+    ## AC4 — the deduplication the spec asked for turned out to need no machinery
+
+    `find aida-core/templates -type l` → **0**: there are no symlinks under the scanned prefix, and
+    `.claude/skills/` lies outside it. `.agents/skills/` holds untracked regular-file **copies**,
+    gitignored at `.gitignore:194`, so `git ls-files` never yields them either. Scoping to
+    `aida-core/templates/` therefore delivers AC4 for free, and a resolve-and-uniq mechanism would have
+    been dead code. The criterion is satisfied by a **test** that pins the behaviour — a site reachable
+    through both the master and `.claude/skills/<name>/SKILL.md` is reported once, under the master's
+    path — rather than by an implementation.
+
+    ## AC1 — the end-to-end catch, which is the proof that matters
+
+    Pointed at BUG-1755's pre-fix content from `8c8f9a2d02` in a scratch repo under the target prefix,
+    the gate reports **exactly two** findings, at the **offending** lines and not the fence lines:
+
+    ```
+    aida-core/templates/skills/aida-code-review.md:63:  GNU-only coreutils flag (BSD differs): grep -oP 'trace:\K…'
+    aida-core/templates/skills/aida-docs-review.md:170: GNU-only coreutils flag (BSD differs): grep -oP '`…`' docs/*.md
+    ```
+
+    exit 1. So the gate would have caught both sites this spec was filed because of, at their real line
+    numbers. Against current content it reports **0** over the same 1362 lines, so AC6 needed no
+    allowlist row — the premise that this spec creates no backlog is confirmed, not assumed.
+
+    ## AC7 — one mutation cannot witness four tests, and that is not a defect
+
+    The implementer ran the root mutation and reported, honestly, that **three** of its four new tests
+    went red and the fourth stayed green, with the correct explanation: the suppression test asserts an
+    **empty** result, and an absent scan also produces one. It did not claim 4-of-4. That honesty is why
+    this round was accepted instead of sent back.
+
+    But "the other three prove the pass is active" only answers half the question, so this seat ran two
+    further mutations to find out whether AC5 is witnessed by anything at all:
+
+    | mutation | failures | which test |
+    |---|---|---|
+    | `markdown_root` → nonexistent prefix | **3** | the three detection tests |
+    | opt-out window `lines[max(0, idx-2):idx]` → `[]` | **1** | the suppression test — both the marked line and the line below the marker surface |
+    | `code = strip_shell_comment(raw)` → `code = raw` | **1** | the suppression test — the commented-out line surfaces |
+    | restored | **0** | 22 tests OK |
+
+    So every new test is witnessed by some mutation, and the suppression test is the **sole** witness for
+    **both** suppression mechanisms. Demanding that it also go red under the root mutation would mean
+    weakening the only test that covers them. AC7 is satisfied across the mutation set, which is the
+    correct reading of the criterion; the single-mutation reading would have bought a worse test.
+
+    ## AC3, AC5, AC6 — re-run by this seat
+
+    - `python3 -m unittest tests.test_prose_classification_rule` → **22 tests OK**, the 4 new ones named
+      and green.
+    - `bash scripts/check-portability.sh` → exit **0**.
+    - `--check-allowlist-growth origin/main` → exit **0**; `scripts/portability-allowlist.txt`
+      byte-identical to `origin/main`. **No per-row judgment was needed** because no pre-existing finding
+      surfaced.
+    - Diff surface: `scripts/check-portability.sh` +51, `tests/test_prose_classification_rule.py` +63.
+      Nothing under `.claude/` or `.agents/`.
+    - `cargo test --workspace` skipped, recorded as a decision: Python and shell only, no Rust file, no
+      new CLI subcommand, no new source file. macOS and Windows CI do not run the portability gate, so
+      ubuntu is the only leg that exercises this.
+
+    ## The design trap the brief warned about was avoided
+
+    The pass is a **separate** walk, not an entry added to `shell_roots`. That mattered: `shell_roots`
+    reaches a non-`.sh` file only through an `sh` shebang, which no `.md` has, so adding the prefix there
+    would have been a silent no-op — and relaxing the suffix test instead would scan whole markdown files
+    as shell, which is precisely the over-matching AC2's narrowing exists to prevent.
+
+    ## What the new gate does NOT see — filed as BUG-1758
+
+    The review's most useful output came from asking what the pass misses rather than only confirming
+    what it catches.
+
+    A repo-wide check for "a tagged fence line appearing inside an already-open fence" finds **exactly
+    two**, both in `aida-core/templates/skills/aida-docs-review.md`: ```` ```diff ```` at line 241 inside
+    a `markdown` block, and ```` ```bash ```` at line 255 inside an untagged fence that should not be
+    open at all. The cause is at line 245 — a `markdown` block nests a **same-length** fence, so per
+    CommonMark the inner bare marker closes the **outer** block, and a stray bare marker then re-opens an
+    untagged fence, inverting polarity for the rest of the file.
+
+    The consequence: the genuine ```` ```bash ```` block at lines 255–261 is read as fence *content* and
+    **is never scanned**. A tagged, shipped, runnable recipe in one of the two files that motivated this
+    whole effort is invisible to the gate built to see it. It also renders wrongly.
+
+    **This is a document defect, not a scanner defect.** The scanner is faithful to CommonMark and agrees
+    *exactly* with an independent reference implementation written by this seat before the dispatch — same
+    207/406/1362, same two findings on pre-fix content. Both share the blind spot because both follow the
+    spec. So **1362 is a slight undercount** of what should be in scope, and the cause is one malformed
+    file. Filed as **BUG-1758** (approved, low), which also records that teaching the gate to warn about
+    unbalanced fences is a plausible further follow-on needing its own measurement — noted, deliberately
+    not built.
+
+    ## One prose nit, not worth a round
+
+    The new pass's comment says a bare marker "closes the innermost open fence", but the fence state is a
+    scalar, not a stack, so there is no innermost. The behaviour is correct per CommonMark and matches the
+    reference implementation; only the wording overstates. Recorded here rather than spent a round on.
+  created_at: 2026-10-01T18:09:59.488184556Z
+  modified_at: 2026-10-01T18:09:59.488184556Z
+  session_id: af6e8c72-539b-41ba-ae4c-6a1d493d0ce5
 history:
 - id: 01a0f88e-8abd-70c0-8a11-e02e918be0ba
   author: joe
