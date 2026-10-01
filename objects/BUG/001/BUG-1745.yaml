@@ -1,7 +1,7 @@
 id: 01a0f4d7-e1eb-78a1-b89e-00acb149ba5f
 spec_id: BUG-1745
 agreed_id: BUG-1745
-title: 'Performance guard records no performance_audits: its configured command emits none, so every trip is an audit_error and the routed advisor job has no evidence'
+title: 'Performance guard trips are unparseable: the agent-mode error block lands on the same stdout as the --json envelope, so every trip records audit_error instead of the evidence it already produced'
 description: |
   OBSERVED: the performance guard can never record performance evidence. Every trip it writes
   carries `audit_error` and zero audits, so the advisor seat job it routes — whose prompt says
@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:23:03.915547857Z
-modified_at: 2026-10-01T00:57:46.338953959Z
+modified_at: 2026-10-01T00:58:00.891016196Z
 req_type: Bug
 comments:
 - id: 01a0f4f7-a4d7-7730-b792-ff64d53d9d02
