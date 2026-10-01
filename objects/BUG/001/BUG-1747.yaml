@@ -91,12 +91,12 @@ description: |
   resolved. BUG-1693's immediate unblock is the one-off operator action of defining the two labels on
   `joemooney/aida`. This spec is the durable fix so the next repository to adopt the gate does not
   inherit a silently disabled integrity floor.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T03:59:45.457882144Z
-modified_at: 2026-10-01T07:37:44.694326289Z
+modified_at: 2026-10-01T07:55:26.140062037Z
 req_type: Bug
 tags:
 - merge-hold authority integrity-floor fail-open
@@ -492,12 +492,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0f676-095f-7190-9d98-83c1003d2207
+  author: aida-auto-bump
+  timestamp: 2026-10-01T07:55:25.919302229Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a0f64c-5248-7fe3-875c-4a4948741b0e
   timestamp: 2026-10-01T07:09:52.072048492Z
   agent: aida
   commit_sha: b6dd78aebee4a27a179be42b872c87acdd262558
   summary: Completed via merge b6dd78ae
+- id: 01a0f676-0a3c-78b2-82fd-9ef25b43963c
+  timestamp: 2026-10-01T07:55:26.140058962Z
+  agent: advisor
+  commit_sha: cb68f44e77985d2f22403e686a62be5d872a259a
+  summary: Completed via merge cb68f44e
 filed_at:
   code_sha: 54c950a8075025c16c706581f9364eeaacf07e5a
   branch: main
@@ -508,4 +520,5 @@ filed_at:
   session: f00803e7-046a-4f7e-8540-549f9adf7c10
 implementation_info:
   implemented: false
+  completed_at: 2026-10-01T07:55:25.919276153Z
   completion_sha: b6dd78aebee4a27a179be42b872c87acdd262558
