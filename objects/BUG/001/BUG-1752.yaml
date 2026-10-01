@@ -1,0 +1,61 @@
+id: 01a0f71b-55f7-7912-b51e-e7e168cac90b
+spec_id: BUG-1752
+agreed_id: BUG-1752
+title: A cache schema migration fails in a linked worktree because the cache is symlinked into the main checkout, so a dispatched implementer cannot read the spec it is implementing
+description: |
+  OBSERVED (2026-10-01, relay advisor session #12): a dispatched implementer working in a fresh linked worktree could not read the spec it was implementing. Both `aida show BUG-1750 --full` and `aida comment list BUG-1750` failed with:
+
+      Failed to drop cache tables for schema migration
+
+  The same two commands succeeded in the main checkout (`/home/joe/ai/aida`) minutes earlier and minutes later, and `aida cache verify` reported `OK: every cached status agrees with the store`.
+
+  ## What is established
+
+  `aida queue work` scaffolds the linked worktree's cache as SYMLINKS into the main checkout:
+
+      ../aida-worktrees/bug-1750/.aida/cache.db      -> /home/joe/ai/aida/.aida/cache.db
+      ../aida-worktrees/bug-1750/.aida/cache.db-shm  -> /home/joe/ai/aida/.aida/cache.db-shm
+      ../aida-worktrees/bug-1750/.aida/cache.db-wal  -> /home/joe/ai/aida/.aida/cache.db-wal
+
+  So every worktree shares ONE SQLite cache with the main checkout and with every other worktree. Under the dispatch model that sharing is not an edge case, it is the normal operating condition: the advisor seat runs `aida show` / `aida comment add` in main while a dispatched implementer runs `aida` in a worktree.
+
+  ## Hypothesis, NOT yet confirmed
+
+  A schema migration that DROPs cache tables cannot proceed while another connection holds the database, and SQLite surfaces that as the error above. The session had just rebuilt the main checkout's binary (`make build-fast`, finishing ~03:24) and the advisor seat was issuing `aida comment add` / `aida show` against the shared cache; the worktree's invocation at ~03:39 is the one that failed. The main-checkout invocations that succeeded either ran when nothing else held the db, or had already completed the migration.
+
+  This is labelled a hypothesis deliberately. Reproduce it before fixing it — do not take the above as root cause.
+
+  ## Why it matters
+
+  The dispatch workflow instructs every implementer brief to start with `aida show <ID> --full`. If that can fail, an implementer either guesses the requirement or stops. In this instance nothing was lost only because the brief happened to carry the full survey inline — that was luck, not design. A read of the requirements store is the most basic substrate operation there is and it must not be defeated by a second seat being active.
+
+  ## Acceptance criteria
+
+  1. Reproduce it deterministically: a test (or a documented recipe) that holds the shared cache open from one process while a second process triggers the migration, and observes the failure. If the real cause turns out to be something other than the concurrency hypothesis above, record what it actually is on this spec before fixing.
+  2. A cache schema migration either waits for its turn (bounded, with a clear message if it gives up) or is performed in a way that does not require DROPping tables out from under a live reader. Pick one and say why on the spec.
+  3. A READ command (`aida show`, `aida comment list`, `aida list`, `aida search`) must never fail because a migration cannot run. Worst case it degrades to reading the store directly, or reports a clearly-worded transient condition and a retry — it must not surface a raw SQLite-shaped error to an agent.
+  4. The failure message, wherever it survives, names the shared-cache situation and what to do about it. `Failed to drop cache tables for schema migration` tells an agent nothing actionable.
+  5. Mutation proof: the reproduction from AC1 must go red without the fix and green with it.
+
+  ## Out of scope
+
+  Do not change the symlinked-cache design itself — sharing one cache across worktrees is deliberate and this spec is about making a migration safe under it, not about giving every worktree its own cache. Do not widen or disable `aida cache verify`.
+
+  ## Notes
+
+  Filed from the advisor seat. Discovered because the dispatched implementer REPORTED the failure in its deviations section instead of guessing the requirement — worth noting as evidence that asking for an explicit deviations section pays for itself.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T10:55:58.967574057Z
+modified_at: 2026-10-01T10:55:58.967574057Z
+req_type: Bug
+filed_at:
+  code_sha: d93fabb4329d6619c7540d87311b9d4b0b407215
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d93fabb432
+  vendor: antigravity
+  session: 1cc8c699-e0cc-44c1-8b82-e26e523801bd
