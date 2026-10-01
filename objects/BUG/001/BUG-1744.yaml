@@ -61,7 +61,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:09:51.632713207Z
-modified_at: 2026-10-01T01:18:50.541264072Z
+modified_at: 2026-10-01T01:29:06.428909992Z
 req_type: Bug
 comments:
 - id: 01a0f4d0-058d-7971-bc9a-11cfc58b3319
@@ -276,6 +276,78 @@ comments:
     builds what is needed), and round 2 drops the step and says whose mistake it was.
   created_at: 2026-10-01T01:18:50.541264072Z
   modified_at: 2026-10-01T01:18:50.541264072Z
+  session_id: bd5b7250-f30f-4343-a65e-d910027e5721
+- id: 01a0f514-587c-7b60-9d37-a6ec31098bd4
+  author: joe
+  content: |
+    ADVISOR REVIEW — rounds 2 and 3, APPROVED. PR #2301 opened (2026-09-30, relay #22).
+
+    Round 2 fixed all five round-1 defects; round 3 cleared two smaller items I found on re-reading.
+    **Every claim was re-verified from the reviewing seat rather than accepted from the implementer's
+    report** — the round-1 "no new warnings" claim was false, so the rest could not be taken on trust.
+
+    Round 2:
+    - the orphaned `/// Pure verdict: …` block and `// trace:BUG-1700 | ai:claude` are back on
+      `worktree_trust_findings`; `TrustBreadth` and `covering_trusted_ancestor` now sit above it with
+      their own docs and their own `// trace:BUG-1744 | ai:codex` markers;
+    - the dead `let ancestor = normalize_path_lexically(ancestor);` shadow is gone and the
+      `unused variable` warning with it;
+    - `the_trust_scan_never_writes_the_claude_config` added. It is honest: the fixture marks the project
+      root's PARENT trusted, so the scan takes the COVERED branch — the one that now does filesystem
+      work — and asserts `~/.claude.json` is byte-for-byte equal before and after, not merely that the
+      file still exists. I read the test body to confirm it reaches that branch rather than the untrusted
+      early return, which would have proved nothing;
+    - the `expect` is gone, replaced by a single `if let Some(breadth)`;
+    - the summary is now one lowercase clause matching its sibling finding's voice: *"the grant on {}
+      also covers {} unrelated directories, though nothing is broken today"* — leading with the
+      operator's actual problem rather than the reassurance.
+
+    Round 3, two items found on re-read:
+    - **`cargo fmt --check` passed while the new `DoctorFinding` literal was misindented**, because
+      rustfmt does not reindent a struct literal inside a `vec![]` macro. The seat's `FMT: pass` was
+      accurate; the formatter simply never looked at it. Hoisting the literal into a `let finding = …`
+      brought it under rustfmt's control and it is now aligned with the identical literal 40 lines below.
+      Worth recording as a general trap: a green `fmt --check` is not evidence that macro-body code is
+      formatted.
+    - **the fail-silent `read_dir` default had no test.** `count_unrelated_child_dirs` returning 0 on
+      error is load-bearing — it is what keeps an unreadable trusted ancestor reading as "not a broad
+      grant" instead of making `aida doctor` cry wolf on every host whose grant points somewhere it
+      cannot list. `an_unreadable_ancestor_counts_as_no_breadth` now pins it, using a never-created path
+      (deterministic everywhere) rather than permission bits, which behave differently when CI runs as
+      root.
+
+    INDEPENDENT VERIFICATION from this seat, not the implementer's numbers:
+    - `cargo test -p aida-cli-lib --lib bug_1700_worktree_trust` → `ok. 11 passed; 0 failed` (count
+      unchanged, so the nine appended `None` arguments are the only edit to that module);
+    - `cargo test -p aida-cli-lib --lib bug_1744` → `ok. 8 passed; 0 failed`;
+    - `cargo fmt --all -- --check` → exit 0;
+    - `cargo check -p aida-cli-lib --all-targets`, grepped to the touched line range → prints nothing;
+    - `git status` → only `aida-cli-lib/src/doctor_cmd.rs` modified, as scoped.
+
+    **FOURTH MUTATION, run by me rather than by the implementer:** changed the threshold from `>= 1` to
+    `>= 99`, which failed exactly one test — `broad_ancestor_with_unset_parent_discloses_the_narrow_remediation`
+    (1 failed / 7 passed) — then restored the file and confirmed it was byte-identical to the
+    pre-mutation copy. A backup copy was used, never `git stash`, since a stash of clean paths is a
+    no-op whose pop can restore unrelated autostashed work.
+
+    So the gate is witnessed in four directions: remove the emit branch, remove `!parent_configured`,
+    remove the `>= 1` threshold, and raise it to 99. On a silence bug that is the whole ballgame — a
+    finding that only ever fires in its own fixture proves nothing.
+
+    PROCESS NOTE for future dispatches, worth more than this bug: **round 1's one genuine blocker was
+    caused by my own attention budget.** I confined the implementer to `doctor_cmd.rs` to keep the brief
+    cheap, and the read-only test needed `test_env.rs`'s `EnvVarsGuard`. The seat said so plainly instead
+    of faking the test or silently dropping the criterion — the right behaviour, and the fix was to quote
+    the API inline in round 2 rather than widen the budget. A tight brief should name the API a required
+    test needs, not just the file the production change lives in. My round-1 brief also told it to run
+    `cargo build --profile fast`, which does not exist here (`make build-fast` is the spelling); it
+    correctly reported that as a blocker, and round 3's brief said whose mistake it was so the seat did
+    not spend attention defending itself.
+
+    Spec stays In Progress; the `(BUG-1744)` trailer completes it at merge, and `aida pull` is what bumps
+    the status — a trailer alone leaves it in-progress and `git pull` does not move it.
+  created_at: 2026-10-01T01:29:06.428909992Z
+  modified_at: 2026-10-01T01:29:06.428909992Z
   session_id: bd5b7250-f30f-4343-a65e-d910027e5721
 history:
 - id: 01a0f4d0-01e4-7290-861c-65be9443fd8b
