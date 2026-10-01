@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T14:50:14.960014032Z
+modified_at: 2026-10-01T15:06:59.174196092Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -420,6 +420,133 @@ comments:
   created_at: 2026-10-01T14:50:14.960014032Z
   modified_at: 2026-10-01T14:50:14.960014032Z
   session_id: 1169fc8c-9e1a-48b3-b948-ec0cce4c6920
+- id: 01a0f801-22e6-7822-8743-7eff76c85042
+  author: joe
+  content: |
+    Advisor, relay session #16 — AC3 measured at the CLI, and the remaining gap is a LIVELOCK, not a missing fallback
+
+    ## AC3(a)+(b) are DONE, and `search` was never the odd one out
+
+    I built the branch binary (`target/debug/aida` @ `4469004aa5`) and ran the four read commands
+    against a purpose-built scratch project whose `.aida/` directory is `chmod a-w` while a live
+    `sqlite3` connection holds an open `BEGIN DEFERRED` across the chmod (so `-wal`/`-shm` exist,
+    which is the real-world state: the main checkout is in active use). The cache's `schema_version`
+    meta was set to `14` first, so a migration is genuinely due.
+
+    | command | branch @ 4469004aa5 | control: main @ b785274c7b (`target/release/aida`) |
+    |---|---|---|
+    | `aida show BUG-1` | **exit 0**, full spec | exit 1, `Failed to write cache lock info at .../cache.db.lock-info` |
+    | `aida list` | **exit 0**, 1 of 1 open | exit 1, same |
+    | `aida search probe` | **exit 0**, 1 result | exit 1, same |
+    | `aida comment list BUG-1` | **exit 0** | exit 1, same |
+
+    That is a clean CLI-level mutation proof for AC3: all four fail before the fix, all four succeed
+    after it. **The long-repeated claim that `search` is the only one of the four that does not fall
+    back was wrong** — there is no cache-to-store fallback anywhere for any of the four. They work
+    because the write PROBE in `Cache::open` stops the migration from being attempted at all, which is
+    the ruling from round 1c. Nothing further is owed for AC3(a) or AC3(b).
+
+    ## The remaining gap: the no-`-shm` state does not fail, it HANGS FOREVER
+
+    Same fixture, one change: checkpoint and delete `-wal`/`-shm` before the chmod, so the committed
+    projection is genuinely unreadable (`sqlite3 'file:...?mode=ro'` answers
+    `attempt to write a readonly database (8)`; reading a WAL database needs the `-shm` and creating it
+    is a directory write).
+
+    All four read commands then **hang indefinitely** — measured at `timeout 90` → exit 124 on each,
+    process in state `R` at ~12% CPU with `wchan = poll_schedule_timeout`.
+
+    This matters more than the state BUG-1752 was filed from. `-wal`/`-shm` only exist while some
+    process holds the cache; a dispatched implementer that starts work while the advisor seat is idle
+    sees exactly this state, so it is the COMMON case for a fresh dispatch, not an edge case. And a
+    hang is strictly worse than the filed symptom: the filed error at least told the agent to stop.
+
+    ### Root cause, confirmed
+
+    `strace -e trace=openat,clock_nanosleep,flock,newfstatat` shows a tight repeating cycle of
+    `.git/worktrees/.../commondir` + `.git/config` reads — i.e. `current_head_sha()` called over and
+    over. That is the unbounded `continue` in `CachedGitBackend::tolerant_read_with_budget`
+    (`cached_git_backend.rs:596-603`):
+
+    ```rust
+    if state.is_none()
+        && cache_head.as_deref() != Some(head.as_str())
+        && !cache_refresh::RefreshLock::held_by_current_thread(self.cache.path())
+    {
+        continue;
+    }
+    ```
+
+    The condition can never clear in this state, because:
+
+    1. `Cache::open` cannot read `cache_meta` (unreadable WAL), so `on_disk_version` is `None`,
+       `needs_migration_drop` is true, `read_only` is true → `migration_pending = true` and
+       `tables_present` (hence `usable_snapshot`) is false.
+    2. `freshen_for_read` therefore skips the round-1c read-only early return (it requires
+       `has_usable_snapshot()`), takes the refresh lock, reaches
+       `if migration || !self.cache.has_usable_snapshot()` → `ensure_cache_fresh()`, which the round-1c
+       change makes a no-op `Ok(())` for a read-only cache → `return Ok(None)`. So `state` is `None`.
+    3. `Cache::get_meta` (`cache.rs:1340-1350`) ends in `.ok()`, so an unreadable `cache_meta` is
+       indistinguishable from an absent key: `source_head_sha()` returns `Ok(None)`, so `cache_head` is
+       `None` and never equals the live HEAD.
+
+    Nothing in the loop bounds itself, so it spins until killed. The `.ok()` is the mechanism, the
+    missing bound is the defect, and the read-only `ensure_cache_fresh` short-circuit is what made an
+    error into a loop.
+
+    ## Ruling for AC3(c) and AC4
+
+    Two changes, both small, and in this order:
+
+    **1. Bound the re-pin loop.** `tolerant_read_with_budget` must cap its re-pin `continue`s (a count
+    or a deadline) and, on exhaustion, return a typed error carrying the actionable read-only message —
+    never spin. This stands on its own merits regardless of (2): an unbounded retry whose predicate is
+    fed by an error-swallowing `.ok()` is a defect wherever it appears.
+
+    **2. Serve the read from a private writable fallback cache.** When `Cache::open` reports
+    `is_read_only() && !has_usable_snapshot()` — the projection cannot be served at all and cannot be
+    repaired in place — `CachedGitBackend::open` re-opens the cache at a private, per-user, per-store
+    fallback path under `${XDG_CACHE_HOME:-$HOME/.cache}/aida/`, and uses that. No read method changes
+    and no new query semantics: the fallback is writable, so the existing stale → `full_rebuild`
+    machinery projects the authoritative store into it on the first read, which IS "degrades to reading
+    the store directly" as AC3 words it. It persists between invocations, so the full projection is paid
+    once rather than per command.
+
+    Rejected alternatives, with reasons:
+
+    - *Add a `self.inner` fallback arm to each cache read method.* `list_summaries` and `search` exist
+      only on `CachedGitBackend`/`Cache` (filter pushdown and FTS5); re-implementing their semantics
+      against a loaded store would duplicate the projection's filter logic at every site.
+    - *Degrade to a bare `GitBackend` in `db::create_backend`.* Same reason — the CLI calls those
+      inherent methods, so a plain `GitBackend` cannot answer `aida list` or `aida search`.
+    - *An in-memory (`:memory:`) cache.* `Cache::read_snapshot` opens a SECOND connection to
+      `self.path`, which an unshared in-memory database cannot serve. A file is required.
+    - *`immutable=1`.* Already banned on this spec: it ignores the `-wal` and silently answers from the
+      last checkpoint. A cache that answers stale is worse than one that declines.
+    - *`std::env::temp_dir()`.* `store_locate.rs` already treats the system temp roots as
+      world-writable and hostile; a per-user cache directory created 0700 is the right home.
+
+    If the fallback itself cannot be created, the read declines through (1)'s bounded error with the
+    AC4 wording — it must still never hang.
+
+    **AC4** is then satisfied on every surviving failure path: the `CacheReadOnly` context, the
+    schema-drift-rebuild `map_err`, and (1)'s exhaustion error all name the cache path, the shared
+    symlinked-cache situation, and the two remedies (`--add-dir <main>/.aida`, or run from the main
+    checkout).
+
+    ## Reproduction recipe (for the AC1/AC5 tests)
+
+    Not a one-liner — the fixture must distinguish the two states, and the earlier rounds lost three
+    cycles to exactly this confusion:
+
+    - **readable-but-unwritable** (AC3(a)/(b), already covered by the two green unit tests): hold a
+      second connection with an active `BEGIN DEFERRED` across the `chmod`, so `-wal`/`-shm` stay alive.
+    - **unreadable** (AC3(c), new): checkpoint, delete `-wal`/`-shm`, then `chmod a-w` the directory.
+      Never drop the handle and chmod without deleting the sidecars, and never assert that a cache in
+      this state can be read — SQLite cannot do it.
+  created_at: 2026-10-01T15:06:59.174196092Z
+  modified_at: 2026-10-01T15:06:59.174196092Z
+  session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
   author: joe
