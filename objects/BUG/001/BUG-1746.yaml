@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T00:25:27.739056324Z
-modified_at: 2026-10-01T00:25:37.555137475Z
+modified_at: 2026-10-01T00:50:57.272211018Z
 req_type: Bug
 comments:
 - id: 01a0f4da-3a13-76c2-ba13-06dde406d0dd
@@ -91,6 +91,131 @@ comments:
   created_at: 2026-10-01T00:25:37.555137475Z
   modified_at: 2026-10-01T00:25:37.555137475Z
   session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+- id: 01a0f4f1-6a78-75c1-9fc9-f53373e5d61b
+  author: joe
+  content: |
+    ADVISOR DISPOSITION (2026-09-30, relay #21): APPROVED — the observed drift is real and
+    recurring, and it is worth fixing. But the filing's ROOT CAUSE is materially wrong, its design
+    fork is already resolved in shipped code, and acting on the filing as written would build the
+    one option this disposition rejects. Corrections below are BINDING on the implementation.
+
+    ## Correction 1 — the fan-out is NOT bound to one explicit command
+
+    The filing states: "The fan-out is bound to that ONE explicit command [`aida db sync --push`].
+    Nothing in the write path, and nothing in `aida schedule tick`, ever runs `aida db sync --push`."
+    The second sentence is true. The first is false, and the conclusion drawn from it is wrong.
+
+    I grepped the code rather than trusting either the filing or `aida search` (which returns
+    nothing useful here). THREE shipped fan-out triggers exist, and TWO of them cover the store
+    branch:
+
+    1. `aida db sync --push` — the one the filing found.
+    2. **`aida pull`** → `mirror_sync_after_pull` (`remote_create.rs:1801`), sole call site
+       `lib.rs:72604`, guarded on both legs succeeding. It calls `mirror_sync_hubs`
+       (`remote_create.rs:1617`), whose branch list is `mirror_sync_branches`
+       (`remote_create.rs:1589`) — which **explicitly adds `STORE_BRANCH`**.
+    3. `aida remote mirror-sync` on demand (`handle_remote_mirror_sync`, `:1771`).
+
+    `mirror_sync_hubs`'s own doc comment (`:1596-1606`) states the filing's complaint almost
+    verbatim, two sessions before it was filed:
+
+    > "the store branch is pushed to origin by every targeted `aida edit` write, none of which fan
+    > out (only `aida db sync --push` does). Both hubs therefore drift for hours between the rare
+    > full syncs."
+
+    That is **BUG-1676** (completed). BUG-1676 diagnosed this exact drift, built the store-covering
+    fan-out, and chose its boundary: the pull. So this is not a missing mechanism.
+
+    ## Correction 2 — the real root cause is a trigger gap, not a fan-out gap
+
+    The shipped fan-out follows ORIGIN and covers the store. It fires on `aida pull`. An advisor-seat
+    session makes many store writes (`aida edit`, `aida comment add`, `aida add`,
+    `aida schedule done`) and may never run `aida pull` at all. That is precisely what happened in
+    the session that filed this: 6 writes, no pull, gitlab exactly 6 behind. The mechanism was
+    correct and simply never ran.
+
+    So the bug is: **the only cadence that levels the hubs is `aida pull`, and a seat can work a
+    full session without crossing it.** State it that way in the PR; the filing's framing would send
+    an implementer to build a second mechanism beside a working one.
+
+    ## Correction 3 — the pre-push hook's store skip is NOT the defect, and must NOT be removed
+
+    For the record, since it is the first thing an implementer will find: every store write DOES
+    reach a fan-out point. The store push to origin fires `.git/hooks/pre-push` →
+    `aida remote mirror-push origin` → `run_mirror_push` (`:1342`), and
+    `mirror_push_refspecs` (`:1297`) filters the store branch out deliberately
+    (`:1305-1307`, doc comment `:1292-1294`).
+
+    **BINDING: do not remove that filter.** Removing it IS the per-write fan-out option, arriving by
+    the back door — a second network hop in the path of every ordinary `aida edit`. That is the
+    option this disposition rejects (below). Leave `mirror_push_refspecs` alone.
+
+    ## The design fork, RESOLVED
+
+    The filing asks for the fan-out point to be decided explicitly. Decided: **fan out on a
+    substrate cadence, reusing the shipped `mirror_sync_hubs` — not per write, and not at session
+    end.**
+
+    - **Not per write.** It puts a second network hop and a hub outage inside `aida edit`. The
+      filing already names this cost; it is not worth paying for a mirror whose purpose is
+      durability, not currency-to-the-second.
+    - **Not session end.** A seat can be killed (this host has had an oomd session kill), so an
+      end-of-session hook is exactly the trigger that does not run on the occasions when it matters.
+    - **A substrate cadence.** `aida schedule` already runs substrate jobs with seats `*` on a
+      tick, independent of which seat is working — the one actor guaranteed to run. Bounded
+      staleness of one cadence interval instead of a day, zero added latency in any user command,
+      and it reuses code BUG-1676 already shipped and tested.
+
+    Note the likely shape: `aida remote mirror-sync` already exists and already covers main + store,
+    so this may be substantially a scheduled-job addition rather than new push logic. Prefer that.
+    Do not re-implement fan-out.
+
+    **Do NOT teach `hub-drift-guard` to self-heal.** The filing is right that the guard is correct
+    and is what surfaced this. A detector that mutates shared branches is a worse object than the
+    chore it saves. Fix the cadence; the guard then stops firing for this cause on its own, which is
+    the proof the fix worked.
+
+    ## Acceptance addenda (binding, in addition to the filing's)
+
+    1. **Mutation proof must target the TRIGGER, not the mechanism.** `mirror_sync_hubs` and
+       `mirror_sync_branches` are already covered by BUG-1676; a test asserting the store branch is
+       in the branch list proves nothing new and would pass today. The new test must FAIL when the
+       new cadence trigger is removed, with the mechanism left intact.
+    2. **A transient hub failure must not route a human job.** If the cadence is a scheduled job, a
+       single unreachable-hub run must not trip `CronJobFailed` into the advisor seat — that would
+       replace a daily ceremony job with a flakier one. `hub-drift-guard` (every 6h) stays the
+       escalation path for drift that PERSISTS. Say in the PR which of the two reports a hub outage.
+    3. **Never force-push.** A non-fast-forward hub tip must still be reported as `Failed` with
+       git's diagnostic and left to `aida remote reconcile`. This is already the shipped semantics
+       of `mirror_sync_hubs`; keep a test pinning it so the cadence cannot acquire a `--force`.
+    4. **Fix the stale config comment** — and fix it to the truth, which is now three triggers, not
+       one. `.aida/config.toml:22-26` says listing a hub "makes every `aida db sync --push` push the
+       store to BOTH hubs". That sentence is what sent this filing down the wrong root cause. Update
+       it and the `init_cmd.rs` scaffold stubs (`:4592`, `:4872`, `:5455`) together, or the next
+       project scaffolded inherits the same misleading comment.
+    5. **The filing's first AC is accepted as the end-to-end proof** (several ordinary writes, then
+       `aida remote status` in sync with no explicit `aida db sync --push`) — but it must be reached
+       by letting the cadence run, not by calling the fan-out directly from the test.
+
+    ## Live re-measurement of the filing's central claim
+
+    The filing's step 2/3 observation is the load-bearing evidence, so I re-ran it rather than
+    inheriting it. Baseline before this disposition: gitlab and origin BOTH at `de9b4901e28c`
+    (identical SHA — verified with `git rev-parse` and `git merge-base --is-ancestor`, so the
+    "intentionally non-fast-forward across hubs" premise that justifies the pre-push store skip has
+    in fact expired for this project; that is a separate observation and NOT a reason to change the
+    filter, see Correction 3). The writes that record this disposition are themselves the test; the
+    resulting tips are reported on this spec.
+
+    ## Disposition
+
+    APPROVED, high. Keep the priority: this removes a recurring zero-judgment advisor job, and the
+    real risk the filing names is correct — a seat trained to wave through hub-drift alerts is the
+    seat that waves through a genuine divergence. Start from BUG-1676's code and its doc comment,
+    not from this filing's root-cause paragraph.
+  created_at: 2026-10-01T00:50:57.272211018Z
+  modified_at: 2026-10-01T00:50:57.272211018Z
+  session_id: 4c77c80f-dbec-4968-be8b-fd61944ac334
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
