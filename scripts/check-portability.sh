@@ -333,6 +333,57 @@ def scan() -> list[tuple[str, str, int, str, str]]:
                         continue
                     findings.append((rule["id"], rel, idx, rule["label"], stripped))
                     break
+
+        # trace:BUG-1757 | ai:codex
+        # Markdown recipes are checked only inside explicitly shell-tagged fences.
+        markdown_root = "aida-core/templates"
+        try:
+            tracked_markdown = subprocess.run(
+                ["git", "-C", str(root), "ls-files", "-z", "--", markdown_root],
+                check=True, capture_output=True,
+            ).stdout.decode(errors="replace").split("\0")
+            markdown_candidates = [root / rel for rel in tracked_markdown if rel.endswith(".md")]
+        except (OSError, subprocess.CalledProcessError):
+            markdown_candidates = [
+                path for path in (root / markdown_root).rglob("*.md") if path.is_file()
+            ]
+        opening = re.compile(r"^(`{3,}|~{3,})(.*)$")
+        shell_tags = {"bash", "sh", "shell", "console"}
+        for path in sorted(set(markdown_candidates)):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(root).as_posix()
+            if not rel.startswith(f"{markdown_root}/"):
+                continue
+            lines = path.read_text(errors="replace").splitlines()
+            fence = None
+            tag = ""
+            for idx, raw in enumerate(lines, start=1):
+                stripped = raw.strip()
+                if fence is None:
+                    match = opening.match(stripped)
+                    if match:
+                        fence = match.group(1)
+                        info = match.group(2).strip()
+                        tag = info.split(None, 1)[0].lower() if info else ""
+                    continue
+                # A bare same-kind marker closes the innermost open fence.
+                if re.fullmatch(re.escape(fence[0]) + r"{" + str(len(fence)) + r",}", stripped):
+                    fence = None
+                    tag = ""
+                    continue
+                if tag not in shell_tags:
+                    continue
+                code = strip_shell_comment(raw)
+                for rule in shell_rules:
+                    if not rule["regex"].search(code):
+                        continue
+                    if rule["optout"] and any(
+                        rule["optout"].search(w) for w in lines[max(0, idx - 2) : idx]
+                    ):
+                        continue
+                    findings.append((rule["id"], rel, idx, rule["label"], stripped))
+                    break
     return findings
 
 

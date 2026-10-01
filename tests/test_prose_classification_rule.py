@@ -274,6 +274,31 @@ def shell_findings(files: dict[str, str], *, git_repo: bool = True,
         return lines, result.stderr
 
 
+def markdown_shell_findings(files: dict[str, str], *, mirrors: dict[str, str] | None = None):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp).resolve()
+        (root / "scripts").mkdir()
+        shutil.copy(RULES, root / "scripts" / "portability-rules.json")
+        (root / "scripts" / "portability-allowlist.txt").write_text("")
+        all_files = {**{f"aida-core/templates/{name}": body for name, body in files.items()},
+                     **(mirrors or {})}
+        for name, body in all_files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(textwrap.dedent(body).lstrip())
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+        subprocess.run(["git", "add", "--", *all_files], cwd=root, check=True)
+        result = subprocess.run(
+            ["bash", str(CHECK), "--print-findings"], cwd=root,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root), "HOME": tmp},
+        )
+        return [line for line in result.stdout.splitlines()
+                if line.startswith(f"{SHELL_RULE_ID}\t")], result.stderr
+
+
 class ProseClassificationRuleTest(unittest.TestCase):
     def test_each_positive_fixture_matches(self):
         for name, body in POSITIVE.items():
@@ -415,6 +440,44 @@ class ProseClassificationRuleTest(unittest.TestCase):
                            "expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\n",
         })
         self.assertEqual(found, [])
+
+    def test_markdown_shell_fences_scan_all_four_tags_with_real_line_numbers(self):
+        body = "\n".join(f"```{tag}\ndate -d yesterday +%s\n```" for tag in
+                           ("bash", "sh", "shell", "console"))
+        found, stderr = markdown_shell_findings({"tagged.md": body})
+        self.assertEqual(len(found), 4, found)
+        self.assertTrue(all("aida-core/templates/tagged.md:" in line for line in found), found)
+        for line_number in (2, 5, 8, 11):
+            self.assertIn(f"aida-core/templates/tagged.md:{line_number}:", stderr)
+
+    def test_markdown_shell_fences_ignore_files_outside_template_prefix(self):
+        found, _ = markdown_shell_findings(
+            {"inside.md": "```bash\ndate -d yesterday +%s\n```"},
+            mirrors={"docs/outside.md": "```bash\ndate -d yesterday +%s\n```"},
+        )
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("aida-core/templates/inside.md", found[0])
+
+    def test_markdown_mirror_reachable_site_is_reported_once_at_master(self):
+        content = "```bash\ndate -d yesterday +%s\n```"
+        found, _ = markdown_shell_findings(
+            {"skills/example/SKILL.md": content},
+            mirrors={".claude/skills/example/SKILL.md": content},
+        )
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("aida-core/templates/skills/example/SKILL.md", found[0])
+        self.assertNotIn(".claude/", "\n".join(found))
+
+    def test_markdown_fence_comments_and_fallback_markers_are_immune(self):
+        found, _ = markdown_shell_findings({"immune.md": """\
+            ```bash
+            date -d yesterday +%s # portable-fallback: alternate implementation
+            # portable-fallback: alternate implementation
+            date -d yesterday +%s
+            # date -d yesterday +%s
+            ```
+            """})
+        self.assertEqual(found, [], found)
 
     # Scope isolation must inspect raw output; rule-filtered helpers hide leaks.
     def test_shell_rule_scope_does_not_cross_file_types(self):
