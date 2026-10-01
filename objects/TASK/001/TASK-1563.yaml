@@ -1,0 +1,48 @@
+id: 01a0f532-bf14-7e22-ab80-ef7fb140d022
+spec_id: TASK-1563
+agreed_id: TASK-1563
+title: Adopt worktree_parent in this repo's config so one folder-trust grant covers every AIDA worktree
+description: |
+  Adopt the opt-in `[worktree_pool] worktree_parent` in this repository's own tracked
+  `.aida/config.toml`, setting it to `../aida-worktrees` so every AIDA-minted worktree lands under
+  one directory that a single folder-trust grant can cover.
+
+  WHY NOW: BUG-1744 (merged as #2301) made `aida doctor` disclose the condition this fixes — the
+  covering folder-trust grant on `/home/joe/ai` spans ~140 unrelated directories, which is a very
+  wide grant to hold open purely because AIDA scatters worktrees as siblings of the project root.
+  TASK-1561 (merged as #2300) closed the last escape hatch by routing the CLI's pickup fallback
+  through the single `worktree_placement_path` rule, so a configured value is now honoured by every
+  worktree creator rather than only by the warm pool. With both landed, setting the key is the
+  remaining operator-side step, and the operator approved it on 2026-09-30.
+
+  SCOPE: one new `[worktree_pool]` table in `.aida/config.toml` with one key. No code change. The
+  repository has no `[worktree_pool]` table today, so this adds one rather than editing one.
+
+  NOT IN SCOPE: changing what `aida init` scaffolds or enables by default; moving any existing
+  worktree.
+
+  ## Acceptance
+  - `.aida/config.toml` contains a single `[worktree_pool]` table setting
+    `worktree_parent = "../aida-worktrees"`, and the file still parses (`aida doctor` runs without
+    a config error). A duplicate table would make the config unparseable with empty stderr, so the
+    table count is asserted, not assumed.
+  - A newly created worktree lands under `/home/joe/ai/aida-worktrees/` rather than as a sibling of
+    the project root. Demonstrated once after the change.
+  - Existing worktrees are not moved and keep working; the change is forward-only.
+  - The comment above the key states the relative-path rule (resolved against the project root) and
+    why the value is this one, so a reader does not have to recover the rationale from git history.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T02:02:18.772064501Z
+modified_at: 2026-10-01T02:02:18.772064501Z
+req_type: Task
+filed_at:
+  code_sha: 543deb61976a4e731d1cb79528c5f2e38a11ce14
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 7d85a8057d
+  vendor: antigravity
+  session: 6663ec7a-be85-417d-ba2d-94a22495eb19
