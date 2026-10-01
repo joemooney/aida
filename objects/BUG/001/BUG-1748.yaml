@@ -67,8 +67,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:21.256433944Z
-modified_at: 2026-10-01T08:05:17.036364292Z
+modified_at: 2026-10-01T08:30:17.012414791Z
 req_type: Bug
+comments:
+- id: 01a0f695-f1b4-7030-9349-cc9941b3aa8b
+  author: mcp
+  content: 'AC4 audit complete: the advisor code guard was the only defective existence check against a TTL-bearing flag file. `roles/$role.toml` is a plain role-definition file without an active flag or TTL, so its existence check is correct. No additional specs were filed.'
+  created_at: 2026-10-01T08:30:17.012388069Z
+  modified_at: 2026-10-01T08:30:17.012388069Z
 history:
 - id: 01a0f5c2-e6ed-7f82-a78a-e7b4a1174dbb
   author: joe
