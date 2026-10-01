@@ -64,6 +64,16 @@ pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<
                 find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
             worktree_scope_gate::enforce_at_commit(&root)
         }
+        // trace:BUG-1748 | ai:codex
+        cli::InternalCommand::SoloActive => {
+            // Silent exit-code query, not a bail: a non-zero here means "solo is
+            // off", which is a normal answer, not an error to print.
+            std::process::exit(if crate::presence::current_solo(chrono::Utc::now()) {
+                0
+            } else {
+                1
+            })
+        }
     }
 }
 

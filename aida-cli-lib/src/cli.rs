@@ -166,6 +166,12 @@ pub enum InternalCommand {
     /// session that is not worktree-scoped.
     // trace:TASK-1178 | ai:claude
     WorktreeScopeGate,
+
+    /// Query effective solo mode for the Claude advisor-code-guard PreToolUse
+    /// hook. Exits 0 when solo mode is active and 1 when it is off; prints
+    /// nothing.
+    // trace:BUG-1748 | ai:codex
+    SoloActive,
 }
 
 #[derive(Subcommand, Debug)]
