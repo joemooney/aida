@@ -1,0 +1,83 @@
+id: 01a0f806-5e00-7962-81cd-cfaf9ad03e90
+spec_id: BUG-1756
+agreed_id: BUG-1756
+title: The unshipped-work detector excludes local-only committed branches, so the one state where finished work exists on a single machine is the one state it never reports
+description: |
+  OBSERVED (2026-10-01, relay advisor sessions #15 and #16, confirmed twice): the unshipped-work
+  detector is blind to a **local-only committed branch**, which is the single most strandable state
+  work can be in.
+
+  ## Evidence
+
+  Branch `bug-1688` in worktree `/home/joe/ai/aida-bug-1688`:
+
+  - commit `72bc040a09`, `[AI:codex] fix(scripts): gate full-access launches in shipped scripts with no unattended caller (BUG-1688)`
+  - `git branch -vv` → `[origin/main: ahead 1, behind 72]`
+  - `git ls-remote --heads origin bug-1688` → **empty**: never pushed
+  - no PR
+  - over 24 hours old at the time of the first observation
+
+  `aida awaiting` reports `unshipped_work[0]` — i.e. nothing — and flags the spec only as
+  `orphaned_in_progress`, which reads as "a stale lease", not as "a finished fix is sitting on this
+  machine and nowhere else".
+
+  ## Why the detector cannot see it
+
+  This is a coverage gap by construction, not a regression. STORY-1043 defined unshipped work as
+  "pushed branch, ahead of main, no PR, no live lease", and every later fix in the family tightened the
+  detector against OVER-reporting: BUG-1187 (230 false positives), BUG-1576 (squash-merged branches),
+  BUG-1531 (published PR snapshots), TASK-1445 (owning-spec disagreement). None of them revisited the
+  "pushed" precondition.
+
+  The result is an inverted risk profile. A pushed branch is durable — it survives the machine, and
+  another seat can find it. A local-only commit exists in exactly one place; if that worktree is
+  reclaimed, `aida session end`-ed, or the disk is cleaned (and `.aida/handoff` notes say worktree
+  `target/` dirs have already been bulk-deleted once on this host to reclaim 251G), the work is gone
+  with no trace in any substrate surface. That is the state the detector most needs to name, and it is
+  the one state it excludes.
+
+  `orphaned_in_progress` is not a substitute: it describes the LEASE, fires on specs with no commits at
+  all, and recommends lease cleanup — the opposite of "push this".
+
+  ## Acceptance criteria
+
+  1. A local-only branch that is ahead of `main`, carries at least one commit, and has no PR is
+     reported as unshipped work, with its state distinguished from a pushed-no-PR branch: the two need
+     different next actions (`push then open a PR` vs `open a PR`). TASK-1305 already established that
+     collapsing distinct unshipped states into one rendering is a defect; this is the same principle
+     applied to the push axis.
+  2. The fix does not reintroduce the over-reporting the family already paid for: a branch whose
+     commits are merged, squash-merged, or landed by trailer must still be excluded, whether or not it
+     was ever pushed. Re-run whatever fixtures BUG-1187, BUG-1576 and TASK-1534 left behind and report
+     their results.
+  3. The recommended action for a local-only branch names pushing first. A reader must not be told to
+     `aida pr ship` something that has no remote ref.
+  4. Mutation proof: a fixture with a local-only committed branch goes red without the fix and green
+     with it, and a fixture with a pushed branch keeps its current classification unchanged.
+
+  ## Out of scope
+
+  Do not widen the detector to uncommitted working-tree changes — that is a different signal with a
+  different lifetime, and it would reopen the noise problem BUG-1187 closed.
+
+  ## Notes
+
+  Filed from the advisor seat while round 1e of BUG-1752 was dispatched. Both observations were made
+  while reconciling `aida human` / `aida awaiting` entries by hand, which is itself the signal: the
+  reconciliation only caught it because a human-shaped pass went looking at worktrees the detector
+  never mentions.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T15:12:41.984679155Z
+modified_at: 2026-10-01T15:12:41.984679155Z
+req_type: Bug
+filed_at:
+  code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: b785274c7b
+  vendor: antigravity
+  session: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
