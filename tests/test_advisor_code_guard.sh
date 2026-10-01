@@ -66,8 +66,14 @@ unset AIDA_AUTO_COMPLETE
 STATUS_REPO="$TMP/status-repo"
 mkdir -p "$STATUS_REPO"
 git -C "$STATUS_REPO" init -q -b main
-now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+# trace:BUG-1748 | ai:codex
+# Use python3 because date -d is GNU-only and this test runs on the macOS matrix leg.
+now=$(python3 -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')
+expired=$(python3 -c 'import datetime; print((datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ"))')
+if [ -z "$now" ] || [ -z "$expired" ]; then
+    echo "FAIL - could not compute solo fixture timestamps"
+    exit 1
+fi
 for state in absent active expired inactive; do
     solo_on=false
     case "$state" in
