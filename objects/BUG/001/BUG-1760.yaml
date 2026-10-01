@@ -96,8 +96,36 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:21:51.793308105Z
-modified_at: 2026-10-01T18:21:59.679856817Z
+modified_at: 2026-10-01T18:22:18.489356737Z
 req_type: Bug
+comments:
+- id: 01a0f8b3-f579-7513-8100-0183cfc5c782
+  author: joe
+  content: |
+    AC5 pre-measured by the advisor at filing time, so the implementer does not have to:
+
+    **4** commits touched `aida-core/templates/` between 2026-09-28 and 2026-10-01, changing **5** masters:
+
+    ```
+    aida-core/templates/gitlab-ci-merge-hold-gate.yml
+    aida-core/templates/hooks/aida-advisor-code-guard.sh
+    aida-core/templates/hooks/aida-git-guardrails.sh
+    aida-core/templates/skills/aida-code-review.md      <- in the pack, drifted
+    aida-core/templates/skills/aida-docs-review.md      <- in the pack, drifted
+    ```
+
+    Of the five, the **two under `skills/`** are the ones the pack mirrors, and **both** had drifted —
+    `make sync-templates` rewrote exactly those two. So the miss rate over this window was **2 of 2**: every
+    pack-relevant master change in three days went unregenerated. The other three masters are outside the
+    pack's scope (`check-agent-skills` only covers `aida-core/templates/skills/aida-*.md`), which is itself
+    worth stating in the fix: hooks and CI templates have **no** drift check at all, not even a manual one.
+
+    That strengthens option (b) over (a) on AC1 — a guard that a session must remember to satisfy is the
+    same failure mode one layer up — but the decision is still the implementer's to argue and the advisor's
+    to approve.
+  created_at: 2026-10-01T18:22:18.489356737Z
+  modified_at: 2026-10-01T18:22:18.489356737Z
+  session_id: f30df840-cbe8-450a-bc3c-59a41927a710
 history:
 - id: 01a0f8b3-abff-77d2-a69c-dabe4b43776a
   author: joe
