@@ -106,7 +106,8 @@ BRANCH_EXISTS=$(git branch -a 2>/dev/null | grep -c "$STORE_BRANCH" || true)
 
 if [ -d "$STORE_DIR" ]; then
     # Worktree already exists
-    REQ_COUNT=$(./target/debug/aida list 2>/dev/null | tail -1 | grep -oP '\d+' || echo "0")
+    # trace:BUG-1754 | ai:codex
+    REQ_COUNT=$(./target/debug/aida list 2>/dev/null | tail -1 | grep -oE '[0-9]+' || echo "0")
     ok "Store worktree exists at $STORE_DIR ($REQ_COUNT requirements)"
 elif [ "$BRANCH_EXISTS" -gt 0 ]; then
     # Branch exists but worktree not set up
@@ -185,7 +186,7 @@ if command -v aida &>/dev/null; then
 fi
 
 if $AIDA_CMD list &>/dev/null; then
-    REQ_COUNT=$($AIDA_CMD list 2>/dev/null | tail -1 | grep -oP '\d+' || echo "?")
+    REQ_COUNT=$($AIDA_CMD list 2>/dev/null | tail -1 | grep -oE '[0-9]+' || echo "?")
     ok "aida list works ($REQ_COUNT requirements)"
 else
     if [ -d "$STORE_DIR" ]; then

@@ -236,6 +236,7 @@ def findings(sources: dict[str, str], *, git_repo: bool = True,
 def shell_findings(files: dict[str, str], *, git_repo: bool = True,
                    untracked: dict[str, str] | None = None,
                    rules: list[dict] | None = None,
+                   prefix: str = "tests",
                    raw: bool = False) -> tuple[list[str], str]:
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp).resolve()
@@ -246,21 +247,21 @@ def shell_findings(files: dict[str, str], *, git_repo: bool = True,
             import json
             (root / "scripts" / "portability-rules.json").write_text(json.dumps(rules))
         (root / "scripts" / "portability-allowlist.txt").write_text("")
-        (root / "tests").mkdir()
+        (root / prefix).mkdir(parents=True)
         for name, body in files.items():
-            path = root / "tests" / name
+            path = root / prefix / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(textwrap.dedent(body).lstrip())
         if untracked:
             for name, body in untracked.items():
-                path = root / "tests" / name
+                path = root / prefix / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(textwrap.dedent(body).lstrip())
         if git_repo:
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
-            tracked_paths = [f"tests/{name}" for name in files]
+            tracked_paths = [f"{prefix}/{name}" for name in files]
             subprocess.run(["git", "add", "--", *tracked_paths], cwd=root, check=True)
         result = subprocess.run(
             ["bash", str(CHECK), "--print-findings"], cwd=root,
@@ -398,6 +399,14 @@ class ProseClassificationRuleTest(unittest.TestCase):
             "fixture.sh": "expired=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\n"
         })
         self.assertTrue(found)
+
+    def test_shell_rule_scans_aida_setup_files(self):
+        found, _ = shell_findings(
+            {"setup.sh": "count=$(printf '%s\\n' value | grep -oP '\\\\d+')\n"},
+            prefix=".aida",
+        )
+        self.assertEqual(len(found), 1, found)
+        self.assertIn(".aida/setup.sh", found[0])
 
     def test_shell_comments_and_fallback_marker_are_immune(self):
         found, _ = shell_findings({
