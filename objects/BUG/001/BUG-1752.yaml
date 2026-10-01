@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T17:00:36.977134653Z
+modified_at: 2026-10-01T17:01:21.971006480Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -607,6 +607,71 @@ comments:
     Round 1f is dispatched with exactly this scope.
   created_at: 2026-10-01T15:27:37.033691385Z
   modified_at: 2026-10-01T15:27:37.033691385Z
+  session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
+- id: 01a0f869-dab3-7e22-8953-af291aa975dc
+  author: joe
+  content: |
+    Closed — merged as `1660445110` (PR #2311). Advisor verification, re-run independently of the round 1f verdict.
+
+    ## The acceptance measurement, in the REAL linked-cache shape, run by the advisor
+
+    Fixture: scratch project, `aida init` + one spec, then the actual shape `aida queue work` scaffolds —
+    `cache.db` moved into a separate directory with a **symlink** left at `<project>/.aida/cache.db`, the
+    moved cache's `schema_version` downgraded to `14` so a migration is due, its `-wal`/`-shm` checkpointed
+    and deleted so the projection is unreadable, and **only the target's directory** set `0555`. The
+    project's own `.aida/` stayed writable, as it is in a real linked worktree.
+    `AIDA_CACHE_FALLBACK_DIR` unset.
+
+    | command | `main` @ `b785274c7b` | branch @ `589b33b060` |
+    |---|---|---|
+    | `aida show BUG-1` | exit 1, `Failed to enable WAL journal mode for cache` | **exit 0** |
+    | `aida list` | exit 1, same | **exit 0** |
+    | `aida search fallback` | exit 1, same | **exit 0** |
+    | `aida comment list BUG-1` | exit 1, same | **exit 0** |
+
+    The fallback landed in location 1 —
+    `<project>/.aida/cache-fallback/0800a508…/cache.db` — and `~/.cache/aida/unwritable-cache-fallback`
+    stayed **ABSENT**, which is the acceptance for the round 1e review's defect 2 (the candidate list used
+    to create the loser too). The read-only symlink target was byte-for-byte unmodified afterwards.
+
+    Second shape, to exercise the other location: with the project's own `.aida/` made unwritable so
+    location 1 is unreachable, reads still exit 0 and the fallback is created under
+    `~/.cache/aida/unwritable-cache-fallback/<digest>/`. Both locations work, in the right preference order.
+
+    `cargo test --workspace`, run by the advisor on the merged tree: `7444 passed; 0 failed; 2 ignored`,
+    and `grep -c '^test result: FAILED'` → 0. CI on `589b33b060`: `Build (ubuntu-latest)` pass (21m29s),
+    `merge-hold-gate` pass.
+
+    ## One correction to this spec's own record
+
+    The hang reported in the previous comment was a **branch-only regression**, not a property of `main`.
+    On `main` the unreadable state fails fast (`Failed to enable WAL journal mode for cache`); the
+    indefinite spin was introduced by rounds 1a–1d's own read-only short-circuits, which made
+    `ensure_cache_fresh` a no-op for a read-only cache and so left `tolerant_read_with_budget` re-pinning a
+    predicate that could never clear. The fix therefore closes a defect the fix itself created, on top of
+    the filed one. Worth stating plainly: a partial fix that converts a clean failure into a hang is a
+    worse state than the bug, and only the end-to-end CLI measurement in the right fixture shape surfaced
+    it — no unit test on this branch ever did.
+
+    ## What AC2's "pick one and say why" resolved to
+
+    Neither waiting nor a non-dropping migration: **a read-only cache never migrates at all**. The
+    writability probe in `Cache::open` classifies the handle once, `with_cache_write` refuses before the
+    sidecar write with a typed `CacheReadOnly`, and a handle whose projection is unusable is replaced by a
+    private writable fallback whose first read rebuilds it from the authoritative store. Waiting was
+    rejected because the condition is not transient — a sandboxed agent will never gain write access by
+    waiting — so a bounded wait would only add latency before the same failure.
+
+    `immutable=1` stays banned: it ignores the `-wal` and answers from the last checkpoint, so it would
+    make the cache silently serve stale rows.
+
+    ## Follow-on filed
+
+    BUG-1756 (approved): the unshipped-work detector excludes local-only committed branches. Found while
+    reconciling `aida human` by hand during this spec's dispatch waits; `bug-1688`'s branch carries a
+    finished fix, has no remote ref and no PR, and `aida awaiting` reports `unshipped_work[0]` empty.
+  created_at: 2026-10-01T17:01:21.971006480Z
+  modified_at: 2026-10-01T17:01:21.971006480Z
   session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
