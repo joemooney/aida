@@ -38,6 +38,7 @@ dependencies = [
  "aida-core",
  "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]

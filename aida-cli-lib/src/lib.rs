@@ -36832,11 +36832,27 @@ fn resolve_session_branch(
     )
 }
 
-/// BUG-1628: the default worktree path of an ordinary pickup — a sibling of
-/// the project root named `<repo>-<slug>`. `session_start`, the `queue work
+/// BUG-1628: the default worktree path of an ordinary pickup — `<repo>-<slug>`,
+/// placed by the same rule the warm pool uses. `session_start`, the `queue work
 /// --dry-run` preview, and the auto-complete phase-1 fallback all derive the
 /// path here, so they cannot drift apart again.
+///
+/// TASK-1561: the NAME is local; the PLACEMENT is not. This used to hardcode
+/// `project_root.parent()`, so `[worktree_pool] worktree_parent` was honoured by
+/// every pooled tree and by nothing else. That made the warm-pool fallback — the
+/// branch taken whenever the pool cannot serve a tree — scatter worktrees back
+/// into the project root's parent, silently, with only a warning about the pool
+/// and nothing about the layout. Since BUG-1700 exists so one folder-trust grant
+/// on one directory covers every worktree AIDA mints, a fallback that ignores
+/// the key defeats the guarantee exactly when it matters: the operator is handed
+/// a fresh untrusted path with its own modal, and the only alternative is to
+/// trust the shared parent and every unrelated project under it.
+///
+/// Placement therefore goes through `worktree_pool::worktree_placement_path`,
+/// the one rule, rather than a second copy of its sibling half. With the key
+/// unset the result is byte-identical to the historical `<parent>/<repo>-<slug>`.
 // trace:BUG-1628 | ai:claude
+// trace:TASK-1561 | ai:claude
 pub(crate) fn pickup_worktree_path(
     project_root: &std::path::Path,
     slug: &str,
@@ -36845,10 +36861,19 @@ pub(crate) fn pickup_worktree_path(
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("project");
-    Ok(project_root
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("project root has no parent"))?
-        .join(format!("{}-{}", repo_name, slug)))
+    let name = format!("{}-{}", repo_name, slug);
+    let parent_dir = worktree_pool_config_worktree_parent(project_root);
+    // The historical error when the root is a filesystem root is preserved for
+    // the UNCONFIGURED case only: with a configured parent the root's own parent
+    // is never consulted, so there is nothing to fail on.
+    if parent_dir.is_none() && project_root.parent().is_none() {
+        anyhow::bail!("project root has no parent");
+    }
+    Ok(aida_core::worktree_pool::worktree_placement_path(
+        project_root,
+        &name,
+        parent_dir.as_deref(),
+    ))
 }
 
 /// BUG-1628: the branch + worktree an ordinary pickup (`aida queue work
@@ -64998,6 +65023,10 @@ mod task_1558_agents_mcp_type_tests;
 #[cfg(test)]
 #[path = "tests/bug_1700_worktree_parent_tests.rs"]
 mod bug_1700_worktree_parent_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1561_pickup_worktree_parent_tests.rs"]
+mod task_1561_pickup_worktree_parent_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1701_drain_routing_tests.rs"]
