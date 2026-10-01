@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:58.967574057Z
-modified_at: 2026-10-01T14:28:49.494676298Z
+modified_at: 2026-10-01T14:50:14.960014032Z
 req_type: Bug
 comments:
 - id: 01a0f7af-ceb3-7141-bee0-c1c97bb17fa9
@@ -345,6 +345,80 @@ comments:
     `2bb0d0fb1e`.
   created_at: 2026-10-01T14:28:49.494676298Z
   modified_at: 2026-10-01T14:28:49.494676298Z
+  session_id: 1169fc8c-9e1a-48b3-b948-ec0cce4c6920
+- id: 01a0f7f1-d030-7e12-9e2f-f889077fc248
+  author: joe
+  content: |
+    # Round 1d landed: the cache suite is GREEN and the reproduction now holds. AC3(b)/AC3(c)/AC4 remain.
+
+    The split-the-test ruling was correct. Round 1d rebuilt both fixtures to hold a second connection
+    with an active `BEGIN DEFERRED` read transaction across the `chmod`, so `-wal`/`-shm` stay live —
+    and both tests went green immediately. They are renamed to name the fixture:
+    `old_stamp_in_unwritable_cache_with_live_wal_keeps_committed_rows` and
+    `empty_old_stamp_in_unwritable_cache_with_live_wal_defers_migration`.
+
+    ## Verified by the advisor, not reported
+
+        cargo test -p aida-core cache
+        test result: ok. 177 passed; 0 failed; 1 ignored; 0 measured; 1112 filtered out; finished in 151.00s
+        (0 lines matching '^test result: FAILED')
+
+        cargo fmt --all -- --check          -> exit 0
+
+    Round 1d also reported `make build-fast` finishing in 4m36s and
+    `cargo clippy --workspace -- -W clippy::all -D clippy::correctness` at exit 0, and ran the **AC5
+    mutation proof** properly: `cp` aside, strip the live-WAL fixture, **RED** (0 passed / 2 failed),
+    restore, **GREEN** (2 passed / 0 failed), `diff -q` clean. No `git stash`. AC5 is satisfied for
+    the fixture; it still needs re-running against the production change once AC3(b) lands.
+
+    ## I was wrong about `cache_blocked_flag_matches_edge_walk`, and the round was right to check
+
+    I told round 1d that failure was unrelated parallel-test interference. It is not — it fails in
+    isolation, and round 1d said so rather than accepting my framing. The cause: round 1's WIP
+    (`9de03791e8`) turned a bare `rebuild_from_store` call into two assertions both hard-coded to `1`,
+    while the fixture builds **eight** requirements. Red ever since, on a test with nothing to do with
+    this bug. Fixed in `4469004aa5` by deriving the count from `store.requirements.len()` — which the
+    test's own later `rows.len()` assertion already uses, so it cannot drift again.
+
+    ## Branch state
+
+    `bug-1752`, unpushed, four commits, **none carrying the completing `(BUG-1752)` trailer**:
+
+    | commit | what |
+    |---|---|
+    | `9de03791e8` | WIP: classifier + first degrade attempt (per-site catches) |
+    | `2bb0d0fb1e` | the probe ruling: one write probe in `Cache::open`, `read_only` on `Cache`, `with_cache_write` returning typed `CacheReadOnly` before the sidecar write; `cached_git_backend` early returns re-keyed off `migration_pending()` onto read-only |
+    | `1d26f8f214` | the live-WAL fixtures |
+    | `4469004aa5` | the blocked-flag count fix |
+
+    ## Still outstanding — this is the whole of round 1e
+
+    1. **AC3(b): the `search` fallback.** Note for the next brief: `search` already routes through
+       `with_cache_schema_retry` + `tolerant_read`, exactly like `list_summaries`, and
+       `tolerant_read` has **no fallback to `inner`** at all — its last arm is `Err(err) => return
+       Err(err)` (`cached_git_backend.rs:572-596`). So whatever makes `show`/`list`/`comment list`
+       reach the authoritative store sits **above** this layer, at the CLI. The earlier framing of
+       "`search` is the only one of the four unrouted" should be re-checked against that before a
+       brief repeats it.
+    2. **AC3(c): the unusable-projection fallback** — the no-`-shm` case, where the cache genuinely
+       cannot be served and the caller must reach the store.
+    3. **AC4: the clean decline** — the read-only classification and message must surface instead of a
+       raw `attempt to write a readonly database`.
+    4. Re-run AC5 against the production change once (1) lands, plus `make build-fast`, the cache
+       suite, clippy and fmt.
+
+    ## Standing constraints for round 1e
+
+    - **`immutable=1` is banned** (it answers from the last checkpoint and ignores the `-wal`; measured
+      as `no such table` against a live WAL).
+    - **`--add-dir <main>/.aida` is not the fix** — too much blast radius to make a read work.
+    - **A dispatched agent cannot commit in a linked worktree** — the git metadata lives in
+      `<main>/.git/worktrees/`, outside the sandbox, so `index.lock` fails with `Read-only file
+      system`. Round 1c did a full round of work it could not commit. **The dispatching advisor must
+      `git status --porcelain` the worktree and commit on every round, including a round that reports
+      failure.**
+  created_at: 2026-10-01T14:50:14.960014032Z
+  modified_at: 2026-10-01T14:50:14.960014032Z
   session_id: 1169fc8c-9e1a-48b3-b948-ec0cce4c6920
 history:
 - id: 01a0f71b-7e46-77c0-b7fe-c4ef04d45fb8
