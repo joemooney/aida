@@ -602,6 +602,16 @@ pub enum CiProbeResult {
     Failed { change: u64, summary: String },
 }
 
+/// A branch CI observation together with the commit the forge says that
+/// observation belongs to. `head_sha` is the PR/MR head on GitHub and the
+/// newest pipeline SHA on GitLab.
+// trace:BUG-1819 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CiProbeEvidence {
+    pub probe: CiProbeResult,
+    pub head_sha: Option<String>,
+}
+
 /// STORY-516: adapt the orchestrator's `CiProbe` (main.rs) to the forge-neutral
 /// `CiProbeResult` — 1:1, preserving `NoSignal(reason)`. Pure + unit-tested.
 /// trace:STORY-516 | ai:claude
@@ -625,6 +635,17 @@ fn ci_probe_result_from_ci_probe(p: crate::CiProbe) -> CiProbeResult {
             summary: failed_summary,
         },
     }
+}
+
+fn github_ci_head_from_json(body: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(body.trim())
+        .ok()?
+        .get(0)?
+        .get("headRefOid")?
+        .as_str()
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1230,6 +1251,25 @@ pub fn forge_for_kind(project_root: &Path, kind: ForgeKind) -> Box<dyn Forge> {
     }
 }
 
+/// Read CI state and its covered head in one provider response. This is used
+/// by `--from-pr` reconciliation, where a bare green bit is insufficient: the
+/// reviewer must know that the terminal result covers the current PR/MR head.
+// trace:BUG-1819 | ai:codex
+pub(crate) fn ci_probe_evidence_for_branch(
+    project_root: &Path,
+    kind: ForgeKind,
+    branch: &str,
+) -> CiProbeEvidence {
+    match kind {
+        ForgeKind::GitHub => GitHubForge::new(project_root).ci_probe_evidence(branch),
+        ForgeKind::GitLab => GitLabForge::new(project_root).ci_probe_evidence(branch),
+        ForgeKind::None => CiProbeEvidence {
+            probe: CiProbeResult::NoSignal("no forge CI (pure-git)".to_string()),
+            head_sha: None,
+        },
+    }
+}
+
 /// TASK-1421: an injectable forge constructor. The orchestrator driver holds an
 /// optional one so a test can hand it a fake forge whose calls it observes; when
 /// unset (every production path) the driver falls back to [`forge_for_kind`].
@@ -1267,6 +1307,40 @@ impl GitHubForge {
             .args(args)
             .output_retrying_etxtbsy()
             .context("could not invoke `gh` — is the GitHub CLI installed?")
+    }
+
+    fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
+        let out = self.gh(&[
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number,headRefOid,statusCheckRollup",
+            "--limit",
+            "1",
+        ]);
+        let (probe, head_sha) = match out {
+            Ok(out) if out.status.success() => {
+                let body = String::from_utf8_lossy(&out.stdout);
+                let head = github_ci_head_from_json(&body);
+                (
+                    ci_probe_result_from_ci_probe(crate::parse_ci_probe(&body)),
+                    head,
+                )
+            }
+            Ok(out) => (
+                CiProbeResult::NoSignal(format!(
+                    "gh pr list failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                )),
+                None,
+            ),
+            Err(error) => (CiProbeResult::NoSignal(format!("{error:#}")), None),
+        };
+        CiProbeEvidence { probe, head_sha }
     }
 }
 
@@ -1624,12 +1698,11 @@ impl Forge for GitHubForge {
         // trace:STORY-1163 | ai:codex
         //
         // STORY-516: delegate to the proven `probe_ci_state_for_branch` (single
-        // `gh pr list --json number,statusCheckRollup` call → PR number + rollup,
-        // with the BUG-* NoSignal degradations) and adapt CiProbe → CiProbeResult.
-        // No classification reimplementation. trace:STORY-516 | ai:claude
-        Ok(ci_probe_result_from_ci_probe(
-            crate::probe_ci_state_for_branch_github(branch),
-        ))
+        // `gh pr list --json number,headRefOid,statusCheckRollup` call → PR
+        // number + covered head + rollup, with the BUG-* NoSignal
+        // degradations). No classification reimplementation.
+        // trace:STORY-516 trace:BUG-1819 | ai:codex
+        Ok(self.ci_probe_evidence(branch).probe)
     }
 
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
@@ -1872,6 +1945,12 @@ impl GitLabForge {
             Ok(ChangeLookup::Found(c)) => c.id,
             _ => 0,
         }
+    }
+
+    fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
+        let change = self.mr_iid_for_branch(branch);
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]);
+        ci_probe_evidence_from_glab_pipelines(out, change)
     }
 }
 
@@ -2179,9 +2258,7 @@ impl Forge for GitLabForge {
         // projects/:id/pipelines?ref=<branch>` (glab 1.36 has no `-F json` on
         // `ci list`), mirroring the BUG-639 MR-read fix. trace:STORY-510
         // trace:TASK-962 | ai:claude
-        let change = self.mr_iid_for_branch(branch);
-        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]);
-        Ok(ci_probe_from_glab_pipelines(out, change))
+        Ok(self.ci_probe_evidence(branch).probe)
     }
 
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
@@ -3444,42 +3521,78 @@ pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -
 /// transient-vs-definitive split: a `glab` invocation error → `NoSignal` (couldn't
 /// probe), distinct from "no pipelines" (`NoChecks`). trace:STORY-510 | ai:claude
 fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) -> CiProbeResult {
+    ci_probe_evidence_from_glab_pipelines(out, change).probe
+}
+
+// trace:BUG-1819 | ai:codex
+fn ci_probe_evidence_from_glab_pipelines(
+    out: Result<std::process::Output>,
+    change: u64,
+) -> CiProbeEvidence {
     let out = match out {
         // The only Err `glab(...)` produces is "could not invoke glab".
-        Err(_) => return CiProbeResult::NoSignal("glab not on PATH".to_string()),
+        Err(_) => {
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal("glab not on PATH".to_string()),
+                head_sha: None,
+            }
+        }
         Ok(o) => o,
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return CiProbeResult::NoSignal(if stderr.is_empty() {
-            "glab ci list failed".to_string()
-        } else {
-            stderr
-        });
+        return CiProbeEvidence {
+            probe: CiProbeResult::NoSignal(if stderr.is_empty() {
+                "glab ci list failed".to_string()
+            } else {
+                stderr
+            }),
+            head_sha: None,
+        };
     }
     let body = String::from_utf8_lossy(&out.stdout);
     let trimmed = body.trim();
     if trimmed.is_empty() {
-        return CiProbeResult::NoChecks { change };
+        return CiProbeEvidence {
+            probe: CiProbeResult::NoChecks { change },
+            head_sha: None,
+        };
     }
     let arr = match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(serde_json::Value::Array(a)) => a,
         Ok(_) => {
-            return CiProbeResult::NoSignal("glab ci list JSON was not an array".to_string());
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal("glab ci list JSON was not an array".to_string()),
+                head_sha: None,
+            };
         }
         Err(e) => {
-            return CiProbeResult::NoSignal(format!("could not parse glab ci list JSON: {e}"));
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal(format!("could not parse glab ci list JSON: {e}")),
+                head_sha: None,
+            };
         }
     };
     let pipeline = match newest_glab_pipeline(&arr) {
         Some(p) => p,
-        None => return CiProbeResult::NoChecks { change },
+        None => {
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoChecks { change },
+                head_sha: None,
+            }
+        }
     };
+    let head_sha = pipeline
+        .get("sha")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string);
     let status = pipeline
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    match glab_ci_state_from_status(status) {
+    let probe = match glab_ci_state_from_status(status) {
         CiState::Success => CiProbeResult::Green { change },
         CiState::Failed => CiProbeResult::Failed {
             change,
@@ -3488,7 +3601,8 @@ fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) 
         CiState::Running | CiState::Pending => CiProbeResult::InProgress { change },
         // An unknown/empty status token gives no usable verdict.
         CiState::None => CiProbeResult::NoChecks { change },
-    }
+    };
+    CiProbeEvidence { probe, head_sha }
 }
 
 /// Map a `glab mr list --output json` body to a `Vec<ChangeRef>`. A clean run
@@ -5289,6 +5403,13 @@ mod tests {
         );
     }
 
+    // trace:BUG-1819 | ai:codex
+    #[test]
+    fn github_ci_evidence_reads_the_pr_head() {
+        let body = r#"[{"number":26,"headRefOid":"abc123","statusCheckRollup":[]}]"#;
+        assert_eq!(github_ci_head_from_json(body).as_deref(), Some("abc123"));
+    }
+
     // trace:BUG-1224 | ai:codex
     #[test]
     fn gitlab_progress_snapshot_changes_as_running_job_duration_advances() {
@@ -5500,6 +5621,24 @@ mod tests {
             }
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    // trace:BUG-1819 | ai:codex
+    #[test]
+    fn gitlab_ci_evidence_reads_the_newest_pipeline_head() {
+        let evidence = ci_probe_evidence_from_glab_pipelines(
+            Ok(fake_output(
+                0,
+                &real_glab_api_pipelines_response(101, "success"),
+                "",
+            )),
+            26,
+        );
+        assert_eq!(evidence.probe, CiProbeResult::Green { change: 26 });
+        assert_eq!(
+            evidence.head_sha.as_deref(),
+            Some("a91957a858320c0e17f3a0eca7cfacbff50ea29a")
+        );
     }
 
     // ─────────────── change-metadata parsers (TASK-963) ───────────────

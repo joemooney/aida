@@ -1158,6 +1158,8 @@ pub(crate) fn handle_drain_resume(
                     pr,
                     head_sha: member.as_ref().and_then(|m| m.head_sha.clone()),
                     from_pr: false,
+                    ci_terminal_sha: None,
+                    ci_terminal_green: None,
                 })
             };
             // BUG-438: when we re-enter past phase 1, the crashed implementer's
