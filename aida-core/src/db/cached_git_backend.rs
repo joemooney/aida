@@ -380,6 +380,10 @@ impl CachedGitBackend {
     /// rebuild.
     // trace:BUG-636 | ai:claude
     fn ensure_cache_fresh(&self) -> Result<()> {
+        // trace:BUG-1752 | ai:codex
+        if self.cache.migration_pending() {
+            return Ok(());
+        }
         // TASK-1515: an incremental refresh declines when HEAD moves while it
         // reads the changed objects (it cannot stamp one HEAD on rows that may
         // come from a later one). On a busy store that is common, so retry the
@@ -458,6 +462,12 @@ impl CachedGitBackend {
         loop {
             let head = self.current_head_sha();
             let migration = self.cache.recheck_migration();
+            // trace:BUG-1752 | ai:codex
+            // A last-good committed snapshot remains readable while a version-only
+            // migration is pending; do not turn an advisory read into a cache write.
+            if migration {
+                return Ok(None);
+            }
             if migration && budget.0.is_zero() {
                 return Err(cache_refresh::AdvisoryCacheUnavailable.into());
             }
@@ -663,8 +673,15 @@ impl CachedGitBackend {
             .inner
             .load()
             .context("Failed to load git store for cache schema-drift rebuild")?;
-        self.cache
-            .rebuild_from_store_after_schema_drift(&store, &head)?;
+        self.cache.rebuild_from_store_after_schema_drift(&store, &head)
+            .map_err(|err| {
+                if super::cache::is_cache_unwritable_error(&err) {
+                    anyhow::anyhow!(
+                        "the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout: {err}",
+                        self.cache.path().display()
+                    )
+                } else { err }
+            })?;
         Ok(())
     }
 

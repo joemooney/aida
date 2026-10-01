@@ -648,6 +648,16 @@ pub fn fast_fail_cache_enabled() -> bool {
 fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Connection> {
     match open_connection_inner(path, lock_info_path) {
         Ok(conn) => Ok(conn),
+        // trace:BUG-1752 | ai:codex
+        // In a linked worktree the cache may be readable but its parent
+        // directory is not writable, so SQLite cannot initialize WAL shared
+        // memory through a read-write handle. Fall back to a read-only handle.
+        Err(err) if is_cache_unwritable_error(&err) && path.exists() => {
+            let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .with_context(|| format!("the AIDA cache at {} is not writable; could not open its readable snapshot: {err}", path.display()))?;
+            conn.busy_timeout(Duration::ZERO)?;
+            Ok(conn)
+        }
         // BUG-683: a corrupt / non-sqlite `.aida/cache.db` is a no-escape
         // dead-end — every cache-backed read fails, and even `aida cache
         // rebuild` re-opens the same corrupt file first and fails. The cache is
@@ -696,9 +706,16 @@ fn open_connection_inner(path: &Path, lock_info_path: &Path) -> Result<Connectio
         // otherwise block inside a single attempt and hide the lock holder.
         conn.busy_timeout(Duration::from_millis(0))?;
         // trace:STORY-580 | ai:codex
-        let journal_mode: String = conn
-            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-            .context("Failed to enable WAL journal mode for cache")?;
+        // trace:BUG-1752 | ai:codex
+        // Asking SQLite to set WAL again still attempts a directory write on
+        // read-only databases. Read first so an existing WAL snapshot opens.
+        let current_mode: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+        let journal_mode = if current_mode.eq_ignore_ascii_case("wal") {
+            current_mode
+        } else {
+            conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+                .context("Failed to enable WAL journal mode for cache")?
+        };
         if !journal_mode.eq_ignore_ascii_case("wal") {
             anyhow::bail!("cache did not enter WAL journal mode: {journal_mode}");
         }
@@ -725,6 +742,20 @@ fn is_sqlite_corruption_error(err: &anyhow::Error) -> bool {
                 ),
                 _ => false,
             })
+    })
+}
+
+// trace:BUG-1752 | ai:codex
+pub(super) fn is_cache_unwritable_error(err: &anyhow::Error) -> bool {
+    use std::io::ErrorKind;
+    err.chain().any(|cause| {
+        if let Some(sqlite) = cause.downcast_ref::<rusqlite::Error>() {
+            return matches!(sqlite, rusqlite::Error::SqliteFailure(code, _)
+                if matches!(code.code, rusqlite::ErrorCode::ReadOnly | rusqlite::ErrorCode::CannotOpen));
+        }
+        cause.downcast_ref::<std::io::Error>().is_some_and(|io| {
+            io.kind() == ErrorKind::PermissionDenied || io.raw_os_error() == Some(30)
+        })
     })
 }
 
@@ -1122,7 +1153,21 @@ impl Cache {
                         )?;
                         tx.commit()?;
                         Ok(EmptyMigration::Migrated)
-                    })?;
+                    });
+                let outcome = match outcome {
+                    Ok(value) => value,
+                    // The tables may be readable even when lock metadata or a
+                    // migration write cannot be created. Keep their committed
+                    // contents and stamp unchanged; a later writer retries.
+                    Err(err) if is_cache_unwritable_error(&err) => {
+                        migration_pending = true;
+                        EmptyMigration::NowHasRows
+                    }
+                    Err(err) => return Err(err.context(format!(
+                        "the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). Grant write access to its .aida directory or run from the main checkout",
+                        path.display()
+                    ))),
+                };
                 migration_pending = outcome == EmptyMigration::NowHasRows;
             }
         } else if !tables_present {
@@ -1170,7 +1215,10 @@ impl Cache {
             Connection::open_with_flags(&self.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         conn.busy_timeout(std::time::Duration::ZERO)?;
         conn.execute_batch("BEGIN DEFERRED")?;
-        if schema_migration_needed(&conn) {
+        // A stale version stamp alone does not make the committed projection
+        // unreadable. Preserve it until a writer can perform the migration.
+        // Structural drift is handled by the authoritative backend fallback.
+        if schema_structurally_drifted(&conn) {
             self.migration_pending.store(true, Ordering::SeqCst);
             return Err(CacheSchemaChanged.into());
         }
@@ -1394,8 +1442,13 @@ impl Cache {
                 }
                 let drop_first = force_drop || (migration_pending && schema_migration_needed(&tx));
                 if drop_first {
-                    tx.execute_batch(DROP_PROJECTION_SQL)
-                        .context("Failed to drop cache tables for schema migration")?;
+                    tx.execute_batch(DROP_PROJECTION_SQL).context(
+                        if force_drop && !(migration_pending && schema_migration_needed(&tx)) {
+                            "Failed to drop cache tables for forced rebuild"
+                        } else {
+                            "Failed to drop cache tables for schema migration"
+                        },
+                    )?;
                 }
                 // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
                 // the DELETEs so `aida cache rebuild` is always a valid
@@ -3034,7 +3087,8 @@ mod tests {
             dep_blocks_only,
         ]);
 
-        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(cache.rebuild_from_store(&store, "head").unwrap(), 1);
+        assert_eq!(cache.requirement_count().unwrap(), 1);
 
         // Ground truth: the edge-walk over the full store.
         let expected = compute_blocked(&store);
@@ -6287,6 +6341,83 @@ mod tests {
             is_sqlite_corruption_error(&corrupt),
             "SQLITE_CORRUPT is the corruption class — self-heal applies"
         );
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn old_stamp_in_unwritable_cache_keeps_committed_readable_rows() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1752", "readable"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let old = (current_schema_version_num() - 1).to_string();
+        cache.set_meta(META_KEY_SCHEMA_VERSION, &old).unwrap();
+        drop(cache);
+
+        let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
+        let result = (|| {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode & !0o222))?;
+            std::fs::set_permissions(
+                dir.path(),
+                std::fs::Permissions::from_mode(dir_mode & !0o222),
+            )?;
+            let cache = Cache::open(&path).context("reopen read-only cache")?;
+            let snapshot = cache.read_snapshot().context("pin read-only snapshot")?;
+            let rows = snapshot
+                .list_summaries(&ListFilter::default())
+                .context("query read-only snapshot")?;
+            anyhow::ensure!(rows
+                .iter()
+                .any(|row| row.spec_id.as_deref() == Some("BUG-1752")));
+            anyhow::ensure!(cache.migration_pending());
+            let stamp: String = snapshot.get_meta(META_KEY_SCHEMA_VERSION)?.unwrap();
+            anyhow::ensure!(
+                stamp == old,
+                "read-only open must preserve the on-disk stamp"
+            );
+            Ok::<_, anyhow::Error>(())
+        })();
+        // Restore permissions even when an assertion fails, so the tempdir can
+        // always be removed cleanly.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode)).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(dir_mode)).unwrap();
+        result.unwrap();
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn empty_old_stamp_in_unwritable_cache_defers_migration() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        drop(Cache::open(&path).unwrap());
+        let old = (current_schema_version_num() - 1).to_string();
+        let conn = Connection::open(&path).unwrap();
+        set_meta_on(&conn, META_KEY_SCHEMA_VERSION, &old).unwrap();
+        drop(conn);
+        let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
+        let result = (|| {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode & !0o222))?;
+            std::fs::set_permissions(
+                dir.path(),
+                std::fs::Permissions::from_mode(dir_mode & !0o222),
+            )?;
+            let cache = Cache::open(&path)?;
+            anyhow::ensure!(cache.migration_pending());
+            let got = cache.get_meta(META_KEY_SCHEMA_VERSION)?;
+            anyhow::ensure!(got.as_deref() == Some(old.as_str()));
+            Ok::<_, anyhow::Error>(())
+        })();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode)).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(dir_mode)).unwrap();
+        result.unwrap();
     }
 
     // BUG-683: a lock-held cache must keep failing as a LOCK (not be deleted as
