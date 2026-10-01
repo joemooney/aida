@@ -55,7 +55,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T11:26:34.634192022Z
-modified_at: 2026-10-01T11:48:08.183311963Z
+modified_at: 2026-10-01T11:55:23.179923158Z
 req_type: Bug
 comments:
 - id: 01a0f746-ebb4-72f0-a613-a31cd7c0b637
@@ -199,6 +199,96 @@ comments:
     Rework brief: `.aida/handoff/advisor/bug-1753-round1b-rework-brief.md`.
   created_at: 2026-10-01T11:48:08.183311963Z
   modified_at: 2026-10-01T11:48:08.183311963Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
+- id: 01a0f751-b8ab-78b1-afc1-839e3ff45091
+  author: joe
+  content: |
+    Advisor review — rounds 1b and 1c **accepted**. Merge-ready pending CI. PR **#2309**, head
+    `ecfe28a08a`.
+
+    ## Round 1b — both findings fixed, re-verified by the advisor
+
+    - Finding 1: one line, `or not path.is_file()` added to the Rust loop's existing guard — the same
+      condition the shell walk already carried. The advisor's own round-1b crash repro (fixture with
+      two tracked `.rs`, one `rm`'d without staging the deletion) now **exits 0 with no traceback**
+      against the fixed script, where it previously died with
+      `FileNotFoundError: [Errno 2] ... src/gone.rs`.
+    - Finding 2: `grep -c '"GIT_CEILING_DIRECTORIES": tmp'` = **0**; all five call sites now pass the
+      resolved `str(root)`.
+    - `python3 -m unittest tests/test_prose_classification_rule.py` → **17 tests, OK**.
+
+    ## Round 1c — one finding, net deletion
+
+    Round 1b's `test_rust_walk_tolerates_deleted_tracked_file` hand-copied two of `bug_1295`'s trimmed
+    source lines into a **literal allowlist**, purely so it could assert `returncode == 0`. That
+    coupled the test to three pieces of incidental data at once: that `POSITIVE`'s first key is
+    `bug_1295`, that that fixture yields exactly two findings, and the verbatim text of both matching
+    lines. `POSITIVE` is exactly the dict that gets edited when a rule changes, so all three would rot,
+    and the resulting failure would point at the deleted-file guard when the real cause was a reworded
+    fixture. The exit code was never the thing worth asserting: without the guard the script dies, so
+    `assertNotIn("Traceback", stderr)` and the "survivor is flagged" assertion already witness the
+    defect. Both literal rows and the `returncode` assertion are gone; the allowlist is written empty,
+    matching the two sibling tests.
+
+    Because the assertion carrying that test changed, the mutation proof had to be re-run — round 1b's
+    proof pinned a `returncode` assertion that no longer ships. This is the BUG-1750 round-1c lesson
+    applied prospectively rather than after the fact.
+
+    ## Mutation proofs: all three re-run by the advisor, not taken on report
+
+    | mutation | result |
+    |---|---|
+    | enumeration → `rglob` | `test_rust_walk_skips_nested_linked_worktree` red, `AssertionError: True is not false`, with `.claude/worktrees/agent-fixture/src/bug_1295.rs` rows **and** top-level `src/bug_1295.rs` rows present |
+    | tracked list → `[]` | **all six** positive subcases of the pre-existing `test_each_positive_fixture_matches` red (`AssertionError: [] is not true : bug_1435 was not flagged`) |
+    | drop `or not path.is_file()` | `test_rust_walk_tolerates_deleted_tracked_file` red on `assertNotIn("Traceback", ...)`, traceback ending `FileNotFoundError: ... src/bug_1297.rs` |
+
+    Each restored with `cp` and proved byte-identical via `diff -q`, mutation-marker count 0. **Never
+    `git stash`.**
+
+    ### A trap worth recording for the next guard of this shape
+
+    The naive mutation `sed -i 's/ or not path.is_file():/:/'` hits **two** sites — the shell walk
+    carries the identical condition. `grep -c` on the marker returned **2**, which is how it was
+    caught. A confounded two-site mutation still turns the test red, so it reads as a valid proof while
+    proving something weaker than intended. The clean proof replaced the whole two-line
+    `for`/`if` block with an `assert t.count(old) == 1` precondition. **When a mutation string is a
+    condition shared by a sibling code path, assert the occurrence count before mutating.**
+
+    ## Acceptance criteria — final disposition
+
+    - **AC1** met, with the authorized deviation (no pathspec; `.rs` suffix filter in Python) recorded
+      on this spec before dispatch.
+    - **AC2** met, measured by the advisor in the operator's checkout with all 33 nested worktrees
+      present: **exit 1 / 232 s / 7760 `.claude/worktrees` findings → exit 0 / 9 s**.
+    - **AC3** met twice over: the untracked-file mirror of BUG-1750's test, **and** a real
+      `git worktree add .claude/worktrees/agent-fixture` reproduction that asserts the nested `.git`
+      **is a file** and carries a positive assertion so it cannot pass on a dead walk.
+    - **AC4** met: allowlist byte-identical to `HEAD` (`diff -q` clean), as the pre-dispatch survey of
+      all 71 referenced files predicted.
+    - **AC5** met and independently re-run.
+
+    ## Full-suite judgment
+
+    **Not required, and that is a decision, not a skip.** The diff is one Python-in-bash script and one
+    Python test file; nothing Rust compiles differently. The two Rust files that mention
+    `scripts/check-portability.sh` (`implementer_preflight.rs`, `bug_1468_stale_check_tests.rs`)
+    reference it **by path only** and write their own stub scripts in fixtures — there is no coupling to
+    any line this change touches. Neither of the repo's full-suite triggers ("adds a new source file",
+    "adds a CLI subcommand") applies.
+
+    Verification run: 17 tests OK; `tests/test_portability_growth.sh` passed; bare gate exit 0;
+    `--check-allowlist-growth origin/main` exit 0; allowlist unchanged.
+
+    ## Side note confirming BUG-1752
+
+    The implementer again reported `aida show BUG-1753` and `aida awaiting` failing inside the worktree
+    with WAL/schema-migration errors, while both work from the main checkout. Three dispatches, three
+    reproductions. Putting the survey inline in the brief is still the only reason nothing was lost.
+
+    Briefs: `.aida/handoff/advisor/bug-1753-round1b-rework-brief.md`,
+    `.aida/handoff/advisor/bug-1753-round1c-rework-brief.md`.
+  created_at: 2026-10-01T11:55:23.179923158Z
+  modified_at: 2026-10-01T11:55:23.179923158Z
   session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f737-81aa-7891-ba4a-233a509c77ae
