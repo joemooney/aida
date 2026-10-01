@@ -296,7 +296,8 @@ def scan() -> list[tuple[str, str, int, str, str]]:
     # recursion catches subdirectories such as scripts/ablations/.
     shell_rules = [rule for rule in PATTERNS if rule["scope"] == "shell"]
     if shell_rules:
-        shell_roots = ("tests", "scripts", "aida-core/templates/hooks")
+        # trace:BUG-1754 | ai:codex
+        shell_roots = ("tests", "scripts", "aida-core/templates/hooks", ".aida")
         try:
             tracked = subprocess.run(
                 ["git", "-C", str(root), "ls-files", "-z", "--", *shell_roots],
@@ -309,7 +310,7 @@ def scan() -> list[tuple[str, str, int, str, str]]:
             if any(part in {".git", "target"} for part in path.parts) or not path.is_file():
                 continue
             rel = path.relative_to(root).as_posix()
-            if not (rel.startswith("tests/") or rel.startswith("scripts/") or rel.startswith("aida-core/templates/hooks/")):
+            if not any(rel.startswith(f"{prefix}/") for prefix in shell_roots):
                 continue
             if path.suffix != ".sh":
                 try:
