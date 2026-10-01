@@ -695,3 +695,11 @@ blocks:
   range_end: 1640
   next: 1541
   allocated_at: 2026-10-01T20:07:27.076908067Z
+- node_id: '10'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: SPIKE
+  range_start: 505
+  range_end: 604
+  next: 505
+  allocated_at: 2026-10-01T20:07:29.012633678Z
