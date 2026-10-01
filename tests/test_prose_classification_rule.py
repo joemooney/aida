@@ -202,9 +202,10 @@ NEGATIVE = {
 }
 
 
-def findings(sources: dict[str, str], *, raw: bool = False) -> list[str]:
+def findings(sources: dict[str, str], *, git_repo: bool = True,
+             raw: bool = False) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
-        root = pathlib.Path(tmp)
+        root = pathlib.Path(tmp).resolve()
         (root / "scripts").mkdir()
         shutil.copy(RULES, root / "scripts" / "portability-rules.json")
         (root / "scripts" / "portability-allowlist.txt").write_text("")
@@ -212,13 +213,18 @@ def findings(sources: dict[str, str], *, raw: bool = False) -> list[str]:
         src.mkdir()
         for name, body in sources.items():
             (src / f"{name}.rs").write_text(textwrap.dedent(body).lstrip())
+        if git_repo:
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", *(f"src/{name}.rs" for name in sources)], cwd=root, check=True)
         result = subprocess.run(
             ["bash", str(CHECK), "--print-findings"],
             cwd=root,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
-            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": tmp,
+            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root),
                  "HOME": tmp},
         )
         lines = result.stdout.splitlines()
@@ -232,7 +238,7 @@ def shell_findings(files: dict[str, str], *, git_repo: bool = True,
                    rules: list[dict] | None = None,
                    raw: bool = False) -> tuple[list[str], str]:
     with tempfile.TemporaryDirectory() as tmp:
-        root = pathlib.Path(tmp)
+        root = pathlib.Path(tmp).resolve()
         (root / "scripts").mkdir()
         if rules is None:
             shutil.copy(RULES, root / "scripts" / "portability-rules.json")
@@ -259,7 +265,7 @@ def shell_findings(files: dict[str, str], *, git_repo: bool = True,
         result = subprocess.run(
             ["bash", str(CHECK), "--print-findings"], cwd=root,
             stdin=subprocess.DEVNULL, capture_output=True, text=True,
-            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": tmp, "HOME": tmp},
+            env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root), "HOME": tmp},
         )
         lines = result.stdout.splitlines()
         if not raw:
@@ -272,6 +278,91 @@ class ProseClassificationRuleTest(unittest.TestCase):
         for name, body in POSITIVE.items():
             with self.subTest(name=name):
                 self.assertTrue(findings({name: body}), f"{name} was not flagged")
+
+    def test_non_git_fallback_still_scans_rust_fixture(self):
+        name, body = next(iter(POSITIVE.items()))
+        self.assertTrue(findings({name: body}, git_repo=False), f"{name} was not flagged")
+
+    def test_rust_walk_tolerates_deleted_tracked_file(self):
+        surviving_name, body = next(iter(POSITIVE.items()))
+        deleted_name = next(name for name in POSITIVE if name != surviving_name)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp).resolve()
+            (root / "scripts").mkdir()
+            shutil.copy(RULES, root / "scripts" / "portability-rules.json")
+            (root / "scripts" / "portability-allowlist.txt").write_text("")
+            src = root / "src"
+            src.mkdir()
+            (src / f"{surviving_name}.rs").write_text(textwrap.dedent(body).lstrip())
+            (src / f"{deleted_name}.rs").write_text(textwrap.dedent(POSITIVE[deleted_name]).lstrip())
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", f"src/{surviving_name}.rs", f"src/{deleted_name}.rs"], cwd=root, check=True)
+            (src / f"{deleted_name}.rs").unlink()
+            result = subprocess.run(
+                ["bash", str(CHECK), "--print-findings"], cwd=root,
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root), "HOME": tmp},
+            )
+        lines = result.stdout.splitlines()
+        paths = [line.split("\t")[1].split(":", 1)[0] for line in lines if "\t" in line]
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertTrue(any(path == f"src/{surviving_name}.rs" for path in paths), lines)
+
+    def test_rust_walk_skips_untracked_file(self):
+        tracked_name, tracked_body = next(iter(POSITIVE.items()))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp).resolve()
+            (root / "scripts").mkdir()
+            shutil.copy(RULES, root / "scripts" / "portability-rules.json")
+            (root / "scripts" / "portability-allowlist.txt").write_text("")
+            src = root / "src"
+            src.mkdir()
+            tracked = src / f"{tracked_name}.rs"
+            tracked.write_text(textwrap.dedent(tracked_body).lstrip())
+            untracked = src / "untracked_positive.rs"
+            untracked.write_text(textwrap.dedent(tracked_body).lstrip())
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", f"src/{tracked_name}.rs"], cwd=root, check=True)
+            result = subprocess.run(
+                ["bash", str(CHECK), "--print-findings"], cwd=root,
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root), "HOME": tmp},
+            )
+        lines = result.stdout.splitlines()
+        paths = [line.split("\t")[1].split(":", 1)[0] for line in lines if "\t" in line]
+        self.assertTrue(any(path == f"src/{tracked_name}.rs" for path in paths), lines)
+        self.assertFalse(any("untracked_positive.rs" in path for path in paths), lines)
+
+    def test_rust_walk_skips_nested_linked_worktree(self):
+        name, body = next(iter(POSITIVE.items()))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp).resolve()
+            (root / "scripts").mkdir()
+            shutil.copy(RULES, root / "scripts" / "portability-rules.json")
+            (root / "scripts" / "portability-allowlist.txt").write_text("")
+            (root / "src").mkdir()
+            (root / "src" / f"{name}.rs").write_text(textwrap.dedent(body).lstrip())
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+            subprocess.run(["git", "add", "--", f"src/{name}.rs"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=root, check=True)
+            subprocess.run(["git", "worktree", "add", "-q", ".claude/worktrees/agent-fixture"], cwd=root, check=True)
+            nested_git = root / ".claude/worktrees/agent-fixture/.git"
+            self.assertTrue(nested_git.is_file())
+            result = subprocess.run(
+                ["bash", str(CHECK), "--print-findings"], cwd=root,
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                env={"PATH": "/usr/bin:/bin", "GIT_CEILING_DIRECTORIES": str(root), "HOME": tmp},
+            )
+        lines = result.stdout.splitlines()
+        paths = [line.split("\t")[1].split(":", 1)[0] for line in lines if "\t" in line]
+        self.assertTrue(any(path == f"src/{name}.rs" for path in paths), lines)
+        self.assertFalse(any(path.startswith(".claude/") for path in paths), lines)
 
     def test_negative_fixtures_are_not_flagged(self):
         for name, body in NEGATIVE.items():
