@@ -1,0 +1,76 @@
+id: 01a0f88e-679c-74d3-a6da-1439b1dbd2cd
+spec_id: BUG-1757
+agreed_id: BUG-1757
+title: Fenced shell inside scaffolded skill markdown is shipped by aida init but no portability gate scans it
+description: |
+  A shell command inside a scaffolded skill's prose is shipped to user machines by `aida init`, but no
+  gate scans it. The portability walk (BUG-1750, widened to `.aida/` by BUG-1754) inspects a file only
+  when it has a `.sh` suffix or a `^#!.*\bsh` shebang, so every recipe inside
+  `aida-core/templates/skills/*.md` is invisible to the ratchet. BUG-1755 found two GNU-only sites there
+  by hand; without this, the next one is found the same way.
+
+  ## Measurement that sets the scope
+
+  A fenced-shell scan of **all 835 tracked `.md` files** with the gate's single shell-scoped rule
+  (`gnu-only-coreutils`) finds **four** hits, which are **two distinct sites** —
+  `aida-core/templates/skills/aida-code-review.md` and `aida-docs-review.md`, each counted twice because
+  `.claude/skills/<name>/SKILL.md` is a **symlink** to the template master. Both are fixed by BUG-1755.
+
+  So this spec creates **no backlog**: once BUG-1755 lands the gate has nothing to catch. Its value is
+  entirely forward-looking, which is why it is approved but not urgent.
+
+  ## Acceptance criteria
+
+  1. The portability walk inspects fenced shell inside tracked `.md` under `aida-core/templates/`, and
+     reports a finding with the markdown file's path and the real line number of the offending line
+     (not the fence's line).
+  2. **Tagged fences only**: ```` ```bash ````, ```` ```sh ````, ```` ```shell ````, ```` ```console ````.
+     The templates carry 258 `bash`-tagged fences alongside several hundred untagged ones plus
+     `markdown`, `json`, `rust`, `ini` and `diff` blocks. An untagged fence is as likely to hold sample
+     *output* as a command; a language tag is the author's explicit claim that the block is runnable.
+     State on this spec how many tagged shell blocks come into scope and how many lines that is.
+  3. **Scoped to `aida-core/templates/`**, not all tracked markdown. The class matters because `aida init`
+     ships these files; a GNU-only command in a design doc, handoff note or dated artifact is prose about
+     the past, and including those would generate allowlist churn that makes a gate get ignored. A test
+     must prove a GNU-only line in a `.md` outside `aida-core/templates/` is **not** flagged.
+  4. **The master is scanned, never a generated mirror.** `git ls-files` lists `.claude/skills/*/SKILL.md`
+     and reading one follows the symlink, so a naive walk reports every finding twice and invites someone
+     to edit a mirror — which this repository forbids. Deduplicate deliberately (resolve and uniq, or
+     exclude `.claude/skills/`) and prove it with a test that asserts exactly one finding for a site
+     reachable through both paths.
+  5. A `# portable-fallback:` style opt-out marker works inside a fence the same way it does in a `.sh`
+     file, and a commented line inside a fence is immune — mirror the existing
+     `test_shell_comments_and_fallback_marker_are_immune` behaviour.
+  6. `bash scripts/check-portability.sh` exits 0 and `--check-allowlist-growth origin/main` exits 0 after
+     the change. If any pre-existing finding surfaces, give it a **per-row judgment** — debt or correct
+     idiom — and fix or baseline accordingly. Do not bulk-regenerate the allowlist.
+  7. Mutation proof: disable the markdown scan and show the new tests red; restore and show them green.
+
+  ## Out of scope
+
+  - The two sites themselves (BUG-1755) and the `.aida/` prefix (BUG-1754).
+  - Widening to all tracked `.md`, or to untagged fences. Both are explicitly rejected above; reopening
+    either needs a new spec with its own measurement.
+  - Any change to a skill's instructions. This spec adds a gate, it does not rewrite prose.
+
+  ## Notes
+
+  Filed from the advisor seat as BUG-1755's AC2 decision, which asked for the judgment to be recorded and
+  then filed separately rather than widening that spec mid-flight. The full reasoning, including why each
+  of the three narrowing constraints is motivated by the measurement rather than by caution, is in the
+  decision comment on BUG-1755.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T17:41:17.340950779Z
+modified_at: 2026-10-01T17:41:17.340950779Z
+req_type: Bug
+filed_at:
+  code_sha: 8c8f9a2d026bfb26d1d9843674eb91614f733a2c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: '1660445110'
+  vendor: antigravity
+  session: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
