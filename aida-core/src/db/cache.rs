@@ -1075,7 +1075,7 @@ fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
 }
 
 // trace:BUG-1752 | ai:codex
-fn fallback_cache_paths(original: &Path) -> Vec<PathBuf> {
+fn fallback_cache_candidates(original: &Path) -> Vec<PathBuf> {
     use sha2::{Digest, Sha256};
     let canonical = if let Ok(path) = std::fs::canonicalize(original) {
         path
@@ -1100,7 +1100,7 @@ fn fallback_cache_paths(original: &Path) -> Vec<PathBuf> {
     } else {
         let Some(home) = std::env::var_os("XDG_CACHE_HOME")
             .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            .or_else(|| crate::home::home_dir().map(|h| h.join(".cache")))
         else {
             return Vec::new();
         };
@@ -1114,22 +1114,17 @@ fn fallback_cache_paths(original: &Path) -> Vec<PathBuf> {
             home.join("aida/unwritable-cache-fallback"),
         ]
     };
-    let mut paths = Vec::new();
-    for base in bases {
-        let dir = base.join(&digest);
-        if std::fs::create_dir_all(&dir).is_err() {
-            continue;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).is_err() {
-                continue;
-            }
-        }
-        paths.push(dir.join("cache.db"));
+    bases.into_iter().map(|base| base.join(&digest)).collect()
+}
+
+fn prepare_fallback_cache_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    paths
+    Ok(())
 }
 
 impl Cache {
@@ -1178,7 +1173,11 @@ impl Cache {
         let conn = match open_connection_with_retry(&path, &lock_info_path) {
             Ok(conn) => conn,
             Err(err) if read_only && allow_fallback => {
-                for fallback in fallback_cache_paths(&path) {
+                for fallback_dir in fallback_cache_candidates(&path) {
+                    if prepare_fallback_cache_dir(&fallback_dir).is_err() {
+                        continue;
+                    }
+                    let fallback = fallback_dir.join("cache.db");
                     if let Ok(cache) = Self::open_at(fallback.clone(), false) {
                         if !cache.read_only {
                             note_cache_fallback(&path, &fallback);
@@ -1246,7 +1245,11 @@ impl Cache {
         // reader serve the last-good committed snapshot with zero contention.
         let tables_present = cache_tables_present(&conn);
         if read_only && !tables_present && allow_fallback {
-            for fallback in fallback_cache_paths(&path) {
+            for fallback_dir in fallback_cache_candidates(&path) {
+                if prepare_fallback_cache_dir(&fallback_dir).is_err() {
+                    continue;
+                }
+                let fallback = fallback_dir.join("cache.db");
                 if let Ok(cache) = Self::open_at(fallback.clone(), false) {
                     if !cache.read_only {
                         note_cache_fallback(&path, &fallback);
