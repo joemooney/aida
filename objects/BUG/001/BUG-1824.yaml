@@ -1,0 +1,57 @@
+id: 01a0f9da-e89a-7200-8e66-0dfc724d7e96
+spec_id: BUG-1824
+agreed_id: BUG-1824
+title: 'auto-complete failure: phase 1 (implementer) on BUG-1819'
+description: |
+  Auto-drafted by `aida queue work BUG-1819 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  phase 1 child session 01a0f9da exited with code 1 after 303ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1819` is not pickable for fresh work: Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1819 was not advanced
+
+  Failure kind: `launch-refused`
+
+  ## Recovery hint shown to the user
+
+  The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1819`.
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-10-01T23:44:28.024811318+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 862117 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-1819","started_at":"2026-10-01T23:30:03.137427165+00:00","completed_at":"2026-10-01T23:44:28.024811318+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a0f9da exited with code 1 after 303ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1819` is not pickable for fresh work: Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1819 was not advanced","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":862117}],"total_ms":864748,"binary_sha":"6d0d20a762"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-01T23:44:28.314440941Z
+modified_at: 2026-10-01T23:44:28.314440941Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-1
+- failure-kind:launch-refused
+- implementer
+filed_at:
+  code_sha: b6e78b658442990ed2d899cb1671c530cdb885ec
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d0d20a762
+  vendor: codex

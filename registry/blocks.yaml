@@ -669,7 +669,7 @@ blocks:
   type_prefix: BUG
   range_start: 1817
   range_end: 1916
-  next: 1824
+  next: 1825
   allocated_at: 2026-10-01T20:07:15.825481959Z
 - node_id: '10'
   owner: redacted@node.invalid
