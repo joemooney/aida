@@ -45,8 +45,95 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T10:55:30.734561229Z
-modified_at: 2026-10-01T12:17:00.815130190Z
+modified_at: 2026-10-01T12:18:57.519437266Z
 req_type: Bug
+comments:
+- id: 01a0f767-4d6f-7981-a19f-b786871ab108
+  author: joe
+  content: |
+    Advisor, relay session #13 — pre-dispatch survey, **AC1 amended**, round 1 dispatched.
+
+    ## AC1 amendment, with the reasoning
+
+    AC1 said "Prefer a single shared helper over three independent rewrites." Taken literally as a
+    **sourced library file**, that costs more than it buys:
+
+    - Every hook in `aida-core/templates/hooks/` is embedded individually with `include_str!` and
+      written to `.claude/hooks/<name>` by `aida-core/src/scaffolding/mod.rs` (~2460 for guardrails,
+      ~2486 for the advisor guard). A library would need a new embedded artifact and a new write site,
+      i.e. a Rust change and a rebuild for a parsing fix.
+    - `grep -n '^\s*\.\s\|^\s*source '` over all 17 hook templates returns **nothing**. Every
+      scaffolded hook is self-contained by construction, which matters because these run in arbitrary
+      environments on user machines. A hook whose library did not land dies in its `ERR` trap — a new
+      install-time failure mode introduced by a fix for a silent-failure bug.
+
+    **Amended requirement:** one shell function `__aida_json_field`, defined **once per file** and used
+    by every site in that file (two in the guard, one in guardrails), with the two definitions
+    **byte-identical and a test asserting it**. That preserves the intent — one implementation, one
+    place to fix a parsing bug, not three rewrites — without a new scaffolded artifact. The duplication
+    is deliberate and must be commented as such in both files.
+
+    **Also rejected before anyone spends a round on it:** a new `aida internal json-field` subcommand.
+    Despite the BUG-1748 `aida internal solo-active` precedent, it would make the guardrails hook's
+    *primary input* depend on the `aida` binary — no binary, no `COMMAND`, fail open, which is this very
+    bug — and it would add a subprocess to a PreToolUse hook that fires on every Bash tool call.
+
+    ## The repo's existing idiom is the wrong model here, and the brief says so
+
+    `aida-session-context.sh:43-56`, `aida-role-context.sh:124-130`, `aida-subagent-start.sh:11` and
+    `aida-notification.sh:28` all use "jq, else python3, else no-op". **"No python3 → exit 0" is exactly
+    the fail-open shape of this defect.** A guard must not depend on an optional interpreter to decide
+    whether to guard. The helper is specified in POSIX `awk` only.
+
+    ## Intended behaviour change on Linux, flagged so it cannot ship silently
+
+    `grep -oP '"command"\s*:\s*"\K[^"]*'` stops at the **first** `"`, so a command containing `\"` — an
+    ordinary quoted argument — is silently **truncated on Linux too**, not just broken on macOS. The
+    helper is required to honour backslash escapes and stop at the first *unescaped* quote, so the
+    guardrails hook will now see the whole command. Safe direction (a guardrail seeing more of the
+    command cannot classify less), but it is a change, so it needs its own pinning test and a
+    Deviations entry.
+
+    ## Survey facts front-loaded so no round re-derives them
+
+    - `.claude/hooks/*.sh` are **symlinks** into the templates — edit the template only, no mirror to
+      sync; `make check-templates` still gets run and reported.
+    - Allowlist rows to remove are **lines 220, 221, 222** and only those; 223–228 are separate debt
+      (explicitly out of scope per the filing).
+    - `tests/test_advisor_code_guard.sh` has nine cases, CI step at `ci.yml:221-223`, gated **only** on
+      `full_ci` with **no `runner.os` guard** — it already runs on ubuntu, macOS and Windows.
+    - **There is no test for `aida-git-guardrails.sh` at all**, so AC2 cannot be met for that hook by
+      extending an existing file. A focused new `tests/test_git_guardrails_parse.sh` plus its own CI
+      step is required.
+    - BUG-1753 (merged `30018209f0`) means the portability gate now runs in ~9 s locally and scans
+      `tests/` — so it checks the new test for GNU-only constructs automatically.
+
+    ## The session_id proof the ACs did not ask for
+
+    AC2 asks the test to prove the field resolves and the hook reaches its real decision. For
+    `session_id` that is not enough: a fallback to the literal `nosession` still *looks* like a working
+    marker. The brief therefore requires a row where **two different session ids each soft-block** —
+    if `session_id` were not parsed, both would collapse onto one marker and the second would be
+    allowed by fire-once. Mutation proof 2 targets exactly that row.
+
+    ## Noted as follow-on candidates, deliberately NOT expanded into this spec
+
+    Three more shipped `grep -oP` sites exist outside the filing's three:
+
+    - `.aida/setup.sh:109` and `:188` (`grep -oP '\d+'`). Also a coverage gap: BUG-1750's shell walk
+      scans `tests/`, `scripts/` and `aida-core/templates/hooks/`, so **`.aida/` is unscanned** and
+      these are not even baselined.
+    - `aida-core/templates/skills/aida-code-review.md:63` and `aida-docs-review.md:170` — scaffolded
+      skills that ship `grep -oP` inside documented recipes for an agent to run. Different surface
+      (a recipe, and its failure is visible to the agent rather than silent), so a different
+      disposition, but it is the same shipped-to-macOS exposure.
+
+    Brief: `.aida/handoff/advisor/bug-1751-round1-brief.md`. Dispatched to codex in
+    `/home/joe/ai/aida-worktrees/bug-1751` (branch `bug-1751-portable-hook-json-parse`, session
+    `01a0f76583e9`).
+  created_at: 2026-10-01T12:18:57.519437266Z
+  modified_at: 2026-10-01T12:18:57.519437266Z
+  session_id: 8a3a2f1e-33d2-4aab-aba0-c0217c0a6c86
 history:
 - id: 01a0f71b-7b10-7081-a022-78d9602ba33a
   author: joe
