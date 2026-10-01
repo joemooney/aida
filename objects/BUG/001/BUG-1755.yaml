@@ -58,13 +58,78 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T13:26:18.258656630Z
-modified_at: 2026-10-01T13:26:28.743479407Z
+modified_at: 2026-10-01T17:41:26.954266645Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a0f71a-e7ae-7212-a81c-dbf60ca8898b
   created_at: 2026-10-01T13:26:28.743476091Z
   created_by: joe
+comments:
+- id: 01a0f88e-8d2a-7e60-838d-62303d9edece
+  author: joe
+  content: |
+    Advisor decision on AC2, recorded before implementation so the round does not have to carry it.
+
+    ## The measurement
+
+    A fenced-shell scan of **every tracked `.md` file in the repo (835 of them)** using the gate's single
+    shell-scoped rule (`gnu-only-coreutils`) finds exactly **four** hits:
+
+    ```
+    1  .claude/skills/aida-code-review/SKILL.md
+    1  .claude/skills/aida-docs-review/SKILL.md
+    1  aida-core/templates/skills/aida-code-review.md
+    1  aida-core/templates/skills/aida-docs-review.md
+    ```
+
+    `.claude/skills/aida-code-review/SKILL.md` is a **symlink** to
+    `../../../aida-core/templates/skills/aida-code-review.md` (likewise docs-review), so those are two
+    distinct sites counted twice — precisely the two this spec fixes. Across 835 markdown files there is
+    nothing else.
+
+    ## Decision: YES, in scope — but narrowly, and as its own spec
+
+    The answer to "should fenced shell in skill markdown be in scope for the portability gate" is yes.
+    The argument the spec itself makes is the right one: a shipped recipe inside a skill's prose is
+    invisible to the ratchet, so the next one gets found by hand, exactly as these two were. And the
+    measurement shows the cost of saying yes is near zero — the backlog it would create is **empty** once
+    this spec lands.
+
+    Three constraints on the scope, all of which the measurement motivates:
+
+    1. **Tagged fences only** — ```` ```bash ````, ```` ```sh ````, ```` ```shell ````, ```` ```console ````.
+       The templates carry 258 `bash`-tagged fences against a few hundred untagged ones plus `markdown`,
+       `json`, `rust`, `ini` and `diff`. An untagged fence is as likely to be sample *output* as a
+       command, and a scan that reads output samples as shell will flag text that merely looks like a
+       command line. A language tag is an author's explicit claim that the block is runnable; honour it
+       and ignore the rest.
+    2. **`aida-core/templates/` only**, not all 835 `.md`. The reason this class matters is that
+       `aida init` **ships** these onto user machines, macOS included. A GNU-only command in a design doc,
+       a handoff note or a dated artifact is prose about the past, not a recipe anyone will run, and
+       dragging those into a ratchet would generate exactly the kind of allowlist churn that makes a gate
+       get ignored.
+    3. **Scan the template master, never a generated mirror.** The four-hit count is really two, inflated
+       by symlinks. The repository rule is already that `.claude/skills` are links or generated mirrors and
+       must never be edited; the gate must follow the same rule or it will report every finding twice and
+       invite someone to "fix" a mirror. Note that `git ls-files` lists the symlinks and reading one
+       follows it, so the deduplication has to be deliberate — resolve and uniq, or exclude
+       `.claude/skills/` explicitly.
+
+    Filed as **BUG-1757** per this criterion's own instruction to file rather than widen. It is
+    deliberately filed as *approved but not urgent*: with AC1 landed the gate would have nothing to
+    catch, so its value is entirely forward-looking — it stops the next shipped recipe, it does not fix
+    a present defect.
+
+    ## What this does NOT change about this spec
+
+    AC1 and AC3 stand as written, and the out-of-scope line stands: change the two commands, nothing
+    else, and do not widen the gate in this round. AC1's requirement to prove the replacement produces
+    **byte-identical output to the GNU form on this repo** is the important half — a two-stage
+    `grep -oE … | sed` is not obviously equivalent to `\K`, and the counts must be compared, not assumed.
+  created_at: 2026-10-01T17:41:26.954266645Z
+  modified_at: 2026-10-01T17:41:26.954266645Z
+  session_id: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
 history:
 - id: 01a0f7a5-16e3-75e0-8b8d-2505a4c30661
   author: joe
