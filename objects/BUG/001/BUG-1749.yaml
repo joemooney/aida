@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:31.501218455Z
-modified_at: 2026-10-01T04:59:03.447650766Z
+modified_at: 2026-10-02T01:36:01.624772233Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -119,6 +119,63 @@ comments:
   created_at: 2026-10-01T04:59:03.447650766Z
   modified_at: 2026-10-01T04:59:03.447650766Z
   session_id: daeb8598-0fad-4d16-94b8-01ba69c8465a
+- id: 01a0fa41-0a58-72e2-903a-3aeb260ecbda
+  author: joe
+  content: |
+    ## Fresh reproduction from the advisor cron, 2026-10-01 on main @ `3494256297`
+
+    Reached this from the other direction: `aida schedule due --seat advisor` routed
+    `performance-guard-route` ("a performance budget was breached... decide: real regression, or a budget
+    that needs changing deliberately"), and the trip's recorded evidence is
+    `audit_error: 'malformed typed doctor output: trailing characters at line 30 column 1'` — no
+    `performance_audits` at all. So the advisor is asked to judge a breach while the typed evidence the
+    guard already produced is unreadable. That is this spec, observed from the consumer end.
+
+    **Measured today, both arms:**
+
+    - `aida doctor check performance --fail-on-findings` with stdout captured to a **file** (i.e. not a TTY,
+      so agent mode is active and no format is pinned) emits **human box-drawing text** —
+      `─── AIDA doctor ───`, bullet prose, `Total: 1 visible finding`, `─── Environment ───` — and then
+      `error: "1 finding(s) in performance — failing because --fail-on-findings was requested"` on the same
+      stream. `json.loads` on the captured stdout fails at `line 1 column 1`. Exit 1.
+    - The same command **with `--json`** emits exactly **one** JSON document whose top-level keys are
+      `total, findings, bwrap, performance_audits, error`. One doc, parses clean, and it carries the
+      `performance_audits` array `PerformanceAuditEnvelope` wants.
+
+    That contrast is the useful part: the **envelope and the audit data are fine**; the defect is purely the
+    renderer selection AC1 describes. Nothing upstream needs to change for the guard to get its evidence —
+    only the mode-resolution arm.
+
+    Note the trip's error said "line 30"; today's human output is 14 lines. The column/line in the parse
+    error tracks whatever prose happened to be emitted that day, so **do not treat `line 30 column 1` as a
+    stable signature** when writing the regression test. Assert on "captured stdout parses as exactly one
+    document of the resolved mode", as AC2 already says.
+
+    **A correction to my own first instinct, recorded because the spec is right and I was wrong:** the
+    obvious-looking fix is to add `--json` to the scheduled command. This spec's Out of scope section
+    already forbids that and gives the reason — `maintenance_schedule.rs:3146` is an identity predicate on
+    the exact string `"doctor check performance --fail-on-findings"`, load-bearing in nine places. Worth
+    spelling out the failure mode for whoever implements this: changing the command string without updating
+    that comparison would make `is_performance` take the `else` arm, so the trip would record **no**
+    `audit_error` and **no** audits — the breach would become invisible rather than unparseable, which is
+    strictly worse than today. Leave the command string alone.
+
+    ## The underlying finding, for whoever judges the budget (not part of this spec)
+
+    Recording it here because it is the evidence the guard could not hand over. From the human output:
+    `aida show` exceeded its 1000 ms budget on **11.2% of 152 calls** in the last 24h against a tolerated
+    10.0%, and the ceiling tripped on a single **12365 ms** call against a 5000 ms ceiling. Per binary:
+    `1660445110` 4.5% of 44, `7d85a8057d` 2.6% of 39, **`0bd634c` 48.0% of 25**, `d93fabb432` 6.2% of 16,
+    `f3cde6e60e` 6.2% of 16, `b785274c7b` 0.0% of 12; plus 5 excluded calls from 3 binaries outside this
+    HEAD's lineage (`589b33b060` 66.7% of 3, `4469004aa5` 0.0% of 1, `98794c48eb` 100.0% of 1).
+
+    Every in-lineage binary except `0bd634c` sits **under** the 10% tolerance. One binary at 48% of 25 calls
+    is what pushes the aggregate over, which is the shape of host contention rather than a code regression —
+    this host runs a 2-slot cargo gate on 6 cores plus several long-lived agent seats. Disposition is on the
+    cron ledger; no budget was changed.
+  created_at: 2026-10-02T01:36:01.624772233Z
+  modified_at: 2026-10-02T01:36:01.624772233Z
+  session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
 history:
 - id: 01a0f5c2-efb8-7a02-ae49-98b0e6972676
   author: joe
