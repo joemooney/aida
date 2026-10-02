@@ -1942,12 +1942,19 @@ pub(crate) fn handle_git_backend_command(
             // trace:BUG-1771 | ai:claude
             let mut parked_lens_keys: Vec<&'static str> = Vec::new();
             let mut lens_widened_needs_attention = false;
+            // BUG-1687: `--status deferred` is the other non-stored token.
+            // Deferral is STORY-584's view-flag, orthogonal to status, so it
+            // has no status to widen to — it opens the defer axis instead,
+            // exactly as `--deferred` does. trace:BUG-1687 | ai:claude
+            let mut status_asked_deferred = false;
             let status: Option<String> = match raw_status {
                 Some(spec) => {
-                    let (lens_keys, residual) =
-                        crate::status_display::split_status_lens_spec(&spec);
-                    parked_lens_keys = lens_keys;
-                    let mut expanded = match residual.as_deref() {
+                    let split = crate::status_display::split_status_filter_spec(&spec);
+                    parked_lens_keys = split.lens_keys;
+                    status_asked_deferred = split
+                        .view_axes
+                        .contains(&crate::status_display::ViewFilterAxis::Deferred);
+                    let mut expanded = match split.residual.as_deref() {
                         Some(residual) => aida_core::RequirementStatus::expand_filter_spec(
                             residual,
                         )
@@ -1956,15 +1963,17 @@ pub(crate) fn handle_git_backend_command(
                                 "Unknown status filter '{tok}'. Use a status \
                                          (draft, approved, planned, in-progress, done, \
                                          completed, rejected, needs-attention), a parked \
-                                         lens ({lenses}), an alias (open, closed), or a \
-                                         comma-separated set (draft,approved). To filter \
-                                         by something else try --type, --tags, or \
-                                         `aida search`.",
-                                lenses = crate::status_display::lens_filter_token_list()
+                                         lens ({lenses}), a view lens ({views}), an alias \
+                                         (open, closed), or a comma-separated set \
+                                         (draft,approved). To filter by something else try \
+                                         --type, --tags, or `aida search`.",
+                                lenses = crate::status_display::lens_filter_token_list(),
+                                views = crate::status_display::view_filter_token_list()
                             )
                         })?,
-                        // Lens tokens only: nothing stored was named, so the
-                        // widening below supplies the whole query.
+                        // Non-stored tokens only: nothing stored was named, so
+                        // the lens widening below (or the defer axis) supplies
+                        // the whole query.
                         None => Vec::new(),
                     };
                     if !parked_lens_keys.is_empty() {
@@ -1976,9 +1985,19 @@ pub(crate) fn handle_git_backend_command(
                             lens_widened_needs_attention = true;
                         }
                     }
-                    // expand_filter_spec returns canonical cache-keys; join
-                    // them back into the comma-OR spec the cache understands.
-                    Some(expanded.join(","))
+                    if expanded.is_empty() {
+                        // A bare `--status deferred` names no status at all.
+                        // `Some("")` would hand the cache an empty status
+                        // clause; the honest value is "no status constraint",
+                        // which also keeps the STORY-723 default open lens from
+                        // re-hiding what the caller asked for (see
+                        // `want_deferred_only`). trace:BUG-1687 | ai:claude
+                        None
+                    } else {
+                        // expand_filter_spec returns canonical cache-keys; join
+                        // them back into the comma-OR spec the cache understands.
+                        Some(expanded.join(","))
+                    }
                 }
                 None => None,
             };
@@ -2044,9 +2063,14 @@ pub(crate) fn handle_git_backend_command(
             let asked_for_defer_tag = effective_tags
                 .iter()
                 .any(|t| t.starts_with("deferred:") || t.starts_with("deferred*"));
+            // BUG-1687: `--status deferred` is a spelling of `--deferred`, so
+            // it reaches the axis through the same variable and inherits the
+            // same precedence — `--all` / `--archived` still widen to Both.
+            // trace:BUG-1687 | ai:claude
+            let want_deferred_only = *deferred || status_asked_deferred;
             let defer = if *all || *archived || asked_for_defer_tag {
                 aida_core::DeferFilter::Both
-            } else if *deferred {
+            } else if want_deferred_only {
                 aida_core::DeferFilter::DeferredOnly
             } else {
                 aida_core::DeferFilter::NonDeferredOnly
@@ -2061,8 +2085,16 @@ pub(crate) fn handle_git_backend_command(
             // an explicit `aida list closed` / `--status completed` is untouched.
             // The closed set stays one flag away (`--all` / `--status closed`).
             // trace:STORY-723 | ai:claude
-            let default_open_lens =
-                list_default_open_lens(effective_status.is_some(), *all, *archived, *deferred);
+            // BUG-1687: a bare `--status deferred` leaves `effective_status`
+            // None, so the defer axis is what has to stop the open-lens default
+            // from re-hiding a deferred-and-Completed row the caller asked for.
+            // trace:BUG-1687 | ai:claude
+            let default_open_lens = list_default_open_lens(
+                effective_status.is_some(),
+                *all,
+                *archived,
+                want_deferred_only,
+            );
             let effective_status = if default_open_lens {
                 Some(
                     aida_core::RequirementStatus::open_statuses()
@@ -4559,13 +4591,35 @@ pub(crate) fn handle_git_backend_command(
                             "modified".to_string(),
                             serde_json::to_value(req.modified_at)?,
                         );
-                        object.insert(
-                            "status".to_string(),
-                            serde_json::Value::String(display_status.clone()),
-                        );
+                        // BUG-1687: the machine projection reports the same
+                        // DISPLAY answer the human and TOON surfaces do, so a
+                        // deferred spec never reads as "act now" on one surface
+                        // and not another (AC4). `stored_status` is why that is
+                        // safe — it exists so a consumer never has to infer
+                        // which of the two values is presentation-only — and the
+                        // defer axis itself is reported as its own fields rather
+                        // than left to be parsed out of a label.
+                        // trace:BUG-1687 | ai:claude
+                        let json_status = if status_display::is_deferred(&req) {
+                            status_display::DEFERRED_LABEL.to_string()
+                        } else {
+                            display_status.clone()
+                        };
+                        object.insert("status".to_string(), serde_json::Value::String(json_status));
                         object.insert(
                             "stored_status".to_string(),
                             serde_json::Value::String(req.status.to_string()),
+                        );
+                        object.insert(
+                            "deferred".to_string(),
+                            serde_json::Value::Bool(status_display::is_deferred(&req)),
+                        );
+                        object.insert(
+                            "deferred_until".to_string(),
+                            match status_display::deferred_revisit_trigger(&req) {
+                                Some(trigger) => serde_json::Value::String(trigger),
+                                None => serde_json::Value::Null,
+                            },
                         );
                         object.insert(
                             "priority".to_string(),
@@ -4660,13 +4714,36 @@ pub(crate) fn handle_git_backend_command(
                             "type",
                             &format!("{:?}", req.req_type).to_ascii_lowercase(),
                         ));
-                        // BUG-1767: disclose a derived rollup status so the
-                        // agent can tell it from a stored one.
-                        // trace:BUG-1767 | ai:claude
-                        lines.push(crate::toon::scalar(
-                            "status",
-                            &toon_show_status(&effective_status_str, &stored_status_str),
-                        ));
+                        // BUG-1687: this is the surface that misled two agent
+                        // sessions — both read `status: needs-attention` off a
+                        // spec they had just deferred. A deferred spec reports
+                        // `deferred` here, keeps the stored value beside it as
+                        // `stored_status` (so nothing is hidden, and AC3's
+                        // round trip is readable), and emits the revisit trigger
+                        // as its own scalar so the agent sees until WHEN without
+                        // a second command. trace:BUG-1687 | ai:claude
+                        // BUG-1767: on the non-deferred path (and inside
+                        // `stored_status` for a deferred epic) a derived rollup
+                        // status still carries its disclosure, so the agent can
+                        // tell it from a stored one. trace:BUG-1767 | ai:claude
+                        if status_display::is_deferred(&req) {
+                            lines.push(crate::toon::scalar(
+                                "status",
+                                status_display::DEFERRED_TOKEN,
+                            ));
+                            lines.push(crate::toon::scalar(
+                                "stored_status",
+                                &toon_show_status(&effective_status_str, &stored_status_str),
+                            ));
+                            if let Some(trigger) = status_display::deferred_revisit_trigger(&req) {
+                                lines.push(crate::toon::scalar("deferred_until", &trigger));
+                            }
+                        } else {
+                            lines.push(crate::toon::scalar(
+                                "status",
+                                &toon_show_status(&effective_status_str, &stored_status_str),
+                            ));
+                        }
                         lines.push(crate::toon::scalar(
                             "priority",
                             &format!("{}", req.effective_priority()).to_ascii_lowercase(),
@@ -4917,10 +4994,14 @@ pub(crate) fn handle_git_backend_command(
                         .as_deref()
                         .map(|a| format!(" {}", format!("({a})").dimmed()))
                         .unwrap_or_default();
+                    // BUG-1687: a deferred spec must not advertise the status it
+                    // was deferred OUT of — `spec_status_badge` applies the
+                    // display override and falls through to the stored badge for
+                    // everything else. trace:BUG-1687 | ai:claude
                     println!(
                         "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status),
+                        status_display::spec_status_badge(&req, &status),
                         status_note
                     );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
@@ -5371,10 +5452,12 @@ pub(crate) fn handle_git_backend_command(
                     // when the command returns. trace:TASK-269 | ai:claude
                     println!("\n{}", "─".repeat(40).dimmed());
                     // trace:BUG-1767 | ai:claude — reprint keeps the disclosure.
+                    // trace:BUG-1687 | ai:claude — the reprint carries the same
+                    // deferral override as the Status line at the top.
                     println!(
                         "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status),
+                        status_display::spec_status_badge(&req, &status),
                         status_note
                     );
                     // STORY-727: the per-spec next-command block for HUMANS. The
