@@ -205,7 +205,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:40:04.826717728Z
-modified_at: 2026-10-02T10:54:37.604361972Z
+modified_at: 2026-10-02T10:55:06.484427599Z
 req_type: Bug
 tags:
 - auto-complete
@@ -213,6 +213,78 @@ tags:
 - orchestrator
 - severity:major
 - triaged
+comments:
+- id: 01a0fc40-e4f4-7d02-8ae7-a2b0206b8871
+  author: joe
+  content: |
+    Triage pass (advisor, relay session #13, 2026-10-02). Verdict: **real, approved,
+    and NOT a regression of BUG-1524.** The open question this spec was filed with is
+    answered; `needs-triage` removed, acceptance criteria added, heft is small.
+
+    **BUG-1524 is not the owner of this classifier.** It made a genuine no-launch
+    refusal stop the drain instead of continuing from the CI gate against an
+    unchanged head. That is correct and must not regress (now AC7/AC8). What broke
+    here is one level up: whether a `LaunchRefused` should have been produced at all.
+
+    **The real owner is BUG-1140, bypassed by a path BUG-1629 added in front of it.**
+    `lib.rs:108879-108890` states the doctrine verbatim — "a non-zero exit is NOT
+    proof the work failed … the codex implementer commits + pushes and advances the
+    spec to Done, then its session exits 1 … Verify by SUBSTRATE instead of trusting
+    the exit code" — and the code prints `verifying by substrate before classifying`
+    (`:108894`) then comments `Deliberately fall through — the resolution below is
+    the arbiter`. But the arbiter, `discover_orchestrated_lease`, keys on
+    lease-or-receipt presence and nothing else. BUG-1817's first child was exactly
+    BUG-1140's case (426.5 s, committed, advanced to Done, exited 1) and had ALSO
+    lost its lease and receipt, so it took the BUG-1629 branch at `:108926` and the
+    substrate check never ran.
+
+    **`recover_lost_child_state` (`lib.rs:106353`) consults no substrate signal at
+    all.** Verified by reading it end to end: its entire decision input is lease
+    absent, receipt absent, retry budget (`:103770`), and — only to choose WHERE to
+    relaunch, never WHETHER — worktree/branch/unleased at `:106399-106412`. It never
+    asks whether the spec advanced.
+
+    **The data was already in hand, twice over.** `spec_status(project_root, spec)`
+    already exists in the same file at `lib.rs:103663` (already used for a terminal
+    check at `:97245`), so no new plumbing is needed. And the refusal text the code
+    quoted into its own failure message is the `RequirementStatus::Done` arm of
+    `queue_cmd.rs:9608`, which ends "Otherwise nothing to do — auto-bump fires when
+    the PR merges." A success report, consumed as a failure, rendered as
+    "BUG-1817 was not advanced".
+
+    **Precedent for the fix shape:** `ImplementerOutcome::AlreadyMerged` (BUG-709,
+    `auto_complete.rs:934`) solved this exact defect class once already — work
+    succeeded, orchestrator looked for its customary artifact, didn't find it,
+    false-negatived a landed drive. The outcome variants the fix needs already
+    exist: `PrOpened` and `AlreadyMerged`.
+
+    **Fix location named, and one location ruled OUT.** Fix at
+    `recover_lost_child_state`, before the replacement launch. Do **not** add a
+    blanket "never demote a Done spec" guard at the shelve call: it would suppress
+    the legitimate stale-Done refusal BUG-1524 exists to surface, and would leave
+    the wasted replacement launch in place.
+
+    **Two corrections to my own first reading, both now in the ACs.**
+
+    1. The `orchestrate()`-level test `launch_refusal_shelves_and_never_reaches_ci_or_reviewer`
+       (`auto_complete.rs:9820`) does NOT need narrowing. It uses `MockPhaseDriver`
+       to *inject* a `LaunchRefused` and asserts the shelve that follows; this fix
+       changes whether that failure is produced upstream. It must keep passing
+       untouched. The right instrument is instead
+       `tests/bug_1629_phase1_recovery_tests.rs`, which builds a real
+       `RealPhaseDriver` and counts child launches via `attempts(&root)`.
+    2. **Fixture gotcha that would otherwise cost a round trip:** that file's
+       `project()` helper creates only `.aida/sessions` — there is no store in the
+       fixture, so `spec_status()` returns `None` there and every existing fixture
+       exercises the no-advance path by accident. The new test must give the tempdir
+       a store real enough for `spec_status` to resolve `Done`. Make it fail first.
+
+    AC4 additionally covers the telemetry defect the spec documents but had no
+    criterion for: `phase_durations` recorded phase 1 as 426 837 ms while blaming a
+    child that lived 302 ms.
+  created_at: 2026-10-02T10:55:06.484427599Z
+  modified_at: 2026-10-02T10:55:06.484427599Z
+  session_id: 8e6a376b-16ed-45f7-a6ee-ea30765c7868
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
