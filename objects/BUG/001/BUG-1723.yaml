@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T06:06:38.663034493Z
-modified_at: 2026-10-02T18:12:44.648100321Z
+modified_at: 2026-10-02T18:40:36.303840379Z
 req_type: Bug
 comments:
 - id: 01a0fc39-30c5-7543-9388-2868c8fdbc2d
@@ -144,6 +144,55 @@ comments:
     4.  overrides in  (if implemented per the TASK-1499 rework) are explicitly discarded or rejected, deferring to the running executable.
   created_at: 2026-10-02T14:17:30.279100802Z
   modified_at: 2026-10-02T14:17:30.279100802Z
+- id: 01a0fdeb-11cf-7223-ac5f-8422cc52e30e
+  author: joe
+  content: |
+    IMPLEMENTATION NOTE (branch bug-1723-work) — and one PREMISE CORRECTION.
+
+    AC1 (doctrine where reviewers meet it): doc-comment at `agent_registry::Config`
+    (aida-cli-lib/src/agent_registry.rs), extended module doc on `trusted_config.rs`, and a paragraph in
+    docs/agents/aida-repository-guide.md next to the .gitignore convention it completes.
+
+    AC2 (enumerate + classify guard): scripts/config-trust.toml enumerates every source file whose
+    non-test code touches a `config.toml` path (51 files, 160 sites, channels: worktree / trusted /
+    home / write / probe / other-file / prose) and every section/key parsed from the branch-local copy.
+    Guard: aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs — scans the workspace at test time
+    from CARGO_MANIFEST_DIR (no include_str!), checks both directions (uninventoried site, stale entry,
+    site-count drift), and classifies every worktree key: `policy` passes, authority-SHAPED names
+    (bin/exec/command/credential/token/…) fail outright, location keys must be frozen in
+    LOCATION_EXCEPTIONS (store_path bootstrap only). Mutation-proven: in-test synthetic proofs
+    (aida_bin-as-policy rejected; command class rejected; path key rejected; uninventoried/stale/count
+    cases) plus two real-tree proofs run during development: deleting scripts/config-trust.toml fails
+    the guard; appending one read site to notify.rs fails with the count complaint; reverting goes
+    green.
+
+    AC3 (control): the three [agent_registry] keys classify clean
+    (todays_agent_registry_keys_pass_the_classifier), and the STORY-435 fallthrough behaviour is
+    untouched — no behaviour change to any key; the existing config_load_defaults_when_section_missing
+    / config_ignores_unknown_keys / config_load_reads_from_disk tests still cover it.
+
+    AC4 (precedence reconciliation): the 2026-09-28 decision's "on-disk .aida/config.toml override"
+    term is REMOVED by this spec's 2026-10-02 operator decision. Amendment comments recorded on
+    TASK-1499 and BUG-1679 (where that decision lives). Verified first: the term was never implemented
+    (aida_bin.rs:278 reads only env AIDA_BIN; nothing reads AIDA_BIN/*_bin from config.toml), so the
+    amendment is records-only.
+
+    PREMISE CORRECTION — the filing's and the disposition's shared claim "no executable-selecting key
+    is read from config.toml today; preventive, not a live breach" is FALSE. Both verifications looked
+    at agent_registry + project_capabilities only. The whole-workspace enumeration found live
+    authority-bearing branch-local reads: [notify] command (sh -c), [behavior] permission_mode (can
+    pass bypassPermissions to claude), [contained] enable/os_wrap/read_allowlist/allowed_hosts/
+    managed_domains_only (sandbox posture), [terminal] send_token (credential), [preflight] guards,
+    [worktree_pool] worktree_parent, [[schedule.jobs/tasks]] command|prompt. Filed as BUG-1775 (high).
+    Per this spec's approved scope (documentation + guard only, no behaviour change), the guard FREEZES
+    those keys in GRANDFATHERED_AUTHORITY referencing BUG-1775: no new authority key can land, and
+    fixing one means deleting its grandfather row, after which the guard enforces the fix forever.
+    The AC2 sentence "asserts each is a policy value" is therefore satisfiable only as "policy, a frozen
+    location exception, or a BUG-1775-tracked grandfather" — the premise it assumed did not survive
+    measurement (the predicate could not reach zero on day one).
+  created_at: 2026-10-02T18:40:36.303840379Z
+  modified_at: 2026-10-02T18:40:36.303840379Z
+  session_id: d5ee562a-7ce2-403d-8384-8ef61700260f
 history:
 - id: 01a0fc39-41ce-77c0-9bfa-72b79a03b70c
   author: joe
