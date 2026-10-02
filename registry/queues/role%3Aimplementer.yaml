@@ -103,3 +103,11 @@
   added_at: 2026-10-01T23:30:02.611016030Z
   for_role: implementer
   added_by_machine: spock
+- user_id: role:implementer
+  requirement_id: 01a0fe76-235e-7fa0-b5a5-acc8030ba541
+  position: 404000
+  added_by: role:implementer
+  note: 'TASK-1527 follow-up slice 1: fail-open the refresh-request hint write (AC1 violation); approved 2026-10-02, queued by advisor relay #14'
+  added_at: 2026-10-02T22:34:14.781894025Z
+  for_role: implementer
+  added_by_machine: imac
