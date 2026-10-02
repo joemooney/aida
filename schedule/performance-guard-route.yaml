@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-02T01:36:12.959148341Z
+last_run: 2026-10-02T09:58:38.183797368Z
 last_by:
   seat: advisor
-  session: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
+  session: d5361d99-df2f-496e-9322-ef0a7eb10836
   vendor: antigravity
 result: done
-note: 'Judged: NOT a code regression, and no budget changed. The routed trip carried no typed evidence (audit_error ''malformed typed doctor output''), so I re-ran the check myself. Real finding: ''aida show'' exceeded its 1000ms budget on 11.2% of 152 calls (tolerated 10.0%) with one 12365ms call against a 5000ms ceiling. Per-binary breakdown is the disposition: every in-lineage binary except 0bd634c is UNDER tolerance (4.5%, 2.6%, 6.2%, 6.2%, 0.0%); 0bd634c alone is 48.0% of 25 calls and drags the aggregate over. That is the shape of host contention, not a slower code path - this host runs a machine-wide 2-slot cargo gate on 6 cores plus several long-lived agent seats. Raising the ceiling would hide a real signal; leaving it trips again only if a binary repeats the pattern. Separately, the reason the evidence was missing is BUG-1749 (approved, unblocked now that BUG-1745 is Completed): ''doctor check'' has no TOON arm, so in agent mode without --json it prints human prose and the error block to the same stdout. Verified today that the SAME command with --json emits exactly one parseable JSON doc containing performance_audits, so the data exists and only the renderer selection is broken. Full reproduction and the per-binary numbers are now a comment on BUG-1749. Do NOT fix this by adding --json to the scheduled command: maintenance_schedule.rs:3146 is an identity predicate on that exact string, load-bearing in nine places, and changing it would make the trip record no audit_error at all - invisible rather than unparseable.'
-due_since: 2026-10-02T04:55:19.909603996Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Investigated. The trip is NOT a code regression in `aida show`: the proportion arm is 10.2% against a 10.0% tolerance (0.2-point margin on a 205-call sample) and the ceiling arm is one 9449 ms call, both measured in a 24h window during which this host ran a sustained agent fleet (one agy process at 125% CPU, load 3.73 on 6 cores, cargo 2-slot gated). Per-binary rates are scattered with no worsening across the lineage, which a real regression would show. Raising a budget is explicitly an operator decision, so the three options and their consequences are filed as TASK-1565 (draft, needs-operator-decision) rather than decided here. Separately: the 2026-09-29 failure_trips entry carrying ''malformed typed doctor output'' is a DIFFERENT, parse-level failure that did not recur in the 2026-10-02 run; noted in TASK-1565 so the two are not conflated.'
