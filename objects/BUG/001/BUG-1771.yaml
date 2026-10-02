@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T14:13:04.482813479Z
-modified_at: 2026-10-02T14:55:40.168025331Z
+modified_at: 2026-10-02T22:16:58.702944740Z
 req_type: Bug
 tags:
 - cli
@@ -81,6 +81,12 @@ comments:
   created_at: 2026-10-02T14:55:40.168025331Z
   modified_at: 2026-10-02T14:55:40.168025331Z
   session_id: 4d15c9cf-9632-421e-973e-436f4d2e6185
+- id: 01a0feb1-2a4e-7913-a2ea-73f8b4903195
+  author: joe
+  content: 'Merge-readiness review of PR #2339 (cross-vendor codex + advisor disposition): MERGE-READY. Codex raised one blocker — the lens filter reads the row''s own parked fields while lib.rs''s epic attribution walks children, so an epic parked only via a child matches neither lens. Advisor disposition: NOT a blocker — the PR''s own doc comment makes this a deliberate inherited limit preserving filter/label consistency (the json status_lens field already behaved this way), and making the filter disagree with the label would be the worse bug. The promised follow-up spec now exists: TASK-1572. Non-blocking notes: refusal message''s stored-status list omits superseded; integration test drives the built binary (non-vacuous).'
+  created_at: 2026-10-02T22:16:58.702944740Z
+  modified_at: 2026-10-02T22:16:58.702944740Z
+  session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
 history:
 - id: 01a0fcf8-9fa1-7890-824e-fd98464a44c5
   author: joe
