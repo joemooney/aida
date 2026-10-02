@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Resolved by `aida db sync --push`: the aida-store mirror had not fanned out to gitlab since routine store writes only reach origin (BUG-1746). `aida remote status` now reports all hubs agreeing on main, aida-store, and the v0.15.0 release tag. No force-push was used.'
+due_since: 2026-10-02T17:08:15.201556442Z
+due_reason: on CronJobFailed:hub-drift-guard
