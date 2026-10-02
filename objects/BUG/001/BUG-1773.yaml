@@ -1,0 +1,112 @@
+id: 01a0fdb0-3a8a-7340-94a5-70d4b30b012a
+spec_id: BUG-1773
+agreed_id: BUG-1773
+title: Derive held_prs from the review-verdict corpus so a rejection recorded outside aida review record is visible to aida awaiting
+description: |
+  ## Summary
+
+  `aida awaiting`'s `held_prs` is built from marker files ONLY. In
+  `aida-cli-lib/src/lib.rs` the list is `hold_records.iter().filter(...)` — a read
+  of `.aida/merge-holds/PR-<n>`. Nothing in that path consults the review-verdict
+  corpus, so a refusing verdict written by any producer other than
+  `handle_review_record_at` is invisible to the one view whose job is to surface
+  it. BUG-1705 records the real instance: PR #2242 had `request-changes` at its
+  exact head and did not appear under `held_prs`.
+
+  This is the READ half of BUG-1705 (its AC2, plus AC1 as far as the view is
+  concerned). The enforcement half — the `forge::merge_change` chokepoint and the
+  label mirror — is the sibling child and is deliberately out of scope here.
+
+  ## Two corrections to BUG-1705's own prescription
+
+  Both measured in this tree at `fe09d7678e`; an implementer who follows the
+  parent spec's advisor comment literally will get these wrong.
+
+  ### 1. Do NOT reuse `local_verdict_blocks_merge` as the `held_prs` predicate
+
+  The parent comment says to "wire that existing predicate into `held_prs`".
+  That predicate is a *fail-closed merge* test, not a *rejection* test:
+
+  * it returns `true` whenever a verdict artifact exists and the current head is
+    not cleanly `Approved` — including when the only recordings sit at shas that
+    no longer match, where `reconcile_artifacts_for_sha` returns `Ok(None)`;
+  * it returns `true` when `current_sha` is `None` (deliberate, for the merge
+    gate).
+
+  Correct for "may I merge this". Wrong for `held_prs`, which would then list
+  every open PR carrying any stale verdict, plus every PR whose head could not be
+  read. That is the parent comment's own risk 1, and reusing the predicate causes
+  it rather than avoiding it.
+
+  `held_prs` needs the positive form: **there is an OUTSTANDING blocking verdict
+  at the PR's CURRENT head.** Unknown head ⇒ hold nothing (a view fails open; the
+  gate fails closed). The two predicates should share the reconciliation
+  primitive, not the policy.
+
+  ### 2. `reconcile_artifacts_for_sha` does NOT honour `is_closed()` — answered, not open
+
+  The parent comment left this as something to "check". It is settled:
+  `reconcile_artifacts_for_sha` (`aida-cli-lib/src/review_verdict.rs:509`) parses
+  each artifact as raw `serde_json::Value` and reads only `verdict`,
+  `reviewed_sha`/head provenance, `recorded_by` and `rounds`. It never reads
+  `closed_by_merge`. Within the module that field is read in exactly two places —
+  `RecordedVerdict` parsing and `is_outstanding_refusal` — and neither is on the
+  reconcile path.
+
+  So the closed-verdict exclusion must be applied explicitly by this change.
+  `review_verdict::is_outstanding_refusal(verdict, spec_completed)` already
+  encodes it (BUG-1529: closed by merge, or the spec is `Completed`) and is the
+  right building block.
+
+  ## Acceptance
+
+  1. An open PR whose spec or `PR-<n>` verdict artifact carries an outstanding
+     blocking verdict (`request-changes` / `rejected`) at that PR's CURRENT head
+     appears in `aida awaiting`'s `held_prs` with `reason_kind` `rework`, the sha,
+     and the finding count — with NO marker file and NO label applied by hand,
+     matching how a marker-backed hold already presents.
+  2. No double entry. A PR that has BOTH a marker-backed hold and a corpus-derived
+     rejection appears exactly once.
+  3. Over-holding is excluded, each case covered by its own test:
+     a. a verdict whose recordings are all at shas other than the current head
+        holds nothing;
+     b. a verdict closed by a merge (`closed_by_merge` set) holds nothing;
+     c. a blocking verdict whose spec is `Completed` holds nothing;
+     d. a PR whose head sha is unknown/unreadable holds nothing (this view fails
+        OPEN — contrast the merge gate, which must keep failing closed);
+     e. an `approved` verdict at the current head holds nothing.
+  4. A spec with no verdict artifact at all holds nothing and is not an error
+     (parent AC5).
+  5. The decision is a pure function of its inputs (verdict bodies, verdict shas,
+     PR head sha, closed/completed flags) with no network and no clock. Tested
+     directly at that seam, not only through the assembled report.
+  6. Prove by mutation, BOTH directions, that each rule has a witness only it
+     satisfies: removing the corpus-derived arm must fail the AC1 test, and
+     removing the outstanding/closed filter must fail the AC3b/AC3c tests. A test
+     that passes either way proves nothing.
+
+  ## Do not
+
+  - Do not touch `forge::merge_change`, the label mirror, or
+    `merge_hold::write_typed_hold`. That is the sibling child. This change is
+    read-only with respect to enforcement state — in particular it must NOT write
+    a marker file as a side effect of a read, which is how the parent's failure
+    mode (arming at one writer) got in.
+  - Do not use `review_verdict::review_actionability`; it reports `NeedsReview`
+    as soon as the head moves, which would release a hold on a head move alone —
+    BUG-1705 AC3 forbids exactly that.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T17:36:20.106331337Z
+modified_at: 2026-10-02T17:36:20.106331337Z
+req_type: Bug
+filed_at:
+  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
