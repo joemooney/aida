@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T22:12:18.090218807Z
-modified_at: 2026-10-01T22:12:18.090218807Z
+modified_at: 2026-10-02T10:40:36.590070573Z
 req_type: Bug
 tags:
 - auto-complete
@@ -48,6 +48,36 @@ tags:
 - failure-1
 - failure-kind:launch-refused
 - implementer
+comments:
+- id: 01a0fc33-9eee-79d3-a5e6-31c92e1e3f59
+  author: joe
+  content: |
+    Advisor disposition (relay session #12, 2026-10-02): rejected, as a non-bug,
+    reaching by hand the verdict the substrate's own mechanism would have reached.
+
+    Its parent BUG-1817 is `Completed` (terminal flip 2026-10-01T23:27:21Z). That is
+    exactly the condition under which `aida-auto-bump` rejected both of this
+    finding's siblings:
+
+    - BUG-1712 (on BUG-1706) -- "reached Completed via commit 5ed030a / PR #2255"
+    - BUG-1824 (on BUG-1819) -- "reached Completed via commit 4679b54 / PR #2319"
+
+    This finding was NOT rejected with them because BUG-1817's terminal flip is
+    authored `joe.mooney`, not `AUTO_BUMP_AUTHOR` -- a hand completion -- and the
+    auto-reject is reachable only from the auto-bump's own flip set. Filed as
+    **BUG-1768** (approved).
+
+    The run this finding reports was also not a real phase failure: the implementer
+    reached `Done` at 22:11:37Z and the orchestrator demoted it to `NeedsAttention`
+    at 22:12:17Z after a replacement launch was refused *because* the work was
+    finished. Filed as **BUG-1769** (draft, needs-triage).
+
+    So the orchestrator defect this finding was drafted to surface is real, but it
+    is neither of the two things this draft is: it is not a bug about BUG-1817, and
+    it is not work to queue. Both real defects are filed and traced. Rejecting.
+  created_at: 2026-10-02T10:40:36.590070573Z
+  modified_at: 2026-10-02T10:40:36.590070573Z
+  session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
   branch: main
