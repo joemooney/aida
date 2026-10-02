@@ -48,12 +48,12 @@ description: |
   - A worktree whose branch has an open PR is skipped by default, with an opt-in override.
   - Verified against a fixture with a main checkout, a live-lease worktree, an open-PR
     worktree and a stale worktree: exactly the stale one is deleted.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:53:14.519131201Z
-modified_at: 2026-10-02T10:07:43.445487620Z
+modified_at: 2026-10-02T10:31:16.633148752Z
 req_type: Task
 tags:
 - docs:impacted
@@ -270,6 +270,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fc2b-13b5-73e2-8042-52d0c2e1457e
+  author: joe
+  timestamp: 2026-10-02T10:31:16.661204910Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
@@ -278,3 +285,7 @@ filed_at:
   aida_build_sha: 7d85a8057d
   vendor: antigravity
   session: ebd9f361-5c58-426c-bd52-cad88aa0059b
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-02T10:31:16.633148752Z
+  implemented_by: joe
