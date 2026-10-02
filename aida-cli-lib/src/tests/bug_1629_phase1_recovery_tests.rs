@@ -683,3 +683,325 @@ exit 0"#;
         .unwrap_or_default();
     assert!(leftovers.is_empty(), "{leftovers:?}");
 }
+
+// ---------------------------------------------------------------- BUG-1769
+//
+// The lost-child recovery above decided from lease-absent + receipt-absent +
+// the retry budget and nothing else, so it could not see the case BUG-1140
+// mandates verifying by substrate: a child that committed, pushed, advanced
+// the spec to `Done` and *then* exited without its lease or receipt. For
+// BUG-1817 that spent a replacement launch the child's own claim gate refused
+// with "Status is Done (work finished on a branch)" — a success report — and
+// typed the refusal `LaunchRefused`, which demoted a finished spec to
+// NeedsAttention and auto-drafted a non-bug for a human to triage.
+//
+// Fixture note: `project()` above creates only `.aida/sessions`, so there is
+// no store at all and `spec_status()` returns `None` — which means every
+// fixture above exercises the no-advance path *by accident*. The BUG-1769
+// fixtures below give the tempdir a real store with `store()`, and the AC8
+// control deliberately keeps a storeless one.
+// trace:BUG-1769 | ai:claude
+
+/// A real git-canonical store under `root`, holding `spec` at `status`. The
+/// store is what `spec_status` reads, and it reads the working tree, so a
+/// child can advance the spec with a plain `sed` and no commit.
+fn store(root: &std::path::Path, spec: &str, status: aida_core::RequirementStatus) {
+    use aida_core::DatabaseBackend;
+    let store_root = root.join(".aida-store");
+    std::fs::create_dir_all(&store_root).unwrap();
+    aida_core::git_ops::init(&store_root).unwrap();
+    aida_core::git_ops::configure_user(&store_root, "Test", "test@example.invalid").unwrap();
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let mut req = aida_core::Requirement::new(format!("spec {spec}"), "body".into());
+    req.spec_id = Some(spec.to_string());
+    req.status = status.clone();
+    backend.add_requirement(req).unwrap();
+    assert_eq!(
+        crate::spec_status(root, spec).as_ref(),
+        Some(&status),
+        "fixture: the store must be readable by the shipped `spec_status`"
+    );
+}
+
+/// Shell that advances `spec` to `Done` in the store, the way a child that
+/// finished its work does, then exits 1 without a lease or a receipt.
+fn finish_then_lose_state(spec: &str) -> String {
+    format!(
+        r#"obj=$(find .aida-store/objects -name '{spec}.yaml' | head -1)
+sed -i 's/^status: .*/status: Done/' "$obj"
+exit 1"#
+    )
+}
+
+/// AC1 + AC5: the spec advanced to `Done` inside this run, so phase 1 is
+/// treated as having succeeded — no replacement child launches, and the result
+/// is not `LaunchRefused`. The injected forge hands back the PR the child
+/// opened, so the run continues into CI + review exactly as a lease-bearing
+/// child's would.
+#[cfg(unix)]
+#[test]
+fn bug_1769_advance_during_the_run_resolves_the_pr_instead_of_relaunching() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::Approved);
+    let advance = finish_then_lose_state("NFR-56");
+    let stub = stub(&root, &advance, &advance);
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 4242,
+        url: "https://example.invalid/pull/4242".into(),
+        branch: "nfr-56".into(),
+        base: "main".into(),
+        title: Some("feat: the work the lost child finished".into()),
+    });
+    let mut d = driver(&root, "NFR-56", stub);
+    d.forge_factory = Some(forge.factory());
+
+    let outcome = d
+        .run_implementer()
+        .expect("a run that finished the work is not a phase failure");
+    assert_eq!(outcome, ImplementerOutcome::PrOpened, "{outcome:?}");
+    assert_eq!(
+        attempts(&root).len(),
+        1,
+        "no replacement launch is spent on work that is already done: {:?}",
+        attempts(&root)
+    );
+    assert_eq!(
+        d.pr_number,
+        Some(4242),
+        "the resolved PR is carried forward"
+    );
+}
+
+/// AC1: when no PR can be found or opened the run is `Inconclusive` — the
+/// drain pauses and the spec keeps its status. The one thing this path must
+/// never do is demote a spec this run finished, so it is never `LaunchRefused`
+/// and never a `PhaseFailure`.
+#[cfg(unix)]
+#[test]
+fn bug_1769_advance_with_no_locatable_pr_pauses_rather_than_demoting() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::InProgress);
+    let advance = finish_then_lose_state("NFR-56");
+    let stub = stub(&root, &advance, &advance);
+    let forge = crate::forge::fake::RecordingForge::new();
+    let mut d = driver(&root, "NFR-56", stub);
+    d.forge_factory = Some(forge.factory());
+
+    let outcome = d.run_implementer().expect("not a failure");
+    let ImplementerOutcome::Inconclusive { reason, .. } = &outcome else {
+        panic!("expected Inconclusive, got {outcome:?}");
+    };
+    assert!(
+        reason.contains("this run finished the work"),
+        "the reason says what the substrate read: {reason}"
+    );
+    assert!(
+        reason.contains("Done"),
+        "the reason names the status it read: {reason}"
+    );
+    assert_eq!(attempts(&root).len(), 1, "{:?}", attempts(&root));
+}
+
+/// AC1: a child that finished the work and merged its own PR resolves
+/// `AlreadyMerged` (BUG-709), not a relaunch. The fixture's store has no
+/// `origin`, so the branch probe is inconclusive rather than `Absent`, which
+/// is the arm that consults the merged-PR lookup.
+#[cfg(unix)]
+#[test]
+fn bug_1769_advance_whose_pr_already_merged_completes_the_drive() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = git_project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::Approved);
+    let advance = finish_then_lose_state("NFR-56");
+    let stub = stub(&root, &advance, &advance);
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.merged_for_branch = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 77,
+        url: "https://example.invalid/pull/77".into(),
+        branch: "nfr-56".into(),
+        base: "main".into(),
+        title: Some("feat: shipped end to end".into()),
+    });
+    let mut d = driver(&root, "NFR-56", stub);
+    d.forge_factory = Some(forge.factory());
+
+    let outcome = d.run_implementer().expect("not a failure");
+    assert_eq!(
+        outcome,
+        ImplementerOutcome::AlreadyMerged { pr_number: 77 },
+        "{outcome:?}"
+    );
+    assert_eq!(attempts(&root).len(), 1, "{:?}", attempts(&root));
+}
+
+/// AC7, the stale-Done control: a spec that was ALREADY `Done` when phase 1
+/// began must still be refused exactly as it is today. This is the BUG-1524
+/// behaviour — a genuine no-launch refusal has to stop the drain — and the
+/// before/after comparison is the only thing separating it from the case
+/// above.
+#[cfg(unix)]
+#[test]
+fn bug_1769_a_spec_already_done_before_phase_1_still_shelves() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::Done);
+    let stub = stub(&root, "exit 1", "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(err.kind, FailureKind::LaunchRefused);
+    assert_eq!(
+        attempts(&root).len(),
+        2,
+        "the stale-Done refusal still spends its one replacement: {:?}",
+        attempts(&root)
+    );
+    assert_eq!(
+        d.phase1_entry_spec_status,
+        Some(Some(aida_core::RequirementStatus::Done)),
+        "the entry status is captured from the store at phase-1 entry"
+    );
+}
+
+/// AC8, the no-advance control: a child that genuinely never launched and left
+/// the spec where it was still spends the single replacement launch and still
+/// shelves on the second loss. BUG-1629's recovery is preserved.
+#[cfg(unix)]
+#[test]
+fn bug_1769_a_child_that_never_advanced_the_spec_still_retries_once_then_shelves() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::Approved);
+    let stub = stub(&root, "exit 1", "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(err.kind, FailureKind::LaunchRefused);
+    assert_eq!(attempts(&root).len(), 2, "{:?}", attempts(&root));
+    // AC3: the no-advance claim is scoped to the replacement launch and is
+    // backed by the status the substrate read.
+    assert!(
+        err.reason
+            .contains("that replacement launch did not advance NFR-56"),
+        "{}",
+        err.reason
+    );
+    assert!(
+        err.reason.contains("the store reports NFR-56 as Approved"),
+        "the message reports what it read, not an unverified claim: {}",
+        err.reason
+    );
+    assert!(
+        !err.reason.contains("NFR-56 was not advanced"),
+        "the unqualified claim BUG-1817 made is gone: {}",
+        err.reason
+    );
+    // AC4: the elapsed time is attributed to the child it belongs to, so the
+    // phase total can no longer be read as this child's lifetime.
+    assert!(
+        err.reason.contains("that replacement child's own lifetime")
+            && err.reason.contains("covers every launch in the phase"),
+        "{}",
+        err.reason
+    );
+}
+
+/// AC8, storeless control: with no store at all `spec_status` returns `None`
+/// at both ends. That is UNKNOWN, not "was not finished", so it must never
+/// license the success path — the fail-safe answer is the pre-fix behaviour.
+#[cfg(unix)]
+#[test]
+fn bug_1769_an_unreadable_store_keeps_the_pre_fix_behaviour() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    let stub = stub(&root, "exit 1", "exit 1");
+    let mut d = driver(&root, "NFR-56", stub);
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(err.kind, FailureKind::LaunchRefused);
+    assert_eq!(attempts(&root).len(), 2, "{:?}", attempts(&root));
+    assert_eq!(d.phase1_entry_spec_status, Some(None));
+    assert!(
+        err.reason.contains("unreadable"),
+        "the message says the read failed rather than claiming a status: {}",
+        err.reason
+    );
+}
+
+/// AC2: the entry status is captured ONCE. `run_implementer` is re-entered by
+/// the replacement launch, and a second capture would overwrite the entry
+/// reading with a mid-run one — destroying the only thing that separates
+/// "finished by this run" from the stale-Done refusal.
+#[test]
+fn bug_1769_the_entry_status_capture_is_idempotent() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = project(&temp);
+    store(&root, "NFR-56", aida_core::RequirementStatus::Approved);
+    let mut d = driver(&root, "NFR-56", root.join("aida-stub"));
+
+    d.capture_phase1_entry_spec_status();
+    assert_eq!(
+        d.phase1_entry_spec_status,
+        Some(Some(aida_core::RequirementStatus::Approved))
+    );
+
+    let obj = root
+        .join(".aida-store")
+        .join("objects")
+        .join("NFR")
+        .join("000")
+        .join("NFR-56.yaml");
+    let body = std::fs::read_to_string(&obj).unwrap();
+    std::fs::write(
+        &obj,
+        body.replace("\nstatus: Approved\n", "\nstatus: Done\n"),
+    )
+    .unwrap();
+    assert_eq!(
+        crate::spec_status(&root, "NFR-56"),
+        Some(aida_core::RequirementStatus::Done),
+        "fixture: the store now reads Done"
+    );
+
+    d.capture_phase1_entry_spec_status();
+    assert_eq!(
+        d.phase1_entry_spec_status,
+        Some(Some(aida_core::RequirementStatus::Approved)),
+        "a later call must not replace the entry reading with a mid-run one"
+    );
+}
+
+/// AC1 + AC2 as a pure decision, including the fail-safe arms a driver test
+/// cannot reach cheaply.
+#[test]
+fn bug_1769_advance_decision() {
+    use aida_core::RequirementStatus as S;
+    let advanced = crate::phase1_advanced_to_finished_during_run;
+
+    assert!(advanced(Some(&S::Approved), Some(&S::Done)));
+    assert!(advanced(Some(&S::InProgress), Some(&S::Done)));
+    assert!(advanced(Some(&S::InProgress), Some(&S::Completed)));
+
+    // The stale-Done confound: finished before the run began.
+    assert!(!advanced(Some(&S::Done), Some(&S::Done)));
+    assert!(!advanced(Some(&S::Completed), Some(&S::Completed)));
+    assert!(!advanced(Some(&S::Done), Some(&S::Completed)));
+
+    // Terminal but NOT finished work — reading these as success would turn a
+    // declined spec into a shipped one.
+    assert!(!advanced(Some(&S::Approved), Some(&S::Rejected)));
+    assert!(!advanced(Some(&S::Approved), Some(&S::Superseded)));
+    assert!(!advanced(Some(&S::InProgress), Some(&S::NeedsAttention)));
+
+    // No advance at all.
+    assert!(!advanced(Some(&S::InProgress), Some(&S::InProgress)));
+
+    // UNKNOWN is never success: an unreadable reading at either end keeps the
+    // pre-fix behaviour.
+    assert!(!advanced(None, Some(&S::Done)));
+    assert!(!advanced(Some(&S::Approved), None));
+    assert!(!advanced(None, None));
+}

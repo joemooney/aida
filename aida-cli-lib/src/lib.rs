@@ -103741,6 +103741,53 @@ fn phase1_lost_child_retry_allowed(retries_used: usize) -> bool {
     retries_used == 0
 }
 
+/// BUG-1769: is this spec's work finished? `Done` means committed on a branch
+/// and `Completed` means landed on the default branch, so both say the phase's
+/// goal was reached. `Rejected` / `Superseded` / `NeedsAttention` are terminal
+/// or parked but are NOT finished work, and reading them as success would turn
+/// a declined spec into a shipped one.
+// trace:BUG-1769 | ai:claude
+fn phase1_status_is_finished(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Done | RequirementStatus::Completed
+    )
+}
+
+/// BUG-1769: did THIS run finish the work? The discriminator is BUG-1524's own
+/// before-and-after principle applied to spec status: an advance counts only
+/// when the entry reading was not already finished, so a spec that was `Done`
+/// *before* phase 1 began is still refused exactly as it is today.
+///
+/// Either reading being absent is UNKNOWN, not "was not finished", so it can
+/// never license the success path — the fail-safe answer is the behaviour that
+/// shipped before this fix. That matters because the no-store case is real: a
+/// fixture or a checkout without `.aida-store` makes `spec_status` return
+/// `None` at both ends.
+// trace:BUG-1769 | ai:claude
+fn phase1_advanced_to_finished_during_run(
+    entry: Option<&RequirementStatus>,
+    current: Option<&RequirementStatus>,
+) -> bool {
+    match (entry, current) {
+        (Some(entry), Some(current)) => {
+            phase1_status_is_finished(current) && !phase1_status_is_finished(entry)
+        }
+        _ => false,
+    }
+}
+
+/// BUG-1769: render a substrate status reading for a diagnostic message, so a
+/// lost-child failure can say what it actually read instead of asserting an
+/// un-read "was not advanced".
+// trace:BUG-1769 | ai:claude
+fn phase1_spec_status_text(status: Option<&RequirementStatus>) -> String {
+    match status {
+        Some(status) => status.to_string(),
+        None => "unreadable (no store, or the spec is not in it)".to_string(),
+    }
+}
+
 // trace:BUG-1629 | ai:claude
 fn phase1_branch_race_reason(spec: &str, branch: &str) -> String {
     format!(
@@ -105430,6 +105477,21 @@ struct RealPhaseDriver {
     /// child exits without its session lease and handoff receipt.
     // trace:BUG-1629 | ai:claude
     lost_child_state_retries_used: usize,
+    /// BUG-1769: the spec's store status read ONCE at phase-1 entry, before any
+    /// child launches. [`RealPhaseDriver::recover_lost_child_state`] compares it
+    /// against a fresh read to tell "this run finished the work" (the BUG-1140
+    /// substrate verification) from the stale-Done refusal BUG-1524 must keep
+    /// surfacing.
+    ///
+    /// Set by [`RealPhaseDriver::capture_phase1_entry_spec_status`], called at
+    /// the top of `RealPhaseDriver::run_implementer`. The OUTER `Option` is the
+    /// captured/not-captured flag, not a status: `run_implementer` is re-entered
+    /// by the BUG-1629 replacement launch and the BUG-826 relaunches, and a
+    /// second capture would overwrite the entry reading with a mid-run one and
+    /// destroy the comparison. The INNER `Option` is `spec_status`'s own
+    /// "no store, or the spec is not in it".
+    // trace:BUG-1769 | ai:claude
+    phase1_entry_spec_status: Option<Option<RequirementStatus>>,
     /// BUG-1213 / TASK-1265: `(PR, dispatched branch, blocking verdict's
     /// reviewed_sha, the dispatched branch's head AT ARM TIME, authoritative
     /// review delta, round)` captured immediately before a rework implementer
@@ -105805,6 +105867,7 @@ impl RealPhaseDriver {
             retry_implementer_branch: None,
             phase1_workspace: None,
             lost_child_state_retries_used: 0,
+            phase1_entry_spec_status: None,
             rework_guard: None,
         }
     }
@@ -106350,18 +106413,51 @@ impl RealPhaseDriver {
         if let Some(refusal) = &refusal {
             state.push_str(&format!("; the child refused: {refusal}"));
         }
+        // BUG-1769: this is the arbiter BUG-1140 mandated, and until now it
+        // consulted no substrate signal at all. Its whole decision input was
+        // lease-absent + receipt-absent + the retry budget — which cannot see
+        // the case BUG-1140 describes: a child that committed, pushed, advanced
+        // the spec to Done and then exited without its lease or receipt. For
+        // BUG-1817 that cost a replacement launch the child's own claim gate
+        // refused with "Status is Done (work finished on a branch)" — a success
+        // report — and then demoted a finished spec to NeedsAttention.
+        // trace:BUG-1769 trace:BUG-1140 | ai:claude
+        let current_status = spec_status(&self.project_root, &self.spec);
+        let entry_status = self
+            .phase1_entry_spec_status
+            .as_ref()
+            .and_then(|status| status.as_ref());
+        if phase1_advanced_to_finished_during_run(entry_status, current_status.as_ref()) {
+            return self.resolve_phase1_finished_without_lease(&state, current_status.as_ref());
+        }
         if !phase1_lost_child_retry_allowed(self.lost_child_state_retries_used) {
             let how = if refusal.is_some() {
                 "was refused"
             } else {
                 "lost its state the same way"
             };
+            // BUG-1769: this message used to assert "<spec> was not advanced"
+            // with nothing behind it, and said exactly that about a run that
+            // HAD advanced the spec to Done. The no-advance claim is now
+            // scoped to the replacement launch this method spent, and the
+            // status it reports is the `spec_status` read above.
+            //
+            // The elapsed time in `{state}` is the replacement child's OWN
+            // lifetime. Phase 1's recorded `phase_durations` entry covers every
+            // launch in the phase — BUG-1817 recorded 426 837 ms for a phase
+            // whose blamed child lived 302 ms — so the message says which child
+            // the elapsed time belongs to rather than leaving the reader to
+            // attribute the phase total to it. trace:BUG-1769 | ai:claude
             return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::LaunchRefused,
                 format!(
                     "{state}. The single clean replacement launch already ran and {how}; no \
-                     session lease was left behind and {} was not advanced",
-                    self.spec
+                     session lease was left behind, and that replacement launch did not \
+                     advance {spec} — the store reports {spec} as {status}. The elapsed time \
+                     above is that replacement child's own lifetime; phase 1's recorded \
+                     duration covers every launch in the phase, not this child alone",
+                    spec = self.spec,
+                    status = phase1_spec_status_text(current_status.as_ref()),
                 ),
             ));
         }
@@ -106383,6 +106479,150 @@ impl RealPhaseDriver {
         }
         self.record_lost_child_replacement(&state);
         auto_complete::PhaseDriver::run_implementer(self)
+    }
+
+    /// BUG-1769: read the spec's store status once, at phase-1 entry. Later
+    /// calls are no-ops: `run_implementer` is re-entered by the BUG-1629
+    /// replacement launch and the BUG-826 zero-byte-log relaunches, and a
+    /// second capture would replace the entry reading with a mid-run one, which
+    /// is precisely the comparison this field exists to make.
+    // trace:BUG-1769 | ai:claude
+    fn capture_phase1_entry_spec_status(&mut self) {
+        if self.phase1_entry_spec_status.is_none() {
+            self.phase1_entry_spec_status = Some(spec_status(&self.project_root, &self.spec));
+        }
+    }
+
+    /// BUG-1769: phase 1's child lost its lease and its handoff receipt, but
+    /// the substrate says THIS run finished the work — the spec advanced to
+    /// `Done` (or beyond) from an entry status that was not finished. Spending
+    /// the BUG-1629 replacement launch here is pure waste: the child's own
+    /// claim gate refuses an already-`Done` spec, and its refusal text ends
+    /// "nothing to do — auto-bump fires when the PR merges", which is a success
+    /// report. Typing that refusal `LaunchRefused` is what demoted BUG-1817
+    /// from `Done` to `NeedsAttention` and auto-drafted a non-bug for a human.
+    ///
+    /// So resolve it the way a lease-bearing child's work is resolved, against
+    /// the pinned phase-1 branch: an open PR means `PrOpened` and the run
+    /// continues into CI + review (the real quality gates), a merged one means
+    /// `AlreadyMerged` (BUG-709 — the implementer ran the full ship itself),
+    /// and committed-but-unopened work is recovered into a PR (BUG-893). This
+    /// is the `ImplementerOutcome::AlreadyMerged` shape applied to a second
+    /// instance of the same defect class: the work succeeded, the orchestrator
+    /// looked for its customary artifact, did not find it, and false-negatived
+    /// a finished drive.
+    ///
+    /// Only when no PR can be found OR opened is the result `Inconclusive`: the
+    /// work is real but its artifact is not locatable, so the drain pauses and
+    /// leaves the spec where it is. That is deliberately not a failure — the
+    /// one thing this path must never do is demote a spec this run finished.
+    // trace:BUG-1769 | ai:claude
+    fn resolve_phase1_finished_without_lease(
+        &mut self,
+        state: &str,
+        current_status: Option<&RequirementStatus>,
+    ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
+        let status = phase1_spec_status_text(current_status);
+        let Some((worktree, branch)) = self
+            .phase1_workspace
+            .as_ref()
+            .map(|pin| (pin.worktree.clone(), pin.branch.clone()))
+        else {
+            return Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                reason: format!(
+                    "{state}; but the store reports {} as {status}, so this run finished the \
+                     work — no replacement launch was spent and nothing was shelved. No \
+                     phase-1 workspace was pinned, so there is no branch to look a PR up on",
+                    self.spec
+                ),
+                retry_hint: None,
+            });
+        };
+        if !self.json {
+            eprintln!(
+                "  {} {} is {} — this run finished the work, so the lost child's missing lease \
+                 is not a failure; resolving the PR on `{}` instead of relaunching",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                self.spec,
+                status,
+                branch,
+            );
+        }
+        self.implementer_worktree = Some(worktree.clone());
+        self.branch = Some(branch.clone());
+        match self.detect_phase1_pr(&branch) {
+            Phase1PrResolve::Found(pr) => {
+                self.set_pr_number(pr.number as u32);
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{} found on `{}` — continuing into CI + review",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        pr.number,
+                        branch,
+                    );
+                }
+                Ok(auto_complete::ImplementerOutcome::PrOpened)
+            }
+            // BUG-709: the implementer ran the full ship itself, so there is no
+            // open PR to shepherd and nothing to tear down (this child never
+            // took a lease). trace:BUG-709 | ai:claude
+            Phase1PrResolve::AlreadyMerged(pr) => {
+                self.set_pr_number(pr.number as u32);
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{} already merged — completing the drive",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        pr.number,
+                    );
+                }
+                Ok(auto_complete::ImplementerOutcome::AlreadyMerged {
+                    pr_number: pr.number as u32,
+                })
+            }
+            // No open PR, or the lookup could not reach the forge. Either way
+            // the commits may be sitting in the pinned worktree unopened —
+            // BUG-893's recovery is the same one the lease-bearing path runs.
+            // trace:BUG-893 | ai:claude
+            other => {
+                if let Some((ahead, pr)) = try_open_orchestrator_pr_for_no_pr_worktree(
+                    &self.project_root,
+                    &worktree,
+                    &branch,
+                    self.lifecycle_forge,
+                    &self.spec,
+                ) {
+                    if !self.json {
+                        eprintln!(
+                            "  {} {} commit(s) on `{}` with no PR — opened PR-{} for them \
+                             (BUG-893 recovery)",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            ahead,
+                            branch,
+                            pr,
+                        );
+                    }
+                    self.set_pr_number(pr as u32);
+                    return Ok(auto_complete::ImplementerOutcome::PrOpened);
+                }
+                let why = match other {
+                    Phase1PrResolve::NoPr => "no open PR on the branch".to_string(),
+                    Phase1PrResolve::Fail(f) => f.reason,
+                    Phase1PrResolve::Retry(reason) => reason,
+                    Phase1PrResolve::Found(_) | Phase1PrResolve::AlreadyMerged(_) => {
+                        unreachable!("resolved above")
+                    }
+                };
+                Ok(auto_complete::ImplementerOutcome::Inconclusive {
+                    reason: format!(
+                        "{state}; but the store reports {} as {status}, so this run finished \
+                         the work — no replacement launch was spent and nothing was shelved. \
+                         No PR could be found or opened for `{branch}`: {why}",
+                        self.spec
+                    ),
+                    retry_hint: None,
+                })
+            }
+        }
     }
 
     /// BUG-1629: leave a durable trace of the replacement launch — the drain
@@ -108521,6 +108761,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
              pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped \
              the lock"
         );
+        // BUG-1769: read the spec's status BEFORE any child runs, so the
+        // lost-child recovery can tell an advance this run produced from one
+        // that was already there. Idempotent, so the replacement launch
+        // re-entering here keeps the original entry reading.
+        // trace:BUG-1769 | ai:claude
+        self.capture_phase1_entry_spec_status();
         let session_uuid = uuid::Uuid::now_v7().to_string();
         // trace:BUG-1063 | ai:codex
         let implementer_started_at = std::time::SystemTime::now();
