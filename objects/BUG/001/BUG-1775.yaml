@@ -1,0 +1,93 @@
+id: 01a0fde1-b94e-72c0-a5ea-7dc3aea96d5b
+spec_id: BUG-1775
+agreed_id: BUG-1775
+title: 'Branch-local .aida/config.toml carries live launch/credential/sandbox authority: [notify] command runs via sh -c, [behavior] permission_mode can pass bypassPermissions, [contained] can relax the sandb'
+description: |
+  Filed from the BUG-1723 survey (2026-10-02). BUG-1723's own premise — "no executable-selecting key
+  is read from config.toml today, so this is preventive, not a live breach" — was verified twice
+  (filing advisor, disposition advisor) against agent_registry only. A whole-workspace enumeration of
+  every `.aida/config.toml` read site (done while building BUG-1723's guard) falsifies it: several
+  keys read from the BRANCH-LOCAL copy select a shell command, a filesystem path, a credential, or
+  the sandbox/permission posture. The file is tracked and committable, so a pushed branch can supply
+  every one of these — the exact supply-chain shape TASK-969 closed for `[pr-rebase] smoke_check`.
+
+  FLAGGED SITES (survey at fe09d7678e; line numbers approximate)
+
+  1. `[notify] command` — notify.rs:366 NotifyConfig::load, executed via `sh -c`
+     (run_command_bounded, notify.rs:671). Reached from `aida notify`/`watch`, session_reap passive
+     checks, drain finalize, shift, supervise, and mirror-failure notices. A committed config.toml on
+     a drained branch gets arbitrary code execution. This is the TASK-969 hole, one section over.
+     SEVERITY: the worst of the set.
+  2. `[behavior] permission_mode` — lib.rs:113029 read_behavior_permission_mode (used by
+     queue_cmd.rs:10803). Passed unchecked as `claude --permission-mode <v>`, so a branch can set
+     `bypassPermissions`. The gate_agent_bypass consent prompt only covers interactive,
+     non-orchestrated launches; `--no-human` launches pass it through.
+  3. `[contained] enable / os_wrap / read_allowlist / allowed_hosts / managed_domains_only` —
+     session.rs:2176-2376, lib.rs:29755. A branch can turn the bwrap sandbox off, replace the
+     read-only bind set, or widen network egress. `[contained] enable` is applied last and overrides
+     the user's ~/.aida/agents.toml.
+  4. `[terminal] send_token` — terminal_cmd.rs:590. A credential in a tracked file, passed to
+     `busctl … SendToken` (keystroke injection).
+  5. `[preflight] guards` — implementer_preflight.rs:104. Branch-chosen CI step names whose `run:`
+     bodies execute via `bash -c` out of the branch's own ci.yml. Mitigating: the branch already
+     controls what its own build/test run executes, so this adds little NEW authority — but the
+     drain-side execution is outside the normal test envelope. Decide, don't assume.
+  6. `[worktree_pool] worktree_parent` — lib.rs:65530 (~-expanded path deciding where worktrees are
+     created) and `store_path` / `[deployment] store_path` — store_locate.rs:292, lib.rs:70733,
+     aida-tui redesign/store.rs:872 (the directory every store write goes to). Data-location paths,
+     not executables — but a committed redirect moves writes somewhere the operator did not choose.
+  7. `[[schedule.jobs]] command|prompt` — maintenance_schedule.rs:500. `command` is allowlisted to
+     fixed aida subcommands (including `shift tick`, which launches drains); `prompt` is free text
+     delivered to an agent seat (prompt-injection surface, not code execution).
+
+  NOT flagged (closed-enum or already-trusted): vendor/model selectors ([agents], [dispatch.routing],
+  [orchestrator] headless_vendor, [forge] provider — fixed value lists), [pr-rebase] smoke_check
+  (trusted default-branch copy via trusted_config), [worktree_pool] post_create/pre_destroy hooks
+  (home file only), [review] acceptance command policy (home file only).
+
+  SUGGESTED REMEDIATION DIRECTION (advisor to confirm/decompose)
+
+  Route each authority key through `trusted_config::read_trusted_config_toml` (default-branch copy,
+  fail-closed) the way TASK-969 did for smoke_check, or relocate it to `~/.aida/config.toml` /
+  agents.toml when it is really operator-machine policy (send_token, contained posture,
+  permission_mode). The data-location paths (6) need their own decision: store_path is load-bearing
+  bootstrap (the committed file is HOW a clone finds its store), so it is probably a documented
+  exception, not a fix.
+
+  RELATION TO BUG-1723
+
+  BUG-1723 lands the doctrine, the enumerated classification (scripts/config-trust.toml), and the
+  guard test (bug_1723_config_trust_tests.rs). The guard FREEZES the keys above in a
+  GRANDFATHERED_AUTHORITY list referencing this bug, so no NEW authority key can be added while this
+  bug is open, and fixing a key here means deleting its grandfather entry — the guard then enforces
+  the fix forever. Each item fixed should remove its entry in the same PR.
+
+  ACCEPTANCE (initial; advisor may decompose this bug into per-subsystem children)
+
+  1. Each flagged key above is either (a) read through trusted_config fail-closed, (b) relocated
+     outside the worktree, or (c) explicitly dispositioned as a documented exception with its reason
+     recorded here — per key, no blanket disposition.
+  2. Every resolved key's entry is removed from GRANDFATHERED_AUTHORITY in
+     bug_1723_config_trust_tests.rs, and the guard passes with the entry gone (which proves the
+     worktree copy no longer feeds it).
+  3. A regression test per fixed key proves the branch-local value is ignored (the
+     trusted_config::tests::reads_default_branch_copy_not_worktree_copy pattern).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T18:30:23.822947124Z
+modified_at: 2026-10-02T18:30:23.822947124Z
+req_type: Bug
+tags:
+- config-trust
+- security
+- supply-chain
+filed_at:
+  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
+  branch: bug-1723-work
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: d5ee562a-7ce2-403d-8384-8ef61700260f
