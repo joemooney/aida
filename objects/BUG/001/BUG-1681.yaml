@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:51:56.911021216Z
-modified_at: 2026-10-02T13:36:06.037741864Z
+modified_at: 2026-10-02T14:02:19.047156150Z
 req_type: Bug
 comments:
 - id: 01a0dfef-386d-79a3-8fb7-6b6bf8f43c90
@@ -23,6 +23,69 @@ comments:
   created_at: 2026-09-27T14:14:48.453428869Z
   modified_at: 2026-09-27T14:14:48.453428869Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0fcec-4a27-7760-8ffe-37c401f26744
+  author: joe
+  content: |
+    Implemented on branch `bug-1681-work`, PR #2337, head `d52dd2b6bb`.
+
+    ## Provenance: this was a salvage, and it resolves an 8-session open question
+
+    The 13 uncommitted files that have sat in the operator's checkout
+    `/home/joe/ai/aida` for eight relay sessions are **an earlier, rougher draft of
+    this very fix**, mixed with a stray BUG-1687 test file. Both lanes had ALREADY
+    been salvaged onto branches (`claude/bug-1681` and `claude/bug-1687`, each one
+    `wip: salvage ...` commit, no PR), so the operator's dirty tree is a
+    **duplicate** and is safe to discard.
+
+    The branch was far more complete than the loose draft (123 lines in
+    `dispatch_health_ps.rs` vs 4; a 379-line fixture file the draft had none of), so
+    the branch was the starting point. The loose draft would also have failed
+    `Check formatting` and carried an `is_done` expression whose `&&`/`||`
+    precedence read as a bug.
+
+    ## Merging forward
+
+    `claude/bug-1681` was cut at `7201317922`, so the merge was real, not a replay.
+    Two conflicts, both genuine and both resolved toward main:
+
+    - `awaiting_you.rs` — main had refactored the orphan state wording into a shared
+      `orphaned_state_label` (BUG-1739). Kept main's shared classifier and moved the
+      BUG-1681 wording change *inside* it, so agent mode and human mode cannot drift.
+    - `lib.rs` — a module-registration collision with BUG-1680. Both registrations kept.
+
+    One further break the merge could not see: `live_fanout_harness_lease_detects_generic_harness_only`
+    is **new on main**, added after the branch point, and called the boolean helper
+    this fix renames. Ported to `ps_live_fanout_leases`, TASK-1064's selection rule
+    unchanged and still pinned, plus an assertion on the returned lease *identity* —
+    which is the property that makes per-spec attribution possible at all.
+
+    ## Evidence (all on the final tree)
+
+    - `bug_1681` → **8 passed, 0 failed**; `story_696_ps` 46; `bug_1656` 18;
+      `bug_1523` 3; `awaiting` 128 — all 0 failed.
+    - `make check-ci-fast` → **16 gates passed**. `cargo clippy` exit 0 with no new
+      diagnostic; the two `never used` warnings in `dispatch_health_ps.rs` are
+      pre-existing (test-only callers, caller counts byte-identical to main).
+    - **Four mutation proofs, one per direction of each discriminator** — a single
+      mutation leaves a control whose observable result equals the pre-fix
+      behaviour, which an independent reviewer would rightly call out. Full table in
+      the PR body. The key rows: dropping the evidence gate fails *exactly* the
+      evidence-gate test and nothing else; reverting attribution to
+      any-fan-out-anywhere fails the two must-not-attribute tests and leaves the
+      does-attribute control green.
+    - Mutations applied by `cp` + restore, verified byte-identical with `diff -q`.
+      Never `git stash`.
+
+    ## Pre-existing expectations that moved
+
+    `ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves`
+    (BUG-1521) now expects `subagent` rather than the internal `general-purpose`
+    placeholder. BUG-1521's actual invariant is twofold — the row is never left
+    roleless, and the recorded placeholder survives as provenance in `lease_role` —
+    and both are still explicitly asserted. Only the label changes, which is AC3.
+  created_at: 2026-10-02T14:02:19.047156150Z
+  modified_at: 2026-10-02T14:02:19.047156150Z
+  session_id: bda69c2d-94ea-4e14-802c-29cc2207a98f
 history:
 - id: 01a0e354-b71b-7f90-93eb-a7ccad6dbafb
   author: aida-session-start
