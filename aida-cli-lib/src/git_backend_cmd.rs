@@ -3296,8 +3296,11 @@ pub(crate) fn handle_git_backend_command(
                 req.owner = o.clone();
             }
             if let Some(t) = tags {
-                for tag in t.split(',') {
-                    req.tags.insert(tag.trim().to_string());
+                // BUG-1770: one shared parser for every `--tags` write path, so
+                // a whitespace blob cannot be created here and the rule cannot
+                // drift between `add` and `edit`. trace:BUG-1770 | ai:claude
+                for tag in parse_tag_list(t)? {
+                    req.tags.insert(tag);
                 }
             }
             if let Some(effort) = effort {
@@ -5969,14 +5972,13 @@ pub(crate) fn handle_git_backend_command(
                 // visible. `--add-tag` / `--remove-tag` are the incremental forms
                 // (kept mutually exclusive with `--tags` by clap's conflicts_with).
                 // trace:BUG-545 | ai:claude
+                // BUG-1770: parse and validate the replacement set BEFORE
+                // clearing the old one — a refusal must leave the spec's tags
+                // exactly as they were. trace:BUG-1770 | ai:claude
+                let replacement = parse_tag_list(t)?;
                 let old_tags = req.tags.clone();
                 req.tags.clear();
-                for tag in t.split(',') {
-                    let trimmed = tag.trim();
-                    if !trimmed.is_empty() {
-                        req.tags.insert(trimmed.to_string());
-                    }
-                }
+                req.tags.extend(replacement);
                 // trace:BUG-1252 | ai:codex
                 force_dropped_structural_tags =
                     enforce_structural_tag_replacement(&old_tags, &req.tags, *force)?;
@@ -5995,7 +5997,12 @@ pub(crate) fn handle_git_backend_command(
             // forms mutually exclusive. Adding a present tag or removing
             // an absent one is a graceful no-op.
             // trace:TASK-351 | ai:claude
-            if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
+            // BUG-1770: keep the REPORT, not just the bool. A `--remove-tag`
+            // that matched nothing used to fall through to the generic
+            // "No changes specified" line, which tells the caller to pass a
+            // flag they already passed. trace:BUG-1770 | ai:claude
+            let tag_report = apply_tag_deltas_report(&mut req.tags, add_tag, remove_tag)?;
+            if tag_report.changed() {
                 changed = true;
             }
             // TASK-524: typo guard — a `lifecycle:*` tag that isn't a recognized
@@ -6176,6 +6183,16 @@ pub(crate) fn handle_git_backend_command(
                     EditCompletionRender::Updated => println!("Updated: {}", id),
                 }
 
+                // BUG-1770: say what the tag flags actually did, on the success
+                // path too. A caller who removes two tags and mistypes one
+                // currently sees only "Updated" and cannot tell. The lines are
+                // emitted whenever tag flags were passed, including the partial
+                // case where some matched and some did not.
+                // trace:BUG-1770 | ai:claude
+                for line in tag_report.summary_lines() {
+                    println!("  {line}");
+                }
+
                 // TASK-928 (SPIKE-71): a tag edit that introduces a
                 // `parent:<SPEC-ID>` tag must materialize the real bidirectional
                 // edge too (same gap as `aida add`). Only fires when tags were
@@ -6304,7 +6321,19 @@ pub(crate) fn handle_git_backend_command(
                 // trace:STORY-1434 | ai:claude
                 && carve_out.is_none()
             {
-                println!("No changes specified. Use --title, --status, --priority, etc.");
+                // BUG-1770: only say "no changes SPECIFIED" when none were.
+                // If tag flags were passed and matched nothing, say THAT —
+                // conflating the two is what made a no-op indistinguishable
+                // from success and hid this class long enough to be found by
+                // accident. trace:BUG-1770 | ai:claude
+                let tag_lines = tag_report.summary_lines();
+                if tag_lines.is_empty() {
+                    println!("No changes specified. Use --title, --status, --priority, etc.");
+                } else {
+                    for line in tag_lines {
+                        println!("{line}");
+                    }
+                }
             }
 
             // TASK-1176: record the supersede lineage AFTER the scalar save,

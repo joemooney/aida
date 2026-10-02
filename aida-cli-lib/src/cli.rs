@@ -9076,7 +9076,8 @@ pub enum Command {
         #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
-        /// Tags for the requirement (comma-separated)
+        /// Tags for the requirement (comma-separated). A tag may not contain
+        /// whitespace: `--tags "a b"` is refused, `--tags a,b` is two tags.
         #[clap(long)]
         tags: Option<String>,
 
@@ -9864,7 +9865,8 @@ pub enum Command {
         #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
-        /// New tags (comma-separated, replaces existing).
+        /// New tags (comma-separated, replaces existing). A tag may not
+        /// contain whitespace: `--tags "a b"` is refused, `--tags a,b` is two.
         /// Use --add-tag/--remove-tag for partial edits that don't clobber.
         #[clap(long)]
         tags: Option<String>,
