@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T06:53:48.209612245Z
+modified_at: 2026-10-02T14:10:26.274365066Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -47,6 +47,96 @@ comments:
   content: 'I was able to reproduce the bug and verify that `aida list --status deferred` was failing because ''deferred'' is not a value in the RequirementStatus enum. \n\nI fixed it by:\n1. Updating `aida list`''s argument parsing in `aida-cli-lib/src/git_backend_cmd.rs` to explicitly intercept the `--status deferred` positional/flag shorthand. It now applies the deferred list-filter and bypasses the enum deserialization.\n2. In `aida show`, if `req.deferred` is true, the human output surfaces `Status: · Deferred (was <Status>)` prominently, and the TOON output emits `status: deferred` directly, so both surfaces agree and agents no longer read stale non-deferred status.\n\nAdded an integration test in `aida-cli-lib/src/tests/bug_1687_defer_status_tests.rs` covering both surfaces and the round trip.'
   created_at: 2026-10-02T06:53:48.209612245Z
   modified_at: 2026-10-02T06:53:48.209612245Z
+- id: 01a0fcf3-b962-7f52-a630-d3d967b262b7
+  author: joe
+  content: |-
+    Advisor design sketch + signoff (relay session #18, 2026-10-02). Supersedes the
+    approach in PR #2336, which does not compile.
+
+    ## Why PR #2336 must not be fixed in place
+
+    `aida-cli-lib/src/tests/bug_1687_defer_status_tests.rs` is written against an
+    API that does not exist anywhere in the workspace:
+
+    - `use crate::tests::test_env::TestEnv` — test files are registered as TOP-LEVEL
+      modules via `#[cfg(test)] #[path = "tests/x.rs"] mod x;`, so the helper path is
+      `crate::test_env` (lib.rs:339). There is no `crate::tests`. Hence E0433.
+    - `crate::git_backend_cmd::{handle_list_command, handle_show_command}` — neither
+      function exists, and `git log -S "fn handle_list_command"` finds no commit that
+      ever added one. git_backend_cmd.rs has exactly two `pub(crate) fn`:
+      `list_json_status_label_lens` and `handle_git_backend_command`. The list filter
+      logic is INLINE in the 7200-line `handle_git_backend_command` match
+      (the status-filter arm is at git_backend_cmd.rs:1805). Hence E0432.
+    - Corroborating evidence: an untracked `git_backend_cmd.rs.rej` in the operator
+      checkout shows a patch rejected against a hunk header
+      `pub(crate) fn handle_list_command(` at line 1799 — the invented factoring.
+
+    The file also ships committed deliberation ("but wait, the test requires
+    show/list agreement"), covers at most AC2/AC4, and leaves AC1 and AC3 untested.
+
+    ## The fix shape (signed off)
+
+    Do NOT add a `RequirementStatus::Deferred` variant. Deferral is orthogonal to
+    status, and AC3 ("un-deferring restores the prior status") positively requires
+    the stored status to survive a defer. An enum variant would also break every
+    match arm and struct literal in the workspace for no gain.
+
+    Instead, deferral becomes a PRESENTATION-level status override, reusing the
+    mechanism already in the tree for exactly this ("a stored Approved decision is
+    displayed as Accepted" — `status_display::display_status_for_type`, BUG-1502).
+    `defer_single` (defer_cmd.rs:26) already leaves `status` untouched, so AC3 is
+    satisfied by construction and needs only a round-trip fixture.
+
+    1. **AC1 — `aida show` must not read needs-attention / in-progress.**
+       `status_display::needs_attention_lens` (status_display.rs:75) is the existing
+       "parked" classifier, and `parked_status_badge` (status_display.rs:259) already
+       routes the human Status line through it. Today the lens returns `None` for
+       anything whose status is not `NeedsAttention`, and it never reads
+       `req.deferred`. Add a `NeedsAttentionLens::Deferred { trigger }` arm that
+       - is checked BEFORE the `NeedsAttention` gate (a deferred spec may sit at any
+         status), and
+       - carries `req.deferred_until` as the label detail, falling back to the legacy
+         `deferred:*` tag suffix the way `print_deferred_triggers` (lib.rs:11803)
+         already does.
+       The human show line then fixes itself through `parked_status_badge`.
+
+    2. **AC1, agent surface.** The TOON single-spec renderer bypasses the badge: it
+       emits `toon_status_token(&effective_status_str)` directly
+       (git_backend_cmd.rs:4468, token fn at lib.rs:2948). Route it through the same
+       deferral override so `aida show` under AGENT-MODE reads `status: deferred`,
+       and emit `deferred_until` as its own scalar beside it. This is the surface
+       that misled both agents in the filed report, so it is the one that must be
+       proved by fixture.
+
+    3. **AC2 — `aida list --status deferred`.** `--deferred` already exists as a
+       lens flag (STORY-584; git_backend_cmd.rs:1888). Treat the token `deferred` in
+       `--status` as a spelling of that lens rather than a status: in the
+       `raw_status` arm at git_backend_cmd.rs:1805, intercept `deferred` before
+       `RequirementStatus::expand_filter_spec` (which will otherwise reject it with
+       "Unknown status filter") and set the deferred lens instead. The rejected
+       `.rej` hunk had this part right; it is the only salvageable idea in #2336.
+       Keep `--status deferred,approved` honest — either support the mixed set or
+       refuse it with a message naming `--deferred`; do not silently drop a token.
+
+    4. **AC3 / AC4 — fixtures.** Four tests in a NEW
+       `aida-cli-lib/src/tests/bug_1687_defer_status_tests.rs` registered as a
+       top-level `mod` in lib.rs: (a) show-surface reads deferred, not the stored
+       needs-attention; (b) `--status deferred` returns the deferred spec and
+       `--status needs-attention` does NOT claim it; (c) defer -> undefer round trip
+       restores the stored status unchanged; (d) one test asserting the defer
+       command, the show surface and the list surface agree on a single answer.
+
+    ## Verification discipline for the implementer
+
+    - Prove each fixture fails without the fix (revert the override, re-run) — a
+      test that passes either way advertises coverage that does not exist.
+    - The list-filter change touches `handle_git_backend_command`, which is reached
+      by aida-cli INTEGRATION tests, not only `-p aida-cli-lib --lib`. Run
+      `make check-ci-fast` before pushing; a `--lib` filter cannot see the
+      format-json audit or the CLI-surface guards.
+  created_at: 2026-10-02T14:10:26.274365066Z
+  modified_at: 2026-10-02T14:10:26.274365066Z
+  session_id: 6b6263ef-7534-4ca6-873c-25ab949a24ae
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
