@@ -1,0 +1,40 @@
+id: 01a0fe42-9267-7753-9d2a-839091b9289a
+spec_id: TASK-1570
+agreed_id: TASK-1570
+title: Disable all macOS CI legs until further notice (operator mandate 2026-10-02)
+description: |
+  Operator mandate (2026-10-02 13:14 MST, relayed in-session): "I don't have any need for
+  macOS and should disable it in the CI until further notice."
+
+  Scope — disable every macOS leg in CI, commented out (not deleted) with a dated marker so
+  restoring is a one-line revert per site:
+
+  1. .github/workflows/cross-platform.yml — remove `macos-latest` from the nightly/PR build
+     matrix (leaves windows-latest). This also mutes the BUG-1776 macOS nightly reds.
+  2. .github/workflows/ci.yml — drop the `aarch64-apple-darwin` target from the report-only
+     cross-target cargo check (TASK-1205 step); keep the Windows target.
+  3. .github/workflows/ci.yml — comment out the `macos-latest` entry in the tag-only release
+     artifact matrix (no aida-macos-x86_64 artifact until re-enabled).
+
+  Out of scope (flagged for operator): .github/workflows/release.yml still builds
+  x86_64/aarch64 darwin artifacts on release tags. Left untouched because the mandate said
+  "in the CI"; say the word and it gets the same treatment.
+
+  Acceptance: no workflow job schedules a macos-latest runner on PR, nightly, or ci.yml tag
+  builds; each disabled site carries a comment naming this spec and "until further notice";
+  cross-platform.yml still runs its Windows leg.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T20:16:10.855559954Z
+modified_at: 2026-10-02T20:16:10.855559954Z
+req_type: Task
+filed_at:
+  code_sha: 2779659ec636e12e5076c52efedf61147fbcd850
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 36d8236a-e4eb-4af0-8043-25d75751b21d
