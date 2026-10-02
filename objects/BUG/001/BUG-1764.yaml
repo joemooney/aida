@@ -67,12 +67,12 @@ description: |
   5. Fixture test per clause. The collision case is reproducible without root: record
      a lease with `pid = 2` and a `pid_start_time` later than boot, and assert it reads
      dead.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T04:13:57.890825536Z
-modified_at: 2026-10-02T07:50:09.253194536Z
+modified_at: 2026-10-02T07:50:39.585481529Z
 req_type: Bug
 comments:
 - id: 01a0fadc-8d6e-7bf3-83c1-859dc5980e29
@@ -426,6 +426,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fb98-055f-7b10-a7fe-5ef051e690d9
+  author: aida-auto-bump
+  timestamp: 2026-10-02T07:50:39.199813975Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fb98-06e1-7223-bcce-aee573a29ec0
+  timestamp: 2026-10-02T07:50:39.585480207Z
+  agent: advisor
+  commit_sha: 85acb8543994c1f103eb343531ae48a8b47b85bb
+  summary: Completed via merge 85acb854
 filed_at:
   code_sha: 85aea1c60fcc36a4c4756fd8047c6342208616c5
   branch: main
@@ -438,3 +451,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-02T07:50:09.253194536Z
   implemented_by: joe
+  completed_at: 2026-10-02T07:50:39.199787465Z
+  completion_sha: 85acb8543994c1f103eb343531ae48a8b47b85bb
