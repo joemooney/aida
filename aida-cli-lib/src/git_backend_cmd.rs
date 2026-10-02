@@ -1802,22 +1802,29 @@ pub(crate) fn handle_git_backend_command(
             let exact_draft_view = raw_status
                 .as_deref()
                 .is_some_and(crate::status_spec_is_exact_draft);
+            // trace:BUG-1687 | ai:codex
+            let mut was_status_deferred_shortcut = false;
             let status: Option<String> = match raw_status {
                 Some(spec) => {
-                    let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
-                        .map_err(|tok| {
-                            anyhow::anyhow!(
-                                "Unknown status filter '{tok}'. Use a status \
-                                 (draft, approved, planned, in-progress, done, \
-                                 completed, rejected, needs-attention), an alias \
-                                 (open, closed), or a comma-separated set \
-                                 (draft,approved). To filter by something else \
-                                 try --type, --tags, or `aida search`."
-                            )
-                        })?;
-                    // expand_filter_spec returns canonical cache-keys; join
-                    // them back into the comma-OR spec the cache understands.
-                    Some(expanded.join(","))
+                    if spec.to_lowercase() == "deferred" {
+                        was_status_deferred_shortcut = true;
+                        None
+                    } else {
+                        let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
+                            .map_err(|tok| {
+                                anyhow::anyhow!(
+                                    "Unknown status filter '{tok}'. Use a status \
+                                     (draft, approved, planned, in-progress, done, \
+                                     completed, rejected, needs-attention), an alias \
+                                     (open, closed), or a comma-separated set \
+                                     (draft,approved). To filter by something else \
+                                     try --type, --tags, or `aida search`."
+                                )
+                            })?;
+                        // expand_filter_spec returns canonical cache-keys; join
+                        // them back into the comma-OR spec the cache understands.
+                        Some(expanded.join(","))
+                    }
                 }
                 None => None,
             };
@@ -1885,7 +1892,7 @@ pub(crate) fn handle_git_backend_command(
                 .any(|t| t.starts_with("deferred:") || t.starts_with("deferred*"));
             let defer = if *all || *archived || asked_for_defer_tag {
                 aida_core::DeferFilter::Both
-            } else if *deferred {
+            } else if *deferred || was_status_deferred_shortcut {
                 aida_core::DeferFilter::DeferredOnly
             } else {
                 aida_core::DeferFilter::NonDeferredOnly
@@ -4186,11 +4193,14 @@ pub(crate) fn handle_git_backend_command(
                     // Keep the stored status separately below; consumers must
                     // not have to infer which value is presentation-only.
                     // trace:BUG-1502 | ai:codex
-                    let display_status = status_display::display_status_for_type(
+                    let mut display_status = status_display::display_status_for_type(
                         &format!("{:?}", req.req_type),
                         &effective_status_str,
                     )
                     .to_string();
+                    if req.deferred {
+                        display_status = format!("Deferred (was {})", display_status);
+                    }
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -4463,10 +4473,12 @@ pub(crate) fn handle_git_backend_command(
                             "type",
                             &format!("{:?}", req.req_type).to_ascii_lowercase(),
                         ));
-                        lines.push(crate::toon::scalar(
-                            "status",
-                            &toon_status_token(&effective_status_str),
-                        ));
+                        let toon_status = if req.deferred {
+                            "deferred".to_string()
+                        } else {
+                            toon_status_token(&effective_status_str)
+                        };
+                        lines.push(crate::toon::scalar("status", &toon_status));
                         lines.push(crate::toon::scalar(
                             "priority",
                             &format!("{}", req.effective_priority()).to_ascii_lowercase(),

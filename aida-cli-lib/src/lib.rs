@@ -113268,3 +113268,4 @@ mod bug_1650_store_resolver_tests;
 #[cfg(test)]
 #[path = "tests/bug_1670_stale_cache_callers_tests.rs"]
 mod bug_1670_stale_cache_callers_tests;
+#[cfg(test)]
