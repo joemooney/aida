@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T03:41:56.604921140Z
-modified_at: 2026-10-02T07:54:01.737883041Z
+modified_at: 2026-10-02T08:09:54.471090254Z
 req_type: Task
 comments:
 - id: 01a0fb9b-1c89-7d73-8574-45063ec260f7
@@ -168,6 +168,42 @@ comments:
     `cargo test --workspace` running, result posted to the PR.
   created_at: 2026-10-02T07:54:01.737883041Z
   modified_at: 2026-10-02T07:54:01.737883041Z
+  session_id: abe6a79a-f09b-4400-bffa-4a7992c7a025
+- id: 01a0fba9-a627-76d1-ae83-eda19a3b50fe
+  author: joe
+  content: |
+    ## Measurement: the spec undercounts its own problem by two orders of magnitude
+
+    TASK-1564's description cites **two** currently-approved phase-failure records
+    (`BUG-1713`, `BUG-1716`) as "the shape of the problem". Counted against the
+    store objects rather than a capped `aida list`:
+
+    ```
+    find .aida-store/objects -name '*.yaml'                     → 4728 spec objects
+    find .aida-store/objects/BUG -name '*.yaml'                 → 1478 BUG objects
+    grep -rl '^title: .auto-complete failure: phase' objects/   →  424 phase-failure records
+    ```
+
+    **424 spec objects in this store exist only because a drain phase failure filed
+    one.** That is **28.7% of every BUG ever filed here** and 9.0% of the whole
+    spec graph. Two are still sitting at Approved; the rest were triaged and
+    rejected, which is the cost — a human disposition per record.
+
+    `aida search "auto-complete failure: phase"` returns exactly **200**, which is a
+    result cap, not a count. `aida list --type bug --status <s>` adds to 28 across
+    all statuses for the same reason. Neither surface can answer "how many", which
+    is part of why the spec's framing was two.
+
+    The mechanism was also **still producing them during this session**: `BUG-1824`
+    ("phase 1 (implementer) on BUG-1819") and `BUG-1826` ("phase 2 (ci) on
+    BUG-1823") were filed and rejected at 2026-10-02T02:13Z, hours before this fix
+    landed on a branch.
+
+    This does not change the implementation — the fix is the same either way — but
+    it changes how the work should be read: this was not a two-item annoyance, it
+    was the single largest filer of specs in the project.
+  created_at: 2026-10-02T08:09:54.471090254Z
+  modified_at: 2026-10-02T08:09:54.471090254Z
   session_id: abe6a79a-f09b-4400-bffa-4a7992c7a025
 history:
 - id: 01a0fab4-97bb-7500-ad79-5d23a03c55b9
