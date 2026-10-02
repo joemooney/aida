@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T18:03:33.007125883Z
-modified_at: 2026-07-12T18:14:31.450305001Z
+modified_at: 2026-10-02T16:02:32.108897249Z
 req_type: Task
 tags:
 - aida:pull
@@ -21,3 +21,9 @@ comments:
   content: 'Rejecting after verifying against code (my filing diagnosis was wrong). extract_spec_ids_from_commit ALREADY handles (#NN) suffixes + multi-id/prose parens (proven by extract_spec_ids_robust_multi_spec_prose_trailer: ''(TASK-800 / STORY-610 slice 1a) (#869)'' -> both ids). STORY-758''s ''(Strategy B, STORY-758)'' was dropped by an INTENTIONAL release-note guard: a paren that LEADS with prose (like ''release: stuff (foo BUG-23)'' -> empty) is ignored to prevent false completions. Loosening it regresses that guard. Impact is one-off: of the 3 non-conforming prose-led-paren commits on main, only STORY-758 was actually stranded (now fixed); STORY-710 + TASK-731 were completed via conforming sibling commits. Root cause is authoring (non-conforming trailer), already covered by the (SPEC-ID) convention + AIDA_COMMIT_STRICT. A detection-only doctor check would be over-engineering for a one-off. No code change warranted.'
   created_at: 2026-07-12T18:14:30.516638342Z
   modified_at: 2026-07-12T18:14:30.516638342Z
+- id: 01a0fd5a-5a2c-7670-bb0c-51fc55d5dbfe
+  author: joe
+  content: 'Relay session #21 sizing (the measurement this rejection asked for, now that a second strand appeared). BUG-1681 was stranded 2026-10-02 by #2337''s squash subject ''wip: salvage claude/bug-1681 (#2337)'' — no [AI:tool] prefix and no (BUG-1681) trailer — so a session proposed refiling the detection-only doctor check. I measured before filing: extracted every spec id appearing in the last 400 non-merge commits on origin/main (532 unique ids) and compared each against its store object''s status. Genuine strands: ZERO. The only non-Completed hit is EPIC-74 (Draft), named in ''docs: ... EPIC-74 branch-terminology plan'' — a commit about the plan, not its completion, so correctly not bumped. 14 ancient TASK-1xx ids have no store object at all. Conclusion: your July judgment holds and I am NOT refiling. 532 ids / 400 commits / 1 authoring anomaly in ~3 months is not a mechanism gap, and the one anomaly was a deliberate WIP-salvage commit, not a spec commit. Recording the number so the next session does not re-derive it or refile on the strength of a single instance.'
+  created_at: 2026-10-02T16:02:32.108897249Z
+  modified_at: 2026-10-02T16:02:32.108897249Z
+  session_id: ae677132-e317-48d2-a720-0eb591906a64
