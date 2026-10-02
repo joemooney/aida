@@ -53,8 +53,78 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T06:06:38.663034493Z
-modified_at: 2026-09-29T06:06:38.663034493Z
+modified_at: 2026-10-02T10:46:41.605556096Z
 req_type: Bug
+comments:
+- id: 01a0fc39-30c5-7543-9388-2868c8fdbc2d
+  author: joe
+  content: |
+    Advisor disposition (relay session #12, 2026-10-02): APPROVED, with the open
+    question ANSWERED by evidence and acceptance criteria added.
+
+    ## The filing's premise is confirmed, and the mechanism is sharper than filed
+
+    The filing asked whether config.toml is trusted "because it is expected to be
+    reviewed, or because it is gitignored in practice, or nothing but history". It is
+    none of those three. Measured on main at 30638a79ea:
+
+    | file | tracked by git? | ignore rule |
+    |---|---|---|
+    | `.aida/config.toml` | **YES** (`git ls-files --error-unmatch` succeeds) | `.gitignore:87` `.aida/*` deny-by-default, **explicitly overridden** by `.gitignore:90` `!.aida/config.toml` |
+    | `.aida/session-env.sh` | **NO** (unknown to git) | ignored via `.git/info/exclude:19` |
+
+    `.gitignore:84-85` states the governing rule in the repository's own words:
+    "tracking a new project-config file requires adding an explicit `!.aida/<name>`
+    line." So config.toml's committability is a deliberate, named opt-in, not an
+    accident of history -- and that makes the filing's premise STRONGER, not weaker:
+    a branch can commit its own config.toml by design, which is exactly the
+    criterion BUG-1624 used to declare session-env.sh untrusted.
+
+    The real distinction between the two files is reviewability: config.toml is
+    tracked, so a change to it appears in a diff; session-env.sh is never committed,
+    so it is never reviewed. That justifies trusting config.toml for POLICY values.
+    It does not justify trusting it for launch authority, because the reviewer of an
+    agent-authored branch may itself be an agent.
+
+    ## Live-breach claim re-verified: still preventive
+
+    `agent_registry::Config` (the path in the filing is off by one crate -- it is
+    **aida-cli-lib/src/agent_registry.rs:301**, not aida-core) reads exactly three
+    keys, all policy: `busy_threshold_secs`, `work_grace_secs`, `singleton_roles`.
+    The only other non-test reader of `.aida/config.toml` is
+    `project_capabilities::write_capabilities` (project_capabilities.rs:371), which
+    is a WRITER of `[project.capabilities]`, not an authority reader. No key selects
+    an executable, a path, or a credential today. Preventive, as filed.
+
+    ## Acceptance criteria
+
+    1. The doctrine is written down where a reviewer will meet it -- a comment at the
+       `Config` definition and a line in the contributor-facing docs -- in this form:
+       a value read from `.aida/config.toml` may tune POLICY (timeouts, thresholds,
+       role lists); it may NOT select an executable, a filesystem path, or a
+       credential. Those must come from the running binary or from outside the
+       worktree.
+    2. A guard test enumerates every key read from `.aida/config.toml` and asserts
+       each is a policy value. The guard must FAIL when a key that names an
+       executable or a path is added -- prove it by adding one in the test and
+       asserting the guard rejects it, then removing it. A guard that cannot fail
+       advertises coverage that does not exist.
+    3. Control: the three keys that exist today
+       (`busy_threshold_secs`, `work_grace_secs`, `singleton_roles`) pass the guard
+       unchanged, and a missing file / section / key still falls through to defaults
+       without erroring -- the STORY-435 behaviour documented at agent_registry.rs:295
+       must not regress.
+    4. The 2026-09-28 AIDA_BIN precedence decision, which ranks an "on-disk
+       `.aida/config.toml` override" above the running executable, is reconciled with
+       AC1 -- either amended, or recorded as a deliberate exception with its reason.
+       This is the one item that may need the operator: it reverses part of a
+       decision the operator already took. Do not silently implement AC1 in a way
+       that contradicts it.
+
+    Scope: documentation + guard only. No behaviour change to any existing key.
+  created_at: 2026-10-02T10:46:41.605556096Z
+  modified_at: 2026-10-02T10:46:41.605556096Z
+  session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
