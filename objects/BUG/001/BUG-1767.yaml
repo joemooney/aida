@@ -135,12 +135,12 @@ description: |
      derivation annotation (EPIC-74 / TASK-1565 shape above).
   4. Each new assertion is mutation-proven: reverting the production change turns
      that assertion red, and no other test in the file changes colour.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:05:44.820925638Z
-modified_at: 2026-10-02T22:21:51.352168718Z
+modified_at: 2026-10-02T22:22:12.952437376Z
 req_type: Bug
 comments:
 - id: 01a0fc1b-6260-7050-8448-3e53502762f7
@@ -231,6 +231,13 @@ history:
   - field_name: status
     old_value: Planned
     new_value: Approved
+- id: 01a0feb5-f5d8-74d0-81b8-623ee9e79014
+  author: aida-session-start
+  timestamp: 2026-10-02T22:22:12.952436967Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
   branch: main
