@@ -106436,7 +106436,10 @@ impl RealPhaseDriver {
         self.retract_publication_with_notice(branch, &note);
     }
 
-    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) {
+    /// Returns whether the change was actually closed; `false` covers every
+    /// arm that deliberately leaves it open (foreign or unverified ownership,
+    /// no PR found, or a failed close call).
+    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) -> bool {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
             // A same-branch PR may have been opened by an operator while the
             // implementer was running. Branch presence alone does not prove
@@ -106471,7 +106474,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return;
+                    return false;
                 }
                 RetractionOwnership::Unverified => {
                     if !self.json {
@@ -106482,7 +106485,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return;
+                    return false;
                 }
             }
             let change = crate::forge::ChangeRef {
@@ -106492,7 +106495,7 @@ impl RealPhaseDriver {
                 base: String::new(),
                 title: Some(pr.title.clone()),
             };
-            match forge.close_change(&change, &note) {
+            match forge.close_change(&change, note) {
                 Ok(()) => {
                     if !self.json {
                         eprintln!(
@@ -106502,6 +106505,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
+                    true
                 }
                 Err(e) => {
                     if !self.json {
@@ -106512,8 +106516,11 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
+                    false
                 }
             }
+        } else {
+            false
         }
     }
 
@@ -106574,6 +106581,13 @@ impl RealPhaseDriver {
                 );
             }
         }
+        let change = crate::forge::ChangeRef {
+            id: number,
+            url: pr.url.clone(),
+            branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+            base: String::new(),
+            title: Some(pr.title.clone()),
+        };
         if let (Err(marker_error), Err(label_error)) = (&marker_result, &label_result) {
             let notice = format!(
                 "Publication guards could not complete, and the merge-hold could not be applied.\n\n\
@@ -106588,16 +106602,31 @@ impl RealPhaseDriver {
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
-            self.retract_publication_with_notice(branch, &notice);
+            if !self.retract_publication_with_notice(branch, &notice) {
+                // The PR could be neither held nor closed. The last honest
+                // lever is a comment: put the warning ON the PR so whoever
+                // can merge it sees that the work is unverified.
+                let warning = format!(
+                    "Publication guards could not complete, and the merge-hold could not \
+                     be applied.\n\n\
+                     Merge-hold marker error: {marker_error}\n\
+                     Merge-hold label error: {label_error}\n\n\
+                     This PR could be neither held nor closed: it is OPEN and UNVERIFIED \
+                     and must not merge unreviewed. The guards will be retried on the \
+                     next publication attempt.\n\n{detail}"
+                );
+                if let Err(e) = self.project_forge().comment(&change, &warning) {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{number} is OPEN, UNVERIFIED, and carries no hold \
+                             layer — could not even warn on it: {e}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        );
+                    }
+                }
+            }
             return;
         }
-        let change = crate::forge::ChangeRef {
-            id: number,
-            url: pr.url.clone(),
-            branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
-            base: String::new(),
-            title: Some(pr.title.clone()),
-        };
         let note = implementer_preflight::inconclusive_hold_notice(detail);
         if let Err(e) = self.project_forge().comment(&change, &note) {
             if !self.json {
@@ -109079,6 +109108,54 @@ mod forge_seam_tests {
         // label error may legitimately say "refusing to call `gh`".)
         assert!(!notice.contains("guards refused"), "{notice}");
         assert!(!notice.contains("Closed automatically:"), "{notice}");
+    }
+
+    #[test]
+    fn inconclusive_preflight_warns_on_the_pr_when_it_can_neither_hold_nor_close() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(46, "claude/bug-1714"));
+        // A foreign author forbids the close; with both hold layers down the
+        // last lever is a warning comment on the PR itself.
+        forge.author = Some("operator".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        let detail = "guard `Run clippy` could not complete: timed out";
+        driver.hold_inconclusive_publication("claude/bug-1714", detail);
+
+        assert!(
+            forge.closed().is_empty(),
+            "a foreign PR must not be closed: {:?}",
+            forge.closed()
+        );
+        let commented = forge.commented();
+        assert_eq!(
+            commented.len(),
+            1,
+            "an uncloseable unheld PR must carry a warning comment: {commented:?}"
+        );
+        assert_eq!(commented[0].0, 46);
+        let warning = &commented[0].1;
+        assert!(warning.contains("Merge-hold marker error:"), "{warning}");
+        assert!(warning.contains("Merge-hold label error:"), "{warning}");
+        assert!(warning.contains("neither held nor closed"), "{warning}");
+        assert!(warning.contains("OPEN and UNVERIFIED"), "{warning}");
+        assert!(warning.contains("guards will be retried"), "{warning}");
+        // The PR stayed open, so the comment must not claim it was closed.
+        assert!(!warning.contains("was closed"), "{warning}");
     }
 
     #[test]
