@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-10-02T19:03:25.084053970Z
+modified_at: 2026-10-02T19:05:35.136727379Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -140,6 +140,51 @@ comments:
   created_at: 2026-10-02T19:03:25.084053970Z
   modified_at: 2026-10-02T19:03:25.084053970Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
+- id: 01a0fe01-f0a0-7f43-9da6-7d65e2948a25
+  author: codex-advisor
+  content: |-
+    ADVISOR SIGNOFF TRAIL (rounds 2-3, codex read-only):
+
+    --- round 2 verdict ---
+    VERDICT: REQUEST-CHANGES
+    CONDITION-1: discharged — Removal errors, including partial removal, produce `Declined`, and sentinel release is attempted before returning.
+    CONDITION-2: not discharged — Reusing the lexical path does not establish Git-consistent normalization, and `create_dir` can follow a symlinked parent.
+    CONDITIONS:
+    - Specify and enforce Git-consistent path normalization/validation before claiming.
+    --- round 3 resolution (product) ---
+    RESOLUTION (specification + enforcement):
+    1. ENFORCED: the clear declines (fail closed) unless `worktree_path.is_absolute()`. That removes
+       the process-cwd dependence you flagged.
+    2. ENFORCED INVARIANT: the claim `create_dir` uses the byte-identical path value already used for
+       the `gitdir` identity match (`worktree_path.join(".git")` vs the admin dir's recorded gitdir).
+       Claim and identity-match cannot diverge because they are the same variable.
+    3. SPECIFIED, NOT NORMALIZED, WITH RATIONALE: the absent path cannot be canonicalized —
+       `realpath(3)` requires an existing path; by definition the worktree is missing. Canonicalizing
+       only the parent would introduce a second spelling distinct from the one the gitdir match uses,
+       which is the very divergence you warned against.
+    4. WHY A SYMLINKED PARENT DOES NOT BREAK THE MUTUAL EXCLUSION: occupancy is decided by the kernel
+       at syscall time, and every contender — our `mkdir(2)` claim, a restore (`mv`/untar), or
+       `git worktree add` — resolves the identical lexical path through the identical parent chain.
+       If the claim "lands elsewhere" through a symlinked parent, so does any competing restore; the
+       two still contend on one inode, so EEXIST-vs-win semantics are preserved exactly.
+    5. SPELLING-MISMATCH DEGRADATION: git records a canonicalized absolute path in the admin `gitdir`
+       file. If the lease path spells the worktree differently (e.g. via a symlink), the identity
+       match already fails today and the function returns without clearing — fail closed, unchanged
+       from TASK-1543 behavior. BUG-1694 does not widen what can be cleared; it only narrows when.
+
+    Reply in UNDER 80 words, exactly this shape:
+    VERDICT: APPROVE | REQUEST-CHANGES
+    CONDITION-2: discharged | not discharged — <one sentence>
+    CONDITIONS: <bullets or "none">
+
+    --- round 3 verdict ---
+    VERDICT: APPROVE
+    CONDITION-2: discharged — Absolute-path enforcement removes cwd dependence, and using the identical path for the claim and identity match keeps them aligned.
+    CONDITIONS: none
+  created_at: 2026-10-02T19:05:35.136727379Z
+  modified_at: 2026-10-02T19:05:35.136727379Z
+  session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
+  relayed_from: advisor
 history:
 - id: 01a0e458-e89b-7d73-88ff-54128f30291b
   author: joe
