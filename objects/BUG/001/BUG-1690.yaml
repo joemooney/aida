@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T23:05:57.373584271Z
+modified_at: 2026-10-02T23:14:22.318303377Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -151,6 +151,12 @@ comments:
   created_at: 2026-10-02T22:55:28.643740610Z
   modified_at: 2026-10-02T22:55:28.643740610Z
   session_id: 47c5e88c-e7a4-4eb8-af51-a2d518e76102
+- id: 01a0fee5-b5ee-7c90-9d5f-45c8e6b6b39e
+  author: joe
+  content: 'ADVISOR REVIEW VERDICT (relay #14, PR #2357): REWORK NEEDED — one confirmed blocker. spec_is_draft_only_tagged (aida-cli-lib/src/lib.rs:106672) fails OPEN: when load_store_for_lookup returns None (or the spec is absent from the store) it returns false, and undraft_reused_publication then marks the PR ready — a transient store-load failure at phase-1 adoption would strip a review:draft-only spec''s draft, which IS the STORY-529 human-review hold, licensing auto-merge past the gate. Fix: fail CLOSED — unknown tag state (store load failure or spec not found) must skip the un-draft, with a warning naming why; worst case is the pre-PR stall for untagged specs in a rare state, which the forge''s draft refusal already reports. Second codex blocker DEMOTED: the JSON-mode suppression of the failed-un-draft warning is the driver''s established if !self.json idiom (54 sites in lib.rs) and the forge''s explicit draft refusal still surfaces at merge — no silent stall. Minor worth fixing in the same pass: the seam tests call undraft_reused_publication directly, so neither phase-1 adoption call site (lib.rs:107372, 110451) is witnessed — deleting one call would fail no test. Everything else verified clean: both adoption points wired, draft-only exception correct in the happy path, mark_change_ready per-forge arms correct, best-effort failure path proceeds to the forge''s own refusal.'
+  created_at: 2026-10-02T23:14:22.318303377Z
+  modified_at: 2026-10-02T23:14:22.318303377Z
+  session_id: a4861695-0967-4442-a984-92e100a5580a
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
