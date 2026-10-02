@@ -1,0 +1,62 @@
+id: 01a0fca7-aabb-7022-9c37-f47a51fdad76
+spec_id: TASK-1567
+agreed_id: TASK-1567
+title: 'The committed protobuf mirror aida-cli-lib/src/generated/aida.rs is stale: a build regenerates it with RequirementStatus::Superseded, so every worktree build leaves an unrelated dirty file'
+description: |
+  Observed in relay session #15 (2026-10-02) while implementing BUG-1770 in a
+  clean sibling worktree off `main` at `30638a79ea`.
+
+  A plain `cargo check -p aida-cli-lib --lib` leaves
+  `aida-cli-lib/src/generated/aida.rs` modified with a 6-line insertion that has
+  nothing to do with the change being built:
+
+      + /// TASK-1176: adopted, then replaced by a successor spec. ...
+      +     Superseded = 9,
+      +     Self::Superseded => "REQUIREMENT_STATUS_SUPERSEDED",
+      +     "REQUIREMENT_STATUS_SUPERSEDED" => Some(Self::Superseded),
+
+  So the committed mirror predates TASK-1176's `Superseded` status reaching the
+  `.proto`, and the build script regenerates it correctly every time.
+
+  ## Why it matters
+
+  - Every agent working in a worktree gets an unrelated dirty file and has to
+    decide whether to commit it. I reverted it to keep the BUG-1770 diff clean,
+    which means the next seat will hit it again.
+  - `git status` noise is how an unrelated file ends up in someone's commit.
+    CLAUDE.md says never edit a generated mirror, which is correct, but says
+    nothing about one that is already out of date in the index.
+  - It may be why the operator's checkout has carried uncommitted entries for
+    several sessions — worth checking before blaming a lane.
+
+  ## Acceptance
+
+  1. Regenerate and commit `aida-cli-lib/src/generated/aida.rs` from the current
+     `proto/` so a clean build leaves the tree clean.
+  2. A gate (or an existing one extended) fails when the committed mirror differs
+     from what the build produces, so this cannot silently drift again. Prefer a
+     mechanism that fails loudly over a predicate that can pass vacuously — see
+     the absent-is-not-matching pattern.
+  3. Mutation proof: with the regenerated file reverted, the new gate fails.
+
+  Autonomous-safe. Heft 1 if the gate reuses an existing drift-check harness.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T12:47:21.787131796Z
+modified_at: 2026-10-02T12:47:21.787131796Z
+req_type: Task
+tags:
+- build
+- generated-mirror
+- needs-triage
+- papercut
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 4dbc7b5e-a08e-4242-b502-dcb152ac27f5
