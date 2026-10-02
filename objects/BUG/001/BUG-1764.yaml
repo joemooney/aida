@@ -72,8 +72,62 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T04:13:57.890825536Z
-modified_at: 2026-10-02T04:14:11.262660707Z
+modified_at: 2026-10-02T04:25:53.262492485Z
 req_type: Bug
+comments:
+- id: 01a0fadc-8d6e-7bf3-83c1-859dc5980e29
+  author: joe
+  content: |
+    Located the defect precisely, and it is narrower and more fixable than the original
+    description implied. Correcting the record.
+
+    **`print_cross_clone_leases` applies NO expiry predicate of any kind.**
+    `aida-cli-lib/src/lib.rs:47860-47880`. Its only filter is:
+
+        .filter(|c| c.clone_path.is_empty() || c.clone_path != our_clone)
+
+    No liveness check, no TTL check, no heartbeat-age check. It then *computes* `age`
+    from `heartbeat_at` and prints it in a column — but never uses it as a predicate.
+    A foreign lease is therefore displayed forever, once written.
+
+    `coordination::list_claims` (`aida-cli-lib/src/coordination.rs:598`) filters nothing
+    either: it reads every `*.toml` in `coordination/leases/` and returns all of them.
+
+    That explains the 219-files-but-9-shown number, which I earlier misattributed to
+    unenforced `ttl_secs`. The real split:
+
+    - **~211 files have `clone_path == /home/joe/ai/aida`** — this clone. They are routed
+      to the LOCAL lease table, which does apply a liveness check, so the dead ones are
+      correctly hidden. The files are never garbage-collected, but nothing misreports.
+    - **8 files have `clone_path == /tmp/aida-nightshift`** — a different path on the SAME
+      host. They are routed to the foreign section, which checks nothing, so all 8 display
+      as active indefinitely.
+
+    So this is one defect with a clear fix site, not a TTL-enforcement gap across the
+    subsystem. Revised acceptance, superseding the clauses below where they conflict:
+
+    1. `print_cross_clone_leases` applies an expiry predicate before rendering. The `age`
+       it already computes is the natural input.
+    2. That predicate must NOT be bare pid-existence. The measurement in this spec's
+       description is the reason: `pr-2256` (pid 2 = `kthreadd`) and `bug-1692`
+       (pid 202 = `kworker/R-nvme-reset-wq`) both collide with live kernel threads and
+       would read as alive forever. Require `pid_start_time` to match the process's actual
+       start, and treat a lease with no `pid_start_time` as unverifiable rather than live.
+    3. When `host` equals the querying host, evaluate against the local process table even
+       though `clone_path` differs — the host's own process table is fully authoritative
+       and no remote probe is needed. This is the case all 8 of these fall into.
+    4. There is a supported way to clear a stale foreign lease. `aida session end --spec`
+       cannot reach one today (measured: `error: "No lease found for spec BUG-1689"`), and
+       `aida session reap` never touches them.
+    5. Garbage collection of the lease files themselves is a SEPARATE, lower-priority
+       concern — 211 accumulated files that nothing misreports. Do not widen this fix into
+       it; file it separately if it ever matters.
+    6. Fixture per clause. The collision case is reproducible without root: write a foreign
+       lease with `pid = 2` and a `pid_start_time` later than boot, and assert it does not
+       render.
+  created_at: 2026-10-02T04:25:53.262492485Z
+  modified_at: 2026-10-02T04:25:53.262492485Z
+  session_id: 37866160-9ec6-4e9b-a86b-8da41edb7a26
 history:
 - id: 01a0fad1-d73e-70f1-9163-1abe5ec89ac1
   author: joe
