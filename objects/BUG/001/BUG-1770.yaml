@@ -1,0 +1,175 @@
+id: 01a0fc43-1fdd-7c13-922e-f78fa493bb81
+spec_id: BUG-1770
+agreed_id: BUG-1770
+title: Every tag write path accepts a tag containing whitespace, so a space-separated --tags argument is stored as one malformed tag that renders identically to the tags it was meant to be
+description: |
+  Every tag write path accepts a tag containing whitespace, so a space-separated
+  `--tags` argument is silently stored as ONE malformed tag. The human rendering
+  joins tags with spaces, so the malformation is **invisible by eye** — it renders
+  identically to the N separate tags the caller intended. The tag is then
+  unmatchable by `--remove-tag`, and `aida edit` responds to the failed match with
+  `No changes specified`, which sends the caller hunting for a flag they already
+  passed.
+
+  This is not a hypothesis. It is the root cause behind the rejection of BUG-1542,
+  it is still creating malformed objects nine days after that post-mortem named
+  it, and it has now produced the same false diagnosis in a second seat.
+
+  ## Proved from the canonical store, not inferred
+
+  BUG-1769 was filed 2026-10-01 by an antigravity session. Its tags at creation
+  (store commit `05488fab80`, `objects/BUG/001/BUG-1769.yaml`):
+
+      tags:
+      - auto-complete orchestrator needs-triage launch-refused
+
+  One list item. Four intended tags. `aida show` rendered it as
+  `tags: "auto-complete orchestrator needs-triage launch-refused"` — exactly what
+  four correct tags would render as.
+
+  The advisor seat then ran `aida edit BUG-1769 --remove-tag needs-triage` to clear
+  the triage flag, and got:
+
+      No changes specified. Use --title, --status, --priority, etc.
+      (exit 0)
+
+  and the tag still present. Combined with `--add-tag`, the adds landed and the
+  remove was silently dropped while the command printed `Updated: BUG-1769`.
+
+  The tell that distinguishes the malformation from a parser bug — and the only
+  one visible without reading the YAML — is **ordering**. Before the repair the
+  rendering was `auto-complete orchestrator needs-triage launch-refused
+  severity:major triaged`: the first four in authored order, the two genuinely
+  separate tags appended in sorted order. After a `--tags` replace normalised them
+  into six real list items, the rendering became fully alphabetical:
+  `auto-complete launch-refused orchestrator severity:major triaged`. A
+  non-alphabetical run inside an otherwise sorted tag line IS a blob.
+
+  ## This exact trap already cost a full misfiling cycle
+
+  BUG-1542 was filed as "`--remove-tag` silently does nothing for a
+  colon-namespaced tag". It was **rejected** on 2026-09-22 after a Codex
+  reinvestigation proved the colon claim false, and the rejection evidence
+  identified this malformation as the real cause:
+
+  > Git-canonical history proves TASK-1416 was created at store commit 26de9916
+  > with exactly ONE tag value: `tooling rebase stacked-pr papercut
+  > severity:cosmetic` (one YAML list item), not five independent tags. … The
+  > misleading human rendering erased list boundaries, creating the false
+  > diagnosis.
+
+  The cost of that cycle: a high-priority misfiling, a full reinvestigation, and
+  PR #2084 closed as not fixing the ID it was filed under. **Nothing was then done
+  about the writer that creates the blob** — the post-mortem diagnosed the
+  rendering and closed the bug. So the trap stayed armed, and BUG-1769 was created
+  with a blob nine days later.
+
+  That Codex comment also recorded the reporting fix and explicitly asked for it to
+  be filed on its own: *"Recommend BUG-1542 be rejected/closed as
+  non-reproducible, with any desired tag-outcome reporting filed and reviewed
+  separately across both edit backends."* **This spec is that filing**, plus the
+  writer-side validation that the post-mortem stopped short of.
+
+  ## The code, on main at 30638a79ea
+
+  No write path validates a tag against whitespace:
+
+  | path | site | behaviour |
+  |---|---|---|
+  | `aida add --tags` | `git_backend_cmd.rs:3305` | `for tag in t.split(',')` → `req.tags.insert(tag.trim())` |
+  | `aida edit --tags` | `git_backend_cmd.rs:5988` | same, split on `,` only |
+  | `--add-tag` / `--remove-tag` | `apply_tag_deltas`, `lib.rs:19540` | exact `HashSet` insert/remove, `trim()` only |
+
+  `split(',')` is correct per `--help` ("comma-separated"), and the bug is not that
+  it splits on commas. The bug is that **a value containing a space is accepted as
+  a tag** rather than refused or split, at all three sites, with no whitespace
+  check anywhere.
+
+  The misleading message is a second, separable defect in the same command. The
+  early "any flags passed?" guard at `git_backend_cmd.rs:5461` correctly includes
+  `remove_tag.is_empty()`, so `--remove-tag` passes it. But `apply_tag_deltas`
+  returns `false` when nothing matched, and the `else if` at
+  `git_backend_cmd.rs:6314` then prints `No changes specified` at `:6321`. Changes
+  WERE specified; the flag matched nothing. The two are indistinguishable to the
+  caller, which is why a silent no-op reads as a parser bug.
+
+  ## Why this is worth fixing rather than documenting
+
+  A blob tag is not merely cosmetic. It is invisible to every exact-match consumer
+  while looking correct to a human: `--remove-tag` cannot clear it, and tag-keyed
+  selection cannot see the tags inside it, so a `batch:`, `parent:`, `severity:` or
+  `needs-triage` tag swallowed into a blob is silently absent from the filters and
+  sweeps AIDA's own conventions are built on. BUG-1252 already protects structural
+  tags from being silently DROPPED by a `--tags` replace; this is the adjacent hole
+  where they are never correctly WRITTEN in the first place.
+
+  ## Acceptance
+
+  1. A tag containing whitespace is refused at every write path — `aida add
+     --tags`, `aida edit --tags`, and `aida edit --add-tag` (`git_backend_cmd.rs:3305`,
+     `:5988`, `apply_tag_deltas` at `lib.rs:19540`). The error names the offending
+     value and shows the comma-separated form, e.g.
+     `tag "auto-complete orchestrator" contains a space — did you mean
+     --tags auto-complete,orchestrator ?`
+     Refusing is preferred over silently splitting on whitespace: splitting would
+     make a genuinely intended multi-word tag unrepresentable without warning, and
+     the caller's intent is unambiguous enough to report.
+  2. The refusal applies to BOTH edit backends. BUG-1542's closing recommendation
+     asked for exactly this, and `apply_tag_deltas` (`lib.rs`) and the
+     `git_backend_cmd.rs` `--tags` paths are reached by different commands.
+  3. `aida edit --remove-tag X` never prints `No changes specified` when a tag flag
+     was passed. It reports the outcome per tag: removed / no matching tag /
+     already present. `No changes specified` is printed only when no tag flag was
+     passed at all.
+  4. Exit status distinguishes the cases, or AC3's message does so unambiguously —
+     a caller must be able to tell "removed it" from "it was not there" without
+     re-reading the object.
+  5. **Mutation proof.** With the AC1 validation removed, the AC6 test fails.
+     Recorded in the PR body.
+  6. A test asserts that `--tags "a b"` is refused and that `--tags "a,b"` yields
+     two separate tags, inspecting the stored object (the YAML list, or the parsed
+     tag set) and NOT the rendered line — the rendering is what hid this for nine
+     days and cannot witness the regression. Keep a control asserting a
+     colon-namespaced tag (`severity:major`) still round-trips. That is the case
+     BUG-1542 was filed against and correctly rejected over; it works today and
+     must keep working, so it is the control that stops a regression passing by
+     breaking both forms at once.
+  7. **No migration is in scope for this spec.** Existing blobs in the store are
+     left alone. If a sweep is wanted, file it separately with the ordering
+     heuristic from the Evidence section above as its detector (a
+     non-alphabetical run inside an otherwise sorted tag line). Note that
+     `aida edit --tags <full,set>` is the working repair, as used on BUG-1769.
+
+  ## Repro
+
+      aida add --type task --title "probe" --tags "alpha beta"
+      aida show <ID>            # renders "alpha beta" — looks like two tags
+      aida edit <ID> --remove-tag alpha
+      # -> "No changes specified. Use --title, --status, --priority, etc.", exit 0
+      grep -A3 '^tags:' .aida-store/objects/TASK/*/<ID>.yaml
+      # -> a single list item: "- alpha beta"
+
+  Found by the advisor seat in relay session #13 while clearing `needs-triage`
+  from BUG-1769 — i.e. found by walking into the trap, and caught only by running
+  BUG-1542's rejection as a control before filing. Autonomous-safe.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T10:57:32.637932108Z
+modified_at: 2026-10-02T10:57:32.637932108Z
+req_type: Bug
+tags:
+- cli
+- papercut
+- severity:major
+- silent-noop
+- tags
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 8e6a376b-16ed-45f7-a6ee-ea30765c7868
