@@ -8,10 +8,27 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:19.667769905Z
-modified_at: 2026-09-16T15:53:01.746272431Z
+modified_at: 2026-10-02T06:35:57.721229815Z
 req_type: Bug
 tags:
 - aida:queue needs-repro-verification from-downstream:quizdom
+comments:
+- id: 01a0fb53-a399-7290-a2b8-8d2b57a99c18
+  author: joe
+  content: |-
+    ## Triage Investigation (aida-triage)
+
+    ### Status: Fixed / Covered by TASK-270 and TASK-322
+
+    ### Code Verification
+    1. `aida queue list --batch <NAME>` (`queue_cmd.rs:1774-2150`) normalizes the batch filter, handles stripping of redundant `batch:` prefixes (TASK-270), and filters entries by `batch:<name>` against the requirements' tag set.
+    2. `aida queue work --batch <NAME>` and positional `aida queue work batch:<NAME>` (`queue_cmd.rs:5796-5833, 6542`) share identical tag matching and normalization logic.
+    3. The discrepancy observed in Quizdom #1 (2026-07-19) was addressed by unifying batch-prefix stripping and queue-list / queue-work tag resolution under TASK-270.
+
+    ### Recommendation
+    Close as completed/verified by TASK-270.
+  created_at: 2026-10-02T06:35:57.721229815Z
+  modified_at: 2026-10-02T06:35:57.721229815Z
 deferred: true
 deferred_at: 2026-07-22T15:34:50.848173469Z
 deferred_until: the repro is re-run on current main (a7cd68909+) and still fails — then file a real, mechanism-confirmed spec
