@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T22:22:49.919184087Z
+modified_at: 2026-10-02T22:55:28.643740610Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -139,6 +139,12 @@ comments:
     3. Tests assert that a draft PR is correctly marked as ready (un-drafted) before it is merged by the orchestrator.
   created_at: 2026-10-02T14:17:59.633265376Z
   modified_at: 2026-10-02T14:17:59.633265376Z
+- id: 01a0fed4-6983-7560-86d0-121fc9bee8bf
+  author: joe
+  content: 'Implemented on branch bug-1690, PR #2357 (session 01a0feb65a11). Design per the recorded decision: un-draft the reused PR at phase-1 adoption. New Forge::mark_change_ready (gh pr ready / glab mr update --ready / pure-git no-op); undraft_reused_publication at both phase-1 adoption points, keyed on forge-reported is_draft; review:draft-only specs keep their draft (that draft IS the STORY-529 human-review hold — the drain merge path never reads the tag, so un-drafting would license auto-merge past the gate); retraction_notice updated to state the retry reuses an open PR, un-drafting it first if needed. Seam tests + mutation proof both directions; make check-ci-fast green.'
+  created_at: 2026-10-02T22:55:28.643740610Z
+  modified_at: 2026-10-02T22:55:28.643740610Z
+  session_id: 47c5e88c-e7a4-4eb8-af51-a2d518e76102
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
