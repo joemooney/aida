@@ -16,12 +16,12 @@ description: |
   4. The change claims no protected boundary and does not mark BUG-1669 complete.
 
   Out of scope: the broker, backend selection, installation, credentials, any production launch sink, and any acceptance change to BUG-1669.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-10-02T04:28:41.467668228Z
+modified_at: 2026-10-02T04:28:49.188453515Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -262,10 +262,28 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fadf-3c2c-70c3-83ff-c410c3d7019f
+  author: aida-auto-bump
+  timestamp: 2026-10-02T04:28:49.068323590Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fadf-3ca4-7d80-8ab0-4398566a49c8
+  timestamp: 2026-10-02T04:28:49.188421201Z
+  agent: aida
+  commit_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
+  summary: 'Advisor review of the revived branch. Re-verified all four ACs against current main rather than the original commit message. Found and fixed one real defect: the AC2 fixture was wired into no runner (ci.yml names each shell test individually; no glob over tests/*.sh), so the zero-vendor-launch proof was unenforced. Now runs as step 22 of Build (ubuntu-latest) — confirmed executed and successful in CI run 36963390190, not merely inferred from a green rollup. Mutation proof: exit 78 -> exit 0 in gate-vs-rule.sh turns the fixture red and names that script. AC3 route audit re-run on today''s main: still exactly the four gate-vs-rule ablations. Recorder shims bind to the scripts'' own AIDA_ABLATION_CLAUDE/CODEX override points, so the zero-launch arm is live. Claims no protected boundary; BUG-1669 untouched.'
+  punted:
+  - 'punted: session end observed 1 commit ahead on branch `bug-1688` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-02T04:28:41.467668228Z
   implemented_by: joe
+  completed_at: 2026-10-02T04:28:49.068244656Z
+  completion_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
 decision_request:
   question: Gate the five shipped scripts that construct full-access vendor argv, ahead of the protected broker?
   choices:
