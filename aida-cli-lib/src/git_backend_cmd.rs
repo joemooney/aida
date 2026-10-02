@@ -256,6 +256,20 @@ fn show_cached_context(
     (effective_status, serialize_command)
 }
 
+/// The TOON `status` scalar value for the per-spec agent-mode `show`: the
+/// normalized status token, annotated with the derived-status disclosure when
+/// the displayed (effective) value and the stored field resolve to different
+/// lifecycle states. Split out for direct unit testing, same rationale as
+/// BUG-1423's `emit_ship_pr_merged`.
+// trace:BUG-1767 | ai:claude
+fn toon_show_status(effective_status: &str, stored_status: &str) -> String {
+    let token = toon_status_token(effective_status);
+    match status_display::derived_status_annotation(effective_status, stored_status) {
+        Some(annotation) => format!("{token} ({annotation})"),
+        None => token,
+    }
+}
+
 // trace:BUG-1207 | ai:codex
 fn render_list_table<F>(
     reqs: &[aida_core::RequirementSummary],
@@ -874,6 +888,51 @@ mod show_latency_regression_tests {
     fn show_cached_context_stays_generic_over_cache_only_reads() {
         let req = Requirement::new("BUG-1559 witness".to_string(), String::new());
         let _ = show_cached_context(&AnotherCacheOnlyView, &req);
+    }
+
+    /// BUG-1767 (acceptance 1): the `show` status value for a rollup-complete
+    /// epic whose STORED status is not Completed must carry BOTH values — the
+    /// derived one and the stored one — so no caller can mistake a rolled-up
+    /// Completed for a stored one. Dropping the stored value from the line
+    /// turns this red.
+    // trace:BUG-1767 | ai:claude
+    #[test]
+    fn toon_show_status_discloses_derived_and_stored() {
+        // The spec's fixture shape: stored Draft, rollup-derived Completed.
+        let line = toon_show_status("Completed", "Draft");
+        assert!(line.contains("completed"), "derived value legible: {line}");
+        assert!(
+            line.contains("stored: draft"),
+            "stored value legible: {line}"
+        );
+
+        // The other stored shape observed (EPIC-71): stored InProgress.
+        let line = toon_show_status("Completed", "InProgress");
+        assert!(line.contains("stored: in-progress"), "{line}");
+    }
+
+    /// BUG-1767 (acceptance 3): the unchanged cases — a non-epic, and an epic
+    /// whose rollup matches its stored field — render EXACTLY the stored
+    /// status token with no derivation annotation, including across spelling
+    /// variants of the same state and for custom statuses outside the
+    /// lifecycle.
+    // trace:BUG-1767 | ai:claude
+    #[test]
+    fn toon_show_status_unannotated_when_stored_agrees() {
+        // TASK-1565 / STORY-1486 shape: a non-epic's effective status IS the
+        // stored one.
+        assert_eq!(toon_show_status("Draft", "Draft"), "draft");
+        // EPIC-74 shape: an epic that is not rollup-complete derives its
+        // stored value back.
+        assert_eq!(toon_show_status("Completed", "Completed"), "completed");
+        assert_eq!(
+            toon_show_status("In Progress", "In Progress"),
+            "in-progress"
+        );
+        // Spelling variants of the SAME state are agreement, not divergence.
+        assert_eq!(toon_show_status("InProgress", "In Progress"), "in-progress");
+        // A custom status outside the lifecycle never grows an annotation.
+        assert_eq!(toon_show_status("frobnicated", "Draft"), "frobnicated");
     }
 }
 
@@ -4194,6 +4253,18 @@ pub(crate) fn handle_git_backend_command(
                         &effective_status_str,
                     )
                     .to_string();
+                    // BUG-1767: the displayed (effective) status can be a
+                    // derived rollup that disagrees with the stored field.
+                    // Compute the stored value and the disclosure once; every
+                    // render surface below must not present the derived value
+                    // as if it were stored, and must not prescribe `archive`
+                    // while the stored status is non-terminal.
+                    // trace:BUG-1767 | ai:claude
+                    let stored_status_str = req.status.to_string();
+                    let derived_annotation = status_display::derived_status_annotation(
+                        &effective_status_str,
+                        &stored_status_str,
+                    );
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -4422,8 +4493,14 @@ pub(crate) fn handle_git_backend_command(
                         );
                         object.insert("blockers".to_string(), serde_json::Value::Array(blockers));
 
-                        let mut next =
-                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        // trace:BUG-1767 | ai:claude — stored-aware, so a
+                        // derived-complete epic is prescribed the close move,
+                        // not `archive`.
+                        let mut next = crate::help_next::show_spec_next(
+                            &effective_status_str,
+                            &stored_status_str,
+                            &req.display_id(),
+                        );
                         crate::help_next::push_serialize_cluster(
                             &mut next,
                             serialize_cluster_command.clone(),
@@ -4466,9 +4543,12 @@ pub(crate) fn handle_git_backend_command(
                             "type",
                             &format!("{:?}", req.req_type).to_ascii_lowercase(),
                         ));
+                        // BUG-1767: disclose a derived rollup status so the
+                        // agent can tell it from a stored one.
+                        // trace:BUG-1767 | ai:claude
                         lines.push(crate::toon::scalar(
                             "status",
-                            &toon_status_token(&effective_status_str),
+                            &toon_show_status(&effective_status_str, &stored_status_str),
                         ));
                         lines.push(crate::toon::scalar(
                             "priority",
@@ -4619,8 +4699,12 @@ pub(crate) fn handle_git_backend_command(
                         // TASK-974 (AXI #9): lifecycle-aware next-step block —
                         // the valid next transition(s) for THIS spec's current
                         // state, templated with its id. trace:TASK-974
-                        let mut next =
-                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        // trace:BUG-1767 | ai:claude — stored-aware.
+                        let mut next = crate::help_next::show_spec_next(
+                            &effective_status_str,
+                            &stored_status_str,
+                            &req.display_id(),
+                        );
                         crate::help_next::push_serialize_cluster(
                             &mut next,
                             serialize_cluster_command.clone(),
@@ -4709,10 +4793,18 @@ pub(crate) fn handle_git_backend_command(
                     // ACCEPTED — the terminal state — so display it that way
                     // here and in the reprint at the foot. trace:BUG-781
                     let status = display_status.clone();
+                    // BUG-1767: a derived rollup status carries its disclosure
+                    // on BOTH prints (here and the foot reprint), so neither
+                    // reads as a stored value. trace:BUG-1767 | ai:claude
+                    let status_note = derived_annotation
+                        .as_deref()
+                        .map(|a| format!(" {}", format!("({a})").dimmed()))
+                        .unwrap_or_default();
                     println!(
-                        "{}: {}",
+                        "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status)
+                        status_display::status_badge(&status),
+                        status_note
                     );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
                     // FR-283: the numeric weight/score, shown only when set.
@@ -5161,10 +5253,12 @@ pub(crate) fn handle_git_backend_command(
                     // rule — "what state is this in?" then sits at the cursor
                     // when the command returns. trace:TASK-269 | ai:claude
                     println!("\n{}", "─".repeat(40).dimmed());
+                    // trace:BUG-1767 | ai:claude — reprint keeps the disclosure.
                     println!(
-                        "{}: {}",
+                        "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status)
+                        status_display::status_badge(&status),
+                        status_note
                     );
                     // STORY-727: the per-spec next-command block for HUMANS. The
                     // agent-mode TOON `next` block fires on its own branch above
@@ -5172,8 +5266,13 @@ pub(crate) fn handle_git_backend_command(
                     // but not to per-spec inspection, so the human `show` never
                     // got a next command. Render it now, leading with `aida zen
                     // <id>` for an Approved/Planned spec. trace:STORY-727
-                    let mut next =
-                        crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                    // trace:BUG-1767 | ai:claude — stored-aware, matching the
+                    // agent surfaces above.
+                    let mut next = crate::help_next::show_spec_next(
+                        &effective_status_str,
+                        &stored_status_str,
+                        &req.display_id(),
+                    );
                     crate::help_next::push_serialize_cluster(&mut next, serialize_cluster_command);
                     if let Some(block) = crate::help_next::render_human(&next) {
                         println!("{block}");

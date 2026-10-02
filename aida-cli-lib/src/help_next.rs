@@ -56,7 +56,9 @@ pub fn push_serialize_cluster(steps: &mut Vec<NextStep>, command: Option<String>
 
 /// The stable lowercase token for a lifecycle target state — the `to` column of
 /// the `next` block, so the agent sees WHICH state a suggestion advances to.
-fn state_token(s: State) -> &'static str {
+// trace:BUG-1767 | ai:claude — pub(crate) so the derived-status disclosure on
+// the `show` status line renders the stored state with the same vocabulary.
+pub(crate) fn state_token(s: State) -> &'static str {
     match s {
         State::Start => "start",
         State::Draft => "draft",
@@ -150,6 +152,33 @@ pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
     }
     ranked.sort_by_key(|(r, _)| *r);
     ranked.into_iter().map(|(_, s)| s).collect()
+}
+
+/// Lifecycle-aware next steps for the per-spec `show` surface, where the
+/// displayed status may be an epic's DERIVED child rollup (BUG-626) while the
+/// store still holds an earlier stored status.
+///
+/// For a derived-terminal epic whose STORED status is non-terminal, the honest
+/// next move is to RECORD the completion (`aida edit <id> --status completed`)
+/// — the same command the advisor's close bucket prescribes — never
+/// `aida archive`, which would shelve the spec with the completion unrecorded
+/// (and, for a stored Draft, with approval skipped entirely). Everything else
+/// falls through to [`spec_next`] on the displayed status unchanged.
+// trace:BUG-1767 | ai:claude
+pub fn show_spec_next(effective_status: &str, stored_status: &str, id: &str) -> Vec<NextStep> {
+    if let (Some(eff), Some(stored)) = (
+        State::from_status_str(effective_status),
+        State::from_status_str(stored_status),
+    ) {
+        if eff != stored && eff.is_terminal() && !stored.is_terminal() {
+            let token = state_token(eff);
+            return vec![NextStep::new(
+                format!("aida edit {id} --status {token}"),
+                token,
+            )];
+        }
+    }
+    spec_next(effective_status, id)
 }
 
 /// Lifecycle-aware next steps for the `aida why <spec>` surface.
@@ -350,13 +379,19 @@ pub fn render(steps: &[NextStep]) -> Option<String> {
 /// An unmapped token glosses to the empty string, so the command renders on its
 /// own with no trailing description.
 // trace:STORY-727 | ai:claude
-fn human_hint(to: &str) -> &'static str {
-    match to {
+fn human_hint(step: &NextStep) -> &'static str {
+    match step.to.as_str() {
         "merged" => "build + ship it autonomously, end-to-end",
         "in-progress" => "start implementing it yourself",
         "approved" => "approve it",
         "planned" => "mark it planned — the design is settled",
         "done" => "mark it done (finished on a branch)",
+        // Two commands advance to `completed`: the post-merge sync (`aida
+        // pull`) and BUG-1767's record-the-rollup close move (`aida edit`).
+        // trace:BUG-1767 | ai:claude
+        "completed" if step.cmd.starts_with("aida edit") => {
+            "record the completion the child rollup already shows"
+        }
         "completed" => "sync after merge to auto-complete it",
         "rejected" => "reject it",
         "archived" => "hide it from the default views",
@@ -386,7 +421,7 @@ pub fn render_human(steps: &[NextStep]) -> Option<String> {
     let arrow = crate::glyph(crate::glyphs::Glyph::Arrow);
     let mut lines: Vec<String> = vec![format!("\n{}", "Next:".bold())];
     for s in steps {
-        let hint = human_hint(&s.to);
+        let hint = human_hint(s);
         if hint.is_empty() {
             lines.push(format!("  {} {}", arrow, s.cmd.cyan()));
         } else {
@@ -603,6 +638,80 @@ mod tests {
         let human = render_human(&steps).expect("non-empty");
         assert!(human.contains("Next:"));
         assert!(human.contains("aida queue done TASK-7"));
+    }
+
+    // BUG-1767 (acceptance 2): a rollup-complete epic whose STORED status is
+    // non-terminal must be prescribed the close move — recording the
+    // completion, the same command the advisor's close bucket hands out —
+    // never `aida archive`, which would shelve the epic with the completion
+    // unrecorded (and, for a stored Draft, with approval skipped entirely).
+    #[test]
+    fn show_spec_next_derived_complete_epic_prescribes_close_not_archive() {
+        // The spec's fixture shape: stored Draft, rollup complete.
+        let steps = show_spec_next("Completed", "Draft", "EPIC-42");
+        assert_eq!(cmds(&steps), vec!["aida edit EPIC-42 --status completed"]);
+        assert_eq!(steps[0].to, "completed");
+        assert!(
+            !cmds(&steps).iter().any(|c| c.contains("archive")),
+            "archive must not be prescribed while the stored status is non-terminal"
+        );
+
+        // The other stored shapes observed in the close bucket (EPIC-71 was
+        // stored InProgress, EPIC-61 stored Approved) take the same move.
+        for stored in ["InProgress", "Approved"] {
+            let steps = show_spec_next("Completed", stored, "EPIC-71");
+            assert_eq!(cmds(&steps), vec!["aida edit EPIC-71 --status completed"]);
+        }
+    }
+
+    // BUG-1767 (acceptance 3 control): when displayed and stored agree — every
+    // non-epic, and an epic whose rollup matches its stored field — the show
+    // surface keeps exactly the status-only suggestions, archive included for
+    // a genuinely stored-terminal spec. A derived NON-terminal divergence
+    // (rollup-in-progress epic) also passes through unchanged.
+    #[test]
+    fn show_spec_next_passes_through_when_no_terminal_divergence() {
+        // Stored Completed really is terminal → the archive off-ramp stands.
+        assert_eq!(
+            cmds(&show_spec_next("completed", "completed", "TASK-9")),
+            vec!["aida archive TASK-9"]
+        );
+        // Agreement on a non-terminal status → identical to spec_next.
+        assert_eq!(
+            cmds(&show_spec_next("draft", "draft", "TASK-1")),
+            cmds(&spec_next("draft", "TASK-1"))
+        );
+        // Spelling variants of the SAME state are agreement, not divergence.
+        assert_eq!(
+            cmds(&show_spec_next("InProgress", "In Progress", "TASK-3")),
+            cmds(&spec_next("InProgress", "TASK-3"))
+        );
+        // Derived non-terminal divergence (epic moving while stored Draft)
+        // keeps the effective status's own transitions.
+        assert_eq!(
+            cmds(&show_spec_next("In Progress", "Draft", "EPIC-7")),
+            cmds(&spec_next("In Progress", "EPIC-7"))
+        );
+    }
+
+    // BUG-1767: the human render of the close move must not borrow `aida
+    // pull`'s "sync after merge" gloss — both steps advance to `completed`,
+    // but only one of them is the post-merge sync.
+    #[test]
+    fn render_human_close_move_gets_its_own_hint() {
+        let steps = show_spec_next("Completed", "Draft", "EPIC-42");
+        let human = render_human(&steps).expect("non-empty");
+        assert!(
+            human.contains("record the completion"),
+            "close move needs its own gloss:\n{human}"
+        );
+        assert!(
+            !human.contains("sync after merge"),
+            "close move must not wear the `aida pull` gloss:\n{human}"
+        );
+        // And `aida pull`'s own gloss is untouched.
+        let pull = render_human(&queue_done_next("TASK-7")).expect("non-empty");
+        assert!(pull.contains("sync after merge"), "{pull}");
     }
 
     // BUG-1129: an in-progress epic is a read-only child rollup. `aida why`
