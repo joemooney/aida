@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:37.337431823Z
-modified_at: 2026-10-02T21:06:53.924967803Z
+modified_at: 2026-10-02T21:13:10.180179556Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -18,6 +18,13 @@ relationships:
 - rel_type: Child
   target_id: 01a0dd1b-98af-71d2-aaf7-719663db7044
   created_at: 2026-09-26T18:51:55.983683077Z
+comments:
+- id: 01a0fe76-bf24-75a0-b3b6-6da7d56239a0
+  author: joe
+  content: 'POST-MERGE REVIEW (advisor relay session #12, 2026-10-02). PR #2349 was merged by the operator as an emergency action without pre-merge review; the recorded approved verdict was trust-based. A cross-vendor codex static review of merge commit 8995bd5429241ed207d492a430a2d4a1844d69d4 returned REQUEST_CHANGES: no blockers, 3 majors. Advisor verification: major 1 CONFIRMED (file_request? at cached_git_backend.rs:470 propagates through freshen_for_read into tolerant_read_with_budget:637 — a failed hint write fails the read, violating AC1 hint-only) → filed BUG-1778 (high). Majors 2+3 confirmed with corrected mechanism (reader-vs-worker race codex cited does NOT exist — readers file under the RefreshLock; the real unlocked writers are the reaper thread record_worker_exit and cache_cmd.rs:168/194/201) → filed BUG-1779 (medium). Also verified: the Windows CI red on this head is byte-identical to BUG-1777''s known 16-test set — nothing new rode in on the waived red. Spec remains completed; findings are follow-ups, not a reopen.'
+  created_at: 2026-10-02T21:13:10.180179556Z
+  modified_at: 2026-10-02T21:13:10.180179556Z
+  session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
 history:
 - id: 01a0fdf1-836d-7331-9d3e-ac3a67bb447b
   author: joe
