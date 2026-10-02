@@ -200,12 +200,12 @@ description: |
 
   Related: BUG-1768 covers the downstream consequence (the orphaned Draft
   finding), and is independent of this fix.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:40:04.826717728Z
-modified_at: 2026-10-02T10:55:06.484427599Z
+modified_at: 2026-10-02T10:55:17.866644135Z
 req_type: Bug
 tags:
 - auto-complete
@@ -285,6 +285,14 @@ comments:
   created_at: 2026-10-02T10:55:06.484427599Z
   modified_at: 2026-10-02T10:55:06.484427599Z
   session_id: 8e6a376b-16ed-45f7-a6ee-ea30765c7868
+history:
+- id: 01a0fc41-116a-7423-aabd-28082d0088c9
+  author: joe
+  timestamp: 2026-10-02T10:55:17.866642013Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
