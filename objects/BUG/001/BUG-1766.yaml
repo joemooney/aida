@@ -1,0 +1,19 @@
+id: 01a0fb5c-c9da-7b73-b5ca-7d4662f3301c
+spec_id: BUG-1766
+agreed_id: BUG-1766
+title: Dummy bug for 1687 triage
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T06:45:57.338389050Z
+modified_at: 2026-10-02T06:45:57.338389050Z
+req_type: Bug
+filed_at:
+  code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
