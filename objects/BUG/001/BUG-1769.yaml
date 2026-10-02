@@ -205,10 +205,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:40:04.826717728Z
-modified_at: 2026-10-02T10:53:59.246269140Z
+modified_at: 2026-10-02T10:54:17.171037464Z
 req_type: Bug
 tags:
 - auto-complete orchestrator needs-triage launch-refused
+- severity:major
+- triaged
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
