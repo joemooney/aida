@@ -234,6 +234,139 @@ pub(crate) fn decide_claim(
     }
 }
 
+/// BUG-1764: decide whether a recorded claim is STALE for the purpose of
+/// *reporting* it. Returns `Some(reason)` when the claim must not be presented
+/// as active, `None` when it is presumed live.
+///
+/// Every reader of [`list_claims`] must route through this. Before BUG-1764
+/// none of them applied any expiry predicate at all, so a claim displayed
+/// forever once written: `aida session leases` filtered only on `clone_path`,
+/// and `aida status --full` / `aida doctor` / `aida team` took the whole list
+/// (measured on one host: 211 claims reported as active, the oldest 93 days
+/// past its own 1800s TTL).
+///
+/// # Why this is TTL-first and not a pid check
+///
+/// A session lease is **not** [`Claim::process_backed`] — its recorded `pid` is
+/// the ephemeral `aida session start` shell, which exits the instant the lease
+/// is written, so neither its death nor its survival says anything about the
+/// session. The TTL/heartbeat age is therefore the governing signal, and the
+/// pid probe can only ever ADD staleness. That ordering is what makes a PID
+/// collision harmless: BUG-1764 was filed because a lease recording `pid = 2`
+/// (`kthreadd`) or `pid = 202` (a live kworker) looked alive forever, and under
+/// a TTL-first predicate no pid value can grant life to an aged-out claim.
+///
+/// Clause order mirrors [`decide_claim`] so display and reclaim never disagree:
+/// a claim this function calls stale is one `decide_claim` would reclaim.
+///
+/// `is_alive` is injected so every clause is unit-testable without spawning a
+/// process — the same shape `decide_claim` uses.
+// trace:BUG-1764 | ai:claude
+pub(crate) fn claim_staleness(
+    claim: &Claim,
+    now: DateTime<Utc>,
+    our_host: &str,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Option<String> {
+    // Clause 1 — the universal TTL backstop, portable across hosts and the only
+    // signal that applies to a non-process-backed session lease.
+    if let Some(age) = claim.heartbeat_age_secs(now) {
+        if age > claim.ttl_secs {
+            return Some(format!(
+                "heartbeat {age}s old, past its {}s TTL",
+                claim.ttl_secs
+            ));
+        }
+    }
+    // Clause 2 — same-HOST pid evaluation. Gated on `process_backed` for the
+    // reason above. Note this is keyed on `host`, NOT `clone_path`: a claim from
+    // a different clone on THIS machine is fully probeable against the local
+    // process table and must not be excused as unreachable just because its
+    // path differs (BUG-1764 clause 3 — all eight leases in the filed
+    // measurement were `host = "imac"` queried from `imac`).
+    let same_host = !claim.host.is_empty() && claim.host == our_host;
+    if claim.process_backed && same_host && !is_alive(claim.pid, claim.pid_start_time.as_deref()) {
+        return Some(format!(
+            "holder pid {} on {} is not running",
+            claim.pid, claim.host
+        ));
+    }
+    None
+}
+
+/// BUG-1764: the STRICT process-identity probe used by [`claim_staleness`].
+///
+/// Deliberately *not* `aida_core::liveness::process_identity_is_alive`, which
+/// returns `true` when the record carries no `pid_start_time` — the documented
+/// TASK-1284 degrade that keeps legacy drain/solo lock holders from being
+/// reclaimed merely because their record predates process identities. That
+/// degrade is right for reclaim (wrongly reclaiming a live drain is far more
+/// destructive than printing a stale row) and wrong for reporting, which is
+/// what BUG-1764 clause 2 asks for: an unverifiable claim must not be trusted
+/// as live.
+///
+/// | recorded start | live start | verdict |
+/// |---|---|---|
+/// | (pid not alive) | — | dead |
+/// | absent | — | **unverifiable → not live** |
+/// | present | unreadable | **unverifiable → not live** |
+/// | present | differs | dead (the PID-collision case) |
+/// | present | equal | alive |
+///
+/// Use for display and for the opt-in `--prune-stale` clear only. Do NOT reuse
+/// as a reclaim predicate for the drain/solo locks.
+// trace:BUG-1764 | ai:claude
+pub(crate) fn strictly_alive(pid: u32, recorded_start: Option<&str>) -> bool {
+    strictly_alive_with(
+        pid,
+        recorded_start,
+        aida_core::liveness::pid_is_alive,
+        aida_core::liveness::process_start_identity,
+    )
+}
+
+/// Injectable core of [`strictly_alive`], so the collision case is reproducible
+/// in a unit test without root and without a real pid 2.
+// trace:BUG-1764 | ai:claude
+fn strictly_alive_with(
+    pid: u32,
+    recorded_start: Option<&str>,
+    is_pid_alive: impl FnOnce(u32) -> bool,
+    live_start: impl FnOnce(u32) -> Option<String>,
+) -> bool {
+    if !is_pid_alive(pid) {
+        return false;
+    }
+    // No recorded identity → nothing to compare → unverifiable, not live.
+    let Some(recorded) = recorded_start else {
+        return false;
+    };
+    // Kernel start time unreadable → unverifiable, not live.
+    match live_start(pid) {
+        Some(actual) => recorded == actual,
+        None => false,
+    }
+}
+
+/// BUG-1764: partition claims into (presumed-live, stale-with-reason) using
+/// [`claim_staleness`] and the real strict probe. The single entry point for
+/// every reporting surface, so a new reader cannot forget the predicate.
+// trace:BUG-1764 | ai:claude
+pub(crate) fn partition_claims(
+    claims: Vec<Claim>,
+    now: DateTime<Utc>,
+    our_host: &str,
+) -> (Vec<Claim>, Vec<(Claim, String)>) {
+    let mut live = Vec::new();
+    let mut stale = Vec::new();
+    for claim in claims {
+        match claim_staleness(&claim, now, our_host, strictly_alive) {
+            Some(reason) => stale.push((claim, reason)),
+            None => live.push(claim),
+        }
+    }
+    (live, stale)
+}
 /// Sanitize a scope into a safe, collision-resistant filename stem. Lowercases,
 /// keeps `[a-z0-9._-]`, maps every other byte to `_`. A trailing FNV-1a hash of
 /// the ORIGINAL scope guarantees two scopes that sanitize to the same stem
@@ -590,6 +723,59 @@ pub(crate) fn release_claim(store_root: &Path, scope: &str, clone_path: &Path) {
     if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
         let _ = aida_core::git_ops::push(store_root, "origin", &branch);
     }
+}
+
+/// BUG-1764 clause 4: release a FOREIGN lease claim that [`claim_staleness`]
+/// reports dead. Returns `Ok(true)` when a file was removed, `Ok(false)` when
+/// the claim had already gone or no longer matches what we judged.
+///
+/// [`release_claim`] cannot do this: it deliberately refuses a claim whose
+/// `clone_path` is not ours, so "a successor reclaimed it" never gets stomped.
+/// That guard is right for the normal end path and is why there was previously
+/// NO supported way to clear a stale foreign claim — `aida session end --spec`
+/// cannot reach one (no local lease) and `aida session reap` requires spec
+/// Done + branch merged + process exited.
+///
+/// The authorization here is the staleness verdict, so the verdict must still
+/// hold at delete time. `expect_heartbeat` is the `heartbeat_at` the caller
+/// judged: if the on-disk claim has a different one, the holder heartbeated
+/// between the listing and the delete and is NOT stale after all — leave it.
+/// Same for a changed `clone_path` (a successor took the scope). This closes
+/// the read-then-delete window that the `clone_path` check closes for
+/// [`release_claim`].
+// trace:BUG-1764 | ai:claude
+pub(crate) fn release_stale_foreign_claim(
+    store_root: &Path,
+    scope: &str,
+    expect_clone_path: &str,
+    expect_heartbeat: &str,
+) -> Result<bool> {
+    if !store_root.exists() || !aida_core::git_ops::has_remote(store_root, "origin") {
+        return Ok(false);
+    }
+    let path = claim_path(store_root, scope);
+    let branch =
+        aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    // Pull first so we judge, and delete, against the latest store state — a
+    // peer may already have released or refreshed it.
+    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    let Some(existing) = read_claim(&path) else {
+        // Already gone (or unreadable) — nothing to release, not an error.
+        return Ok(false);
+    };
+    if existing.clone_path != expect_clone_path || existing.heartbeat_at != expect_heartbeat {
+        // Refreshed or reclaimed since we listed it → our staleness verdict is
+        // no longer about this record. Refuse rather than guess.
+        return Ok(false);
+    }
+    std::fs::remove_file(&path)?;
+    let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
+    aida_core::git_ops::add(store_root, &[&rel])?;
+    let msg = format!("chore(coordination): release stale lease {scope} (BUG-1764)");
+    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
+        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    }
+    Ok(true)
 }
 
 /// List the cross-clone lease claims currently recorded on the store. Returns
@@ -1516,5 +1702,206 @@ ttl_secs = 1800
             matches!(out, LockAcquireOutcome::Unavailable(_)),
             "got {out:?}"
         );
+    }
+
+    // ── BUG-1764: the reporting-staleness predicate ────────────────────────
+    //
+    // Before BUG-1764 NO reader of `list_claims` applied an expiry predicate:
+    // `print_cross_clone_leases` filtered only on `clone_path`, and
+    // `print_status_coordination_section` (`aida status --full`, `aida doctor`)
+    // and `team::build_team_view` took the whole list. Measured on the
+    // reporter's host: 211 claims reported active, oldest 8_078_324s against
+    // its own 1800s TTL.
+    //
+    // Liveness is injected, so the PID-collision case the spec specifies —
+    // `pid = 2` (`kthreadd`) with a `pid_start_time` later than boot — is
+    // reproducible without root and without a real pid 2.
+    // trace:BUG-1764 | ai:claude
+
+    /// A NON-process-backed foreign claim: the session-lease shape, whose
+    /// recorded pid is the ephemeral `aida session start` shell.
+    fn lease_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
+        Claim {
+            scope: "BUG-1817".to_string(),
+            node_id: "4".to_string(),
+            clone_path: "/home/joe.mooney/ai/aida".to_string(),
+            host: host.to_string(),
+            pid,
+            pid_start_time: Some("2026-10-01T22:05:10+00:00".to_string()),
+            agent: "implementer".to_string(),
+            started_at: heartbeat_at.to_string(),
+            heartbeat_at: heartbeat_at.to_string(),
+            ttl_secs: 1800,
+            process_backed: false,
+            review_verb: false,
+            authorized_by: None,
+        }
+    }
+
+    fn at(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+    }
+
+    /// Clause 1 — an aged-out claim is stale; a fresh one is not. This is the
+    /// clause that catches every lease in the filed measurement, and the
+    /// reproduction that survived the operator's hand-clear: BUG-1817 on host
+    /// `spock`, age 26055s against its own `ttl_secs = 1800`.
+    #[test]
+    fn bug_1764_ttl_expiry_is_applied_to_a_foreign_lease() {
+        let c = lease_claim("spock", 1134977, "2026-10-01T22:05:14+00:00");
+        // 26055s later — 14x past the 1800s TTL the claim itself carries.
+        let reason = claim_staleness(&c, at("2026-10-02T05:19:29+00:00"), "imac", |_, _| true)
+            .expect("a lease 26055s past its 1800s TTL must read stale");
+        assert!(
+            reason.contains("1800s TTL"),
+            "reason should name the TTL it breached, got {reason:?}"
+        );
+        // Fresh: 60s old, well inside the TTL → presumed live.
+        assert_eq!(
+            claim_staleness(&c, at("2026-10-01T22:06:14+00:00"), "imac", |_, _| true),
+            None,
+            "a lease inside its TTL must stay visible"
+        );
+    }
+
+    /// Clause 2 — a LIVE pid must never rescue an aged-out claim. This is the
+    /// structural fix for the filed defect: `pr-2256` recorded `pid = 2`
+    /// (`kthreadd`) and `bug-1692` recorded `pid = 202` (a live kworker), and
+    /// any predicate that asked only "does this pid exist" saw them as live
+    /// forever. `is_alive` says yes to everything here and the claim is still
+    /// stale, because the TTL is evaluated first and independently.
+    #[test]
+    fn bug_1764_a_live_pid_cannot_rescue_an_aged_out_claim() {
+        for pid in [2u32, 202] {
+            let c = lease_claim("imac", pid, "2026-09-28T12:26:18+00:00");
+            assert!(
+                claim_staleness(&c, at("2026-10-01T22:00:00+00:00"), "imac", |_, _| true).is_some(),
+                "pid {pid} colliding with a live kernel thread must not keep an \
+                 aged-out lease alive"
+            );
+        }
+    }
+
+    /// Clause 2 — the strict identity probe. A recorded start time that
+    /// disagrees with the kernel's means the PID was recycled: the filed
+    /// leases recorded Sep 28 while pid 2 and pid 202 actually started Sep 4
+    /// at boot.
+    #[test]
+    fn bug_1764_strict_probe_rejects_a_recycled_pid() {
+        let boot = |_| Some("2026-09-04T00:00:00+00:00".to_string());
+        // Recorded Sep 28, kernel says Sep 4 → mismatch → dead.
+        assert!(
+            !strictly_alive_with(2, Some("2026-09-28T12:26:18+00:00"), |_| true, boot),
+            "a recorded start time that differs from the kernel's must read dead"
+        );
+        // Recorded == actual → alive.
+        assert!(
+            strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| true, boot),
+            "a matching start time must read alive"
+        );
+        // Pid not alive at all → dead, regardless of the recorded identity.
+        assert!(
+            !strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| false, boot),
+            "a dead pid must read dead"
+        );
+    }
+
+    /// Clause 2 — a claim with NO `pid_start_time` is UNVERIFIABLE, not live.
+    /// Three of the eight filed leases (`bug-1692`, `task-1500`, `task-1531`)
+    /// carry no `pid_start_time` at all, and `bug-1692` is the case where both
+    /// defects land together: no recorded identity AND a live colliding kernel
+    /// thread. This is deliberately the OPPOSITE of
+    /// `aida_core::liveness::process_identity_is_alive`, which returns `true`
+    /// on a missing record (the TASK-1284 reclaim degrade) — see
+    /// `strictly_alive`'s doc comment for why reporting must not inherit it.
+    #[test]
+    fn bug_1764_absent_pid_start_time_is_unverifiable_not_live() {
+        assert!(
+            !strictly_alive_with(
+                202,
+                None,
+                |_| true,
+                |_| Some("2026-09-04T00:00:00+00:00".to_string())
+            ),
+            "no recorded pid_start_time must read NOT live, even for a live pid"
+        );
+        // And a kernel that cannot report a start time is equally unverifiable.
+        assert!(
+            !strictly_alive_with(202, Some("2026-09-28T00:00:00+00:00"), |_| true, |_| None),
+            "an unreadable kernel start time must read NOT live"
+        );
+        // Guard the contrast with the reclaim predicate we deliberately did
+        // NOT change: it still trusts a missing record, and must keep doing so.
+        assert!(
+            aida_core::liveness::process_identity_is_alive(std::process::id(), None),
+            "the drain/solo reclaim degrade must be left intact"
+        );
+    }
+
+    /// Clause 3 — a claim whose `host` is ours is evaluated against the LOCAL
+    /// process table even though its `clone_path` differs. All eight leases in
+    /// the filed measurement were `host = "imac"` queried from `imac`, yet were
+    /// filed as unreachable "cross-clone" purely because the path differed.
+    #[test]
+    fn bug_1764_same_host_different_clone_is_evaluated_locally() {
+        let mut c = lease_claim("imac", 2, "2026-10-01T22:00:00+00:00");
+        c.process_backed = true; // a drain/solo claim: pid liveness is exact
+        assert_ne!(
+            c.clone_path, "/home/joe/ai/aida",
+            "fixture is a foreign clone"
+        );
+        // Inside its TTL, so clause 1 cannot be what decides this. Same host +
+        // a dead pid → stale via the local process table.
+        let reason = claim_staleness(&c, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| false)
+            .expect("same-host claim with a dead pid must read stale");
+        assert!(
+            reason.contains("not running"),
+            "reason should name the pid probe, got {reason:?}"
+        );
+        // The SAME claim on a different host is not locally probeable, so the
+        // pid verdict must not be applied to it.
+        let remote = lease_claim("spock", 2, "2026-10-01T22:00:00+00:00");
+        assert_eq!(
+            claim_staleness(&remote, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| {
+                false
+            }),
+            None,
+            "a foreign-HOST claim inside its TTL must not be judged by our pid table"
+        );
+    }
+
+    /// A non-process-backed session lease must NOT be called stale merely
+    /// because its ephemeral `session start` shell has exited — that pid dies
+    /// immediately by design. Only the TTL governs it. Guards against the
+    /// obvious over-correction while fixing this bug.
+    #[test]
+    fn bug_1764_ephemeral_session_pid_death_is_not_staleness() {
+        let c = lease_claim("imac", 1134977, "2026-10-01T22:00:00+00:00");
+        assert!(!c.process_backed);
+        assert_eq!(
+            claim_staleness(&c, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| false),
+            None,
+            "a session lease must survive the death of its launching shell"
+        );
+    }
+
+    /// `partition_claims` is the single entry point every reporting surface
+    /// uses, so a new reader cannot forget the predicate. Asserts the split
+    /// keeps the live claim and reports the reason for the dead one.
+    #[test]
+    fn bug_1764_partition_splits_live_from_stale() {
+        let fresh = lease_claim("spock", 1, "2026-10-01T22:05:00+00:00");
+        let mut aged = lease_claim("spock", 2, "2026-09-01T00:00:00+00:00");
+        aged.scope = "ADR-7".to_string();
+        let (live, stale) = partition_claims(
+            vec![fresh.clone(), aged.clone()],
+            at("2026-10-01T22:06:00+00:00"),
+            "imac",
+        );
+        assert_eq!(live.len(), 1, "the fresh claim must survive");
+        assert_eq!(live[0].scope, "BUG-1817");
+        assert_eq!(stale.len(), 1, "the aged claim must be reported stale");
+        assert_eq!(stale[0].0.scope, "ADR-7");
+        assert!(stale[0].1.contains("TTL"), "got {:?}", stale[0].1);
     }
 }

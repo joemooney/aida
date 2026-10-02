@@ -146,6 +146,19 @@ pub(crate) fn build_team_view(store_root: &Path, our_clone: &str) -> Vec<TeamMem
     // One read of the coordination tree; bucket claims by canonical clone path.
     let mut claims = crate::coordination::list_claims(store_root);
     claims.extend(crate::coordination::list_lock_claims(store_root));
+    // BUG-1764: `active_claims` is a promise the field name makes, and this
+    // reader kept it for claims whose holder was long gone — nothing here
+    // applied an expiry predicate. Drop the stale ones before bucketing so a
+    // roster row reports what a peer actually holds now. The staleness verdict
+    // is shared with `aida session leases` / `aida status`, so the three
+    // surfaces can never disagree about who holds what.
+    // trace:BUG-1764 | ai:claude
+    let claims = crate::coordination::partition_claims(
+        claims,
+        chrono::Utc::now(),
+        &crate::coordination::hostname(),
+    )
+    .0;
 
     registry
         .nodes
