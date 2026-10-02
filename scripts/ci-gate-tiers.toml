@@ -36,9 +36,17 @@
 #     LITERAL it searches the tree for. It never runs the binary -> fast.
 #   - "Check formatting" invokes cargo but builds nothing (rustfmt only, ~1s),
 #     so it belongs in the pre-push tier despite naming cargo.
+#   - "Generated protobuf mirror drift guard" names only `cargo check`, which by
+#     the binary-dependency rule above would read `fast` (as "TUI seam guard"
+#     does). It is `full` anyway, and the reason is not build cost: the gate
+#     DELETES both tracked mirrors and regenerates them, and it refuses outright
+#     when a mirror already carries uncommitted edits. A pre-push tier runs
+#     while an agent is mid-edit, so that gate belongs after the push, not
+#     before it. trace:TASK-1567
 [tiers]
 "Build all packages" = "full"
 "TUI seam guard" = "fast"
+"Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"

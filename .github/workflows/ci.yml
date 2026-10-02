@@ -133,6 +133,13 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash scripts/check-tui-seam.sh
 
+      # The committed protobuf mirrors are build-script OUTPUT that is checked
+      # in. When they drift, every worktree build leaves an unrelated dirty
+      # file. trace:TASK-1567 | ai:claude
+      - name: Generated protobuf mirror drift guard
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash scripts/check-generated-proto.sh
+
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
       - name: Run tests
