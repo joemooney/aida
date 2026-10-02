@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-09-27T14:16:16.719762313Z
+modified_at: 2026-10-02T10:47:15.085897884Z
 req_type: Story
 tags:
 - agent-launch
@@ -49,6 +49,49 @@ comments:
   created_at: 2026-09-27T14:16:16.719762313Z
   modified_at: 2026-09-27T14:16:16.719762313Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0fc39-b38d-73d0-8d47-52e5dbe66e17
+  author: joe
+  content: |
+    Advisor pass (relay session #12, 2026-10-02): LEFT IN DRAFT DELIBERATELY. Not an
+    oversight, and it should not be re-groomed as if it were groomable.
+
+    The spec says in its own text that it changes agent authority and "stays a DRAFT
+    for the operator; a proxy must not approve it". This session is a proxy advisor
+    seat, so approving it is out of bounds regardless of how sound the proposal
+    looks. Recording that here so the next advisor pass does not spend the
+    investigation again.
+
+    ## One thing HAS changed since filing, and it is the thing the operator needs
+
+    Its only blocker is now satisfied: **TASK-1499 is Completed** (`blocked: false`
+    on the spec as of this pass). At filing time, "hold until TASK-1499 lands" was a
+    live option. It has landed.
+
+    So STORY-1486 is now waiting on **nothing but an operator decision**. Its three
+    recorded options were: adopt the profile as proposed; adopt it without the
+    no-approval-prompt part; or hold until STORY-1473 lands. The first two are now
+    actionable immediately. Only the third still depends on other work --
+    STORY-1473 (seat authority is session-bound and set at a TTY) is referenced, not
+    a blocker, and is itself approved-but-not-queued.
+
+    ## What the operator is actually being asked
+
+    Heft 7, and the substantive question is AC3: which commands are exempt from
+    Codex approval prompts. ACs 1, 2, 4 and 5 are mechanical and carry little
+    authority risk -- separating writable from read-only roots, downgrading a seat
+    to Git-read-only, authorizing both target/debug and target/release, and banning
+    machine-specific absolute paths. AC3 is the one that widens what an agent may do
+    without being asked, and it is the reason this spec is operator-gated.
+
+    That suggests a third disposition the recorded options do not list, offered here
+    as advice and not as a decision: approve ACs 1, 2, 4, 5 as their own spec now --
+    they are a portability and least-privilege improvement with no authority
+    widening -- and keep AC3 parked for the operator. That would unblock most of
+    heft 7 without a proxy touching the approval-prompt surface. If the operator
+    prefers the spec whole, it stays as it is.
+  created_at: 2026-10-02T10:47:15.085897884Z
+  modified_at: 2026-10-02T10:47:15.085897884Z
+  session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 decision_request:
   question: STORY-1486 (split from TASK-1499) sets what scaffolded agents may write and which aida commands skip approval prompts. How should it proceed?
   choices:
