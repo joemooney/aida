@@ -84,12 +84,12 @@ description: |
   `Done` during the same run, on the strength of a refusal whose own message said
   "Status is Done (work finished on a branch)" -- is filed separately and is NOT
   in scope here.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:39:25.470768504Z
-modified_at: 2026-10-02T12:00:53.039324470Z
+modified_at: 2026-10-02T15:10:27.662180359Z
 req_type: Bug
 tags:
 - advisor-groom
@@ -117,6 +117,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fd2a-acf6-7cf1-8781-6099f27cf4aa
+  author: aida-auto-bump
+  timestamp: 2026-10-02T15:10:27.574866928Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0fd2a-ad4e-7272-89e6-edf9072c3ca0
+  timestamp: 2026-10-02T15:10:27.662176023Z
+  agent: aida
+  commit_sha: 5a560f7aad3a0150ebcce4724daa9e7af1e0a322
+  summary: Completed via merge 5a560f7a
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
@@ -125,3 +138,7 @@ filed_at:
   aida_build_sha: f3cde6e60e
   vendor: antigravity
   session: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-02T15:10:27.574781554Z
+  completion_sha: 5a560f7aad3a0150ebcce4724daa9e7af1e0a322
