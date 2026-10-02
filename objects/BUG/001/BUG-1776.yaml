@@ -1,0 +1,64 @@
+id: 01a0fe04-d960-7831-bd7b-d171c4d37570
+spec_id: BUG-1776
+agreed_id: BUG-1776
+title: 'macOS nightly: the three bug_1769 phase-1 recovery tests fail — the substrate-verification branch classifies a resolvable lost child as LaunchRefused even though its own reason text names the store st'
+description: |
+  The three bug_1769_* tests in aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs
+  (added by BUG-1769, PR #2334, merged aae7a140f4 on 2026-10-02 07:16 -0700) fail on the
+  macOS leg of the Cross-platform (nightly) workflow. They pass on Linux (CI workflow and
+  the local suite are green) and the failure appeared in the first macOS run whose merge
+  ref contained #2334.
+
+  Failing tests (all three, same shape):
+  - bug_1769_advance_during_the_run_resolves_the_pr_instead_of_relaunching (panics at bug_1629_phase1_recovery_tests.rs:762)
+  - bug_1769_advance_with_no_locatable_pr_pauses_rather_than_demoting (line 793)
+  - bug_1769_advance_whose_pr_already_merged_completes_the_drive (line 831)
+
+  Observed failure: each test expects BUG-1769's substrate verification to resolve the
+  "lost phase-1 child" (store reports the spec Approved / In Progress, or the PR already
+  merged) instead of recording a PhaseFailure. On macOS the orchestrator still returns
+  `PhaseFailure { kind: LaunchRefused, reason: "phase 1 child session ... exited with
+  code 1 after ~150-300ms without a session lease or an orchestrator handoff receipt ...
+  that replacement launch did not advance NFR-56 — the store reports NFR-56 as Approved" }`
+  — i.e. the reason text itself proves the substrate read SUCCEEDED (it names the store
+  status), yet the verification branch still classified the run as a phase failure.
+
+  Evidence:
+  - Run 37032563848 (Cross-platform (nightly), pull_request on task-1567-work,
+    2026-10-02T16:14Z), job 110922761390 Build (macos-latest):
+    `test result: FAILED. 7531 passed; 3 failed` in aida-cli-lib --lib.
+  - Control (pre-merge): run 36953169827 (bug-1760, 01:54Z) and run 36965985522
+    (task-1536, 04:46Z) — macOS leg PASSED; their merge refs predate #2334.
+  - Distinct from the macOS timing flakes seen on task-1562's runs
+    (db::cached_git_backend loser_budget / refresh_holder tests) and from the
+    longstanding broad Windows failures.
+
+  Suspected class: tempdir path canonicalization (/var vs /private/var) breaking an
+  identity/path comparison inside the substrate-verification branch, the class BUG-1192
+  fixed elsewhere — unverified; no macOS host available here.
+
+  Scheduling note: ADR-62 (macOS/Windows do not gate merges) and ADR-47 (defer
+  cross-platform work until the queue drains) apply — filed for capture, not for
+  immediate work. Also observed while triaging: the SCHEDULED nightly run on main has
+  been `cancelled` four days running (2026-09-29..10-02), so the nightly tracking-issue
+  automation never fires; the only completed cross-platform runs are PR-triggered.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T19:08:45.792442925Z
+modified_at: 2026-10-02T19:08:45.792442925Z
+req_type: Bug
+tags:
+- cross-platform
+- from-triage
+- macos
+- nightly
+filed_at:
+  code_sha: 2779659ec636e12e5076c52efedf61147fbcd850
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 54f4de70-b131-41b6-b8b6-9904154b654a
