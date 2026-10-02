@@ -1,0 +1,87 @@
+id: 01a0fd8e-2bde-7b01-af5e-0aa34a6a0ac3
+spec_id: BUG-1772
+agreed_id: BUG-1772
+title: 'A harness-worktree lease minted against the project root is never reaped and tracks nothing: two survive here, 3 months and 10 days old'
+description: |
+  ## Summary
+
+  `worktree_lease::lease_spec_for_start` writes a session lease from the
+  `SubagentStart` hook payload with `worktree_path = payload.cwd` and
+  `scope = spec_id_from_branch(branch).unwrap_or(HARNESS_WORKTREE_SCOPE)`. An
+  Agent-tool subagent that is NOT given a worktree of its own runs in the project
+  root on `main`, so both fallbacks fire and the record written is:
+
+  ```
+  scope         = "harness-worktree"
+  worktree_path = "<project root>"
+  branch        = "main"
+  # no active_pid, no creator_pid
+  ```
+
+  Two problems, both observed in this repository on 2026-10-02 at `fe09d7678e`:
+
+  1. **It tracks nothing.** The path recorded is the checkout, not the
+     subagent's. Nothing can be learned from it that is not already known, and
+     because `lease_state_for`'s `has_live_claude` arm matches on
+     `cwd.starts_with(worktree_path)`, a lease pinned to the root absorbs the
+     liveness of every claude process anywhere under the checkout — the
+     operator's own window included.
+
+  2. **Nothing reaps it.** `lease_id_for_stop` clears the lease on
+     `SubagentStop`. When that hook never arrives, the record is immortal. This
+     store holds two:
+
+     | id | started_at | age |
+     |---|---|---|
+     | `abf9f7f087dbb254e-c3a7f12a9af4d18b` | 2026-06-26T18:55:38Z | 3 months |
+     | `01a0c96c2f117c239cfd2acf11a8f59a-3716d304824b58e5` | 2026-09-22T14:01:46Z | 10 days |
+
+     Both root-pinned, both pid-less. `aida ps --json` reports both
+     `liveness: live`, attributing to each the pid of whatever claude happens to
+     be standing in the checkout.
+
+  ## Why this is filed separately
+
+  BUG-1740 made the CONSUMER robust: a root-pinned harness lease no longer counts
+  as an active fan-out, and the reporting session is no longer its own
+  corroboration. That removes the wrong verdict, which was the urgent part. It
+  does not stop the bad records being written, and it does not remove the two
+  already in the store. BUG-1740's AC7 asked for exactly this split.
+
+  ## Acceptance
+
+  1. Decide and record whether a `SubagentStart` whose cwd is the project root
+     should mint a lease at all. If the subagent has no worktree of its own,
+     state what the lease is FOR; if the answer is "nothing", do not write it.
+  2. A `harness-worktree` lease whose `SubagentStop` never arrives is reaped.
+     Say by what: a liveness-backed sweep, a TTL, or
+     `aida session leases --prune-stale` learning this shape. Whichever is
+     chosen, a lease with no pid of any kind and an age past the threshold must
+     not survive.
+  3. The two leases above are gone from this store, by the mechanism from AC2 and
+     not by hand.
+  4. Prove by mutation that a new test fails without the fix. A test that passes
+     either way proves nothing here: every pre-BUG-1740 unit test passed while
+     that defect was live, because the fixtures used `std::process::id()` as the
+     worker.
+
+  ## Do not
+
+  - Do not re-litigate BUG-1740's consumer-side rules; they are merged and
+    independently tested.
+  - Do not widen into general lease GC or the ~80 accumulated worktrees.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T16:59:08.126367723Z
+modified_at: 2026-10-02T16:59:08.126367723Z
+req_type: Bug
+filed_at:
+  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 9128ae3a-ad73-43ef-b6ef-021513ef8317
