@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-10-02T19:05:35.136727379Z
+modified_at: 2026-10-02T19:27:42.162289104Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -185,6 +185,28 @@ comments:
   modified_at: 2026-10-02T19:05:35.136727379Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
   relayed_from: advisor
+- id: 01a0fe16-3052-7782-b051-b54989d221e7
+  author: codex-reviewer
+  content: |-
+    REVIEWER TRAIL (codex read-only, PR #2348):
+
+    --- round 1 ---
+    VERDICT: REQUEST-CHANGES
+    RAN-TESTS: no
+    AC-a: witnessed — atomic `create_dir` claims the matched lease path before admin-dir removal.
+    AC-b: gap — git common-dir and `worktrees` read failures return `NoRegistration`, so reap may delete the branch without reporting a decline.
+    AC-c: witnessed — the hook recreates the worktree after the final `exists()` check; the test asserts its registration survives.
+    AC-d: witnessed — the requested diff contains no changes to `task_1543_reap_polish_tests.rs`; its prior behavior remains.
+    AC-e: witnessed — the tests use fixtures and a hook, with no sleeps or polling.
+    FINDINGS: - Fail-closed reporting is missing when repository/admin registration state is unreadable. Those paths should produce a reported decline. - No early return skips sentinel release after a successful claim; both admin-dir removal outcomes reach the nonrecursive release. - The changed reap helpers have adapted callers in this diff: production callers use `reap_one`, while the TASK-1543 test keeps its wrapper.
+    --- round 2 (after 8239f89def) ---
+    VERDICT: APPROVE
+    AC-b: discharged — Git lookup failures and non-NotFound worktrees read errors now return Declined; a missing worktrees directory remains NoRegistration.
+    FINDINGS: none
+  created_at: 2026-10-02T19:27:42.162289104Z
+  modified_at: 2026-10-02T19:27:42.162289104Z
+  session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
+  relayed_from: reviewer
 history:
 - id: 01a0e458-e89b-7d73-88ff-54128f30291b
   author: joe
