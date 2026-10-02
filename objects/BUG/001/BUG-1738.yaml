@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-09-30T13:41:16.859543918Z
+modified_at: 2026-10-02T14:20:53.741078007Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -140,6 +140,19 @@ comments:
   created_at: 2026-09-30T13:41:15.850923368Z
   modified_at: 2026-09-30T13:41:15.850923368Z
   session_id: 622c849c-8085-4d0c-840e-82dd660b1787
+- id: 01a0fcfd-4c6d-74a0-9922-5d26f32c7624
+  author: joe
+  content: |-
+    DECISION: The `aida doctor` finding will be report-only (not `safe_heal`).
+
+    ### Decision & Rationale
+
+    We will make the hook staleness finding report-only, prompting the user to run `aida remote mirror <name>` manually. Automatically rewriting files in `.git/hooks/` crosses a trust boundary (modifying executable code outside the AIDA store). Even if we verify the AIDA header, it is safer to require the operator to opt-in to the rewrite by running the suggested command themselves. This avoids violating the safe default arm of `heal_doctor_finding` and ensures the operator is aware the hook is being updated.
+
+    ### Acceptance Criteria Updates
+    The ACs remain as written, with the decision above resolving AC4.
+  created_at: 2026-10-02T14:20:53.741078007Z
+  modified_at: 2026-10-02T14:20:53.741078007Z
 history:
 - id: 01a0f28c-4fbb-74f2-b46b-ec100afd2b2b
   author: joe
