@@ -38,11 +38,29 @@
 //!
 //! # Liveness (decides "live" vs "reclaimable")
 //!
-//! - **Same host** (`host == ours`): probe the recorded `pid` — a dead pid is
-//!   reclaimed immediately (fast, exact; slice-1's primary same-host case).
-//! - **Any host:** `now - heartbeat_at > ttl_secs` is stale and reclaimable
-//!   (portable backstop). Periodic heartbeat refresh is slice 2; slice 1 sets
-//!   `heartbeat_at = started_at` so the TTL backstop still works.
+//! A session-lease claim has NO heartbeat: it is written once by a process
+//! that exits immediately, so `heartbeat_at` stays equal to `started_at` for
+//! the claim's whole life and "heartbeat age" is really claim age (BUG-1765 —
+//! the once-planned slice-2 refresh cannot exist without a long-lived driver).
+//! Liveness is therefore decided per claim kind:
+//!
+//! - **Process-backed claims** (drain/solo locks): the holder IS a long-lived
+//!   process, so same host + dead pid → reclaim immediately, and their
+//!   heartbeat genuinely refreshes (`drain_lock`'s heartbeat thread).
+//! - **Session-lease claims, same host:** probed against the holder clone's
+//!   OWN local lease table at `clone_path` with the same worktree/live-claude
+//!   matrix the local table trusts ([`probe_session_liveness_with`]). A
+//!   verified-live (or dormant-but-standing) session keeps its claim alive
+//!   indefinitely — TTL age alone never expires it. The probe can only ADD
+//!   liveness, never subtract it: when it affirms nothing, the clauses below
+//!   decide exactly as they would have (so a peer racing the claim write
+//!   cannot insta-reclaim, and a gone holder still ages out).
+//! - **Session-lease claims, remote host:** `now - heartbeat_at > ttl_secs`
+//!   is stale and reclaimable — the TTL backstop. Nothing short of a real
+//!   heartbeat can see a remote peer, and refusing forever would turn one
+//!   crashed remote clone into a permanent deadlock; the honest contract is
+//!   that a remote session longer than its TTL (30 min) WILL be told it
+//!   expired.
 //! - **`--force`** short-circuits to acquire (the escape hatch) — handled at
 //!   the call site, not in the pure decision fn.
 //!
@@ -111,10 +129,13 @@ pub(crate) struct Claim {
     /// slice-1 session-lease case), the `pid` is the EPHEMERAL `aida session
     /// start` shell that exits the instant the lease is written — so its death
     /// says nothing about whether the worktree session is still live. For
-    /// session leases the holder is the worktree (cross-clone-invisible), so
-    /// only the TTL backstop governs reclaim. Defaults to `false` so an old
-    /// reader / older binary treats every claim as TTL-governed (never wrongly
-    /// reclaims via a dead ephemeral pid). trace:STORY-637 | ai:claude
+    /// session leases the holder is the worktree: on the holder's own host it
+    /// is probeable through that clone's local lease table (BUG-1765,
+    /// [`probe_session_liveness`]), and the TTL backstop governs whatever the
+    /// probe cannot affirm. Defaults to `false` so an old reader / older
+    /// binary treats every claim as TTL-governed (never wrongly reclaims via
+    /// a dead ephemeral pid).
+    // trace:STORY-637 trace:BUG-1765 | ai:claude
     #[serde(default)]
     pub process_backed: bool,
     /// True for advisory PR/MR-review claims (no worktree). Informational —
@@ -168,18 +189,32 @@ pub(crate) enum ClaimDecision {
 /// OUR OWN clone (same `node_id`) → ACQUIRE (re-entrant; we already hold it).
 /// A foreign claim is reclaimable when it is `process_backed` and its pid is
 /// dead AND on our host, or when its heartbeat is older than its `ttl_secs`;
-/// otherwise REFUSE. (Session leases are NOT `process_backed` — only the TTL
-/// backstop governs them; see [`Claim::process_backed`].)
+/// otherwise REFUSE. (Session leases are NOT `process_backed` — the TTL
+/// backstop governs them UNLESS `session_live` affirms the holder's session;
+/// see [`Claim::process_backed`] and below.)
 ///
 /// `our_host` is this machine's hostname (used to gate the pid fast path —
 /// probing a pid only makes sense for a same-host holder). `is_alive` reports
 /// whether a pid is currently running on THIS machine.
+///
+/// BUG-1765: `session_live` is the verified-live probe for a session-lease
+/// claim (the real one is [`probe_session_liveness`]; tests inject). It is
+/// consulted only for a non-`process_backed` claim, and `true` means the
+/// holder's session was POSITIVELY verified live on this host — which REFUSES
+/// the acquire even when the claim's heartbeat has aged past its TTL, because
+/// nothing ever refreshes a session claim's heartbeat and expiring a live
+/// session's claim is how the registry silently stopped coordinating after
+/// 30 minutes. `false` means "no affirmative signal" (remote host, holder
+/// gone, probe unavailable), NEVER "verified dead" — the remaining clauses
+/// then decide exactly as they always have. The probe can only add liveness.
+// trace:BUG-1765 | ai:claude
 pub(crate) fn decide_claim(
     existing: Option<&Claim>,
     ours: &Claim,
     now: DateTime<Utc>,
     our_host: &str,
     is_alive: impl Fn(u32, Option<&str>) -> bool,
+    session_live: impl Fn(&Claim) -> bool,
 ) -> ClaimDecision {
     let Some(holder) = existing else {
         return ClaimDecision::Acquire;
@@ -214,6 +249,18 @@ pub(crate) fn decide_claim(
                 "holder pid {} on {} is not running",
                 holder.pid, holder.host
             ),
+        };
+    }
+    // BUG-1765: a session-lease claim whose holding session is POSITIVELY
+    // verified live (same-host probe of the holder clone's own lease table)
+    // is live, full stop — the TTL backstop below must not expire it, because
+    // no heartbeat ever refreshes a session claim. Gated off `process_backed`
+    // (a lock's pid probe above is already exact) and evaluated before the
+    // TTL so verified liveness outranks aged-out-ness, never the reverse.
+    // trace:BUG-1765 | ai:claude
+    if !holder.process_backed && session_live(holder) {
+        return ClaimDecision::Refuse {
+            holder: Box::new(holder.clone()),
         };
     }
     // Universal TTL backstop (portable across hosts): heartbeat aged out.
@@ -261,15 +308,30 @@ pub(crate) fn decide_claim(
 ///
 /// `is_alive` is injected so every clause is unit-testable without spawning a
 /// process — the same shape `decide_claim` uses.
+///
+/// BUG-1765: `session_live` mirrors [`decide_claim`]'s probe — a session-lease
+/// claim whose holding session is positively verified live is reported LIVE
+/// even past its TTL (the claim's heartbeat is never refreshed, so TTL age is
+/// just claim age). `false` means "no affirmative signal", never "dead": the
+/// clauses below then decide unchanged.
 // trace:BUG-1764 | ai:claude
+// trace:BUG-1765 | ai:claude
 pub(crate) fn claim_staleness(
     claim: &Claim,
     now: DateTime<Utc>,
     our_host: &str,
     is_alive: impl Fn(u32, Option<&str>) -> bool,
+    session_live: impl Fn(&Claim) -> bool,
 ) -> Option<String> {
+    // Clause 0 (BUG-1765) — a verified-live session outranks TTL age, exactly
+    // as in `decide_claim`: a claim this clause spares is one `decide_claim`
+    // would refuse to reclaim. trace:BUG-1765 | ai:claude
+    if !claim.process_backed && session_live(claim) {
+        return None;
+    }
     // Clause 1 — the universal TTL backstop, portable across hosts and the only
-    // signal that applies to a non-process-backed session lease.
+    // signal that applies to a non-process-backed session lease the probe
+    // could not affirm.
     if let Some(age) = claim.heartbeat_age_secs(now) {
         if age > claim.ttl_secs {
             return Some(format!(
@@ -348,19 +410,99 @@ fn strictly_alive_with(
     }
 }
 
+/// BUG-1765: the real verified-live probe for a session-lease claim, injected
+/// into [`decide_claim`] / [`claim_staleness`] as `session_live`.
+///
+/// `true` iff the claim's holder is on THIS host and the holder clone's OWN
+/// local lease table (`<clone_path>/.aida/sessions/`) holds a lease for the
+/// claim's scope whose state is `Live` or `Dormant` under the exact matrix the
+/// local table trusts (`lease_state_for`: worktree exists + live claude + age
+/// — BUG-1764 clause 3 established a same-host claim is fully probeable).
+/// `Dormant` counts as live because the worktree and lease still stand:
+/// reclaiming over a paused session's WIP is the duplicate-work race this
+/// registry exists to prevent (`--force` remains the escape hatch).
+///
+/// Everything else — remote host, empty/missing `clone_path`, no matching
+/// lease, `Stale` state — is `false`, which means "no affirmative signal",
+/// never "verified dead": the callers' remaining clauses (TTL backstop) then
+/// decide unchanged. The probe can only ADD liveness, so a peer that races
+/// the gap between the cross-clone claim write and the local lease write
+/// cannot insta-reclaim a fresh claim.
+// trace:BUG-1765 | ai:claude
+pub(crate) fn probe_session_liveness(claim: &Claim, our_host: &str) -> bool {
+    // Cheap gates first so the process-table scan only runs when the answer
+    // could matter.
+    if claim.process_backed || claim.clone_path.is_empty() {
+        return false;
+    }
+    if claim.host.is_empty() || claim.host != our_host {
+        return false;
+    }
+    let live_sessions = crate::process_probe::probe_live_claude_sessions();
+    probe_session_liveness_with(claim, our_host, &live_sessions, Utc::now())
+}
+
+/// Injectable-clock core of [`probe_session_liveness`]: the caller supplies
+/// the live-claude session listing (one process-table scan can serve many
+/// claims — see [`partition_claims`]) and `now`.
+// trace:BUG-1765 | ai:claude
+pub(crate) fn probe_session_liveness_with(
+    claim: &Claim,
+    our_host: &str,
+    live_sessions: &[crate::process_probe::LiveSession],
+    now: DateTime<Utc>,
+) -> bool {
+    if claim.process_backed || claim.clone_path.is_empty() {
+        return false;
+    }
+    if claim.host.is_empty() || claim.host != our_host {
+        return false;
+    }
+    let clone_root = Path::new(&claim.clone_path);
+    if !clone_root.is_dir() {
+        return false;
+    }
+    // Freshest lease matching the claim's scope, case-insensitive — the same
+    // selection rule the intra-clone conflict guard uses.
+    let leases = crate::list_leases(clone_root);
+    let Some(lease) = crate::find_scope_lease_conflict(&leases, &claim.scope) else {
+        return false;
+    };
+    matches!(
+        crate::lease_state_for(&lease, live_sessions, now),
+        aida_core::liveness::LeaseState::Live | aida_core::liveness::LeaseState::Dormant
+    )
+}
+
 /// BUG-1764: partition claims into (presumed-live, stale-with-reason) using
 /// [`claim_staleness`] and the real strict probe. The single entry point for
 /// every reporting surface, so a new reader cannot forget the predicate.
+///
+/// BUG-1765: the session-liveness probe shares ONE process-table scan across
+/// the whole claim list, so `aida session leases` / `status` / `doctor` /
+/// `team` inherit verified-live reporting at the cost of a single probe.
 // trace:BUG-1764 | ai:claude
+// trace:BUG-1765 | ai:claude
 pub(crate) fn partition_claims(
     claims: Vec<Claim>,
     now: DateTime<Utc>,
     our_host: &str,
 ) -> (Vec<Claim>, Vec<(Claim, String)>) {
+    // Scan the process table once, and only if some claim could need it
+    // (a non-process-backed same-host claim with a clone path to probe).
+    let needs_probe = claims.iter().any(|c| {
+        !c.process_backed && !c.clone_path.is_empty() && !c.host.is_empty() && c.host == our_host
+    });
+    let live_sessions = if needs_probe {
+        crate::process_probe::probe_live_claude_sessions()
+    } else {
+        Vec::new()
+    };
+    let session_live = |c: &Claim| probe_session_liveness_with(c, our_host, &live_sessions, now);
     let mut live = Vec::new();
     let mut stale = Vec::new();
     for claim in claims {
-        match claim_staleness(&claim, now, our_host, strictly_alive) {
+        match claim_staleness(&claim, now, our_host, strictly_alive, &session_live) {
             Some(reason) => stale.push((claim, reason)),
             None => live.push(claim),
         }
@@ -498,9 +640,10 @@ fn build_claim(
         ttl_secs: DEFAULT_TTL_SECS,
         // A session lease is worktree-backed, not process-backed: the pid above
         // is the ephemeral `aida session start` shell that exits immediately, so
-        // it must NOT drive same-host reclaim. Only the TTL backstop (or an
-        // explicit `aida session end` release, or `--force`) reclaims it.
-        // Slice 2's drain/solo claims set this `true`. trace:STORY-637
+        // it must NOT drive same-host reclaim. The same-host session probe
+        // (BUG-1765), the TTL backstop, an explicit `aida session end` release,
+        // or `--force` govern it instead. Drain/solo claims set this `true`.
+        // trace:STORY-637
         process_backed: false,
         review_verb,
         // trace:STORY-711 | ai:claude — not wired yet; see the field doc.
@@ -580,6 +723,9 @@ pub(crate) fn acquire_claim(
                 Utc::now(),
                 &our_host,
                 crate::process_probe::process_identity_is_alive,
+                // BUG-1765: a same-host holder whose session is verifiably
+                // live keeps its claim past the TTL. trace:BUG-1765 | ai:claude
+                |c: &Claim| probe_session_liveness(c, &our_host),
             ) {
                 ClaimDecision::Refuse { holder } => {
                     anyhow::bail!("{}", refusal_message(scope, &holder, &path));
@@ -975,6 +1121,11 @@ pub(crate) fn acquire_lock_claim(
                 Utc::now(),
                 &our_host,
                 crate::process_probe::process_identity_is_alive,
+                // A lock claim is process-backed (the pid probe above is the
+                // exact signal); there is no session to probe. A session
+                // claim can never legitimately sit at a LOCK path, so grant
+                // it no liveness either. trace:BUG-1765 | ai:claude
+                |_: &Claim| false,
             ) {
                 ClaimDecision::Refuse { holder } => {
                     anyhow::bail!("{}", lock_refusal_message(kind, &holder, &path));
@@ -1074,7 +1225,8 @@ pub(crate) fn live_foreign_lock_claim(
         authorized_by: None,
     };
     let our_host = ours.host.clone();
-    match decide_claim(Some(&holder), &ours, now, &our_host, is_alive) {
+    // Lock claims are process-backed — no session to probe (BUG-1765).
+    match decide_claim(Some(&holder), &ours, now, &our_host, is_alive, |_| false) {
         ClaimDecision::Refuse { holder } => Some(*holder),
         ClaimDecision::Acquire | ClaimDecision::Reclaim { .. } => None,
     }
@@ -1246,7 +1398,14 @@ mod tests {
 
     #[test]
     fn no_claim_acquires() {
-        let d = decide_claim(None, &ours("1", "imac"), now(), "imac", |_, _| true);
+        let d = decide_claim(
+            None,
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+            |_| false,
+        );
         assert_eq!(d, ClaimDecision::Acquire);
     }
 
@@ -1264,6 +1423,7 @@ mod tests {
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         assert_eq!(d, ClaimDecision::Acquire);
     }
@@ -1276,7 +1436,14 @@ mod tests {
         // node ids. trace:STORY-637
         let existing = claim("1", "imac", 4242, "2026-06-16T11:59:30Z"); // clone aida-b
         let mine = ours("1", "imac"); // clone aida-a, same node_id "1"
-        let d = decide_claim(Some(&existing), &mine, now(), "imac", |_, _| true);
+        let d = decide_claim(
+            Some(&existing),
+            &mine,
+            now(),
+            "imac",
+            |_, _| true,
+            |_| false,
+        );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
 
@@ -1291,6 +1458,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1308,6 +1476,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
@@ -1323,6 +1492,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1337,6 +1507,7 @@ mod tests {
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         match d {
             ClaimDecision::Refuse { holder } => assert_eq!(holder.node_id, "2"),
@@ -1355,6 +1526,7 @@ mod tests {
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1371,6 +1543,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
@@ -1386,6 +1559,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1400,6 +1574,7 @@ mod tests {
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         assert!(
             matches!(alive, ClaimDecision::Refuse { .. }),
@@ -1411,6 +1586,7 @@ mod tests {
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(
             matches!(dead, ClaimDecision::Reclaim { .. }),
@@ -1579,6 +1755,7 @@ ttl_secs = 1800
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1593,6 +1770,7 @@ ttl_secs = 1800
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
@@ -1606,6 +1784,7 @@ ttl_secs = 1800
             now(),
             "imac",
             |pid, start| pid == 4242 && start == Some("different-start"),
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1621,6 +1800,7 @@ ttl_secs = 1800
             now(),
             "imac",
             |_, _| true,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
@@ -1636,6 +1816,7 @@ ttl_secs = 1800
             now(),
             "imac",
             |_, _| false,
+            |_| false,
         );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
@@ -1750,15 +1931,27 @@ ttl_secs = 1800
     fn bug_1764_ttl_expiry_is_applied_to_a_foreign_lease() {
         let c = lease_claim("spock", 1134977, "2026-10-01T22:05:14+00:00");
         // 26055s later — 14x past the 1800s TTL the claim itself carries.
-        let reason = claim_staleness(&c, at("2026-10-02T05:19:29+00:00"), "imac", |_, _| true)
-            .expect("a lease 26055s past its 1800s TTL must read stale");
+        let reason = claim_staleness(
+            &c,
+            at("2026-10-02T05:19:29+00:00"),
+            "imac",
+            |_, _| true,
+            |_| false,
+        )
+        .expect("a lease 26055s past its 1800s TTL must read stale");
         assert!(
             reason.contains("1800s TTL"),
             "reason should name the TTL it breached, got {reason:?}"
         );
         // Fresh: 60s old, well inside the TTL → presumed live.
         assert_eq!(
-            claim_staleness(&c, at("2026-10-01T22:06:14+00:00"), "imac", |_, _| true),
+            claim_staleness(
+                &c,
+                at("2026-10-01T22:06:14+00:00"),
+                "imac",
+                |_, _| true,
+                |_| false
+            ),
             None,
             "a lease inside its TTL must stay visible"
         );
@@ -1775,7 +1968,14 @@ ttl_secs = 1800
         for pid in [2u32, 202] {
             let c = lease_claim("imac", pid, "2026-09-28T12:26:18+00:00");
             assert!(
-                claim_staleness(&c, at("2026-10-01T22:00:00+00:00"), "imac", |_, _| true).is_some(),
+                claim_staleness(
+                    &c,
+                    at("2026-10-01T22:00:00+00:00"),
+                    "imac",
+                    |_, _| true,
+                    |_| false
+                )
+                .is_some(),
                 "pid {pid} colliding with a live kernel thread must not keep an \
                  aged-out lease alive"
             );
@@ -1852,8 +2052,14 @@ ttl_secs = 1800
         );
         // Inside its TTL, so clause 1 cannot be what decides this. Same host +
         // a dead pid → stale via the local process table.
-        let reason = claim_staleness(&c, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| false)
-            .expect("same-host claim with a dead pid must read stale");
+        let reason = claim_staleness(
+            &c,
+            at("2026-10-01T22:10:00+00:00"),
+            "imac",
+            |_, _| false,
+            |_| false,
+        )
+        .expect("same-host claim with a dead pid must read stale");
         assert!(
             reason.contains("not running"),
             "reason should name the pid probe, got {reason:?}"
@@ -1862,9 +2068,13 @@ ttl_secs = 1800
         // pid verdict must not be applied to it.
         let remote = lease_claim("spock", 2, "2026-10-01T22:00:00+00:00");
         assert_eq!(
-            claim_staleness(&remote, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| {
-                false
-            }),
+            claim_staleness(
+                &remote,
+                at("2026-10-01T22:10:00+00:00"),
+                "imac",
+                |_, _| false,
+                |_| false
+            ),
             None,
             "a foreign-HOST claim inside its TTL must not be judged by our pid table"
         );
@@ -1879,7 +2089,13 @@ ttl_secs = 1800
         let c = lease_claim("imac", 1134977, "2026-10-01T22:00:00+00:00");
         assert!(!c.process_backed);
         assert_eq!(
-            claim_staleness(&c, at("2026-10-01T22:10:00+00:00"), "imac", |_, _| false),
+            claim_staleness(
+                &c,
+                at("2026-10-01T22:10:00+00:00"),
+                "imac",
+                |_, _| false,
+                |_| false
+            ),
             None,
             "a session lease must survive the death of its launching shell"
         );
@@ -1903,5 +2119,180 @@ ttl_secs = 1800
         assert_eq!(stale.len(), 1, "the aged claim must be reported stale");
         assert_eq!(stale[0].0.scope, "ADR-7");
         assert!(stale[0].1.contains("TTL"), "got {:?}", stale[0].1);
+    }
+
+    // ── BUG-1765: a verified-live session outranks TTL age ────────────────
+    //
+    // A session-lease claim's heartbeat is never refreshed (its writer exits
+    // immediately), so before BUG-1765 every session claim read reclaimable
+    // 1800s after `session start` — while its session was still working —
+    // and a peer clone was told to RECLAIM the scope, the exact duplicate-
+    // work race the registry exists to prevent. The injected `session_live`
+    // probe can only ADD liveness: `true` is a positive same-host
+    // verification, `false` is "no signal" and leaves every older clause
+    // deciding unchanged.
+    // trace:BUG-1765 | ai:claude
+
+    /// AC2: a session-lease claim whose holding session is verified live must
+    /// not yield `Reclaim` purely because `ttl_secs` elapsed.
+    #[test]
+    fn bug_1765_live_session_claim_past_ttl_is_refused_not_reclaimed() {
+        // 3600s old against a 1800s TTL — aged out, but verified live.
+        let existing = session_claim("2", "imac", 4242, "2026-06-16T11:00:00Z");
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+            |_| true,
+        );
+        assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
+    }
+
+    /// AC3 (the adjacent half): with NO affirmative probe signal the TTL
+    /// backstop still reclaims the same aged claim — a gone holder cannot
+    /// deadlock the scope. Differs from AC2's fixture only in the probe's
+    /// answer, so the pair witnesses exactly what the probe changes.
+    #[test]
+    fn bug_1765_unaffirmed_session_claim_past_ttl_still_reclaims() {
+        let existing = session_claim("2", "imac", 4242, "2026-06-16T11:00:00Z");
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+            |_| false,
+        );
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
+    }
+
+    /// The probe is gated OFF process-backed claims: a drain/solo lock is
+    /// governed by its own exact pid probe and TTL, and even a (buggy) probe
+    /// answering `true` must not rescue it.
+    #[test]
+    fn bug_1765_probe_cannot_rescue_a_process_backed_claim() {
+        // Dead pid, fresh heartbeat → reclaim, probe ignored.
+        let dead = lock_claim("imac", 4242, "2026-06-16T11:59:55Z");
+        let d = decide_claim(
+            Some(&dead),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+            |_| true,
+        );
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
+        // Live pid, aged-out heartbeat → reclaim, probe still ignored.
+        let aged = lock_claim("imac", 4242, "2026-06-16T11:00:00Z");
+        let d = decide_claim(
+            Some(&aged),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+            |_| true,
+        );
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
+    }
+
+    /// AC4's predicate: `claim_staleness` mirrors `decide_claim`, so every
+    /// reporting surface behind `partition_claims` (`aida session leases`,
+    /// `status`, `doctor`, `team`) shows a verified-live cross-clone session
+    /// as live past its TTL, and an unaffirmed one as stale.
+    #[test]
+    fn bug_1765_staleness_mirrors_decide_for_a_live_session_past_ttl() {
+        let c = lease_claim("imac", 1134977, "2026-10-01T22:05:14+00:00");
+        let aged = at("2026-10-02T05:19:29+00:00"); // 26055s past the 1800s TTL
+        assert_eq!(
+            claim_staleness(&c, aged, "imac", |_, _| false, |_| true),
+            None,
+            "a verified-live session's claim must be reported live past its TTL"
+        );
+        assert!(
+            claim_staleness(&c, aged, "imac", |_, _| false, |_| false).is_some(),
+            "with no probe signal the TTL verdict is unchanged"
+        );
+    }
+
+    /// Plumbing: the real probe reads the holder clone's OWN local lease
+    /// table and affirms a standing (here: Dormant — worktree exists, no live
+    /// claude, young) lease for the claim's scope, case-insensitively; it
+    /// affirms nothing for a remote host, a different scope, a deleted clone,
+    /// a process-backed claim, or a deleted worktree.
+    #[test]
+    fn bug_1765_probe_reads_the_holder_clones_local_lease_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let clone_root = dir.path();
+        let sessions = clone_root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let worktree = clone_root.join("wt");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let started = Utc::now().to_rfc3339();
+        // Serialize the lease through the toml crate so the worktree path is
+        // escaped correctly on every platform (a raw format! into a TOML
+        // basic string would corrupt Windows backslashes).
+        let mut lease = toml::map::Map::new();
+        for (k, v) in [
+            ("id", "feedbeef0001"),
+            ("scope", "BUG-9999"),
+            ("slug", "bug-9999"),
+            ("owner", "test"),
+            ("branch", "bug-9999"),
+            ("hostname", "testhost"),
+        ] {
+            lease.insert(k.to_string(), toml::Value::String(v.to_string()));
+        }
+        lease.insert(
+            "worktree_path".to_string(),
+            toml::Value::String(worktree.display().to_string()),
+        );
+        lease.insert(
+            "started_at".to_string(),
+            toml::Value::String(started.clone()),
+        );
+        std::fs::write(
+            sessions.join("feedbeef0001.toml"),
+            toml::to_string(&toml::Value::Table(lease)).unwrap(),
+        )
+        .unwrap();
+        let mut c = lease_claim("imac", 1, &started);
+        c.scope = "bug-9999".to_string(); // matches "BUG-9999" case-insensitively
+        c.clone_path = clone_root.display().to_string();
+        let now_t = Utc::now();
+        assert!(
+            probe_session_liveness_with(&c, "imac", &[], now_t),
+            "a standing lease for the scope must affirm the claim"
+        );
+        assert!(
+            !probe_session_liveness_with(&c, "otherhost", &[], now_t),
+            "a remote host is never affirmed"
+        );
+        let mut other_scope = c.clone();
+        other_scope.scope = "BUG-0000".to_string();
+        assert!(
+            !probe_session_liveness_with(&other_scope, "imac", &[], now_t),
+            "a scope with no lease in the holder clone is not affirmed"
+        );
+        let mut gone_clone = c.clone();
+        gone_clone.clone_path = clone_root.join("nope").display().to_string();
+        assert!(
+            !probe_session_liveness_with(&gone_clone, "imac", &[], now_t),
+            "a deleted clone is not affirmed"
+        );
+        let mut locked = c.clone();
+        locked.process_backed = true;
+        assert!(
+            !probe_session_liveness_with(&locked, "imac", &[], now_t),
+            "the probe never applies to a process-backed claim"
+        );
+        // Reap the worktree: the lease now classifies Stale → no affirmation,
+        // so the TTL backstop reclaims a genuinely gone same-host holder.
+        std::fs::remove_dir(&worktree).unwrap();
+        assert!(
+            !probe_session_liveness_with(&c, "imac", &[], now_t),
+            "a deleted worktree must not be affirmed"
+        );
     }
 }
