@@ -1,0 +1,59 @@
+id: 01a0fe1b-4fc8-70d0-86b1-da1f0c33dadb
+spec_id: BUG-1777
+agreed_id: BUG-1777
+title: 'Cross-platform Build (windows-latest) is red on every PR: 16 aida-cli-lib tests fail identically across unrelated branches'
+description: |
+  The Cross-platform (nightly) workflow's Build (windows-latest) job fails 16 aida-cli-lib tests on
+  every current PR run. Evidence: PR #2341 (job 110922760974, head task-1567-work) and PR #2345 (job
+  110978167436, head 67f1098ab5) fail the IDENTICAL set (diff of the two sorted failure lists is
+  empty), so this is main's state, not either branch's. The workflow is informational
+  ([ci] informational_workflows = ["Cross-platform*"], BUG-1191), so merges are not blocked — which is
+  exactly how it stays red unnoticed (TASK-687's lesson).
+
+  macOS has a separate 3-test failure already tracked as BUG-1776; this bug is the Windows 16 only:
+
+  - aida_bin::tests::declined_override_resolves_to_running_executable_before_path
+  - aida_bin::tests::override_running_and_path_precedence_and_layouts
+  - aida_bin::tests::rejects_non_executable_override_and_selects_fresh_profile
+  - bug_1745_error_channel_tests::performance_command_stdout_round_trips_into_failure_trip
+  - bug_1749_doctor_toon_tests::json_spellings_match_and_human_pin_stays_on_stderr
+  - bug_1749_doctor_toon_tests::performance_failure_stdout_is_one_parseable_toon_document
+  - db::cached_git_backend::tests::loser_budget_is_shared_across_backend_opens
+  - doctor_cmd::bug_1700_worktree_trust_tests::untrusted_parent_is_reported_once_and_is_not_auto_healable
+  - doctor_cmd::bug_1744_trust_breadth_tests::broad_ancestor_with_unset_parent_discloses_the_narrow_remediation
+  - remote_create::tests::mirror_hook_forwards_dry_run_spellings_as_preview_only
+  - sandbox_cmd::tests::a_successful_retry_is_not_silent_and_names_what_blocked_it
+  - sandbox_cmd::tests::remove_tree_is_bounded_and_names_what_survived
+  - session_reap::bug_1657_batched_reap_tests::bug_1657_removed_worktree_reaps_without_dangling_entry
+  - task_1561_pickup_worktree_parent_tests::absolute_configured_parent_captures_the_pickup_path
+  - task_1561_pickup_worktree_parent_tests::resolve_pickup_workspace_inherits_the_configured_parent
+  - test_home::tests::raw_home_lookup_scan_catches_std_home_multiline_and_decoy_exemptions
+
+  Not triaged per-test; the clusters suggest Windows path/exec semantics (aida_bin profile selection,
+  worktree-parent path handling, test_home scan) and stdout/stderr channel differences (toon/error
+  channel tests). Triage should start by reproducing one from each cluster on a Windows runner and
+  deciding fix vs cfg-gate per test — a test cfg'd off Windows must say why, not just vanish.
+
+  ACCEPTANCE
+  1. Build (windows-latest) on the Cross-platform workflow is green on a PR whose base is main.
+  2. Any test exempted from Windows carries an explicit cfg + comment naming the Windows behavior it
+     cannot have, rather than a silent skip.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T19:33:17.896248217Z
+modified_at: 2026-10-02T19:33:17.896248217Z
+req_type: Bug
+tags:
+- ci
+- cross-platform
+- windows
+filed_at:
+  code_sha: 67f1098ab582a793e9c165c641574dedcb7e3640
+  branch: bug-1723-work
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: d5ee562a-7ce2-403d-8384-8ef61700260f
