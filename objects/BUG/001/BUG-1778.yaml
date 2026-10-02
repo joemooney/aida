@@ -1,0 +1,54 @@
+id: 01a0fe76-235e-7fa0-b5a5-acc8030ba541
+spec_id: BUG-1778
+agreed_id: BUG-1778
+title: 'A failed refresh-request hint write fails the read: file_request errors propagate through freshen_for_read instead of degrading to a labelled stale read (TASK-1527 AC1 violation)'
+description: |
+  ## Summary
+
+  From the cross-vendor post-merge review of PR #2349 / TASK-1527 (merged as an
+  operator emergency action without pre-merge review; codex REQUEST_CHANGES
+  major 1, advisor-verified).
+
+  TASK-1527's AC1 says the refresh request file is a HINT only — losing or
+  failing to write it must never break correctness. The shipped read path
+  violates this in the write-failure case:
+
+  - `aida-core/src/db/cached_git_backend.rs:470` — `file_request(cache_path, &head)?`
+    inside `file_and_spawn_refresh`, and `record_failed_attempt(...)?` at :478.
+  - `file_and_spawn_refresh`'s errors propagate through `freshen_for_read`, and
+    `tolerant_read_with_budget` (cached_git_backend.rs:637) does
+    `self.freshen_for_read(budget)?` — so the read FAILS, even though a usable
+    pinned snapshot exists and the function's own comment promises "serve the
+    pinned rows with a stale label rather than failing a read".
+
+  Trigger: sidecar directory unwritable or ENOSPC at the moment a stale reader
+  files the hint. Expected: serve the stale read with a degraded label (e.g.
+  Deferred). Actual: the read errors.
+
+  ## Acceptance sketch
+
+  1. A failed hint write (and failed failure-attempt record) degrades to a
+     labelled stale read; the error is reported at most as a diagnostic.
+  2. Named test: fixture makes the sidecar path unwritable (chmod a-w fixture —
+     note the fixture-shape trap: chmod vs symlink-out trip different clauses),
+     asserts the read SUCCEEDS with a stale label, and fails against the shipped
+     `?` (mutation-proven both directions).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T21:12:30.302363871Z
+modified_at: 2026-10-02T21:12:30.302363871Z
+req_type: Bug
+tags:
+- cache
+- refresh
+- task-1527-followup
+filed_at:
+  code_sha: 8995bd5429241ed207d492a430a2d4a1844d69d4
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 05aca398-12b9-4f85-8d34-61b3f3d760a9
