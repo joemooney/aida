@@ -116,13 +116,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-09-29T15:38:49.820288998Z
+modified_at: 2026-10-02T14:21:30.176790302Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0c074-3ed9-7a81-bf28-bd8ac8614a6c
   created_at: 2026-09-29T15:38:40.420151027Z
   created_by: joe
+comments:
+- id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
+  author: joe
+  content: |-
+    ### Triage for Failure 4
+
+    To answer the triage question for AC3:
+    **Is `worktree_trust_findings` re-joining components (production formatting), or is only the assertion wrong?**
+    Only the assertion is wrong. The production code correctly uses `parent.display()` (at `aida-cli-lib/src/doctor_cmd.rs` around line 1900), which emits native path separators (backslashes on Windows) for the `Path` it is given. The test assertion incorrectly hardcodes the unix path separator in its substring check (`"/home/op/aida-worktrees"`), which fails when matched against `\home\op\aida-worktrees` on Windows.
+  created_at: 2026-10-02T14:21:30.176790302Z
+  modified_at: 2026-10-02T14:21:30.176790302Z
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
