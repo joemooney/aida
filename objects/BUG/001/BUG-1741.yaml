@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-10-02T06:34:25.994683324Z
+modified_at: 2026-10-02T14:19:15.864155563Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -196,6 +196,21 @@ comments:
     2. **Deduplication**: Route `vendor_activity.rs:pid_alive` and `merge_lock.rs:pid_alive` through `aida_core::liveness::pid_is_alive` so they inherit the zombie fix. Leave `test_home.rs` as conservative or route through canonical.
   created_at: 2026-10-02T06:34:25.994683324Z
   modified_at: 2026-10-02T06:34:25.994683324Z
+- id: 01a0fcfb-ce18-7682-a3b5-536ea6ba022b
+  author: joe
+  content: |-
+    DECISION: Implement the zombie check directly in `pid_is_alive` and route all helpers through it.
+
+    ### Decision & Rationale
+
+    1. **Does `creator_pid_start_time` cover this?** No. As the spec suspected, a zombie retains its original start time. Thus `process_identity_is_alive` will not detect that the process is dead. The zombie check must be performed inside `pid_is_alive`.
+    2. **Where does the check belong?** Inside `aida-core/src/liveness.rs` `pid_is_alive_impl` for Linux, using a `/proc/<pid>/stat` check for the `Z` (zombie) state. This ensures that every liveness check in the workspace accurately considers zombies dead, while keeping the O(1) property (no process-table walk).
+    3. **Consolidating helpers:** I have examined the other pid-liveness helpers (`vendor_activity.rs`, `merge_lock.rs`, and `test_home.rs`). All of them currently implement their own `libc::kill(pid, 0)` checks, which suffers from the exact same defect. None of them have a valid reason to consider a zombie "alive". The proposed fix is to delete these redundant local helpers and route all of them through `aida_core::liveness::pid_is_alive`.
+
+    ### Acceptance Criteria Updates
+    The ACs remain exactly as written. The implementation will consolidate all helpers.
+  created_at: 2026-10-02T14:19:15.864155563Z
+  modified_at: 2026-10-02T14:19:15.864155563Z
 history:
 - id: 01a0f2e8-a08c-7791-a627-87ed4b1d9b75
   author: joe
