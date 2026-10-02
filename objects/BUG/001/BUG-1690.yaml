@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T10:43:26.027489838Z
+modified_at: 2026-10-02T14:17:59.633265376Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -124,6 +124,21 @@ comments:
   created_at: 2026-10-02T10:43:20.016529117Z
   modified_at: 2026-10-02T10:43:20.016529117Z
   session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
+- id: 01a0fcfa-a451-7412-a6bd-2af2ea980c9b
+  author: joe
+  content: |-
+    DECISION: Un-draft the reused PR.
+
+    ### Decision & Rationale
+
+    We will implement the branch to un-draft the reused PR, rather than opening a fresh one. While the previous close-only behavior did not suffer from this trap, the "draft-first" retraction was explicitly an operator-approved change designed to reuse PRs and avoid polluting the repository with closed PRs. Un-drafting the PR when retrying allows us to preserve that operator decision while escaping the stalling trap.
+
+    ### Acceptance Criteria Updates
+    1. The implementation must add `gh pr ready` (or equivalent forge API call) when reusing a PR that was found in a draft state.
+    2. The `draft_notice` in `implementer_preflight.rs` is updated to correctly state that the drain retry will un-draft and reuse the PR.
+    3. Tests assert that a draft PR is correctly marked as ready (un-drafted) before it is merged by the orchestrator.
+  created_at: 2026-10-02T14:17:59.633265376Z
+  modified_at: 2026-10-02T14:17:59.633265376Z
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
