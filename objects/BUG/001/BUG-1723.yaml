@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T06:06:38.663034493Z
-modified_at: 2026-10-02T10:46:45.966100634Z
+modified_at: 2026-10-02T14:17:30.279100802Z
 req_type: Bug
 comments:
 - id: 01a0fc39-30c5-7543-9388-2868c8fdbc2d
@@ -125,6 +125,25 @@ comments:
   created_at: 2026-10-02T10:46:41.605556096Z
   modified_at: 2026-10-02T10:46:41.605556096Z
   session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
+- id: 01a0fcfa-31a7-7120-aa9c-078a75ad21de
+  author: joe
+  content: |-
+    DECISION: Adopt the suggested disposition.  is worktree-resident and must be treated as UNTRUSTED for launch-authority values.
+
+    ### Decision & Rationale
+
+    We will split the config surface by consequence.  may provide POLICY values (timeouts, thresholds, roles) since those only govern internal AIDA behavior. It may NOT provide EXECUTABLE paths, credentials, or other authority-escalating values. Those must come from the running binary or from a location outside the worktree (like  or environment variables).
+
+    This aligns  with the doctrine established in BUG-1624 for .
+
+    ### Acceptance Criteria
+
+    1. Implement a validation function (e.g. ) or type-level split in  that explicitly rejects any executable-selecting or path-selecting keys if loaded from the worktree .
+    2. Add a clear doc-comment on the  struct (and its loading mechanisms) codifying this split: policy keys are allowed from the worktree, authority/executable keys are not.
+    3. Tests assert that attempting to load a config from the worktree with an executable override (if any exist) is ignored or fails, while policy keys are correctly loaded.
+    4.  overrides in  (if implemented per the TASK-1499 rework) are explicitly discarded or rejected, deferring to the running executable.
+  created_at: 2026-10-02T14:17:30.279100802Z
+  modified_at: 2026-10-02T14:17:30.279100802Z
 history:
 - id: 01a0fc39-41ce-77c0-9bfa-72b79a03b70c
   author: joe
