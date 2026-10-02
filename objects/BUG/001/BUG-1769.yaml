@@ -59,20 +59,144 @@ description: |
   later. BUG-1821's own comment trail records the manual un-shelving:
   "Returned from NeedsAttention to In Progress via `aida edit --status`."
 
-  ## Open question for triage -- why this is Draft, not Approved
+  ## Triage verdict (advisor, 2026-10-02) — NOT a regression of BUG-1524
 
-  The shelve path lives in `aida-cli-lib/src/auto_complete.rs`, whose
-  `NeedsAttention` handling is EPIC-28 / STORY-975 / TASK-1054 semantics across
-  ~30 sites. I did NOT read it; the evidence above is behavioural, from the store
-  and the telemetry. Before implementing, triage must establish:
+  BUG-1524 is not the owner of this classifier and nothing it shipped regressed.
+  BUG-1524's contribution was to make a genuine no-launch refusal STOP the drain
+  instead of continuing from the CI gate against an unchanged head, and that
+  behaviour is correct and still wanted. This is a **missed case of BUG-1140**,
+  reached through a path BUG-1629 added in front of BUG-1140's arbiter.
 
-  - whether the fix belongs at the refusal classifier (a refusal that reports the
-    spec already `Done` is a phase SUCCESS, not a `launch-refused` failure), or at
-    the shelve call (never demote `Done` -> `NeedsAttention`), or both;
-  - whether BUG-1524 -- "A phase-1 launch refusal is treated as a recoverable
-    failure and the drain continues from the CI gate" (completed 2026-09-23) --
-    already owns this classifier, making this a regression or a missed case of it
-    rather than new behaviour. BUG-1524 is the first thing to read.
+  ### The exact mechanism, read from main at 30638a79ea
+
+  The decision site is `ImplementerDriver::recover_lost_child_state`
+  (`aida-cli-lib/src/lib.rs:106353`), reached from the phase-1 classify block at
+  `lib.rs:108926` when `discover_orchestrated_lease` returns `LaunchRefused`
+  (`lib.rs:106229` / `:106269`).
+
+  Thirty lines above that call site, `lib.rs:108879-108890` states the governing
+  doctrine in the repository's own words:
+
+      BUG-1140: a non-zero exit is NOT proof the work failed. The codex
+      implementer commits + pushes and advances the spec to Done, then its
+      session exits 1 -- and shelving as "tool-exit" here orphaned correct work
+      behind a manual `--resume` ... Verify by SUBSTRATE instead of trusting the
+      exit code: fall through to the lease/PR resolution below, which -- via the
+      BUG-893 recovery -- opens a PR for committed-but-unopened work and proceeds
+      into CI + review (the real quality gates).
+
+  BUG-1817's first phase-1 child is precisely the case that paragraph describes:
+  it ran 426.5 s, committed, advanced the spec to `Done`, and exited non-zero. The
+  code even prints `implementer session exited 1 — verifying by substrate before
+  classifying` (`lib.rs:108894`) and comments `Deliberately fall through — the
+  resolution below is the arbiter`. **But the arbiter it falls through to keys on
+  nothing but lease-or-receipt presence.** That child had also lost its lease and
+  its receipt, so `discover_orchestrated_lease` typed it `LaunchRefused` and the
+  BUG-1629 branch short-circuited the substrate verification BUG-1140 mandated.
+
+  `recover_lost_child_state` then consults **no substrate signal whatsoever**. Its
+  whole decision input is: lease absent, receipt absent, retry budget
+  (`phase1_lost_child_retry_allowed`, `lib.rs:103770`), and -- only to choose
+  WHERE to relaunch, never WHETHER -- worktree existence / branch / unleased
+  (`lib.rs:106399-106412`). It never asks whether the spec advanced. So it spent
+  its one replacement launch, and that replacement was refused by the child's own
+  claim gate with the `RequirementStatus::Done` arm of
+  `queue_cmd.rs:9608`, whose own text ends **"Otherwise nothing to do — auto-bump
+  fires when the PR merges."** That is a success report. It was consumed as a
+  failure, and `lib.rs:106385-106394` rendered it as `BUG-1817 was not advanced`.
+
+  ### The information needed was already in hand
+
+  `spec_status(project_root, spec) -> Option<RequirementStatus>` already exists in
+  the same file at `lib.rs:103663`, 2 700 lines above the decision site, and is
+  already used for a terminal-state check at `lib.rs:97245`. No new plumbing is
+  required to ask the question that was never asked.
+
+  ### Precedent for the shape of the fix
+
+  `ImplementerOutcome::AlreadyMerged` (BUG-709, `auto_complete.rs:934`) is the
+  same defect class already solved once: the work succeeded, the orchestrator
+  looked for its customary artifact (an OPEN PR), did not find it, and
+  false-negatived a landed drive. Its doc comment -- "instead of spinning the
+  open-PR verify to its retry ceiling and false-negativing a landed drive as
+  'inconclusive, retry'" -- is the template for this fix. The outcome variants
+  needed already exist: `PrOpened` for Done-with-an-open-PR, `AlreadyMerged` for
+  Done-and-merged.
+
+  ### Fix location: the lost-child path, not the shelve call
+
+  Fix it at `recover_lost_child_state`, BEFORE the replacement launch. Do not add
+  a blanket "never demote a Done spec" guard at the shelve call: that would also
+  suppress the legitimate stale-Done refusal BUG-1524 exists to surface, and it
+  would leave the wasted replacement launch in place.
+
+  ### The stale-Done confound is the one real hazard
+
+  A spec that was already `Done` when the run began must still be refused the way
+  it is today. The discriminator is BUG-1524's own AC1 principle -- compare before
+  and against after -- applied to spec status rather than branch head. No
+  phase-1-entry status is recorded on the driver today (verified: no
+  `status_at_entry` / `initial_status` field exists), so the implementer must
+  capture it at phase-1 entry, or otherwise establish that the advance happened
+  inside this run.
+
+  ## Acceptance
+
+  1. Before spending the BUG-1629 replacement launch,
+     `recover_lost_child_state` reads the spec's current status from the
+     substrate (`spec_status`, `lib.rs:103663`). When the spec advanced to `Done`
+     (or beyond) *during this run*, phase 1 is treated as having succeeded: the
+     run proceeds through the existing PR/CI resolution -- `PrOpened` when an open
+     PR is found, `AlreadyMerged` when the branch's PR already merged -- and
+     neither a replacement launch nor a `LaunchRefused` failure is produced.
+  2. The advance is attributed to this run, not merely observed. Phase-1 entry
+     status is captured and compared, so a spec that was already `Done` before the
+     run began is still refused exactly as it is today. A comment names the field
+     and where it is set.
+  3. No lost-child failure message may assert that the spec "was not advanced"
+     without having read the spec's status. The message at
+     `lib.rs:106385-106394` is either justified by a substrate read or reworded to
+     describe only the replacement launch.
+  4. `phase_durations` does not attribute a successful child's elapsed time to the
+     failure of a different child. Either the per-child durations are recorded
+     separately, or the failure message names which child the duration belongs to.
+     (BUG-1817 recorded phase 1 as 426 837 ms while blaming a child that lived
+     302 ms.)
+  5. A test reaches the lost-child path on a real driver and asserts that, with
+     the spec advanced to `Done` inside the run, **no replacement child launches**
+     and the result is not `LaunchRefused`. The right instrument is
+     `aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs`, which builds a
+     real `RealPhaseDriver` against a tempdir with a stub `aida` binary, calls
+     `d.run_implementer()`, and counts child launches with its `attempts(&root)`
+     helper -- today's lost-child fixtures assert `attempts().len() == 2` (the
+     original plus the one replacement), so the new assertion is
+     `attempts().len() == 1`.
+
+     **Fixture gotcha, read this before writing the test.** That file's `project()`
+     helper creates only `.aida/sessions` -- there is no store in the fixture at
+     all, so `spec_status()` returns `None` there and every existing fixture
+     exercises the no-advance path by accident. The new test must give the tempdir
+     a real enough store for `spec_status` to resolve `Done`, and the control in
+     AC8 must keep a fixture where it resolves to `None` or to the pre-run status.
+     Confirm which it is by making the test fail first.
+
+     The existing `orchestrate()`-level test
+     `launch_refusal_shelves_and_never_reaches_ci_or_reviewer`
+     (`auto_complete.rs:9820`) does **not** need changing: it uses
+     `MockPhaseDriver` to *inject* a `LaunchRefused` and asserts the shelve that
+     follows. This fix changes whether that failure is produced upstream, not what
+     the orchestrator does once it has one. It must keep passing untouched.
+
+  6. **Mutation proof.** With the AC1 substrate read removed, the AC5 test fails.
+     Recorded in the PR body, per the standing rule that a test which passes
+     either way advertises coverage that does not exist.
+  7. **Control, stale-Done.** A test where the spec was `Done` *before* phase 1
+     began still shelves with `LaunchRefused`. This is the BUG-1524 behaviour and
+     must not regress.
+  8. **Control, no advance.** A test where the child genuinely never launched and
+     the spec did not advance still spends the single replacement launch and, on a
+     second loss, still shelves with `LaunchRefused`. BUG-1629's recovery is
+     preserved.
 
   Related: BUG-1768 covers the downstream consequence (the orphaned Draft
   finding), and is independent of this fix.
@@ -81,7 +205,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:40:04.826717728Z
-modified_at: 2026-10-02T10:40:04.826717728Z
+modified_at: 2026-10-02T10:53:59.246269140Z
 req_type: Bug
 tags:
 - auto-complete orchestrator needs-triage launch-refused
