@@ -909,7 +909,7 @@ fn reap_one(
     lease: &SessionLease,
     checked_tip: Option<&str>,
 ) -> String {
-    reap_one_with_missing_worktree_hook(project_root, lease, checked_tip, || {})
+    reap_one_with_clear_hooks(project_root, lease, checked_tip, || {}, || {})
 }
 
 // trace:TASK-1543 | ai:codex
@@ -918,6 +918,23 @@ fn reap_one_with_missing_worktree_hook(
     lease: &SessionLease,
     checked_tip: Option<&str>,
     before_missing_worktree_clear: impl FnOnce(),
+) -> String {
+    reap_one_with_clear_hooks(
+        project_root,
+        lease,
+        checked_tip,
+        before_missing_worktree_clear,
+        || {},
+    )
+}
+
+// trace:BUG-1694 | ai:claude
+fn reap_one_with_clear_hooks(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    checked_tip: Option<&str>,
+    before_missing_worktree_clear: impl FnOnce(),
+    after_final_registration_check: impl FnOnce(),
 ) -> String {
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
     let branch = lease.branch.trim();
@@ -998,13 +1015,18 @@ fn reap_one_with_missing_worktree_hook(
     // another session's temporarily unavailable worktree keeps its registration.
     // trace:BUG-1657 trace:TASK-1543 | ai:antigravity
     if worktree_missing {
-        if !clear_missing_worktree_registration(
+        // A decline is reported even when the path vanished again by the time
+        // we return: the claim saw it occupied (or could not prove otherwise),
+        // so the registration was kept. trace:BUG-1694 | ai:claude
+        if clear_missing_worktree_registration(
             project_root,
             &lease.worktree_path,
             before_missing_worktree_clear,
-        ) && lease.worktree_path.exists()
+            after_final_registration_check,
+        ) == RegistrationClearOutcome::Declined
         {
-            return "reaped — lease released (worktree path reappeared; registration kept)"
+            return "reaped — lease released (worktree path reappeared or could not be \
+                    confirmed unoccupied; registration kept)"
                 .to_string();
         }
     }
@@ -1015,30 +1037,63 @@ fn reap_one_with_missing_worktree_hook(
     }
 }
 
+// How a registration-clear attempt for an absent lease path ended.
+// trace:BUG-1694 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegistrationClearOutcome {
+    /// The stale admin registration was removed.
+    Cleared,
+    /// The path could not be confirmed unoccupied (or the removal itself
+    /// failed), so the registration was kept. Fail closed: a stale
+    /// registration is strictly better than orphaning a live worktree.
+    Declined,
+    /// No admin registration names this path (or the repository state was
+    /// unreadable); there was nothing to clear.
+    NoRegistration,
+}
+
 // Clear only the administrative registration for an absent lease path. Never
 // ask Git to remove a worktree here: the path can reappear after the early scan.
-// trace:TASK-1543 | ai:codex
+//
+// An exists() check cannot close the window between itself and the removal
+// (TASK-1543 left that residue open). Instead the path is CLAIMED with an
+// atomic `mkdir`: every cooperating creator — a restore (`mv`/untar) or
+// `git worktree add` — must materialize this same path, so either the claim
+// wins and nothing can reappear while the admin dir is removed, or the claim
+// loses (EEXIST, or any other error) and we decline. The claim deliberately
+// uses the byte-identical path value the `gitdir` identity match uses, so the
+// two cannot diverge; a relative lease path is declined outright rather than
+// resolved against a process cwd. trace:BUG-1694 | ai:claude
 fn clear_missing_worktree_registration(
     project_root: &std::path::Path,
     worktree_path: &std::path::Path,
     before_clear: impl FnOnce(),
-) -> bool {
+    after_final_check: impl FnOnce(),
+) -> RegistrationClearOutcome {
+    if !worktree_path.is_absolute() {
+        return RegistrationClearOutcome::Declined;
+    }
     if worktree_path.exists() {
-        return false;
+        return RegistrationClearOutcome::Declined;
     }
     before_clear();
     if worktree_path.exists() {
-        return false;
+        return RegistrationClearOutcome::Declined;
     }
 
+    // Unreadable repository state cannot establish that no registration names
+    // this path — decline loudly rather than fall through to branch deletion.
+    // trace:BUG-1694 | ai:claude
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
         .args(["rev-parse", "--git-common-dir"])
         .output();
-    let Ok(output) = output else { return false };
+    let Ok(output) = output else {
+        return RegistrationClearOutcome::Declined;
+    };
     if !output.status.success() {
-        return false;
+        return RegistrationClearOutcome::Declined;
     }
     let common_dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
     let common_dir = if common_dir.is_absolute() {
@@ -1048,8 +1103,15 @@ fn clear_missing_worktree_registration(
     };
     let worktrees_dir = common_dir.join("worktrees");
     let expected_gitdir = worktree_path.join(".git");
-    let Ok(entries) = std::fs::read_dir(worktrees_dir) else {
-        return false;
+    // A missing worktrees dir means no registrations exist at all (the common
+    // already-pruned case); any OTHER read failure is unreadable state and
+    // declines like the above. trace:BUG-1694 | ai:claude
+    let entries = match std::fs::read_dir(worktrees_dir) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return RegistrationClearOutcome::NoRegistration;
+        }
+        Err(_) => return RegistrationClearOutcome::Declined,
     };
     for entry in entries.flatten() {
         let admin_dir = entry.path();
@@ -1058,12 +1120,24 @@ fn clear_missing_worktree_registration(
         };
         if std::path::Path::new(gitdir.trim()) == expected_gitdir {
             if worktree_path.exists() {
-                return false;
+                return RegistrationClearOutcome::Declined;
             }
-            return std::fs::remove_dir_all(admin_dir).is_ok();
+            after_final_check();
+            if std::fs::create_dir(worktree_path).is_err() {
+                return RegistrationClearOutcome::Declined;
+            }
+            let removed = std::fs::remove_dir_all(admin_dir);
+            // Release the claim on both outcomes; non-recursive, so a creator
+            // that already populated the empty directory keeps it (ENOTEMPTY).
+            let _ = std::fs::remove_dir(worktree_path);
+            return if removed.is_ok() {
+                RegistrationClearOutcome::Cleared
+            } else {
+                RegistrationClearOutcome::Declined
+            };
         }
     }
-    false
+    RegistrationClearOutcome::NoRegistration
 }
 
 /// Does local branch `branch` still point at `tip`? `None` (never pinned) or
@@ -1580,3 +1654,9 @@ mod bug_1657_batched_reap_tests;
 #[cfg(test)]
 #[path = "tests/task_1543_reap_polish_tests.rs"]
 mod task_1543_reap_polish_tests;
+
+// Registration clear claims the worktree path atomically (fail closed).
+// trace:BUG-1694 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1694_registration_clear_claim_tests.rs"]
+mod bug_1694_registration_clear_claim_tests;
