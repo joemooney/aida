@@ -1278,15 +1278,21 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
         worktree_lease::HARNESS_WORKTREE_SCOPE,
         tmp.path().to_path_buf(),
     );
+    // BUG-1740: the live process backing the lease must be a WORKER, not the
+    // reporting session — a fixture pinned to `std::process::id()` asserted
+    // exactly the self-corroboration this predicate now refuses.
+    // trace:BUG-1740 | ai:claude
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // A pid that is not in this process's ancestor chain: a real worker.
+        pid: 424_242,
         cwd: tmp.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,
     }];
+    let caller = [std::process::id()];
     // The returned leases borrow the slice, so it must outlive the call.
     let harness_leases = [harness.clone()];
-    let found = ps_live_fanout_leases(&harness_leases, &live, now);
+    let found = ps_live_fanout_leases(&harness_leases, &live, now, &caller);
     assert_eq!(
         found.len(),
         1,
@@ -1298,7 +1304,7 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
     // A live SPEC-scoped lease is not a fan-out (it backs its own spec).
     let spec_lease = ps_lease("sess-spec", "STORY-7", tmp.path().to_path_buf());
     assert!(
-        ps_live_fanout_leases(&[spec_lease], &live, now).is_empty(),
+        ps_live_fanout_leases(&[spec_lease], &live, now, &caller).is_empty(),
         "a spec-scoped lease is not a generic fan-out lease"
     );
 
@@ -1309,7 +1315,7 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
         std::path::PathBuf::from("/nonexistent/aida-fanout-dead"),
     );
     assert!(
-        ps_live_fanout_leases(&[dead_harness], &[], now).is_empty(),
+        ps_live_fanout_leases(&[dead_harness], &[], now, &caller).is_empty(),
         "a dead harness lease is not an active fan-out"
     );
 }

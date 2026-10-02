@@ -49412,6 +49412,13 @@ mod bug_1680_salvage_main_tests;
 #[path = "tests/bug_1681_ps_reporting_tests.rs"]
 mod bug_1681_ps_reporting_tests;
 
+// BUG-1740: `possibly_subagent` must not be corroborated by the reporting
+// session, and a harness lease pinned to the project root is not a fan-out.
+// trace:BUG-1740 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1740_fanout_self_corroboration_tests.rs"]
+mod bug_1740_fanout_self_corroboration_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -67412,6 +67419,39 @@ fn ps_orphan_verdict_with_movement(
     ps_orphan_verdict(lease_state, awaiting_agent)
 }
 
+/// BUG-1740: is this `harness-worktree` lease pinned to the project ROOT
+/// itself — the main checkout — rather than to a worktree of its own?
+///
+/// THE RULE, and why (AC1). A root-pinned harness lease is **never**, on its
+/// own, evidence that an Agent-tool fan-out is running. The project root is
+/// where the operator's own interactive session sits and where every `aida`
+/// invocation runs, so a lease there is the ambient session, not a dispatched
+/// subagent. Worse, `lease_state_for`'s `has_live_claude` arm matches on
+/// `cwd.starts_with(worktree_path)`, so a root-pinned lease absorbs the
+/// liveness of every claude process anywhere under the checkout — including
+/// the one running this command. A genuine fan-out does not need this lease:
+/// the harness gives each Agent-tool subagent its own worktree
+/// (`.claude/worktrees/agent-*`), and the subagent takes its own
+/// `harness-worktree` lease pinned there, which this filter keeps.
+///
+/// Decided from the lease alone — `worktree_path == parent_project_root` —
+/// so the predicate stays pure and needs no ambient project-root lookup.
+// trace:BUG-1740 | ai:claude
+fn ps_lease_is_project_root_pinned(l: &SessionLease) -> bool {
+    !l.worktree_path.as_os_str().is_empty()
+        && l.parent_project_root.as_deref() == Some(l.worktree_path.as_path())
+}
+
+/// BUG-1740: the pid chain of the process running this command, innermost
+/// first and including itself. The reporting session must never be its own
+/// corroboration for a fan-out (AC2), and the session that invoked `aida` is
+/// an ANCESTOR of this process, not this process — so the whole chain is
+/// excluded, not just `std::process::id()`.
+// trace:BUG-1740 | ai:claude
+fn ps_caller_pid_chain() -> Vec<u32> {
+    process_probe::walk_ancestor_pids(std::process::id())
+}
+
 /// TASK-1064: is an advisor Agent-tool fan-out currently running? Detected as a
 /// LIVE lease whose scope is the generic `harness-worktree` fallback — the lease
 /// an Agent-tool subagent (a `general-purpose` fan-out whose branch carries no
@@ -67419,18 +67459,52 @@ fn ps_orphan_verdict_with_movement(
 /// is building read as having no spec-scoped lease. Its liveness means those
 /// flag-only In-Progress specs are most likely being worked by the fan-out, not
 /// genuinely orphaned. Pure over the lease set + the shared liveness machinery.
+///
+/// BUG-1740: two leases that used to qualify no longer do.
+///
+///  1. A lease pinned to the project root — see [`ps_lease_is_project_root_pinned`].
+///  2. A lease whose only live backing is the caller's own presence. The
+///     `has_live_claude` arm of `lease_state_for` infers a worker from a
+///     claude process whose cwd is inside the lease's worktree — and the
+///     reporting session is such a process. That is a statement about the
+///     observer, not about a fan-out, so `caller_pids` is subtracted from the
+///     live set before liveness is classified.
+///
+/// SCOPE OF (2), and why it stops where it does (AC2 vs AC4). The subtraction
+/// applies to the cwd/presence arm ONLY — never to an explicit `active_pid`.
+/// An Agent-tool subagent executes INSIDE the parent claude process, so its
+/// harness lease's `active_pid` is legitimately an ancestor of any `aida` the
+/// advisor runs from that same session (this is BUG-1656's fixture shape).
+/// Subtracting the caller chain there would delete TASK-1064's case outright,
+/// which BUG-1740 explicitly forbids. The distinction is that `active_pid` is
+/// a positive claim by the lease's minter that a named process holds it,
+/// whereas presence-in-a-directory is an inference, and the observer's own
+/// presence is not evidence of a worker.
+///
+/// Still pure: `caller_pids` is an input, so every corner is fixture-testable.
 // trace:TASK-1064 | ai:claude
+// trace:BUG-1740 | ai:claude
 fn ps_live_fanout_leases<'a>(
     leases: &'a [SessionLease],
     live: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
+    caller_pids: &[u32],
 ) -> Vec<&'a SessionLease> {
+    // The observer removed from the evidence, once for the whole pass.
+    // trace:BUG-1740 | ai:claude
+    let corroborating: Vec<process_probe::LiveSession> = live
+        .iter()
+        .filter(|s| !caller_pids.contains(&s.pid))
+        .cloned()
+        .collect();
     leases
         .iter()
         .filter(|l| {
             l.scope
                 .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
-                && matches!(lease_state_for(l, live, now), LeaseState::Live)
+                // trace:BUG-1740 | ai:claude
+                && !ps_lease_is_project_root_pinned(l)
+                && matches!(lease_state_for(l, &corroborating, now), LeaseState::Live)
         })
         .collect()
 }
@@ -68944,7 +69018,11 @@ fn build_running_work(
     // BUG-1681: the live fan-out leases THEMSELVES, so the framing below can
     // be matched per spec instead of applied to every flag-only row in the
     // store the moment any subagent is alive. trace:BUG-1681 | ai:claude
-    let fanouts = ps_live_fanout_leases(leases, live, now);
+    // BUG-1740: the caller is excluded from fan-out corroboration. Resolved
+    // ONCE here (one /proc walk per `aida ps`, not one per lease) and passed
+    // into the pure predicate. trace:BUG-1740 | ai:claude
+    let caller_pids = ps_caller_pid_chain();
+    let fanouts = ps_live_fanout_leases(leases, live, now, &caller_pids);
     for s in specs {
         if !s.in_progress {
             continue;
