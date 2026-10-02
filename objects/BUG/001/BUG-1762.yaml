@@ -1,0 +1,117 @@
+id: 01a0fa70-ebc8-74b3-bb8d-7a13ed9ac972
+spec_id: BUG-1762
+agreed_id: BUG-1762
+title: make install-agent-skill-hooks is never invoked by anything, so BUG-1760's pack regeneration stays inert in every clone including the operator's
+description: |
+  OBSERVED (2026-10-01, relay advisor session #20, firsthand during BUG-1759's merge):
+
+  BUG-1760 shipped `make install-agent-skill-hooks` to install the `post-merge` / `post-checkout` /
+  `post-rewrite` symlinks that regenerate `.agents/skills`. **Nothing ever calls it**, so the fix is
+  inert in every existing clone — including the operator's own main checkout, where it was still inert
+  four merges later.
+
+  ## Measurement
+
+  Every reference to the target in the repository:
+
+  ```
+  Makefile:10    (the .PHONY list)
+  Makefile:427   (the target definition)
+  ```
+
+  That is all. No doc, no `CLAUDE.md` setup step, no CI leg, no `aida dev activate`, no `make build`
+  prerequisite, and `aida search` returns no spec. Grepped `*.md *.rs *.sh *.toml Makefile *.yml`
+  excluding `target/`; the only other hits are session handoff/verdict artifacts, which are records, not
+  callers.
+
+  ## Firsthand consequence, measured end to end
+
+  In `/home/joe/ai/aida` on `main`, immediately before merging BUG-1759 (which edits a skill **master**):
+
+  ```
+  ls -l .git/hooks/post-merge .git/hooks/post-checkout .git/hooks/post-rewrite
+    -> No such file or directory   (all three)
+  ```
+
+  Then after `git pull --ff-only` brought the merge in:
+
+  ```
+  .agents/skills/aida-evaluate/SKILL.md   4457 bytes   (unchanged — no hook fired)
+  make check-templates                    exit 2
+    DRIFT (modified): .agents/skills/aida-evaluate/SKILL.md
+  ```
+
+  So BUG-1760's *detection* half worked correctly and caught a real drift on the very next skill-master
+  merge. Its *regeneration* half did not fire, because the installer had never been run. The drift was
+  cleared by hand with `make sync-templates` (one file, 4457 -> 6736 bytes).
+
+  `make install-agent-skill-hooks` was then run manually, and the installed hook was proven live in the
+  same checkout:
+
+  ```
+  # mutate the pack copy
+  6736 -> 6762 bytes;  make check-templates  exit 2   DRIFT (modified)
+  # run the installed hook
+  .git/hooks/post-merge                     exit 0
+  6762 -> 6736 bytes;  make check-templates  exit 0   present and current
+  ```
+
+  The mechanism is sound. Only its activation is missing.
+
+  ## Why the scaffolder is not the answer
+
+  BUG-1760 deliberately kept this hook out of the scaffolder's generated hook set, because
+  `scaffolding/mod.rs` **copies** hooks and so would inherit BUG-1738's never-updates defect. That
+  decision stands and should not be reversed here — this spec is about the *in-repo development*
+  checkout, not about shipping the hook downstream. Downstream remains BUG-1738's problem.
+
+  ## Acceptance criteria
+
+  1. A developer who follows the documented setup for working on AIDA ends up with the three hooks
+     installed without knowing the target's name. Pick one mechanism and say why: a prerequisite on an
+     existing target that developers already run (`make build-fast` / `make build`), a step in
+     `aida dev activate`, or an explicit line in `CLAUDE.md`'s "Develop AIDA itself" section.
+     A `CLAUDE.md` line alone is the weakest option — state the reasoning if it is chosen.
+  2. The chosen mechanism is **idempotent** and safe to run repeatedly: re-running it on an
+     already-installed checkout changes nothing and exits 0. Prove it by running it twice and diffing
+     `ls -l` of the three hook paths.
+  3. The chosen mechanism **must not clobber a pre-existing unrelated hook.** The target currently uses
+     `ln -sfn`, which would silently overwrite a developer's own `post-merge`. Either refuse with a
+     clear message or chain to the existing hook; state which, and prove it with a fixture that puts a
+     non-symlink `post-merge` in place first.
+  4. It still refuses from a linked worktree, as it does today
+     (`Refusing to install portable-pack hooks from a linked worktree`). Prove with a worktree run.
+  5. Mutation proof: with the mechanism in place and hooks removed, run the developer-facing command and
+     confirm the three symlinks reappear; then confirm `make check-templates` goes exit 0 after a
+     skill-master edit followed by the triggering git operation, without any manual
+     `make sync-templates`.
+
+  ## Out of scope
+
+  - Shipping the hook through the scaffolder to user projects — that is BUG-1738, and BUG-1760's
+    reasoning for excluding it stands.
+  - Any change to the hook master's own behaviour (it is correct: quiet exit 0 in a linked worktree,
+    warn-and-exit-0 rather than a cold compile when the example is unbuilt, never fails the git
+    operation).
+  - Changing the drift check. It worked exactly as designed here and is the reason this was caught.
+
+  ## Notes
+
+  Filed from the advisor seat the same session BUG-1759 merged, because that merge is the evidence.
+  Related: BUG-1760 (shipped the inert target), BUG-1738 (the downstream copy defect), BUG-1759 (the
+  skill-master edit that exposed it).
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T02:28:19.528938397Z
+modified_at: 2026-10-02T02:28:19.528938397Z
+req_type: Bug
+filed_at:
+  code_sha: 53484fbff71b983a5888be0e7ed127bd23b10809
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 8507630f-b690-4da6-8d9d-bece228469d1
