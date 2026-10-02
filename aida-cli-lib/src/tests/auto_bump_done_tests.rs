@@ -753,6 +753,89 @@ fn auto_bump_rejects_matching_auto_drafted_failure_bug() {
     ));
 }
 
+/// BUG-1768: the flip-driven sweep only ever saw the specs a pass flipped
+/// itself, so a parent that reached `Completed` by any other route -- a hand
+/// `aida edit --status completed`, or any path outside the pass's confirmed set
+/// -- orphaned its auto-drafted phase-failure finding in `Draft` forever, where
+/// it surfaced as human work in the advisor `groom` bucket. The observed case
+/// (BUG-1821 on BUG-1817) was still Draft 20 hours after its parent completed,
+/// while two siblings whose parents completed through the auto-bump's own flip
+/// were rejected on schedule.
+///
+/// This pass flips nothing, which is the state the orphan was stranded in; the
+/// two controls assert the widened sweep stays inside
+/// `is_auto_complete_failure_bug_about`.
+// trace:BUG-1768 | ai:claude
+#[test]
+fn auto_bump_rejects_failure_finding_whose_parent_completed_outside_this_pass() {
+    let (_tmp, project_root, store_path) = init_test_project();
+
+    // Completed outright, the shape a non-auto-bump author's flip leaves behind.
+    let orphan_parent = seed_spec_at(&store_path, "TASK-91768", "Completed");
+    let orphan = seed_auto_complete_failure_bug(&store_path, "BUG-917680", &orphan_parent);
+
+    // Control: a finding whose parent is still open must stay Draft.
+    let open_parent = seed_spec_at(&store_path, "TASK-91769", "InProgress");
+    let on_open_parent = seed_auto_complete_failure_bug(&store_path, "BUG-917681", &open_parent);
+
+    // Control: same title shape, no `auto-drafted` marker, so the predicate must
+    // refuse it even though the spec its title names is Completed.
+    let storage = Storage::new(&store_path);
+    let mut store = storage.load().unwrap();
+    let mut hand_filed = aida_core::Requirement::new(
+        format!("auto-complete failure: phase 1 (implementer) on {orphan_parent}"),
+        "Looks similar, but is missing the auto-drafted marker.".to_string(),
+    );
+    hand_filed.spec_id = Some("BUG-917682".to_string());
+    hand_filed.req_type = aida_core::RequirementType::Bug;
+    hand_filed.set_status_from_str("Draft");
+    hand_filed.tags.insert("auto-complete".to_string());
+    hand_filed.tags.insert("failure-1".to_string());
+    store.requirements.push(hand_filed);
+    storage.save(&store).unwrap();
+
+    // No commit lands in this range: the pass has nothing of its own to flip.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 0, "no spec should flip in this pass");
+
+    let after = storage.load().unwrap();
+    let resolved = after.get_requirement_by_spec_id(&orphan).unwrap();
+    assert!(
+        matches!(resolved.status, RequirementStatus::Rejected),
+        "orphaned finding should be Rejected, was {:?}",
+        resolved.status
+    );
+    assert!(
+        resolved
+            .comments
+            .iter()
+            .any(|c| c.author == "aida-auto-bump"
+                && c.content.contains(&orphan_parent)
+                && c.content.contains(&orphan)),
+        "rejection should carry the aida-auto-bump comment naming parent and finding"
+    );
+
+    let still_open = after.get_requirement_by_spec_id(&on_open_parent).unwrap();
+    assert!(
+        matches!(still_open.status, RequirementStatus::Draft),
+        "a finding whose parent is still open must stay Draft, was {:?}",
+        still_open.status
+    );
+    assert!(
+        still_open.comments.is_empty(),
+        "a finding whose parent is still open must be left un-commented"
+    );
+
+    let hand_filed_after = after.get_requirement_by_spec_id("BUG-917682").unwrap();
+    assert!(
+        matches!(hand_filed_after.status, RequirementStatus::Draft),
+        "a BUG without the auto-drafted marker must be untouched, was {:?}",
+        hand_filed_after.status
+    );
+}
+
 /// BUG-477: the merge-driven Done→Completed auto-bump must record the
 /// status transition in the per-spec `history:` array (the source-of-truth
 /// for spec-state time series), the same way the manual `aida edit --status`
