@@ -17,12 +17,12 @@ description: |-
   - A test recreates the path in the window AFTER the final exists() check and BEFORE registration removal (injected via the existing before_clear-style hook, or an equivalent seam) and asserts the registration survives. A test that only recreates the path earlier does not satisfy this — TASK-1543 already covers that case.
   - The TASK-1543 test continues to pass unchanged.
   - Fixture-based, no sleeps and no polling loops.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-10-02T20:01:21.521894888Z
+modified_at: 2026-10-02T21:51:19.386494821Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -242,3 +242,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fe99-ad4b-7e50-b3e7-040a719d2339
+  author: aida-auto-bump
+  timestamp: 2026-10-02T21:51:19.371905757Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0fe99-ad5a-7e31-9ea0-7ef64a535b96
+  timestamp: 2026-10-02T21:51:19.386492900Z
+  agent: product
+  commit_sha: 56e9d435aacafb520779110cfa52fffa754415f2
+  summary: Completed via merge 56e9d435
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-02T21:51:19.371867628Z
+  completion_sha: 56e9d435aacafb520779110cfa52fffa754415f2
