@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-09-30T15:29:32.329026737Z
+modified_at: 2026-10-02T06:34:38.625961206Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -311,6 +311,25 @@ comments:
   created_at: 2026-09-30T15:29:32.329026737Z
   modified_at: 2026-09-30T15:29:32.329026737Z
   session_id: 259d97b0-df15-4cdb-8712-e2f54e1a8223
+- id: 01a0fb52-6ea1-7010-881f-6f5ca78fc96a
+  author: joe
+  content: |-
+    ## Triage Confirmation (Live Reproduction)
+
+    ### Status: Confirmed Live Today (2026-10-01)
+
+    ### Live Evidence
+    1. Running `aida awaiting --json` and `aida ps --json` in the main checkout (`/home/joe/ai/aida`) reproduces the exact split documented in the advisor amendment:
+       - `BUG-1764` has `stale_lease: true` and is mislabeled with `"possibly_subagent": true`.
+       - `TASK-1536` has `stale_lease: false` (flag-only) and is marked `"likely_fanout": true`.
+       - As a direct result of `likely_fanout: true`, `TASK-1536` is **silently dropped from `aida awaiting --json`** (orphaned_in_progress contains only BUG-1764, omitting TASK-1536).
+    2. Inspection of `.aida/sessions/` confirms two root-pinned `harness-worktree` leases (`01a0c96c2f11...` and `abf9f7f087db...`) pointing to `/home/joe/ai/aida`.
+    3. `aida ps --json` shows session `abf9f7f087db...` with PID `2996156` (the current active session process) satisfying `has_live_claude` and setting `fanout_active = true`.
+
+    ### Conclusion
+    The advisor amendment (A1–A4) remains 100% accurate and reproduces today. Root cause is confirmed in `live_fanout_harness_lease` counting the observer session itself as fanout corroboration.
+  created_at: 2026-10-02T06:34:38.625961206Z
+  modified_at: 2026-10-02T06:34:38.625961206Z
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
