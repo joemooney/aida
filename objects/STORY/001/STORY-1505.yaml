@@ -1,0 +1,34 @@
+id: 01a0fc7c-f7b8-7250-96d7-46bd1072e02e
+spec_id: STORY-1505
+agreed_id: STORY-1505
+title: 'Review PR-2332: [AI:claude] fix(auto-bump): resolve an auto-drafted phase-failure finding whose parent completed outside this pass (BUG-1768)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0fc48`) for branch `bug-1768`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2332>
+  - Branch: `bug-1768` → `main`
+
+  ## Covers
+
+  - BUG-1768
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2332` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T12:00:43.448986632Z
+modified_at: 2026-10-02T12:00:43.448986632Z
+req_type: Story
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 80a149f2-df5e-43a1-9400-e2ad67e7819c
