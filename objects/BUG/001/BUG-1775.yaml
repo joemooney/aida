@@ -72,17 +72,25 @@ description: |
      worktree copy no longer feeds it).
   3. A regression test per fixed key proves the branch-local value is ignored (the
      trusted_config::tests::reads_default_branch_copy_not_worktree_copy pattern).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T18:30:23.822947124Z
-modified_at: 2026-10-02T18:30:23.822947124Z
+modified_at: 2026-10-02T21:58:26.915725658Z
 req_type: Bug
 tags:
 - config-trust
 - security
 - supply-chain
+history:
+- id: 01a0fea0-3363-7a31-9eb5-1b94f2333dc0
+  author: joe
+  timestamp: 2026-10-02T21:58:26.915723147Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
   branch: bug-1723-work
