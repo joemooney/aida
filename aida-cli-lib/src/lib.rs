@@ -9143,6 +9143,140 @@ fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> 
         .filter(|s| !s.trim().is_empty())
 }
 
+/// Accept a reconciliation-time CI result only when it is terminal green and
+/// belongs to the exact head the PR/MR metadata reports. The error deliberately
+/// names both heads so stale and incomplete forge evidence is diagnosable.
+// trace:BUG-1819 | ai:codex
+fn verified_from_pr_ci_head(
+    pr: u32,
+    expected_head: Option<&str>,
+    evidence: &crate::forge::CiProbeEvidence,
+) -> Result<String, auto_complete::PhaseFailure> {
+    let expected = expected_head
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .unwrap_or("<unknown>");
+    let observed = evidence
+        .head_sha
+        .as_deref()
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .unwrap_or("<unknown>");
+    let observed_change = match &evidence.probe {
+        crate::forge::CiProbeResult::Green { change } => Some(*change),
+        _ => None,
+    };
+    if observed_change != Some(u64::from(pr)) {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!(
+                "review of PR-{pr} refused: CI evidence is not terminal green for this change (observed change {}); expected head {expected}, observed head {observed}",
+                observed_change
+                    .map(|change| change.to_string())
+                    .unwrap_or_else(|| "<nonterminal>".to_string())
+            ),
+        ));
+    }
+    if expected == "<unknown>"
+        || observed == "<unknown>"
+        || !expected.eq_ignore_ascii_case(observed)
+    {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!(
+                "review of PR-{pr} refused: CI evidence does not cover the current change; expected head {expected}, observed head {observed}"
+            ),
+        ));
+    }
+    Ok(observed.to_string())
+}
+
+#[cfg(test)]
+mod bug_1819_from_pr_ci_evidence_tests {
+    use super::*;
+
+    const HEAD: &str = "a91957a858320c0e17f3a0eca7cfacbff50ea29a";
+    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn evidence(
+        probe: crate::forge::CiProbeResult,
+        head: Option<&str>,
+    ) -> crate::forge::CiProbeEvidence {
+        crate::forge::CiProbeEvidence {
+            probe,
+            head_sha: head.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn direct_reviewer_reentry_accepts_exact_green_head() {
+        let verified = verified_from_pr_ci_head(
+            26,
+            Some(HEAD),
+            &evidence(
+                crate::forge::CiProbeResult::Green { change: 26 },
+                Some(HEAD),
+            ),
+        )
+        .expect("an exact terminal green head is reviewable");
+        assert_eq!(verified, HEAD);
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let mut driver = RealPhaseDriver::new(
+            tmp.path().to_path_buf(),
+            "BUG-205".into(),
+            "tester".into(),
+            None,
+            false,
+            None,
+            AutonomyMode::Default,
+            "run-token".into(),
+            false,
+            false,
+            false,
+            false,
+            auto_complete::LifecycleSkip::none(),
+            auto_complete::AutoCompleteVariant::Full,
+        );
+        driver.seed_resume_state(
+            Some("bug-205".into()),
+            Some(26),
+            None,
+            Some(verified),
+            Some(true),
+        );
+        assert_eq!(driver.ci_terminal_sha.as_deref(), Some(HEAD));
+        assert_eq!(driver.ci_terminal_green, Some(true));
+    }
+
+    #[test]
+    fn stale_evidence_names_expected_and_observed_heads() {
+        let failure = verified_from_pr_ci_head(
+            26,
+            Some(HEAD),
+            &evidence(crate::forge::CiProbeResult::Green { change: 26 }, Some(OLD)),
+        )
+        .expect_err("a green result for an old head must be rejected");
+        assert!(failure.reason.contains(HEAD), "{}", failure.reason);
+        assert!(failure.reason.contains(OLD), "{}", failure.reason);
+    }
+
+    #[test]
+    fn nonterminal_evidence_names_expected_and_observed_heads() {
+        let failure = verified_from_pr_ci_head(
+            26,
+            Some(HEAD),
+            &evidence(
+                crate::forge::CiProbeResult::InProgress { change: 26 },
+                Some(HEAD),
+            ),
+        )
+        .expect_err("pending CI must not authorize review");
+        assert!(failure.reason.contains("not terminal green"));
+        assert!(failure.reason.contains(HEAD), "{}", failure.reason);
+    }
+}
+
 /// TASK-1449: like [`pr_head_sha_best_effort`], but the PR's head branch
 /// name — used by the rework no-op guard to check whether a PR OTHER than
 /// the one it armed against (the BUG-1527 shape) is actually attributed to
@@ -41274,54 +41408,6 @@ pub(crate) fn watch_ci_for_context_with_forge(
         crate::forge::forge_for_kind(project_root, forge_kind)
             .stream_ci_for_branch(branch, !no_human_active),
     )
-}
-
-// TASK-1273: `probe_ci_state_for_branch` (and the `ci_probe_via_forge` wrapper
-// above it) used to live here and resolved the project root from the process
-// cwd. Every caller now passes the driven root to `ci_probe_with_forge`, so
-// both are removed rather than left as a cwd-resolving entry point the next
-// call site could reach for. `probe_ci_state_for_branch_github` below is a
-// different function — GitHubForge still calls it. trace:TASK-1273 | ai:claude
-
-// STORY-1163: raw GitHub CI probe used by GitHubForge after the public helper
-// became forge-dispatched. The argv and parser stay byte-for-byte compatible
-// with the pre-dispatch helper. trace:STORY-1163 | ai:codex
-pub(crate) fn probe_ci_state_for_branch_github(branch: &str) -> CiProbe {
-    let gh = match resolve_forge_cli(crate::forge::ForgeKind::GitHub) {
-        Some(p) => p,
-        None => return CiProbe::NoSignal("gh not on PATH".to_string()),
-    };
-    // `gh pr list --head <branch> --state all --json number,statusCheckRollup`
-    // is the one call that gives us both the PR number and the check
-    // rollup. `--state all` covers Open + Merged (we still probe a
-    // recently-merged PR for "did CI finish before the merge?", though
-    // in practice the user has already merged so we just degrade).
-    let output = std::process::Command::new(&gh)
-        .args([
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "open",
-            "--json",
-            "number,statusCheckRollup",
-            "--limit",
-            "1",
-        ])
-        .output_retrying_etxtbsy();
-    let output = match output {
-        Ok(o) if o.status.success() => o,
-        Ok(o) => {
-            return CiProbe::NoSignal(format!(
-                "gh pr list failed: {}",
-                String::from_utf8_lossy(&o.stderr).trim()
-            ));
-        }
-        Err(e) => return CiProbe::NoSignal(format!("gh spawn error: {e}")),
-    };
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_ci_probe(&stdout)
 }
 
 /// Pure JSON-to-CiProbe parser. Extracted so we can unit-test it without
@@ -95770,21 +95856,32 @@ fn handle_from_pr(
         let mut sink = network_retry::StderrSink;
         facts.pr_merged = pr_is_merged_with_sink(&project_root, n, &mut sink).unwrap_or(false);
         facts.branch_exists = true;
-        if !facts.ci_green {
-            // Every other fact on this path is probed against `project_root`;
-            // resolving CI from the process cwd instead could green-light a
-            // resume from a different repository's forge.
-            // trace:TASK-1273 | ai:claude
-            let forge_kind = crate::forge::resolve_forge_kind(&project_root);
-            facts.ci_green = branch
-                .as_deref()
-                .map(|b| {
-                    matches!(
-                        ci_probe_with_forge(&project_root, forge_kind, b),
-                        CiProbe::Green { .. }
-                    )
-                })
-                .unwrap_or(false);
+    }
+    // BUG-1819: `probe_resume_facts` only carries a green bit. Reconcile the
+    // provider's terminal state with the exact head it covered so a direct
+    // phase-3 entry can inherit the same head-bound proof phase 2 records.
+    let forge_kind = crate::forge::resolve_forge_kind(&project_root);
+    let mut resume_ci_terminal_sha = None;
+    let mut resume_ci_terminal_green = None;
+    let mut resume_ci_refusal = None;
+    if forge_kind != crate::forge::ForgeKind::None {
+        facts.ci_green = false;
+        if let (Some(pr), Some(branch)) = (pr, branch.as_deref()) {
+            let mut sink = network_retry::StderrSink;
+            let expected_head = crate::forge::forge_for_kind(&project_root, forge_kind)
+                .change_metadata(pr as u64, &mut sink)
+                .ok()
+                .map(|metadata| metadata.head_sha);
+            let evidence =
+                crate::forge::ci_probe_evidence_for_branch(&project_root, forge_kind, branch);
+            match verified_from_pr_ci_head(pr, expected_head.as_deref(), &evidence) {
+                Ok(head) => {
+                    facts.ci_green = true;
+                    resume_ci_terminal_sha = Some(head);
+                    resume_ci_terminal_green = Some(true);
+                }
+                Err(failure) => resume_ci_refusal = Some(failure.reason),
+            }
         }
     }
     let pr_exists = pr.is_some();
@@ -95847,6 +95944,14 @@ fn handle_from_pr(
             // `ci_gated_start_phase` for why a phase-name check is not enough.
             // trace:BUG-1460 trace:TASK-1272 | ai:claude
             let start_phase = drain_resume::ci_gated_start_phase(start_phase, facts.ci_green);
+            if start_phase == auto_complete::Phase::Ci {
+                if let Some(reason) = resume_ci_refusal.as_deref() {
+                    eprintln!(
+                        "  {} {reason}; re-running phase 2 before review",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+            }
             println!(
                 "{} driving `{}` from phase {} ({}) — implementation shipped outside the \
                  orchestrator (skipping the implementer phase).",
@@ -95876,6 +95981,8 @@ fn handle_from_pr(
                 pr,
                 head_sha: None,
                 from_pr: true,
+                ci_terminal_sha: resume_ci_terminal_sha,
+                ci_terminal_green: resume_ci_terminal_green,
             });
             let result = run_auto_complete(
                 storage,
@@ -97012,7 +97119,13 @@ fn run_auto_complete(
     // (CI / reviewer / merge / …) have the context they need.
     let start_phase = match &resume {
         Some(r) => {
-            driver.seed_resume_state(r.branch.clone(), r.pr, r.head_sha.clone());
+            driver.seed_resume_state(
+                r.branch.clone(),
+                r.pr,
+                r.head_sha.clone(),
+                r.ci_terminal_sha.clone(),
+                r.ci_terminal_green,
+            );
             driver.from_pr = r.from_pr;
             r.start_phase
         }
@@ -98059,6 +98172,8 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             pr,
             head_sha: None,
             from_pr: true,
+            ci_terminal_sha: None,
+            ci_terminal_green: None,
         });
         run_auto_complete(
             self.storage,
@@ -100358,6 +100473,8 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             pr,
             head_sha: None,
             from_pr: true,
+            ci_terminal_sha: None,
+            ci_terminal_green: None,
         });
         run_auto_complete(
             self.storage,
@@ -105313,6 +105430,11 @@ struct ResumeEntry {
     // trace:BUG-1818 | ai:codex
     head_sha: Option<String>,
     from_pr: bool,
+    /// BUG-1819: terminal CI evidence verified during `--from-pr`
+    /// reconciliation. A direct reviewer re-entry must inherit this rather
+    /// than pretending only an in-process phase 2 can establish it.
+    ci_terminal_sha: Option<String>,
+    ci_terminal_green: Option<bool>,
 }
 
 /// What the ownership probe concluded about a same-branch open change before
@@ -106677,6 +106799,8 @@ impl RealPhaseDriver {
         branch: Option<String>,
         pr: Option<u32>,
         head_sha: Option<String>,
+        ci_terminal_sha: Option<String>,
+        ci_terminal_green: Option<bool>,
     ) {
         if branch.is_some() {
             self.branch = branch;
@@ -106686,6 +106810,12 @@ impl RealPhaseDriver {
         }
         if head_sha.is_some() {
             self.phase_done_head = head_sha;
+        }
+        if ci_terminal_sha.is_some() {
+            self.ci_terminal_sha = ci_terminal_sha;
+        }
+        if ci_terminal_green.is_some() {
+            self.ci_terminal_green = ci_terminal_green;
         }
     }
 
