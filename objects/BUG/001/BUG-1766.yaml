@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:45:57.338389050Z
-modified_at: 2026-10-02T14:49:27.911112854Z
+modified_at: 2026-10-02T14:49:45.783633935Z
 req_type: Bug
+comments:
+- id: 01a0fd17-ba37-7980-b40e-f7b55eb4e9be
+  author: joe
+  content: 'Rejected 2026-10-02 (relay session #19): an empty-description placeholder created during BUG-1687 triage — no reproduction, no acceptance criteria, no distinct defect. It was surfacing in `aida list --deferred` as if it were real backlog. BUG-1687 and BUG-1771 carry the actual findings from that triage.'
+  created_at: 2026-10-02T14:49:45.783633935Z
+  modified_at: 2026-10-02T14:49:45.783633935Z
+  session_id: 4d15c9cf-9632-421e-973e-436f4d2e6185
 history:
 - id: 01a0fd17-7467-7690-901a-8216cbf03ae6
   author: joe
