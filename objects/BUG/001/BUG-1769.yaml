@@ -1,0 +1,95 @@
+id: 01a0fc33-22da-7493-8024-d38ce3b3bc3c
+spec_id: BUG-1769
+agreed_id: BUG-1769
+title: The orchestrator demotes a Done spec to NeedsAttention and records a failed run when a phase-1 relaunch is refused because the work is already finished
+description: |
+  On 2026-10-01 the orchestrator demoted BUG-1817 from `Done` to `NeedsAttention`
+  and recorded the whole `--auto-complete` run as `failed` /
+  `failure_kind: launch-refused`, on the strength of a child refusal whose own
+  message said the work was finished. The implementer phase had succeeded.
+
+  ## Evidence
+
+  Authored transition chain from `.aida-store/objects/BUG/001/BUG-1817.yaml`,
+  against the telemetry line quoted in BUG-1821:
+
+  | UTC | author | transition |
+  |---|---|---|
+  | 22:05:07 | aida-orchestrator-phase1 | Approved -> InProgress  (run starts; `started_at` 22:05:08) |
+  | 22:11:37 | joe.mooney | InProgress -> **Done**  (work finished on a branch) |
+  | 22:12:17 | aida-orchestrator | **Done -> NeedsAttention**  (`completed_at` 22:12:17, outcome `failed`) |
+  | 23:00:47 | joe.mooney | NeedsAttention -> InProgress  (manual recovery, 48 min later) |
+  | 23:27:21 | joe.mooney | InProgress -> Done, then Done -> Completed |
+
+  The recorded failure message is:
+
+      phase 1 child session 01a0f986 exited with code 1 after 302ms without a
+      session lease or an orchestrator handoff receipt: no implementer session
+      started, so there is nothing to resume; the child refused: `BUG-1817` isn't
+      queued. Status is Done (work finished on a branch).. The single clean
+      replacement launch already ran and was refused; no session lease was left
+      behind and BUG-1817 was not advanced
+
+  Three things in that one message contradict the verdict it produced:
+
+  1. `Status is Done (work finished on a branch)` -- the orchestrator was told the
+     phase's goal had been reached.
+  2. `BUG-1817 was not advanced` is false: the run advanced it Approved -> InProgress
+     -> Done. The final clause describes only the 302ms replacement launch.
+  3. `phase_durations` records phase 1 as 426837 ms while the child it blames
+     exited after 302ms. The 426.5s belong to the first child -- the one that
+     succeeded. The telemetry attributes a successful phase's duration to a
+     failure.
+
+  ## Why the stale-Done confound is ruled out
+
+  A guard of the form "do not demote a spec that is already Done" could in
+  principle fire on a spec that was Done *before* the run began. That is not this
+  case: the orchestrator itself flipped BUG-1817 `Approved -> InProgress` at
+  22:05:07, so the run demonstrably started from a non-Done state and the `Done`
+  at 22:11:37 was produced inside the run. The evidence distinguishes
+  "Done because of this run" from "Done beforehand".
+
+  ## Cost
+
+  The false failure demoted a finished spec, auto-drafted BUG-1821 asking a human
+  to triage a non-bug, and printed a recovery hint -- "Resolve that, then retry:
+  `aida queue work BUG-1817`" -- that would be refused again for the same reason.
+  A human then walked the spec forward by hand in three transitions, 48 minutes
+  later. BUG-1821's own comment trail records the manual un-shelving:
+  "Returned from NeedsAttention to In Progress via `aida edit --status`."
+
+  ## Open question for triage -- why this is Draft, not Approved
+
+  The shelve path lives in `aida-cli-lib/src/auto_complete.rs`, whose
+  `NeedsAttention` handling is EPIC-28 / STORY-975 / TASK-1054 semantics across
+  ~30 sites. I did NOT read it; the evidence above is behavioural, from the store
+  and the telemetry. Before implementing, triage must establish:
+
+  - whether the fix belongs at the refusal classifier (a refusal that reports the
+    spec already `Done` is a phase SUCCESS, not a `launch-refused` failure), or at
+    the shelve call (never demote `Done` -> `NeedsAttention`), or both;
+  - whether BUG-1524 -- "A phase-1 launch refusal is treated as a recoverable
+    failure and the drain continues from the CI gate" (completed 2026-09-23) --
+    already owns this classifier, making this a regression or a missed case of it
+    rather than new behaviour. BUG-1524 is the first thing to read.
+
+  Related: BUG-1768 covers the downstream consequence (the orphaned Draft
+  finding), and is independent of this fix.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T10:40:04.826717728Z
+modified_at: 2026-10-02T10:40:04.826717728Z
+req_type: Bug
+tags:
+- auto-complete orchestrator needs-triage launch-refused
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
