@@ -1688,12 +1688,13 @@ pub enum SessionCommand {
         /// or (for a process-backed claim on this host) holding a pid whose
         /// identity no longer matches. Prints scope + reason per release and
         /// never touches a claim it reports live, so there is no `--force`.
-        /// Before BUG-1764 the only remedy was deleting
-        /// `.aida-store/coordination/leases/*.toml` by hand: `aida session
-        /// end --spec` cannot reach a foreign claim (it has no local lease)
-        /// and `aida session reap` requires spec Done + branch merged +
-        /// process exited. Opt-in by design — releasing another clone's
-        /// claim is a cross-clone mutation, so it is never automatic.
+        /// This is the only supported way to clear one: `aida session end
+        /// --spec` cannot reach a foreign claim (it has no local lease) and
+        /// `aida session reap` requires the spec Done + the branch merged +
+        /// the process exited, so the alternative is deleting
+        /// `.aida-store/coordination/leases/*.toml` by hand. Opt-in by
+        /// design — releasing another clone's claim is a cross-clone
+        /// mutation, so it is never automatic.
         // trace:BUG-1764 | ai:claude
         #[clap(long)]
         prune_stale: bool,
