@@ -252,6 +252,13 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_move.sh
 
+      # BUG-1762: the agent-skill-hook installer behind the build prerequisite
+      # must install idempotently, never clobber a foreign hook, and skip
+      # (quietly in --best-effort mode) from linked worktrees and non-repos.
+      - name: Run agent-skill-hook installer fixtures
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_install_agent_skill_hooks.sh
+
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests
