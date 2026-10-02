@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T14:15:12.063490389Z
+modified_at: 2026-10-02T14:56:02.558431644Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -196,6 +196,26 @@ comments:
   created_at: 2026-10-02T14:15:12.063490389Z
   modified_at: 2026-10-02T14:15:12.063490389Z
   session_id: 6b6263ef-7534-4ca6-873c-25ab949a24ae
+- id: 01a0fd1d-79fe-7f81-8065-ea32a45fb08f
+  author: joe
+  content: |-
+    Correction to the earlier sketch, from implementing BUG-1771 (relay session #19, PR #2339).
+
+    The sketch said BUG-1771's fix site would satisfy this spec's AC2 (`aida list --status deferred`) as a side effect — 'fix once at git_backend_cmd.rs:1805 and deferred, shelved and needs-decision are all satisfied together'. That is wrong, and the implementation makes it clear why.
+
+    `shelved` and `needs-decision` are lenses over the STORED NeedsAttention status: one cache query on needs-attention returns the superset, and the lens narrows it. `deferred` is not on that axis at all — it is the orthogonal defer VIEW-FLAG (STORY-584's `DeferFilter`, already exposed as `--deferred`). There is no status to widen to. AC2 therefore needs its own handling: recognise the token and set `defer = DeferFilter::DeferredOnly` (and open the axis), NOT an entry in `LENS_FILTER_TOKENS`.
+
+    What BUG-1771 does leave behind for this spec, already on main-to-be:
+    - `status_display::split_status_lens_spec` — the place to hang the `deferred` token split.
+    - `LENS_FILTER_TOKENS` + `lens_filter_token_list()` — the refusal message is now generated from a table, so adding `deferred` to the accepted set updates the refusal automatically. Whatever table `deferred` joins must feed that message too, or AC3's anti-drift property is lost for the new token.
+    - `aida-cli/tests/bug_1771_status_lens_filters.rs` — a working integration harness that parks specs through the real CLI (`aida review record --verdict request-changes` shelves, `aida punt` asks for a decision) and asserts through the JSON projection. AC2's fixture should follow that shape, not the dead `requirement_matches_status_filter` unit tests.
+
+    Note for the AC2 fixture specifically: a deferred spec is hidden by the DEFAULT defer filter, so a test that only asserts 'the row appears' can pass for the wrong reason. Assert the control too — that the same spec is absent without the filter.
+
+    The rest of the earlier sketch (AC1's presentation-level override, AC3 satisfied by construction because defer_single leaves status untouched, and the pre-authorized list of match sites a new NeedsAttentionLens variant breaks) still stands.
+  created_at: 2026-10-02T14:56:02.558431644Z
+  modified_at: 2026-10-02T14:56:02.558431644Z
+  session_id: 4d15c9cf-9632-421e-973e-436f4d2e6185
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
