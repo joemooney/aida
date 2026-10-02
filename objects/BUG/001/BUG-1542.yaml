@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T08:43:25.468471381Z
-modified_at: 2026-09-22T08:20:04.522568252Z
+modified_at: 2026-10-02T10:58:33.886080272Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -102,3 +102,48 @@ comments:
   content: '[aida:driver-disposition] verdict=rejected; reasoning=historical canonical object at commit 26de9916 stored one literal space-delimited tag, so severity:cosmetic was never an independently removable tag; incident-era c9da874c06 already exact-removes colon tags in distributed and legacy paths; independent cold review refused observability-only PR #2084; timestamp=2026-09-22T01:20:02-07:00'
   created_at: 2026-09-22T08:20:02.980066370Z
   modified_at: 2026-09-22T08:20:02.980066370Z
+- id: 01a0fc44-0f1e-7561-9fcc-adae9dca1c03
+  author: joe
+  content: |
+    Forward pointer (advisor, relay session #13, 2026-10-02): **the rejection of
+    this spec was correct, and the cause its rejection identified is still live.
+    It is now filed as BUG-1770.**
+
+    The 2026-09-22 reinvestigation closed the colon-parsing claim and named the real
+    cause — TASK-1416's tags had been stored as ONE space-delimited list item, and
+    "the misleading human rendering erased list boundaries, creating the false
+    diagnosis." That diagnosis was right. But it addressed the rendering and closed
+    the bug; **nothing was done about the writer that creates the blob.**
+
+    Nine days later, on 2026-10-01, BUG-1769 was filed with its tags stored as a
+    single list item: `- auto-complete orchestrator needs-triage launch-refused`
+    (store commit `05488fab80`). This seat then ran
+    `aida edit BUG-1769 --remove-tag needs-triage`, got `No changes specified` and
+    exit 0, and began drafting a bug report with the same shape as this one. It was
+    caught only by reading this spec's rejection as a control before filing.
+
+    So the trap has now produced the same false diagnosis in two independent seats,
+    and it will keep doing so: no write path validates a tag against whitespace
+    (`git_backend_cmd.rs:3305` for `aida add --tags`, `:5988` for
+    `aida edit --tags`, `apply_tag_deltas` at `lib.rs:19540` for `--add-tag`).
+
+    BUG-1770 also carries this spec's own closing recommendation, which was never
+    filed: *"any desired tag-outcome reporting filed and reviewed separately across
+    both edit backends."* The `No changes specified` misdirection is still present on
+    main at `git_backend_cmd.rs:6314-6321` — the early flag guard at `:5461` does
+    include `remove_tag.is_empty()`, so the flag passes it, but `apply_tag_deltas`
+    returning `false` then routes into the no-changes branch. That work was done on
+    branch `bug-1542-tag-report` (`a920c8ecec`) and abandoned when PR #2084 was
+    closed; whoever takes BUG-1770 should look there before rewriting it.
+
+    One field-usable detection heuristic, recorded because the rendering is what hid
+    this twice: a blob is visible as **a non-alphabetical run inside an otherwise
+    sorted tag line**. Correctly stored tags render alphabetically. BUG-1769 rendered
+    `auto-complete orchestrator needs-triage launch-refused severity:major triaged`
+    — the first four in authored order, the two real tags sorted after them. The
+    repair is `aida edit <ID> --tags <full,comma,separated,set>`.
+
+    No status change to this spec; it stays rejected.
+  created_at: 2026-10-02T10:58:33.886080272Z
+  modified_at: 2026-10-02T10:58:33.886080272Z
+  session_id: 8e6a376b-16ed-45f7-a6ee-ea30765c7868
