@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-10-02T04:28:49.188453515Z
+modified_at: 2026-10-02T04:29:20.685819206Z
 req_type: Bug
 tags:
 - authority security launch scripts from:TASK-1549
@@ -247,6 +247,58 @@ comments:
   created_at: 2026-10-02T03:49:30.966782354Z
   modified_at: 2026-10-02T03:49:30.966782354Z
   session_id: 1d7813fc-728c-4a86-bee2-03e780d5b022
+- id: 01a0fadf-b7ad-7d81-b2c8-edb139d23f0d
+  author: joe
+  content: |
+    Revived and merged 2026-10-01 (relay session #5), PR #2326, merge commit `dc3b03058e`.
+
+    **The defect the revival found, which the original commit did not have:** the refusal
+    guards and `tests/test_bug_1688_shipped_launch_refusals.sh` were both already on the
+    branch, but **nothing ever executed the fixture.** CI names each shell test
+    individually in `.github/workflows/ci.yml`; there is no glob runner over `tests/*.sh`
+    and no Makefile target that sweeps them. So AC2's "a fixture proves zero vendor
+    launches" was an assertion no gate enforced — a later edit to any of the five scripts
+    could have dropped a guard with every required check still green.
+
+    Fixed by wiring it in as a CI step beside the other hook/authority fixtures, gated on
+    `full_ci` because the route audit shells out to ripgrep, which only the `full_ci`
+    dependency step installs (ci.yml line ~101). Verified it **actually executed**:
+    step 22 of `Build (ubuntu-latest)`, run 36963390190, conclusion success — read from
+    the job's step list, not inferred from the green rollup.
+
+    Measurements, all re-run against current `main` rather than taken from the original
+    commit message:
+
+    | check | result |
+    |---|---|
+    | `git merge-tree --write-tree origin/main bug-1688` | exit 0, zero conflicts |
+    | `bash tests/test_bug_1688_shipped_launch_refusals.sh` | exit 0, five surfaces refused, launch count 0 |
+    | mutation: `exit 78` -> `exit 0` in `gate-vs-rule.sh` | fixture **exit 1**, names that script |
+    | `scripts/check-portability.sh` | exit 0 |
+    | `ci.yml` yaml load + step resolution | ok, step present with the `full_ci` guard |
+    | AC3 route audit on today's `main` | still exactly the four `gate-vs-rule*` ablations |
+    | CI per head SHA `dc26181a1e` | `merge-hold-gate` success, `Build (ubuntu-latest)` success |
+
+    **AC3 disposition.** The only other code constructing full-access argv is in
+    `aida-cli-lib` (`queue_cmd`, `compete`, `session`, `bypass_confirm`, `lib`, plus three
+    test modules) and `aida-core/templates/agents.toml`. Those DO have legitimate
+    unattended callers — drain, burndown, compete — so they are BUG-1669's domain and are
+    reported here rather than silently widened into this fix.
+
+    **The zero-launch arm is not vacuous.** The fixture's recording shims bind to
+    `AIDA_ABLATION_CLAUDE` / `AIDA_ABLATION_CODEX`, which are the ablation scripts' own
+    documented override points (`gate-vs-rule-i2.sh:91-92`), so a regression that removes
+    a guard records a launch rather than passing silently.
+
+    No Rust changed, so the full workspace suite was deliberately skipped — stated as a
+    decision, not a silent omission. The ubuntu Build job runs it regardless and was green.
+
+    Scope held: claims no protected boundary, and BUG-1669 is untouched and not marked
+    complete. ADR-61's reconciled AC3/AC4 make a refusal-only change insufficient by
+    construction.
+  created_at: 2026-10-02T04:29:20.685819206Z
+  modified_at: 2026-10-02T04:29:20.685819206Z
+  session_id: 37866160-9ec6-4e9b-a86b-8da41edb7a26
 history:
 - id: 01a0e4aa-0db5-7f03-939f-9b70d4ca32f9
   author: joe
