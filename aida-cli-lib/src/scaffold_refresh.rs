@@ -341,6 +341,9 @@ pub(crate) fn refresh_agent_packs_at(
     // A memory-lane project stays a memory lane: only its lane skills and
     // its lane AGENTS.md block are refreshed. trace:BUG-1662 | ai:claude
     let memory_lane = footprint == Some(crate::cli::InitFootprint::MemoryLane);
+    // A minimal-footprint project installs only what minimal init installs
+    // (no discipline pack, no conventions block, no skills). trace:TASK-1536 | ai:agy
+    let minimal = footprint == Some(crate::cli::InitFootprint::Minimal);
     let deliveries = if full_footprint {
         plan_refresh_deliveries(project_root, &preview)
     } else {
@@ -431,12 +434,19 @@ pub(crate) fn refresh_agent_packs_at(
     // trace:TASK-1503 | ai:claude
     record_refresh_deliveries(project_root, &preview, &deliveries);
 
-    if let Some(agents) = agents_md_block_refresh(project_root, &preview, memory_lane) {
-        packs.push(agents);
+    // A minimal-footprint project has no AIDA AGENTS.md block; a memory-lane
+    // project refreshes its memory-lane block in place; full footprint refreshes
+    // the full conventions block. trace:BUG-1662 | ai:claude trace:TASK-1536 | ai:agy
+    if !minimal {
+        if let Some(agents) = agents_md_block_refresh(project_root, &preview, memory_lane) {
+            packs.push(agents);
+        }
     }
 
+    // A memory-lane or minimal-footprint project never installs the discipline pack.
     // trace:BUG-1662 | ai:claude
-    let discipline = if memory_lane {
+    // trace:TASK-1536 | ai:agy
+    let discipline = if memory_lane || minimal {
         None
     } else {
         crate::ensure_discipline_pack_scaffold(project_root, true).ok()
@@ -673,6 +683,13 @@ fn codex_prompts_refresh(dest: Option<&Path>) -> Option<PackRefresh> {
 pub(crate) fn is_memory_lane(project_root: &Path) -> bool {
     crate::init_cmd::effective_init_footprint(project_root)
         == Some(crate::cli::InitFootprint::MemoryLane)
+}
+
+/// Is this a minimal-footprint project? Refresh keeps such a project minimal.
+// trace:TASK-1536 | ai:agy
+pub(crate) fn is_minimal(project_root: &Path) -> bool {
+    crate::init_cmd::effective_init_footprint(project_root)
+        == Some(crate::cli::InitFootprint::Minimal)
 }
 
 /// Print the per-pack summary. Silent about packs that had nothing installed.
@@ -2333,5 +2350,124 @@ global = true
         std::fs::write(&path, custom).unwrap();
         refresh_agent_packs_at(root, None, None);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), custom);
+    }
+
+    // ── TASK-1536: minimal footprint refresh & pre-footprint lane detection ──
+
+    /// Acceptance 1: scaffold refresh on a minimal-footprint project installs
+    /// only what minimal init installs (no discipline pack, no conventions
+    /// block, no skills).
+    // trace:TASK-1536 | ai:agy
+    #[test]
+    fn task_1536_minimal_footprint_refresh_installs_only_minimal_init() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        crate::init_cmd::write_init_footprint(root, crate::cli::InitFootprint::Minimal).unwrap();
+        std::fs::write(root.join(".gitignore"), ".aida/\n").unwrap();
+        std::fs::write(
+            root.join("AGENTS.md"),
+            "# Project AGENTS.md\n\nCustom user notes.\n",
+        )
+        .unwrap();
+
+        assert!(is_minimal(root));
+        assert!(!is_memory_lane(root));
+
+        let before = tree_snapshot(root);
+
+        for _ in 0..2 {
+            let packs = refresh_agent_packs_at(root, None, None);
+            assert!(
+                packs.iter().all(|p| p.label != "Discipline pack"),
+                "minimal refresh must not install discipline pack"
+            );
+            assert!(
+                packs.iter().all(|p| p.label != "AGENTS.md AIDA block"),
+                "minimal refresh must not touch AGENTS.md"
+            );
+        }
+
+        let after = tree_snapshot(root);
+        assert_eq!(
+            before.keys().collect::<Vec<_>>(),
+            after.keys().collect::<Vec<_>>(),
+            "minimal refresh added or removed files"
+        );
+        assert!(before == after, "minimal refresh modified files");
+
+        assert!(!root.join(".aida/discipline").exists());
+        let agents = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert_eq!(agents, "# Project AGENTS.md\n\nCustom user notes.\n");
+        assert!(!agents.contains("# AIDA Conventions"));
+        assert!(!agents.contains("# AIDA Memory Lane"));
+    }
+
+    /// Acceptance 3: a lane created before saved footprints, with no skills,
+    /// is recognised as a lane when AGENTS.md has the memory-lane block heading.
+    // trace:TASK-1536 | ai:agy
+    #[test]
+    fn task_1536_pre_footprint_lane_with_no_skills_recognised_by_agents_heading() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Pre-footprint: no [scaffold] footprint in .aida/config.toml.
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        // No skills in any pack.
+        for pack in [
+            ".claude/skills",
+            ".agents/skills",
+            ".codex/skills",
+            ".antigravity/skills",
+        ] {
+            assert!(!root.join(pack).exists());
+        }
+
+        // Without the memory-lane heading, it is not recognised as memory-lane.
+        std::fs::write(root.join("AGENTS.md"), "# AGENTS.md\n\nNo AIDA heading.\n").unwrap();
+        assert!(!crate::init_cmd::looks_like_memory_lane(root));
+        assert_ne!(
+            crate::init_cmd::effective_init_footprint(root),
+            Some(crate::cli::InitFootprint::MemoryLane)
+        );
+        assert!(!is_memory_lane(root));
+
+        // When AGENTS.md carries the memory-lane block heading (# AIDA Memory Lane),
+        // it is recognised as a memory-lane project even with no skills.
+        let lane_agents = "\
+# AGENTS.md
+
+<!-- AIDA-AUTOGEN-BEGIN -->
+# AIDA Memory Lane
+
+This project uses AIDA as a lightweight requirements and memory store.
+
+Storage: .aida-store
+
+## Daily Commands
+<!-- AIDA-AUTOGEN-END -->
+
+User notes here.
+";
+        std::fs::write(root.join("AGENTS.md"), lane_agents).unwrap();
+        assert!(crate::init_cmd::has_memory_lane_agents_heading(root));
+        assert!(crate::init_cmd::looks_like_memory_lane(root));
+        assert_eq!(
+            crate::init_cmd::effective_init_footprint(root),
+            Some(crate::cli::InitFootprint::MemoryLane)
+        );
+        assert!(is_memory_lane(root));
+
+        // Full-install markers (e.g. .claude/AIDA.md) take precedence:
+        // a pruned/interrupted full install is not a memory lane even if
+        // AGENTS.md has the heading.
+        std::fs::create_dir_all(root.join(".claude")).unwrap();
+        std::fs::write(root.join(".claude/AIDA.md"), "# AIDA Conventions\n").unwrap();
+        assert!(!crate::init_cmd::looks_like_memory_lane(root));
+        assert_ne!(
+            crate::init_cmd::effective_init_footprint(root),
+            Some(crate::cli::InitFootprint::MemoryLane)
+        );
+        assert!(!is_memory_lane(root));
     }
 }

@@ -574,6 +574,16 @@ pub(crate) fn handle_scaffold_command(
                 );
                 return Ok(());
             }
+            // A minimal-footprint project installs only what minimal init installs:
+            // no discipline pack, type protocols, or permission setup.
+            // trace:TASK-1536 | ai:agy
+            if crate::scaffold_refresh::is_minimal(&root) {
+                println!(
+                    "  {} minimal-footprint project: refreshed only minimal setup (no discipline pack, type protocols, or permission setup).",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
+                return Ok(());
+            }
             let seeded = crate::protocol_cmd::seed_missing_protocols(storage)?;
             if seeded > 0 {
                 println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
