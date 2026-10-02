@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-02T06:34:38.625961206Z
+modified_at: 2026-10-02T14:02:44.032263756Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -330,6 +330,55 @@ comments:
     The advisor amendment (A1–A4) remains 100% accurate and reproduces today. Root cause is confirmed in `live_fanout_harness_lease` counting the observer session itself as fanout corroboration.
   created_at: 2026-10-02T06:34:38.625961206Z
   modified_at: 2026-10-02T06:34:38.625961206Z
+- id: 01a0fcec-abc0-7cf2-8a39-f3bb2ee44e13
+  author: joe
+  content: |
+    ## Partly addressed by BUG-1681 (PR #2337) — deliberately NOT closed
+
+    BUG-1681's AC2 moved the predicate this spec is about. `possibly_subagent` was
+
+        stale_lease && fanout_active        // fanout_active = any live harness lease anywhere
+
+    and is now
+
+        stale_lease && subagent_in_this_worktree
+
+    where `ps_fanout_holds_lease` requires the live fan-out lease to match the spec
+    lease's **own worktree or branch**. So the specific degeneracy this spec reports
+    — one root-pinned harness lease making *every* stale spec claim a fan-out — no
+    longer holds for a spec whose worktree is not the project root. The wording was
+    corrected in the same pass: `orphaned_state_label` now says "a live subagent
+    holds this worktree" instead of "live harness lease in this repo", because the
+    old wording described the old (broken) predicate.
+
+    **This spec's own ACs are still open**, and BUG-1681 is not claiming them:
+
+    - **AC1** — the rule about a `harness-worktree` lease pinned to the project root
+      is still not *decided and stated beside the predicate*. BUG-1681 made
+      attribution relative, which sidesteps the root-pinned case for most specs but
+      does not rule on it. Note the residual hole: when the spec lease's own
+      worktree **is** the project root, `ps_fanout_holds_lease` still matches, so
+      self-corroboration survives for exactly that shape.
+    - **AC2** — "the reporting session must never be its own corroboration" is not
+      implemented as such. Nothing yet excludes the calling process or its
+      ancestors; BUG-1681 only made the match narrower.
+    - **AC3** — no before/after `aida awaiting --json` evidence was captured for
+      BUG-1688 / BUG-1693 / BUG-1695. This spec's own warning ("verify against the
+      report, not only the unit test") still applies and is unmet.
+    - **AC5** — the four-corner fixture matrix over lease + live-session is not
+      written. BUG-1681's fixtures cover attribution matching, not caller identity.
+    - **AC7** — whether minting a `harness-worktree` lease against the project root
+      is the upstream mistake is unanswered.
+
+    Recommended next step for whoever takes this: start from
+    `ps_fanout_holds_lease` and `ps_live_fanout_leases` in `aida-cli-lib/src/lib.rs`
+    as they land in #2337, and add the caller-identity exclusion on top. The
+    predicates are now pure and fixture-testable, so AC5's matrix is cheap. Do AC3's
+    before/after on the real repo — this spec was filed once on a refuted mechanism,
+    and a green unit test is explicitly not enough here.
+  created_at: 2026-10-02T14:02:44.032263756Z
+  modified_at: 2026-10-02T14:02:44.032263756Z
+  session_id: bda69c2d-94ea-4e14-802c-29cc2207a98f
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
