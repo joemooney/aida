@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T05:44:15.964379833Z
-modified_at: 2026-09-29T04:44:05.937753488Z
+modified_at: 2026-10-02T17:37:21.773017787Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -178,6 +178,71 @@ comments:
   created_at: 2026-09-29T04:44:05.937753488Z
   modified_at: 2026-09-29T04:44:05.937753488Z
   session_id: 90913ac5-fbfb-4527-a436-ca91b9307726
+- id: 01a0fdb1-2b6d-7490-971d-8a521e5873f7
+  author: joe
+  content: |
+    ADVISOR DECOMPOSITION (2026-10-02, advisor seat). Acting on the prior advisor
+    comment's own recommendation to decompose rather than re-size.
+
+    ## Children filed and approved
+
+    * **BUG-1773** — derive `held_prs` from the verdict corpus (the READ half:
+      parent AC2, and AC1 as far as the view is concerned).
+    * **BUG-1774** — arm `forge::merge_change` and the label mirror from the same
+      corpus (the ENFORCEMENT half: parent AC1/AC3/AC4).
+
+    Take BUG-1773 first; BUG-1774 should consume the predicate it introduces.
+    Parent AC4 is resolved in BUG-1774 as the prior comment proposed: the corpus is
+    the source of truth, the marker file and the label are derived mirrors, because
+    ADR-37's server half is a GitHub check that can read a label and cannot read the
+    local corpus.
+
+    ## Prerequisite cleared
+
+    The prior comment named BUG-1691 a prerequisite ("in progress this session").
+    **BUG-1691 is Completed.** Nothing blocks either child.
+
+    ## Two corrections to this spec's own prescription
+
+    Verified in the tree at `fe09d7678e`. Both are carried into BUG-1773's
+    description because an implementer following the prior comment literally gets
+    them wrong.
+
+    ### 1. `local_verdict_blocks_merge` must NOT be reused as the `held_prs` predicate
+
+    The prior comment says to "wire that existing predicate into the two surfaces
+    that lack it — `held_prs` and the ... chokepoint". That is right for the
+    chokepoint and wrong for `held_prs`. The predicate is a fail-closed MERGE test:
+    it returns `true` whenever an artifact exists and the head is not cleanly
+    `Approved` (including when every recording sits at a non-matching sha and
+    `reconcile_artifacts_for_sha` returns `Ok(None)`), and `true` when
+    `current_sha` is `None`. Wiring that into a VIEW lists every open PR carrying
+    any stale verdict plus every PR whose head cannot be read — the prior comment's
+    own risk 1, caused by the prescription rather than avoided by it.
+
+    `held_prs` needs the positive form: an OUTSTANDING blocking verdict at the
+    CURRENT head. A view fails open on an unknown head; the gate fails closed. The
+    two should share the reconciliation primitive, not the policy.
+
+    ### 2. "confirm `reconcile_artifacts_for_sha` honours `is_closed`" — it does not
+
+    Settled, not open. `reconcile_artifacts_for_sha`
+    (`aida-cli-lib/src/review_verdict.rs:509`) parses each artifact as raw
+    `serde_json::Value` and reads only `verdict`, the `reviewed_sha`/head
+    provenance, `recorded_by` and `rounds`. It never reads `closed_by_merge`.
+    In that module the field is read in exactly two places — `RecordedVerdict`
+    parsing and `is_outstanding_refusal` — and neither is on the reconcile path.
+    So the closed-verdict exclusion must be applied explicitly by the fix;
+    `is_outstanding_refusal` (BUG-1529: closed by merge, or spec `Completed`) is
+    the building block that already encodes it.
+
+    ## Disposition of this parent
+
+    Left Approved as the umbrella. It completes when both children do; it should
+    not be marked done on either one alone.
+  created_at: 2026-10-02T17:37:21.773017787Z
+  modified_at: 2026-10-02T17:37:21.773017787Z
+  session_id: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
 history:
 - id: 01a0e68a-ff60-7c32-86db-4e7f26ec371b
   author: joe
