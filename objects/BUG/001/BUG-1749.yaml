@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:31.501218455Z
-modified_at: 2026-10-02T02:22:49.834931050Z
+modified_at: 2026-10-02T03:02:08.495909721Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -274,6 +274,130 @@ comments:
   created_at: 2026-10-02T02:22:49.834931050Z
   modified_at: 2026-10-02T02:22:49.834931050Z
   session_id: 8507630f-b690-4da6-8d9d-bece228469d1
+- id: 01a0fa8f-e16f-7ad0-96c1-9a388ab444ee
+  author: joe
+  content: |
+    ## Advisor re-measurement (relay session #22) — the defect is confirmed live, and the "recurring cron false-positive" justification does NOT hold
+
+    Measured on `main` @ `53484fbff7` with a **current** binary built from `a74d191512`
+    (`/home/joe/ai/aida-worktrees/aida-bug-1761/target/debug/aida`, built 2026-10-01 19:53). Everything
+    below I ran myself this session.
+
+    ### 1. Line numbers re-confirmed — session #20's table is still exact
+
+    `/usr/bin/grep -n 'render_doctor_report' aida-cli-lib/src/doctor_cmd.rs` on `53484fbff7`:
+
+    | site | line |
+    |---|---|
+    | `doctor_multi_agent` | **730** |
+    | `doctor_check_runaway_seats_light` | **959** |
+    | `doctor_check_disk_headroom_light` | **989** |
+    | `doctor_check_store_free_light` | **1022** |
+    | definition | 5617 |
+
+    Unchanged from session #20. The **description's** `817-822` is still stale; ignore it.
+
+    ### 2. The defect reproduced on all SIX of AC4's categories
+
+    Each run captured stdout to a **file** (non-TTY → agent mode active, no format pin), with
+    `--fail-on-findings`:
+
+    | category | exit | stdout | stderr | what stdout held |
+    |---|---|---|---|---|
+    | `performance` | 1 | 1237 B | **0 B** | human box text **+ trailing TOON `error:`** |
+    | `remote-drift` | 1 | 813 B | **0 B** | human box text **+ trailing TOON `error:`** |
+    | `disk-headroom` | 0 | 357 B | 0 B | human box text (no findings today) |
+    | `runaway-seats` | 0 | 1137 B | 0 B | human box text + coverage table |
+    | `scheduler-driver` | 0 | 357 B | 0 B | human box text (falls through to `doctor_multi_agent`) |
+    | `agent-launch` | 0 | 357 B | 0 B | human box text (falls through to `doctor_multi_agent`) |
+
+    **All six emit human box-drawing text in agent mode** — AC1's defect, confirmed on every category.
+    **stderr is 0 bytes in every case**, which is the proof that the error is on stdout rather than stderr.
+    The two categories with findings today additionally carry the second document; the other four are
+    latent exactly as the session #9 comment predicted.
+
+    ### 3. CORRECTION — this spec is NOT the root cause of the `performance-guard-route` `audit_error`
+
+    The previous two comments justify this spec partly as "clearing a recurring cron false-positive". **That
+    justification does not survive measurement.** Three facts:
+
+    - The scheduled argv **already contains `--json`** (`maintenance_schedule.rs:2799-2805`), added by
+      BUG-1573, not BUG-1745. Only the `display` string omits it, and that string is the identity predicate
+      at `:3146`. So the cron never takes the TOON path this spec is about.
+    - With the **current** binary, `doctor check performance --json --fail-on-findings` emits **exactly one**
+      JSON document, `error` inside it, `performance_audits` length 1, stderr 0 B. BUG-1745 works.
+    - With `/home/joe/ai/aida/target/debug/aida` — **stale**, sha `fd26d6e5b4`, built 2026-09-30 17:30, and
+      `git merge-base --is-ancestor 3f68acaa1a fd26d6e5b4` says **NO**, i.e. it predates BUG-1745's merge —
+      the same command emits JSON **plus** a trailing `error:` line and `json.loads` fails with
+      **`Extra data: line 30 column 1`**. That is a byte-level match for the trip's recorded
+      `audit_error: 'malformed typed doctor output: trailing characters at line 30 column 1'`.
+
+    So the recurring cron false-positive is a **stale-binary artifact of a bug BUG-1745 already fixed**. It
+    will clear when the binary the cron resolves is rebuilt — independently of this spec. Session #20's
+    contrasting measurement was right about the current binary; what neither earlier comment checked was
+    *which* binary the cron actually ran.
+
+    **This does not invalidate any acceptance criterion** — §2 above shows AC1 and AC2 describe live,
+    reproducible breakage. It re-prices the spec: medium/heft-3 cleanup of a contract violation with **no
+    shipped consumer today**, not the root cause of a standing cron trip. Re-order it against BUG-1762 /
+    BUG-1756 / BUG-1738 on that basis if desired.
+
+    ### 4. `doctor_multi_agent` is structurally harder than the three light functions — THREE bail sites, not one
+
+    The light functions compute one `reason` before the render, so BUG-1745's "reason rides inside the
+    document" shape drops straight in. `doctor_multi_agent` does **not**: it renders at 730 and then has
+    **three** separate `bail!` sites *after* the report is already on stdout:
+
+    | line | condition |
+    |---|---|
+    | **760** | `permission-posture` finding(s) detected (STORY-1127) |
+    | **772** | `--fail-on-findings` with findings (STORY-1422) |
+    | **789** | `{failed} finding(s) failed to heal` (BUG-471) |
+
+    Putting the reason inside the one document therefore requires **hoisting all three conditions above the
+    render**, not adapting one. A fix that converts only the `--fail-on-findings` arm leaves the other two
+    appending a second document in agent mode, and AC2 fails on the permission-posture and heal paths.
+
+    Also in that same `else` arm, after the render: `runaway_seats::render_coverage` (**733**) and
+    `print_doctor_status_diagnostics` (**742**, only when `opts.category.is_none()`). Both are human-only
+    text. A TOON arm must emit **neither**, or bare `aida doctor` in agent mode fails AC2's "exactly one
+    document". There is also a prior `opts.quiet_output` arm at **726** that must keep winning.
+
+    ### 5. There is NO generic serde → TOON serializer; the renderer must be written
+
+    `aida-cli-lib/src/toon.rs` (516 lines, `mod toon` at `lib.rs:280`) exposes only hand-assembly
+    primitives: `escape`, `scalar`, `error_block`, `error_block_with_help_list`, `FieldDef`, `table`,
+    `table_raw`, plus `parse_table` / `parse_scalar`. Every existing TOON view in the tree is a hand-written
+    `render_*_toon`. So this spec needs a new `render_doctor_report_toon(&DoctorReport) -> String` covering
+    `total`, `findings`, `bwrap`, `performance_audits`, `runaway_seats`, `hidden_completed_without_commit`,
+    `healed`, and `error` (struct at `doctor_cmd.rs:373-397`). `parse_table`/`parse_scalar` are what AC2's
+    test should parse the result with.
+
+    ### 6. Mode resolution: `agent_output_mode()` is a BOOL, so it cannot select TOON on its own
+
+    - `agent_output_mode() -> bool` (`lib.rs:2326`) — agent vs human only.
+    - `output_format_override() -> Option<OutputFormat>` (`lib.rs:2407`); `OutputFormat` is
+      `Human | Toon | Json`, parsed at `:2395-2400` (`"toon" | "agent"` → `Toon`, `"table"` → `Human`).
+    - `output_format_is_json() -> bool` (`lib.rs:2415`) is the existing helper for "the pin selects JSON";
+      AC1's "`--json` and `--format json` must agree" is satisfied by OR-ing the local `json` bool with it,
+      which is the convention the doc comment there already describes.
+
+    So the three-way resolution is `(local --json || output_format_is_json())` → JSON, else
+    `agent_output_mode()` → TOON, else human. Worth extracting once rather than four times.
+
+    ### 7. Test harness to copy, and the guard it already dodges
+
+    `aida-cli-lib/src/tests/bug_1745_error_channel_tests.rs` (106 lines, registered at `lib.rs:1035-1036`
+    via `#[path = "tests/..."]`) already does what AC2 needs:
+    `performance_command_stdout_round_trips_into_failure_trip` runs the **built binary** with captured
+    stdout — which is itself how agent mode gets activated — and parses the result. Reuse its
+    `built_aida_binary()` helper; read its comment first, because **TASK-1262's architecture guard
+    allowlists the literal resolver call**, and that comment explains why the helper may not name the raw OS
+    lookup. Copy the helper's three ownership assertions with it; they are what stop the test measuring a
+    different build's binary.
+  created_at: 2026-10-02T03:02:08.495909721Z
+  modified_at: 2026-10-02T03:02:08.495909721Z
+  session_id: 1d7813fc-728c-4a86-bee2-03e780d5b022
 history:
 - id: 01a0f5c2-efb8-7a02-ae49-98b0e6972676
   author: joe
