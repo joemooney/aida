@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-09-27T16:22:07.447451902Z
+modified_at: 2026-10-02T18:33:52.342166192Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -91,6 +91,23 @@ comments:
   created_at: 2026-09-27T16:22:07.447451902Z
   modified_at: 2026-09-27T16:22:07.447451902Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0fde4-e7d6-7413-90c8-d83479310eb3
+  author: joe
+  content: |
+    Pre-implementation assessment (2026-10-02, product seat), claims re-verified against HEAD fe09d7678e:
+
+    STILL TRUE: Cargo.toml has no [profile.*] sections; .aida/config.toml show budget is 1000/5000 (ADR-53 two-limb); BUG-1674 is still open, so the do-not-slow-release constraint stands; build-fast runs `aida dev build-guard release` (Makefile:118) — note the guard already takes the profile as an ARGUMENT, which helps AC2.
+
+    TOUCH SURFACE IS WIDER THAN THE SPEC'S THREE LINE REFS. dev_cmd.rs assumes a two-profile world (debug|release) in at least: DevProfile enum + auto_select_dev_profile, pick_dev_binary_dir (match arms + error strings, ~dev_cmd.rs:222-278), alternate_build_is_newer (hard-codes the binary PAIR for the stale-build PS1 warning), resolve_activate_reexec (probes exactly release+debug), dev_build_candidates. Also scripts/restart-mcp-servers.sh enumerates target/{debug,release}/aida. The implementation brief must authorize these files or it costs a round trip.
+
+    DESIGN FORK NEEDING ADVISOR INPUT BEFORE IMPLEMENTATION (sketch-first): AC2 has agents dev-activate the opt-1 binary, but the performance budget samples come from whatever binary actually runs. If agents run opt-1, AC4's "budget still measures an opt-level-3 binary" cannot be satisfied by a static check alone — it needs profile-tagged timing samples (embed the profile name the way the SHA is already embedded; the guard filters to release samples), OR the agent profile must be scoped to build-verification only with activation staying on release. The second option is simpler but interacts badly with build-fast: if build-fast builds only the agent profile, there is no fresh release binary, and activation falls back to a stale release via RecencyFallback warnings. The two ACs are coupled; pick one shape explicitly.
+
+    HOST STATE: measurements CANNOT be taken as of 2026-10-02 11:31 — an advisor relay session is live with rustc at 100% CPU (load 3.5-4.5 on 6 cores). TASK-1537's protocol (sccache off, 3 runs x 4 scenarios) and this task's AC3 should share ONE quiet window; take 1537's baseline first in that window, as the blocker ordering already encodes.
+
+    MINOR: a new profile gets fresh sccache fingerprints (the 41% hit rate does not transfer at first) and a separate target/<profile>/ dir, which is good — no thrash against release. The fingerprint-invalidation warning in the spec ("apply on a quiet machine") also applies to the Cargo.toml edit itself.
+  created_at: 2026-10-02T18:33:52.342166192Z
+  modified_at: 2026-10-02T18:33:52.342166192Z
+  session_id: 8de4c3c9-7ff4-4c24-94c3-b23cbb2f30bf
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
   author: joe
