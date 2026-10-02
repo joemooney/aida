@@ -74417,6 +74417,30 @@ fn is_auto_complete_failure_bug_about(req: &aida_core::Requirement, completed_sp
             .ends_with(&format!(" on {completed_spec}"))
 }
 
+/// BUG-1768: the parent spec an auto-drafted phase-failure finding is about,
+/// read back out of the finding's own title. The flip-driven sweep below learns
+/// the parent from the set of specs it just flipped; a finding whose parent
+/// completed by some other route has no such source, and the title is the only
+/// place the parent is recorded.
+///
+/// `None` unless the finding passes `is_auto_complete_failure_bug_about` against
+/// the id this reads out, so that predicate stays the sole admission test and a
+/// hand-filed BUG that merely mentions a spec is never admitted here.
+// trace:BUG-1768 | ai:claude
+fn auto_complete_failure_bug_parent_spec(req: &aida_core::Requirement) -> Option<String> {
+    let parent = req
+        .title
+        .trim_end()
+        .rsplit(" on ")
+        .next()?
+        .trim()
+        .to_string();
+    if parent.is_empty() || !is_auto_complete_failure_bug_about(req, &parent) {
+        return None;
+    }
+    Some(parent)
+}
+
 fn reject_resolved_auto_complete_failure_bug(
     req: &mut aida_core::Requirement,
     completed_spec: &str,
@@ -74472,6 +74496,49 @@ fn auto_resolve_failure_bugs_for_completed_specs(
             ));
         }
     }
+
+    // BUG-1768: the loop above only sees the specs THIS pass flipped. A parent
+    // that reached Completed by any other route -- a hand
+    // `aida edit --status completed`, or any path outside this pass's confirmed
+    // set -- left its auto-drafted finding in Draft forever, where it surfaced
+    // as human work in the advisor groom bucket (BUG-1821 on BUG-1817 sat there
+    // 20 hours after its parent completed). Sweep the findings themselves: each
+    // names its parent, so ask the store whether that parent is already done.
+    // trace:BUG-1768 | ai:claude
+    for req in &store.requirements {
+        let Some(parent) = auto_complete_failure_bug_parent_spec(req) else {
+            continue;
+        };
+        // Already emitted above, against the real completing commit.
+        if completed.iter().any(|(spec_id, _)| *spec_id == parent) {
+            continue;
+        }
+        let Some(parent_req) = store.requirements.iter().find(|p| {
+            p.spec_id.as_deref() == Some(parent.as_str())
+                || p.agreed_id.as_deref() == Some(parent.as_str())
+        }) else {
+            continue;
+        };
+        if !matches!(parent_req.status, RequirementStatus::Completed) {
+            continue;
+        }
+        let Some(finding_id) = req.spec_id.as_deref().or(req.agreed_id.as_deref()) else {
+            continue;
+        };
+        // The parent's own auto-bump stamp when it has one; `completing_ref_label`
+        // degrades to "completion evidence" for a hand flip, which leaves none.
+        let parent_sha = parent_req
+            .implementation_info
+            .as_ref()
+            .and_then(|i| i.completion_sha.clone())
+            .unwrap_or_default();
+        out.push((
+            finding_id.to_string(),
+            parent,
+            completing_ref_label(project_root, &parent_sha),
+        ));
+    }
+
     out.sort();
     out.dedup();
     out
@@ -75850,10 +75917,18 @@ fn auto_bump_done_to_completed_with(
     // BUG-1551: held specs whose blockers have since resolved.
     let released_holds = collect_released_closure_holds(&store);
 
+    // BUG-1768: resolving a finding whose parent completed outside this pass is
+    // work this pass must still do, so it has to count as a reason to continue
+    // past the nothing-to-do guard. An empty `completed` list exercises exactly
+    // the retroactive branch of the sweep. trace:BUG-1768 | ai:claude
+    let orphaned_failure_findings =
+        auto_resolve_failure_bugs_for_completed_specs(&store, &[], project_root);
+
     if candidates.is_empty()
         && pr_to_sha.is_empty()
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
+        && orphaned_failure_findings.is_empty()
     {
         return Ok((Vec::new(), true));
     }
@@ -76019,10 +76094,14 @@ fn auto_bump_done_to_completed_with(
     // trace:TASK-246 trace:BUG-219 | ai:claude
     let stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
 
+    // BUG-1768: the second nothing-to-do guard. A pass with an orphaned finding
+    // to resolve and nothing to flip reaches here, so this one has to admit the
+    // same reason to continue as the guard above it. trace:BUG-1768 | ai:claude
     if flips.is_empty()
         && stale_review_flips.is_empty()
         && stranded_review_pr.is_empty()
         && closure_holds.is_empty()
+        && orphaned_failure_findings.is_empty()
     {
         return Ok((Vec::new(), true));
     }
