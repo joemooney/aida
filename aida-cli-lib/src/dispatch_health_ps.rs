@@ -82,6 +82,15 @@ pub(crate) enum DispatchState {
     /// provenance of the death.
     // trace:TASK-1518 | ai:claude
     Stopped,
+    /// The work is FINISHED and waiting on the integrator, not on this
+    /// session: the spec is done with an approving review recorded, or its
+    /// branch is riding an open integration PR. The process is gone and the
+    /// tree is clean — the same shape as [`Stalled`](Self::Stalled) — but
+    /// there is nothing here to pick back up, and saying otherwise is
+    /// actively harmful: an agent that follows a resume hint on landed work
+    /// re-implements it. Carries an informational note and no command.
+    // trace:BUG-1681 | ai:claude
+    AwaitingIntegration,
 }
 
 impl DispatchState {
@@ -97,6 +106,8 @@ impl DispatchState {
             DispatchState::AwaitingAgent => "awaiting-agent",
             // trace:TASK-1518 | ai:claude
             DispatchState::Stopped => "stopped",
+            // trace:BUG-1681 | ai:claude
+            DispatchState::AwaitingIntegration => "awaiting-integration",
         }
     }
 }
@@ -122,6 +133,112 @@ pub(crate) fn apply_interruption(
     } else {
         state
     }
+}
+
+/// BUG-1681: what is known about a finished session's INTEGRATION standing —
+/// the evidence that says "this is waiting on the integrator, not on you".
+/// Built by [`integration_standing`] from facts the caller already has locally
+/// (the spec's status and its recorded review), never from a forge round-trip.
+// trace:BUG-1681 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct IntegrationStanding {
+    /// The integration PR carrying this work, when the local record names one.
+    pub(crate) pr: Option<u64>,
+    /// The integration branch the approving review was recorded against, when
+    /// that is not this session's own branch — the batched-integration shape,
+    /// where a reviewer approves the spec on the batch branch rather than on
+    /// the implementer's.
+    pub(crate) batch_branch: Option<String>,
+}
+
+/// BUG-1681: is this session's work finished and waiting on integration?
+///
+/// Evidence-gated, in the PRIN-5 sense that absent evidence is never good
+/// evidence: an approving recorded review is necessary, and on its own not
+/// sufficient. One of two further facts must hold — the spec itself is done
+/// (the ordinary "implementer finished, batch not landed yet" shape), or the
+/// approval was recorded against a DIFFERENT branch from this session's, which
+/// is what a batched integration PR looks like from here (the reviewer reviews
+/// the batch branch, not the implementer's). An approval on the session's own
+/// branch while the spec is still open is an ordinary mid-flight review and
+/// says nothing about integration.
+///
+/// Pure over five plain values so the whole matrix is fixture-testable.
+// trace:BUG-1681 | ai:claude
+pub(crate) fn integration_standing(
+    spec_finished: bool,
+    verdict_approves: bool,
+    reviewed_branch: Option<&str>,
+    lease_branch: &str,
+    comment_url: Option<&str>,
+) -> Option<IntegrationStanding> {
+    if !verdict_approves {
+        return None;
+    }
+    let batch_branch = reviewed_branch
+        .map(str::trim)
+        .filter(|b| !b.is_empty() && !b.eq_ignore_ascii_case(lease_branch.trim()))
+        .map(str::to_string);
+    if !spec_finished && batch_branch.is_none() {
+        return None;
+    }
+    Some(IntegrationStanding {
+        pr: comment_url.and_then(pr_number_from_comment_url),
+        batch_branch,
+    })
+}
+
+/// BUG-1681: the PR/MR number a recorded review's comment URL points at, so
+/// the row can name the PR the reader should look at. Recognizes both forge
+/// shapes (`/pull/<n>`, `/merge_requests/<n>`); anything else yields `None`
+/// rather than a guess.
+// trace:BUG-1681 | ai:claude
+pub(crate) fn pr_number_from_comment_url(url: &str) -> Option<u64> {
+    let rest = url
+        .split("/pull/")
+        .nth(1)
+        .or_else(|| url.split("/merge_requests/").nth(1))?;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+/// BUG-1681: fold the integration standing into the classified state. Only the
+/// two "nothing is moving here" readings are reframed — a
+/// [`Salvageable`](DispatchState::Salvageable) row keeps its urgency (an
+/// uncommitted diff is at risk however finished the spec is), and a moving or
+/// undeterminable row is left exactly as classified.
+// trace:BUG-1681 | ai:claude
+pub(crate) fn apply_integration(
+    state: DispatchState,
+    standing: Option<&IntegrationStanding>,
+) -> DispatchState {
+    match (state, standing) {
+        (DispatchState::Stalled | DispatchState::Stopped, Some(_)) => {
+            DispatchState::AwaitingIntegration
+        }
+        _ => state,
+    }
+}
+
+/// BUG-1681: the note a [`DispatchState::AwaitingIntegration`] row carries.
+/// It names the standing (and the PR or batch branch when known) and stops
+/// there — deliberately no command, because there is nothing for the reader to
+/// run and a resume would restart work that has already shipped.
+// trace:BUG-1681 | ai:claude
+pub(crate) fn integration_hint(standing: Option<&IntegrationStanding>) -> String {
+    let where_it_sits = match standing {
+        Some(s) => match (s.pr, s.batch_branch.as_deref()) {
+            (Some(pr), _) => format!(" (PR #{pr})"),
+            (None, Some(branch)) => format!(" (batch branch {branch})"),
+            (None, None) => String::new(),
+        },
+        None => String::new(),
+    };
+    format!(
+        "done and approved — awaiting integration{where_it_sits}; \
+         nothing here needs picking back up, and the worktree is cleaned up \
+         once the batch lands"
+    )
 }
 
 /// Default elapsed-time bar (seconds) past which an alive-but-idle row (no
@@ -823,6 +940,12 @@ pub(crate) fn next_command_hint_with_untracked(
         // the salvage-commit command here: an agent may still be writing this
         // worktree, and salvage-committing under it would capture half-done
         // work and double-dispatch. trace:BUG-752 | ai:claude
+        // BUG-1681: finished work waiting on the integrator. The caller that
+        // resolved the standing renders the detailed note via
+        // [`integration_hint`]; this generic form keeps the state's contract
+        // (every non-Moving state explains itself) without inventing a PR.
+        // trace:BUG-1681 | ai:claude
+        DispatchState::AwaitingIntegration => Some(integration_hint(None)),
         DispatchState::Unknown => Some(format!(
             "liveness unknown — no pid recorded for {wt} (branch {branch}, last commit \"{last_commit}\"); \
              an agent may still be working here — verify before any cleanup"

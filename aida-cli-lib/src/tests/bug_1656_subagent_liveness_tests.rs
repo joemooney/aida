@@ -305,25 +305,31 @@ fn bug_1656_dead_lease_with_old_dirty_diff_is_still_salvageable_and_abandoned() 
 
 // --- (3) possibly worked by a subagent ------------------------------------------
 
+/// BUG-1681 tightened the attribution: the live subagent must be working
+/// THIS spec's worktree, not merely be alive somewhere in the repo. The
+/// fixture is now the real shape — the subagent's harness lease records the
+/// spec's own worktree as its cwd and carries the live parent-harness pid,
+/// while the spec lease itself has no live process (the parent process's cwd
+/// is the project root, never the worktree).
+// trace:BUG-1656 trace:BUG-1681 | ai:claude
 #[test]
 fn bug_1656_stale_lease_next_to_live_harness_lease_says_possibly_subagent() {
-    let harness_dir = tempfile::tempdir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let spec_worktree = tmp.path().join("wt-bug-1641");
+    std::fs::create_dir_all(&spec_worktree).unwrap();
+    let parent_root = tmp.path().join("repo");
+    std::fs::create_dir_all(&parent_root).unwrap();
     let specs = vec![in_progress_spec("BUG-1641", "worked by a subagent")];
-    let leases = vec![
-        lease(
-            "sess-dead3",
-            "BUG-1641",
-            std::path::PathBuf::from("/nonexistent/bug-1656-wt-bug-1641"),
-        ),
-        lease(
-            "sess-harness",
-            worktree_lease::HARNESS_WORKTREE_SCOPE,
-            harness_dir.path().to_path_buf(),
-        ),
-    ];
+    let mut harness = lease(
+        "sess-harness",
+        worktree_lease::HARNESS_WORKTREE_SCOPE,
+        spec_worktree.clone(),
+    );
+    harness.active_pid = Some(std::process::id());
+    let leases = vec![lease("sess-dead3", "BUG-1641", spec_worktree), harness];
     let live = vec![process_probe::LiveSession {
         pid: std::process::id(),
-        cwd: harness_dir.path().to_path_buf(),
+        cwd: parent_root,
         jsonl: None,
         stale_cwd: false,
     }];
@@ -335,7 +341,7 @@ fn bug_1656_stale_lease_next_to_live_harness_lease_says_possibly_subagent() {
     assert!(orphan.stale_lease);
     assert!(
         orphan.possibly_subagent,
-        "a live harness lease in the repo flags it"
+        "a live subagent holding this spec's worktree flags it"
     );
     assert!(
         !orphan.likely_fanout,

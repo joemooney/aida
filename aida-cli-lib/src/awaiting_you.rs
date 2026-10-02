@@ -1145,8 +1145,13 @@ pub(crate) fn unowned_failing_pr_toon_rows(items: &[UnownedFailingPrItem]) -> Ve
 // trace:BUG-1739 | ai:claude
 pub(crate) fn orphaned_state_label(item: &OrphanedInProgressItem) -> &'static str {
     if item.possibly_subagent {
+        // BUG-1681: the old wording said only "live harness lease in this repo",
+        // which is what the old predicate actually tested — and why every stale
+        // spec claimed a subagent the moment any fan-out was alive anywhere.
+        // The predicate now requires the subagent to hold THIS worktree; say so.
         // trace:BUG-1656 | ai:claude
-        "possibly worked by a subagent — lease pid dead, live harness lease in this repo"
+        // trace:BUG-1681 | ai:claude
+        "possibly worked by a subagent — lease pid dead, a live subagent holds this worktree"
     } else if item.abandoned {
         "abandoned — lease died"
     } else {
