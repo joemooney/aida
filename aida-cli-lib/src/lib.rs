@@ -68036,6 +68036,7 @@ struct RunningWorkSpec {
     agreed_id: Option<String>,
     spec_id: Option<String>,
     title: String,
+    status: String,
     /// The spec is currently In Progress (orphan-pass candidate).
     in_progress: bool,
     /// Rollup / stateless type (epic / folder / meta) — excluded from the
@@ -68071,6 +68072,7 @@ fn running_work_spec_from_summary(s: aida_core::RequirementSummary) -> RunningWo
         disp,
         in_progress: aida_core::RequirementStatus::from_filter_str(&s.status)
             == Some(aida_core::RequirementStatus::InProgress),
+        status: s.status.clone(),
         orphan_excluded_type: ps_orphan_excluded_type_str(&s.req_type),
         agreed_id: s.agreed_id,
         spec_id: s.spec_id,
@@ -68124,6 +68126,7 @@ fn running_work_spec_index(project_root: &std::path::Path) -> Vec<RunningWorkSpe
                         agreed_id: r.agreed_id.clone(),
                         spec_id: r.spec_id.clone(),
                         title: r.title.clone(),
+                        status: r.status.to_string(),
                         in_progress: matches!(r.status, aida_core::RequirementStatus::InProgress),
                         orphan_excluded_type: ps_orphan_excluded_type(&r.req_type),
                     }
@@ -68234,6 +68237,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         |lease_id| manifest_roles.get(lease_id).cloned(),
         probe_mail_identity,
         seat_activity_probe,
+        |_| None,
     );
     // TASK-163: a dead phase child does not make its lease stale while the
     // drain orchestrator owns that spec. Overlay the authoritative drain PID
@@ -68374,6 +68378,7 @@ fn build_running_work(
     // resolved live pid — a Dormant/Stale row has no process to inspect and
     // stays `None`.
     seat_activity_probe: impl Fn(&SessionLease, u32) -> SeatActivity,
+    pr_probe: impl Fn(&str) -> Option<u64>,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -68393,7 +68398,7 @@ fn build_running_work(
                 });
             let live_by_pid = pid.and_then(|p| live.iter().find(|s| s.pid == p));
             let jsonl_role = live_by_pid
-                .or(live_in_worktree)
+                .or_else(|| live_in_worktree.filter(|s| Some(s.pid) == pid))
                 .and_then(|s| s.jsonl.as_deref())
                 .and_then(&role_probe);
             let manifest_role = manifest_role_probe(&l.id);
@@ -68437,15 +68442,14 @@ fn build_running_work(
             // BUG-769 — that classifier is not the elapsed column).
             let lease_elapsed_secs =
                 now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
-            let spec = specs
-                .iter()
-                .find(|s| {
-                    [s.agreed_id.as_deref(), s.spec_id.as_deref()]
-                        .into_iter()
-                        .flatten()
-                        .any(|id| l.scope.eq_ignore_ascii_case(id))
-                })
-                .map(|s| s.disp.clone());
+            let matched_spec = specs.iter().find(|s| {
+                [s.agreed_id.as_deref(), s.spec_id.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|id| l.scope.eq_ignore_ascii_case(id))
+            });
+            let spec = matched_spec.map(|s| s.disp.clone());
+            let spec_status = matched_spec.map(|s| s.status.clone());
             // TASK-1090: worktree-less advisory leases (review/claim locks)
             // have no git state to classify — dispatch stays None for them.
             // A dead-worktree lease (removed dir) also has nothing to probe;
@@ -68492,7 +68496,48 @@ fn build_running_work(
                     pid_alive,
                     l.interrupted_at.is_some(),
                 );
-                let hint = dispatch_health_ps::next_command_hint_with_untracked(
+                // trace:BUG-1681 | ai:codex
+                // BUG-1681: Done specs awaiting integration or with an open PR
+                let pr_number = pr_probe(&l.branch);
+                let is_done_status = spec_status
+                    .as_ref()
+                    .map(|s| {
+                        let st = aida_core::RequirementStatus::from_filter_str(s);
+                        matches!(
+                            st,
+                            Some(
+                                aida_core::RequirementStatus::Done
+                                    | aida_core::RequirementStatus::Completed
+                                    | aida_core::RequirementStatus::Approved
+                            )
+                        )
+                    })
+                    .unwrap_or(false);
+                let is_done = is_done_status && pr_number.is_some()
+                    || spec_status
+                        .as_ref()
+                        .map(|s| {
+                            let st = aida_core::RequirementStatus::from_filter_str(s);
+                            matches!(
+                                st,
+                                Some(
+                                    aida_core::RequirementStatus::Done
+                                        | aida_core::RequirementStatus::Completed
+                                )
+                            )
+                        })
+                        .unwrap_or(false);
+                let ds = if (is_done || pr_number.is_some())
+                    && matches!(
+                        ds,
+                        dispatch_health_ps::DispatchState::Stalled
+                            | dispatch_health_ps::DispatchState::Salvageable
+                    ) {
+                    dispatch_health_ps::DispatchState::AwaitingIntegration
+                } else {
+                    ds
+                };
+                let mut hint = dispatch_health_ps::next_command_hint_with_untracked(
                     ds,
                     &l.worktree_path,
                     &l.branch,
@@ -68501,6 +68546,11 @@ fn build_running_work(
                     manual_enter_secs.is_some(),
                     probe.untracked_only,
                 );
+                if let (Some(h), Some(pr)) = (&mut hint, pr_number) {
+                    if ds == dispatch_health_ps::DispatchState::AwaitingIntegration {
+                        *h = format!("awaiting integration (PR #{pr})");
+                    }
+                }
                 Some(PsDispatch {
                     state: ds,
                     hint,
@@ -69187,6 +69237,10 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         dispatch_health_ps::DispatchState::Salvageable => (
                             crate::glyph(crate::glyphs::Glyph::Warning),
                             d.state.label().red().bold(),
+                        ),
+                        dispatch_health_ps::DispatchState::AwaitingIntegration => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().green(),
                         ),
                         dispatch_health_ps::DispatchState::Stalled => (
                             crate::glyph(crate::glyphs::Glyph::Warning),

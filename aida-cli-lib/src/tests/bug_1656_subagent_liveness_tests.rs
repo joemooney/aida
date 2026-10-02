@@ -75,6 +75,7 @@ fn running_work(
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     )
 }
 

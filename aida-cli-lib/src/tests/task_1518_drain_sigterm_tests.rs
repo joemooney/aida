@@ -634,6 +634,7 @@ fn task_1518_ps_reads_a_marked_lease_as_stopped_not_dead() {
             |_| None,
             |_| crate::MailIdentityStatus::Unknown,
             |_, _| crate::SeatActivity::Unknown,
+            |_| None,
         );
         rows
     };

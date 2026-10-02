@@ -66,6 +66,7 @@ fn no_op_orphans(specs: &[RunningWorkSpec], leases: &[SessionLease]) -> Vec<PsOr
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
     orphans
 }
@@ -151,6 +152,7 @@ fn live_process_case_is_not_reported_as_orphaned() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     let items = orphaned_in_progress_items(orphans, |_| "unused".to_string());

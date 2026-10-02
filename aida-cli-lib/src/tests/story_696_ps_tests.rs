@@ -95,6 +95,7 @@ fn ps_process_backed_lease_uses_active_pid() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -151,6 +152,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -212,6 +214,7 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -254,6 +257,7 @@ fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
         |lease_id| (lease_id == "l-role-manifest").then(|| "advisor".to_string()),
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -301,6 +305,7 @@ fn ps_real_lease_role_beats_derived_jsonl_role() {
         |lease_id| (lease_id == "l-real-role").then(|| "product".to_string()),
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -354,6 +359,7 @@ fn ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role() {
         |lease_id| (lease_id == "l-placeholder-order").then(|| "product".to_string()),
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -398,6 +404,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -448,6 +455,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -747,6 +755,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -852,6 +861,7 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     let locked_row = rows
@@ -1103,6 +1113,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1130,6 +1141,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, None);
@@ -1206,6 +1218,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1226,6 +1239,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1420,6 +1434,7 @@ fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1501,6 +1516,7 @@ fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     let entered_row = rows.iter().find(|r| r.lease.id == "l-entered-old").unwrap();
@@ -1632,6 +1648,7 @@ fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1696,6 +1713,7 @@ fn ps_listed_session_keeps_its_own_role_not_a_foreign_probe_match() {
         |_| None,
         |_| MailIdentityStatus::Unknown,
         |_, _| SeatActivity::Unknown,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1863,6 +1881,7 @@ mod bug_1553_seat_activity {
                 "l-suspended" => SeatActivity::Suspended,
                 _ => SeatActivity::Unknown,
             },
+            |_| None,
         );
 
         assert_eq!(rows.len(), 4);
@@ -1907,6 +1926,7 @@ mod bug_1553_seat_activity {
             |_| None,
             |_| MailIdentityStatus::Unknown,
             |_, _| SeatActivity::Working,
+            |_| None,
         );
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].state, LeaseState::Stale);

@@ -82,6 +82,8 @@ pub(crate) enum DispatchState {
     /// provenance of the death.
     // trace:TASK-1518 | ai:claude
     Stopped,
+    /// BUG-1681: Done specs awaiting integration or with an open PR.
+    AwaitingIntegration,
 }
 
 impl DispatchState {
@@ -97,6 +99,7 @@ impl DispatchState {
             DispatchState::AwaitingAgent => "awaiting-agent",
             // trace:TASK-1518 | ai:claude
             DispatchState::Stopped => "stopped",
+            DispatchState::AwaitingIntegration => "awaiting-integration",
         }
     }
 }
@@ -818,6 +821,7 @@ pub(crate) fn next_command_hint_with_untracked(
             "drain wave stopped — nothing running in {wt} (branch {branch}, last commit \"{last_commit}\"), \
              worktree intact — resume/rebrief: {rebrief}"
         )),
+        DispatchState::AwaitingIntegration => Some(format!("awaiting integration")),
         // BUG-752: no pid was recorded and the worktree probe can't see a
         // harness-hosted worker — liveness is unknown, NOT dead. Never emit
         // the salvage-commit command here: an agent may still be writing this
