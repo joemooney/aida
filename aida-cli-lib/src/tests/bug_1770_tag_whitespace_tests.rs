@@ -6,7 +6,7 @@
 //! `--tags` string itself cannot quietly reintroduce the blob.
 // trace:BUG-1770 | ai:claude
 
-use super::{apply_tag_deltas_report, parse_tag_list, validate_tag_value, TAGS_FLAG};
+use super::{apply_tag_deltas_report, parse_tag_list, validate_tag_value, TagRepair, TAGS_FLAG};
 use std::collections::HashSet;
 
 fn vec(items: &[&str]) -> Vec<String> {
@@ -38,7 +38,8 @@ fn a_whitespace_value_is_refused_and_the_message_shows_the_comma_repair() {
 
 #[test]
 fn the_add_tag_refusal_suggests_the_repeatable_flag_not_a_comma_list() {
-    let err = validate_tag_value("alpha beta", "--add-tag").expect_err("must be refused");
+    let err = validate_tag_value("alpha beta", TagRepair::RepeatedFlag("--add-tag"))
+        .expect_err("must be refused");
     let msg = err.to_string();
     assert!(
         msg.contains("--add-tag alpha --add-tag beta"),
@@ -52,8 +53,8 @@ fn the_add_tag_refusal_suggests_the_repeatable_flag_not_a_comma_list() {
 
 #[test]
 fn a_tab_or_newline_is_whitespace_too() {
-    assert!(validate_tag_value("alpha\tbeta", TAGS_FLAG).is_err());
-    assert!(validate_tag_value("alpha\nbeta", TAGS_FLAG).is_err());
+    assert!(validate_tag_value("alpha\tbeta", TagRepair::CommaFlag(TAGS_FLAG)).is_err());
+    assert!(validate_tag_value("alpha\nbeta", TagRepair::CommaFlag(TAGS_FLAG)).is_err());
 }
 
 #[test]
@@ -61,7 +62,7 @@ fn a_colon_namespaced_tag_still_round_trips() {
     // The control: this is the case BUG-1542 was filed against and correctly
     // rejected over. It works today and must keep working, so it stops a
     // regression passing by breaking both forms at once.
-    assert!(validate_tag_value("severity:major", TAGS_FLAG).is_ok());
+    assert!(validate_tag_value("severity:major", TagRepair::CommaFlag(TAGS_FLAG)).is_ok());
     assert_eq!(
         parse_tag_list("severity:major,parent:EPIC-28").unwrap(),
         vec(&["severity:major", "parent:EPIC-28"])
@@ -117,5 +118,23 @@ fn the_report_distinguishes_a_removal_from_a_miss() {
             .iter()
             .any(|l| l == "no matching tag to remove: nosuchtag"),
         "{lines:?}"
+    );
+}
+
+#[test]
+fn the_mcp_refusal_suggests_a_json_array_not_a_cli_flag() {
+    // A refusal that tells an MCP client to pass `--tags a,b` names a form
+    // that surface does not accept, which reads as authoritative and is worse
+    // than the blob. trace:BUG-1770 | ai:claude
+    let err = validate_tag_value("alpha beta", TagRepair::JsonArray("tags"))
+        .expect_err("must be refused");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("\"tags\": [\"alpha\", \"beta\"]"),
+        "must show the JSON array repair: {msg}"
+    );
+    assert!(
+        !msg.contains("--tags"),
+        "must not suggest a CLI flag: {msg}"
     );
 }
