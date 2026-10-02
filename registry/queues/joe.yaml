@@ -13,20 +13,6 @@
   added_at: 2026-09-26T05:32:08.778314014Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0fc32-891e-7072-b251-9d533d3f1eae
-  position: 28000
-  added_by: joe
-  added_at: 2026-10-02T11:02:40.292002469Z
-  for_role: advisor
-- user_id: joe
-  requirement_id: 01a0fc7c-f7b8-7250-96d7-46bd1072e02e
-  position: 29000
-  added_by: joe
-  note: auto-queued by `session end` (01a0fc48); covers 1 spec
-  added_at: 2026-10-02T12:00:57.365532063Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0fcf6-2362-72e3-8cbf-dcf565e9e21a
   position: 30000
   added_by: joe
