@@ -70,10 +70,91 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T09:58:21.276137615Z
-modified_at: 2026-10-02T09:58:21.276137615Z
+modified_at: 2026-10-02T11:21:41.912069623Z
 req_type: Task
 tags:
 - measurement observability needs-operator-decision
+comments:
+- id: 01a0fc59-3d18-75e3-a288-81b564311dbe
+  author: joe
+  content: |
+    ## Fresh re-measurement + the link this decision was missing (advisor relay #14, 2026-10-02 ~11:20Z)
+
+    The `performance-guard-route` job re-fired because the guard failed again at
+    `2026-10-02T10:50:29Z` (after this morning's route was closed `done` at 09:58).
+    Re-ran the guard's own command by hand rather than re-reading the stale ledger
+    trip:
+
+    ```
+    aida doctor check performance --json --fail-on-findings    # exit 1
+    ```
+
+    Today's numbers for `aida show`:
+
+    | measure | value |
+    |---|---|
+    | calls in the 24h window | 245 |
+    | over the 1000 ms budget | 22 |
+    | proportion | **8.98%** |
+    | tolerated | 10.0% |
+    | worst single call | **9449 ms** |
+    | ceiling | 5000 ms |
+    | excluded (out-of-lineage binaries) | 8 calls from 4 binaries |
+
+    Per-binary, counted: `f3cde6e60e` 6.8% of 161, `1660445110` 4.5% of 44,
+    `0bd634c` 56.2% of 16, `b785274c7b` 0.0% of 12, `d93fabb432` 0.0% of 12.
+
+    ## This is a ceiling trip, not a proportion trip
+
+    **The proportion is now inside tolerance** (8.98% < 10.0%). The only thing
+    tripping the guard is the single 9449 ms call against ADR-53's 5000 ms ceiling,
+    and the finding's own action text says so: *"a single call exceeded the ceiling —
+    that trips regardless of the proportion, because a proportion cannot express one
+    bad call."*
+
+    So the spec's framing — "trips on a 0.2-point proportion margin **and** one
+    9449 ms call" — is now half stale. Recalibrating the proportion would change
+    nothing: it is not what is failing.
+
+    ## The link that should decide this: BUG-1674
+
+    This spec does not reference **BUG-1674** (approved): *"aida show still exceeds
+    the 5000 ms ceiling (24.5 s) on BUG-1606's fixed binary: the strict stale-cache
+    refresh waits unbounded behind a concurrent writer."* That is an already-approved,
+    already-root-caused explanation for exactly this ceiling breach — an unbounded
+    wait behind a concurrent writer, which is also precisely what "measured under
+    fleet contention" describes from the outside.
+
+    That reframes the operator's choice. It is not "recalibrate the budget, or make
+    the measurement contention-aware". Those are both ways of changing the
+    instrument. There is a third option already approved and unstarted:
+
+    - **Fix BUG-1674** and re-measure. If the unbounded wait is the 9449 ms call,
+      the ceiling stops tripping with no budget change at all, and ADR-53's ceiling
+      keeps meaning what it says.
+
+    Raising a ceiling to accommodate a breach whose cause is a filed, approved,
+    unbounded wait would hide the bug rather than price it. Recommend BUG-1674 be
+    settled (or explicitly deferred) **before** this recalibration decision is taken,
+    and that this spec be re-scoped to the proportion question only — which, on
+    today's numbers, may not need an answer at all.
+
+    ## Also confirmed: BUG-1745's fix is live
+
+    The ledger's only trip is still `performance-guard@2026-09-29T09:42:49Z` carrying
+    `audit_error: malformed typed doctor output: trailing characters at line 30
+    column 1` — a **pre-fix artifact**. BUG-1745 (Completed 2026-10-01) fixed exactly
+    that, and today's run confirms it: stdout is a single well-formed JSON document
+    whose top-level keys are `total, findings, bwrap, performance_audits, error`, and
+    `performance_audits[0]` carries the full audit. Any seat routed here should read
+    a fresh run, not that trip. (Sibling control: `hub-drift-guard.yaml` likewise
+    still carries a 2026-09-24 trip under `result: ok` — trips are retained history,
+    not current state.)
+
+    Still an operator decision; nothing picked autonomously.
+  created_at: 2026-10-02T11:21:41.912069623Z
+  modified_at: 2026-10-02T11:21:41.912069623Z
+  session_id: 80a149f2-df5e-43a1-9400-e2ad67e7819c
 filed_at:
   code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
   branch: main
