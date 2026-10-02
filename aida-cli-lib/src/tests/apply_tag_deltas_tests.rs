@@ -13,7 +13,7 @@ fn vec(items: &[&str]) -> Vec<String> {
 #[test]
 fn add_inserts_new_tag_and_preserves_others() {
     let mut tags = set(&["a", "b", "c"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &[]);
+    let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &[]).unwrap();
     assert!(changed);
     assert_eq!(tags, set(&["a", "b", "c", "x"]));
 }
@@ -22,7 +22,7 @@ fn add_inserts_new_tag_and_preserves_others() {
 #[test]
 fn remove_drops_named_tag_and_preserves_others() {
     let mut tags = set(&["a", "b", "c"]);
-    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["b"]));
+    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["b"])).unwrap();
     assert!(changed);
     assert_eq!(tags, set(&["a", "c"]));
 }
@@ -31,7 +31,7 @@ fn remove_drops_named_tag_and_preserves_others() {
 #[test]
 fn add_and_remove_compose_in_one_call() {
     let mut tags = set(&["a", "b"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["x", "y"]), &vec(&["a"]));
+    let changed = apply_tag_deltas(&mut tags, &vec(&["x", "y"]), &vec(&["a"])).unwrap();
     assert!(changed);
     assert_eq!(tags, set(&["b", "x", "y"]));
 }
@@ -40,7 +40,7 @@ fn add_and_remove_compose_in_one_call() {
 #[test]
 fn adding_present_tag_is_noop() {
     let mut tags = set(&["a", "b"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["a"]), &[]);
+    let changed = apply_tag_deltas(&mut tags, &vec(&["a"]), &[]).unwrap();
     assert!(!changed);
     assert_eq!(tags, set(&["a", "b"]));
 }
@@ -49,7 +49,7 @@ fn adding_present_tag_is_noop() {
 #[test]
 fn removing_absent_tag_is_noop() {
     let mut tags = set(&["a", "b"]);
-    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["z"]));
+    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["z"])).unwrap();
     assert!(!changed);
     assert_eq!(tags, set(&["a", "b"]));
 }
@@ -58,7 +58,7 @@ fn removing_absent_tag_is_noop() {
 #[test]
 fn whitespace_entries_are_ignored() {
     let mut tags = set(&["a"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["", "  "]), &vec(&[" "]));
+    let changed = apply_tag_deltas(&mut tags, &vec(&["", "  "]), &vec(&[" "])).unwrap();
     assert!(!changed);
     assert_eq!(tags, set(&["a"]));
 }
@@ -67,7 +67,7 @@ fn whitespace_entries_are_ignored() {
 #[test]
 fn entries_are_trimmed() {
     let mut tags = set(&["a"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["  x  "]), &vec(&[" a "]));
+    let changed = apply_tag_deltas(&mut tags, &vec(&["  x  "]), &vec(&[" a "])).unwrap();
     assert!(changed);
     assert_eq!(tags, set(&["x"]));
 }
@@ -76,7 +76,7 @@ fn entries_are_trimmed() {
 #[test]
 fn empty_inputs_make_no_change() {
     let mut tags = set(&["a", "b"]);
-    let changed = apply_tag_deltas(&mut tags, &[], &[]);
+    let changed = apply_tag_deltas(&mut tags, &[], &[]).unwrap();
     assert!(!changed);
     assert_eq!(tags, set(&["a", "b"]));
 }
@@ -86,7 +86,7 @@ fn empty_inputs_make_no_change() {
 fn add_then_remove_same_tag_in_one_call_is_net_zero_if_present() {
     // remove runs after add, so add x + remove x with x absent yields {} change net
     let mut tags = set(&["a"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &vec(&["x"]));
+    let changed = apply_tag_deltas(&mut tags, &vec(&["x"]), &vec(&["x"])).unwrap();
     assert!(changed); // x was inserted then removed — both ops registered changes
     assert_eq!(tags, set(&["a"]));
 }
@@ -97,7 +97,7 @@ fn add_then_remove_same_tag_in_one_call_is_net_zero_if_present() {
 #[test]
 fn add_tag_preserves_existing_provenance_tags() {
     let mut tags = set(&["from-friction", "papercut", "safety", "aida:edit"]);
-    let changed = apply_tag_deltas(&mut tags, &vec(&["supervised"]), &[]);
+    let changed = apply_tag_deltas(&mut tags, &vec(&["supervised"]), &[]).unwrap();
     assert!(changed);
     // All five present — the original four survive the add.
     assert_eq!(
@@ -117,7 +117,7 @@ fn add_tag_preserves_existing_provenance_tags() {
 #[test]
 fn remove_tag_drops_only_named_tag() {
     let mut tags = set(&["from-friction", "papercut", "safety", "supervised"]);
-    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["supervised"]));
+    let changed = apply_tag_deltas(&mut tags, &[], &vec(&["supervised"])).unwrap();
     assert!(changed);
     assert_eq!(tags, set(&["from-friction", "papercut", "safety"]));
 }

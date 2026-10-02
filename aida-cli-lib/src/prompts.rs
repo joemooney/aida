@@ -87,13 +87,19 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     // ?-exempt: cosmetic sub-step of the interactive add wizard — no consequence beyond the current form. trace:STORY-809
     let add_tags = Confirm::new("Add tags?").prompt()?;
     if add_tags {
-        let tags_input = Text::new("Tags (comma separated):").prompt()?;
-        let tags = tags_input
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        req.tags = tags;
+        // BUG-1770: the wizard is where a space-separated line is most
+        // natural to type, so re-prompt instead of aborting the whole form —
+        // and never accept the blob. trace:BUG-1770 | ai:claude
+        loop {
+            let tags_input = Text::new("Tags (comma separated):").prompt()?;
+            match crate::parse_tag_list(&tags_input) {
+                Ok(tags) => {
+                    req.tags = tags.into_iter().collect();
+                    break;
+                }
+                Err(e) => eprintln!("  {e}"),
+            }
+        }
     }
 
     Ok(req)

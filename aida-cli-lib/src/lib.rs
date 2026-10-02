@@ -10178,11 +10178,10 @@ fn handle_findings_add(
     }
 
     if let Some(raw) = extra_tags {
-        for tag in raw.split(',') {
-            let trimmed = tag.trim();
-            if !trimmed.is_empty() {
-                req.tags.insert(trimmed.to_string());
-            }
+        // BUG-1770: same shared parser as the other `--tags` surfaces.
+        // trace:BUG-1770 | ai:claude
+        for tag in parse_tag_list(raw)? {
+            req.tags.insert(tag);
         }
     }
 
@@ -19532,6 +19531,215 @@ fn print_processing_records(records: &[aida_core::ProcessingRecord]) {
 /// processing-record audit trail. List is read-only (backend); prune writes
 /// through `Storage::update_atomically`, propose-by-default. trace:STORY-582
 // trace:REQ-0232 | ai:claude:high
+/// What a `--add-tag` / `--remove-tag` pass actually did.
+///
+/// BUG-1770: the bool this replaces could not distinguish "removed nothing
+/// because the tag was absent" from "removed nothing because something went
+/// wrong", and the caller rendered both as `No changes specified` — a message
+/// that sends the user looking for a flag they already passed. Naming the tags
+/// that matched nothing turns a silent no-op into a visible one.
+// trace:BUG-1770 | ai:claude
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct TagDeltaReport {
+    /// Tags newly inserted.
+    pub(crate) added: Vec<String>,
+    /// Tags actually removed.
+    pub(crate) removed: Vec<String>,
+    /// `--add-tag` values that were already present.
+    pub(crate) already_present: Vec<String>,
+    /// `--remove-tag` values that matched no existing tag.
+    pub(crate) absent: Vec<String>,
+}
+
+impl TagDeltaReport {
+    pub(crate) fn changed(&self) -> bool {
+        !self.added.is_empty() || !self.removed.is_empty()
+    }
+
+    /// One line per outcome, or `None` when nothing was requested at all.
+    /// Deterministic order so output is stable for tests and scripts.
+    pub(crate) fn summary_lines(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let list = |v: &[String]| v.join(", ");
+        if !self.added.is_empty() {
+            out.push(format!(
+                "added {}: {}",
+                plural(self.added.len(), "tag"),
+                list(&self.added)
+            ));
+        }
+        if !self.removed.is_empty() {
+            out.push(format!(
+                "removed {}: {}",
+                plural(self.removed.len(), "tag"),
+                list(&self.removed)
+            ));
+        }
+        if !self.already_present.is_empty() {
+            out.push(format!(
+                "already present, nothing added: {}",
+                list(&self.already_present)
+            ));
+        }
+        if !self.absent.is_empty() {
+            out.push(format!(
+                "no matching {} to remove: {}",
+                if self.absent.len() == 1 {
+                    "tag"
+                } else {
+                    "tags"
+                },
+                list(&self.absent)
+            ));
+        }
+        out
+    }
+}
+
+fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+/// The flag name used in a whitespace refusal raised for `aida add --tags` /
+/// `aida edit --tags`, where the pasteable repair is one comma-separated value.
+// trace:BUG-1770 | ai:claude
+pub(crate) const TAGS_FLAG: &str = "--tags";
+
+/// How a refused tag value arrived, so the refusal can show a repair the
+/// caller can actually paste back.
+///
+/// A refusal that suggests `--tags a,b` to an MCP client, or a comma list to a
+/// repeatable flag, names a form that surface does not accept — which is a
+/// worse failure than the blob, because it reads as authoritative.
+// trace:BUG-1770 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TagRepair {
+    /// A comma-separated argument: `--tags a,b`.
+    CommaFlag(&'static str),
+    /// A repeatable single-value flag: `--add-tag a --add-tag b`.
+    RepeatedFlag(&'static str),
+    /// A JSON array field on an MCP tool call: `"tags": ["a", "b"]`.
+    JsonArray(&'static str),
+}
+
+impl TagRepair {
+    /// The pasteable repair for `parts`, in this surface's own syntax.
+    fn suggestion(&self, parts: &[&str]) -> String {
+        match self {
+            Self::CommaFlag(flag) => format!("{flag} {}", parts.join(",")),
+            Self::RepeatedFlag(flag) => parts
+                .iter()
+                .map(|p| format!("{flag} {p}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+            Self::JsonArray(field) => format!(
+                "\"{field}\": [{}]",
+                parts
+                    .iter()
+                    .map(|p| format!("\"{p}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+/// Refuse a tag value that contains whitespace.
+///
+/// A space-separated `--tags` argument is stored as ONE tag whose human
+/// rendering is byte-identical to the N tags it was meant to be, so the
+/// malformation is invisible by eye while being unmatchable by `--remove-tag`
+/// and invisible to every tag-keyed filter and sweep. Refusing is preferred
+/// over silently splitting on whitespace: splitting would make a genuinely
+/// intended multi-word tag unrepresentable without warning, and the caller's
+/// intent here is unambiguous enough to just report.
+///
+/// `flag` is the flag the value arrived on, so the suggestion is pasteable.
+/// `--remove-tag` is deliberately NOT validated: a tag already malformed in the
+/// store can only be named by reproducing it verbatim, and refusing that would
+/// leave the existing blobs unrepairable by the incremental form.
+// trace:BUG-1770 | ai:claude
+pub(crate) fn validate_tag_value(tag: &str, repair: TagRepair) -> anyhow::Result<()> {
+    if !tag.chars().any(char::is_whitespace) {
+        return Ok(());
+    }
+    let parts: Vec<&str> = tag.split_whitespace().collect();
+    let suggestion = repair.suggestion(&parts);
+    anyhow::bail!(
+        "tag \"{tag}\" contains whitespace — did you mean `{suggestion}` ?\n  \
+         A tag may not contain whitespace: the whole value would be stored as ONE tag that \
+         renders identically to the {} separate tags it looks like, and would then be \
+         invisible to --remove-tag and to every tag-keyed filter.",
+        parts.len()
+    )
+}
+
+/// Parse a comma-separated `--tags` argument into validated tag values,
+/// trimmed, empties dropped, order preserved.
+///
+/// Every `--tags` write path goes through this so the whitespace rule cannot be
+/// reintroduced by a fourth site splitting the string itself.
+// trace:BUG-1770 | ai:claude
+pub(crate) fn parse_tag_list(raw: &str) -> anyhow::Result<Vec<String>> {
+    let mut out = Vec::new();
+    for tag in raw.split(',') {
+        let trimmed = tag.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        validate_tag_value(trimmed, TagRepair::CommaFlag(TAGS_FLAG))?;
+        out.push(trimmed.to_string());
+    }
+    Ok(out)
+}
+
+/// The reporting form. [`apply_tag_deltas`] is the bool-returning wrapper kept
+/// for callers that only need "did anything change".
+// trace:BUG-1770 | ai:claude
+pub(crate) fn apply_tag_deltas_report(
+    tags: &mut HashSet<String>,
+    add: &[String],
+    remove: &[String],
+) -> anyhow::Result<TagDeltaReport> {
+    // BUG-1770: validate the entire `add` list BEFORE mutating anything, so a
+    // refusal can never leave a half-applied tag set behind for the caller to
+    // save. trace:BUG-1770 | ai:claude
+    for raw in add {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            validate_tag_value(trimmed, TagRepair::RepeatedFlag("--add-tag"))?;
+        }
+    }
+    let mut report = TagDeltaReport::default();
+    for raw in add {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if tags.insert(trimmed.to_string()) {
+            report.added.push(trimmed.to_string());
+        } else {
+            report.already_present.push(trimmed.to_string());
+        }
+    }
+    for raw in remove {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if tags.remove(trimmed) {
+            report.removed.push(trimmed.to_string());
+        } else {
+            report.absent.push(trimmed.to_string());
+        }
+    }
+    Ok(report)
+}
+
 /// Apply additive (`--add-tag`) and subtractive (`--remove-tag`) tag deltas
 /// without disturbing tags the caller didn't name. Empty / whitespace-only
 /// entries are ignored. Adding a present tag or removing an absent one is
@@ -19541,21 +19749,8 @@ pub(crate) fn apply_tag_deltas(
     tags: &mut HashSet<String>,
     add: &[String],
     remove: &[String],
-) -> bool {
-    let mut changed = false;
-    for raw in add {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() && tags.insert(trimmed.to_string()) {
-            changed = true;
-        }
-    }
-    for raw in remove {
-        let trimmed = raw.trim();
-        if !trimmed.is_empty() && tags.remove(trimmed) {
-            changed = true;
-        }
-    }
-    changed
+) -> anyhow::Result<bool> {
+    Ok(apply_tag_deltas_report(tags, add, remove)?.changed())
 }
 
 /// Build the loud-on-clobber warning shown when `aida edit --tags` REPLACES the
@@ -19767,6 +19962,10 @@ fn apply_effort_tag(
 mod apply_tag_deltas_tests;
 
 #[cfg(test)]
+#[path = "tests/bug_1770_tag_whitespace_tests.rs"]
+mod bug_1770_tag_whitespace_tests;
+
+#[cfg(test)]
 #[path = "tests/tags_replace_warning_tests.rs"]
 mod tags_replace_warning_tests;
 
@@ -19945,11 +20144,12 @@ fn edit_requirement_cli(
 
     // Update tags
     if let Some(tags_str) = tags {
-        let new_tags: HashSet<String> = tags_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
+        // BUG-1770: this is the SECOND edit backend the bug's acceptance names,
+        // and it split the argument itself rather than sharing a parser — so
+        // the whitespace rule has to be routed through `parse_tag_list` here
+        // too or `aida edit --tags "a b"` stays reachable from this path.
+        // trace:BUG-1770 | ai:claude
+        let new_tags: HashSet<String> = parse_tag_list(tags_str)?.into_iter().collect();
         let old_tags: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
         let new_tags_str: String = new_tags.iter().cloned().collect::<Vec<_>>().join(", ");
         if new_tags != req.tags {
@@ -19963,16 +20163,29 @@ fn edit_requirement_cli(
     // mutually exclusive at the clap layer, so at most one of the two
     // blocks fires.
     // trace:TASK-351 | ai:claude
+    // BUG-1770: keep the REPORT here too. This backend discarded the bool and
+    // then fell through to "No changes made to <ID>" — the same conflation of
+    // "nothing was asked" with "a tag flag matched nothing" that AC3 narrows on
+    // the canonical backend. trace:BUG-1770 | ai:claude
+    let mut tag_report = TagDeltaReport::default();
     if !add_tag.is_empty() || !remove_tag.is_empty() {
         let old_tags: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
-        if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
+        tag_report = apply_tag_deltas_report(&mut req.tags, add_tag, remove_tag)?;
+        if tag_report.changed() {
             let new_tags_str: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
             changes.push(Requirement::field_change("tags", old_tags, new_tags_str));
         }
     }
 
     if changes.is_empty() {
-        println!("{} No changes made to {}", "!".yellow(), spec_id);
+        let tag_lines = tag_report.summary_lines();
+        if tag_lines.is_empty() {
+            println!("{} No changes made to {}", "!".yellow(), spec_id);
+        } else {
+            for line in tag_lines {
+                println!("{line}");
+            }
+        }
         return Ok(());
     }
 
@@ -19989,6 +20202,12 @@ fn edit_requirement_cli(
         spec_id,
         changes.len()
     );
+    // BUG-1770: say what the tag flags did on the success path too — a caller
+    // who removes two tags and mistypes one must not see only "Updated".
+    // trace:BUG-1770 | ai:claude
+    for line in tag_report.summary_lines() {
+        println!("  {line}");
+    }
 
     // TASK-358: triage out of NeedsAttention — clean up any orchestrator-
     // escalated worktree for this spec. The lease's `escalated_to_human`

@@ -48,7 +48,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--status approved` — see "don't reach for it when." Legitimate when *you are* the disposing authority and this capture is genuinely blessed.
 - `--prefix` — override the ID prefix (e.g. `SEC`, `PERF`). Rarely needed; the type-derived prefix is usually right.
 
-**Gotchas.** The positional title and `--title` both exist; if you pass both, `--title` wins. Tags are comma-separated; if you mean to *add* a tag to an existing spec later, that's `edit --add-tag`, not `edit --tags` (which *replaces*).
+**Gotchas.** The positional title and `--title` both exist; if you pass both, `--title` wins. Tags are comma-separated, and a tag may not contain whitespace — `--tags "a b"` is refused with the comma form it meant, because a space-separated value would be stored as one tag that *renders identically* to the two it looks like. If you mean to *add* a tag to an existing spec later, that's `edit --add-tag`, not `edit --tags` (which *replaces*).
 
 **Chains with** — the returned SPEC-ID is what you then `trace:` in code, reference in a commit `(SPEC-ID)` trailer, and feed to `edit` / `queue add` / `show`. **File the spec first, then write the trace** — guessing the next ID is off-by-one.
 

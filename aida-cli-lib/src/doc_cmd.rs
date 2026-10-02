@@ -89,11 +89,11 @@ pub(crate) fn handle_doc_command(
                 }
             }
             if let Some(t) = tags {
-                for tag in t.split(',') {
-                    let tag = tag.trim();
-                    if !tag.is_empty() {
-                        doc.tags.insert(tag.to_string());
-                    }
+                // BUG-1770: `aida doc add --tags` is a tag write path the bug's
+                // own survey missed; route it through the shared parser so it
+                // cannot create a blob either. trace:BUG-1770 | ai:claude
+                for tag in parse_tag_list(t)? {
+                    doc.tags.insert(tag);
                 }
             }
 

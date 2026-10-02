@@ -1921,9 +1921,20 @@ impl<'a> McpServer<'a> {
 
         // Optional tags
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            // BUG-1770: an MCP client is the caller most likely to hand a
+            // whole tag line in as one array element, and the blob it creates
+            // is invisible to every tag-keyed filter afterwards. Same rule as
+            // the CLI, phrased in this surface's own syntax.
+            // trace:BUG-1770 | ai:claude
             for t in tag_arr {
                 if let Some(s) = t.as_str() {
-                    req.tags.insert(s.to_string());
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    crate::validate_tag_value(trimmed, crate::TagRepair::JsonArray("tags"))
+                        .map_err(|e| e.to_string())?;
+                    req.tags.insert(trimmed.to_string());
                 }
             }
         }
@@ -2068,10 +2079,20 @@ impl<'a> McpServer<'a> {
 
         // STORY-82: tags — replace the set with the provided list.
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
-            let new_tags: std::collections::HashSet<String> = tag_arr
-                .iter()
-                .filter_map(|t| t.as_str().map(str::to_string))
-                .collect();
+            // BUG-1770: the MCP replace path needs the same rule as
+            // `aida edit --tags`. trace:BUG-1770 | ai:claude
+            let mut new_tags: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for t in tag_arr {
+                if let Some(s) = t.as_str() {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    crate::validate_tag_value(trimmed, crate::TagRepair::JsonArray("tags"))
+                        .map_err(|e| e.to_string())?;
+                    new_tags.insert(trimmed.to_string());
+                }
+            }
             // trace:BUG-1252 | ai:codex
             let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false)
                 || args
