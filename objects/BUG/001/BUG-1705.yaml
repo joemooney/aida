@@ -60,6 +60,10 @@ feature: Uncategorized
 created_at: 2026-09-28T05:44:15.964379833Z
 modified_at: 2026-09-29T04:44:05.937753488Z
 req_type: Bug
+relationships:
+- rel_type: Parent
+  target_id: 01a0fdb0-3a8a-7340-94a5-70d4b30b012a
+  created_at: 2026-10-02T17:36:22.995081622Z
 comments:
 - id: 01a0eb7a-25b1-7122-834d-e8307ab35a07
   author: joe
