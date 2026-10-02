@@ -1,0 +1,78 @@
+id: 01a0fdb0-6bfa-73a3-a1dc-1ded7ed222a6
+spec_id: BUG-1774
+agreed_id: BUG-1774
+title: Arm the merge chokepoint and the label mirror from the verdict corpus, so a rejection from any producer holds the PR
+description: |
+  ## Summary
+
+  The ENFORCEMENT half of BUG-1705. Sibling of the `held_prs` read child; take
+  that one first, because this one should consume the predicate it introduces.
+
+  A refusing verdict holds a PR only when it was recorded through
+  `handle_review_record_at`, the one handler that calls
+  `merge_hold::write_typed_hold` + `merge_hold::sync_label`. Every other producer
+  of a verdict artifact arms nothing:
+
+  * `handle_review_spec` — the reviewer SKILL writes
+    `.aida/review-verdicts/<SPEC>.json` itself, then AIDA calls
+    `review_verdict::adopt_direct_write`, and the follow-up `record_verdict` has
+    its error discarded with `let _ =`;
+  * a second `adopt_direct_write` site in `aida-cli-lib/src/queue_cmd.rs`;
+  * two further `adopt_direct_write` sites in `aida-cli-lib/src/lib.rs`;
+  * `stamp_pr_review_verdict`, the drain reviewer path;
+  * a hand-written or hand-edited verdict file, which `adopt_direct_write` exists
+    precisely to accommodate.
+
+  ## The architectural constraint (parent AC4, resolved)
+
+  Adding a fifth place that stamps a hold repeats the failure mode that produced
+  the bug. Enforcement state must be DERIVED from the verdict corpus at the gate,
+  not stamped once per writer.
+
+  The label cannot be retired: ADR-37's server half is a GitHub required status
+  check, and a check can read a label but cannot read the local verdict corpus.
+  So the resolution is: **the verdict corpus is the source of truth; the marker
+  file and the label are derived mirrors, refreshed whenever the corpus is read.**
+
+  ## Acceptance
+
+  1. `forge::merge_change` refuses a PR with an outstanding blocking verdict at
+     the PR's current head, whatever produced the verdict artifact — including
+     each `adopt_direct_write` site and a hand-written file.
+  2. The gate keeps failing CLOSED on an unknown head sha and on an unreadable
+     verdict artifact. (The read view fails OPEN; these two must not be collapsed
+     into one predicate — see the sibling child.)
+  3. The hold lifts only when the head MOVES PAST the rejected sha AND a later
+     `approved` verdict is recorded at the NEW head. Neither a head move alone nor
+     an `approved` verdict recorded at the OLD rejected sha lifts it. (Parent AC3
+     — the cases that can wrongly RELEASE a hold.)
+  4. The label mirror cannot disagree with the corpus: whatever refreshes the
+     mirror does so from the same predicate the gate uses.
+  5. A refusing verdict recorded for a spec with no open PR is not an error and
+     holds nothing (parent AC5).
+  6. `merge_hold::write_typed_hold` overwrites unconditionally, so any new
+     programmatic Rework write must not displace a Recusal hold. BUG-1691 fixed
+     the displacement and is Completed — confirm the guarantee still holds with a
+     test at this new caller rather than assuming it.
+  7. Prove by mutation, both directions, that each AC3 release case has a witness
+     only it satisfies.
+
+  ## Do not
+
+  - Do not re-derive `held_prs`; that is the sibling child.
+  - Do not reuse `review_verdict::review_actionability` (releases on a head move).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T17:36:32.762478821Z
+modified_at: 2026-10-02T17:36:32.762478821Z
+req_type: Bug
+filed_at:
+  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
