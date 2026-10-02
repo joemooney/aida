@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T12:47:21.787131796Z
-modified_at: 2026-10-02T16:14:43.156591418Z
+modified_at: 2026-10-02T22:25:27.885550378Z
 req_type: Task
 tags:
 - build
@@ -113,6 +113,12 @@ comments:
   created_at: 2026-10-02T16:14:43.156591418Z
   modified_at: 2026-10-02T16:14:43.156591418Z
   session_id: ae677132-e317-48d2-a720-0eb591906a64
+- id: 01a0feb8-ef4d-7be2-aedf-5a21ba9db81d
+  author: joe
+  content: 'Advisor disposition of the independent codex review of PR #2341 (static, read-only): VERDICT request-changes received; blocker VERIFIED mechanically but DEMOTED to optional hardening after a both-directions check. Codex''s claim — the script''s two ''git diff --quiet'' predicates anchor on the INDEX, so staged mirror edits slip the precondition and a staged==regenerated state passes while HEAD is stale — reproduces exactly in a scratch-repo test. Harm analysis: the gate is tiered ''full'' (CI-only), and a CI checkout has index==HEAD, making the predicates HEAD-equivalent — no false pass is reachable where the gate guards. Locally the only false-ok state is staged bytes already equal to the regenerated truth (committing them is the fix the gate would demand); every divergent state fails loud. Optional two-token hardening verified: ''git diff --quiet HEAD --'' at both sites also rejects staged edits. Codex minor (''|| true'' on the restore path can hide a failed restore; gate still exits nonzero) concurs with advisor reading — fail-closed, cosmetic. Advisor''s own wiring verification all clean: step name byte-identical to the ci-gate-tiers key, tiered full with recorded rationale, step executed+passed in ubuntu Build job 110922761308, full_ci filter covers proto-only changes, PR body carries a three-mutation proof with negative control. MERGE-READY; macOS/Windows failures on the head are the pre-TASK-1570 legs — update-branch after #2353 merges, re-run Build, then record+merge.'
+  created_at: 2026-10-02T22:25:27.885550378Z
+  modified_at: 2026-10-02T22:25:27.885550378Z
+  session_id: 067bdb9b-08a9-4bc6-b7aa-015dcb3f2438
 history:
 - id: 01a0fd5b-1433-7083-86a1-8e4085c84c4d
   author: joe
