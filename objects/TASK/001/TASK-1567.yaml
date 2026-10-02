@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T12:47:21.787131796Z
-modified_at: 2026-10-02T16:03:19.731963276Z
+modified_at: 2026-10-02T16:14:43.156591418Z
 req_type: Task
 tags:
 - build
@@ -96,6 +96,23 @@ comments:
   created_at: 2026-10-02T14:03:18.545853202Z
   modified_at: 2026-10-02T14:03:18.545853202Z
   session_id: bda69c2d-94ea-4e14-802c-29cc2207a98f
+- id: 01a0fd65-81d4-7bd2-ba25-bdb0e0af64d3
+  author: joe
+  content: |-
+    Implemented in PR #2341 (branch task-1567-work, base main, independent of #2339/#2340 — no shared files).
+
+    AC1 needed no code change, and that is a finding rather than a skip. Filed in session #15 against a mirror missing TASK-1176's Superseded variant; on origin/main at fe09d7678e a full codegen run (cargo check -p aida-server + cargo check -p aida-cli-lib --features remote) leaves BOTH mirrors byte-identical and the tree clean. Verified by sha256 before/after. The staleness was committed in the interim.
+
+    AC2: scripts/check-generated-proto.sh deletes both mirrors, touches proto/aida.proto to trip each build script's rerun-if-changed, regenerates, then diffs. Delete-first is the design, not caution: CLI-mirror codegen is behind --features remote, which is NOT in aida-cli-lib's default set, so 'forgot the feature' is the likeliest way this gate goes quietly dead, and a compare-in-place check passes vacuously in exactly that case. The guard also refuses an untracked or already-edited mirror so an absent file cannot read as a match. Also replaced make proto-check, which ran 'diff -q proto/aida.proto aida-server/src/generated/aida.rs' — a .proto against a .rs, a predicate that can never match, reported only as a warning, so it could never fail. Tiered full in ci-gate-tiers.toml; reason recorded there is NOT build cost but that the gate deletes tracked files and refuses a mirror with uncommitted edits, so it must not run pre-push while an agent is mid-edit.
+
+    AC3: three mutations, three DIFFERENT exit paths. (1) strip the Superseded lines from the committed mirror -> 'the committed protobuf mirrors are stale' with a diff showing exactly the 3 lines from the original filing. (2) drop --features remote from the gate -> 'codegen did not reproduce these mirrors: aida-cli-lib/src/generated/aida.rs', NOT a drift failure. (3) delete + untrack a mirror -> 'generated mirror is missing ... it must be committed, not generated on demand'.
+
+    Negative control for the design claim: on ONE tree with a genuinely stale committed mirror, a naive compare-in-place gate without the feature flag exits 0 (false pass) while this gate exits 1. Measured both directions on the same tree state, so delete-first is load-bearing rather than decoration. An earlier, weaker control was discarded because the mirror was correct there, making 'no drift' the true answer too.
+
+    Verification: make check-ci-fast exit 0, 16 gates passed. make check-ci-list shows 'PLAN Generated protobuf mirror drift guard [full]'. cargo test -p aida-cli-lib --lib ci_gate_tiers = 3 passed, including task_1555_every_ci_build_gate_is_classified_for_the_local_runner, which is what makes the new CI step impossible to leave unwired.
+  created_at: 2026-10-02T16:14:43.156591418Z
+  modified_at: 2026-10-02T16:14:43.156591418Z
+  session_id: ae677132-e317-48d2-a720-0eb591906a64
 history:
 - id: 01a0fd5b-1433-7083-86a1-8e4085c84c4d
   author: joe
