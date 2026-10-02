@@ -8,10 +8,28 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:38.590060636Z
-modified_at: 2026-07-22T15:34:52.620293147Z
+modified_at: 2026-10-02T06:35:32.777695783Z
 req_type: Bug
 tags:
 - aida:orchestrator needs-repro-verification from-downstream:quizdom
+comments:
+- id: 01a0fb53-4229-79b3-8fe4-d4eb58aecfdf
+  author: joe
+  content: |-
+    ## Triage Investigation (aida-triage)
+
+    ### Status: Fixed / Covered by BUG-777, BUG-906, and BUG-1285
+
+    ### Code Verification
+    1. The phantom failure mode `"could not match the orchestrated session"` was replaced with typed, structured predecessor handling in `release_dead_phase_predecessor_leases` (`aida-cli-lib/src/lib.rs:112306`, trace:BUG-906).
+    2. Clean predecessor worktrees/leases are automatically reaped and logged before phase retry.
+    3. Dirty worktrees are converted to typed, shelvable `CacheLocked` failures specifying the exact worktree path requiring salvage (`bug_777_stale_lease_recovery_tests.rs:590`, trace:BUG-1285).
+    4. Live `--resume` matching logic was reworked under STORY-492 / BUG-478.
+
+    ### Recommendation
+    Close as completed/verified by BUG-777, BUG-906, and BUG-1285.
+  created_at: 2026-10-02T06:35:32.777695783Z
+  modified_at: 2026-10-02T06:35:32.777695783Z
 deferred: true
 deferred_at: 2026-07-22T15:34:52.620293147Z
 deferred_until: the repro is re-run on current main (a7cd68909+) and still fails — then file a real, mechanism-confirmed spec
