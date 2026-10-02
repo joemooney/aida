@@ -106432,6 +106432,11 @@ impl RealPhaseDriver {
     /// `run_implementer` so a test can drive it with an injected forge.
     // trace:TASK-1529 trace:TASK-1421 | ai:codex
     fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
+        let note = implementer_preflight::retraction_notice(detail);
+        self.retract_publication_with_notice(branch, &note);
+    }
+
+    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
             // A same-branch PR may have been opened by an operator while the
             // implementer was running. Branch presence alone does not prove
@@ -106487,7 +106492,6 @@ impl RealPhaseDriver {
                 base: String::new(),
                 title: Some(pr.title.clone()),
             };
-            let note = implementer_preflight::retraction_notice(detail);
             match forge.close_change(&change, &note) {
                 Ok(()) => {
                     if !self.json {
@@ -106538,7 +106542,9 @@ impl RealPhaseDriver {
             None,
         )
         .with_spec(&self.spec);
-        match crate::merge_hold::write_typed_hold(&self.project_root, &hold) {
+        let marker_result = crate::merge_hold::write_typed_hold(&self.project_root, &hold);
+        let label_result = crate::merge_hold::sync_label(&self.project_root, number, true);
+        match &marker_result {
             Ok(()) => {
                 if !self.json {
                     eprintln!(
@@ -106559,7 +106565,7 @@ impl RealPhaseDriver {
                 }
             }
         }
-        if let Err(err) = crate::merge_hold::sync_label(&self.project_root, number, true) {
+        if let Err(err) = &label_result {
             if !self.json {
                 eprintln!(
                     "  {} merge-hold label not applied on PR-{number}: {err} — Layer 2 is off \
@@ -106567,6 +106573,23 @@ impl RealPhaseDriver {
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
+        }
+        if let (Err(marker_error), Err(label_error)) = (&marker_result, &label_result) {
+            let notice = format!(
+                "Publication guards could not complete, and the merge-hold could not be applied.\n\n\
+                 Merge-hold marker error: {marker_error}\n\
+                 Merge-hold label error: {label_error}\n\n\
+                 This PR was closed only because it could not be made unmergeable. The branch is \
+                 preserved, and the guards will be retried on the next publication attempt.\n\n{detail}"
+            );
+            if !self.json {
+                eprintln!(
+                    "  {} both merge-hold layers failed for PR-{number}; closing it because it could not be made unmergeable",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            self.retract_publication_with_notice(branch, &notice);
+            return;
         }
         let change = crate::forge::ChangeRef {
             id: number,
@@ -109001,6 +109024,61 @@ mod forge_seam_tests {
             commented[0].1
         );
         assert!(commented[0].1.contains("retried"), "{}", commented[0].1);
+    }
+
+    #[test]
+    fn inconclusive_preflight_closes_when_both_hold_layers_fail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(45, "claude/bug-1714"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        // Occupy the hold directory path with a file, forcing the marker write
+        // to fail. Label sync only fails when a forge is declared but the repo
+        // cannot be pinned (a pure-git root short-circuits to Ok): a git repo
+        // with a github provider and no origin remote is unpinnable.
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        let detail = "guard `Run clippy` could not complete: timed out";
+        driver.hold_inconclusive_publication("claude/bug-1714", detail);
+
+        let closed = forge.closed();
+        assert_eq!(
+            closed.len(),
+            1,
+            "double failure must retract the PR: {closed:?}"
+        );
+        assert_eq!(closed[0].0, 45);
+        let notice = &closed[0].1;
+        assert!(notice.contains("guards could not complete"), "{notice}");
+        assert!(
+            notice.contains("merge-hold could not be applied"),
+            "{notice}"
+        );
+        assert!(notice.contains("Merge-hold marker error:"), "{notice}");
+        assert!(notice.contains("Merge-hold label error:"), "{notice}");
+        assert!(
+            notice.contains("closed only because it could not be made unmergeable"),
+            "{notice}"
+        );
+        assert!(notice.contains("branch is preserved"), "{notice}");
+        assert!(notice.contains("guards will be retried"), "{notice}");
+        // The close must never reuse the refused-path notice: the guards did
+        // not refuse this change, they could not complete. (The embedded
+        // label error may legitimately say "refusing to call `gh`".)
+        assert!(!notice.contains("guards refused"), "{notice}");
+        assert!(!notice.contains("Closed automatically:"), "{notice}");
     }
 
     #[test]
