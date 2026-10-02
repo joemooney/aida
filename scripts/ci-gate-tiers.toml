@@ -51,6 +51,7 @@
 "Run shipped full-access launch refusal fixtures" = "fast"
 "Run advisor-code-gate substrate test" = "full"
 "Run pre-commit provenance move-detection test" = "fast"
+"Run agent-skill-hook installer fixtures" = "fast"
 "Run distributed / sibling-store integration tests" = "full"
 "Run ~/.aida home-guard self-test" = "fast"
 "Minimal aida-cli build for docs-only guards" = "full"
