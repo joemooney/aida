@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T19:53:48.881834213Z
+modified_at: 2026-10-02T20:07:41.474282210Z
 req_type: Bug
 comments:
 - id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
@@ -139,6 +139,23 @@ comments:
     (5) SURFACES: decide_claim and claim_staleness both grow an injected session_live probe (pure, unit-testable); partition_claims builds the real probe once per call (one process-table scan), so aida session leases / status / doctor / team all inherit AC4. Lock paths pass a constant-false probe (lock claims are process-backed; there is no session to probe).
   created_at: 2026-10-02T19:53:48.881834213Z
   modified_at: 2026-10-02T19:53:48.881834213Z
+  session_id: 2ac91c1e-8d4e-42a6-b079-e54f997d41e4
+- id: 01a0fe3a-cca2-7e30-899c-b5ca22b4d191
+  author: joe
+  content: |-
+    IMPLEMENTATION (branch bug-1765, relay session #27, follows the AC1 decision comment above). All changes in aida-cli-lib/src/coordination.rs.
+
+    AC2+AC3: decide_claim grew an injected session_live probe, consulted only for a non-process-backed claim and BEFORE the TTL backstop: verified-live => Refuse even when heartbeat age > ttl_secs; no affirmative signal => every older clause decides unchanged (TTL still reclaims a gone holder). Fixtures bug_1765_live_session_claim_past_ttl_is_refused_not_reclaimed and bug_1765_unaffirmed_session_claim_past_ttl_still_reclaims differ only in the probe's answer. MUTATION PROOF: neutering the two new clauses (if false &&) fails exactly the two behavior-witnessing tests (AC2 decide + AC4 staleness mirror) while the gating/control tests stay green; reverted, all 43 coordination tests pass.
+
+    AC4: claim_staleness grew the mirrored clause 0, so partition_claims (the single entry point for aida session leases / status / doctor / team) reports a verified-live cross-clone session as live past 30 min. partition_claims scans the process table ONCE per call and only when some claim could need it.
+
+    REAL PROBE (probe_session_liveness / _with): same host only; reads the holder clone's own .aida/sessions/ table at claim.clone_path, freshest scope-matching lease (case-insensitive, same rule as find_scope_lease_conflict), classified with the exact local matrix (lease_state_for); Live OR Dormant affirms (reclaiming over a paused session's WIP is the race the registry prevents; --force stays the escape). Plumbing test bug_1765_probe_reads_the_holder_clones_local_lease_table covers: standing lease affirms, remote host / other scope / deleted clone / process-backed / deleted worktree do not. The probe can only ADD liveness — the fresh-claim race (peer probing between claim write and local lease write) degrades to today's TTL behavior, never to insta-reclaim.
+
+    AC5: module-doc Liveness section rewritten — states there is NO heartbeat and why, the per-kind rules, and the honest remote-host contract (a remote session longer than its TTL WILL be told it expired; only a real heartbeat could fix that, and a heartbeat without a long-lived driver would be worse than none). Claim::process_backed doc and build_claim comment updated to match.
+
+    Lock paths (acquire_lock_claim, live_foreign_lock_claim) pass a constant-false probe: lock claims are process-backed, no session to probe, and bug_1765_probe_cannot_rescue_a_process_backed_claim proves even a buggy true cannot rescue one.
+  created_at: 2026-10-02T20:07:41.474282210Z
+  modified_at: 2026-10-02T20:07:41.474282210Z
   session_id: 2ac91c1e-8d4e-42a6-b079-e54f997d41e4
 history:
 - id: 01a0fb3a-6c76-7133-9c90-ac6be4867834
