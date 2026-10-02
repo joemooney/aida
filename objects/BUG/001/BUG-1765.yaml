@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T06:34:15.908663819Z
+modified_at: 2026-10-02T14:18:40.166680064Z
 req_type: Bug
 comments:
 - id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
@@ -118,6 +118,11 @@ comments:
     - For cross-host claims: require a explicit heartbeat refresh mechanism (e.g. hooked into session command execution / status line / MCP keepalive) or fallback to requiring explicit release / operator confirmation rather than silent auto-reclaim after 30 minutes.
   created_at: 2026-10-02T06:34:15.908663819Z
   modified_at: 2026-10-02T06:34:15.908663819Z
+- id: 01a0fcfb-42a6-7860-9e3a-205fa2dc1069
+  author: joe
+  content: "DECISION: Option 2 - Stop pretending the TTL applies.\n\n### Decision & Rationale\n\nWe will remove the TTL/heartbeat mechanism for session leases and instead rely on the existing local liveness checks (e.g. verifying the worktree and process). \n\nAs noted in the spec, adding a reliable heartbeat for short-lived processes (like `aida session start` which exits immediately) is difficult without introducing a persistent background daemon for every session. Failing to heartbeat means the cross-clone registry silently stops coordinating after 30 minutes, which leads to duplicate work and merge races.\n\nIt is better to admit that we cannot reliably probe the liveness of a remote clone (and perhaps require manual intervention or an escape hatch) than to silently expire the lease and allow conflicting work.\n\n### Acceptance Criteria Updates\nThe ACs will follow the implementation of Option 2: `decide_claim` must no longer reclaim session leases purely due to a 1800s TTL expiry."
+  created_at: 2026-10-02T14:18:40.166680064Z
+  modified_at: 2026-10-02T14:18:40.166680064Z
 history:
 - id: 01a0fb3a-6c76-7133-9c90-ac6be4867834
   author: joe
