@@ -66,8 +66,77 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:17:53.606632960Z
-modified_at: 2026-10-02T02:15:36.109233184Z
+modified_at: 2026-10-02T02:18:55.384421157Z
 req_type: Bug
+comments:
+- id: 01a0fa68-5018-7271-91ae-aefcdb6301dd
+  author: joe
+  content: |
+    ## Advisor decision + measured ACs (relay session #20)
+
+    The only non-mechanical choice this spec left open was **what the example should say**, and a second
+    one surfaced while writing it: **what tag the fence should carry**. Both decided here, with numbers.
+
+    ### Decision 1 — the fence stays UNTAGGED
+
+    The truncated block opens as a bare ```` ``` ````. It would have been easy to "improve" it to
+    ```` ```console ````. That is the wrong call, for two reasons:
+
+    1. It is a **session transcript** (`User:` / `Agent:` turns), not a shell recipe. Nothing in it is
+       meant to be executed.
+    2. `scripts/check-portability.sh:338-351` scans markdown **only inside explicitly shell-tagged
+       fences** (`bash`, `sh`, `shell`, `console`). Tagging it would pull all 58 new interior lines into
+       the gate's shell-rule scope — including the `aida edit --description "..."` and
+       `aida comment add` lines — for no benefit, and would move AC6's number.
+
+    AC6 confirms the decision was free: shell-tagged interior lines are **1367 before and 1367 after**.
+    All-fence interior lines go 2634 → 2692 (+58), which is the new example body and nothing else.
+
+    The example also contains **no inner fence markers**, deliberately: the gate's closer is
+    `re.fullmatch(fence_char{len,}, stripped)`, so any bare ```` ``` ```` inside would have closed the
+    outer fence early and re-created the very defect this spec is about.
+
+    ### Decision 2 — what the example shows
+
+    It walks the skill's **actual** six-step flow rather than inventing one: invoke → load + summary
+    (Step 1) → the five scoring criteria (Step 3) → results in the exact Step 5 display format →
+    the Step 6 follow-up menu → user picks, agent applies the change. Score is **6/10**, which is
+    deliberately in the "5-6 Fair - some issues need addressing" band from the skill's own Quality Score
+    Guidelines, so the example demonstrates the *interesting* path (issues found, improvement applied,
+    evaluation recorded) instead of a trivial accept.
+
+    **Both CLI invocations in the new example were verified against the real binary before shipping**,
+    because a scaffolded template shipping a wrong flag would be worse than the truncation:
+    `aida edit --description <DESCRIPTION>` exists, and `aida comment add` really does take a positional
+    `[CONTENT]` (`Usage: aida comment add [OPTIONS] <ID> [CONTENT]`). The file's pre-existing CLI
+    Reference section is therefore correct as written; nothing there needed changing.
+
+    ### Acceptance criteria — measured
+
+    | AC | Result |
+    |---|---|
+    | 1 — example complete, fence closed | Fence closes at line **231**. Example covers all six workflow steps. |
+    | 2 — trailing newline | `tail -c 1 \| od -c` = `\n`. Was `2` (the `2` of `FR-0042`). |
+    | 3 — repo-wide unterminated fences | **2 → 0**, over the same **835** tracked `.md`. Both originals were the master and its `.claude/skills` symlink, so the one edit cleared both. |
+    | 4 — `make check-templates` exit 0, symlink intact | exit **0**, `All templates OK!`. Log lists `OK: .claude/skills/aida-evaluate/SKILL.md (symlink)`. `ls -l` still a symlink, and it resolves to the edited master (both report **6603** bytes). Master edited only. |
+    | 5 — portability gate, allowlist unchanged | `check-portability.sh` exit **0**; `--check-allowlist-growth origin/main` exit **0**. Allowlist byte-identical: **225** lines, md5 `103f6f2174be2369bb09876509adb572` before and after. No row added. |
+    | 6 — interior-line total | **1367 → 1367** (unchanged, per Decision 1). All-fence 2634 → 2692 accounted for above. |
+
+    File goes 4323 → 6603 bytes, 172 → 231 lines.
+
+    ### Incidental confirmation of BUG-1760
+
+    `make check-templates` in this linked worktree prints
+    `OK: .agents/skills absent (clean no-op for fresh clones and CI)`, while the same command in the main
+    checkout prints `OK: .agents/skills present and current`. That is BUG-1760's new distinct-reporting
+    fix observed working in **both** states, from a merge that landed earlier in this same session.
+
+    Because this change edits a skill **master**, `.agents/` in the main checkout goes stale on merge —
+    which is precisely the drift BUG-1760 exists to catch. `make sync-templates` must run in the main
+    checkout after the merge, and that is verified as part of closing this spec.
+  created_at: 2026-10-02T02:18:55.384421157Z
+  modified_at: 2026-10-02T02:18:55.384421157Z
+  session_id: 8507630f-b690-4da6-8d9d-bece228469d1
 history:
 - id: 01a0f8b0-06a8-7602-a994-690954e3c51c
   author: joe
