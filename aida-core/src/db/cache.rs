@@ -1327,7 +1327,6 @@ impl Cache {
                             || is_cache_read_only_error(&err)
                             || is_cache_unwritable_error(&err) =>
                     {
-                        migration_pending = true;
                         EmptyMigration::NowHasRows
                     }
                     Err(err) => return Err(err),
