@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T09:58:21.276137615Z
-modified_at: 2026-10-02T11:21:57.334915829Z
+modified_at: 2026-10-02T19:47:03.548711586Z
 req_type: Task
 tags:
 - measurement observability needs-operator-decision
@@ -160,6 +160,12 @@ comments:
   created_at: 2026-10-02T11:21:41.912069623Z
   modified_at: 2026-10-02T11:21:41.912069623Z
   session_id: 80a149f2-df5e-43a1-9400-e2ad67e7819c
+- id: 01a0fe27-e8fc-75e2-ae05-6f6743e26230
+  author: joe
+  content: 'Evidence update from the performance-guard-route servicing (relay session #26→#8, 2026-10-02): the 10-02 trip (12.1%/257 over the 1000ms budget, one 9772ms ceiling breach) was dispositioned ENVIRONMENTAL with budgets unchanged. Per-binary breakdown: over-budget calls concentrate in OLD binary f3cde6e60e (14.9%) during the multi-day build-storm/high-iowait window; current binary fe09d7678e was 1.9%. Quiet-host control at 12:43 MST: 5x ''aida show'' in 90-180ms. This strengthens the environmental reading and weakens the case for (b) recalibration — the budget holds on a quiet host and on the current binary under normal load. If a decision is still wanted, the evidence now favors (a) treat trips during declared fleet-storm windows as load signals, or (c) contention-aware bucketing; (b) raising the ceiling would fit the number to a storm that has passed. Decision remains the operator''s per this spec''s own text.'
+  created_at: 2026-10-02T19:47:03.548711586Z
+  modified_at: 2026-10-02T19:47:03.548711586Z
+  session_id: 2ac91c1e-8d4e-42a6-b079-e54f997d41e4
 filed_at:
   code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
   branch: main
