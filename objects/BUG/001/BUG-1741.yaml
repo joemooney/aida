@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-10-02T22:22:15.850877318Z
+modified_at: 2026-10-02T22:46:53.017005242Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -211,6 +211,19 @@ comments:
     The ACs remain exactly as written. The implementation will consolidate all helpers.
   created_at: 2026-10-02T14:19:15.864155563Z
   modified_at: 2026-10-02T14:19:15.864155563Z
+- id: 01a0fecc-8b59-7431-8346-fca7ff9971eb
+  author: joe
+  content: |
+    RESOLUTION (PR #2356, branch bug-1741):
+
+    AC6 confirmed in code, not assumed: `creator_pid_start_time` / `process_identity_is_alive` (TASK-1284) does NOT cover zombies. The test `zombie_keeps_start_identity_so_only_the_liveness_probe_rejects_it` witnesses that a defunct child still reports its original kernel start time via `process_start_identity`, so the recorded and live identities match and the pid-reuse guard passes it through. The zombie check therefore belongs inside `pid_is_alive` (where `process_identity_is_alive` inherits it), and that is where it was implemented: Linux reads `/proc/<pid>/stat`, parsing state after the LAST ')'; non-Linux unix degrades to today's behaviour (stated in code); Windows has no defunct state.
+
+    AC7 helper disposition: vendor_activity.rs and merge_lock.rs local kill(pid,0) copies deleted and routed through the canonical predicate; test_home.rs keeps unknown-counts-as-alive (pid 0 / out-of-pid_t / non-unix) but delegates the probeable case — a zombie owner holds no open files, sweep is safe; worktree_pool.rs and db/cache_lock.rs already delegated.
+
+    AC5 mutation proof: with the zombie check removed (bare kill(pid,0) predicate), `pid_is_alive_false_for_unreaped_zombie` fails (0 passed; 1 failed); restored, passes. The zombie was NOT reaped as the fix; the host's live corpse (pid 1907632) was left alone.
+  created_at: 2026-10-02T22:46:53.017005242Z
+  modified_at: 2026-10-02T22:46:53.017005242Z
+  session_id: 4a4b848c-a019-49f6-aaa6-c381acf18e52
 history:
 - id: 01a0f2e8-a08c-7791-a627-87ed4b1d9b75
   author: joe
