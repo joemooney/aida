@@ -8,6 +8,7 @@
         docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills install-agent-skill-hooks \
+        check-ci check-ci-fast check-ci-audit check-ci-list \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -436,6 +437,26 @@ install-agent-skill-hooks: ## Install main-checkout symlink hooks that refresh .
 		ln -sfn "$$root/aida-core/templates/hooks/aida-sync-agent-skills.sh" "$$hooks/$$name"; \
 		echo "  Linked: $$hooks/$$name"; \
 	done
+
+# CI's Build job runs ~36 gates; the check set documented in CLAUDE.md names
+# five of them. Every gate an agent cannot run locally costs a full CI cycle
+# plus a re-push, which on a constrained host is the dominant cost of a fix.
+#
+# These targets run CI's OWN step bodies, read out of .github/workflows/ci.yml,
+# in CI's order, stopping at the first failure. No gate command is duplicated
+# here or in the runner; see scripts/ci-gate-tiers.toml for why.
+# trace:TASK-1555 | ai:claude
+check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
+	@python3 scripts/check-ci-gates.py --tier fast
+
+check-ci: ## Run every CI gate that can run locally, in CI's order (needs a build)
+	@python3 scripts/check-ci-gates.py --tier all
+
+check-ci-audit: ## Fail if a CI gate is unclassified (what keeps the tiers honest)
+	@python3 scripts/check-ci-gates.py --audit
+
+check-ci-list: ## Show which CI gates run locally, which are skipped, and why
+	@python3 scripts/check-ci-gates.py --tier all --list
 
 # trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked

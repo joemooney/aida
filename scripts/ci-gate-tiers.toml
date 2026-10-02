@@ -1,0 +1,81 @@
+# Local tier classification for CI's Build-job gates.
+#
+# This file carries NO gate commands. Every command stays owned by
+# `.github/workflows/ci.yml`, and `scripts/check-ci-gates.py` reads it from
+# there, so a gate whose command changes cannot drift away from its local
+# runner. The same principle is stated on `guards_from_ci` in
+# `aida-cli-lib/src/implementer_preflight.rs`:
+# "Commands deliberately remain owned by the workflow; AIDA never carries a
+# second hand-written copy."
+#
+# What this file DOES carry is the one judgement a workflow cannot express:
+# whether a gate can run on a developer's machine, and whether it needs a cargo
+# build. Every `run:` step in `jobs.build` must appear in exactly one of the two
+# tables below. A step that appears in neither is a FAILURE, not a silent
+# omission — `tests::task_1555_ci_gate_tiers_tests` enforces that in both
+# directions, and `--audit` enforces it before any gate runs.
+#
+# trace:TASK-1555 | ai:claude
+
+# fast = needs no cargo BUILD, so it is cheap enough to run before every push.
+# full = invokes cargo, or shells into a script that runs `cargo build -p
+#        aida-cli` itself.
+#
+# The basis for each `full` entry is a grep for
+# `cargo build|cargo run|target/(debug|release)|AIDA_BIN` over the gate's step
+# body AND over every .sh/.py file that body names — the binary dependency is
+# often one level down, which is exactly the indirection BUG-1420's comment
+# warns about ("a guard whose text does not name `aida` can still reach it
+# through a script"). Three entries are worth recording because a shallower
+# check would misplace them:
+#   - "Monitor contract drift guard" looks pure: its step body only runs
+#     `docs/monitor-contract-fixtures/verify.py`. That script execs
+#     `target/debug/aida contract --json` -> full. It was classified `fast`
+#     first and failed on exactly that, which is why the check is transitive.
+#   - "Removed mode-flag spelling guard" matches `$AIDA_BIN` only inside a REGEX
+#     LITERAL it searches the tree for. It never runs the binary -> fast.
+#   - "Check formatting" invokes cargo but builds nothing (rustfmt only, ~1s),
+#     so it belongs in the pre-push tier despite naming cargo.
+[tiers]
+"Build all packages" = "full"
+"TUI seam guard" = "fast"
+"Run tests" = "full"
+"GitLab live-smoke workflow guard" = "fast"
+"External-prose classifier inventory" = "fast"
+"Run MCP stdio compatibility tests" = "full"
+"Run history template CLI/config/MCP contract tests" = "full"
+"Run MCP doc-consistency test" = "full"
+"Run merge-hold gate fixtures" = "fast"
+"Run advisor-code-guard hook test" = "full"
+"Run git-guardrails parse test" = "fast"
+"Run shipped full-access launch refusal fixtures" = "fast"
+"Run advisor-code-gate substrate test" = "full"
+"Run pre-commit provenance move-detection test" = "fast"
+"Run distributed / sibling-store integration tests" = "full"
+"Run ~/.aida home-guard self-test" = "fast"
+"Minimal aida-cli build for docs-only guards" = "full"
+"CLI-manual drift-guard (every command documented)" = "full"
+"Monitor contract drift guard" = "full"
+"Check formatting" = "fast"
+"Removed mode-flag spelling guard" = "fast"
+"Check Rust test portability ratchet" = "fast"
+"Prose-classification rule fixtures" = "fast"
+"Executable fixture ratchet" = "fast"
+"Run clippy" = "full"
+"Glyph-literal lint (block new raw glyphs)" = "fast"
+"Trace/doc-header stranding gate" = "fast"
+"Docs-drift guards schedule on docs-only PRs" = "fast"
+
+# Gates that genuinely cannot run here. The reason is PRINTED, one line per
+# gate, every time the runner skips it — AC1 asks for the skip list to be
+# visible rather than silent, and a skip nobody sees is how this drifted in the
+# first place.
+[skips]
+"CI docs-only short-circuit" = "an echo for CI flow control; it asserts nothing about the tree"
+"Pin stable toolchain & verify cargo" = "runs `rustup default stable`, which would mutate this machine's toolchain"
+"Install Linux dependencies" = "`sudo apt-get` against the runner image"
+"Report cross-target cargo check (Windows/macOS on Linux)" = "report-only by its own name, and needs the Windows/macOS std targets installed"
+"Live bwrap OS-wrap confinement gate" = "needs `sudo sysctl` to change the kernel's unprivileged-userns flag"
+"Report diff trace coverage (report-only)" = "report-only by its own name"
+"Validate commit SPEC-ID references (trace gate)" = "fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate"
+"Doc-intent gate (surface changes mark doc-impact)" = "same `.aida-store` fetch-and-fast-forward as the trace gate above"

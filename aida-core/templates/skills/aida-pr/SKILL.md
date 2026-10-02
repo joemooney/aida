@@ -152,6 +152,25 @@ Skip silently for non-Rust projects (no `Cargo.toml` at the repo root). This is 
 
 Bypass: `--skip-fmt-check` for the rare case where drift is intentional (e.g. an in-flight rustfmt config change). Default is to refuse.
 
+### 4a. Pre-flight: the CI gates a local check set omits — trace:TASK-1555
+
+`cargo fmt`, `cargo test` and `cargo clippy` are the checks a project tends to
+document. A CI build job usually runs many more — portability ratchets, drift
+guards, lint and fixture gates — and each one an agent cannot run locally costs
+a full CI cycle plus a re-push.
+
+If the project ships a target for them, run it before pushing:
+
+```bash
+# AIDA's own repo provides this; it runs CI's own step bodies, read out of
+# .github/workflows/ci.yml, for every gate that needs no cargo build (~90s).
+make -n check-ci-fast >/dev/null 2>&1 && make check-ci-fast
+```
+
+Treat a failure exactly like fmt drift: STOP, do not push, fix it, re-run. Skip
+silently when the target does not exist — most projects have no equivalent, and
+inventing one is not this skill's job.
+
 ### 4b. Doc-surface nudge (warn-only) — trace:TASK-939
 
 Front-of-the-pipeline companion to the release-time `aida doc coverage`
