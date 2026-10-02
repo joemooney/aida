@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:32:40.486442883Z
-modified_at: 2026-10-02T08:18:09.081824343Z
+modified_at: 2026-10-02T08:40:27.902311527Z
 req_type: Task
 comments:
 - id: 01a0fbb1-3239-7cb0-a41f-044535ae4bd1
@@ -137,6 +137,83 @@ comments:
     what blocks publication, not about what an agent can run locally.
   created_at: 2026-10-02T08:18:09.081824343Z
   modified_at: 2026-10-02T08:18:09.081824343Z
+  session_id: a44ab090-138d-446d-9dae-f2d108dd2e1f
+- id: 01a0fbc5-9ffe-7ae0-98f8-cae53a03c827
+  author: joe
+  content: |
+    # Implemented — PR #2330 (branch `task-1555`, commit `0c3d698cdb`)
+
+    Follows the sketch comment above. Deviations and findings worth recording:
+
+    ## The measurement
+
+    **36** named `run:` gates in `jobs.build`, counted structurally with PyYAML.
+    Classified: **16 fast** (no cargo build), **12 full**, **8 skipped**. CLAUDE.md
+    documented five. So the spec's "~25 gates an agent cannot run locally" was
+    accurate, and the fast tier alone recovers 16 of them for **~90 seconds**.
+
+    ## Two findings that changed the implementation
+
+    **1. Tiering has to be transitive.** `Monitor contract drift guard` reads as a
+    pure script gate — its step body runs only
+    `docs/monitor-contract-fixtures/verify.py`. That script execs
+    `target/debug/aida contract --json`. It was classified `fast`, and the first
+    real fast-tier run failed on it with `FileNotFoundError: target/debug/aida`.
+
+    This is exactly the indirection BUG-1420's comment in `implementer_preflight`
+    warns about — "a guard whose text does not name `aida` can still reach it
+    through a script" — which is why that module refuses to key its build on a
+    textual predicate. The tier basis is now a grep over each step body **and every
+    `.sh`/`.py` that body names**. Re-run across all fast gates, it finds exactly
+    two such cases, and the other is a false positive worth recording:
+    `scripts/check-removed-flags.sh` matches `$AIDA_BIN` only inside a **regex
+    literal** it searches the tree for.
+
+    The fast tier additionally runs with a stub `aida` first on PATH that exits
+    non-zero naming the gate. Stated limit, in the code: that covers PATH lookup
+    only — a gate invoking `target/debug/aida` by path walks past the stub, but then
+    fails on the absent file, which is also loud. Neither route can produce a false
+    pass; the stub only makes the PATH route say *why*.
+
+    **2. Two gates had to be demoted to skips, not promoted.** `Validate commit
+    SPEC-ID references (trace gate)` and `Doc-intent gate` both run
+    `git fetch --no-tags origin aida-store:…` and
+    `git -C .aida-store merge --ff-only origin/aida-store`. Those **mutate the
+    shared `.aida-store` worktree**. Shipping that inside a "run before every push"
+    tier is a hazard, so both are skipped with that reason printed. Note that
+    `Doc-intent gate` IS in `[preflight] guards`, so the publication path already
+    runs it — but it does so in a linked worktree where `.aida-store` is not a
+    worktree, so a different branch of the gate executes. Promoting these is a
+    follow-up once they can run read-only; it is deliberately not done here.
+
+    ## AC5 is guarded in Rust, and why
+
+    `aida-cli-lib/src/tests/task_1555_ci_gate_tiers_tests.rs`, inside
+    `cargo test --workspace`. A shell or python guard would need its own named step
+    in `ci.yml`, and BUG-1688's lesson is that such a fixture can sit on a branch
+    wired into nothing while looking like coverage.
+
+    Both files are read at runtime from `CARGO_MANIFEST_DIR`, never `include_str!`,
+    so the mutation that matters — deleting the table — is writable at all.
+
+    **7 mutants, each red at its own assertion, baseline restored green:** delete
+    the table; drop an entry; rename an entry; add an unclassified CI gate; add an
+    **orphan** entry (this one exists specifically because renaming fires the
+    *unclassified* assertion first, so the stale-entry branch needed its own
+    witness); a `"Fast"` tier typo; and a drifted `defaults.run.shell`.
+
+    ## Dogfood result
+
+    `make check-ci-fast` **caught real `cargo fmt` drift in this very change**
+    before it was pushed — the exact cycle the spec was filed to close.
+
+    ## Acceptance
+
+    AC1–AC5 all addressed; see the PR body for the per-AC mapping and test table.
+    Out of scope and untouched: no gate's rules changed, and `[preflight] guards`
+    plus the publication path are unchanged.
+  created_at: 2026-10-02T08:40:27.902311527Z
+  modified_at: 2026-10-02T08:40:27.902311527Z
   session_id: a44ab090-138d-446d-9dae-f2d108dd2e1f
 history:
 - id: 01a0e416-4ef4-7e20-8c7a-0678945654d6
