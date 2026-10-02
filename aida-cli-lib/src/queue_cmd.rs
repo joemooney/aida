@@ -8673,6 +8673,54 @@ pub(crate) fn queue_work_plan_wants_pr_head_branch(plan: &QueueWorkPlan) -> bool
         })
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PreclaimDecision {
+    Proceed,
+    Refuse(String),
+}
+
+/// BUG-1761: the pre-claim collision decision for `aida queue work <SPEC>`.
+///
+/// The command used to signal "someone is already on this spec" only as a
+/// branch-name suffix. It had the information and discarded it: it had to
+/// check that `bug-1819` existed in order to pick `bug-1819-2`, so at that
+/// moment it knew a branch for the spec existed — and it bumped the status,
+/// took a lease and minted a worktree anyway, next to an open PR another
+/// agent was actively implementing.
+///
+/// Pure by design, in the shape of `dup_pickup_recheck`: the caller runs the
+/// forge and branch probes and passes primitives in, so the whole truth table
+/// is unit-testable without a forge. Ordering matters — an open PR is the more
+/// specific and more actionable collision, so it is reported in preference to
+/// the branch that PR is built on.
+///
+/// `branch_exists` must be false whenever the forge could not answer. A
+/// lookup failure means "cannot tell", not "no PR", and refusing on it would
+/// let a network blip block every pickup on the machine.
+// trace:BUG-1761 | ai:codex
+pub(crate) fn preclaim_collision_check(
+    spec_display: &str,
+    open_pr: Option<(u64, &str, &str)>,
+    branch: &str,
+    branch_exists: bool,
+    bypass: bool,
+) -> PreclaimDecision {
+    if bypass {
+        return PreclaimDecision::Proceed;
+    }
+    if let Some((number, title, url)) = open_pr {
+        return PreclaimDecision::Refuse(format!(
+            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display} --from-pr`, or take it over deliberately with `--force-claim`.",
+        ));
+    }
+    if branch_exists {
+        return PreclaimDecision::Refuse(format!(
+            "Branch `{branch}` exists, but no open PR was found for it. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
+        ));
+    }
+    PreclaimDecision::Proceed
+}
+
 fn rework_pr_head_branch_override(
     project_root: &std::path::Path,
     plan: &QueueWorkPlan,
@@ -11655,6 +11703,52 @@ pub(crate) fn handle_queue_work(
         ) {
             anyhow::bail!("{}", msg);
         }
+    }
+
+    // BUG-1761: the suffix allocator already knows when the spec branch is
+    // occupied; expose that collision before claiming status, lease, or tree.
+    // trace:BUG-1761 | ai:codex
+    let preclaim_orchestrator_corroborated = {
+        let root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        orchestrator::detect(&root).is_orchestrated()
+    };
+    let preclaim_review_session = plan.review_target.is_some()
+        || role == "reviewer"
+        || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+    let preclaim_bypass = force_claim
+        || queue_work_plan_wants_pr_head_branch(&plan)
+        || preclaim_review_session
+        || preclaim_orchestrator_corroborated
+        || resume.is_some()
+        || branch_override.is_some();
+    if !preclaim_bypass {
+        let (open_pr, branch_probe_allowed) =
+            match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
+                crate::PrLookup::Found(info) => (Some(info), false),
+                crate::PrLookup::NoOpenPr => (None, true),
+                // Forge failures mean unknown, not "no PR". Skip the branch
+                // refusal too, so an offline or gh-less pickup proceeds.
+                crate::PrLookup::GhMissing
+                | crate::PrLookup::GhFailed(_)
+                | crate::PrLookup::GhUnreachable(_) => (None, false),
+            };
+        let branch = slugify(&plan.scope);
+        let branch_exists =
+            branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+        if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
+            &plan.scope,
+            open_pr
+                .as_ref()
+                .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
+            &branch,
+            branch_exists,
+            preclaim_bypass,
+        ) {
+            anyhow::bail!("{}", msg);
+        };
     }
 
     // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`

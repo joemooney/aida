@@ -65385,6 +65385,10 @@ mod task_1561_pickup_worktree_parent_tests;
 #[path = "tests/bug_1701_drain_routing_tests.rs"]
 mod bug_1701_drain_routing_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_1761_preclaim_collision_tests.rs"]
+mod bug_1761_preclaim_collision_tests;
+
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
     match cmd {
