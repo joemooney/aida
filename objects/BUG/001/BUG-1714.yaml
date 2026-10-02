@@ -71,7 +71,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T12:33:02.774229129Z
-modified_at: 2026-10-02T20:37:03.646647615Z
+modified_at: 2026-10-02T20:45:25.694198788Z
 req_type: Bug
 comments:
 - id: 01a0fe24-d860-7e60-8670-1af414041f65
@@ -93,6 +93,13 @@ comments:
     Rework for the PR #2350 reviewer blocker landed as 363dc78623 (pushed to bug-1714): hold_inconclusive_publication now captures both merge-hold layer results; when BOTH fail it retracts the PR through the shared close path with an honest notice (reports marker + label errors, states the close happened only because the PR could not be made unmergeable, never claims the guards refused the change). Codex's draft test had a hole — a bare temp root short-circuits label sync to Ok(()) as pure-git — so the advisor corrected the fixture (git init + declared github forge with no origin remote, which is unpinnable) and narrowed the over-broad no-'refus' assertion to the refused-notice discriminators ('guards refused', 'Closed automatically:'), since the embedded label error legitimately says 'refusing to call gh unpinned'. Mutation-proven both directions: the test fails on pre-fix production code (closed=[]), passes with the fix; forge_seam_tests 6/6, fmt clean. Independent codex delta review dispatched.
   created_at: 2026-10-02T20:37:03.646647615Z
   modified_at: 2026-10-02T20:37:03.646647615Z
+  session_id: 231094b4-c512-4956-897f-4eb995672b2d
+- id: 01a0fe5d-593e-7ca1-86de-eaf1ba622faa
+  author: joe
+  content: |
+    First codex delta review on 363dc78623 returned REQUEST_CHANGES with one blocker: on a double hold-layer failure the shared retraction path can leave the PR open with no hold layer and no on-PR warning (foreign/unverified ownership, or a failed close call). Verified genuine but bounded — closing a foreign PR is deliberately forbidden, so the honest remaining lever is a non-destructive comment. Fix landed as 626cb4809a: retract_publication_with_notice now reports whether it closed the change; when it did not, the double-failure path posts the warning as a best-effort PR comment stating the PR is OPEN and UNVERIFIED and must not merge unreviewed (never that it was closed). Refused path behavior-unchanged (return ignored). New test inconclusive_preflight_warns_on_the_pr_when_it_can_neither_hold_nor_close drives the foreign-ownership case, mutation-proven against the prior commit. forge_seam_tests 7/7, fmt clean, no new clippy warnings (a needless_borrow the refactor introduced was also fixed). Second codex delta review dispatched on 626cb4809a.
+  created_at: 2026-10-02T20:45:25.694198788Z
+  modified_at: 2026-10-02T20:45:25.694198788Z
   session_id: 231094b4-c512-4956-897f-4eb995672b2d
 history:
 - id: 01a0e801-478f-7b31-9c8f-8a1761335c13
