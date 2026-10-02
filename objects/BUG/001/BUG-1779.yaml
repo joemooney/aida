@@ -1,0 +1,60 @@
+id: 01a0fe76-8414-7722-a00c-b7b32b7d64b0
+spec_id: BUG-1779
+agreed_id: BUG-1779
+title: 'Refresh-request sidecar RMW is unlocked on the reaper and cache_cmd paths: lost updates can defeat A7 crash-loop suppression or drop a newer target head'
+description: |
+  ## Summary
+
+  From the cross-vendor post-merge review of PR #2349 / TASK-1527 (codex
+  REQUEST_CHANGES majors 2+3, advisor-verified with a corrected mechanism).
+
+  The refresh-request sidecar's read/modify/write (`refresh_request.rs`
+  load → mutate → temp-write → rename, temp name PID-only) is serialized for
+  MOST writers because the three reader call sites file the request while
+  holding the RefreshLock, and the worker clears/re-files under its own guard.
+  Codex's claimed reader-vs-worker race does NOT exist.
+
+  But three writers mutate the sidecar WITHOUT the flock:
+
+  1. The spawn-side reaper thread: `record_worker_exit` →
+     `record_failed_attempt` (aida-core/src/db/refresh_worker.rs:200-204),
+     running in the spawning process whenever a worker exits abnormally.
+  2. `aida-cli-lib/src/cache_cmd.rs:168` and `:194` — failure recording after
+     `run_refresh_worker` has returned (its guard already dropped).
+  3. `aida-cli-lib/src/cache_cmd.rs:201` — `clear` after an inline refresh,
+     unlocked; can delete a request just filed for a NEWER head (lost hint
+     until the next stale reader).
+
+  Consequences: a lost update can erase a failure-count increment — undermining
+  exactly A7's three-failures-in-10-minutes suppression, the crash-loop guard —
+  or erase a newer target head. Two same-named PID temp files are unlikely but
+  the RMW lost-update needs no name collision at all.
+
+  ## Acceptance sketch
+
+  1. Every sidecar mutation path is serialized (take the RefreshLock in
+     record_failed_attempt/clear, or a dedicated sidecar flock), including the
+     reaper thread and the cache_cmd post-worker paths.
+  2. A test witnesses the lost update against the shipped code (two interleaved
+     record_failed_attempt RMWs → count 1 instead of 2) and passes after.
+  3. The unlocked `clear` either takes the lock and re-checks the request's
+     target head, or is shown harmless by test.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T21:12:55.060797697Z
+modified_at: 2026-10-02T21:12:55.060797697Z
+req_type: Bug
+tags:
+- cache
+- refresh
+- task-1527-followup
+filed_at:
+  code_sha: 8995bd5429241ed207d492a430a2d4a1844d69d4
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 05aca398-12b9-4f85-8d34-61b3f3d760a9
