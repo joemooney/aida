@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:35:05.605942116Z
-modified_at: 2026-10-02T04:12:42.622549035Z
+modified_at: 2026-10-02T18:40:01.728697689Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -377,6 +377,31 @@ comments:
   created_at: 2026-10-02T04:12:42.622549035Z
   modified_at: 2026-10-02T04:12:42.622549035Z
   session_id: 37866160-9ec6-4e9b-a86b-8da41edb7a26
+- id: 01a0fdea-8ac0-7360-b95a-3b060a027ae0
+  author: joe
+  content: |
+    BUG-1723 AMENDMENT to the 2026-09-28 operator precedence decision (recorded here because the
+    decision lives on this spec and BUG-1679).
+
+    The decision's precedence line read:
+
+        attributable AIDA_BIN > on-disk .aida/config.toml override > running executable > PATH
+
+    The 2026-10-02 BUG-1723 operator decision (config.toml is worktree-resident and UNTRUSTED for
+    launch-authority values) removes the second term. The effective order is:
+
+        attributable AIDA_BIN > running executable > PATH
+
+    Verified on main at fe09d7678e before amending: the on-disk override term was never implemented —
+    aida_bin.rs:278 reads only the AIDA_BIN env var (ancestor-attributed per this spec's rework),
+    resolve()'s override source is env-only, and no code reads AIDA_BIN or any *_bin key from
+    .aida/config.toml. So this amendment changes records, not behavior. The guard landed by BUG-1723
+    (aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs + scripts/config-trust.toml) now fails any
+    attempt to add an executable-selecting key to the branch-local config surface, which makes the
+    removed term unimplementable without advisor signoff.
+  created_at: 2026-10-02T18:40:01.728697689Z
+  modified_at: 2026-10-02T18:40:01.728697689Z
+  session_id: d5ee562a-7ce2-403d-8384-8ef61700260f
 history:
 - id: 01a0e0fd-3532-7760-9c08-3b79df618a20
   author: aida-session-start
