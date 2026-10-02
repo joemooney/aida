@@ -100,12 +100,90 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T17:36:20.106331337Z
-modified_at: 2026-10-02T17:37:58.738280413Z
+modified_at: 2026-10-02T18:04:50.080449043Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a0e68a-df5c-7073-ba6c-4593e16daeb4
   created_at: 2026-10-02T17:36:22.995081622Z
+comments:
+- id: 01a0fdca-5220-7481-930f-2328d4cef12c
+  author: joe
+  content: |
+    IMPLEMENTED (2026-10-02, advisor seat). PR #2343, branch `bug-1773`, base `main`,
+    commit `45a24bf000`. Independent of #2339–#2342: shares no file with any of them.
+
+    ## Per-AC coverage
+
+    | AC | how |
+    |---|---|
+    | AC1 refusal at the current head is surfaced with no marker/label | `request_changes_at_the_current_head_holds_the_pr`, `rejected_…`, `the_seam_surfaces_a_refusal_that_no_marker_backs` |
+    | AC2 no double entry | `a_marker_backed_hold_is_not_duplicated_by_the_corpus_arm` (+ mutation) |
+    | AC3a verdict only at an older head | `a_verdict_only_at_an_older_head_holds_nothing` |
+    | AC3b closed by a merge | `a_verdict_closed_by_a_merge_holds_nothing` |
+    | AC3c Completed spec | `a_blocking_verdict_on_a_completed_spec_holds_nothing` |
+    | AC3d unknown head fails OPEN | `an_unknown_head_holds_nothing_even_with_a_live_refusal` |
+    | AC3e approval at the head | `an_approval_at_the_current_head_holds_nothing`, plus the old-sha prohibition |
+    | AC4 no artifact is not an error | `no_verdict_artifact_holds_nothing` |
+    | AC5 pure function of its inputs, tested at that seam | every test drives `corpus_hold_at_head` / `corpus_held_prs` directly; no network, no clock, no filesystem |
+    | AC6 mutation both directions | six mutations, six disjoint witnesses — table below |
+
+    ## Mutation table (AC6)
+
+    | mutation | failures |
+    |---|---|
+    | drop the `spec_completed` exclusion | 1 — the Completed-spec test, only |
+    | drop the `closed_by_merge` filter | 1 — the closed-verdict test, only |
+    | unknown head returns a hold | 1 — the unknown-head test, only |
+    | treat `Ok(None)` as held | 1 — the older-head test, only |
+    | drop the `has_marker_hold` filter | 1 — the no-double-entry test, only |
+    | delete the `corpus_held_prs` call from the collector | 1 — the STORY-1397 source guard |
+
+    Nothing is green both ways.
+
+    ## Three findings worth carrying
+
+    ### 1. The reported witness records NO sha
+
+    `.aida/review-verdicts/PR-2242.json` — the artifact BUG-1705 is about — holds
+    `verdict`, `findings`, `mode`, `summary` and **no sha provenance of any kind**.
+    The parent's description says the refusal was recorded "against `9cd65761d7`, its
+    exact current head"; the artifact never recorded a sha. So AC1-as-written ("a
+    verdict recorded against a sha that is a PR's current head") was never literally
+    true of the measured instance, and no sha-matching predicate can bind it.
+
+    It reaches the integrity branch instead, which is why an unreconcilable corpus
+    HOLDS rather than releases — load-bearing, not defensive. I had initially
+    asserted the opposite for a qualified approval and the test failed; the
+    implementation was right and the assertion was wrong.
+
+    This points at a producer-side gap of the same shape as BUG-1772 (a writer that
+    records no provenance). NOT filed — deliberately not widening. Worth a look if
+    BUG-1774 touches the writers.
+
+    ### 2. No behaviour change on today's corpus
+
+    None of #2338–#2342 has a verdict artifact under either key, so `held_prs` is
+    byte-identical before and after on this repository right now. Reported as a
+    finding, not dressed as a pass. The witness-shape test is what proves the binding.
+
+    ### 3. One honest mutation gap
+
+    Replacing the `current_sha?` early return with `unwrap_or("")` changed nothing —
+    reconcile's sha matching fails open on an empty sha independently. The
+    unknown-head BEHAVIOUR is witnessed (by the fail-closed mutation); that one line
+    is not. Kept for explicit intent rather than depending on reconcile's internals.
+
+    ## Verification
+
+    `make check-ci-fast` exit 0 (16 gates). `bug_1773` 18 passed. Clippy names no new
+    symbol. `cargo fmt` clean. The STORY-1397 read-only guard passes with the arm and
+    fails without it.
+
+    Full `--lib` suite and CI: running at the time of writing — see the handoff.
+  created_at: 2026-10-02T18:04:50.080449043Z
+  modified_at: 2026-10-02T18:04:50.080449043Z
+  session_id: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
 history:
 - id: 01a0fdb0-94ff-7671-9e6f-c01a3c63166c
   author: joe
