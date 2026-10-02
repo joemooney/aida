@@ -86,12 +86,12 @@ description: |
   5. Whatever mechanism is chosen is documented in `coordination.rs`'s module
      docs, replacing the current `heartbeat_at = started_at` note, so the next
      reader does not re-derive this.
-status: Planned
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T14:18:52.161254856Z
+modified_at: 2026-10-02T19:47:11.461130480Z
 req_type: Bug
 comments:
 - id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
@@ -138,6 +138,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
+- id: 01a0fe28-07e5-7000-8bf8-5980cc713b2d
+  author: joe
+  timestamp: 2026-10-02T19:47:11.461127305Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: Approved
 filed_at:
   code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
   branch: main
