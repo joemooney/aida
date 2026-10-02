@@ -54,6 +54,7 @@ and agent docs are links or generated mirrors. Edit the template master, then ru
 | Agent communication | `docs/agents/session-communication.md` |
 | MCP/client setup | `docs/agents/aida-mcp-install-matrix.md` |
 | CLI reference | `docs/cli/` or `aida <command> --help` |
+| Call-graph navigation (what calls/uses a symbol) | `codegraph callers`/`callees`/`impact` when installed — but it skips files over 1 MiB, so `aida-cli-lib/src/lib.rs` is NOT in its graph; treat "no callers" as unverified until `rg` agrees |
 | Specialized workflow | invoke the matching AIDA skill; do not preload its body |
 
 ## Context economy
