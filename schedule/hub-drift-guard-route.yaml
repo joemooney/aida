@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-01T17:01:58.997171393Z
+last_run: 2026-10-02T01:34:20.251556332Z
 last_by:
   seat: advisor
-  session: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
+  session: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
   vendor: antigravity
 result: done
-note: 'Resolved, no action. aida remote status: all remotes agree on every shared branch and release tag — main at 1660445110fb on both gitlab and origin (the BUG-1752 merge), aida-store at 48d7bb45eb87 on both, release v0.15.0 at 580db5b13a31 on both. The trip was the known origin-only drift from routine store writes (BUG-1746); it clears on aida db sync --push, which this session ran. No force-push, nothing reconciled by hand.'
-due_since: 2026-10-01T22:48:35.527646716Z
-due_reason: on CronJobFailed:hub-drift-guard
+note: 'Reconciled by fast-forward, no force push: gitlab main was 2 behind origin (c096deb7c4..3494256297, ancestry verified before pushing) and aida-store was 7 behind local while origin was in sync, so ''aida remote reconcile --execute'' pushed the union to gitlab only. ''aida remote status'' now reports main, aida-store and release v0.15.0 all in sync on both hubs. Root cause is the known one (BUG-1746): routine store writes go to origin only, and the gitlab mirror fans out only on ''aida db sync --push''; the main-branch lag came from four PRs merged forge-side on origin without a mirror-sync.'
