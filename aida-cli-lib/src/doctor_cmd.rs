@@ -1586,9 +1586,17 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
             "free disk space is {free_gib:.1} GiB, below the {min_free_gib} GiB floor \
              (`[doctor.disk_headroom] min_free_gib`)"
         ),
-        action: "reclaim space — stale worktrees (`aida session reap`), Rust build artifacts \
-                 (`cargo clean`), or raise `min_free_gib` deliberately if the floor no longer \
-                 matches this host"
+        // The remediation must name a command that can actually reclaim THIS
+        // space. `cargo clean` cannot: run inside a worktree it clears the
+        // shared CARGO_TARGET_DIR, which points at the main checkout, so it
+        // deletes the live fleet's cache and leaves every stale one in place.
+        // trace:TASK-1562 | ai:claude
+        action: "reclaim space — stale worktree build caches (`aida worktree reclaim`, dry run \
+                 by default), finished worktrees (`aida session reap`), or raise \
+                 `min_free_gib` deliberately if the floor no longer matches this host. \
+                 `cargo clean` does not reclaim this space: inside a worktree it clears the \
+                 shared CARGO_TARGET_DIR pointing at the main checkout, deleting the live \
+                 cache rather than the stale ones"
             .to_string(),
         safe_heal: false,
     })

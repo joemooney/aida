@@ -367,6 +367,8 @@ mod workflow_hints;
 mod worktree;
 // trace:TASK-634 | ai:claude — pure WorktreeCreate/Remove payload → lease record.
 mod worktree_lease;
+// trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
+mod worktree_reclaim;
 // trace:STORY-711 | ai:claude — advisor-directed worktree lock (`aida lock`), slice 1.
 mod worktree_lock;
 // trace:TASK-1178 | ai:claude — warn-only commit-boundary worktree-scope guard.
@@ -1046,6 +1048,10 @@ mod story_737_delight_tests;
 #[cfg(test)]
 #[path = "tests/task_1555_ci_gate_tiers_tests.rs"]
 mod task_1555_ci_gate_tiers_tests;
+// trace:TASK-1562 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1562_worktree_reclaim_tests.rs"]
+mod task_1562_worktree_reclaim_tests;
 
 /// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
 /// dispatch. The `aida` binary is a stub that calls this — keeping the
@@ -65247,6 +65253,21 @@ fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
         }
         // STORY-714 warm-pool surface.
+        WorktreeCommand::Reclaim {
+            apply,
+            min_age_mins,
+            target_pct,
+            include_live,
+            include_open_prs,
+            json,
+        } => worktree_reclaim::run(&worktree_reclaim::ReclaimOptions {
+            apply: *apply,
+            min_age_mins: *min_age_mins,
+            target_pct: *target_pct,
+            include_live: *include_live,
+            include_open_prs: *include_open_prs,
+            json: *json,
+        }),
         WorktreeCommand::Pool(pool) => handle_worktree_pool_command(pool),
     }
 }
