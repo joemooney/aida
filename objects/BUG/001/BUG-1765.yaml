@@ -91,7 +91,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T19:51:36.388537055Z
+modified_at: 2026-10-02T19:53:48.881834213Z
 req_type: Bug
 comments:
 - id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
@@ -123,6 +123,23 @@ comments:
   content: "DECISION: Option 2 - Stop pretending the TTL applies.\n\n### Decision & Rationale\n\nWe will remove the TTL/heartbeat mechanism for session leases and instead rely on the existing local liveness checks (e.g. verifying the worktree and process). \n\nAs noted in the spec, adding a reliable heartbeat for short-lived processes (like `aida session start` which exits immediately) is difficult without introducing a persistent background daemon for every session. Failing to heartbeat means the cross-clone registry silently stops coordinating after 30 minutes, which leads to duplicate work and merge races.\n\nIt is better to admit that we cannot reliably probe the liveness of a remote clone (and perhaps require manual intervention or an escape hatch) than to silently expire the lease and allow conflicting work.\n\n### Acceptance Criteria Updates\nThe ACs will follow the implementation of Option 2: `decide_claim` must no longer reclaim session leases purely due to a 1800s TTL expiry."
   created_at: 2026-10-02T14:18:40.166680064Z
   modified_at: 2026-10-02T14:18:40.166680064Z
+- id: 01a0fe2e-1851-7340-ba7e-088be719d6d2
+  author: joe
+  content: |-
+    AC1 DECISION (advisor seat, relay session #27, 2026-10-02): Option 2 — probe, don't pretend. No heartbeat. Rationale and shape:
+
+    (1) WHY NOT OPTION 1: the claim's creating process exits the instant the lease is written; a reliable refresher needs a long-lived driver that doesn't exist (a hook is host-tool-specific and silently absent for non-Claude tooling; a sweep is a new daemon with its own liveness problem). A heartbeat that fires only for SOME sessions is worse than none — it would make the TTL look authoritative exactly when it isn't.
+
+    (2) SAME-HOST: a non-process-backed claim from a same-host clone gets a REAL liveness probe, reusing the exact matrix the LOCAL lease table already trusts (lease_state_for: worktree exists + live claude + age, per BUG-1764 clause 3 doctrine that same-host claims are fully probeable). Probe = read the holder clone's own .aida/sessions/ table at claim.clone_path, take the freshest lease whose scope matches (case-insensitive, same rule as find_scope_lease_conflict), classify it; Live or Dormant => the claim is live: decide_claim REFUSES and claim_staleness reports live, regardless of TTL age. Dormant counts as live because the worktree and lease still stand — reclaiming over a paused session's WIP is the duplicate-work disaster this registry exists to prevent; --force remains the escape.
+
+    (3) THE PROBE CAN ONLY ADD LIVENESS, NEVER SUBTRACT IT (inverse of BUG-1764's 'pid can only add staleness'): probe finds nothing (remote host, clone gone, no matching lease, Stale state, unreadable) => fall through to the existing clauses unchanged. This kills the fresh-claim race (a peer probing between the cross-clone claim write and the local lease write sees nothing and is governed by TTL exactly as today — it cannot insta-reclaim), and it keeps AC3: a genuinely gone holder still reclaims via the TTL backstop.
+
+    (4) REMOTE HOST: TTL backstop unchanged. Nothing short of a heartbeat can see a remote peer, and refusing forever would trade false expiry for permanent deadlock — AC3's own warning. The module docs will say this plainly (the registry's cross-HOST liveness is TTL-bounded, 30 min) instead of promising a slice-2 heartbeat that never came.
+
+    (5) SURFACES: decide_claim and claim_staleness both grow an injected session_live probe (pure, unit-testable); partition_claims builds the real probe once per call (one process-table scan), so aida session leases / status / doctor / team all inherit AC4. Lock paths pass a constant-false probe (lock claims are process-backed; there is no session to probe).
+  created_at: 2026-10-02T19:53:48.881834213Z
+  modified_at: 2026-10-02T19:53:48.881834213Z
+  session_id: 2ac91c1e-8d4e-42a6-b079-e54f997d41e4
 history:
 - id: 01a0fb3a-6c76-7133-9c90-ac6be4867834
   author: joe
