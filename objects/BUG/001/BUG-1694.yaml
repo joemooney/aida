@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-09-27T19:30:27.099685432Z
+modified_at: 2026-10-02T19:01:19.292605687Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -33,6 +33,71 @@ comments:
   created_at: 2026-09-27T19:30:26.521730888Z
   modified_at: 2026-09-27T19:30:26.521730888Z
   session_id: d7986875-d11b-4a5b-a34d-75f358d3671e
+- id: 01a0fdfe-093c-7a30-8c14-ab9684403f65
+  author: claude-product
+  content: |
+    SKETCH (BUG-1694) — atomic path claim replaces check-then-remove in registration clear
+
+    PROBLEM. `clear_missing_worktree_registration` (aida-cli-lib/src/session_reap.rs:1021-1067) guards
+    with `worktree_path.exists()` three times, then `remove_dir_all(admin_dir)`. Between the final
+    check (line 1060) and the remove, a worktree restored at the path is orphaned (its `.git` file
+    points at the admin dir we delete). More checks only move the window.
+
+    DESIGN FORK CONSIDERED AND REJECTED: shared flock. The worktree pool already serializes creation
+    under `pool.lock` (`worktree_pool::with_state_lock`), so reap could take the same lock. Rejected as
+    the primary mechanism because it binds only pool creators: session leases record `payload.cwd`
+    (worktree_lease.rs:110) — a session can live in an `aida worktree add` epic tree, a hand-made
+    `git worktree add` tree, or a restored directory, none of which take the pool lock. A lock only two
+    of N creators hold is not mutual exclusion.
+
+    CHOSEN MECHANISM — the spec's second branch: an operation that fails closed when the path is
+    occupied. The shared resource every creator must contend on is the path itself, so claim it
+    atomically with `mkdir(2)`:
+
+    1. Keep the existing entry/`before_clear`/final `exists()` checks as cheap early declines
+       (TASK-1543 behavior unchanged).
+    2. New seam `after_final_check: impl FnOnce()` fires after the final check — the BUG-1694 test
+       injection point. Plumbed via a new `reap_one_with_clear_hooks(...)`; the existing
+       `reap_one_with_missing_worktree_hook` signature and the TASK-1543 test stay byte-identical.
+    3. Claim: `create_dir_all(parent)` (parent may be gone; same courtesy git worktree add gets after
+       BUG-1700), then `std::fs::create_dir(worktree_path)` — atomic, EEXIST if anything reappeared.
+       ANY error → decline: keep the registration, report the decline. Fail closed.
+    4. On successful claim: `remove_dir_all(admin_dir)`, then release the claim with non-recursive
+       `std::fs::remove_dir(worktree_path)` — if a creator populated the sentinel meanwhile (git
+       worktree add accepts an empty dir), ENOTEMPTY leaves their directory alone. Never recursive
+       on the worktree path.
+
+    WHY THIS IS MUTUAL EXCLUSION, NOT A FOURTH CHECK. Orphaning requires the ORIGINAL directory
+    restored at the path (only its `.git` names the admin dir being removed — a fresh
+    `git worktree add` always mints a NEW admin dir, so removing the stale one never harms it; git
+    suffixes the name on collision). A whole-directory restore (`mv`, untar, git worktree add) must
+    materialize the path, and the claim holds the path for the whole removal window: either the claim
+    wins and the restore cannot land, or the restore wins and the claim fails EEXIST → decline. There
+    is no interleaving in which both proceed. The one residual writer is a tool that writes THROUGH an
+    existing empty directory (`cp -rT`/rsync into the sentinel); no lock protocol binds such a writer
+    either, and the pool flock was rejected above for the same reason on a larger class.
+
+    REPORTING. Return type goes from `bool` to a three-way outcome (`Cleared` / `Declined` /
+    `NoRegistration`), because the caller (session_reap.rs:1000-1010) today reports the decline only
+    when `worktree_path.exists()` at return time — a claim that failed EEXIST must report "declined;
+    registration kept" even if the path vanished again. Message text stays in the existing
+    "reaped — lease released (…; registration kept)" family.
+
+    TESTS (fixture-based, no sleeps, no polling).
+    - NEW `bug_1694_reap_declines_registration_clear_when_path_reappears_after_final_check`: TASK-1543
+      fixture shape, recreation (dir + original `.git` file + content) injected via the NEW seam;
+      assert `.git/worktrees/<name>` admin dir survives, content survives, outcome reports the decline.
+      Mutation proof: with the seam in place but claim reverted to bare remove_dir_all, this test fails.
+    - NEW claim-success test: nothing reappears → registration cleared and sentinel gone (no
+      `worktree_path` left behind).
+    - TASK-1543 reappearance test passes unchanged (its hook fires before the second check, which
+      still declines early).
+
+    BLAST RADIUS. One function + one new seam + one enum; no behavior change on any path where the
+    worktree did not reappear, except the transient sentinel directory during clear.
+  created_at: 2026-10-02T19:01:19.292605687Z
+  modified_at: 2026-10-02T19:01:19.292605687Z
+  session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
 history:
 - id: 01a0e458-e89b-7d73-88ff-54128f30291b
   author: joe
