@@ -150,6 +150,9 @@ fn phase_failure_comments_on_the_parent_and_files_no_spec() {
 fn the_note_carries_phase_seat_branch_commit_and_failure_text() {
     let (_tmp, root) = project_with_parent_spec("TASK-9002");
     let head = run_git(&root, &["rev-parse", "HEAD"]);
+    // `Seat: ci` is the NO-role spelling, so clear the key under the env lock
+    // rather than trusting the ambient environment.
+    let _no_role = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
 
     let (_, store) = record(&root, "TASK-9002", "2026-10-02T01:00:00Z");
     let body = note_body(&store, "TASK-9002");
@@ -328,13 +331,12 @@ fn the_ledger_line_still_carries_every_failure_field() {
 /// non-default seat says so rather than reading as the phase's default.
 #[test]
 fn the_seat_names_the_session_role_when_one_is_set() {
-    let _guard = crate::test_env::env_lock();
     let (_tmp, root) = project_with_parent_spec("TASK-9008");
-    // SAFETY: serialized by `env_lock`, the crate's convention for the
-    // process-global environment.
-    unsafe { std::env::set_var("AIDA_SESSION_ROLE", "implementer") };
+    // The guard holds `ENV_LOCK` for its whole lifetime, so it both sets the
+    // key and serialises against every sibling that reads it. A raw
+    // `set_var` here would trip `test_env`'s source-scanning guard.
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let (_, store) = record(&root, "TASK-9008", "2026-10-02T01:00:00Z");
-    unsafe { std::env::remove_var("AIDA_SESSION_ROLE") };
 
     let body = note_body(&store, "TASK-9008");
     assert!(
