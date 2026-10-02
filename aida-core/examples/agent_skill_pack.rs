@@ -26,7 +26,11 @@ fn main() {
         },
         "check" => match check_portable_pack(root, PORTABLE_PACK, &config) {
             Ok(drift) if drift.is_empty() => {
-                println!("  OK: .agents/skills (aida-* pack matches aida-core/templates)");
+                if root.join(PORTABLE_PACK).is_dir() {
+                    println!("  OK: .agents/skills present and current (aida-* pack matches aida-core/templates)");
+                } else {
+                    println!("  OK: .agents/skills absent (clean no-op for fresh clones and CI)");
+                }
             }
             Ok(drift) => {
                 for item in drift {
