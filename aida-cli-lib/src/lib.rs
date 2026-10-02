@@ -49376,6 +49376,12 @@ mod task_957_claim_tests;
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
 
+// `held_prs` derived from the verdict corpus, so a refusal recorded outside
+// `aida review record` is still surfaced. trace:BUG-1773 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1773_corpus_held_prs_tests.rs"]
+mod bug_1773_corpus_held_prs_tests;
+
 // `aida ps` flags a live seat whose mail identity would fall back to the
 // shell user. trace:TASK-1451 | ai:claude
 #[cfg(test)]
@@ -83317,7 +83323,7 @@ fn collect_awaiting_report_inner(
     // OPEN PRs: shown with their reason and whose action it is. Needs the PR
     // snapshot to tell an open PR from a stale marker, so the notice path
     // (no snapshot) skips it exactly as it skips `mergeable_prs`.
-    let held_prs: Vec<awaiting_you::HeldPrItem> = match &open_prs {
+    let mut held_prs: Vec<awaiting_you::HeldPrItem> = match &open_prs {
         None => Vec::new(),
         Some(all_prs) => hold_records
             .iter()
@@ -83389,6 +83395,50 @@ fn collect_awaiting_report_inner(
         backend.list_summaries(&aida_core::ListFilter::default())
     }
     .unwrap_or_default();
+    // BUG-1773: a rework hold DERIVED from the verdict corpus, for an open PR
+    // with no marker of its own. Only `handle_review_record_at` writes a
+    // `.aida/merge-holds/PR-<n>` marker, so a refusal recorded by any other
+    // producer (the reviewer skill's direct write, `stamp_pr_review_verdict`,
+    // a hand-edited file) was invisible here — BUG-1705 measured exactly that
+    // on PR #2242, which sat CLEAN and unlisted with `request-changes` at its
+    // exact head. The predicate is the POSITIVE form (an outstanding refusal AT
+    // the current head), not `local_verdict_blocks_merge`, which is the
+    // fail-closed merge test and would list every PR carrying a stale verdict.
+    //
+    // STORY-1397's contract is preserved: this reads the corpus and writes
+    // nothing — no marker, no label. Arming the gate is BUG-1774.
+    // trace:BUG-1773 | ai:claude
+    if let Some(all_prs) = open_prs.as_ref() {
+        let mut status_by_spec = std::collections::HashMap::new();
+        insert_summary_statuses(&mut status_by_spec, &summaries);
+        let candidates: Vec<awaiting_you::CorpusHoldCandidate> = all_prs
+            .iter()
+            .map(|pr| {
+                let spec = worktree_lease::spec_id_from_branch(&pr.head_branch);
+                let mut keys = vec![format!("PR-{}", pr.number)];
+                keys.extend(spec.clone());
+                let bodies = keys
+                    .iter()
+                    .map(|key| review_verdict::verdict_path(project_root, key))
+                    .filter_map(|path| std::fs::read_to_string(path).ok())
+                    .collect();
+                let spec_completed = spec.as_deref().is_some_and(|id| {
+                    status_by_spec
+                        .get(&id.to_ascii_uppercase())
+                        .is_some_and(|status| status == "completed")
+                });
+                awaiting_you::CorpusHoldCandidate {
+                    pr: pr.number,
+                    title: pr.title.clone(),
+                    head_sha: pr.head_sha.clone(),
+                    bodies,
+                    spec_completed,
+                    has_marker_hold: held_numbers.contains(&pr.number),
+                }
+            })
+            .collect();
+        held_prs.extend(awaiting_you::corpus_held_prs(&candidates));
+    }
     // BUG-472: the findings breadcrumb must mirror `aida findings list` — DRAFT
     // specs carrying a from-* tag only. Building it from the unfiltered
     // `summaries` also counts completed/rejected specs that still carry their

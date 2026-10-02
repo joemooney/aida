@@ -1330,6 +1330,88 @@ pub(crate) fn project_held_pr(
     }
 }
 
+/// Project a corpus-derived rework hold (BUG-1773). Presents as `rework` so it
+/// is indistinguishable in shape from a marker-backed rework hold — the reader
+/// should not have to know which producer armed it — but the detail names the
+/// head and the finding count, which is what makes a corpus-derived row
+/// actionable without a marker to read.
+// trace:BUG-1773 | ai:claude
+pub(crate) fn project_corpus_held_pr(
+    pr: u64,
+    title: &str,
+    hold: &crate::review_verdict::CorpusHold,
+) -> HeldPrItem {
+    let short: String = hold.sha.chars().take(12).collect();
+    let detail = match &hold.integrity_error {
+        Some(message) => format!("review verdicts cannot be reconciled at {short}: {message}"),
+        None => {
+            let findings = match hold.findings {
+                0 => "no itemised findings".to_string(),
+                1 => "1 finding".to_string(),
+                n => format!("{n} findings"),
+            };
+            format!(
+                "`{}` recorded at {short} ({findings}); no hold marker — derived from the verdict corpus",
+                hold.verdict_raw
+            )
+        }
+    };
+    HeldPrItem {
+        pr,
+        title: title.to_string(),
+        reason_kind: crate::merge_hold::HoldReasonKind::Rework
+            .as_str()
+            .to_string(),
+        detail,
+        action: "implementer: address the review findings; the hold lifts after approval"
+            .to_string(),
+    }
+}
+
+/// One open PR's resolved inputs for the corpus-derived hold decision
+/// (BUG-1773). The caller does the filesystem and store reads; everything the
+/// decision needs is on this struct, so the decision itself stays pure and the
+/// "no double entry" rule has a test that does not need a repository.
+// trace:BUG-1773 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct CorpusHoldCandidate {
+    pub pr: u64,
+    pub title: String,
+    /// The PR's current head. `None` when the snapshot omitted it — this view
+    /// then holds nothing (it fails OPEN; the merge gate fails closed).
+    pub head_sha: Option<String>,
+    /// Raw verdict artifacts keyed to this PR (`PR-<n>` and the spec).
+    pub bodies: Vec<String>,
+    /// The owning spec is `Completed` — BUG-1529's criterion-4 escape.
+    pub spec_completed: bool,
+    /// A `.aida/merge-holds/PR-<n>` marker already speaks for this PR.
+    pub has_marker_hold: bool,
+}
+
+/// Derive the rework holds the verdict corpus implies, for open PRs that have no
+/// marker of their own. Pure: no filesystem, no network, no clock.
+// trace:BUG-1773 | ai:claude
+pub(crate) fn corpus_held_prs(candidates: &[CorpusHoldCandidate]) -> Vec<HeldPrItem> {
+    candidates
+        .iter()
+        // A marker-backed hold is already projected by `project_held_pr`, and it
+        // carries the richer typed reason. One row per PR, never two.
+        .filter(|candidate| !candidate.has_marker_hold)
+        .filter_map(|candidate| {
+            let hold = crate::review_verdict::corpus_hold_at_head(
+                &candidate.bodies,
+                candidate.head_sha.as_deref(),
+                candidate.spec_completed,
+            )?;
+            Some(project_corpus_held_pr(
+                candidate.pr,
+                &candidate.title,
+                &hold,
+            ))
+        })
+        .collect()
+}
+
 /// Seat-aware projection. Exact stable principal equality is deliberately used:
 /// sharing a role or vendor does not make two agents the same reviewer.
 // trace:STORY-1397 | ai:codex
