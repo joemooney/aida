@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-10-02T23:00:24.788530022Z
+modified_at: 2026-10-02T23:14:18.685468332Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -176,6 +176,12 @@ comments:
   created_at: 2026-10-02T23:00:24.788530022Z
   modified_at: 2026-10-02T23:00:24.788530022Z
   session_id: e4f254c2-1e5a-46ad-87d7-b4769d85d440
+- id: 01a0fee5-a7bd-7c91-bfd5-6b5aca88eb1b
+  author: joe
+  content: 'ADVISOR REVIEW DISPOSITION (relay #14, PR #2358): MERGE-READY pending the known CI guard clear. Codex (read-only, static) returned REQUEST_CHANGES with two blockers; both demoted after mechanical verification. (1) ''Custom hook containing the banner can be overwritten via the remedy'': the overwrite path (installer rewrites when existing contains MIRROR_HOOK_MARKER and generated_text_matches fails) is PRE-EXISTING — generated_text_matches appears nowhere in this PR''s remote_create.rs diff; the new doctor check follows AC2''s prescribed banner recognition and a foreign hook without the banner produces no finding. Residual (noted, non-blocking): an operator who hand-edits AIDA''s generated hook gets a finding whose remedy replaces their edits wholesale — the artifact''s own banner documents it as generated/safe-to-delete. (2) ''Trailing-space-after-backslash compares clean'': FALSE — generated_text_matches is normalize_lf + whole-string trim_end (aida-core/src/scaffolding/mod.rs:432), no per-line tolerance; a mid-file trailing space is real drift and fires the finding. Residual CRLF mask is the installer''s own deliberate BUG-1555 gate; exact-match in the doctor would create a finding the remedy declines to fix. Wiring verified: scan registered behind doctor_category_selected(mirror-hook-drift); repo_hooks_dir shared by installer and scan (git rev-parse --git-path hooks, worktree/hooksPath honored). Merge condition: Build green after update-branch once #2353 lands (current failure is the expected bug_1723 inventory guard, 1 failed / rest pass expected).'
+  created_at: 2026-10-02T23:14:18.685468332Z
+  modified_at: 2026-10-02T23:14:18.685468332Z
+  session_id: a4861695-0967-4442-a984-92e100a5580a
 history:
 - id: 01a0f28c-4fbb-74f2-b46b-ec100afd2b2b
   author: joe
