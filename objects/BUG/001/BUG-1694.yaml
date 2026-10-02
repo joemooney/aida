@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-10-02T19:03:21.472427573Z
+modified_at: 2026-10-02T19:03:25.084053970Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -113,6 +113,33 @@ comments:
   modified_at: 2026-10-02T19:03:21.472427573Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
   relayed_from: advisor
+- id: 01a0fdff-f49c-7b83-9f72-bb3e000d4373
+  author: claude-product
+  content: |
+    SKETCH REVISION 2 (BUG-1694) — advisor signoff round 1 returned REQUEST-CHANGES with two
+    conditions; both accepted. Deltas against the revision-1 sketch:
+
+    CONDITION 1 — admin-removal failure handling. The clear's outcome is decided solely by the
+    `remove_dir_all(admin_dir)` result: `Ok` → `Cleared`; `Err` → `Declined` (registration treated as
+    kept; a partial removal is reported as a decline, never as `Cleared`). The sentinel release runs
+    unconditionally after the removal attempt, before the outcome is returned.
+
+    CONDITION 2 — path interpretation and sentinel lifecycle. `create_dir_all(parent)` is DROPPED: the
+    claim is a single `std::fs::create_dir(worktree_path)` on the same lexical path the function
+    already uses for the `gitdir` identity comparison (session_reap.rs:1050,1059), so claim and
+    identity-match cannot diverge, and no directory is ever created through a symlinked or missing
+    parent. A missing parent surfaces as ENOENT → decline (fail closed; stale registration is the
+    accepted cost, and in practice the worktree parent dir outlives individual trees). Sentinel
+    release: non-recursive `std::fs::remove_dir(worktree_path)` attempted on EVERY path after a
+    successful claim — both admin-removal outcomes — with its own failure (e.g. ENOTEMPTY because a
+    creator populated the empty dir) ignored and the directory left alone.
+
+    Everything else from revision 1 stands: the new after-final-check seam via
+    `reap_one_with_clear_hooks`, the three-way outcome enum, the decline reporting in the caller, the
+    two new tests plus TASK-1543 unchanged, mkdir-claim rationale and pool-flock rejection.
+  created_at: 2026-10-02T19:03:25.084053970Z
+  modified_at: 2026-10-02T19:03:25.084053970Z
+  session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
 history:
 - id: 01a0e458-e89b-7d73-88ff-54128f30291b
   author: joe
