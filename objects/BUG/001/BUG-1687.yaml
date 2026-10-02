@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T03:48:48.190574503Z
+modified_at: 2026-10-02T06:53:48.209612245Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -42,6 +42,11 @@ comments:
   created_at: 2026-09-27T17:08:01.422889244Z
   modified_at: 2026-09-27T17:08:01.422889244Z
   session_id: 3266fac0-5feb-463f-a891-7a3a066739c1
+- id: 01a0fb63-f931-7e13-a3be-0b4eb01454fc
+  author: joe
+  content: 'I was able to reproduce the bug and verify that `aida list --status deferred` was failing because ''deferred'' is not a value in the RequirementStatus enum. \n\nI fixed it by:\n1. Updating `aida list`''s argument parsing in `aida-cli-lib/src/git_backend_cmd.rs` to explicitly intercept the `--status deferred` positional/flag shorthand. It now applies the deferred list-filter and bypasses the enum deserialization.\n2. In `aida show`, if `req.deferred` is true, the human output surfaces `Status: · Deferred (was <Status>)` prominently, and the TOON output emits `status: deferred` directly, so both surfaces agree and agents no longer read stale non-deferred status.\n\nAdded an integration test in `aida-cli-lib/src/tests/bug_1687_defer_status_tests.rs` covering both surfaces and the round trip.'
+  created_at: 2026-10-02T06:53:48.209612245Z
+  modified_at: 2026-10-02T06:53:48.209612245Z
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
