@@ -100,7 +100,112 @@ pub(crate) fn handle_cache_command(
         CacheCommand::Verify { fix, json } => {
             return handle_cache_verify(backend, *fix, *json);
         }
+        CacheCommand::Refresh {
+            worker,
+            if_requested,
+            store,
+            cache,
+        } => {
+            return handle_cache_refresh(backend, *worker, *if_requested, store, cache);
+        }
     }
+    Ok(())
+}
+
+/// `aida cache refresh`: plain form refreshes strictly inline; `--worker` is
+/// the detached single-flight worker (amendment A8: explicit paths, exits by
+/// outcome); `--if-requested` is the schedule-tick form, a silent no-op
+/// without a pending request.
+// trace:TASK-1527 | ai:claude
+fn handle_cache_refresh(
+    ambient: &aida_core::CachedGitBackend,
+    worker: bool,
+    if_requested: bool,
+    store: &Option<std::path::PathBuf>,
+    cache: &Option<std::path::PathBuf>,
+) -> Result<()> {
+    use aida_core::db::{refresh_request, refresh_worker};
+
+    // A worker trusts only its explicit paths, never the inferred project
+    // (amendment A8). The scheduler and plain forms use the ambient backend.
+    let explicit;
+    let backend = match (store, cache) {
+        (Some(store), Some(cache)) => {
+            explicit = aida_core::CachedGitBackend::open(store, cache)?;
+            &explicit
+        }
+        (None, None) => ambient,
+        _ => anyhow::bail!("--store and --cache must be passed together"),
+    };
+
+    if worker {
+        // The runtime cap (sketch: max(120 s, 2x the last full rebuild)) is a
+        // watchdog that exits nonzero: the transaction rolls back under WAL,
+        // the flock dies with the process, and the request file survives for
+        // the next reader or tick.
+        let cap = refresh_worker::worker_runtime_cap(backend);
+        std::thread::spawn(move || {
+            std::thread::sleep(cap);
+            eprintln!(
+                "refresh worker exceeded its runtime cap ({}s); exiting",
+                cap.as_secs()
+            );
+            std::process::exit(3);
+        });
+        let cache_path = backend.cache().path().to_path_buf();
+        return match refresh_worker::run_refresh_worker(backend) {
+            Ok(outcome) => {
+                eprintln!(
+                    "{}: refresh worker: {:?} at {}",
+                    chrono::Utc::now().to_rfc3339(),
+                    outcome,
+                    cache_path.display()
+                );
+                Ok(())
+            }
+            Err(e) => {
+                refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
+                Err(e)
+            }
+        };
+    }
+
+    if if_requested {
+        let cache_path = backend.cache().path();
+        let Some(request) = refresh_request::load(cache_path) else {
+            return Ok(());
+        };
+        if request.spawning_suppressed(chrono::Utc::now()) {
+            println!(
+                "cache refresh pending at {} but suppressed after repeated worker failures{}; \
+                 run `aida cache refresh` to refresh inline",
+                request.target_head,
+                request
+                    .last_error()
+                    .map(|e| format!(" (last: {e})"))
+                    .unwrap_or_default()
+            );
+            return Ok(());
+        }
+        // The tick already runs us in a separate process: do the work inline
+        // rather than spawning a third process.
+        let outcome = refresh_worker::run_refresh_worker(backend).inspect_err(|e| {
+            let _ = refresh_request::record_failed_attempt(cache_path, &format!("{e:#}"));
+        })?;
+        println!("cache refresh --if-requested: {outcome:?}");
+        return Ok(());
+    }
+
+    backend.ensure_cache_fresh_with_schema_retry()?;
+    refresh_request::clear(backend.cache().path())?;
+    println!(
+        "{}: cache fresh at {}",
+        "OK".green(),
+        backend
+            .cache()
+            .source_head_sha()?
+            .unwrap_or_else(|| "(no head)".into())
+    );
     Ok(())
 }
 
