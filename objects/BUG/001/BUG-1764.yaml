@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T04:13:57.890825536Z
-modified_at: 2026-10-02T04:25:53.262492485Z
+modified_at: 2026-10-02T05:26:40.333602580Z
 req_type: Bug
 comments:
 - id: 01a0fadc-8d6e-7bf3-83c1-859dc5980e29
@@ -128,6 +128,191 @@ comments:
   created_at: 2026-10-02T04:25:53.262492485Z
   modified_at: 2026-10-02T04:25:53.262492485Z
   session_id: 37866160-9ec6-4e9b-a86b-8da41edb7a26
+- id: 01a0fb14-33cd-7c93-a7e7-3b7072e8d588
+  author: joe
+  content: |
+    Advisor sketch + survey correction, before implementation. Two corrections to the
+    record, then the design.
+
+    ## Correction 1 — the filed list undercounts. There are THREE readers, not one.
+
+    The comment above names `print_cross_clone_leases` as "a clear fix site, not a
+    TTL-enforcement gap across the subsystem". Re-running the survey against every
+    caller of `coordination::list_claims` shows the gap IS across the subsystem:
+
+    | # | function | surface(s) | expiry predicate today |
+    |---|---|---|---|
+    | 1 | `print_cross_clone_leases` (`lib.rs:47861`) | `aida session leases` | none — filters only `clone_path != ours` |
+    | 2 | `print_status_coordination_section` (`lib.rs:83667`) | `aida status` / `aida status --full` (`status_cmd.rs:684`) **and `aida doctor`** (`doctor_cmd.rs:5571`, passes `show_full = true`) | none — and it does not filter by clone at all |
+    | 3 | `team::build_team_view` (`team.rs:144`) | `aida team` | none — field is literally named `active_claims` |
+
+    **Site 2 is the worst instance and the comment above explicitly mis-acquits it.**
+    It says the ~211 same-clone lease files "are routed to the LOCAL lease table, which
+    does apply a liveness check, so the dead ones are correctly hidden... nothing
+    misreports." That is true of `aida session leases` only. `print_status_coordination_section`
+    takes `list_claims` whole, with **no clone filter at all**, under a header reading
+    "Cross-clone coordination" and a doc comment reading "the ACTIVE `coordination/`
+    claims". Measured on `imac` just now, `aida status --full` renders all 211,
+    oldest first:
+
+        ADR-7      imac  implementer  1   8078324s     <- 93.5 days, ttl_secs = 1800
+        BUG-1092   imac  implementer  1   1689351s     <- 19.5 days
+        BUG-1109   imac  implementer  1   1679660s
+        BUG-1112   imac  implementer  1   1673132s
+        BUG-1130   imac  implementer  1   1587261s
+        ... 206 more
+
+    So does `aida doctor`. The collapsed non-`--full` arm prints "N active claims",
+    i.e. **211 active claims** on a host holding zero. Clause 5 above (file GC) stays
+    out of scope and this does not reopen it — these files may stay on disk forever;
+    what must stop is four commands calling them ACTIVE.
+
+    ## Correction 2 — AC1 reproduces today, on a cleaner case than the one filed.
+
+    The nightshift leases Joe hand-cleared are gone, but the defect is unchanged. One
+    foreign lease remains and it isolates AC1 with no pid collision in play:
+
+        $ aida session leases
+        Cross-clone leases (other clones)
+        scope      host    node  agent        age
+        BUG-1817   spock   4     implementer  26055s
+          /home/joe.mooney/ai/aida
+
+        $ cat .aida-store/coordination/leases/bug-1817-caedc57e6d01a5dd.toml
+        host = "spock"            pid = 1134977
+        pid_start_time = "2026-10-01T22:05:10+00:00"
+        ttl_secs = 1800           process_backed = false
+
+    `age 26055s` against its own `ttl_secs = 1800` — **14x past the TTL it carries**,
+    still rendered. This is the AC1 predicate failing with nothing else confounding it.
+
+    ## The design
+
+    ### Where the predicate goes
+
+    **Not** inline in `print_cross_clone_leases`. One pure function in `coordination.rs`,
+    beside `decide_claim`, consumed by all three readers:
+
+        pub(crate) fn claim_staleness(
+            claim: &Claim,
+            now: DateTime<Utc>,
+            our_host: &str,
+            is_alive: impl Fn(u32, Option<&str>) -> bool,
+        ) -> Option<String>      // Some(reason) = stale, None = presumed live
+
+    Liveness injected as a closure, mirroring `decide_claim`'s existing signature, so
+    every clause is unit-testable without spawning a process. This is the same shape
+    the subsystem already uses — not a new pattern.
+
+    ### What the predicate says, and why it is NOT a pid check
+
+    This resolves the tension between clause 2 ("require `pid_start_time` to match")
+    and a fact the spec does not mention: **a session lease is not `process_backed`.**
+    `Claim::process_backed` is `false` for every lease here (verified on the BUG-1817
+    file above), and its own doc comment says why — the recorded `pid` is the ephemeral
+    `aida session start` shell, which "exits the instant the lease is written", so its
+    death says nothing. `decide_claim` already honours this and gates its pid fast path
+    on `holder.process_backed`.
+
+    So the predicate is **TTL-first**, and the pid probe only ever ADDS staleness:
+
+    1. `now - heartbeat_at > ttl_secs` -> stale. This clause alone catches all 8
+       nightshift leases, the 210 local ones, and BUG-1817.
+    2. `process_backed && host == our_host && !strictly_alive(pid, pid_start_time)`
+       -> stale. Mirrors `decide_claim` exactly.
+    3. otherwise -> presumed live.
+
+    **A live pid must never rescue an aged-out lease.** That is the precise fix for
+    clause 2's worry. The filed worry is that pid 2 (`kthreadd`) makes a lease "read as
+    alive forever" — but under a TTL-first predicate no pid value can grant life, so
+    the collision is neutralised structurally rather than by out-arguing the pid probe.
+    Clause 2's strictness still matters for clause 2's own sake, in `strictly_alive`.
+
+    ### `strictly_alive` is NEW; do not change `process_identity_is_alive`
+
+    `aida_core::liveness::process_identity_is_alive` returns **`true` when
+    `recorded_start_time` is `None`** (`liveness.rs:699`) — the documented TASK-1284
+    degrade, "so legacy lock holders are never reclaimed merely because their record
+    predates process identities". Clause 2 asks for the opposite (missing start time =
+    unverifiable, not live). **Do not flip that function.** It is the reclaim predicate
+    for the drain and solo locks, where wrongly reclaiming a live drain is far more
+    destructive than displaying a stale row. Add a strict local helper instead:
+
+        pid alive? no  -> dead
+        pid alive, recorded start absent      -> UNVERIFIABLE (treat as dead for display)
+        pid alive, recorded start != actual   -> dead (the collision case)
+        pid alive, recorded start == actual   -> alive
+        pid alive, actual unreadable          -> unverifiable (treat as dead for display)
+
+    Treating unverifiable as dead is safe **for display and for clause 4's opt-in
+    clear**, and must not be reused as a reclaim predicate for drain/solo.
+
+    ### Clause 3 — same host, different clone
+
+    `print_cross_clone_leases` classifies by `clone_path` alone, so a same-host lease is
+    filed as if it were unreachable. Clause 3 is satisfied by the predicate taking
+    `our_host` and applying clause 2 whenever `claim.host == our_host`, regardless of
+    `clone_path`. No remote probe, no new transport. I am NOT renaming the section
+    header in this change — the description calls the "cross-clone" framing misleading
+    and it is, but renaming four surfaces is a separate, cosmetic change and clause 3
+    asks for correct *evaluation*, not new wording.
+
+    ### Clause 1 — hide by default, show under `--all`, mirroring what exists
+
+    `aida session leases` already has exactly this UX for the LOCAL table: `--all`
+    "Include stale leases... every lease renders with a state column (live / dormant /
+    stale)". Extend the same contract to the foreign section rather than inventing one:
+    default hides stale foreign claims, `--all` shows them with the reason. Same for
+    `aida status --full` and `aida doctor`: count and render only non-stale claims, and
+    when any were suppressed say so in one line with the command that reveals them.
+    `team::active_claims` filters to non-stale (the field name is a promise).
+
+    ### Clause 4 — clearing a foreign lease
+
+    `aida session end --spec` cannot reach one (measured in the description:
+    `No lease found for spec BUG-1689`) and `session reap` requires Done + merged +
+    exited. `coordination::release_claim(store_root, scope, clone_path)` already exists
+    (`coordination.rs:560`) and is already called on the normal end path
+    (`lib.rs:43268`); nothing exposes it for a foreign scope.
+
+    Add **`aida session leases --prune-stale [-y]`**: release every foreign claim the
+    predicate calls stale, print scope + reason per release, and refuse without `-y` on
+    a non-TTY (the same posture `session end` takes). Reasons to prefer this over a new
+    `session end` flag: the predicate is already computed in that command, the real case
+    is N-at-once (8 then, 211 now), and it cannot touch a claim the predicate calls
+    live, so there is no footgun needing a `--force`. It must be opt-in — never
+    automatic — because releasing another clone's claim is a cross-clone mutation.
+
+    ### Clause 6 — fixtures
+
+    Per clause, as unit tests on the pure predicate (no process spawning):
+
+    1. aged-out foreign claim -> stale; fresh foreign claim -> not stale.
+    2. **the collision case, as the spec specifies it**: `pid = 2`,
+       `pid_start_time` later than boot, injected `is_alive` says the pid exists,
+       injected start-time lookup returns boot -> **mismatch -> dead**, and
+       `process_backed = true, host = our_host` so clause 2 is actually reached.
+       Plus: same claim with `pid_start_time = None` -> unverifiable -> dead, NOT live.
+    3. `host == our_host` with a DIFFERENT `clone_path` reaches the local pid
+       evaluation (the clause-2 path) instead of being treated as unreachable.
+    4. `--prune-stale` releases a stale foreign claim and leaves a live one in place.
+       Also assert: a fresh `process_backed` claim whose pid identity matches is NOT
+       released.
+    5. a regression fixture per reader (`session leases`, the status/doctor section,
+       `team::build_team_view`) asserting a stale claim is absent by default — site 2
+       is where the bug was missed once already.
+
+    Plus the negative control required by [prove a test fails without the fix]:
+    each fixture must be shown failing with the predicate call removed, not merely
+    passing with it present.
+
+    ### Explicitly out of scope
+
+    Clause 5 (GC of the 211 files), renaming the "cross-clone" framing, and any change
+    to `process_identity_is_alive` / drain / solo reclaim semantics.
+  created_at: 2026-10-02T05:26:40.333602580Z
+  modified_at: 2026-10-02T05:26:40.333602580Z
+  session_id: 9d040115-a2e5-4c27-bbcd-7d48337f3273
 history:
 - id: 01a0fad1-d73e-70f1-9163-1abe5ec89ac1
   author: joe
