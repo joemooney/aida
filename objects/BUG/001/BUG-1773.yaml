@@ -102,6 +102,10 @@ feature: Uncategorized
 created_at: 2026-10-02T17:36:20.106331337Z
 modified_at: 2026-10-02T17:36:20.106331337Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 01a0e68a-df5c-7073-ba6c-4593e16daeb4
+  created_at: 2026-10-02T17:36:22.995081622Z
 filed_at:
   code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
   branch: main
