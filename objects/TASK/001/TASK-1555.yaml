@@ -21,8 +21,123 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:32:40.486442883Z
-modified_at: 2026-10-02T08:14:59.496689135Z
+modified_at: 2026-10-02T08:18:09.081824343Z
 req_type: Task
+comments:
+- id: 01a0fbb1-3239-7cb0-a41f-044535ae4bd1
+  author: joe
+  content: |
+    # Design sketch — advisor, before implementation (TASK-1555)
+
+    ## Survey: what CI actually runs
+
+    `jobs.build` has **40 steps, 38 with a `run:` body** (counted structurally with
+    PyYAML, not by eye). The spec's "~25 gates" is the right order of magnitude.
+
+    ## The architectural constraint the spec itself names
+
+    > "that drift is the actual root cause here"
+
+    So the local entrypoint must NOT carry a second copy of the gate commands.
+    That principle is already established in this codebase, in
+    `aida-cli-lib/src/implementer_preflight.rs`:
+
+    > "Resolve configured step names against CI's own YAML. Commands deliberately
+    > remain owned by the workflow; AIDA never carries a second hand-written copy."
+
+    `implementer_preflight` already parses `ci.yml`, verifies the CI bash contract
+    (`bash --noprofile --norc -e -o pipefail {0}`), substitutes
+    `${{ github.event_name }}` → `pull_request` and `${{ github.base_ref }}` → the
+    default branch (shell-safety-validated, BUG-1624), and prepends the worktree
+    binary to PATH (BUG-1420). But it is `pub(crate)`, runs only on the orchestrated
+    implementer publication path, and its gate set is **5 names** in
+    `.aida/config.toml [preflight] guards` — not the ~25 the spec is about.
+
+    ## Chosen shape
+
+    **`make check-ci-fast` / `make check-ci` → `python3 scripts/check-ci-gates.py`.**
+
+    The script owns no gate commands. It:
+    1. parses `jobs.build.steps` from `ci.yml` and runs them **in CI's own order**;
+    2. asserts the CI bash shell contract before running anything, as the Rust seam
+       does — a drifted contract means local parity is a lie, so it refuses;
+    3. substitutes the two GitHub expressions in use. Only five steps contain any
+       (`base_ref` ×5, `event_name` ×1);
+    4. reads **one** declarative file, `scripts/ci-gate-tiers.toml`, mapping each
+       step name to `fast` | `full` | `skip = "<reason>"`. Commands are never in it.
+    5. exits non-zero on the first failure; prints every skip with its reason on one
+       line naming the gate (AC1's visibility requirement).
+
+    ### Why not a new CLI subcommand
+
+    `aida gate` is spec-centric (`gate run <name> <SPEC>`, checklist tiers); a
+    working-tree CI runner does not fit its shape. More to the point, a new
+    subcommand trips the CLI-manual drift-guard and the MCP doc-consistency gate and
+    needs clap wiring in a 110k-line `lib.rs` — real cost for no gain over a make
+    target, which is what AC1 actually asks for.
+
+    ### Why not reuse implementer_preflight for the fast tier
+
+    AC2 requires the script-only tier to need **no cargo build**, and
+    `implementer_preflight::execute` deliberately builds the worktree binary before
+    the first guard that will actually run (BUG-1420 — it refuses to key that build
+    on a textual `aida` predicate, because a script can reach the binary
+    indirectly). Correct for a publication gate; wrong for a pre-push check.
+
+    **So the fast tier enforces that invariant instead of guessing it:** it runs with
+    a stub `aida` first on PATH that exits non-zero with a message naming the gate.
+    A gate mis-classified `fast` then fails loudly, rather than silently consulting
+    whatever stale `aida` the agent has installed. That is strictly stronger than the
+    textual predicate BUG-1420 rejected, and it costs no build.
+
+    ## Tier classification (from the survey, with the basis)
+
+    `full` = the gate invokes cargo or shells into a script that runs
+    `cargo build -p aida-cli` itself. Verified by grepping each gate's script for
+    `cargo build|cargo run|target/(debug|release)|AIDA_BIN`:
+
+    - needs a binary: `test_mcp_stdio.sh`, `test_history_templates.sh`,
+      `test_mcp_doc_consistency.sh`, `test_advisor_code_guard.sh`,
+      `test_advisor_code_gate.sh`, `test_distributed.sh` (each self-builds), plus
+      `Build all packages`, `Run tests`, `Minimal aida-cli build`,
+      `CLI-manual drift-guard`, `Run clippy`.
+    - `scripts/check-removed-flags.sh`'s only match is a **regex literal**, not a
+      binary use → `fast`.
+    - `Check formatting` is `cargo fmt --all -- --check`: invokes cargo, builds
+      nothing, ~1s → `fast`, with that rationale recorded inline.
+
+    `skip` with a printed reason: `CI docs-only short-circuit` (an echo, asserts
+    nothing), `Pin stable toolchain` (mutates the machine's rustup default),
+    `Install Linux dependencies` (sudo apt-get), `Live bwrap OS-wrap confinement
+    gate` (sudo sysctl), `Report cross-target cargo check` and `Report diff trace
+    coverage` (both report-only by their own names).
+
+    ## AC5 — the drift guard
+
+    A **Rust** unit test in `aida-cli-lib`, so `cargo test --workspace` wires it
+    automatically. A new shell/python CI step would have to be named individually in
+    `ci.yml` and can be added to the branch while being wired into nothing.
+
+    It reads `ci.yml` and `scripts/ci-gate-tiers.toml` **at runtime** via
+    `CARGO_MANIFEST_DIR` — never `include_str!`, which compiles in a copy and makes
+    the only mutation proof that matters impossible — and asserts the two name sets
+    agree in both directions:
+    - a `run:` step in `jobs.build` with no tier entry → fail, naming the step;
+    - a tier entry naming no step in `jobs.build` → fail (catches a renamed gate,
+      which is the silent-omission case).
+
+    Mutation proof must include **deleting** `ci-gate-tiers.toml` and **deleting** a
+    tier entry, not only adding a step: a guard that prints "matches" when its
+    artifact is absent can never fail.
+
+    ## Out of scope (spec says so)
+
+    No gate's rules change. `[preflight] guards` and the publication path are left
+    exactly as they are — widening that 5-name list is a separate decision about
+    what blocks publication, not about what an agent can run locally.
+  created_at: 2026-10-02T08:18:09.081824343Z
+  modified_at: 2026-10-02T08:18:09.081824343Z
+  session_id: a44ab090-138d-446d-9dae-f2d108dd2e1f
 history:
 - id: 01a0e416-4ef4-7e20-8c7a-0678945654d6
   author: aida-session-start
