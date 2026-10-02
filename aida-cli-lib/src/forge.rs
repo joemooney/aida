@@ -3775,6 +3775,9 @@ pub(crate) mod fake {
         pub(crate) author: Option<String>,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
+        /// `(change id, body)` for every `comment` call.
+        // trace:BUG-1714 | ai:claude
+        pub(crate) commented: Arc<Mutex<Vec<(u64, String)>>>,
     }
 
     impl RecordingForge {
@@ -3785,6 +3788,7 @@ pub(crate) mod fake {
                 merged_for_branch: ChangeLookup::NoChange,
                 author: Some("codex-bot".into()),
                 closed: Arc::new(Mutex::new(Vec::new())),
+                commented: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -3796,6 +3800,11 @@ pub(crate) mod fake {
 
         pub(crate) fn closed(&self) -> Vec<(u64, String)> {
             self.closed.lock().unwrap().clone()
+        }
+
+        // trace:BUG-1714 | ai:claude
+        pub(crate) fn commented(&self) -> Vec<(u64, String)> {
+            self.commented.lock().unwrap().clone()
         }
     }
 
@@ -3876,7 +3885,11 @@ pub(crate) mod fake {
         ) -> Result<MergeResult> {
             anyhow::bail!("RecordingForge: merge_change not scripted")
         }
-        fn comment(&self, _: &ChangeRef, _: &str) -> Result<()> {
+        fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
+            self.commented
+                .lock()
+                .unwrap()
+                .push((c.id, body.to_string()));
             Ok(())
         }
         fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
