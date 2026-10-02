@@ -49186,6 +49186,13 @@ mod bug_1656_subagent_liveness_tests;
 #[path = "tests/bug_1680_salvage_main_tests.rs"]
 mod bug_1680_salvage_main_tests;
 
+// The three `aida ps` reporting defects: landed work advertised as stalled,
+// guessed fan-out ownership, and fan-out rows wearing the parent's role.
+// trace:BUG-1681 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1681_ps_reporting_tests.rs"]
+mod bug_1681_ps_reporting_tests;
+
 /// trace:TASK-358 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_358_escalation_cleanup_tests.rs"]
@@ -67194,16 +67201,184 @@ fn ps_orphan_verdict_with_movement(
 /// flag-only In-Progress specs are most likely being worked by the fan-out, not
 /// genuinely orphaned. Pure over the lease set + the shared liveness machinery.
 // trace:TASK-1064 | ai:claude
-fn live_fanout_harness_lease(
-    leases: &[SessionLease],
+fn ps_live_fanout_leases<'a>(
+    leases: &'a [SessionLease],
     live: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
-) -> bool {
-    leases.iter().any(|l| {
-        l.scope
-            .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
-            && matches!(lease_state_for(l, live, now), LeaseState::Live)
+) -> Vec<&'a SessionLease> {
+    leases
+        .iter()
+        .filter(|l| {
+            l.scope
+                .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
+                && matches!(lease_state_for(l, live, now), LeaseState::Live)
+        })
+        .collect()
+}
+
+/// BUG-1681: does `text` — a branch name or a worktree path — NAME one of
+/// `ids`? Case-insensitive containment with id boundaries on both sides, so
+/// `claude/bug-168` never matches `BUG-1681` and `wt-bug-1681` does. Pure, so
+/// the matching rule is fixture-testable.
+// trace:BUG-1681 | ai:claude
+fn ps_text_names_spec(text: &str, ids: &[&str]) -> bool {
+    let hay = text.to_ascii_lowercase();
+    ids.iter().any(|id| {
+        let needle = id.trim().to_ascii_lowercase();
+        if needle.is_empty() {
+            return false;
+        }
+        hay.match_indices(&needle).any(|(at, _)| {
+            let before = hay[..at]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !c.is_ascii_alphanumeric());
+            let after = hay[at + needle.len()..]
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_ascii_alphanumeric());
+            before && after
+        })
     })
+}
+
+/// BUG-1681: is this LIVE fan-out lease plausibly working the spec `ids` name?
+/// True only when the subagent's OWN branch or worktree names that spec. The
+/// previous rule was "any fan-out is alive anywhere in this repo", which
+/// credited a live subagent with every flag-only In-Progress spec in the store
+/// — including specs no subagent had ever touched.
+// trace:BUG-1681 | ai:claude
+fn ps_fanout_names_spec(fanout: &SessionLease, ids: &[&str]) -> bool {
+    ps_text_names_spec(&fanout.branch, ids)
+        || ps_text_names_spec(&fanout.worktree_path.to_string_lossy(), ids)
+}
+
+/// BUG-1681: is this LIVE fan-out lease working inside `spec_lease`'s
+/// worktree? That is the BUG-1656 shape — an Agent-tool subagent dispatched
+/// INTO a spec's leased worktree, whose work the spec lease's own pid probe
+/// structurally cannot see — and it is the only case where a dead spec lease
+/// may be explained by a subagent. Matched on the worktree the subagent
+/// recorded, or on the branch it is on; never on mere coexistence in the repo.
+// trace:BUG-1681 | ai:claude
+fn ps_fanout_holds_lease(fanout: &SessionLease, spec_lease: &SessionLease) -> bool {
+    let same_worktree = !spec_lease.worktree_path.as_os_str().is_empty()
+        && fanout.worktree_path == spec_lease.worktree_path;
+    let same_branch = !spec_lease.branch.trim().is_empty()
+        && fanout
+            .branch
+            .trim()
+            .eq_ignore_ascii_case(spec_lease.branch.trim());
+    same_worktree || same_branch
+}
+
+/// BUG-1681: the generic role label a fan-out row shows when the harness
+/// recorded only its placeholder agent type. It says what the row IS — a
+/// subagent — instead of borrowing the identity of the session hosting it.
+// trace:BUG-1681 | ai:claude
+const PS_SUBAGENT_ROLE: &str = "subagent";
+
+/// The role an `aida ps` row displays, from the three signals available.
+///
+/// BUG-1521: a REAL recorded lease role is authoritative — the row shows what
+/// the session recorded about itself, not what a heuristic inferred.
+///
+/// BUG-1681: when the recorded role is the harness's generic Agent-tool
+/// placeholder, the row is an Agent-tool subagent, and its lease's pid is the
+/// PARENT claude process (a subagent executes inside it — see BUG-752). The
+/// transcript scan therefore resolves the HOST session's role, which is how
+/// fan-out rows came to display `advisor`: the parent's identity, not their
+/// own. So the placeholder falls back to the manifest join (TASK-153's stable
+/// per-lease `claude_session_id` link, which is about THIS row) and then to the
+/// generic subagent label — never to the ambiguous host-transcript scan.
+///
+/// A lease with no recorded role at all keeps the pre-existing derivation: the
+/// manifest join, else the transcript scan.
+// trace:BUG-1521 trace:TASK-153 trace:BUG-1681 | ai:claude
+fn ps_display_role(
+    lease_role: Option<&str>,
+    manifest_role: Option<&str>,
+    jsonl_role: Option<&str>,
+) -> Option<String> {
+    match lease_role.map(str::trim).filter(|r| !r.is_empty()) {
+        Some(r) if !r.eq_ignore_ascii_case(tail_cmd::HARNESS_AGENT_TYPE) => Some(r.to_string()),
+        Some(_) => Some(
+            manifest_role
+                .map(str::to_string)
+                .unwrap_or_else(|| PS_SUBAGENT_ROLE.to_string()),
+        ),
+        None => manifest_role.or(jsonl_role).map(str::to_string),
+    }
+}
+
+/// BUG-1681: re-read one row's dispatch verdict in the light of its
+/// integration standing, replacing the stalled/stopped reading (and its
+/// resume hint) with the actionless `awaiting-integration` note. Returns
+/// whether the row changed. Pure over the row + the standing, so the
+/// reframing is fixture-testable without a store or a forge.
+// trace:BUG-1681 | ai:claude
+fn ps_apply_integration_standing(
+    row: &mut PsRow,
+    standing: Option<&dispatch_health_ps::IntegrationStanding>,
+) -> bool {
+    let Some(dispatch) = row.dispatch.as_mut() else {
+        return false;
+    };
+    let next = dispatch_health_ps::apply_integration(dispatch.state, standing);
+    if next == dispatch.state {
+        return false;
+    }
+    dispatch.state = next;
+    dispatch.hint = Some(dispatch_health_ps::integration_hint(standing));
+    true
+}
+
+/// BUG-1681: ask the substrate whether a stalled-looking row's spec has in
+/// fact FINISHED before `aida ps` advertises a resume for it. The observed
+/// failure was ~20 rows whose specs were already Completed and landed in
+/// integration batches, each advertised as `stalled — resume/rebrief`; an
+/// agent that follows that hint redoes shipped work.
+///
+/// Cost-gated: nothing is read unless some row actually classified
+/// stalled/stopped (the quiet case pays zero), and then only the cached
+/// requirement lookup for those rows' specs plus their local review-verdict
+/// files. No forge call.
+// trace:BUG-1681 | ai:claude
+fn ps_overlay_integration_standing(project_root: &std::path::Path, rows: &mut [PsRow]) {
+    let candidates: Vec<String> = rows
+        .iter()
+        .filter(|r| {
+            r.dispatch.as_ref().is_some_and(|d| {
+                matches!(
+                    d.state,
+                    dispatch_health_ps::DispatchState::Stalled
+                        | dispatch_health_ps::DispatchState::Stopped
+                )
+            })
+        })
+        .filter_map(|r| r.spec.clone())
+        .collect();
+    if candidates.is_empty() {
+        return;
+    }
+    let finished = session_reap::finished_scopes(project_root, &candidates);
+    for row in rows.iter_mut() {
+        let Some(spec) = row.spec.clone() else {
+            continue;
+        };
+        if !candidates.iter().any(|c| c.eq_ignore_ascii_case(&spec)) {
+            continue;
+        }
+        let branch = row.lease.branch.clone();
+        let verdict = review_verdict::read_recorded_verdict_any(project_root, &[spec.as_str()]);
+        let standing = dispatch_health_ps::integration_standing(
+            finished.contains(&spec.to_ascii_uppercase()),
+            verdict.as_ref().is_some_and(|v| v.kind.approves()),
+            verdict.as_ref().and_then(|v| v.reviewed_branch.as_deref()),
+            &branch,
+            verdict.as_ref().and_then(|v| v.comment_url.as_deref()),
+        );
+        ps_apply_integration_standing(row, standing.as_ref());
+    }
 }
 
 /// TASK-1064: should a flag-only In-Progress spec (no spec-scoped lease) be
@@ -67213,8 +67388,8 @@ fn live_fanout_harness_lease(
 /// lease exists (a plausible live worker). Pure so the three-way framing is
 /// unit-testable without a store or a lease dir.
 // trace:TASK-1064 | ai:claude
-fn ps_orphan_likely_fanout(stale_lease: bool, fanout_active: bool) -> bool {
-    !stale_lease && fanout_active
+fn ps_orphan_likely_fanout(stale_lease: bool, fanout_names_spec: bool) -> bool {
+    !stale_lease && fanout_names_spec
 }
 
 /// BUG-752: does this lease carry NO process-liveness signal at all while
@@ -68259,6 +68434,11 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
             row.activity = None;
         }
     }
+    // BUG-1681: a row whose spec has already FINISHED (done + approved, or
+    // riding an integration PR) is waiting on the integrator — reframe it
+    // before anything prints a resume hint for work that already landed.
+    // trace:BUG-1681 | ai:claude
+    ps_overlay_integration_standing(project_root, &mut rows);
     orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
     (rows, orphans)
 }
@@ -68415,15 +68595,11 @@ fn build_running_work(
             // claude_session_id join) next, then jsonl_role (the ambiguous
             // transcript scan), and only the placeholder itself as the last
             // resort when nothing else resolved. trace:BUG-1521 | ai:claude
-            let role = match lease_role.as_deref() {
-                Some(r) if !r.eq_ignore_ascii_case(tail_cmd::HARNESS_AGENT_TYPE) => {
-                    Some(r.to_string())
-                }
-                _ => manifest_role
-                    .clone()
-                    .or_else(|| jsonl_role.clone())
-                    .or_else(|| lease_role.clone()),
-            };
+            let role = ps_display_role(
+                lease_role.as_deref(),
+                manifest_role.as_deref(),
+                jsonl_role.as_deref(),
+            );
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
             // both ages instead of mixing provenance silently.
@@ -68546,7 +68722,10 @@ fn build_running_work(
     // In-Progress spec (no spec-scoped lease) is most likely being built by it
     // (the fan-out takes a generic non-spec-linked harness lease) — surface it
     // informationally instead of as a genuine orphan. trace:TASK-1064 | ai:claude
-    let fanout_active = live_fanout_harness_lease(leases, live, now);
+    // BUG-1681: the live fan-out leases THEMSELVES, so the framing below can
+    // be matched per spec instead of applied to every flag-only row in the
+    // store the moment any subagent is alive. trace:BUG-1681 | ai:claude
+    let fanouts = ps_live_fanout_leases(leases, live, now);
     for s in specs {
         if !s.in_progress {
             continue;
@@ -68585,6 +68764,13 @@ fn build_running_work(
                         dispatch_health_ps::DEFAULT_DIRTY_MOVEMENT_FRESH_SECS,
                     )
             });
+        // BUG-1681: attribution must MATCH. A live subagent counts for this
+        // spec only when its own branch/worktree names the spec (the flag-only
+        // framing), or when it is working inside this spec's own leased
+        // worktree (the stale-lease framing). trace:BUG-1681 | ai:claude
+        let fanout_names_this_spec = fanouts.iter().any(|f| ps_fanout_names_spec(f, &id_refs));
+        let subagent_in_this_worktree =
+            lease.is_some_and(|l| fanouts.iter().any(|f| ps_fanout_holds_lease(f, l)));
         if let Some(stale_lease) =
             ps_orphan_verdict_with_movement(lease_state, awaiting_agent, dirty_movement_fresh)
         {
@@ -68593,9 +68779,11 @@ fn build_running_work(
                 title: s.title.clone(),
                 stale_lease,
                 // trace:TASK-1064 | ai:claude
-                likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_active),
+                // trace:BUG-1681 | ai:claude
+                likely_fanout: ps_orphan_likely_fanout(stale_lease, fanout_names_this_spec),
                 // trace:BUG-1656 | ai:claude
-                possibly_subagent: stale_lease && fanout_active,
+                // trace:BUG-1681 | ai:claude
+                possibly_subagent: stale_lease && subagent_in_this_worktree,
             });
         }
     }
@@ -69212,6 +69400,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         // not the dead-agent alarm.
                         // trace:TASK-1518 | ai:claude
                         dispatch_health_ps::DispatchState::Stopped => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().cyan(),
+                        ),
+                        // BUG-1681: finished work waiting on the integrator —
+                        // informational, and deliberately actionless.
+                        // trace:BUG-1681 | ai:claude
+                        dispatch_health_ps::DispatchState::AwaitingIntegration => (
                             crate::glyph(crate::glyphs::Glyph::Info),
                             d.state.label().cyan(),
                         ),
