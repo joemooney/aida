@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:18:28.154779421Z
-modified_at: 2026-10-02T03:49:33.420414982Z
+modified_at: 2026-10-02T04:46:59.911595010Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -48,6 +48,65 @@ comments:
   created_at: 2026-10-02T03:49:33.420414982Z
   modified_at: 2026-10-02T03:49:33.420414982Z
   session_id: 1d7813fc-728c-4a86-bee2-03e780d5b022
+- id: 01a0faef-e147-7f11-a5a1-1ac97eebc3bd
+  author: joe
+  content: |
+    ## Advisor re-verification of the stranded branch (relay session #6)
+
+    **Correction to the session #5 handoff.** That handoff recorded "the diff adds no test file ...
+    'Fixture tests for each' is very likely unsatisfied" and told session #6 to check it first. **That
+    read was wrong, and the reason it was wrong is worth keeping:** the fixtures are inline
+    `#[cfg(test)]` tests *inside the modules they test*, so `git diff --name-only` shows only the four
+    source files and no `tests/` entry. `--name-only` cannot see a Rust unit test. All three ACs have
+    fixtures:
+
+    | AC | fixture | location |
+    |---|---|---|
+    | 1 — minimal refresh installs only minimal init | `task_1536_minimal_footprint_refresh_installs_only_minimal_init` | `scaffold_refresh.rs` |
+    | 2 — doctor flags a flooded lane with restore steps | `task_1536_doctor_flags_flooded_memory_lane_with_manual_restore_guidance` | `doctor_cmd.rs` |
+    | 3 — pre-footprint lane recognised by AGENTS.md heading | `task_1536_pre_footprint_lane_with_no_skills_recognised_by_agents_heading` | `scaffold_refresh.rs` |
+
+    ### Measured
+
+    | check | result |
+    |---|---|
+    | rebase onto `main` @ `dc3b03058e` | clean, zero conflicts |
+    | `make build-fast` | exit 0 (7m48s) |
+    | `cargo test -p aida-cli-lib --lib task_1536` | 3 passed, 0 failed |
+    | `cargo fmt --all -- --check` | exit 0 |
+
+    ### Mutation proof — the coverage is non-vacuous
+
+    Three disjoint mutants applied simultaneously (distinct functions, so no cross-talk; each test pins
+    its own footprint explicitly rather than relying on the heuristic):
+
+    - AC1: `let minimal = footprint == Some(Minimal)` → `let minimal = false`
+    - AC2: the new `if lane {` flooded-lane block → `if false {`
+    - AC3: `lane_skill_seen || lane_agents_heading_seen` → `lane_skill_seen`
+
+    Result: **0 passed, 3 failed**, each panicking in its own assertion
+    (`scaffold_refresh.rs:2381`, `scaffold_refresh.rs:2454`, `doctor_cmd.rs:9300`). Every AC's test
+    witnesses its own fix.
+
+    ### Review notes on the inherited implementation
+
+    - **AC1's command-level path is correct and consistent.** The `is_minimal` early return in the
+      `ScaffoldCommand::Refresh` arm sits *after* `refresh_agent_packs` + `print_refresh_summary` and
+      *before* `seed_missing_protocols` and `maybe_offer_permission_posture_fix` — structurally
+      identical to the `is_memory_lane` arm immediately above it. The pack-side gating lives in
+      `refresh_agent_packs_at`; the command arm gates only protocols and permission posture.
+    - **AC1's test asserts a byte-identical tree across two refreshes**, reusing the `tree_snapshot`
+      helper and the exact assertion shape of the existing BUG-1662 lane test, so
+      `record_refresh_deliveries` demonstrably writes nothing new on the non-full branch.
+    - **Known limitation, deliberately not fixed:** a *pre-footprint* lane that was already flooded is
+      not detectable as a lane, because the flood replaced the `# AIDA Memory Lane` heading that AC3's
+      detection depends on. AC2 therefore reaches flooded lanes that have a saved footprint or lane
+      skills. No AC asks for more, and inferring a lane from an absent marker would be guesswork.
+
+    Verdict recorded separately once clippy and the full workspace suite report.
+  created_at: 2026-10-02T04:46:59.911595010Z
+  modified_at: 2026-10-02T04:46:59.911595010Z
+  session_id: 3a2f2459-030a-4a41-95e3-3087c916e0f6
 history:
 - id: 01a0e1c5-b668-7b01-9ece-cf2b64cb18d1
   author: aida-session-start
