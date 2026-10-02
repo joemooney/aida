@@ -1,0 +1,103 @@
+id: 01a0fc32-891e-7072-b251-9d533d3f1eae
+spec_id: BUG-1768
+agreed_id: BUG-1768
+title: An auto-drafted phase-failure finding is only auto-rejected by the pass that flips its parent, so a hand-completed parent orphans it in Draft
+description: |
+  An auto-drafted phase-failure finding is auto-rejected only as a side effect of
+  the auto-bump's own Done -> Completed flip. If the parent spec reaches Completed
+  by any other route -- a manual `aida edit --status completed`, or any path that
+  is not in that pass's confirmed set -- the finding is never revisited and sits
+  in `Draft` forever, where it surfaces as human work in the advisor's `groom`
+  bucket.
+
+  ## Evidence (BUG-1821 on BUG-1817, 2026-10-01)
+
+  `auto_resolve_failure_bugs_for_completed_specs` is called from exactly ONE site,
+  `aida-cli-lib/src/lib.rs:76389`, and its `completed` argument is
+  `completed_events`, built immediately above it (lib.rs:76379-76388) from only:
+
+  - `confirmed`           -- the specs THIS pass flipped Done -> Completed
+  - `confirmed_stale`     -- the stale-PR variant of the same flip
+
+  `reject_resolved_auto_complete_failure_bug` likewise has only two call sites
+  (lib.rs:76401 and lib.rs:76418), both inside that same block. There is no
+  retroactive sweep anywhere: the predicate `is_auto_complete_failure_bug_about`
+  is never applied to a Draft finding except from the flip set.
+
+  BUG-1817's authored transition chain, read from the canonical store object
+  `.aida-store/objects/BUG/001/BUG-1817.yaml`:
+
+  | UTC | author | transition |
+  |---|---|---|
+  | 2026-10-01T22:05:07 | aida-orchestrator-phase1 | Approved -> InProgress |
+  | 2026-10-01T22:11:37 | joe.mooney | InProgress -> Done |
+  | 2026-10-01T22:12:17 | aida-orchestrator | Done -> NeedsAttention |
+  | 2026-10-01T23:00:47 | joe.mooney | NeedsAttention -> InProgress |
+  | 2026-10-01T23:27:21 | joe.mooney | InProgress -> Done |
+  | 2026-10-01T23:27:21 | joe.mooney | Done -> **Completed** |
+
+  The terminal flip is authored `joe.mooney`, not `aida_core::conflict::AUTO_BUMP_AUTHOR`.
+  So BUG-1817 was never in any pass's `confirmed`/`confirmed_stale`, so BUG-1821
+  was never considered, and it was still `Draft` in the advisor's groom bucket on
+  2026-10-02 -- 20 hours after its parent completed.
+
+  ## Control (this is not a general failure of the mechanism)
+
+  The mechanism works when the flip is the auto-bump's own. Measured in the same
+  session:
+
+  - BUG-1712 (on BUG-1706) -- auto-rejected, comment by `aida-auto-bump`:
+    "BUG-1706 reached Completed via commit 5ed030a / PR #2255".
+  - BUG-1824 (on BUG-1819) -- auto-rejected 2026-10-01 19:13 local, comment by
+    `aida-auto-bump`: "BUG-1819 reached Completed via commit 4679b54 / PR #2319".
+
+  Both parents completed through the auto-bump flip. BUG-1821's parent did not.
+  The difference between the rejected siblings and the orphan is exactly the
+  completion route, not the finding.
+
+  ## Acceptance criteria
+
+  1. A Draft auto-drafted phase-failure finding whose parent spec is already
+     `Completed` is rejected with the same `aida-auto-bump` comment, regardless of
+     whether that parent was flipped by this pass. A test sets a parent to
+     Completed by a non-auto-bump author, runs the pass, and asserts the finding
+     reaches `Rejected`.
+  2. Mutation proof: with the fix reverted, the test in AC1 must FAIL. A test that
+     passes either way does not witness this defect -- the existing flip-driven
+     path already covers the sibling case, so the new test must be the one that
+     distinguishes them.
+  3. Control, in the same test run: a Draft auto-drafted finding whose parent is
+     NOT Completed is left in `Draft` and un-commented. The widened sweep must not
+     reject a finding whose parent is still open.
+  4. Control, in the same test run: a Draft bug that is NOT an auto-drafted
+     phase-failure finding (missing the `auto-complete`/`auto-drafted`/`failure-*`
+     tag triple, or a title that does not end ` on <PARENT>`) is untouched even
+     when a spec named in its title is Completed. `is_auto_complete_failure_bug_about`
+     stays the sole gate.
+  5. BUG-1821 itself needs no fix-time action -- it was rejected by hand in the
+     advisor pass that filed this bug, with the rationale recorded as a comment.
+
+  ## Scope note
+
+  This is the disclosure/sweep half only. The separate question of why the
+  orchestrator shelved BUG-1817 at all -- it demoted a spec that had reached
+  `Done` during the same run, on the strength of a refusal whose own message said
+  "Status is Done (work finished on a branch)" -- is filed separately and is NOT
+  in scope here.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T10:39:25.470768504Z
+modified_at: 2026-10-02T10:39:25.470768504Z
+req_type: Bug
+tags:
+- auto-complete orchestrator advisor-groom auto-bump
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
