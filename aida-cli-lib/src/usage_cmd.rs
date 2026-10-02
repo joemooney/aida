@@ -1532,13 +1532,24 @@ fn render_auto_complete_failures(
         let cause = auto_complete_telemetry::failure_cause_label(ev.failure_kind.as_deref());
         let detail =
             auto_complete_telemetry::failure_detail_first_line(ev.failure_message.as_deref());
-        let bug_cell = ev.drafted_bug.as_ref().map(|bug| {
-            let status = store.and_then(|s| bug_status(s, bug));
-            match status {
-                Some(st) => format!(" · {}", format!("{} [{}]", bug, st).cyan()),
-                None => format!(" · {}", bug.cyan()),
-            }
-        });
+        let bug_cell = ev
+            .drafted_bug
+            .as_ref()
+            .map(|bug| {
+                let status = store.and_then(|s| bug_status(s, bug));
+                match status {
+                    Some(st) => format!(" · {}", format!("{} [{}]", bug, st).cyan()),
+                    None => format!(" · {}", bug.cyan()),
+                }
+            })
+            // TASK-1564: a failure recorded after the container moved has no
+            // drafted BUG — it is a comment on the spec already named in the
+            // row, so point at the thread rather than repeating the spec-id.
+            .or_else(|| {
+                ev.failure_comment
+                    .as_ref()
+                    .map(|_| format!(" · {}", "noted on the spec".cyan()))
+            });
         println!(
             "    {}  {:<12} phase {} ({})  {} — {}{}",
             when.dimmed(),

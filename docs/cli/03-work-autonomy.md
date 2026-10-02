@@ -60,6 +60,17 @@ Three cross-cutting truths the tree assumes:
 - `integrate` — the read-side of the producer/consumer split: parallel implementers finish work, flip a spec Done, and leave an open PR but never merge; bare `aida integrate` shows the focus-scoped queue, live throughput, and active fan-out so an integrator can see whether main is moving. The handoff is the substrate itself — no message bus.
 - `queue recover` — an interactive wizard for a spec stuck after a **failed phase-1 implementer session** (a provider 529, commit-and-exit without a PR, an external crash, partial work). It inspects the spec's git/lease/PR state, recommends a recovery path, and steps through it — a front-end over the same lease/PR probes the orchestrator uses, not new mechanism.
 
+**A drain phase failure is a comment on the parent spec, not a new spec.** When `queue work --auto-complete` fails a phase, the narrative record — the phase that failed, the seat, the branch and commit under test, the captured failure text, the recovery hint, the phase durations and the telemetry line — is appended as a comment on the spec the drain was driving. It does not file a draft spec, because a draft demands a disposition from a human while a comment simply informs the next reader. A re-drive that hits the same `(phase, failure-kind)` signature bumps that comment's `Attempts:` counter instead of stacking a second one. Everything else is unchanged: the drain still exits non-zero, still writes its `~/.aida/auto-complete.jsonl` line, and still routes to the due seat. Read the record with `aida comment list <SPEC>`.
+
+**Promoting a phase-failure comment to its own spec** is explicit and never automatic — do it when the failure is a distinct defect rather than a drain hiccup. Save the comment's text to a file, then:
+
+```bash
+aida add --type bug --priority medium --parent <SPEC> --title "drain phase 2 (ci) failure on <SPEC>" --description-from-file /tmp/note.md
+aida edit <NEW-ID> --status approved
+```
+
+The same recipe is embedded in every phase-failure comment, so the reader who decides to promote one never has to come back here. <!-- trace:TASK-1564 | ai:claude -->
+
 **Gotchas.** The queue's identity is your **shell user** (`$USER` / `$AIDA_USER`), *not* your AIDA node or role. If `queue list` is unexpectedly empty, check `echo $USER` and `echo $AIDA_USER` first — the queue is keyed off whichever the shell sees.
 
 **Chains with** — `backlog groom` fills it; `queue work` empties it into sessions; `drain status` watches an `--auto-complete` run draining it.

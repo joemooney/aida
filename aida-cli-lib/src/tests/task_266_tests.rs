@@ -1,6 +1,5 @@
 use super::{
     auto_complete_queue_add_args, auto_failure_bug_matches, increment_auto_failure_attempts,
-    parse_added_spec_id,
 };
 
 fn failure_bug(status: aida_core::RequirementStatus, kind: &str) -> aida_core::Requirement {
@@ -18,24 +17,11 @@ fn failure_bug(status: aida_core::RequirementStatus, kind: &str) -> aida_core::R
     req
 }
 
-#[test]
-fn parses_spec_id_from_aida_add_output() {
-    let stdout = "Requirement added successfully!\n\
-                      UUID: 019e31cc-26c3-70f3-adb6-3b20cb6d32a9\n\
-                      ID: BUG-220\n";
-    assert_eq!(parse_added_spec_id(stdout), Some("BUG-220".to_string()));
-}
-
-#[test]
-fn returns_none_when_no_id_line() {
-    let stdout = "Requirement added successfully!\nUUID: abc\n";
-    assert_eq!(parse_added_spec_id(stdout), None);
-}
-
-#[test]
-fn returns_none_for_empty_id_value() {
-    assert_eq!(parse_added_spec_id("ID:   \n"), None);
-}
+// TASK-1564 retired the `aida add` subprocess that filed a Draft BUG for a
+// phase failure — the record is now a comment on the parent spec — so the
+// `ID:` stdout parser those three tests covered no longer exists. The dedupe
+// and recurrence coverage below still applies: it guards the legacy
+// auto-drafted-BUG absorb path, which TASK-1564 deliberately left in place.
 
 #[test]
 fn auto_complete_preflight_queue_add_disables_cwd_scope_derivation() {
