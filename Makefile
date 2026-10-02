@@ -7,7 +7,7 @@
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
-        sync-templates check-templates sync-agent-skills check-agent-skills \
+        sync-templates check-templates sync-agent-skills check-agent-skills install-agent-skill-hooks \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -423,9 +423,24 @@ check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 	@echo "Checking .agents/skills/aida-* for drift..."
 	@cargo run -q -p aida-core --example agent_skill_pack -- check
 
+# trace:BUG-1760 | ai:codex
+install-agent-skill-hooks: ## Install main-checkout symlink hooks that refresh .agents/skills
+	@root=$$(git rev-parse --show-toplevel) || exit 1; \
+	git_dir=$$(git rev-parse --absolute-git-dir) || exit 1; \
+	common_dir=$$(git rev-parse --path-format=absolute --git-common-dir) || exit 1; \
+	if [ "$$git_dir" != "$$common_dir" ]; then \
+		echo "Refusing to install portable-pack hooks from a linked worktree" >&2; exit 1; \
+	fi; \
+	hooks="$$common_dir/hooks"; mkdir -p "$$hooks"; \
+	for name in post-merge post-checkout post-rewrite; do \
+		ln -sfn "$$root/aida-core/templates/hooks/aida-sync-agent-skills.sh" "$$hooks/$$name"; \
+		echo "  Linked: $$hooks/$$name"; \
+	done
+
 # trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
+	@test -f aida-core/templates/hooks/aida-sync-agent-skills.sh || { echo "MISSING: portable-pack hook master"; exit 1; }
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \
