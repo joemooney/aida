@@ -68,7 +68,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:31.501218455Z
-modified_at: 2026-10-02T01:36:01.624772233Z
+modified_at: 2026-10-02T02:22:49.834931050Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -176,6 +176,104 @@ comments:
   created_at: 2026-10-02T01:36:01.624772233Z
   modified_at: 2026-10-02T01:36:01.624772233Z
   session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
+- id: 01a0fa6b-e3ea-7b70-8cfb-e9f41cf01880
+  author: joe
+  content: |
+    ## Advisor pre-measurement (relay session #20) — the filed line numbers are stale, and AC4's audit has a bigger answer than the spec expects
+
+    Blocker cleared: **BUG-1745 is `completed`**, so this is unblocked. Not claimed yet — this comment is
+    pre-measurement so the implementing session can dispatch without re-deriving it.
+
+    ### Correction: every line number in the description is stale
+
+    The description points at `doctor_cmd.rs:817-822` for `doctor_check_store_free_light`. That range is
+    now `unsynced_merge_hold_findings`. Re-measured against `main` @ `1775a65a27`:
+
+    | function | defined at | render site |
+    |---|---|---|
+    | `doctor_multi_agent` | **448** | **730** (`render_doctor_report(&report, opts.heal)?`) |
+    | `doctor_check_runaway_seats_light` | **937** | **959** |
+    | `doctor_check_disk_headroom_light` | **982** | **989** |
+    | `doctor_check_store_free_light` | **1003** | **1022** |
+
+    Those are **all four** `render_doctor_report` call sites in the file (the fifth hit, **5617**, is the
+    definition). Verify with `/usr/bin/grep -n 'render_doctor_report' aida-cli-lib/src/doctor_cmd.rs`
+    before editing — this file moves.
+
+    ### AC4's audit, answered: the six named categories reach only FOUR light paths, and two fall through
+
+    The dispatch at `doctor_cmd.rs:55-110` takes a light path for exactly four categories, each gated on
+    `!all && !*sub_all`:
+
+    - `runaway-seats` → `doctor_check_runaway_seats_light` (trace:TASK-1473)
+    - `disk-headroom` → `doctor_check_disk_headroom_light` (trace:BUG-1675)
+    - `performance` → `doctor_check_store_free_light("performance")` (trace:TASK-1544)
+    - `remote-drift` → `doctor_check_store_free_light("remote-drift")`
+
+    `doctor_check_store_free_light` handles **only** those last two — its match arm is
+    `_ => unreachable!("only store-free categories dispatch here")`.
+
+    **`scheduler-driver` and `agent-launch` — two of the six categories AC4 names — have no light path at
+    all.** They fall through to `doctor_multi_agent`, whose render site at **730** carries the *same*
+    defect in the same shape:
+
+    ```rust
+    } else if opts.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, opts.heal)?;   // human box text, in agent mode too
+    ```
+
+    No arm consults `agent_output_mode()`. So **AC4 is not satisfiable by fixing the three light functions**:
+    that leaves 2 of its 6 named categories broken, which AC4 explicitly forbids ("a fix for one category
+    that leaves siblings broken does not satisfy this"). The honest scope is **four** functions, not three,
+    and `doctor_multi_agent` is the one the description never mentions.
+
+    A brief should say this outright, because `doctor_multi_agent` is the riskiest of the four: it is the
+    whole `aida doctor` home, its `else` arm also emits `runaway_seats` coverage and (when
+    `opts.category.is_none()`) `print_doctor_status_diagnostics`, and it has a prior `opts.quiet_output`
+    arm. A TOON arm there must decide what happens to those extra emissions — they are human-only text and
+    must not be appended to a TOON document, or AC2's "exactly one document" fails on the bare
+    `aida doctor` path.
+
+    ### BUG-1745's fix is visible and is the pattern to follow
+
+    `doctor_check_store_free_light` already has the right shape for the JSON mode — worth copying rather
+    than reinventing:
+
+    ```rust
+    if json {
+        report.error = reason.clone();            // reason rides INSIDE the document
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        render_doctor_report(&report, false)?;    // <-- the defect: no agent-mode arm
+    }
+    match reason {
+        None => Ok(()),
+        Some(_) if json => Err(anyhow::Error::new(crate::TypedPayloadEmitted)),  // global renderer stays silent
+        Some(msg) => Err(anyhow::anyhow!("{msg}")),   // <-- appends TOON error: to human stdout
+    }
+    ```
+
+    The TOON arm needs the **same** `TypedPayloadEmitted` suppression as the JSON arm, or AC2 fails for the
+    same reason the JSON path used to: two documents on one stream. Note the last arm is where the second
+    document comes from — fixing only the renderer and leaving `Some(msg) => Err(anyhow!(...))` reachable in
+    agent mode does **not** satisfy AC2.
+
+    ### Out-of-scope guard re-verified, and it is right
+
+    `maintenance_schedule.rs:3146` really is an identity predicate on the literal command string, and the
+    spec is right to forbid touching it: changing it would make the trip record **no** `audit_error`, i.e.
+    invisible rather than unparseable — strictly worse. Leave it alone.
+
+    ### Why clearing this is worth more than its priority suggests
+
+    `performance-guard-route` has tripped on `audit_error: malformed typed doctor output` in each of the
+    last several advisor sessions and cost a judgment each time. This is the root cause, so clearing it
+    removes a recurring cron false-positive, not just a rendering wart.
+  created_at: 2026-10-02T02:22:49.834931050Z
+  modified_at: 2026-10-02T02:22:49.834931050Z
+  session_id: 8507630f-b690-4da6-8d9d-bece228469d1
 history:
 - id: 01a0f5c2-efb8-7a02-ae49-98b0e6972676
   author: joe
