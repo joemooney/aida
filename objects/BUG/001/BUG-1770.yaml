@@ -157,7 +157,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:57:32.637932108Z
-modified_at: 2026-10-02T10:57:48.068366804Z
+modified_at: 2026-10-02T10:58:08.703789413Z
 req_type: Bug
 tags:
 - cli
@@ -165,6 +165,11 @@ tags:
 - severity:major
 - silent-noop
 - tags
+relationships:
+- rel_type: References
+  target_id: 01a0c322-619c-7fc1-bb4e-aeb20b187020
+  created_at: 2026-10-02T10:58:08.703786090Z
+  created_by: joe
 history:
 - id: 01a0fc43-5c24-7611-b3e1-13d9c4a3dbcb
   author: joe
