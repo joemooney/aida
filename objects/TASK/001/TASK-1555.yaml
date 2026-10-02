@@ -16,12 +16,12 @@ description: |
   5. A test or CI step keeps the target honest: if a new gate is added to .github/workflows/ci.yml and not to the local target (or to the documented skip list), something fails. Otherwise this drifts straight back out of date -- that drift is the actual root cause here.
 
   Out of scope: changing any gate's rules, and the portability fix for TASK-1513 itself (already fixed in that branch).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T17:32:40.486442883Z
-modified_at: 2026-10-02T08:40:27.902311527Z
+modified_at: 2026-10-02T08:58:13.555692238Z
 req_type: Task
 comments:
 - id: 01a0fbb1-3239-7cb0-a41f-044535ae4bd1
@@ -237,3 +237,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fbd5-e2c6-7291-ac23-8badaf222ac3
+  author: joe
+  timestamp: 2026-10-02T08:58:13.574084335Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-02T08:58:13.555692238Z
+  implemented_by: joe
