@@ -126,10 +126,16 @@ pub(crate) fn decide(results: &[GuardResult]) -> PreflightDecision {
 /// as someone else's mistake and gets reopened.
 // trace:TASK-1289 | ai:claude
 pub(crate) fn retraction_notice(detail: &str) -> String {
+    // BUG-1690: name what a retry actually does with this PR. A retry reuses
+    // an open PR on the branch — un-drafting it first if it was converted to
+    // a draft, since the forge refuses to merge a draft — and opens a fresh
+    // PR when none is open (this close leaves none open).
+    // trace:BUG-1690 | ai:claude
     format!(
         "Closed automatically: the publication guards refused this change before it was \
          reviewed.\n\n{detail}\n\nThe branch is untouched — fix the guard failure and reopen, \
-         or let the drain retry."
+         or let the drain retry. A retry reuses an open PR on this branch, un-drafting it \
+         first if it was converted to a draft, and opens a fresh PR when none is open."
     )
 }
 
@@ -1335,6 +1341,13 @@ mod tests {
         assert!(
             note.contains("reopen"),
             "the notice must name the way forward: {note}"
+        );
+        // BUG-1690 AC3: the notice's retry claim must match the behaviour —
+        // the drain's retry un-drafts a reused PR rather than stalling on it.
+        // trace:BUG-1690 | ai:claude
+        assert!(
+            note.contains("un-drafting it"),
+            "the retry promise must say a reused draft PR is un-drafted: {note}"
         );
     }
 }

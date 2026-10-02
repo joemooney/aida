@@ -930,6 +930,15 @@ pub trait Forge {
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
 
+    /// `gh pr ready` / `glab mr update --ready` / pure-git no-op.
+    ///
+    /// Converts a draft change back to ready-for-review. The orchestrator uses
+    /// this when phase 1 reuses an already-open change that is sitting in
+    /// draft state: every forge refuses to merge a draft, so a reused draft
+    /// would pass CI and review and then stall at the merge with no signal.
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()>;
+
     /// `gh pr checkout` / pure git checkout (mostly forge-agnostic).
     fn checkout_change(&self, c: &ChangeRef) -> Result<()>;
 
@@ -1814,6 +1823,18 @@ impl Forge for GitHubForge {
         Ok(())
     }
 
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+        let out = self.gh(&["pr", "ready", &c.id.to_string()])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr ready failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         let out = self.gh(&["pr", "checkout", &c.id.to_string()])?;
         anyhow::ensure!(out.status.success(), "gh pr checkout failed for #{}", c.id);
@@ -2475,6 +2496,18 @@ impl Forge for GitLabForge {
         Ok(())
     }
 
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+        let out = self.glab(&["mr", "update", &c.id.to_string(), "--ready"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr update --ready failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         pure_git_checkout(&self.project_root, &c.branch)
     }
@@ -2769,6 +2802,13 @@ impl Forge for PureGitForge {
     /// holds.
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, _c: &ChangeRef, _reason: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Pure git has no draft concept, so a reused change is never
+    /// draft-blocked — vacuously ready.
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, _c: &ChangeRef) -> Result<()> {
         Ok(())
     }
 
@@ -3773,11 +3813,18 @@ pub(crate) mod fake {
         pub(crate) open_for_spec: ChangeLookup,
         pub(crate) merged_for_branch: ChangeLookup,
         pub(crate) author: Option<String>,
+        /// What `change_metadata` reports for `is_draft` — scripts the
+        /// reused-draft-PR scenario.
+        // trace:BUG-1690 | ai:claude
+        pub(crate) is_draft: bool,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
         /// `(change id, body)` for every `comment` call.
         // trace:BUG-1714 | ai:claude
         pub(crate) commented: Arc<Mutex<Vec<(u64, String)>>>,
+        /// Change id for every `mark_change_ready` call.
+        // trace:BUG-1690 | ai:claude
+        pub(crate) readied: Arc<Mutex<Vec<u64>>>,
     }
 
     impl RecordingForge {
@@ -3787,8 +3834,10 @@ pub(crate) mod fake {
                 open_for_spec: ChangeLookup::NoChange,
                 merged_for_branch: ChangeLookup::NoChange,
                 author: Some("codex-bot".into()),
+                is_draft: false,
                 closed: Arc::new(Mutex::new(Vec::new())),
                 commented: Arc::new(Mutex::new(Vec::new())),
+                readied: Arc::new(Mutex::new(Vec::new())),
             }
         }
 
@@ -3805,6 +3854,11 @@ pub(crate) mod fake {
         // trace:BUG-1714 | ai:claude
         pub(crate) fn commented(&self) -> Vec<(u64, String)> {
             self.commented.lock().unwrap().clone()
+        }
+
+        // trace:BUG-1690 | ai:claude
+        pub(crate) fn readied(&self) -> Vec<u64> {
+            self.readied.lock().unwrap().clone()
         }
     }
 
@@ -3843,7 +3897,7 @@ pub(crate) mod fake {
                 base_ref: "main".into(),
                 head_ref: "codex/task".into(),
                 head_sha: "abc".into(),
-                is_draft: false,
+                is_draft: self.is_draft,
                 is_cross_repository: false,
                 head_repo: None,
             })
@@ -3894,6 +3948,11 @@ pub(crate) mod fake {
         }
         fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
             self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            Ok(())
+        }
+        // trace:BUG-1690 | ai:claude
+        fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+            self.readied.lock().unwrap().push(c.id);
             Ok(())
         }
         fn checkout_change(&self, _: &ChangeRef) -> Result<()> {
