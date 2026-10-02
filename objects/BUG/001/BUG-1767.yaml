@@ -140,8 +140,60 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:05:44.820925638Z
-modified_at: 2026-10-02T10:08:18.354032883Z
+modified_at: 2026-10-02T10:14:08.224474984Z
 req_type: Bug
+comments:
+- id: 01a0fc1b-6260-7050-8448-3e53502762f7
+  author: joe
+  content: |
+    ## Evidence completed — all nine close-bucket epics measured, not six
+
+    The filed description measured six and named three as unread. All nine are now
+    read directly from the canonical store objects. **None of the nine is stored
+    `Completed`**, and all nine have `aida show` prescribe `aida archive`:
+
+    | spec | stored status | `aida show` | `show`'s prescribed next |
+    |---|---|---|---|
+    | EPIC-71 | InProgress | completed | `aida archive EPIC-71` |
+    | EPIC-57 | Draft | completed | `aida archive EPIC-57` |
+    | EPIC-61 | Approved | completed | `aida archive EPIC-61` |
+    | EPIC-0433 | Draft | completed | `aida archive EPIC-0433` |
+    | EPIC-42 | Draft | completed | `aida archive EPIC-42` |
+    | EPIC-65 | Draft | completed | `aida archive EPIC-65` |
+    | EPIC-63 | Approved | completed | `aida archive EPIC-63` |
+    | EPIC-59 | Draft | completed | `aida archive EPIC-59` |
+    | EPIC-0419 | Draft | completed | `aida archive EPIC-0419` |
+
+    Tally: **6 Draft, 2 Approved, 1 InProgress, 0 Completed.**
+
+    That makes consequence (2) in the description sharper than first filed:
+    following `aida show`'s own prescribed next action on these would archive **six
+    Draft epics** as delivered work — never recording Completed, and never passing
+    through approval at all. The two remaining copies of the advisor's own
+    prescription (`aida edit <id> --status completed`) would at least record the
+    completion, but it is the *contradiction between the two surfaces* that leaves
+    an advisor with no safe reading.
+
+    EPIC-72 (Approved / shows completed / rollup-complete) behaves identically but
+    lands in the advisor's `bless` bucket rather than `close`, so the divergence is
+    not confined to one bucket's predicate.
+
+    Note for whoever picks this up: EPIC-0433 and EPIC-0419 carry an EMPTY
+    `agreed_id` and are addressed by a zero-padded `spec_id`, so a store lookup
+    keyed on `^agreed_id: <ID>$` silently misses them. Match
+    `^(agreed_id|spec_id): EPIC-0?<n>$` instead. That is a separate trap, not part
+    of this bug, but it will bite the fixture author.
+
+    ## Deliberately NOT done in this session
+
+    I did not close or archive any of the nine. Acting on either prescription while
+    this bug is open would be acting on the defect: six are stored `Draft`, so
+    `--status completed` skips approval outright, and BUG-768 is the recorded
+    precedent that force-closing epics regresses. The disposition of these nine is
+    a decision to take once this bug is fixed — or explicitly as an operator call.
+  created_at: 2026-10-02T10:14:08.224474984Z
+  modified_at: 2026-10-02T10:14:08.224474984Z
+  session_id: 2f2ab833-51fe-47ff-8f5d-d73c37ec27d8
 history:
 - id: 01a0fc16-0bb2-7b33-843a-1352924c07cb
   author: joe
