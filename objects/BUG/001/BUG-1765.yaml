@@ -86,12 +86,12 @@ description: |
   5. Whatever mechanism is chosen is documented in `coordination.rs`'s module
      docs, replacing the current `heartbeat_at = started_at` note, so the next
      reader does not re-derive this.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T20:25:27.400990759Z
+modified_at: 2026-10-02T21:40:19.267168735Z
 req_type: Bug
 comments:
 - id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
@@ -193,6 +193,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fe8f-9abb-78e1-8389-44523136ebae
+  author: aida-auto-bump
+  timestamp: 2026-10-02T21:40:19.259357745Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0fe8f-9ac3-7ba1-a10f-7b9d2cdd9fb8
+  timestamp: 2026-10-02T21:40:19.267160064Z
+  agent: advisor
+  commit_sha: 1751f6eec5b3cfb2aa4bd0641d7bef7cd90e4f9d
+  summary: 'Independent cross-vendor codex review (static): probe only adds liveness, TTL backstop and lock paths unchanged, decision-level tests witness the fix. Non-blocking: no test for an aged stale holder-table entry.'
+  review_verdict: approved
 filed_at:
   code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
   branch: main
@@ -201,3 +215,7 @@ filed_at:
   aida_build_sha: f3cde6e60e
   vendor: antigravity
   session: 9d040115-a2e5-4c27-bbcd-7d48337f3273
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-02T21:40:19.259331940Z
+  completion_sha: 1751f6eec5b3cfb2aa4bd0641d7bef7cd90e4f9d
