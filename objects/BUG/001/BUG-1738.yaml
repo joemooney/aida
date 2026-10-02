@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-10-02T23:00:17.924186393Z
+modified_at: 2026-10-02T23:00:24.788530022Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -169,6 +169,12 @@ comments:
     AC7 — five mutations, each test witnessed: never-report (positive test fails), gate-skip (all four negative tests fail), marker-based recognition (pasted-marker test fails), exact comparator (CRLF-tolerance test fails), alias-entry removal (alias test fails).
   created_at: 2026-10-02T23:00:17.924186393Z
   modified_at: 2026-10-02T23:00:17.924186393Z
+  session_id: e4f254c2-1e5a-46ad-87d7-b4769d85d440
+- id: 01a0fed8-ee54-7921-8bff-8aa5d9024a5f
+  author: joe
+  content: 'Consider-do-not-assume survey: other generated-once artifacts. .git/hooks/pre-commit and .git/hooks/commit-msg are scaffold-pipeline artifacts in the ''template'' category — aida scaffold status reports their drift and aida scaffold upgrade overwrites them, and deployed .claude/.codex prompts/skills are covered by the TASK-1124 scaffold-drift doctor category. The pre-push mirror hook was the uncovered outlier because aida remote mirror installs it outside the scaffold pipeline. I found no other generated-once artifact without a drift check, so no separate spec filed.'
+  created_at: 2026-10-02T23:00:24.788530022Z
+  modified_at: 2026-10-02T23:00:24.788530022Z
   session_id: e4f254c2-1e5a-46ad-87d7-b4769d85d440
 history:
 - id: 01a0f28c-4fbb-74f2-b46b-ec100afd2b2b
