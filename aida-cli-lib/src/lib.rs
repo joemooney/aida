@@ -56,6 +56,8 @@ mod deps_cmd;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+// trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
+mod drain_failure_note;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod project_capabilities;
@@ -101324,6 +101326,7 @@ fn record_auto_complete_run(
         phase_durations,
         total_ms: result.total_ms as u64,
         drafted_bug: None,
+        failure_comment: None,
         binary_sha: build_sha_short(),
         auto_rebase: driver.auto_rebase_events.clone(),
         lifecycle_skips: lifecycle_skip.active_tokens(),
@@ -101371,24 +101374,34 @@ fn record_auto_complete_run(
                     );
                 }
             }
+            // TASK-1564: the narrative record is a comment on the parent spec,
+            // not a new draft spec. Nothing else moves — the non-zero exit, the
+            // ledger line appended below, and the seat routing are untouched.
+            // trace:TASK-1564 | ai:claude
             None => {
                 let hint = auto_complete::recovery_hint(
                     phase,
                     failure.kind,
                     &auto_complete::PhaseDriver::hint_context(driver),
                 );
-                if let Some(bug_id) =
-                    draft_auto_complete_failure_bug(spec, phase, failure, &hint, &event)
-                {
+                if let Some(comment_id) = note_auto_complete_failure_on_parent(
+                    project_root,
+                    spec,
+                    phase,
+                    failure,
+                    &hint,
+                    &event,
+                ) {
                     if !json {
                         eprintln!(
-                            "  {} auto-drafted {} for this failure — triage it: `aida show {}`",
+                            "  {} recorded this failure as a comment on {} \
+                             (no new spec filed) — read it: `aida comment list {}`",
                             "📋".dimmed(),
-                            bug_id.cyan(),
-                            bug_id,
+                            spec.cyan(),
+                            spec,
                         );
                     }
-                    event.drafted_bug = Some(bug_id);
+                    event.failure_comment = Some(comment_id);
                 }
             }
         }
@@ -101417,8 +101430,10 @@ fn record_auto_complete_run(
     );
 }
 
-const AUTO_FAILURE_ATTEMPTS_PREFIX: &str = "Attempts:";
-const AUTO_FAILURE_LATEST_PREFIX: &str = "Latest recurrence:";
+// TASK-1564 moved the recurrence bump into `drain_failure_note` so the note
+// path and the legacy auto-drafted-BUG absorb path share one implementation.
+// trace:TASK-1564 | ai:claude
+use drain_failure_note::increment_auto_failure_attempts;
 
 /// BUG-864: absorb a recurring phase failure into the open auto-drafted BUG
 /// already tracking that `(spec, phase, failure-kind)` signature. The store is
@@ -101536,67 +101551,38 @@ fn auto_failure_kind_matches(req: &aida_core::Requirement, failure_kind: &str) -
             .contains(&format!("Failure kind: `{failure_kind}`"))
 }
 
-fn increment_auto_failure_attempts(description: &str, latest_at: &str) -> String {
-    let mut attempts_seen = false;
-    let mut latest_seen = false;
-    let mut current_attempts = 1;
-    for line in description.lines() {
-        if let Some(raw) = line.trim().strip_prefix(AUTO_FAILURE_ATTEMPTS_PREFIX) {
-            current_attempts = raw.trim().parse::<u32>().unwrap_or(1);
-            break;
-        }
-    }
-    let next_attempts = current_attempts.saturating_add(1);
-    let mut lines = Vec::new();
-    for line in description.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with(AUTO_FAILURE_ATTEMPTS_PREFIX) {
-            lines.push(format!("{AUTO_FAILURE_ATTEMPTS_PREFIX} {next_attempts}"));
-            attempts_seen = true;
-        } else if trimmed.starts_with(AUTO_FAILURE_LATEST_PREFIX) {
-            lines.push(format!("{AUTO_FAILURE_LATEST_PREFIX} {latest_at}"));
-            latest_seen = true;
-        } else {
-            lines.push(line.to_string());
-        }
-    }
-    if !attempts_seen || !latest_seen {
-        if !lines.is_empty() && lines.last().is_some_and(|l| !l.trim().is_empty()) {
-            lines.push(String::new());
-        }
-        lines.push("## Recurrence".to_string());
-        lines.push(String::new());
-        if !attempts_seen {
-            lines.push(format!("{AUTO_FAILURE_ATTEMPTS_PREFIX} {next_attempts}"));
-        }
-        if !latest_seen {
-            lines.push(format!("{AUTO_FAILURE_LATEST_PREFIX} {latest_at}"));
-        }
-    }
-    lines.join("\n")
-}
-
-/// TASK-266: auto-file a Draft BUG for an `--auto-complete` phase failure.
-/// The BUG is intentionally left in Draft and NOT queued — the user triages
-/// it and promotes it to Approved only if it is a real AIDA bug (vs a user
-/// error or a local environment issue). Returns the new BUG's spec-id, or
-/// `None` if the `aida add` subprocess could not run (best-effort — the
-/// JSONL log still captures the failure either way). trace:TASK-266 | ai:claude
-fn draft_auto_complete_failure_bug(
+/// Record an `--auto-complete` phase failure as a comment on the parent spec.
+///
+/// Replaces the TASK-266 Draft-BUG auto-file: the narrative record is the same,
+/// but a comment informs the next reader of the parent instead of demanding a
+/// triage disposition the way a draft spec does. A recurrence of the same
+/// `(phase, failure-kind)` signature bumps the existing note's counter rather
+/// than appending a second one — the BUG-864 anti-spam rule, carried over.
+///
+/// Returns the note's comment UUID, or `None` when the store could not be
+/// resolved or written (best-effort — the JSONL ledger line still records the
+/// failure either way, and the drain still exits non-zero).
+// trace:TASK-1564 trace:TASK-266 trace:BUG-864 | ai:claude
+fn note_auto_complete_failure_on_parent(
+    project_root: &std::path::Path,
     spec: &str,
     phase: auto_complete::Phase,
     failure: &auto_complete::PhaseFailure,
     hint: &str,
     event: &auto_complete_telemetry::AutoCompleteEvent,
 ) -> Option<String> {
-    let phase_n = phase.index();
-    let phase_name = phase.slug();
-    let title = format!("auto-complete failure: phase {phase_n} ({phase_name}) on {spec}");
-    let tags = format!(
-        "auto-complete,failure-{phase_n},auto-drafted,{phase_name},failure-kind:{}",
-        failure.kind.cause_slug()
-    );
-    let json_line = serde_json::to_string(event).unwrap_or_default();
+    let phase_index = phase.index() as u8;
+    let phase_slug = phase.slug();
+    let failure_kind = failure.kind.cause_slug();
+
+    let seat = match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(role) if !role.trim().is_empty() => format!("{phase_slug} (session role: {role})"),
+        _ => phase_slug.to_string(),
+    };
+    let branch = aida_core::git_ops::current_branch(project_root).ok();
+    let commit = aida_core::git_ops::head_sha(project_root)
+        .ok()
+        .map(|sha| sha.chars().take(12).collect::<String>());
     let durations = if event.phase_durations.is_empty() {
         "  (none recorded)".to_string()
     } else {
@@ -101607,99 +101593,49 @@ fn draft_auto_complete_failure_bug(
             .collect::<Vec<_>>()
             .join("\n")
     };
-    let description = format!(
-        "Auto-drafted by `aida queue work {spec} --auto-complete` after phase {phase_n} \
-({phase_name}) failed. Review this BUG and promote it to Approved if it is a real AIDA \
-orchestrator bug — or reject it if it was a user error or a local environment issue. It \
-is intentionally left in Draft and NOT queued. (TASK-266)\n\n\
-## Failure\n\n\
-{reason}\n\n\
-Failure kind: `{kind}`\n\n\
-## Recovery hint shown to the user\n\n\
-{hint}\n\n\
-## Recurrence\n\n\
-Attempts: 1\n\
-Latest recurrence: {latest_at}\n\n\
-## Phase durations\n\n\
-{durations}\n\n\
-## Telemetry entry\n\n\
-The line appended to `~/.aida/auto-complete.jsonl` for this run:\n\n\
-```json\n{json_line}\n```\n\n\
-## Recurse-fix\n\n\
-Once triaged and promoted, this BUG can itself be driven by the orchestrator: \
-`aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes \
-operational.\n",
-        reason = failure.reason,
-        kind = failure.kind.cause_slug(),
-        latest_at = event.completed_at,
-    );
+    let json_line = serde_json::to_string(event).unwrap_or_default();
 
-    // Re-resolve the binary fresh (a phase-6 `cargo build` may have replaced
-    // the one the orchestrator started with — BUG-217). Try the EPIC-23
-    // parent first (this repo dogfoods the orchestrator); fall back to a
-    // parent-less add so the auto-draft still works in any other project
-    // that has no EPIC-23.
-    let exe = resolve_aida_exe();
-    add_draft_bug(&exe, &title, &tags, &description, Some("EPIC-23"))
-        .or_else(|| add_draft_bug(&exe, &title, &tags, &description, None))
-}
+    let body = drain_failure_note::render(&drain_failure_note::NoteContext {
+        spec,
+        phase_index,
+        phase_slug,
+        seat: &seat,
+        failure_kind,
+        failure_reason: &failure.reason,
+        hint,
+        branch: branch.as_deref(),
+        commit: commit.as_deref(),
+        completed_at: &event.completed_at,
+        durations: &durations,
+        telemetry_json: &json_line,
+    });
 
-/// Run `aida add` to file the Draft BUG, returning the new spec-id parsed
-/// from stdout. `NO_COLOR` is set on the child so the `ID:` line is plain
-/// text. trace:TASK-266 | ai:claude
-fn add_draft_bug(
-    exe: &std::path::Path,
-    title: &str,
-    tags: &str,
-    description: &str,
-    parent: Option<&str>,
-) -> Option<String> {
-    use std::io::Write;
-    let mut args: Vec<String> = vec![
-        "add".into(),
-        "--type".into(),
-        "bug".into(),
-        "--status".into(),
-        "draft".into(),
-        "--title".into(),
-        title.into(),
-        "--tags".into(),
-        tags.into(),
-        "--description-stdin".into(),
-    ];
-    if let Some(p) = parent {
-        args.push("--parent".into());
-        args.push(p.into());
+    let store_path = detect_distributed_store_from(project_root)?;
+    let mut storage = Storage::new(&store_path);
+    if let Ok(dispenser) = load_dispenser(&store_path) {
+        storage = storage.with_dispenser(dispenser);
     }
-    let mut child = std::process::Command::new(exe)
-        .args(&args)
-        .env("NO_COLOR", "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn_retrying_etxtbsy()
-        .ok()?;
-    child.stdin.take()?.write_all(description.as_bytes()).ok()?;
-    let out = child.wait_with_output().ok()?;
-    if !out.status.success() {
-        return None;
+    let sig = drain_failure_note::signature(phase_index, phase_slug, failure_kind);
+    match comment_cmd::bump_or_add_marked_comment(
+        &storage,
+        spec,
+        &sig,
+        &body,
+        "auto-complete",
+        &event.completed_at,
+    ) {
+        Ok(id) => Some(id.to_string()),
+        Err(_) => None,
     }
-    parse_added_spec_id(&String::from_utf8_lossy(&out.stdout))
-}
-
-/// Parse the `ID: <SPEC-ID>` line that `aida add` prints on success.
-/// trace:TASK-266 | ai:claude
-fn parse_added_spec_id(stdout: &str) -> Option<String> {
-    stdout
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("ID:"))
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
 }
 
 #[cfg(test)]
 #[path = "tests/task_266_tests.rs"]
 mod task_266_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1564_drain_failure_note_tests.rs"]
+mod task_1564_drain_failure_note_tests;
 
 fn auto_complete_queue_add_args(spec: &str) -> Vec<&str> {
     vec!["queue", "add", spec, "--for", "implementer", "--no-scope"]

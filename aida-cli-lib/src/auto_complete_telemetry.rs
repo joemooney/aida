@@ -77,6 +77,12 @@ pub struct AutoCompleteEvent {
     /// circular reference, it is the pre-draft snapshot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drafted_bug: Option<String>,
+    /// TASK-1564: UUID of the comment this failure was recorded as on the
+    /// parent spec, replacing the TASK-266 draft-BUG container. Set after the
+    /// comment is written, so the verbatim copy embedded in that comment
+    /// carries `None` here — the same pre-write snapshot `drafted_bug` takes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_comment: Option<String>,
     /// Short build SHA of the aida binary (release tracking).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary_sha: Option<String>,
@@ -275,6 +281,7 @@ mod tests {
             }],
             total_ms: 5000,
             drafted_bug: failed_phase.map(|_| "BUG-200".to_string()),
+            failure_comment: None,
             binary_sha: Some("abc1234".to_string()),
             auto_rebase: Vec::new(),
             lifecycle_skips: Vec::new(),
