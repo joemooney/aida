@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T12:47:21.787131796Z
-modified_at: 2026-10-02T13:19:14.012767213Z
+modified_at: 2026-10-02T14:03:18.545853202Z
 req_type: Task
 tags:
 - build
@@ -72,6 +72,30 @@ comments:
   created_at: 2026-10-02T13:19:14.012767213Z
   modified_at: 2026-10-02T13:19:14.012767213Z
   session_id: 20dd6351-ab65-4ffc-b7b1-573c5920c935
+- id: 01a0fced-3291-7383-a679-616ead30edb0
+  author: joe
+  content: |
+    Third independent reproduction, 2026-10-02, in a fresh worktree
+    `/home/joe/ai/aida-bug1681` cut from `main@30638a79ea`.
+
+    `aida-cli-lib/src/generated/aida.rs` was left modified by **every** build-ish
+    command in the session, not just the first: `cargo check -p aida-cli-lib --lib`,
+    then `cargo test -p aida-cli-lib --lib <filter>`, then `make check-ci-fast`. I
+    reverted it with `git checkout --` and a later gate regenerated it again, so a
+    single revert before committing is not enough.
+
+    Concrete cost this time: `git add -u aida-cli-lib/src` staged it, and it was
+    caught only because the staged-file list was inspected before `git commit`. Any
+    seat that runs `git add -A`, or that reverts once and then runs another gate,
+    ships an unrelated generated-proto change in a spec's PR.
+
+    Suggested acceptance to add if this is picked up: after a full
+    `make check-ci-fast` on a clean tree, `git status --porcelain` is empty. That is
+    the predicate a seat actually needs, and it is stronger than "cargo check does
+    not dirty the tree" because the regeneration recurs per gate.
+  created_at: 2026-10-02T14:03:18.545853202Z
+  modified_at: 2026-10-02T14:03:18.545853202Z
+  session_id: bda69c2d-94ea-4e14-802c-29cc2207a98f
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
