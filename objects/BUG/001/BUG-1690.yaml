@@ -13,12 +13,12 @@ description: |
   1. Either a retry un-drafts the PR it is reusing, or phase 1 stops treating a draft PR as published and opens a fresh one. Pick one deliberately and record why.
   2. A fixture test proves a retry after a draft retraction reaches a mergeable state rather than stalling.
   3. `draft_notice`'s text matches whatever behaviour is chosen.
-status: Planned
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T14:18:08.069508255Z
+modified_at: 2026-10-02T22:22:49.919184087Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -168,6 +168,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
+- id: 01a0feb6-863f-73e1-9428-363a4a8e4f8a
+  author: joe
+  timestamp: 2026-10-02T22:22:49.919181712Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: InProgress
 implementation_info:
   implemented: false
   reopened_at_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
