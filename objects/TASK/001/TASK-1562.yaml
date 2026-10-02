@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:53:14.519131201Z
-modified_at: 2026-10-01T00:13:42.229079383Z
+modified_at: 2026-10-02T08:47:50.517838422Z
 req_type: Task
 comments:
 - id: 01a0f4cf-4fd5-7042-bc9d-329e14f37b51
@@ -117,6 +117,95 @@ comments:
   created_at: 2026-10-01T00:13:42.229079383Z
   modified_at: 2026-10-01T00:13:42.229079383Z
   session_id: 00aa410b-ad02-4cfa-9323-d4ac8d607cf9
+- id: 01a0fbcc-60f5-7b21-816a-9a5c558849fc
+  author: joe
+  content: |
+    ## Design sketch — advisor, relay session #10 (2026-10-02)
+
+    ### The scope decision the spec asks for: `aida worktree reclaim`, NOT a flag on `aida session reap`
+
+    `aida session reap` has a narrow, deliberately strict contract it states in its own
+    help: a session is reaped only when its spec is Done/Completed, its branch is merged,
+    AND its process has exited. A stale `target/` cache is reclaimable in precisely the
+    worktrees that do NOT satisfy that contract — an unmerged branch parked mid-review, a
+    worktree whose spec is still In Progress but whose build is hours cold. Putting the
+    reclaim behind a reap flag would either have to violate reap's own contract, or would
+    only ever reach worktrees that are about to be deleted outright, where the `target/`
+    goes with the directory anyway and the flag buys nothing.
+
+    `aida worktree` is already "the workspace layer that mirrors `git worktree`" and already
+    owns the disk-reclaiming verb `gc` (prune merged worktrees). A cache-reclaiming verb is
+    its sibling: `gc` removes worktrees that are finished, `reclaim` removes the regenerable
+    cache inside worktrees that are KEPT. The two are complementary and neither subsumes the
+    other.
+
+    ### Shape
+
+    New module `aida-cli-lib/src/worktree_reclaim.rs`, split so the rails are testable
+    without deleting anything:
+
+    - `Survey` — the gathered inputs (main root, `git worktree list --porcelain` entries,
+      open-PR branches, live session lease paths+PIDs, min-age, now). Injected, so a test
+      builds one against a tempdir fixture instead of mocking a filesystem.
+    - `plan(&Survey) -> Plan` — pure classification. Emits `Reclaimable { target, branch,
+      bytes }` ordered largest-first, plus `skipped: Vec<(PathBuf, Skip)>` where `Skip` is a
+      typed enum (`MainCheckout`, `Store`, `NoTarget`, `LiveSession{pid}`, `OpenPr{branch}`,
+      `RecentlyTouched`). Typed, because the skip REASON is the user-facing output — the
+      operator needs to know it skipped aida-bug-1693 for an open PR, not just that it
+      skipped something.
+    - `apply(&Plan, ..) -> Reclaimed` — the only code that deletes.
+
+    ### The main-checkout rail is enforced twice, on purpose
+
+    AC3 asks that the main checkout's `target/` be "refused as a candidate by an assertion,
+    not by ordering — a test proves the command leaves it in place even when it is the
+    largest candidate." So the refusal lives in TWO places and the test exercises the second:
+
+    1. `plan()` filters it (rail 2), and
+    2. `apply()` re-checks every path against `main_root.join("target")` immediately before
+       `remove_dir_all` and hard-errors if it matches.
+
+    Layer 2 is what makes AC3's test meaningful: the test hands `apply()` a hand-built
+    `Plan` whose largest entry IS the main checkout's target — i.e. it simulates the
+    upstream filter bug — and asserts the directory still exists afterwards and the call
+    errored. A test that only went through `plan()` would prove the filter works, not that
+    ordering is irrelevant, which is the thing the AC actually names.
+
+    ### Dry run is the default
+
+    `--apply` deletes; bare `reclaim` reports reclaimable bytes and the skip list. That is
+    the inverse of most AIDA verbs and matches the reference script, because the failure
+    mode here is unrecoverable-ish (a cold rebuild of 11 worktrees) and the command runs
+    under disk pressure, which is when hand work deletes the wrong thing.
+
+    Flags: `--apply`, `--min-age-mins N` (default 60), `--target-pct N` (stop early once
+    the filesystem is at or below N%), `--include-live`, `--include-open-prs`, `--json`.
+
+    ### AC1 — the guard's remediation text
+
+    Two call sites recommend `cargo clean` for this condition:
+    - `aida-cli-lib/src/init_cmd.rs:2674` — the scaffolded `disk-headroom-guard` job prompt.
+    - `aida-cli-lib/src/doctor_cmd.rs:~1590` — doctor's own disk-headroom advice.
+
+    Both get the same correction: name `aida worktree reclaim`, and where `cargo clean` is
+    still mentioned, say what it actually targets (the SHARED `CARGO_TARGET_DIR`, which in
+    a worktree points at the main checkout — i.e. it clears the live fleet's cache and not
+    the stale one). That is the sentence the spec says is missing, and it is the reason the
+    operator hand-wrote the delete list twice.
+
+    ### What this does NOT do
+
+    The reference script at `.aida/scripts/reclaim-worktree-targets.sh` is operator-local
+    and stays where it is; it is the prior art, not a file to move. Nothing in this change
+    reads it. Open-PR discovery goes through `gh`, and its absence is tolerated the way the
+    script tolerates it — but with the rail INVERTED to fail safe: if `gh` cannot be
+    reached, every branch is treated as possibly having an open PR unless
+    `--include-open-prs` is passed explicitly. The script's version silently reclaimed
+    everything when `gh` was missing, which is the one rail regression worth fixing while
+    porting.
+  created_at: 2026-10-02T08:47:50.517838422Z
+  modified_at: 2026-10-02T08:47:50.517838422Z
+  session_id: d5361d99-df2f-496e-9322-ef0a7eb10836
 history:
 - id: 01a0f4cf-4af6-7b01-b92a-98b2f93c6fda
   author: joe
