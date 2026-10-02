@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-02T11:22:06.078985716Z
+last_run: 2026-10-02T19:44:38.516408094Z
 last_by:
   seat: advisor
-  session: 80a149f2-df5e-43a1-9400-e2ad67e7819c
+  session: b60cff1c-3dc3-4a0a-ae64-2c8966f495bd
   vendor: antigravity
 result: done
-note: 'Re-measured by hand (advisor relay #14): this is a CEILING trip only — proportion 8.98% is inside the 10% tolerance; the single 9449 ms call against ADR-53''s 5000 ms ceiling is the whole failure. Captured on TASK-1565 with the numbers, plus the link it was missing: BUG-1674 (approved) is the already-root-caused unbounded stale-cache wait behind a concurrent writer, i.e. the likely cause of that one call. No budget change picked — still an operator decision, and BUG-1674 should be settled first.'
-due_since: 2026-10-02T17:08:15.201556442Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Disposition: environmental, not a regression; budgets unchanged. Window evidence: 12.1% of 257 ''aida show'' calls over the 1000ms budget concentrated in binary f3cde6e60e (14.9% of 201) during the multi-day build-storm/high-iowait period; current binary fe09d7678e was 1.9% of 54. Quiet-host control just now: 5 consecutive ''aida show'' calls at 90-180ms. The 9772ms ceiling breach reads as one contended-host outlier. Side note: the 09-29 trip record carries audit_error ''malformed typed doctor output: trailing characters at line 30 column 1'' — worth a look if it recurs.'
