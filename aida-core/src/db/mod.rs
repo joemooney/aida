@@ -12,12 +12,15 @@ mod cache_lock;
 pub mod cache_refresh;
 #[cfg(feature = "native")]
 mod cached_git_backend;
+// trace:TASK-1527 | ai:claude
 #[cfg(feature = "native")]
 mod git_backend;
 #[cfg(feature = "native")]
 mod migration;
 #[cfg(feature = "postgres")]
 mod postgres_backend;
+#[cfg(feature = "native")]
+pub mod refresh_request;
 #[cfg(feature = "native")]
 mod sqlite_backend;
 #[cfg(feature = "native")]
