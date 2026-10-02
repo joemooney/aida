@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T23:14:22.318303377Z
+modified_at: 2026-10-02T23:31:45.464668966Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -157,6 +157,12 @@ comments:
   created_at: 2026-10-02T23:14:22.318303377Z
   modified_at: 2026-10-02T23:14:22.318303377Z
   session_id: a4861695-0967-4442-a984-92e100a5580a
+- id: 01a0fef5-a0b8-7e80-9f1e-d66c5c0b6219
+  author: joe
+  content: 'ADVISOR RE-REVIEW (relay #16, PR #2357): new branch commit 5fbd75c13b reviewed — it is the pre-verdict test relocation (seam tests moved from lib.rs''s forge_seam_tests to tests/bug_1690_undraft_reuse_tests.rs with per-AC trace anchors; committed 16:03, before the 16:14 verdict, pushed late). Behavior-neutral: no non-test code changed. The relay #14 REWORK NEEDED verdict stands in full — spec_is_draft_only_tagged still fails OPEN (branch head lib.rs:106673-106675 returns false when load_store_for_lookup is None, so a transient store-load failure at phase-1 adoption would un-draft a review:draft-only hold), and the relocated tests still call undraft_reused_publication directly, so neither phase-1 adoption call site is witnessed. Rework remains queued to the implementer role; do not merge #2357 on a green run of this commit.'
+  created_at: 2026-10-02T23:31:45.464668966Z
+  modified_at: 2026-10-02T23:31:45.464668966Z
+  session_id: 376d2bec-1d85-4c9a-b098-83ba6464ab20
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
