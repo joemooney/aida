@@ -67,13 +67,21 @@ description: |
   5. Fixture test per clause. The collision case is reproducible without root: record
      a lease with `pid = 2` and a `pid_start_time` later than boot, and assert it reads
      dead.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T04:13:57.890825536Z
-modified_at: 2026-10-02T04:13:57.890825536Z
+modified_at: 2026-10-02T04:14:11.262660707Z
 req_type: Bug
+history:
+- id: 01a0fad1-d73e-70f1-9163-1abe5ec89ac1
+  author: joe
+  timestamp: 2026-10-02T04:14:11.262658973Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 85aea1c60fcc36a4c4756fd8047c6342208616c5
   branch: main
