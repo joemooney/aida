@@ -553,29 +553,40 @@ mod tests {
 
     // ── BUG-1764: `active_claims` must not keep dead claims ────────────────
 
-    /// Write a session-lease claim TOML into a temp store's coordination tree.
+    /// Write a session-lease claim into a temp store's coordination tree.
     /// `heartbeat` drives the staleness verdict (`ttl_secs = 1800`).
+    ///
+    /// Serializes the real `Claim` struct rather than hand-writing TOML: a
+    /// hand-written `clone_path = "{path}"` is a TOML *basic* string, so a
+    /// Windows path's backslashes would be read as escape sequences. Using the
+    /// struct also keeps the fixture faithful to what the production writer
+    /// emits, so a field added later cannot silently diverge.
     // trace:BUG-1764 | ai:claude
     fn write_claim(store: &Path, scope: &str, clone_path: &str, heartbeat: &str) {
-        let dir = store.join("coordination/leases");
+        let dir = store.join("coordination").join("leases");
         std::fs::create_dir_all(&dir).unwrap();
-        // The filename stem only has to be unique per scope for `list_claims`,
-        // which reads every `*.toml` in the tree and takes the scope from the
-        // record itself.
-        let body = format!(
-            "scope = \"{scope}\"\n\
-             node_id = \"9\"\n\
-             clone_path = \"{clone_path}\"\n\
-             host = \"somewhere-else\"\n\
-             pid = 4242\n\
-             agent = \"implementer\"\n\
-             started_at = \"{heartbeat}\"\n\
-             heartbeat_at = \"{heartbeat}\"\n\
-             ttl_secs = 1800\n\
-             process_backed = false\n\
-             review_verb = false\n"
-        );
-        std::fs::write(dir.join(format!("{}.toml", scope.to_lowercase())), body).unwrap();
+        let claim = crate::coordination::Claim {
+            scope: scope.to_string(),
+            node_id: "9".to_string(),
+            clone_path: clone_path.to_string(),
+            host: "somewhere-else".to_string(),
+            pid: 4242,
+            pid_start_time: None,
+            agent: "implementer".to_string(),
+            started_at: heartbeat.to_string(),
+            heartbeat_at: heartbeat.to_string(),
+            ttl_secs: 1800,
+            process_backed: false,
+            review_verb: false,
+            authorized_by: None,
+        };
+        // The filename stem only has to be unique per scope: `list_claims`
+        // reads every `*.toml` in the tree and takes the scope from the record.
+        std::fs::write(
+            dir.join(format!("{}.toml", scope.to_lowercase())),
+            toml::to_string(&claim).unwrap(),
+        )
+        .unwrap();
     }
 
     /// The roster row for a peer clone must report only claims that peer still
