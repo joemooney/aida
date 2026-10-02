@@ -746,16 +746,55 @@ fn process_identity_is_alive_with(
 fn pid_is_alive_impl(pid: u32) -> bool {
     // SAFETY: `kill` with signal 0 only probes; it never delivers a signal.
     let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    if rc == 0 {
-        return true;
-    }
     // errno == EPERM means the process exists but we may not signal it.
-    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    let exists = rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
+    // BUG-1741: `kill(pid, 0)` answers 0 for a defunct (zombie) process too —
+    // the kernel keeps the entry until the parent reaps it, so an unreaped
+    // child that exited days ago still probes as alive. A zombie cannot do
+    // work, hold locks meaningfully, or be signalled into action, so it is
+    // dead for every liveness consumer here.
+    // trace:BUG-1741 | ai:claude
+    exists && !pid_is_zombie(pid)
+}
+
+/// Linux: is `pid` in process state `Z` (zombie/defunct)? Reads the single
+/// file `/proc/<pid>/stat`, keeping BUG-613's O(1) no-table-walk property.
+///
+/// The second field (`comm`) is parenthesised and may itself contain spaces
+/// and `)` — e.g. `123 (a) b) Z ...` — so the state field is parsed from the
+/// **last** `)`, never by splitting the whole line on whitespace.
+///
+/// Unreadable state (procfs missing, pid vanished between the `kill` probe
+/// and this read, permission oddities) degrades to "not a zombie" so the
+/// `kill(2)` answer stands — this check only ever demotes a provably defunct
+/// process, it never reports a live one dead.
+// trace:BUG-1741 | ai:claude
+#[cfg(target_os = "linux")]
+fn pid_is_zombie(pid: u32) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    let Some(after_comm) = stat.rfind(')').map(|i| &stat[i + 1..]) else {
+        return false;
+    };
+    after_comm.split_whitespace().next() == Some("Z")
+}
+
+/// Non-Linux unix (macOS, BSDs): process state is not readable via a cheap
+/// procfs file here, so this deliberately degrades to today's behaviour — a
+/// zombie still reads as alive — rather than failing closed and risking live
+/// processes reported dead (BUG-1741 acceptance 3). A platform-native probe
+/// (`proc_pidinfo` / `sysctl KERN_PROC_PID`) can tighten this later.
+// trace:BUG-1741 | ai:claude
+#[cfg(all(unix, not(target_os = "linux")))]
+fn pid_is_zombie(_pid: u32) -> bool {
+    false
 }
 
 /// Non-Unix fallback: refresh ONLY the target pid rather than the whole table.
 /// `refresh_pids_specifics` (sysinfo 0.30) scopes the scan to the single pid,
-/// so this stays O(1) on Windows too.
+/// so this stays O(1) on Windows too. No zombie handling is needed here:
+/// Windows has no defunct-process state (BUG-1741).
 // trace:BUG-613 | ai:claude
 #[cfg(not(unix))]
 fn pid_is_alive_impl(pid: u32) -> bool {
@@ -1484,6 +1523,84 @@ mod tests {
         let pid = child.id();
         child.wait().expect("reap child");
         assert!(!pid_is_alive(pid));
+    }
+
+    // BUG-1741: a genuinely running child is alive. trace:BUG-1741 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn pid_is_alive_true_for_running_child() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn `sleep 30`");
+        let pid = child.id();
+        let alive = pid_is_alive(pid);
+        child.kill().expect("kill child");
+        child.wait().expect("reap child");
+        assert!(alive, "a running, unreaped child must read alive");
+    }
+
+    /// Spawn a child, let it exit, and do NOT reap it: the kernel keeps its
+    /// `/proc/<pid>/stat` entry in state `Z` until `wait()`. Returns the
+    /// `Child` so the caller can reap it after asserting. Linux-only: the
+    /// polling loop reads procfs to know the exit has actually happened.
+    // trace:BUG-1741 | ai:claude
+    #[cfg(target_os = "linux")]
+    fn spawn_unreaped_zombie() -> std::process::Child {
+        let child = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn `true`");
+        let stat_path = format!("/proc/{}/stat", child.id());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let stat = std::fs::read_to_string(&stat_path).expect("zombie keeps its stat file");
+            let state = stat
+                .rfind(')')
+                .and_then(|i| stat[i + 1..].split_whitespace().next());
+            if state == Some("Z") {
+                return child;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "child never reached state Z; last stat: {stat}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    // BUG-1741 acceptance 1/4: an exited-but-unreaped (defunct) child is NOT
+    // alive, even though `kill(pid, 0)` still answers 0 for it. Mutation
+    // proof (acceptance 5): against the bare `kill(pid, 0)` predicate this
+    // test fails — the zombie probes as alive. trace:BUG-1741 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn pid_is_alive_false_for_unreaped_zombie() {
+        let mut child = spawn_unreaped_zombie();
+        let alive = pid_is_alive(child.id());
+        child.wait().expect("reap zombie");
+        assert!(!alive, "a defunct (state Z) process must read dead");
+    }
+
+    // BUG-1741 acceptance 6: the TASK-1284 start-time identity guard does NOT
+    // cover zombies — a zombie keeps its original start time, so recorded and
+    // live identities still match and only the `pid_is_alive` zombie check
+    // rejects it. trace:BUG-1741 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn zombie_keeps_start_identity_so_only_the_liveness_probe_rejects_it() {
+        let mut child = spawn_unreaped_zombie();
+        let live_identity = process_start_identity(child.id());
+        let rejected = !process_identity_is_alive(child.id(), live_identity.as_deref());
+        child.wait().expect("reap zombie");
+        assert!(
+            live_identity.is_some(),
+            "a zombie still reports a kernel start time, so the identity \
+             comparison alone would pass it through"
+        );
+        assert!(
+            rejected,
+            "identity guard + zombie-aware liveness rejects it"
+        );
     }
 
     // ---- lease-state classifier -------------------------------------------

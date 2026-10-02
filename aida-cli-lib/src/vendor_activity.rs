@@ -136,20 +136,10 @@ fn lease_pid_alive(ctx: &VendorActivityContext) -> bool {
     else {
         return false;
     };
-    creator_pid.is_some_and(pid_alive)
-}
-
-fn pid_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-        rc == 0
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        false
-    }
+    // BUG-1741: the canonical predicate, not a local `kill(pid, 0)` — a
+    // defunct (zombie) creator must not count as vendor activity.
+    // trace:BUG-1741 | ai:claude
+    creator_pid.is_some_and(aida_core::liveness::pid_is_alive)
 }
 
 struct ClaudeActivity;

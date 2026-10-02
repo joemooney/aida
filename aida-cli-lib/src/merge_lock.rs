@@ -117,21 +117,13 @@ fn parse(body: &str) -> Holder {
     h
 }
 
-/// Is `pid` currently running on THIS machine? `kill(pid, 0)` == 0 (alive) or
-/// EPERM (alive but not ours). ESRCH ⇒ dead. Non-unix cannot probe ⇒ assume
-/// alive so only the TTL backstop reclaims (conservative).
-#[cfg(unix)]
+/// Is `pid` currently running on THIS machine? Routed through the canonical
+/// `aida_core::liveness::pid_is_alive` (BUG-1741) so a defunct (zombie)
+/// holder reads dead instead of pinning the lock until its TTL: same
+/// `kill(pid, 0)`/EPERM semantics on unix, O(1) single-pid probe elsewhere.
+// trace:BUG-1741 | ai:claude
 fn pid_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    // SAFETY: kill with signal 0 performs no signal delivery, only existence/perm check.
-    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-#[cfg(not(unix))]
-fn pid_alive(_pid: u32) -> bool {
-    true
+    aida_core::liveness::pid_is_alive(pid)
 }
 
 /// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid on our host
