@@ -281,7 +281,14 @@ pub enum ServerCommand {
 
     /// List requirements from server
     List {
-        /// Filter by status
+        /// Filter by status: a stored status (draft, approved, planned,
+        /// in-progress, done, completed, rejected, needs-attention), one of the
+        /// `shelved` / `needs-decision` lenses over the parked
+        /// (needs-attention) set, an `open` / `closed` alias, or a
+        /// comma-separated OR set (`shelved,approved`).
+        // trace:BUG-1771 | ai:claude — the two lenses were accepted only by the
+        // legacy centralized listing, so naming them here was false on every
+        // distributed-mode repo until the git-backend path learned them.
         #[clap(long)]
         status: Option<String>,
 

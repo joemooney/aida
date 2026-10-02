@@ -67,6 +67,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 **Key options (rationale only).**
 - the positional `[STATUS]` — `aida list open` / `closed` are aliases (`open` = Draft/Approved/Planned/InProgress/NeedsAttention). The fastest way to "what's live."
 - `--tags 'prefix:*'` — the trailing-`*` prefix-glob is how you query a whole namespace (`aida list --tags 'aida:queue:*'`). Without it you're matching an exact tag.
+- `--status shelved` / `--status needs-decision` — two **lenses over the parked set**, not statuses. Everything paused sits at the single `needs-attention` status, which conflates two different asks: *a run hit a wall* (shelved — it carries a failure reason, triage it with `aida findings`) and *a human has to choose* (needs-decision — it carries an attention reason, answer it with `aida human`). Filtering by lens is how you get one queue instead of both. They compose in a comma set (`--status shelved,approved`), which keeps the Approved rows and narrows the parked ones.
 - `--all` vs `--archived` — `--all` is *both* archived and live; `--archived` is *only* archived (for auditing the archive itself). They're different questions.
 - `--sync` — pull the store from origin before listing. Opt-in because the fast local path is the common case; reach for it when collaborating or when another machine/session may have written.
 - `--parent <ID>` — "what's still open under this EPIC" — composes with the other filters, the everyday rollup query.

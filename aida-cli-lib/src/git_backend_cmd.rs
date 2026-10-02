@@ -78,6 +78,38 @@ fn print_rework_needed_notes(
     }
 }
 
+/// BUG-1771: the parked lens of one `aida list` row.
+///
+/// Every list surface that cares about the lens — the `--format json`
+/// `status_lens` field and the `--status shelved` / `--status needs-decision`
+/// filters — goes through here, so a row the filter selects can never be
+/// labelled as the other lens. The read is a single targeted object fetch and
+/// is gated on the row's stored status, so a list with no parked rows pays
+/// nothing and a filtered one pays only for the parked set — small by nature,
+/// since a parked spec is one waiting on a human.
+///
+/// Known limit, deliberately inherited rather than introduced: this reads the
+/// ROW's own parked fields, so an EPIC whose derived status is NeedsAttention
+/// only because a child is parked has no lens here. That is exactly what the
+/// `--format json` `status_lens` field already reported before BUG-1771, and
+/// making the filter disagree with the label would be the worse bug. The legacy
+/// `effective_needs_attention_lens_with_source` in `lib.rs` does walk children;
+/// unifying the two is its own change, on its own spec.
+// trace:BUG-1771 | ai:claude
+fn row_parked_lens(
+    backend: &aida_core::CachedGitBackend,
+    row: &aida_core::RequirementSummary,
+) -> Option<status_display::NeedsAttentionLens> {
+    if !row.status.eq_ignore_ascii_case("NeedsAttention") {
+        return None;
+    }
+    backend
+        .get_requirement(&row.id)
+        .ok()
+        .flatten()
+        .and_then(|req| status_display::needs_attention_lens(&req))
+}
+
 /// TASK-1456: `aida list --format json`'s `status_label`/`status_lens`
 /// value for a row — either the folded-in-as-rework annotation (takes
 /// priority; a row is never simultaneously Done and NeedsAttention) or the
@@ -1802,19 +1834,59 @@ pub(crate) fn handle_git_backend_command(
             let exact_draft_view = raw_status
                 .as_deref()
                 .is_some_and(crate::status_spec_is_exact_draft);
+            // BUG-1771: `shelved` and `needs-decision` are STORY-1023 display
+            // lenses over the stored `NeedsAttention` status, not statuses — no
+            // cache column holds them, so `expand_filter_spec` rejected both and
+            // the two lenses were unreachable from the shipped CLI even though
+            // the legacy `list_requirements` path accepted them. Split the lens
+            // tokens out, widen the cache query to `needs-attention` so the
+            // superset comes back, and narrow the rows by lens after the query
+            // (see `parked_lens_keys` at the retain below).
+            //
+            // `lens_widened_needs_attention` records that `needs-attention`
+            // reached the query ONLY as the lens widening, not because the caller
+            // named it. That distinction is what lets a mixed set honour both
+            // halves (`--status shelved,approved` keeps Approved rows and the
+            // Shelved subset of the parked rows) without silently dropping a
+            // token, while an explicit `--status shelved,needs-attention` still
+            // shows every parked row.
+            // trace:BUG-1771 | ai:claude
+            let mut parked_lens_keys: Vec<&'static str> = Vec::new();
+            let mut lens_widened_needs_attention = false;
             let status: Option<String> = match raw_status {
                 Some(spec) => {
-                    let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
+                    let (lens_keys, residual) =
+                        crate::status_display::split_status_lens_spec(&spec);
+                    parked_lens_keys = lens_keys;
+                    let mut expanded = match residual.as_deref() {
+                        Some(residual) => aida_core::RequirementStatus::expand_filter_spec(
+                            residual,
+                        )
                         .map_err(|tok| {
                             anyhow::anyhow!(
                                 "Unknown status filter '{tok}'. Use a status \
-                                 (draft, approved, planned, in-progress, done, \
-                                 completed, rejected, needs-attention), an alias \
-                                 (open, closed), or a comma-separated set \
-                                 (draft,approved). To filter by something else \
-                                 try --type, --tags, or `aida search`."
+                                         (draft, approved, planned, in-progress, done, \
+                                         completed, rejected, needs-attention), a parked \
+                                         lens ({lenses}), an alias (open, closed), or a \
+                                         comma-separated set (draft,approved). To filter \
+                                         by something else try --type, --tags, or \
+                                         `aida search`.",
+                                lenses = crate::status_display::lens_filter_token_list()
                             )
-                        })?;
+                        })?,
+                        // Lens tokens only: nothing stored was named, so the
+                        // widening below supplies the whole query.
+                        None => Vec::new(),
+                    };
+                    if !parked_lens_keys.is_empty() {
+                        let needs_attention = aida_core::RequirementStatus::NeedsAttention
+                            .cache_key()
+                            .to_string();
+                        if !expanded.contains(&needs_attention) {
+                            expanded.push(needs_attention);
+                            lens_widened_needs_attention = true;
+                        }
+                    }
                     // expand_filter_spec returns canonical cache-keys; join
                     // them back into the comma-OR spec the cache understands.
                     Some(expanded.join(","))
@@ -1977,6 +2049,27 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
+
+            // BUG-1771: narrow the widened query back down to the requested
+            // parked lens(es). Runs before every downstream lens so the rows the
+            // renderers see are already the asked-for set.
+            //
+            // A row that is NOT parked got here by matching one of the stored
+            // statuses the caller named in the same comma set, so it passes
+            // untouched — that is the "honours both" half of a mixed
+            // `--status shelved,approved`. Skipped entirely when the caller named
+            // `needs-attention` itself, because every parked row is then in scope
+            // by its stored status regardless of lens.
+            // trace:BUG-1771 | ai:claude
+            if !parked_lens_keys.is_empty() && lens_widened_needs_attention {
+                reqs.retain(|r| {
+                    if !r.status.eq_ignore_ascii_case("NeedsAttention") {
+                        return true;
+                    }
+                    row_parked_lens(&backend, r)
+                        .is_some_and(|lens| parked_lens_keys.contains(&lens.palette_key()))
+                });
+            }
 
             // TASK-1456 (follow-up to BUG-1515): the open lens's status set
             // excludes `Done` (it sits with Completed/Rejected on the closed
@@ -2477,15 +2570,9 @@ pub(crate) fn handle_git_backend_command(
                     .iter()
                     .map(|r| {
                         let (in_flight, blocked, queued) = row_routing(r);
-                        let parked_lens = if r.status.eq_ignore_ascii_case("NeedsAttention") {
-                            backend
-                                .get_requirement(&r.id)
-                                .ok()
-                                .flatten()
-                                .and_then(|req| status_display::needs_attention_lens(&req))
-                        } else {
-                            None
-                        };
+                        // trace:BUG-1771 | ai:claude — one lens computation
+                        // shared with the `--status shelved` filter.
+                        let parked_lens = row_parked_lens(&backend, r);
                         // TASK-1456: a Done row folded in by
                         // `select_done_rework_rows` still carries `status:
                         // "Done"` — the machine-consumer contract that field

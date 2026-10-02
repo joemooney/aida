@@ -91,6 +91,77 @@ pub(crate) fn needs_attention_lens(
     })
 }
 
+/// The non-stored `--status` lens tokens, paired with the
+/// [`NeedsAttentionLens::palette_key`] each one selects.
+///
+/// `shelved` and `needs-decision` name a DISPLAY lens over the stored
+/// `NeedsAttention` status (STORY-1023), not statuses of their own, so no cache
+/// column can hold them. This table is the single source of truth for which
+/// tokens `aida list --status` accepts beyond the stored set, and the
+/// "Unknown status filter" refusal enumerates it rather than restating it — a
+/// hand-written list is exactly how the accepted set and the refusal drifted
+/// apart until BUG-1771.
+// trace:BUG-1771 | ai:claude
+pub(crate) const LENS_FILTER_TOKENS: &[(&str, &str)] =
+    &[("shelved", "Shelved"), ("needs-decision", "NeedsDecision")];
+
+/// Resolve one `--status` token to the lens palette key it selects, or `None`
+/// when the token names something other than a lens.
+// trace:BUG-1771 | ai:claude
+pub(crate) fn lens_filter_key(token: &str) -> Option<&'static str> {
+    let normalized = normalize(token);
+    LENS_FILTER_TOKENS
+        .iter()
+        .find(|(tok, _)| normalize(tok) == normalized)
+        .map(|(_, key)| *key)
+}
+
+/// The lens tokens, comma-joined for a help/refusal line.
+// trace:BUG-1771 | ai:claude
+pub(crate) fn lens_filter_token_list() -> String {
+    LENS_FILTER_TOKENS
+        .iter()
+        .map(|(tok, _)| *tok)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Split a `--status` filter spec into the lens keys it names and the residual
+/// stored-status spec.
+///
+/// The cache query filters on stored statuses only, so a lens token has to be
+/// widened to `needs-attention` for the query and the returned rows narrowed
+/// again by lens. Returns `(lens_keys, residual)`, where `residual` is `None`
+/// when the spec named lens tokens only. Empty tokens are dropped and
+/// surrounding whitespace trimmed, matching
+/// `RequirementStatus::expand_filter_spec` so the two halves of a mixed spec
+/// agree on what counts as a token.
+// trace:BUG-1771 | ai:claude
+pub(crate) fn split_status_lens_spec(spec: &str) -> (Vec<&'static str>, Option<String>) {
+    let mut lens_keys: Vec<&'static str> = Vec::new();
+    let mut stored: Vec<&str> = Vec::new();
+    for raw in spec.split(',') {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        match lens_filter_key(token) {
+            Some(key) => {
+                if !lens_keys.contains(&key) {
+                    lens_keys.push(key);
+                }
+            }
+            None => stored.push(token),
+        }
+    }
+    let residual = if stored.is_empty() {
+        None
+    } else {
+        Some(stored.join(","))
+    };
+    (lens_keys, residual)
+}
+
 /// Collapse a status string to a bare match key: lowercase, with whitespace,
 /// `-` and `_` stripped. Lets "In Progress", "InProgress", "in-progress" and
 /// even a column-padded "Approved   " all resolve to the same arm.
@@ -592,5 +663,62 @@ mod tests {
         let painted = paint_status("Approved", "Approved").to_string();
         colored::control::unset_override();
         assert_eq!(painted, "Approved", "expected no escape codes: {painted:?}");
+    }
+
+    /// Every token in the shared table splits out as a lens, with no residual
+    /// left for `expand_filter_spec` to reject. This is the anti-drift guard
+    /// AC3 asks for: adding a row to `LENS_FILTER_TOKENS` without wiring it up
+    /// fails here rather than shipping a token the CLI denies exists.
+    // trace:BUG-1771 | ai:claude
+    #[test]
+    fn every_lens_token_splits_out_as_a_lens() {
+        for (token, key) in LENS_FILTER_TOKENS {
+            let (keys, residual) = split_status_lens_spec(token);
+            assert_eq!(keys, vec![*key], "token {token} must select key {key}");
+            assert_eq!(residual, None, "token {token} must leave no residual");
+        }
+    }
+
+    /// The tokens the refusal prints are exactly the tokens the splitter takes.
+    // trace:BUG-1771 | ai:claude
+    #[test]
+    fn refusal_token_list_matches_the_accepted_set() {
+        let listed = lens_filter_token_list();
+        for (token, _) in LENS_FILTER_TOKENS {
+            assert!(
+                listed.contains(token),
+                "refusal list {listed:?} omits the accepted token {token}"
+            );
+        }
+        assert_eq!(listed.split(", ").count(), LENS_FILTER_TOKENS.len());
+    }
+
+    /// Spelling is normalized the way every other status token is, and a
+    /// non-lens token is handed back untouched for the stored expansion.
+    // trace:BUG-1771 | ai:claude
+    #[test]
+    fn split_normalizes_spelling_and_preserves_stored_tokens() {
+        for spelling in [
+            "needs-decision",
+            "needs_decision",
+            "NeedsDecision",
+            " Needs Decision ",
+        ] {
+            assert_eq!(
+                split_status_lens_spec(spelling),
+                (vec!["NeedsDecision"], None),
+                "{spelling} must resolve to the needs-decision lens"
+            );
+        }
+        assert_eq!(
+            split_status_lens_spec("shelved,approved,shelved,,draft"),
+            (vec!["Shelved"], Some("approved,draft".to_string())),
+            "a repeated lens dedups, empty tokens drop, stored tokens survive in order"
+        );
+        assert_eq!(
+            split_status_lens_spec("draft,approved"),
+            (Vec::new(), Some("draft,approved".to_string())),
+            "a spec with no lens token must pass through unchanged"
+        );
     }
 }
