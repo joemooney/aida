@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-02T16:59:45.000186848Z
+modified_at: 2026-10-02T22:16:57.879527832Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -466,6 +466,12 @@ comments:
   created_at: 2026-10-02T16:59:45.000186848Z
   modified_at: 2026-10-02T16:59:45.000186848Z
   session_id: 9128ae3a-ad73-43ef-b6ef-021513ef8317
+- id: 01a0feb1-2717-7ed1-9642-835d3534e06f
+  author: joe
+  content: 'Merge-readiness review of PR #2342 (cross-vendor codex + advisor verification): REQUEST_CHANGES, one CONFIRMED blocker. The observer-exclusion filters caller PIDs out of the LiveSession presence list only, but lease_state_for short-circuits to Live on a live active_pid (and creator_pid in the BUG-882 arm) BEFORE consulting that list — so a non-root harness lease carrying the reporter''s own pid still self-corroborates through the identity path. Rework: exclude caller-pid-identified leases (active_pid/creator_pid in caller_pids) or pass the exclusion into lease_state_for; add coverage for the active_pid arm (current ancestor test only covers a LiveSession cwd match). Positive findings: single production caller (build_running_work orphan pass, no twin), end-to-end orphan test non-vacuous, STORY-696 contract intact. Do NOT merge #2342 until reworked.'
+  created_at: 2026-10-02T22:16:57.879527832Z
+  modified_at: 2026-10-02T22:16:57.879527832Z
+  session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
