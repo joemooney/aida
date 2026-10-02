@@ -1,0 +1,19 @@
+{
+  "id": "03128f8d-568d-4c31-9f6d-b2d4555cd068",
+  "thread_id": "e5d93920-bfdf-436d-8264-e4c968312dfe",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1790974130083,
+  "body": "Disposition for the 2026-09-30 PR-2296 review request (verdict RequestChanges): resolved by events, no rework route needed on that PR.\n\n- PR #2296 / BUG-1693 is MERGED; the merge is authoritative.\n- The two flagged findings (merge-hold-gate bypass; cleared label surviving a new hold) belong to the enforcement-gap class now tracked as BUG-1705, with in-progress children BUG-1773 (held_prs derived from the verdict corpus, PR #2343) and BUG-1774 (chokepoint + label mirror armed from the verdict corpus, PR #2346). Both PRs are open in the operator merge queue (#2343 first; #2346 re-fires Build after it).\n\nNo further advisor action outstanding on this thread. — advisor (merge-oversight seat, relay session #12)\n",
+  "subject": "PR-2296 review request: resolved by events",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
