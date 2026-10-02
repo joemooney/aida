@@ -1,0 +1,152 @@
+id: 01a0fc13-b3f4-71f0-94ff-34e18b49c626
+spec_id: BUG-1767
+agreed_id: BUG-1767
+title: A rollup-complete epic shows status completed while the store says Draft, so the advisor's close bucket reads as a no-op and show prescribes archiving away the completion record
+description: |
+  Observed on 2026-10-02 from the advisor seat (relay session #11), store at
+  `aida-store` 4b01d654c2 (worktree exactly at origin, 0 ahead / 0 behind).
+
+  ## What happens
+
+  For an epic whose child rollup is complete, the CLI gives TWO INCOMPATIBLE next
+  actions for the same spec, and neither surface discloses that it is reading a
+  different status than the other.
+
+  `aida advisor` reads the STORED status and routes the epic to its `close`
+  bucket:
+
+  ```
+  ● close — mark the delivered epic Completed (`aida edit <id> --status completed`)
+      EPIC-71  EPIC-57  EPIC-61  EPIC-0433  EPIC-42
+      EPIC-65  EPIC-63  EPIC-59  EPIC-0419
+  ```
+
+  `aida show` on any of those same nine reports the DERIVED rollup status and
+  prescribes archiving instead:
+
+  ```
+  $ aida show EPIC-42
+  status: completed
+  next[1]{cmd,to}:
+    aida archive EPIC-42,archived
+  ```
+
+  The canonical store disagrees with that display for all nine:
+
+  | spec | stored status (`.aida-store/objects/EPIC/...`) | `aida show` |
+  |---|---|---|
+  | EPIC-71 | InProgress | completed |
+  | EPIC-57 | Draft | completed |
+  | EPIC-61 | Approved | completed |
+  | EPIC-42 | Draft | completed |
+  | EPIC-65 | Draft | completed |
+  | EPIC-72 | Approved | completed |
+
+  (EPIC-0433, EPIC-0419, EPIC-63, EPIC-59 are in the same close bucket and were
+  not individually read; the six above were.)
+
+  ## Control — this is specific to rollup-complete epics, not a general cache skew
+
+  Measured the same way, in the same run:
+
+  | spec | stored | `aida show` | |
+  |---|---|---|---|
+  | EPIC-74 | Draft | draft | epic, NOT rollup-complete → agrees |
+  | TASK-1565 | Draft | draft | non-epic → agrees |
+  | STORY-1486 | Draft | draft | non-epic → agrees |
+
+  So the cache is not stale (`cache: stale: false` on every call, and the store
+  worktree is at origin). The divergence is the deliberate derived-status display
+  for epics, from BUG-626 / BUG-658.
+
+  ## Why this is a defect and not just the BUG-626 design
+
+  The derived display is intended. The two consequences below are not.
+
+  1. **The close bucket reads as already-done noise.** An advisor handed "mark the
+     delivered epic Completed" runs `aida show EPIC-42`, is told
+     `status: completed`, and reasonably concludes the bucket is stale and the
+     item is a no-op. This session reached exactly that wrong conclusion before
+     reading the store objects. Nine real close actions are invisible behind a
+     display that says they are already taken.
+
+  2. **`aida show`'s own prescribed next action loses the completion record.**
+     `next: aida archive EPIC-42` would archive an epic whose stored status is
+     `Draft`. The epic then leaves every view having never recorded Completed —
+     and five of the nine are stored `Draft`, so the path also skips approval
+     entirely.
+
+  Nothing in the `status: completed` line marks it as derived, so no caller — human
+  or agent — can tell a stored Completed from a rolled-up one.
+
+  ## Prior art (this seam has been patched four times)
+
+  - BUG-626 introduced the epic rollup display.
+  - BUG-658 — `aida list --tree` group header showed stored, not derived.
+  - BUG-628 — "rel-add guard reads stored status while display reads derived":
+    the same stored-vs-derived split, in a different caller.
+  - BUG-764 — rollup not re-derived when children complete via pull auto-bump,
+    leaving epics stuck In Progress; BUG-768 then found that re-derivation
+    regressed force-closed epics.
+
+  The repeat is the signal: each fix taught ONE caller which status to read,
+  rather than making the two distinguishable at the source. Nine epics standing
+  in the close bucket today suggests whatever auto-bump BUG-764 added is not
+  reaching them.
+
+  ## Code locations
+
+  - `aida-cli-lib/src/burndown.rs` ~line 858 — the `ReadyToClose` arm, keyed on
+    `f.epic_rollup == Some((n, n))`; its reason text hard-codes
+    `aida edit <id> --status completed`.
+  - `aida-cli-lib/src/lib.rs` ~line 61503 — the advisor `close` bucket label.
+  - `aida-cli-lib/src/lib.rs` ~line 60040 — `collect_open_facts` skips
+    Completed/Rejected on STORED status, which is why these nine reach the
+    advisor at all.
+
+  ## Remedy options (NOT decided here — an advisor should choose)
+
+  1. **Disclose the derivation in `show`.** Render
+     `status: completed (derived from 7/7 children; stored: draft)`. Cheapest, and
+     it makes every other caller's disagreement self-explaining rather than
+     contradictory.
+  2. **Make `show`'s `next` honest for a derived-complete epic** — prescribe
+     `aida edit <id> --status completed` (matching the advisor), not `archive`.
+  3. **Bump the stored status when the rollup completes**, which is BUG-764's
+     approach — but BUG-768 is the recorded reason to be careful, so this needs
+     the force-closed case designed in, not re-discovered.
+
+  Options 1 and 2 are detection/disclosure only and carry no regression risk of
+  the BUG-768 kind. A reviewer should confirm whether option 3 is already
+  implemented and simply not firing for these nine.
+
+  ## Acceptance criteria
+
+  1. `aida show <EPIC>` on a rollup-complete epic whose STORED status is not
+     Completed renders a status line that a caller can distinguish from a stored
+     Completed — the derived value and the stored value are both legible in the
+     output. A test asserts BOTH substrings, and the test fails if the stored
+     value is dropped from the line.
+  2. The `next` action `aida show` prescribes for such an epic does not propose
+     `archive` while the stored status is non-terminal. A test pins the prescribed
+     command for a fixture epic with stored `Draft` and a complete rollup.
+  3. A control test asserts the unchanged cases: a non-epic, and an epic that is
+     NOT rollup-complete, both render exactly their stored status with no
+     derivation annotation (EPIC-74 / TASK-1565 shape above).
+  4. Each new assertion is mutation-proven: reverting the production change turns
+     that assertion red, and no other test in the file changes colour.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T10:05:44.820925638Z
+modified_at: 2026-10-02T10:05:44.820925638Z
+req_type: Bug
+filed_at:
+  code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 2f2ab833-51fe-47ff-8f5d-d73c37ec27d8
