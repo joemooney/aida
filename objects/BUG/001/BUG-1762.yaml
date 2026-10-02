@@ -100,12 +100,12 @@ description: |
   Filed from the advisor seat the same session BUG-1759 merged, because that merge is the evidence.
   Related: BUG-1760 (shipped the inert target), BUG-1738 (the downstream copy defect), BUG-1759 (the
   skill-master edit that exposed it).
-status: Planned
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T02:28:19.528938397Z
-modified_at: 2026-10-02T14:19:59.232856508Z
+modified_at: 2026-10-02T19:20:41.370804127Z
 req_type: Bug
 comments:
 - id: 01a0fcfc-4d84-7793-a508-5a6bd8d7d792
@@ -137,6 +137,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
+- id: 01a0fe0f-c49a-7a20-980a-fd6520b7ef65
+  author: joe
+  timestamp: 2026-10-02T19:20:41.370801842Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: InProgress
 filed_at:
   code_sha: 53484fbff71b983a5888be0e7ed127bd23b10809
   branch: main
