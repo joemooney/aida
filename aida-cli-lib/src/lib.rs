@@ -25160,6 +25160,11 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["merge-hold", "merge-hold-integrity"],
         "merge-hold-integrity",
     ),
+    // trace:TASK-1527 | ai:claude
+    (
+        &["cache-refresh", "refresh-worker", "cache-worker"],
+        "cache-refresh",
+    ),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
         &["abandoned-lease", "abandoned-leases", "abandoned"],

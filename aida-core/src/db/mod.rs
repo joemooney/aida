@@ -18,6 +18,12 @@ mod git_backend;
 mod migration;
 #[cfg(feature = "postgres")]
 mod postgres_backend;
+// trace:TASK-1527 | ai:claude
+#[cfg(feature = "native")]
+pub mod refresh_request;
+// trace:TASK-1527 | ai:claude
+#[cfg(feature = "native")]
+pub mod refresh_worker;
 #[cfg(feature = "native")]
 mod sqlite_backend;
 #[cfg(feature = "native")]

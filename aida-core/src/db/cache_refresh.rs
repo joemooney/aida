@@ -62,6 +62,20 @@ impl RefreshLock {
                 _thread: Default::default(),
             }));
         }
+        // Amendment A8: the lock descriptor must be close-on-exec, or the
+        // detached worker a lock-holding reader spawns would inherit it and
+        // hold the flock forever. Rust's std sets CLOEXEC on open; this
+        // pins that assumption where it is load-bearing.
+        // trace:TASK-1527 | ai:claude
+        #[cfg(unix)]
+        debug_assert!(
+            {
+                use std::os::fd::AsRawFd;
+                let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) };
+                flags >= 0 && (flags & libc::FD_CLOEXEC) != 0
+            },
+            "refresh lock fd must be CLOEXEC"
+        );
         match fs2::FileExt::try_lock_exclusive(&file) {
             Ok(()) => {
                 held.insert(
@@ -366,6 +380,12 @@ pub enum RefreshState {
     WorkerRunning,
     WriterBusy,
     Deferred,
+    /// A refresh request is filed and a detached worker was spawned
+    /// (TASK-1527). To the reader this is "refreshing" exactly like
+    /// `WorkerRunning`; the distinct variant keeps `cache status`, JSON and
+    /// MCP labels honest about WHICH mechanism is in flight.
+    // trace:TASK-1527 | ai:claude
+    Requested,
 }
 
 // trace:TASK-1526 | ai:codex
@@ -395,7 +415,7 @@ impl StaleServe {
             });
         match self.refreshing {
             RefreshState::Deferred => format!("note: showing results cached at {time}; refresh is deferred. Run `aida cache rebuild` for current data."),
-            RefreshState::WorkerRunning => format!("note: showing results cached at {time}; the cache is refreshing. Re-run in a few seconds for current data."),
+            RefreshState::WorkerRunning | RefreshState::Requested => format!("note: showing results cached at {time}; the cache is refreshing. Re-run in a few seconds for current data."),
             RefreshState::WriterBusy => format!("note: showing results cached at {time}; the cache write lock was busy and refresh was deferred. Re-run to retry, or run `aida cache rebuild` for current data."),
         }
     }

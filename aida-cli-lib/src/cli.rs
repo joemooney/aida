@@ -2820,6 +2820,26 @@ pub enum CacheCommand {
     /// Show cache state (HEAD comparison, requirement count, last build time)
     Status,
 
+    /// Bring the cache current now; worker/scheduler forms drive the detached refresh protocol
+    // trace:TASK-1527 | ai:claude
+    Refresh {
+        /// Run as the detached refresh worker (internal; spawned automatically)
+        #[clap(long, hide = true)]
+        worker: bool,
+
+        /// Refresh only when a pending refresh request exists (for `aida schedule` jobs)
+        #[clap(long)]
+        if_requested: bool,
+
+        /// Explicit store root for the worker (internal; never inferred from the cwd)
+        #[clap(long, hide = true, value_name = "PATH")]
+        store: Option<std::path::PathBuf>,
+
+        /// Explicit cache database path for the worker (internal)
+        #[clap(long, hide = true, value_name = "PATH")]
+        cache: Option<std::path::PathBuf>,
+    },
+
     /// Cross-check every cached status against the git store and report drift
     // trace:BUG-771 | ai:claude
     Verify {

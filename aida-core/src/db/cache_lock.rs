@@ -222,7 +222,7 @@ fn identity_differs(recorded: Option<&str>, local: Option<&str>) -> bool {
 }
 
 // trace:TASK-1526 | ai:codex
-fn local_boot_id() -> Option<String> {
+pub(super) fn local_boot_id() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
@@ -236,7 +236,7 @@ fn local_boot_id() -> Option<String> {
 }
 
 // trace:TASK-1526 | ai:codex
-fn local_pid_ns() -> Option<String> {
+pub(super) fn local_pid_ns() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::fs::MetadataExt;

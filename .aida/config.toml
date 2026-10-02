@@ -126,6 +126,16 @@ informational_workflows = ["Cross-platform*"]
 [performance.budgets]
 show = { budget_ms = 1000, ceiling_ms = 5000 }
 
+# STORY-1484 slice C: pick up an orphaned cache refresh request. Scaffold
+# entry (see `schedule_section()` in aida-cli-lib/src/init_cmd.rs), enabled
+# here as in the scaffold: a silent no-op when no request is pending.
+# trace:TASK-1527 | ai:claude
+[[schedule.jobs]]
+name = "cache-refresh-tick"
+command = "cache refresh --if-requested"
+every = "15m"
+enabled = true
+
 [[schedule.jobs]]
 name = "performance-guard"
 command = "doctor check performance --fail-on-findings"

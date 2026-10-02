@@ -30,6 +30,9 @@ tui = ["aida-cli-lib/tui"]
 # Black-box integration tests under tests/ spawn the built binary
 # (CARGO_BIN_EXE_aida) in throwaway project dirs.
 tempfile = "3.8"
+# TASK-1527: the kill-mid-refresh test pins the worker inside the SQLite
+# retry ladder by holding BEGIN IMMEDIATE on the fixture cache.
+rusqlite = { workspace = true }
 aida-core = { version = "0.15", path = "../aida-core" }
 serde_json.workspace = true
 # TASK-1561: a placement test patches the scaffolded `.aida/config.toml`; it
