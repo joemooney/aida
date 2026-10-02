@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-09-30T15:22:06.860407928Z
+modified_at: 2026-10-02T06:34:25.994683324Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -169,6 +169,33 @@ comments:
   created_at: 2026-09-30T15:22:00.871717410Z
   modified_at: 2026-09-30T15:22:00.871717410Z
   session_id: 259d97b0-df15-4cdb-8712-e2f54e1a8223
+- id: 01a0fb52-3d4a-7c83-a74a-b233f7c6300d
+  author: joe
+  content: |-
+    ## Triage Investigation (aida-triage)
+
+    ### Status: Reproduced Live
+
+    ### Reproduction
+    - Confirmed live on host: PID `1907632` is state `Z` (defunct `[codex]` process):
+      `/proc/1907632/stat` reads: `1907632 (codex) Z 2943488 ...`
+    - `kill(1907632, 0)` returns `0` (success).
+    - `aida_core::liveness::pid_is_alive(1907632)` evaluates to `true` because `pid_is_alive_impl` on Unix only calls `libc::kill(pid, 0)`.
+
+    ### Full Workspace Survey (All PID-Liveness Sites)
+    Re-grepped the entire workspace rather than trusting the filed list. Found 6 distinct sites:
+    1. `aida-core/src/liveness.rs:746` (`pid_is_alive_impl`): The canonical O(1) probe. Bug originates here on Linux.
+    2. `aida-cli-lib/src/vendor_activity.rs:142` (`pid_alive`): Duplicate local probe using raw `libc::kill`.
+    3. `aida-cli-lib/src/merge_lock.rs:124` (`pid_alive`): Duplicate local probe using raw `libc::kill`.
+    4. `aida-cli-lib/src/test_home.rs:151` (`pid_is_alive`): Local helper for `sweep_stale_test_homes`. Deliberately errs toward alive so directories are not prematurely wiped.
+    5. `aida-core/src/worktree_pool.rs:272`: Already correctly delegates to `crate::liveness::pid_is_alive`.
+    6. `aida-core/src/db/cache_lock.rs:214`: Already correctly delegates to `crate::liveness::pid_is_alive`.
+
+    ### Fix Strategy
+    1. **Canonical Fix**: In `aida-core/src/liveness.rs` (`pid_is_alive_impl` on Linux): when `rc == 0`, inspect `/proc/<pid>/stat`. Read field 3 (after the last `)` to handle parenthesized comm names with spaces) and return `false` if state == `"Z"`. Keep O(1) single-pid read.
+    2. **Deduplication**: Route `vendor_activity.rs:pid_alive` and `merge_lock.rs:pid_alive` through `aida_core::liveness::pid_is_alive` so they inherit the zombie fix. Leave `test_home.rs` as conservative or route through canonical.
+  created_at: 2026-10-02T06:34:25.994683324Z
+  modified_at: 2026-10-02T06:34:25.994683324Z
 history:
 - id: 01a0f2e8-a08c-7791-a627-87ed4b1d9b75
   author: joe
