@@ -3,12 +3,12 @@ spec_id: TASK-1536
 agreed_id: TASK-1536
 title: 'Scaffold refresh footprint follow-ups: gate the minimal footprint, flag already-flooded lane projects, detect pre-footprint lanes by AGENTS.md heading'
 description: 'Follow-up from BUG-1662. Acceptance: 1. scaffold refresh on a minimal-footprint project installs only what minimal init installs (no discipline pack). 2. aida doctor flags a memory-lane project whose AGENTS.md carries the full conventions block or a discipline pack (flooded by an older refresh) and gives manual restore steps. 3. A lane created before saved footprints, with no skills, is recognised as a lane when AGENTS.md has the memory-lane block heading. Fixture tests for each.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:18:28.154779421Z
-modified_at: 2026-10-02T07:50:28.114101958Z
+modified_at: 2026-10-02T07:50:41.079943394Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -122,7 +122,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fb98-0cb0-7a50-bdc1-740d83d579f0
+  author: aida-auto-bump
+  timestamp: 2026-10-02T07:50:41.072955824Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fb98-0cb7-7010-94bf-f998a50ff479
+  timestamp: 2026-10-02T07:50:41.079925551Z
+  agent: aida
+  commit_sha: c8d48ac4eb3e334ffbb1ed492e1846d656828085
+  summary: 'Revived stranded agy branch, rebased clean onto dc3b03058e. All three ACs have inline fixture tests (the session #5 ''no test file'' read was a git diff --name-only artifact). Mutation proof: 3 disjoint mutants, 3 failures, each in its own assertion - coverage is non-vacuous. build-fast exit 0, task_1536 targeted 3/3, fmt exit 0, clippy workspace exit 0, full workspace suite 7477 passed / 0 failed. CI: merge-hold-gate + Build (ubuntu-latest) both success on the PR head SHA. Command-level minimal gate mirrors the established memory-lane arm.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-02T07:50:28.114101958Z
   implemented_by: joe
+  completed_at: 2026-10-02T07:50:41.072951584Z
+  completion_sha: c8d48ac4eb3e334ffbb1ed492e1846d656828085
