@@ -80,7 +80,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-10-02T22:22:19.319076118Z
+modified_at: 2026-10-02T23:00:17.924186393Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -153,6 +153,23 @@ comments:
     The ACs remain as written, with the decision above resolving AC4.
   created_at: 2026-10-02T14:20:53.741078007Z
   modified_at: 2026-10-02T14:20:53.741078007Z
+- id: 01a0fed8-d384-75b2-b089-a4e1e831d17c
+  author: joe
+  content: |-
+    Implementation decisions (c2cd7ce909):
+
+    AC2 recognition — the generated banner line, now the shared const MIRROR_HOOK_HEADER embedded in mirror_pre_push_hook_script() via format!, so generator and recognizer cannot drift. Deliberately NOT MIRROR_HOOK_MARKER: the installer tells owners of a custom pre-push hook to paste the marker line (aida remote mirror-push "$1" || true) into their hook, so a marker match can be someone else's hook. A test pins this (foreign hook with pasted marker line → no finding).
+
+    AC3 comparison — generated_text_matches (newline + trailing-whitespace normalization), chosen because it is the installer's own refresh gate: anything it tolerates, aida remote mirror would decline to rewrite, so doctor and installer always agree. Any other byte difference is real drift; the hook is a generated artifact nobody is supposed to hand-edit.
+
+    AC4 — report-only, safe_heal: false. The remedy rewrites a file in the operator's .git/hooks/, a write outside the store; consistent with heal_doctor_finding's diagnostic-only default arm. The finding's action names aida remote mirror <name>.
+
+    AC5 — verified on this repository's real stale hook: doctor --category mirror-hook-drift reported it; aida remote mirror gitlab refreshed the hook in place (it now carries the --dry-run forwarding); re-run reported total: 0. git push --dry-run no longer pushes the mirror on this host.
+
+    AC7 — five mutations, each test witnessed: never-report (positive test fails), gate-skip (all four negative tests fail), marker-based recognition (pasted-marker test fails), exact comparator (CRLF-tolerance test fails), alias-entry removal (alias test fails).
+  created_at: 2026-10-02T23:00:17.924186393Z
+  modified_at: 2026-10-02T23:00:17.924186393Z
+  session_id: e4f254c2-1e5a-46ad-87d7-b4769d85d440
 history:
 - id: 01a0f28c-4fbb-74f2-b46b-ec100afd2b2b
   author: joe
