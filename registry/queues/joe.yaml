@@ -56,3 +56,10 @@
   added_by: joe
   added_at: 2026-10-02T22:21:54.346999369Z
   for_role: product
+- user_id: joe
+  requirement_id: 01a0f272-b03a-7430-8d4b-832900f122f5
+  position: 37000
+  added_by: joe
+  added_at: 2026-10-02T22:21:57.647460093Z
+  for_role: product
+  added_by_machine: imac
