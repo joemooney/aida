@@ -1052,6 +1052,10 @@ mod task_1555_ci_gate_tiers_tests;
 #[cfg(test)]
 #[path = "tests/task_1562_worktree_reclaim_tests.rs"]
 mod task_1562_worktree_reclaim_tests;
+// trace:BUG-1723 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1723_config_trust_tests.rs"]
+mod bug_1723_config_trust_tests;
 
 /// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
 /// dispatch. The `aida` binary is a stub that calls this — keeping the
