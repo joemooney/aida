@@ -1344,7 +1344,7 @@ mod tests {
         );
         // BUG-1690 AC3: the notice's retry claim must match the behaviour —
         // the drain's retry un-drafts a reused PR rather than stalling on it.
-        // trace:BUG-1690 | ai:claude
+        // trace:BUG-1690.ac92920a | ai:claude
         assert!(
             note.contains("un-drafting it"),
             "the retry promise must say a reused draft PR is un-drafted: {note}"

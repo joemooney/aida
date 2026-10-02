@@ -109346,96 +109346,15 @@ mod forge_seam_tests {
             "unknown ownership must fail closed"
         );
     }
-
-    /// BUG-1690 AC2: a retry that reuses a draft PR reaches a mergeable state
-    /// instead of stalling — phase 1's adoption point marks the draft ready
-    /// through the forge, before CI/review/merge ever see it.
-    // trace:BUG-1690 | ai:claude
-    #[test]
-    fn reused_draft_pr_is_marked_ready_at_adoption() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut forge = RecordingForge::new();
-        forge.open_for_branch = ChangeLookup::Found(change(47, "claude/bug-1690"));
-        forge.is_draft = true;
-        let mut driver = driver_with(tmp.path(), &forge);
-
-        let Phase1PrResolve::Found(pr) = driver.detect_phase1_pr("claude/bug-1690") else {
-            panic!("the scripted open change must resolve as Found")
-        };
-        driver.undraft_reused_publication(&pr);
-
-        assert_eq!(
-            forge.readied(),
-            vec![47],
-            "the reused draft PR must be marked ready exactly once"
-        );
-    }
-
-    /// BUG-1690: a reused PR that is already ready is left alone — the
-    /// un-draft call is keyed on the forge-reported draft state, not fired
-    /// unconditionally.
-    // trace:BUG-1690 | ai:claude
-    #[test]
-    fn reused_ready_pr_is_not_touched() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut forge = RecordingForge::new();
-        forge.open_for_branch = ChangeLookup::Found(change(48, "claude/bug-1690"));
-        let mut driver = driver_with(tmp.path(), &forge);
-
-        let Phase1PrResolve::Found(pr) = driver.detect_phase1_pr("claude/bug-1690") else {
-            panic!("the scripted open change must resolve as Found")
-        };
-        driver.undraft_reused_publication(&pr);
-
-        assert!(
-            forge.readied().is_empty(),
-            "a non-draft PR must not be touched: {:?}",
-            forge.readied()
-        );
-    }
-
-    /// BUG-1690: the STORY-529 `review:draft-only` draft is a deliberate
-    /// human-review hold — the drain's merge path never reads that tag, so the
-    /// draft state is the only thing keeping the PR unmerged. Un-drafting it
-    /// would let the drain auto-merge straight past the gate. Leave it.
-    // trace:BUG-1690 | ai:claude
-    #[test]
-    fn draft_only_tagged_spec_keeps_its_draft() {
-        let tmp = tempfile::tempdir().unwrap();
-        // A legacy store in the project root: `load_store_for_lookup` resolves
-        // `requirements.yaml` relative to the project root, which keeps this
-        // fixture inside the tempdir (the distributed-store walk refuses temp
-        // roots by design — BUG-1598).
-        let mut req = aida_core::Requirement::new("draft-only reuse".to_string(), String::new());
-        req.spec_id = Some("TASK-1421".to_string());
-        req.tags.insert(crate::pr_ship::DRAFT_ONLY_TAG.to_string());
-        let mut store = aida_core::RequirementsStore::default();
-        store.requirements.push(req);
-        Storage::new(tmp.path().join("requirements.yaml"))
-            .save(&store)
-            .unwrap();
-
-        let mut forge = RecordingForge::new();
-        forge.open_for_branch = ChangeLookup::Found(change(49, "claude/task-1421"));
-        forge.is_draft = true;
-        let mut driver = driver_with(tmp.path(), &forge);
-
-        let Phase1PrResolve::Found(pr) = driver.detect_phase1_pr("claude/task-1421") else {
-            panic!("the scripted open change must resolve as Found")
-        };
-        assert!(
-            driver.spec_is_draft_only_tagged(),
-            "the fixture store must resolve the spec as draft-only tagged"
-        );
-        driver.undraft_reused_publication(&pr);
-
-        assert!(
-            forge.readied().is_empty(),
-            "a review:draft-only draft is the human-review hold and must stay a draft: {:?}",
-            forge.readied()
-        );
-    }
 }
+
+// The BUG-1690 reused-draft-PR seam tests live in their own file so the
+// `aida criteria` scanner can anchor their AC markers (the convention for
+// every AC-traced driver test).
+// trace:BUG-1690 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1690_undraft_reuse_tests.rs"]
+mod bug_1690_undraft_reuse_tests;
 
 /// BUG-1628: auto-complete phase 1 and ordinary pickup resolve the same
 /// branch + worktree for a custom-prefix requirement. Temp repos only.
