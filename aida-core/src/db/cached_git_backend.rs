@@ -3713,9 +3713,14 @@ mod tests {
         }
     }
 
-    /// Amendment A7's named test: three failed worker attempts inside the
-    /// window stop the spawning, and the reader takes today's strict inline
-    /// path instead of serving stale forever.
+    /// Amendment A7's named test — the READER half: three failed attempts
+    /// recorded on the request stop the spawning, and the reader takes
+    /// today's strict inline path instead of serving stale forever. The
+    /// failures here are recorded by the cfg(test) spawn refusal; the other
+    /// two recorders feed the same counter and are pinned separately (the
+    /// reaper in `refresh_worker::tests::reaper_records_abnormal_exits_and_
+    /// ignores_clean_ones`, the worker's own error path in `cache_cmd`'s
+    /// integration tests).
     // trace:TASK-1527 | ai:claude
     #[test]
     fn worker_crash_loop_stops_spawning() {

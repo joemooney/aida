@@ -152,13 +152,28 @@ fn killed_worker_leaves_cache_readable_and_request_present_then_next_run_complet
     .spawn()
     .expect("spawn worker");
     // Give it time to take the flock and enter the ladder (~25 s of budget
-    // remains, so this cannot race the ladder's end), then kill it there.
+    // remains, so this cannot race the ladder's end), then OBSERVE the flock
+    // is actually held before killing it there (codex review: without this
+    // observation the test would still pass if acquisition were removed).
     std::thread::sleep(std::time::Duration::from_millis(1500));
+    assert!(
+        aida_core::db::cache_refresh::RefreshLock::try_acquire(&cache)
+            .unwrap()
+            .is_none(),
+        "the worker must hold the refresh flock when the kill lands"
+    );
     worker.kill().expect("kill worker");
     let status = worker.wait().unwrap();
     assert!(
         !status.success(),
         "the worker must die by signal, not finish"
+    );
+    // The kernel released the dead worker's flock: no wedge for the next run.
+    assert!(
+        aida_core::db::cache_refresh::RefreshLock::try_acquire(&cache)
+            .unwrap()
+            .is_some(),
+        "a dead worker must not leave the refresh flock held"
     );
 
     // Previous committed cache: readable. Request: present.

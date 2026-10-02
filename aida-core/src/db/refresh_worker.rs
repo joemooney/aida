@@ -176,11 +176,30 @@ pub fn spawn_detached_worker(store_root: &Path, cache_path: &Path) -> std::io::R
         let mut child = cmd.spawn()?;
         let pid = child.id();
         // Reap in the background so a long-lived parent (the MCP server)
-        // accumulates no zombies, without blocking this reader on the refresh.
+        // accumulates no zombies, without blocking this reader on the refresh —
+        // and record a nonzero exit on the request, because a worker killed by
+        // a signal or an early crash never reaches its own error path: without
+        // this, crash-killed workers would be invisible to A7's suppression
+        // and readers could respawn one indefinitely (codex review finding).
+        let request_cache = cache_path.to_path_buf();
         std::thread::spawn(move || {
-            let _ = child.wait();
+            if let Ok(status) = child.wait() {
+                record_worker_exit(&request_cache, status.success(), || {
+                    format!("worker exited abnormally ({status})")
+                });
+            }
         });
         Ok(pid)
+    }
+}
+
+/// The reaper's half of amendment A7: a worker that did not exit cleanly is a
+/// failed attempt, whoever killed it. Success records nothing. Separated from
+/// the reaper thread so the recording rule is directly testable.
+// trace:TASK-1527 | ai:claude
+fn record_worker_exit(cache_path: &Path, success: bool, describe: impl FnOnce() -> String) {
+    if !success {
+        let _ = refresh_request::record_failed_attempt(cache_path, &describe());
     }
 }
 
@@ -225,6 +244,32 @@ mod tests {
         let err = spawn_detached_worker(dir.path(), &dir.path().join("cache.db"))
             .expect_err("recursion must be refused");
         assert!(err.to_string().contains("inside a refresh worker"));
+    }
+
+    /// The reaper records a failed attempt for a nonzero exit and nothing for
+    /// a clean one — the recorder half of A7 (the reader-side half, that three
+    /// recorded failures suppress spawning, is pinned in the backend tests).
+    // trace:TASK-1527 | ai:claude
+    #[test]
+    fn reaper_records_abnormal_exits_and_ignores_clean_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("cache.db");
+        refresh_request::file_request(&cache, "abc").unwrap();
+        record_worker_exit(&cache, true, || unreachable!("success must not describe"));
+        assert!(
+            refresh_request::load(&cache)
+                .unwrap()
+                .last_error()
+                .is_none(),
+            "a clean exit must not count toward suppression"
+        );
+        record_worker_exit(&cache, false, || {
+            "worker exited abnormally (signal: 9)".into()
+        });
+        assert_eq!(
+            refresh_request::load(&cache).unwrap().last_error(),
+            Some("worker exited abnormally (signal: 9)")
+        );
     }
 
     #[test]
