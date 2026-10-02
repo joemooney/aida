@@ -1,0 +1,88 @@
+id: 01a0fab3-e719-7ea3-b403-4893ecda7019
+spec_id: BUG-1763
+agreed_id: BUG-1763
+title: aida queue work's branch-collision arm refuses on merged branches too, so it fires on re-pickup of most of the 761 retained historical spec branches
+description: |
+  BUG-1761 shipped `preclaim_collision_check`, which refuses `aida queue work <SPEC>` when the spec
+  already has an open PR or an existing local branch. The **PR arm** is the specific, actionable
+  collision the bug was filed about. The **branch arm** is over-broad in this repository.
+
+  ## Measurement
+
+  This repo retains merged spec branches locally — `gh pr merge --delete-branch` removes only the
+  remote. As of 2026-10-01:
+
+  ```
+  git branch --list | grep -cE "(bug|story|task|epic|adr|prin)-[0-9]+"   →  761
+  ```
+
+  So the branch arm will fire on **re-pickup of most historical specs**, not just the filed scenario.
+  Re-picking up a spec whose work merged months ago is a legitimate action (a follow-on fix, a revert, a
+  rework), and it will now be refused and require `--force-claim`. That is a false positive on a
+  764-branch population against one true positive class.
+
+  ## Required behavior
+
+  Narrow the branch arm to refuse only when the branch is **unmerged**. The PR arm is unchanged.
+
+  ## The detail that makes this a real spec rather than a one-liner
+
+  Merged-ness **must** be resolved via the forge:
+
+  ```
+  gh pr list --head <branch> --state all
+  ```
+
+  `git merge-base --is-ancestor` is **wrong here**: this repository squash-merges, so an ancestry test
+  reports NO for every squash-merged branch and would classify all 761 as unmerged — leaving the
+  behavior exactly as it is today while appearing to fix it. This is a recorded lesson, not a
+  hypothesis: three branches merged within one hour all reported NO.
+
+  That forge call also means the branch arm acquires a network dependency it does not have today, so:
+
+  - Probe the forge **only** when the branch exists and no bypass applies, so an ordinary pickup of a
+    spec with no branch still pays no `gh` call.
+  - An **unreachable or failing forge must not refuse** — fall through to allowing the claim. This is
+    the same trap BUG-1761's round-1 implementer corrected in the advisor's brief: collapsing a lookup
+    failure to "no PR found" makes an offline pickup refuse. Thread a separate
+    "probe succeeded" value rather than mapping failures onto the negative result.
+
+  ## Acceptance criteria
+
+  1. `aida queue work <SPEC>` succeeds when the only collision is a **merged** local branch, and the
+     refusal message is not emitted.
+  2. It still refuses when the branch exists and is **unmerged**, naming the branch.
+  3. It still refuses when an **open PR** exists, regardless of branch state. PR before branch, as
+     BUG-1761 established.
+  4. Merged-ness is resolved through the forge, not through `git merge-base --is-ancestor`. Assert this
+     by a test that constructs a squash-merged branch and shows the claim is allowed — an
+     ancestry-based implementation fails this test.
+  5. A forge lookup that errors or times out **allows** the claim; it does not refuse. Assert with an
+     injected failure.
+  6. No `gh` call is made on a pickup where the branch does not exist. Assert by counting invocations.
+  7. Every bypass BUG-1761 established still bypasses: `handle_queue_rework`'s `--work` chain
+     (discriminated by `queue_work_plan_wants_pr_head_branch`, not by `--force-claim`), review
+     sessions, orchestrator-corroborated children, `--resume`, and explicit `--branch`. A guard keyed
+     only on `--force-claim` breaks the drain.
+  8. Mutation proof: revert the narrowing and show the merged-branch test goes red; restore.
+
+  ## Out of scope
+
+  `resolve_session_branch` stays unchanged — `aida session start` uses it directly, where STORY-65's
+  documented suffixing is correct. No change to the retention policy for merged local branches; that is
+  a separate question and deleting 761 branches is not this spec's business.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T03:41:29.241583054Z
+modified_at: 2026-10-02T03:41:29.241583054Z
+req_type: Bug
+filed_at:
+  code_sha: 9a9993bcee35f415eafeabb439b88bfa028be810
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 1d7813fc-728c-4a86-bee2-03e780d5b022
