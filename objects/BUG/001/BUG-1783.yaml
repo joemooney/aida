@@ -1,0 +1,30 @@
+id: 01a0fefd-6de1-7103-b5b3-33d89c6ab17d
+spec_id: BUG-1783
+agreed_id: BUG-1783
+title: session-env.sh shared CARGO_TARGET_DIR + sccache can silently serve a worktree build whose artifacts lack the worktree's own edits
+description: |-
+  Observed 2026-10-02 implementing BUG-1767. Main and a linked worktree at the same commit produce the SAME cargo unit hash into the shared /home/joe/ai/aida/target (STORY-52 session-env design), and dep-info records RELATIVE source paths, so freshness resolves against whichever checkout built last. Two concrete lies in one session:
+
+  1. `cargo test -p aida-cli-lib --lib <filter>` in the worktree executed MAIN's stale test binary — new tests on disk matched 0 — until the edited source was touch'ed.
+  2. After a visible 'Compiling aida-cli-lib' + 'Finished' line, the produced rlib and linked aida binary did NOT contain the new code (verified by strings on a literal the change added); only RUSTC_WRAPPER= (sccache disabled) + touch produced an artifact containing the edit. sccache served stale compilation output under the colliding unit.
+
+  Impact: an agent can run its own tests and believe its change is exercised when main's code ran instead; a demo binary can silently be main's. The inverse direction also holds: a worktree build overwrites main's debug artifacts in place.
+
+  Remedy directions (advisor to choose): per-worktree target dir with sccache carrying the sharing load (sccache already dedups compiles across target dirs); or keep the shared dir but have session-env set CARGO_TARGET_DIR to a per-branch subdirectory; or document + doctor-check the staleness hazard with a canary (build, then strings-probe a session nonce).
+
+  Acceptance sketch: from two checkouts of the same commit, editing a source in the worktree and building there yields an artifact containing the edit on the FIRST build, with no manual touch or RUSTC_WRAPPER override; a doctor probe or test witnesses this.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T23:40:16.737141463Z
+modified_at: 2026-10-02T23:40:16.737141463Z
+req_type: Bug
+filed_at:
+  code_sha: e09fb9a464089fcf16198470406dd52228ecabe2
+  branch: bug-1767
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 63672f7e-d507-4105-8604-8598b2023338
