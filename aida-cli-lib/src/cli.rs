@@ -1683,6 +1683,28 @@ pub enum SessionCommand {
         // trace:TASK-345 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Release every CROSS-CLONE lease claim on the shared store that
+        /// the staleness predicate reports dead — past its own `ttl_secs`,
+        /// or (for a process-backed claim on this host) holding a pid whose
+        /// identity no longer matches. Prints scope + reason per release and
+        /// never touches a claim it reports live, so there is no `--force`.
+        /// This is the only supported way to clear one: `aida session end
+        /// --spec` cannot reach a foreign claim (it has no local lease) and
+        /// `aida session reap` requires the spec Done + the branch merged +
+        /// the process exited, so the alternative is deleting
+        /// `.aida-store/coordination/leases/*.toml` by hand. Opt-in by
+        /// design — releasing another clone's claim is a cross-clone
+        /// mutation, so it is never automatic.
+        // trace:BUG-1764 | ai:claude
+        #[clap(long)]
+        prune_stale: bool,
+        /// Skip the y/N confirmation for `--prune-stale`. Required to prune
+        /// non-interactively — a non-terminal stdin errors without it rather
+        /// than silently releasing another clone's claims, the same posture
+        /// `aida session end` takes.
+        // trace:BUG-1764 | ai:claude
+        #[clap(long, short = 'y')]
+        yes: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering

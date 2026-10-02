@@ -26590,7 +26590,23 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             *return_to_pool,
             *remove,
         ),
-        SessionCommand::Leases { verbose, all, json } => session_leases(*verbose, *all, *json),
+        SessionCommand::Leases {
+            verbose,
+            all,
+            json,
+            prune_stale,
+            yes,
+        } => {
+            // BUG-1764: `--prune-stale` is a MUTATION, not a listing — it
+            // releases foreign claims the staleness predicate reports dead.
+            // Route it before the read-only renderer so the two never
+            // interleave output. trace:BUG-1764 | ai:claude
+            if *prune_stale {
+                session_leases_prune_stale(*yes)
+            } else {
+                session_leases(*verbose, *all, *json)
+            }
+        }
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Handoff {
             check,
@@ -47858,9 +47874,18 @@ fn cc_session_id_for_worktree(worktree: &std::path::Path) -> Option<String> {
 /// `aida-store` registry held by OTHER clones (a different clone path than
 /// ours). Returns the number of foreign claims shown. Distinct from the
 /// local-lease table above it. trace:STORY-637 | ai:claude
+///
+/// BUG-1764: stale claims are now EXCLUDED by default. This section applied no
+/// expiry predicate of any kind — its only filter was `clone_path != ours`, and
+/// while it computed `age` from `heartbeat_at` for the display column it never
+/// used it as a predicate, so a foreign claim rendered as active forever once
+/// written. `show_all` (`--all`) brings them back with the staleness reason,
+/// mirroring the contract the LOCAL lease table above already has for `--all`.
+// trace:BUG-1764 | ai:claude
 fn print_cross_clone_leases(
     project_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
+    show_all: bool,
 ) -> usize {
     let store_root = project_root.join(".aida-store");
     // Two clones sharing one store inherit the same node id, so discriminate
@@ -47874,18 +47899,50 @@ fn print_cross_clone_leases(
         .into_iter()
         .filter(|c| c.clone_path.is_empty() || c.clone_path != our_clone)
         .collect();
-    if foreign.is_empty() {
+    // BUG-1764: split before rendering. `partition_claims` is keyed on `host`,
+    // not `clone_path`, so a foreign-CLONE claim on THIS host is evaluated
+    // against the local process table rather than excused as unreachable.
+    let (live, stale) = coordination::partition_claims(foreign, now, &coordination::hostname());
+    let shown: Vec<(&coordination::Claim, Option<&str>)> = if show_all {
+        live.iter()
+            .map(|c| (c, None))
+            .chain(stale.iter().map(|(c, r)| (c, Some(r.as_str()))))
+            .collect()
+    } else {
+        live.iter().map(|c| (c, None)).collect()
+    };
+    if shown.is_empty() {
+        // Nothing live, but say so rather than leaving the operator to wonder
+        // why a lease they can see on disk never appears.
+        if !stale.is_empty() {
+            println!();
+            println!(
+                "{} {} stale cross-clone lease{} hidden · {} to list, {} to release",
+                "·".dimmed(),
+                stale.len(),
+                if stale.len() == 1 { "" } else { "s" },
+                "aida session leases --all".cyan(),
+                "aida session leases --prune-stale".cyan()
+            );
+        }
         return 0;
     }
     println!();
     println!("{}", "Cross-clone leases (other clones)".bold());
     println!();
-    println!(
-        "{:<20} {:<10} {:<14} {:<14} age",
-        "scope", "host", "node", "agent"
-    );
-    println!("{}", "─".repeat(72));
-    for c in &foreign {
+    if show_all {
+        println!(
+            "{:<20} {:<10} {:<14} {:<14} {:<10} state",
+            "scope", "host", "node", "agent", "age"
+        );
+    } else {
+        println!(
+            "{:<20} {:<10} {:<14} {:<14} age",
+            "scope", "host", "node", "agent"
+        );
+    }
+    println!("{}", "─".repeat(if show_all { 86 } else { 72 }));
+    for (c, stale_reason) in &shown {
         let age = chrono::DateTime::parse_from_rfc3339(&c.heartbeat_at)
             .ok()
             .map(|t| {
@@ -47896,17 +47953,43 @@ fn print_cross_clone_leases(
                 format!("{secs}s")
             })
             .unwrap_or_else(|| "?".to_string());
-        println!(
-            "{:<20} {:<10} {:<14} {:<14} {}",
-            truncate(&c.scope, 20),
-            truncate(&c.host, 10),
-            truncate(&c.node_id, 14),
-            truncate(if c.agent.is_empty() { "-" } else { &c.agent }, 14),
-            age
-        );
+        if show_all {
+            let state = match stale_reason {
+                Some(reason) => format!("{} {}", "⚠ stale".yellow(), reason.dimmed()),
+                None => format!("{}", "● live".green()),
+            };
+            println!(
+                "{:<20} {:<10} {:<14} {:<14} {:<10} {}",
+                truncate(&c.scope, 20),
+                truncate(&c.host, 10),
+                truncate(&c.node_id, 14),
+                truncate(if c.agent.is_empty() { "-" } else { &c.agent }, 14),
+                age,
+                state
+            );
+        } else {
+            println!(
+                "{:<20} {:<10} {:<14} {:<14} {}",
+                truncate(&c.scope, 20),
+                truncate(&c.host, 10),
+                truncate(&c.node_id, 14),
+                truncate(if c.agent.is_empty() { "-" } else { &c.agent }, 14),
+                age
+            );
+        }
         println!("{}{}", " ".repeat(2), c.clone_path.dimmed());
     }
-    foreign.len()
+    if !show_all && !stale.is_empty() {
+        println!(
+            "{} {} stale cross-clone lease{} hidden · {} to list, {} to release",
+            "·".dimmed(),
+            stale.len(),
+            if stale.len() == 1 { "" } else { "s" },
+            "aida session leases --all".cyan(),
+            "aida session leases --prune-stale".cyan()
+        );
+    }
+    shown.len()
 }
 
 /// TASK-345: build the `drain` cross-reference for a lease whose scope is the
@@ -47968,6 +48051,104 @@ fn leases_json_rows(
 #[path = "tests/task345_leases_json_tests.rs"]
 mod task345_leases_json_tests;
 
+/// BUG-1764 clause 4: `aida session leases --prune-stale` — release every
+/// CROSS-CLONE claim the staleness predicate reports dead.
+///
+/// Before this there was no supported way to clear one. `aida session end
+/// --spec BUG-1689` answers `No lease found for spec ...` because a foreign
+/// claim has no local lease to resolve; `aida session reap` requires spec
+/// Done/Completed + branch merged + process exited; and
+/// `coordination::release_claim` refuses a claim whose `clone_path` is not ours
+/// by design. The only remedy was deleting
+/// `.aida-store/coordination/leases/*.toml` by hand.
+///
+/// Opt-in and never automatic: releasing another clone's claim is a cross-clone
+/// mutation. It can only ever touch a claim the SHARED predicate reports stale,
+/// so there is no `--force` to add.
+// trace:BUG-1764 | ai:claude
+fn session_leases_prune_stale(yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_root = project_root.join(".aida-store");
+    let our_clone = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf())
+        .display()
+        .to_string();
+    let foreign: Vec<coordination::Claim> = coordination::list_claims(&store_root)
+        .into_iter()
+        .filter(|c| c.clone_path.is_empty() || c.clone_path != our_clone)
+        .collect();
+    let (_live, stale) =
+        coordination::partition_claims(foreign, chrono::Utc::now(), &coordination::hostname());
+    if stale.is_empty() {
+        println!("No stale cross-clone leases to release.");
+        return Ok(());
+    }
+    println!(
+        "{} stale cross-clone lease{} to release:",
+        stale.len(),
+        if stale.len() == 1 { "" } else { "s" }
+    );
+    for (c, reason) in &stale {
+        println!(
+            "  {} {} {}",
+            truncate(&c.scope, 20).yellow(),
+            format!("({})", c.host).dimmed(),
+            reason.dimmed()
+        );
+    }
+    // Same posture as `aida session end`: a non-terminal stdin must not be
+    // able to release a peer's claims without saying so explicitly.
+    if !yes {
+        if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            anyhow::bail!(
+                "refusing to prune non-interactively without --yes (releasing another clone's \
+                 claim is a cross-clone mutation)"
+            );
+        }
+        if !confirm(&format!(
+            "Release {} stale lease claim(s) on the shared store? [y/N] ",
+            stale.len()
+        )) {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+    let mut released = 0usize;
+    for (c, reason) in &stale {
+        match coordination::release_stale_foreign_claim(
+            &store_root,
+            &c.scope,
+            &c.clone_path,
+            &c.heartbeat_at,
+        ) {
+            Ok(true) => {
+                released += 1;
+                println!("  {} released {} — {}", "✓".green(), c.scope, reason);
+            }
+            // Refreshed, reclaimed, or already gone between the listing and the
+            // delete — the verdict no longer describes the record on disk.
+            Ok(false) => println!(
+                "  {} skipped {} — changed on the store since it was listed",
+                "·".dimmed(),
+                c.scope
+            ),
+            Err(e) => eprintln!(
+                "  {} could not release {}: {e}",
+                "Warning:".yellow().bold(),
+                c.scope
+            ),
+        }
+    }
+    println!();
+    println!(
+        "Released {} of {} stale cross-clone lease claim{}.",
+        released,
+        stale.len(),
+        if stale.len() == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
 fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
@@ -47981,7 +48162,7 @@ fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
         // STORY-637: even with no LOCAL leases, a peer clone may hold a
         // cross-clone lease — surface it before the "no sessions" hint so a
         // refused `session start` has a place to point.
-        let foreign = print_cross_clone_leases(&project_root, chrono::Utc::now());
+        let foreign = print_cross_clone_leases(&project_root, chrono::Utc::now(), all);
         if foreign == 0 {
             println!("(no active sessions)");
         }
@@ -48171,7 +48352,7 @@ fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()> {
 
     // STORY-637: surface cross-clone lease claims held by OTHER clones —
     // distinct from the local leases above. trace:STORY-637 | ai:claude
-    print_cross_clone_leases(&project_root, now);
+    print_cross_clone_leases(&project_root, now, all);
 
     println!();
     println!(
@@ -83664,14 +83845,55 @@ fn requirement_breakdown_summary_line(
 /// 3): the ACTIVE `coordination/` claims (leases + drain + solo) held across
 /// all clones — distinct from the LOCAL leases section. Silent when there are
 /// no claims. trace:STORY-640 | ai:claude
+///
+/// BUG-1764: this section is also reached by `aida doctor` (which forces
+/// `show_full`). It applied no expiry predicate and — unlike the lease section
+/// — does not filter by clone at all, so it reported EVERY claim file as
+/// active: measured on one host, 211 claims, the oldest aged 8_078_324s (93
+/// days) against its own 1800s TTL, and the collapsed arm printed "211 active
+/// claims" on a host holding none. Stale claims are now excluded from both
+/// arms, and the count line says how many were suppressed.
+// trace:BUG-1764 | ai:claude
 fn print_status_coordination_section(
     store_root: &std::path::Path,
     now: chrono::DateTime<chrono::Utc>,
     show_full: bool,
 ) {
-    let mut claims = coordination::list_claims(store_root);
-    claims.extend(coordination::list_lock_claims(store_root));
+    let mut all_claims = coordination::list_claims(store_root);
+    all_claims.extend(coordination::list_lock_claims(store_root));
+    if all_claims.is_empty() {
+        return;
+    }
+    // BUG-1764: "active" is a claim the staleness predicate presumes live. The
+    // drain/solo lock claims mixed in here ARE `process_backed`, so they also
+    // get the same-host pid evaluation; session leases are not, so the TTL
+    // governs them. See `coordination::claim_staleness`.
+    let (claims, stale) =
+        coordination::partition_claims(all_claims, now, &coordination::hostname());
+    let hidden = if stale.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " · {} stale hidden (`aida session leases --all`)",
+            stale.len()
+        )
+    };
     if claims.is_empty() {
+        // Every claim on the store is stale. Say so — silence here would read
+        // as "no coordination state", which is what BUG-1764 made impossible
+        // to distinguish from "211 claims, all dead".
+        println!("{}", "─── Cross-clone coordination ───".bold());
+        // Point at the LISTING, not at `--prune-stale`: that command releases
+        // only CROSS-CLONE claims (clause 4's scope), while this count also
+        // includes this clone's own expired claim files — whose garbage
+        // collection is BUG-1764 clause 5, deliberately out of scope.
+        println!(
+            "  no active claims · {} stale claim{} on the store · {} to inspect",
+            stale.len(),
+            if stale.len() == 1 { "" } else { "s" },
+            "aida session leases --all".cyan()
+        );
+        println!();
         return;
     }
     println!("{}", "─── Cross-clone coordination ───".bold());
@@ -83687,11 +83909,12 @@ fn print_status_coordination_section(
             ""
         };
         println!(
-            "  {} active claim{}: {}{} · `aida status --full`",
+            "  {} active claim{}: {}{} · `aida status --full`{}",
             claims.len(),
             if claims.len() == 1 { "" } else { "s" },
             preview,
-            suffix
+            suffix,
+            hidden
         );
         println!();
         return;
@@ -83723,6 +83946,14 @@ fn print_status_coordination_section(
         if !c.clone_path.is_empty() {
             println!("    {}", c.clone_path.dimmed());
         }
+    }
+    if !stale.is_empty() {
+        println!(
+            "  {} stale claim{} hidden · {} to inspect",
+            stale.len(),
+            if stale.len() == 1 { "" } else { "s" },
+            "aida session leases --all".cyan()
+        );
     }
     println!();
 }
