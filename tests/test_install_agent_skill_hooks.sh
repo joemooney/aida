@@ -13,6 +13,8 @@
 #     install either way
 #   - a linked worktree is refused loudly, and skipped silently in
 #     best-effort mode (builds run from worktrees constantly)
+#   - an unwritable hooks dir (or a filesystem without symlinks) cannot fail
+#     a best-effort run — the reviewer-found set -e escape
 #   - outside a git repository, best-effort is a silent no-op
 #
 # trace:BUG-1762 | ai:claude
@@ -119,6 +121,20 @@ out=$work/worktree-quiet.out
 for name in post-merge post-checkout post-rewrite; do
     [ ! -e "$repo/.git/hooks/$name" ] || fail "worktree run installed $name into the main checkout"
 done
+
+echo "==> unwritable hooks dir: best-effort warns and exits 0, loud mode fails"
+repo=$(make_fixture unwritable)
+chmod a-w "$repo/.git/hooks"
+err=$work/unwritable.err
+(cd "$repo" && bash "$installer" --best-effort) >/dev/null 2>"$err" ||
+    { chmod u+w "$repo/.git/hooks"; fail "best-effort exited non-zero over an unwritable hooks dir: $(cat "$err")"; }
+grep -q "cannot create a symlink" "$err" ||
+    { chmod u+w "$repo/.git/hooks"; fail "best-effort did not warn about the unwritable hooks dir: $(cat "$err")"; }
+if (cd "$repo" && bash "$installer") >/dev/null 2>&1; then
+    chmod u+w "$repo/.git/hooks"
+    fail "loud mode exited 0 over an unwritable hooks dir"
+fi
+chmod u+w "$repo/.git/hooks"
 
 echo "==> outside a git repository: best-effort is a silent no-op, loud mode fails"
 mkdir -p "$work/not-a-repo"

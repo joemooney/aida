@@ -34,8 +34,10 @@ refuse() {
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) ||
     refuse "install-agent-skill-hooks: not inside a git repository"
-git_dir=$(git rev-parse --absolute-git-dir)
-common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) ||
+    refuse "install-agent-skill-hooks: cannot resolve the git dir"
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) ||
+    refuse "install-agent-skill-hooks: cannot resolve the git common dir"
 
 # The portable pack belongs to the main checkout, never to linked worktrees
 # (same ownership rule as the hook master itself).
@@ -49,7 +51,8 @@ if [ ! -f "$master" ]; then
 fi
 
 hooks="$common_dir/hooks"
-mkdir -p "$hooks"
+mkdir -p "$hooks" 2>/dev/null ||
+    refuse "install-agent-skill-hooks: cannot create $hooks"
 
 status=0
 for name in post-merge post-checkout post-rewrite; do
@@ -68,7 +71,17 @@ for name in post-merge post-checkout post-rewrite; do
         status=1
         continue
     fi
-    ln -s "$master" "$hook"
+    if ! ln -s "$master" "$hook" 2>/dev/null; then
+        # A filesystem without symlinks or an unwritable hooks dir must not
+        # fail a routine build — that is the --best-effort contract.
+        if [ "$best_effort" -eq 1 ]; then
+            echo "install-agent-skill-hooks: skipping $name — cannot create a symlink at $hook" >&2
+            continue
+        fi
+        echo "Failed to create symlink: $hook" >&2
+        status=1
+        continue
+    fi
     echo "  Linked: $hook"
 done
 exit "$status"
