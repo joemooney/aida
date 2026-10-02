@@ -1,0 +1,22 @@
+id: 01a0fddb-7deb-77c0-bbb1-042b57f6d0ab
+spec_id: TASK-1568
+agreed_id: TASK-1568
+title: 'Document the local codegraph CLI in CLAUDE.md''s read-on-demand table: one row pointing agents at codegraph callers/callees/impact/query for call-graph navigation when the tool is installed, preferring'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T18:23:35.403808518Z
+modified_at: 2026-10-02T18:23:35.403808518Z
+req_type: Task
+tags:
+- lifecycle:no-review
+filed_at:
+  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 8de4c3c9-7ff4-4c24-94c3-b23cbb2f30bf
