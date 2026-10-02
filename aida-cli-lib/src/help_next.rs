@@ -647,6 +647,9 @@ mod tests {
     // unrecorded (and, for a stored Draft, with approval skipped entirely).
     #[test]
     fn show_spec_next_derived_complete_epic_prescribes_close_not_archive() {
+        // trace:BUG-1767.ac43d859 | ai:claude
+        // Mutation-proven (with the two sibling BUG-1767 tests): see the PR
+        // for the three runs. trace:BUG-1767.ac882676 | ai:claude
         // The spec's fixture shape: stored Draft, rollup complete.
         let steps = show_spec_next("Completed", "Draft", "EPIC-42");
         assert_eq!(cmds(&steps), vec!["aida edit EPIC-42 --status completed"]);
@@ -671,6 +674,7 @@ mod tests {
     // (rollup-in-progress epic) also passes through unchanged.
     #[test]
     fn show_spec_next_passes_through_when_no_terminal_divergence() {
+        // trace:BUG-1767.ac336a39 | ai:claude
         // Stored Completed really is terminal → the archive off-ramp stands.
         assert_eq!(
             cmds(&show_spec_next("completed", "completed", "TASK-9")),

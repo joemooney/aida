@@ -898,6 +898,7 @@ mod show_latency_regression_tests {
     // trace:BUG-1767 | ai:claude
     #[test]
     fn toon_show_status_discloses_derived_and_stored() {
+        // trace:BUG-1767.acc811ae | ai:claude
         // The spec's fixture shape: stored Draft, rollup-derived Completed.
         let line = toon_show_status("Completed", "Draft");
         assert!(line.contains("completed"), "derived value legible: {line}");
@@ -919,6 +920,7 @@ mod show_latency_regression_tests {
     // trace:BUG-1767 | ai:claude
     #[test]
     fn toon_show_status_unannotated_when_stored_agrees() {
+        // trace:BUG-1767.ac336a39 | ai:claude
         // TASK-1565 / STORY-1486 shape: a non-epic's effective status IS the
         // stored one.
         assert_eq!(toon_show_status("Draft", "Draft"), "draft");
