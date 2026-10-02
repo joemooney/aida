@@ -76,12 +76,12 @@ description: |
   - Do not reap the zombie as the fix. The defect is the predicate, not this particular corpse.
   - Do not re-absorb BUG-1740. Its cause is a self-satisfying fan-out guard and is independent of
     this; fixing one will not move the other's output.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-10-02T22:21:48.115720539Z
+modified_at: 2026-10-02T22:22:15.850877318Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -233,6 +233,13 @@ history:
   - field_name: status
     old_value: Planned
     new_value: Approved
+- id: 01a0feb6-012a-7ae3-8cff-ef2e3dc1fd4e
+  author: aida-session-start
+  timestamp: 2026-10-02T22:22:15.850876899Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7c37dd81acf8972603487a8ce7d1fbb930295429
   branch: main
