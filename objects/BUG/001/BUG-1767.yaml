@@ -140,7 +140,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:05:44.820925638Z
-modified_at: 2026-10-02T10:14:08.224474984Z
+modified_at: 2026-10-02T14:18:24.650654940Z
 req_type: Bug
 comments:
 - id: 01a0fc1b-6260-7050-8448-3e53502762f7
@@ -194,6 +194,21 @@ comments:
   created_at: 2026-10-02T10:14:08.224474984Z
   modified_at: 2026-10-02T10:14:08.224474984Z
   session_id: 2f2ab833-51fe-47ff-8f5d-d73c37ec27d8
+- id: 01a0fcfb-060a-7e42-9910-8e95ba35a21d
+  author: joe
+  content: |-
+    DECISION: Implement Remedy Options 1 and 2.
+
+    ### Decision & Rationale
+
+    We will disclose the derivation in `aida show` and fix the prescribed `next` action. This resolves the UX contradiction where `aida show` obscures the stored status of an epic, and prevents users from being wrongly advised to archive Draft/InProgress epics.
+
+    We specifically avoid Option 3 (auto-bumping the stored status of epics when rollups complete) because of the regression risks documented in BUG-768 regarding force-closed epics. Leaving the actual status bump as a deliberate human action (guided by the corrected `next` prescription) is safer and clearer.
+
+    ### Acceptance Criteria Updates
+    The existing ACs are fully aligned with this decision and should be implemented as written.
+  created_at: 2026-10-02T14:18:24.650654940Z
+  modified_at: 2026-10-02T14:18:24.650654940Z
 history:
 - id: 01a0fc16-0bb2-7b33-843a-1352924c07cb
   author: joe
