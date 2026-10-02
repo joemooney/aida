@@ -28,8 +28,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T20:16:10.855559954Z
-modified_at: 2026-10-02T20:16:59.163038648Z
+modified_at: 2026-10-02T20:20:39.864637910Z
 req_type: Task
+comments:
+- id: 01a0fe46-ad38-7c21-95d7-dab39c0db1ae
+  author: joe
+  content: |
+    Implemented on branch task-1570, PR #2352, commit accc61fb48. All three AC sites disabled (cross-platform matrix, darwin cross-target check, ci.yml tag release matrix); release.yml left live and flagged here as the open operator question: should release-tag darwin artifacts be disabled too? check-ci-fast 16/16. Gate-tier trap avoided: step name kept because scripts/ci-gate-tiers.toml keys on it. Live verification: PR #2352's own cross-platform run schedules only Build (windows-latest) — no macOS job.
+  created_at: 2026-10-02T20:20:39.864637910Z
+  modified_at: 2026-10-02T20:20:39.864637910Z
+  session_id: 36d8236a-e4eb-4af0-8043-25d75751b21d
 history:
 - id: 01a0fe43-4f1b-7e11-8ce5-5dac62808dde
   author: aida-session-start
