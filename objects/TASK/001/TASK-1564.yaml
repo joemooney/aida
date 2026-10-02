@@ -64,8 +64,111 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T03:41:56.604921140Z
-modified_at: 2026-10-02T07:08:21.533069923Z
+modified_at: 2026-10-02T07:54:01.737883041Z
 req_type: Task
+comments:
+- id: 01a0fb9b-1c89-7d73-8574-45063ec260f7
+  author: joe
+  content: |
+    ## Implementation record — PR #2329, branch `task-1564`, head `f69e582175`
+
+    ### The design decision that is not in the spec
+
+    The spec says the container moves. It does not say what happens to **BUG-864's
+    anti-spam rule**, which exists because a re-drive of a still-broken spec used to
+    file a fresh draft every run. Dropping it would have traded one noise source
+    (drafts demanding triage) for another (a comment per re-drive on a spec someone
+    is actively reading).
+
+    So the rule is carried over **by signature**: every note embeds
+    `Signature: phase <N> (<slug>) · kind <kind>`, and a recurrence with the same
+    fingerprint bumps that note's `Attempts:` counter and restamps
+    `Latest recurrence:` instead of appending a second note. A failure in a
+    *different* phase, or of a different kind, is a different signature and does get
+    its own note — that is the control, and it has its own test
+    (`a_different_phase_gets_its_own_note`), because a recorder that collapsed
+    everything into one note would pass the recurrence test just as well.
+
+    The recurrence-bump helper **moved** out of `lib.rs` into the new
+    `drain_failure_note` module rather than being copied, so the note path and the
+    legacy auto-drafted-BUG absorb path share one implementation. Two copies of that
+    algorithm drifting apart is the defect this avoids.
+
+    ### The legacy absorb path stayed
+
+    `absorb_open_failure_bug` still absorbs into an already-open auto-drafted BUG
+    when a store holds one. Removing it would have stranded such records in other
+    projects, and it does not create a spec object, so it never conflicts with AC1.
+    Its dedupe and recurrence tests are untouched.
+
+    ### Branch and commit under test were NEW
+
+    AC2 asks for "the examined commit or branch". The draft BUG **never carried
+    either** — it carried the phase, seat, parent, failure text and telemetry, but
+    nothing identifying what was under test. The note resolves both through
+    `aida_core::git_ops::{current_branch, head_sha}` and degrades to
+    `(unresolved)` rather than failing.
+
+    ### Why a quiet comment writer
+
+    `comment_cmd::add_comment_cli` prints `Comment added successfully` on stdout.
+    The drain's stdout may be a `--json` document, so the note path got a quiet
+    counterpart, `bump_or_add_marked_comment`, which prints nothing and returns the
+    comment's UUID so the caller can point at it. It is the same git-canonical
+    `Storage::load` → mutate → `Storage::save` path `aida comment add` uses — the
+    autopilot audit trail (`autopilot_audit::write_durable_comment`) already
+    established that precedent.
+
+    ### AC4, concretely
+
+    `record_auto_complete_run` returns `()`. The recorder returns `Option<String>`
+    and the caller consumes it with `if let Some`, so a note that cannot be written
+    cannot reach the exit path. `an_unresolvable_store_returns_none_without_panicking`
+    proves it against a project root with no store at all.
+
+    The ledger line keeps every failure field; `failure_comment` is **additive**
+    (`serde(default)`, `skip_serializing_if`), and a line written before the field
+    existed still deserializes — asserted, not assumed.
+
+    ### What was removed
+
+    The `aida add` subprocess that filed the draft, its `ID:` stdout parser
+    (`parse_added_spec_id`), and the three tests covering that parser. The behaviour
+    they covered no longer exists. Noting it explicitly so the deletion is not read
+    as lost coverage.
+
+    ### Mutation proof (AC6)
+
+    Four disjoint mutants, one build:
+
+    | mutant | test that went red | assertion |
+    |---|---|---|
+    | recorder also files a spec | `phase_failure_comments_on_the_parent_and_files_no_spec` | `no spec object may be created — before 1, after 2` |
+    | drop branch/commit from the body | `the_note_carries_phase_seat_branch_commit_and_failure_text` | `names the branch under test` |
+    | `promotion_recipe` returns `""` | `the_note_carries_an_explicit_promotion_recipe` | `promotion is explicit, not implied` |
+    | never recognise an existing note | `a_recurrence_bumps_the_existing_note_rather_than_adding_a_second` | `the same note is bumped, not replaced` |
+
+    `5 passed; 4 failed` — **each failure at its own assertion**, the 5 survivors
+    orthogonal to all four mutants. Reverted with `git checkout --` on committed
+    files; re-run **9 passed; 0 failed**.
+
+    ### AC5 is deliberately NOT in this PR
+
+    `BUG-1713` and `BUG-1716` are the migration case **and** items 4-5 in the
+    BUG-triage lane running in parallel. Dispositioning them from both lanes is how
+    a double-disposition happens. This PR implements the mechanism; the triage lane
+    recommends their disposition. AC5 stays open until one lane records it.
+
+    ### Checks
+
+    `task_1564` 9/0 · `task_266` 5/0 · `auto_complete` 282/0 ·
+    `cli::tests comment_cmd criteria_coverage usage_cmd metrics` 163/0 ·
+    `cargo fmt --all -- --check` 0 · `cargo clippy -p aida-cli-lib --lib --all-targets`
+    0 errors, no warning names a new symbol · `scripts/check-portability.sh` clean ·
+    `cargo test --workspace` running, result posted to the PR.
+  created_at: 2026-10-02T07:54:01.737883041Z
+  modified_at: 2026-10-02T07:54:01.737883041Z
+  session_id: abe6a79a-f09b-4400-bffa-4a7992c7a025
 history:
 - id: 01a0fab4-97bb-7500-ad79-5d23a03c55b9
   author: joe
