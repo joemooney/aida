@@ -96,7 +96,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:21:51.793308105Z
-modified_at: 2026-10-01T18:30:31.611423064Z
+modified_at: 2026-10-02T01:28:33.446051340Z
 req_type: Bug
 comments:
 - id: 01a0f8b3-f579-7513-8100-0183cfc5c782
@@ -169,6 +169,85 @@ comments:
   created_at: 2026-10-01T18:30:31.611423064Z
   modified_at: 2026-10-01T18:30:31.611423064Z
   session_id: f30df840-cbe8-450a-bc3c-59a41927a710
+- id: 01a0fa3a-33a6-7a70-98cb-8eb18887898e
+  author: joe
+  content: |
+    ## AC1 decision (advisor, operator-agreed 2026-10-01) — option (b), regeneration on the VCS event
+
+    Recorded so the next session can dispatch without re-litigating this. AC5 is answered at the bottom.
+
+    ### (a) is not available, and the reason is structural
+
+    A guard that fails on drift **cannot run in CI at all.** `.agents/` is gitignored (`.gitignore:194`), so
+    a fresh clone has no pack, and `check_portable_pack` returns clean-empty for that case *by design* —
+    `aida-core/src/scaffolding/agent_pack.rs:42` carries the doc comment "A missing pack directory is a
+    clean no-op for fresh clones and CI", and `:48-50` is the early return. A CI leg therefore goes green on
+    this defect no matter how stale the pack is in anyone's checkout. This also answers **AC3**: the
+    mechanism must not live in CI, because CI is the one place the subject of the check does not exist.
+
+    That leaves a local-only guard, which is the same failure mode one layer up: something a session has to
+    remember to run, replacing `make sync-templates`, which is something a session has to remember to run.
+
+    ### (b) is also the only option that can satisfy AC2's mutation
+
+    AC2 requires the mutation proof to include **deleting** `.agents/`, not only modifying a file in it —
+    that absence is the hole that made BUG-1758's AC5 evidence vacuous. A *guard* cannot honestly go red on
+    an absent pack: absence is legitimate in every linked worktree, and a guard that reddened there would
+    fire on 80+ worktrees. **Regeneration has no such conflict** — it recreates the pack, so both mutations
+    (modify a master → the pack copy is rewritten; delete `.agents/` → the pack is recreated) are provable
+    with the same mechanism. That is the deciding argument.
+
+    ### The mechanism
+
+    A git **`post-merge` + `post-checkout` + `post-rewrite`** hook that runs the existing
+    `sync-agent-skills` work. Drift is introduced by a merge bringing new masters, so the VCS event is the
+    honest trigger: no human is in the loop.
+
+    Install it as a **symlink** into `aida-core/templates/hooks/`, which is how this repo already installs
+    `commit-msg` and `pre-commit` (`core.hooksPath` is `.git/hooks`; both of those entries are symlinks to
+    template masters). This matters: **BUG-1738 is about a *generated* (copied) hook never updating.** A
+    symlinked hook cannot drift from its master, so the symlink form sidesteps the very defect that would
+    otherwise make a hook the wrong place to put this. Do not copy the hook.
+
+    Two scope constraints for the implementer:
+
+    1. **Main checkout only.** Regenerating on `post-checkout` in a linked worktree would create 55
+       untracked files in each of them. TASK-1520 put the pack in the main checkout; widening it to
+       worktrees is a separate argument. Gate on the worktree being the main one.
+    2. **`aida-core` must already be built**, since `sync-agent-skills` is `cargo run --example`. A hook
+       that triggers a cold compile on every checkout is not acceptable — degrade to a printed warning
+       when the example is not already built rather than blocking the checkout.
+
+    ### In scope as a second, smaller part: stop the false green
+
+    `aida-core/examples/agent_skill_pack.rs:30-32` prints
+    `OK: .agents/skills (aida-* pack matches aida-core/templates)` for **both** "present and current" and
+    "absent entirely". That one line is what let BUG-1758 round 1 report AC5 as passing a pack check when
+    there was no pack. The `check` arm must distinguish the two outcomes and say which it observed. This is
+    a reporting fix, not a semantic change — `check_portable_pack`'s clean-empty-on-absent contract stays
+    exactly as it is, because CI depends on it.
+
+    ### AC4
+
+    The pack stays untracked; `git status --porcelain` must stay empty. Do **not** solve this by committing
+    55 generated files — that is the out-of-scope option the spec already rejected.
+
+    ### AC5 — the frequency, measured rather than assumed
+
+    Between 2026-09-28 and now, exactly **two** template masters changed, in **two** commits, and **neither
+    prompted a regeneration**:
+
+    - `aida-core/templates/skills/aida-docs-review.md` — `f3cde6e60e` (BUG-1755), `6d0d20a762` (BUG-1758)
+    - `aida-core/templates/skills/aida-code-review.md` — `f3cde6e60e` (BUG-1755)
+
+    A **2-of-2 miss rate** over the window. Both were repaired by hand in relay session #18.
+
+    Current baseline: on clean `main` @ `3494256297`, `make check-templates` exits **0** — but only because
+    session #18 ran `make sync-templates` by hand and no master has changed since. The invariant is not
+    restored, it is merely not currently violated.
+  created_at: 2026-10-02T01:28:33.446051340Z
+  modified_at: 2026-10-02T01:28:33.446051340Z
+  session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
 history:
 - id: 01a0f8b3-abff-77d2-a69c-dabe4b43776a
   author: joe
