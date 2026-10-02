@@ -62,6 +62,20 @@ impl RefreshLock {
                 _thread: Default::default(),
             }));
         }
+        // Amendment A8: the lock descriptor must be close-on-exec, or the
+        // detached worker a lock-holding reader spawns would inherit it and
+        // hold the flock forever. Rust's std sets CLOEXEC on open; this
+        // pins that assumption where it is load-bearing.
+        // trace:TASK-1527 | ai:claude
+        #[cfg(unix)]
+        debug_assert!(
+            {
+                use std::os::fd::AsRawFd;
+                let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) };
+                flags >= 0 && (flags & libc::FD_CLOEXEC) != 0
+            },
+            "refresh lock fd must be CLOEXEC"
+        );
         match fs2::FileExt::try_lock_exclusive(&file) {
             Ok(()) => {
                 held.insert(
