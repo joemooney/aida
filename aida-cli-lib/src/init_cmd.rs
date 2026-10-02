@@ -2535,6 +2535,18 @@ on = ["QueueDrained"]
 prompt = "Triage newly shelved work from the completed queue run: classify the failure, write a concrete rework brief, and requeue or escalate it."
 enabled = true
 
+# STORY-1484 slice C: pick up an orphaned cache refresh request (its worker
+# was killed, or its requester exited before spawning one). A silent no-op
+# when no request is pending, so an enabled-by-default entry trains nobody to
+# ignore it; when the request's worker has crash-looped, the tick reports the
+# stand-down instead of spawning a fourth worker.
+# trace:TASK-1527 | ai:claude
+[[schedule.jobs]]
+name = "cache-refresh-tick"
+command = "cache refresh --if-requested"
+every = "15m"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would
@@ -2723,6 +2735,8 @@ mod story_1226_init_schedule_section_tests {
             "mailbox-triage",
             "product-wave-relaunch",
             "shelf-triage",
+            // trace:TASK-1527 | ai:claude
+            "cache-refresh-tick",
             "groom-drafts",
             "hub-drift-guard",
             "hub-drift-guard-route",
@@ -2744,10 +2758,21 @@ mod story_1226_init_schedule_section_tests {
         assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
         let parsed: toml::Value = toml::from_str(section).expect("defaults parse");
         let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
-        assert_eq!(jobs.len(), 3);
+        // TASK-1527 added cache-refresh-tick as the fourth enabled default.
+        assert_eq!(jobs.len(), 4);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
+        // trace:TASK-1527 | ai:claude
+        let tick = jobs
+            .iter()
+            .find(|job| job["name"].as_str() == Some("cache-refresh-tick"))
+            .expect("cache-refresh-tick scaffolded");
+        assert_eq!(
+            tick["command"].as_str(),
+            Some("cache refresh --if-requested")
+        );
+        assert_eq!(tick["every"].as_str(), Some("15m"));
     }
 }
 

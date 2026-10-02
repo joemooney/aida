@@ -230,6 +230,51 @@ fn plain_refresh_freshens_and_clears_the_request() {
     assert!(String::from_utf8_lossy(&status_out.stdout).contains("FRESH"));
 }
 
+/// Story acceptance #5: `aida cache status` shows the pending request, the
+/// worker failures, the suppression stand-down, and the refresh-lock holder.
+// trace:TASK-1527 | ai:claude
+#[test]
+fn cache_status_shows_request_failures_suppression_and_lock_holder() {
+    let fixture = seeded_fixture();
+    let cache = cache_path(&fixture);
+    aida_core::db::refresh_request::file_request(&cache, "feedfacefeedface").unwrap();
+    for n in 0..3 {
+        aida_core::db::refresh_request::record_failed_attempt(&cache, &format!("boom {n}"))
+            .unwrap();
+    }
+    let out = aida(&fixture, &["cache", "status"]);
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    assert!(
+        text.contains("Refresh request:  pending for feedfacefeedface"),
+        "missing pending request line:\n{text}"
+    );
+    assert!(
+        text.contains("3 failed attempt(s), last: boom 2"),
+        "missing failures line:\n{text}"
+    );
+    assert!(
+        text.contains("SUPPRESSED after repeated worker failures"),
+        "missing suppression line:\n{text}"
+    );
+    assert!(
+        text.contains("Refresh lock:     free"),
+        "lock line:\n{text}"
+    );
+
+    // Hold the flock from this process: status (another process) must call
+    // it held.
+    let _guard = aida_core::db::cache_refresh::RefreshLock::try_acquire(&cache)
+        .unwrap()
+        .expect("acquire refresh flock");
+    let held = aida(&fixture, &["cache", "status"]);
+    let text = String::from_utf8_lossy(&held.stdout).to_string();
+    assert!(
+        text.contains("held (a refresh is running)"),
+        "missing held lock line:\n{text}"
+    );
+}
+
 /// A suppressed request (three failed attempts in the window) makes the tick
 /// report and stand down instead of spawning a fourth worker (A7).
 // trace:TASK-1527 | ai:claude
