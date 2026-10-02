@@ -77,12 +77,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T18:30:23.822947124Z
-modified_at: 2026-10-02T21:58:26.915725658Z
+modified_at: 2026-10-02T22:16:56.986377420Z
 req_type: Bug
 tags:
 - config-trust
 - security
 - supply-chain
+comments:
+- id: 01a0feb1-239a-7ac3-a7ec-cad185cd922c
+  author: joe
+  content: 'Slice 1 ([notify] command — the sh -c RCE shape, worst of the set) implemented and up as PR #2354 (commit 007e6a28df). Routed per operator approval to a NON-advisor codex implementer (workspace-write dispatch); advisor verified the diff, fixed a duplicated comment, confirmed the mutation proof, committed. Grandfather entry removed so the BUG-1723 guard enforces it. PR depends on #2353 (BUG-1714 x BUG-1723 inventory crossfire on main, fixed separately). Remaining slices: terminal.send_token, behavior.permission_mode, contained.*, preflight.guards decision, data-location paths, schedule.jobs.'
+  created_at: 2026-10-02T22:16:56.986377420Z
+  modified_at: 2026-10-02T22:16:56.986377420Z
+  session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
 history:
 - id: 01a0fea0-3363-7a31-9eb5-1b94f2333dc0
   author: joe
