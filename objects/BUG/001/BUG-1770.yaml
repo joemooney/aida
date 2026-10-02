@@ -157,7 +157,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:57:32.637932108Z
-modified_at: 2026-10-02T10:58:08.703789413Z
+modified_at: 2026-10-02T11:16:52.433672328Z
 req_type: Bug
 tags:
 - cli
@@ -170,6 +170,69 @@ relationships:
   target_id: 01a0c322-619c-7fc1-bb4e-aeb20b187020
   created_at: 2026-10-02T10:58:08.703786090Z
   created_by: joe
+comments:
+- id: 01a0fc54-d251-7073-9a02-f0e39801582c
+  author: joe
+  content: |
+    ## Blast radius measured (advisor relay session #14, 2026-10-02)
+
+    The spec scoped migration of existing blobs OUT. That decision deserves the
+    number, because it is not small, and the consequence is not cosmetic.
+
+    Scanned all 4733 store objects under `.aida-store/objects/`; 3088 carry a
+    `tags:` list:
+
+    | measure | count |
+    |---|---|
+    | objects carrying at least one whitespace-containing tag | **276** (8.9% of objects with tags) |
+    | blob tags total | 276 (exactly one per affected object — the blob is always a single `--tags` argument) |
+    | distinct tag words trapped inside a blob | **444** |
+
+    By spec type: BUG 140, TASK 67, STORY 38, ADR 22, EPIC 5, SPIKE 3, PRIN 1.
+
+    Recipe (re-runnable):
+
+    ```
+    python3 -c '
+    import glob,re
+    n=0
+    for f in glob.glob("/home/joe/ai/aida/.aida-store/objects/**/*.yaml",recursive=True):
+        t=open(f,encoding="utf-8",errors="replace").read()
+        m=re.search(r"^tags:\n((?:- .*\n)+)",t,re.M)
+        if m and any(" " in l[2:].strip() for l in m.group(1).strip().split("\n")): n+=1
+    print(n)'
+    ```
+
+    ## The consequence is a silent search miss, not just an ugly render
+
+    BUG-1768 is open and its stored tag list is the single item
+    `auto-complete orchestrator advisor-groom auto-bump`:
+
+    - `aida list --tags orchestrator --all | grep -c 'BUG-1768,'` → **0**
+    - `aida list --tags "auto-complete orchestrator advisor-groom auto-bump" --all | grep -c 'BUG-1768,'` → **1**
+
+    So every one of those 444 trapped words is invisible to `aida list --tags`, and
+    the only query that finds the spec is the whole blob reproduced verbatim. A tag
+    filter that silently under-reports is worse than one that errors: the advisor
+    reads an empty result as "no such work".
+
+    This is the same failure the human render hides, now with a machine-readable
+    witness: the filter and the render disagree in opposite directions. The render
+    shows four tags that cannot be queried; the filter answers for a tag nobody
+    would ever type.
+
+    ## What this does and does not change about the spec
+
+    It does **not** reopen the scope decision — rejecting a whitespace tag at every
+    write path is still the right first move, and is what stops the population
+    growing. It does mean the 276 should be a filed follow-up rather than an
+    unwritten assumption, because "out of scope" currently reads as "harmless".
+    Recommend the implementer add a line to the spec's scope note naming the 276 and
+    pointing at a `aida edit <ID> --tags <comma,separated,set>` repair, so the next
+    seat does not have to re-measure this.
+  created_at: 2026-10-02T11:16:52.433672328Z
+  modified_at: 2026-10-02T11:16:52.433672328Z
+  session_id: 80a149f2-df5e-43a1-9400-e2ad67e7819c
 history:
 - id: 01a0fc43-5c24-7611-b3e1-13d9c4a3dbcb
   author: joe
