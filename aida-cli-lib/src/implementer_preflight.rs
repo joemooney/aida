@@ -6,8 +6,15 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
-const GUARD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-const BUILD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const DEFAULT_GUARD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+/// BUG-1714 AC4: the build budget is sized for a COLD worktree. A fresh pool
+/// worktree's first debug build of this workspace, behind a machine-wide
+/// cargo slot gate, does not finish in 900s — which made Inconclusive the
+/// NORMAL first-publication outcome. Guards already share ONE build per run
+/// (`execute` builds at most once and every guard reuses it), so this budget
+/// is paid at most once per preflight, and only when a guard actually runs.
+// trace:BUG-1714 | ai:claude
+const DEFAULT_BUILD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 const CI_BASH_SHELL: &str = "bash --noprofile --norc -e -o pipefail {0}";
 
 const DEFAULT_GUARD_NAMES: &[&str] = &[
@@ -59,29 +66,55 @@ pub(crate) enum GuardResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PreflightDecision {
     Open,
-    Refuse { failed: Vec<(String, String)> },
+    /// At least one identified guard COULD NOT COMPLETE and none objected.
+    /// Nothing was verified, so the change must not merge unreviewed — but
+    /// nothing was refused either, so closing the PR would discard reviewable
+    /// work over an infrastructure timeout. The caller holds the PR open
+    /// instead of retracting it.
+    // trace:BUG-1714 | ai:claude
+    Hold {
+        inconclusive: Vec<(String, String)>,
+    },
+    Refuse {
+        failed: Vec<(String, String)>,
+    },
 }
 
 // trace:TASK-1289 | ai:codex
 pub(crate) fn decide(results: &[GuardResult]) -> PreflightDecision {
-    // An INCONCLUSIVE guard refuses alongside a failing one. It has not passed,
-    // and a gate that publishes on "we could not tell" is not a gate — a guard
-    // made to time out becomes a guard made to succeed.
-    // trace:TASK-1289 | ai:claude
-    let failed = results
-        .iter()
-        .filter_map(|result| match result {
-            GuardResult::Failed { name, output } => Some((name.clone(), output.clone())),
-            GuardResult::Inconclusive { name, reason } => {
-                Some((name.clone(), format!("did not complete: {reason}")))
+    // An INCONCLUSIVE guard never publishes. It has not passed, and a gate
+    // that publishes on "we could not tell" is not a gate — a guard made to
+    // time out becomes a guard made to succeed.
+    //
+    // BUG-1714: but it does not CLOSE either. `Failed` means a guard looked
+    // and objected; `Inconclusive` means nobody looked. Only a genuine
+    // failure retracts the PR; an inconclusive-only outcome holds it open,
+    // unmergeable, for retry.
+    // trace:TASK-1289 trace:BUG-1714 | ai:claude
+    let mut any_failed = false;
+    let mut refuse_entries = Vec::new();
+    let mut inconclusive = Vec::new();
+    for result in results {
+        match result {
+            GuardResult::Failed { name, output } => {
+                any_failed = true;
+                refuse_entries.push((name.clone(), output.clone()));
             }
-            GuardResult::Passed(_) | GuardResult::Skipped(_) => None,
-        })
-        .collect::<Vec<_>>();
-    if failed.is_empty() {
-        PreflightDecision::Open
+            GuardResult::Inconclusive { name, reason } => {
+                refuse_entries.push((name.clone(), format!("did not complete: {reason}")));
+                inconclusive.push((name.clone(), reason.clone()));
+            }
+            GuardResult::Passed(_) | GuardResult::Skipped(_) => {}
+        }
+    }
+    if any_failed {
+        PreflightDecision::Refuse {
+            failed: refuse_entries,
+        }
+    } else if !inconclusive.is_empty() {
+        PreflightDecision::Hold { inconclusive }
     } else {
-        PreflightDecision::Refuse { failed }
+        PreflightDecision::Open
     }
 }
 
@@ -98,6 +131,115 @@ pub(crate) fn retraction_notice(detail: &str) -> String {
          reviewed.\n\n{detail}\n\nThe branch is untouched — fix the guard failure and reopen, \
          or let the drain retry."
     )
+}
+
+/// The build-failure clause `build_worktree_binary` stamps into every reason
+/// it touches — "(build timed out after Ns)", "(build failed: …)",
+/// "(build could not start: …)". Guards whose reasons carry the SAME clause
+/// were felled by the same build, not by independent defects.
+// trace:BUG-1714 | ai:claude
+fn split_on_build_failure_clause(reason: &str) -> Option<(&str, &str)> {
+    reason
+        .find("(build ")
+        .map(|start| (reason[..start].trim_end(), reason[start..].trim_end()))
+}
+
+/// BUG-1714 AC5: one root cause, reported once. #2255 printed the same build
+/// timeout under two guard names, which read as broader breakage than it was.
+/// Guards sharing a build-failure clause are grouped under that clause; each
+/// guard still states its own proximate symptom (timeout vs could-not-start).
+// trace:BUG-1714 | ai:claude
+pub(crate) fn inconclusive_detail(inconclusive: &[(String, String)]) -> String {
+    let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    let mut singles: Vec<String> = Vec::new();
+    for (name, reason) in inconclusive {
+        match split_on_build_failure_clause(reason) {
+            Some((proximate, clause)) => {
+                let proximate = proximate.to_string();
+                match groups.iter_mut().find(|(c, _)| c == clause) {
+                    Some((_, members)) => members.push((name.clone(), proximate)),
+                    None => groups.push((clause.to_string(), vec![(name.clone(), proximate)])),
+                }
+            }
+            None => singles.push(format!("guard `{name}` could not complete: {reason}")),
+        }
+    }
+    let mut sections = Vec::new();
+    for (clause, members) in groups {
+        if members.len() == 1 {
+            let (name, proximate) = &members[0];
+            sections.push(format!(
+                "guard `{name}` could not complete: {proximate} {clause}"
+            ));
+        } else {
+            let mut section = format!(
+                "one root cause — the worktree build did not complete {clause} — kept {} guards from completing:",
+                members.len()
+            );
+            for (name, proximate) in members {
+                section.push_str(&format!("\n  guard `{name}`: {proximate}"));
+            }
+            sections.push(section);
+        }
+    }
+    sections.extend(singles);
+    sections.join("\n\n")
+}
+
+/// The comment posted on a change that is being HELD because the publication
+/// guards could not complete. Never says a guard objected: for an
+/// inconclusive-only outcome nothing looked at the code, and a reader told
+/// the guards objected goes hunting for a code problem that does not exist.
+// trace:BUG-1714 | ai:claude
+pub(crate) fn inconclusive_hold_notice(detail: &str) -> String {
+    format!(
+        "Publication guards could not complete before this change was reviewed. No guard \
+         objected to the change — and none verified it either.\n\n{detail}\n\nThis PR stays \
+         open under a merge-hold so it cannot merge unreviewed. The guards will be retried \
+         on the next publication attempt; after a review, a human releases the hold with \
+         `aida merge-hold clear`."
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PreflightBudgets {
+    pub(crate) guard_timeout: Duration,
+    pub(crate) build_timeout: Duration,
+}
+
+impl Default for PreflightBudgets {
+    fn default() -> Self {
+        Self {
+            guard_timeout: DEFAULT_GUARD_TIMEOUT,
+            build_timeout: DEFAULT_BUILD_TIMEOUT,
+        }
+    }
+}
+
+/// BUG-1714 AC4: the budgets are configuration, not bare literals —
+/// `[preflight] guard_timeout_secs` / `build_timeout_secs` in
+/// `.aida/config.toml`, with defaults sized for a cold worktree.
+// trace:BUG-1714 | ai:claude
+pub(crate) fn configured_budgets(project_root: &Path) -> PreflightBudgets {
+    let defaults = PreflightBudgets::default();
+    let Ok(text) = std::fs::read_to_string(project_root.join(".aida/config.toml")) else {
+        return defaults;
+    };
+    let Ok(value) = text.parse::<toml::Value>() else {
+        return defaults;
+    };
+    let secs = |key: &str| {
+        value
+            .get("preflight")
+            .and_then(|v| v.get(key))
+            .and_then(|v| v.as_integer())
+            .filter(|&n| n > 0)
+            .map(|n| Duration::from_secs(n as u64))
+    };
+    PreflightBudgets {
+        guard_timeout: secs("guard_timeout_secs").unwrap_or(defaults.guard_timeout),
+        build_timeout: secs("build_timeout_secs").unwrap_or(defaults.build_timeout),
+    }
 }
 
 pub(crate) fn configured_guard_names(project_root: &Path) -> Vec<String> {
@@ -325,12 +467,16 @@ fn github_actions_bash(command: &str) -> Command {
     shell
 }
 
-fn build_worktree_binary(project_root: &Path, path: &Path) -> Result<String, String> {
+fn build_worktree_binary(
+    project_root: &Path,
+    path: &Path,
+    timeout: Duration,
+) -> Result<String, String> {
     let mut build = Command::new("cargo");
     build
         .args(["build", "-p", "aida-cli", "--bin", "aida"])
         .current_dir(project_root);
-    match run_bounded(&mut build, BUILD_TIMEOUT) {
+    match run_bounded(&mut build, timeout) {
         Ok(Some(out)) if out.status.success() => Ok(describe_binary(path)),
         Ok(Some(out)) => Err(format!(
             "{} (build failed: {})",
@@ -340,13 +486,18 @@ fn build_worktree_binary(project_root: &Path, path: &Path) -> Result<String, Str
         Ok(None) => Err(format!(
             "{} (build timed out after {}s)",
             path.display(),
-            BUILD_TIMEOUT.as_secs()
+            timeout.as_secs()
         )),
         Err(err) => Err(format!("{} (build could not start: {err})", path.display())),
     }
 }
 
-fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -> Vec<GuardResult> {
+fn execute(
+    project_root: &Path,
+    guards: Vec<ResolvedGuard>,
+    budgets: PreflightBudgets,
+) -> Vec<GuardResult> {
+    let timeout = budgets.guard_timeout;
     let binary_path = binary_path(project_root);
     // Built at most once, on the first guard that will ACTUALLY RUN.
     //
@@ -416,7 +567,9 @@ fn execute(project_root: &Path, guards: Vec<ResolvedGuard>, timeout: Duration) -
             continue;
         }
         // This guard will execute, so the worktree binary is needed now.
-        let built = binary.get_or_insert_with(|| build_worktree_binary(project_root, &binary_path));
+        let built = binary.get_or_insert_with(|| {
+            build_worktree_binary(project_root, &binary_path, budgets.build_timeout)
+        });
         let binary_label = match &*built {
             Ok(label) | Err(label) => label.clone(),
         };
@@ -479,13 +632,20 @@ pub(crate) fn run(project_root: &Path) -> Vec<GuardResult> {
     execute(
         project_root,
         guards_from_ci(project_root, &names),
-        GUARD_TIMEOUT,
+        configured_budgets(project_root),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_budgets(guard_timeout: Duration) -> PreflightBudgets {
+        PreflightBudgets {
+            guard_timeout,
+            build_timeout: Duration::from_secs(60),
+        }
+    }
 
     #[test]
     fn pure_decision_records_runs_and_refuses_on_any_failure() {
@@ -560,7 +720,7 @@ mod tests {
         let results = execute(
             root.path(),
             guards_from_ci(root.path(), &["Guard".into()]),
-            Duration::from_secs(2),
+            test_budgets(Duration::from_secs(2)),
         );
 
         let PreflightDecision::Refuse { failed } = decide(&results) else {
@@ -573,15 +733,16 @@ mod tests {
         assert!(failed[0].1.contains("found `bash {0}`"));
     }
 
-    #[test]
     /// Was `guard_timeout_skips_instead_of_refusing`, which asserted that a
     /// guard timing out still published. That is the defect finding 2 named:
     /// a guard made to time out became a guard made to succeed, so any
     /// slow-enough failure published itself. The contract is now inverted —
-    /// an identified guard that cannot finish is INCONCLUSIVE and refuses.
-    // trace:TASK-1289 | ai:claude
+    /// an identified guard that cannot finish is INCONCLUSIVE and never
+    /// publishes. BUG-1714 split the consequence: with no genuine failure it
+    /// HOLDS (PR open, unmergeable, retried) instead of closing.
+    // trace:TASK-1289 trace:BUG-1714 | ai:claude
     #[test]
-    fn guard_timeout_is_inconclusive_and_refuses() {
+    fn guard_timeout_is_inconclusive_and_holds() {
         let root = tempfile::tempdir().unwrap();
         let results = execute(
             root.path(),
@@ -589,7 +750,7 @@ mod tests {
                 name: "Hung guard".into(),
                 command: "sleep 5".into(),
             })],
-            Duration::from_millis(50),
+            test_budgets(Duration::from_millis(50)),
         );
         let GuardResult::Inconclusive { name, reason } = &results[0] else {
             panic!(
@@ -601,15 +762,160 @@ mod tests {
         assert!(reason.contains("timed out"), "reason was: {reason}");
         assert!(reason.contains("binary:"), "reason was: {reason}");
         // the decision, not just the classification — this is what publishes
-        let PreflightDecision::Refuse { failed } = decide(&results) else {
-            panic!("an inconclusive guard must refuse publication")
+        let PreflightDecision::Hold { inconclusive } = decide(&results) else {
+            panic!("an inconclusive-only outcome must hold, not publish or close")
         };
-        assert_eq!(failed[0].0, "Hung guard");
+        assert_eq!(inconclusive[0].0, "Hung guard");
         assert!(
-            failed[0].1.contains("did not complete"),
-            "the refusal must say the guard never answered: {}",
-            failed[0].1
+            inconclusive[0].1.contains("timed out"),
+            "the hold must say the guard never answered: {}",
+            inconclusive[0].1
         );
+    }
+
+    /// BUG-1714 AC1/AC2/AC6: the three decide() outcomes. All-inconclusive
+    /// holds; a genuine failure — alone or mixed with inconclusive — keeps
+    /// today's refusal (and the close that follows it), with the inconclusive
+    /// entries riding along in the detail. No outcome with a non-passed guard
+    /// ever opens.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn decide_splits_hold_from_refuse_by_genuine_failure() {
+        let inconclusive = GuardResult::Inconclusive {
+            name: "Run clippy".into(),
+            reason: "timed out after 900s; binary: /t/aida (build timed out after 900s)".into(),
+        };
+        let failed = GuardResult::Failed {
+            name: "portability".into(),
+            output: "bad.rs:7".into(),
+        };
+        let passed = GuardResult::Passed("fmt".into());
+
+        // all-inconclusive → Hold
+        let PreflightDecision::Hold { inconclusive: held } =
+            decide(&[passed.clone(), inconclusive.clone()])
+        else {
+            panic!("all-inconclusive must hold")
+        };
+        assert_eq!(held.len(), 1);
+
+        // mixed → Refuse, inconclusive entries still in the detail
+        let PreflightDecision::Refuse { failed: entries } =
+            decide(&[inconclusive.clone(), failed.clone()])
+        else {
+            panic!("a genuine failure must refuse")
+        };
+        assert_eq!(entries.len(), 2, "{entries:?}");
+        assert!(entries.iter().any(|(n, _)| n == "portability"));
+        assert!(entries
+            .iter()
+            .any(|(n, d)| n == "Run clippy" && d.contains("did not complete")));
+
+        // failed-only → Refuse
+        assert!(matches!(
+            decide(&[failed]),
+            PreflightDecision::Refuse { .. }
+        ));
+    }
+
+    /// BUG-1714 AC3/AC6: the hold notice never claims a guard objected. It
+    /// names the guard, says it could not complete, gives the reason, and the
+    /// retry path.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn hold_notice_names_guards_reasons_and_retry_without_saying_refused() {
+        let detail = inconclusive_detail(&[
+            (
+                "Run clippy".into(),
+                "timed out after 900s; binary: /t/aida".into(),
+            ),
+            (
+                "Doc-intent gate".into(),
+                "could not start (No such file or directory); binary: /t/aida".into(),
+            ),
+        ]);
+        let notice = inconclusive_hold_notice(&detail);
+        assert!(
+            !notice.to_ascii_lowercase().contains("refus"),
+            "an inconclusive-only notice must never say refused: {notice}"
+        );
+        assert!(notice.contains("`Run clippy`"), "{notice}");
+        assert!(notice.contains("could not complete"), "{notice}");
+        assert!(notice.contains("timed out after 900s"), "{notice}");
+        assert!(notice.contains("could not start"), "{notice}");
+        assert!(notice.contains("retried"), "{notice}");
+        assert!(notice.contains("merge-hold"), "{notice}");
+    }
+
+    /// BUG-1714 AC5: #2255 printed the same build timeout under two guard
+    /// names. Guards felled by the same build are one root cause: the build
+    /// clause appears ONCE, each guard keeps its own proximate symptom.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn shared_build_failure_is_reported_as_one_root_cause() {
+        let clause = "(build timed out after 900s)";
+        let detail = inconclusive_detail(&[
+            (
+                "Run clippy".into(),
+                format!("timed out after 900s; binary: /t/aida {clause}"),
+            ),
+            (
+                "Check Rust test portability ratchet".into(),
+                format!("could not start (os error 2); binary: /t/aida {clause}"),
+            ),
+            (
+                "Base branch".into(),
+                "the repository's default branch name is not shell-safe".into(),
+            ),
+        ]);
+        assert_eq!(
+            detail.matches(clause).count(),
+            1,
+            "one root cause, printed once: {detail}"
+        );
+        assert!(detail.contains("one root cause"), "{detail}");
+        assert!(detail.contains("`Run clippy`"), "{detail}");
+        assert!(
+            detail.contains("`Check Rust test portability ratchet`"),
+            "{detail}"
+        );
+        assert!(detail.contains("could not start (os error 2)"), "{detail}");
+        // the ungrouped guard still reports individually
+        assert!(detail.contains("`Base branch`"), "{detail}");
+        assert!(detail.contains("not shell-safe"), "{detail}");
+    }
+
+    /// BUG-1714 AC4: budgets come from `[preflight]` configuration; the
+    /// defaults are cold-worktree sized rather than bare literals.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn budgets_read_config_and_default_to_cold_worktree_sizing() {
+        let root = tempfile::tempdir().unwrap();
+        let defaults = configured_budgets(root.path());
+        assert_eq!(defaults.guard_timeout, DEFAULT_GUARD_TIMEOUT);
+        assert_eq!(defaults.build_timeout, DEFAULT_BUILD_TIMEOUT);
+        assert!(
+            defaults.build_timeout >= Duration::from_secs(3600),
+            "the default build budget must be sized for a cold worktree"
+        );
+
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[preflight]\nguards = [\"Alpha\"]\nguard_timeout_secs = 7\nbuild_timeout_secs = 5\n",
+        )
+        .unwrap();
+        let configured = configured_budgets(root.path());
+        assert_eq!(configured.guard_timeout, Duration::from_secs(7));
+        assert_eq!(configured.build_timeout, Duration::from_secs(5));
+
+        // a nonsense value falls back rather than disabling the gate
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[preflight]\nguard_timeout_secs = 0\nbuild_timeout_secs = -3\n",
+        )
+        .unwrap();
+        assert_eq!(configured_budgets(root.path()), PreflightBudgets::default());
     }
 
     #[test]
@@ -626,7 +932,7 @@ mod tests {
                 name: "No profile".into(),
                 command: "test -z \"${PROFILE_WAS_SOURCED:-}\"".into(),
             })],
-            Duration::from_secs(2),
+            test_budgets(Duration::from_secs(2)),
         );
         assert_eq!(results, vec![GuardResult::Passed("No profile".into())]);
     }
@@ -686,7 +992,7 @@ mod tests {
                 name: "Base branch".into(),
                 command: "test '${{ github.base_ref }}' = trunk".into(),
             })],
-            Duration::from_secs(2),
+            test_budgets(Duration::from_secs(2)),
         );
         assert_eq!(results, vec![GuardResult::Passed("Base branch".into())]);
     }
@@ -737,7 +1043,7 @@ mod tests {
                             .into(),
                     }),
                 ],
-                Duration::from_secs(5),
+                test_budgets(Duration::from_secs(5)),
             );
             assert_eq!(results.len(), 2, "{payload:?}: {results:?}");
             for result in &results {
@@ -746,9 +1052,11 @@ mod tests {
                 };
                 assert!(reason.contains("not a shell-safe"), "{reason}");
             }
+            // BUG-1714: inconclusive-only holds instead of closing, and still
+            // never publishes — the BUG-1624 property this test pins.
             assert!(
-                matches!(decide(&results), PreflightDecision::Refuse { .. }),
-                "{payload:?}: an unsubstituted guard must refuse publication"
+                matches!(decide(&results), PreflightDecision::Hold { .. }),
+                "{payload:?}: an unsubstituted guard must not publish"
             );
             assert!(
                 !root.path().join("injected").exists(),
@@ -785,7 +1093,7 @@ mod tests {
                 name: "No base".into(),
                 command: "test -z \"${AIDA_PREFLIGHT_DEFAULT_BRANCH:-}\"".into(),
             })],
-            Duration::from_secs(5),
+            test_budgets(Duration::from_secs(5)),
         );
         assert_eq!(results, vec![GuardResult::Passed("No base".into())]);
         assert!(!root.path().join("injected").exists());
@@ -810,7 +1118,7 @@ mod tests {
         let results = execute(
             root.path(),
             guards_from_ci(root.path(), &["absent-guard".into()]),
-            Duration::from_secs(2),
+            test_budgets(Duration::from_secs(2)),
         );
 
         assert_eq!(results.len(), 1);

@@ -106513,6 +106513,79 @@ impl RealPhaseDriver {
         }
     }
 
+    /// BUG-1714: the publication guards came back inconclusive-only — nothing
+    /// objected, nothing verified. If the implementer already opened a PR,
+    /// leave it OPEN but unmergeable: stamp a typed merge-hold (plus the
+    /// label) and say on the PR why it is held and that the guards will be
+    /// retried. No ownership check, deliberately: a hold only ever TIGHTENS —
+    /// whoever opened the PR, the work on this branch is unverified and must
+    /// not merge unreviewed — and it is released through the ordinary
+    /// `aida merge-hold clear` path. Best-effort like the retraction: every
+    /// miss is reported and the phase still fails.
+    // trace:BUG-1714 | ai:claude
+    fn hold_inconclusive_publication(&mut self, branch: &str, detail: &str) {
+        let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) else {
+            return;
+        };
+        let number = pr.number;
+        let hold = crate::merge_hold::typed_hold(
+            number,
+            crate::merge_hold::HoldReasonKind::Supervision,
+            format!(
+                "publication guards could not complete (inconclusive); the change is \
+                 unverified and must not merge unreviewed:\n{detail}"
+            ),
+            None,
+        )
+        .with_spec(&self.spec);
+        match crate::merge_hold::write_typed_hold(&self.project_root, &hold) {
+            Ok(()) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} left open under a merge-hold — the publication \
+                         guards could not complete and will be retried",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    );
+                }
+            }
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} is OPEN and UNVERIFIED but the merge-hold marker \
+                         could not be written — hold it by hand (`aida merge-hold add \
+                         {number}`): {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    );
+                }
+            }
+        }
+        if let Err(err) = crate::merge_hold::sync_label(&self.project_root, number, true) {
+            if !self.json {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{number}: {err} — Layer 2 is off \
+                     for this PR until `aida merge-hold list --fix` re-syncs it",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+        }
+        let change = crate::forge::ChangeRef {
+            id: number,
+            url: pr.url.clone(),
+            branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+            base: String::new(),
+            title: Some(pr.title.clone()),
+        };
+        let note = implementer_preflight::inconclusive_hold_notice(detail);
+        if let Err(e) = self.project_forge().comment(&change, &note) {
+            if !self.json {
+                eprintln!(
+                    "  {} could not explain the hold on PR-{number}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
+        }
+    }
+
     fn lifecycle_forge(&self) -> Box<dyn crate::forge::Forge> {
         self.forge_of_kind(self.lifecycle_forge)
     }
@@ -108889,6 +108962,47 @@ mod forge_seam_tests {
         );
     }
 
+    /// BUG-1714 AC1: an inconclusive-only preflight outcome leaves the PR
+    /// OPEN, stamps a merge-hold marker so it cannot merge unreviewed, and
+    /// explains on the PR — without the word "refused" — that the guards
+    /// could not complete and will be retried.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn inconclusive_preflight_holds_the_open_change_instead_of_closing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/bug-1714"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let detail = implementer_preflight::inconclusive_detail(&[(
+            "Run clippy".into(),
+            "timed out after 900s; binary: /t/aida (build timed out after 900s)".into(),
+        )]);
+        driver.hold_inconclusive_publication("claude/bug-1714", &detail);
+
+        assert!(
+            forge.closed().is_empty(),
+            "an inconclusive outcome must never close the PR: {:?}",
+            forge.closed()
+        );
+        let record = crate::merge_hold::read_hold_record(tmp.path(), 42)
+            .expect("the PR must be left unmergeable by a typed merge-hold marker");
+        assert!(
+            record.detail.contains("could not complete"),
+            "the hold explains itself: {}",
+            record.detail
+        );
+        let commented = forge.commented();
+        assert_eq!(commented.len(), 1, "the hold is explained on the PR");
+        assert_eq!(commented[0].0, 42);
+        assert!(
+            !commented[0].1.to_ascii_lowercase().contains("refus"),
+            "nothing refused an unverified change: {}",
+            commented[0].1
+        );
+        assert!(commented[0].1.contains("retried"), "{}", commented[0].1);
+    }
+
     #[test]
     fn refused_preflight_fails_closed_when_pr_author_is_unknown() {
         let tmp = tempfile::tempdir().unwrap();
@@ -109836,32 +109950,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     }
                 }
             }
-            if let implementer_preflight::PreflightDecision::Refuse { failed } =
-                implementer_preflight::decide(&results)
-            {
-                let detail = failed
-                    .into_iter()
-                    .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                // TASK-1289: the guards refused — but the implementer may have
-                // ALREADY opened the PR, because `/aida-pr` runs inside the
-                // implementer phase, before the orchestrator regains control.
-                // A refusal that leaves that PR open is advisory, not a gate:
-                // the work the guards rejected sits published and mergeable by
-                // anyone who never reads this log line, and the only thing
-                // standing between it and `main` is prose in a skill file.
-                // Retract it here, so "the guards refused" and "nothing is
-                // published" are the same state.
-                //
-                // Best-effort by design: a retraction that fails is reported
-                // loudly and the phase still fails. The branch is untouched
-                // either way, so no work is lost.
-                // trace:TASK-1289 | ai:claude
-                self.retract_refused_publication(&branch, &detail);
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "implementer preflight refused to open the PR:\n{detail}"
-                )));
+            match implementer_preflight::decide(&results) {
+                implementer_preflight::PreflightDecision::Refuse { failed } => {
+                    let detail = failed
+                        .into_iter()
+                        .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
+                        .collect::<Vec<_>>()
+                        .join("\n\n");
+                    // TASK-1289: the guards refused — but the implementer may have
+                    // ALREADY opened the PR, because `/aida-pr` runs inside the
+                    // implementer phase, before the orchestrator regains control.
+                    // A refusal that leaves that PR open is advisory, not a gate:
+                    // the work the guards rejected sits published and mergeable by
+                    // anyone who never reads this log line, and the only thing
+                    // standing between it and `main` is prose in a skill file.
+                    // Retract it here, so "the guards refused" and "nothing is
+                    // published" are the same state.
+                    //
+                    // Best-effort by design: a retraction that fails is reported
+                    // loudly and the phase still fails. The branch is untouched
+                    // either way, so no work is lost.
+                    // trace:TASK-1289 | ai:claude
+                    self.retract_refused_publication(&branch, &detail);
+                    return Err(auto_complete::PhaseFailure::new(format!(
+                        "implementer preflight refused to open the PR:\n{detail}"
+                    )));
+                }
+                // BUG-1714: nothing objected, and nothing verified — an
+                // infrastructure outcome, not a code verdict. Closing here
+                // discarded reviewable work whose CI was green (#2255), and
+                // told the reader the guards "refused" a change no guard ever
+                // looked at. Hold the PR open and unmergeable instead; the
+                // phase still fails, so nothing downstream treats the work as
+                // verified, and the guards run again on the next attempt.
+                // trace:BUG-1714 | ai:claude
+                implementer_preflight::PreflightDecision::Hold { inconclusive } => {
+                    let detail = implementer_preflight::inconclusive_detail(&inconclusive);
+                    self.hold_inconclusive_publication(&branch, &detail);
+                    return Err(auto_complete::PhaseFailure::new(format!(
+                        "implementer preflight could not complete — no guard objected, none \
+                         verified; any open PR is held unmergeable and the guards will be \
+                         retried:\n{detail}"
+                    )));
+                }
+                implementer_preflight::PreflightDecision::Open => {}
             }
         }
 
