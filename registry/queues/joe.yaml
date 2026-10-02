@@ -36,3 +36,10 @@
   added_by: joe
   added_at: 2026-10-02T18:19:49.479833860Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 01a0fddb-7deb-77c0-bbb1-042b57f6d0ab
+  position: 34000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-10-02T18:23:39.895216097Z
+  for_role: implementer
