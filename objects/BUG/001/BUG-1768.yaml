@@ -89,13 +89,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:39:25.470768504Z
-modified_at: 2026-10-02T11:17:10.321763749Z
+modified_at: 2026-10-02T12:00:53.039324470Z
 req_type: Bug
 tags:
 - advisor-groom
 - auto-bump
 - auto-complete
 - orchestrator
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a0fc7c-f7b8-7250-96d7-46bd1072e02e
+  created_at: 2026-10-02T12:00:53.039321364Z
+  created_by: joe
 history:
 - id: 01a0fc33-93a0-7d62-a527-e5ee89a7b1c8
   author: joe
