@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T14:10:26.274365066Z
+modified_at: 2026-10-02T14:15:12.063490389Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -136,6 +136,65 @@ comments:
       format-json audit or the CLI-surface guards.
   created_at: 2026-10-02T14:10:26.274365066Z
   modified_at: 2026-10-02T14:10:26.274365066Z
+  session_id: 6b6263ef-7534-4ca6-873c-25ab949a24ae
+- id: 01a0fcf8-15bf-7562-bf68-c23ba9563cdc
+  author: joe
+  content: |-
+    Refinement to the sketch above (same session, after verifying against the live
+    CLI rather than reading only the source).
+
+    **Verified, do not re-derive.** On this repo at 30638a79ea:
+
+        $ aida list --status deferred
+        error: "Unknown status filter 'deferred'. ..."     <- AC2's filed symptom, reproduced
+        $ aida list --deferred
+        count: 30 of 121 matched                           <- the existing lens flag works
+        $ aida list --status shelved
+        error: "Unknown status filter 'shelved'. ..."      <- NOT filed before; now BUG-1771
+
+    The third line is the trap. While scoping AC2 I expected to copy an existing
+    precedent: `ListStatusFilter` (lib.rs:18954) already carries two non-stored lens
+    variants, `Shelved` and `NeedsDecision`, and `parse_list_status_filter`
+    (lib.rs:18968-18970) maps the tokens. Adding a `Deferred` arm there looks like a
+    four-line fix.
+
+    It is not, because that enum is on the **legacy** path. `parse_list_status_filter`
+    has exactly one non-test caller — `fn list_requirements` (lib.rs:18877), which
+    takes a `&Storage` and reads `store.requirements`. A distributed-mode repo routes
+    `aida list` through `handle_git_backend_command`, so the lens variants are
+    unreachable from the shipped CLI and `--status shelved` fails identically to
+    `--status deferred`. The unit tests at lib.rs:19145-19204 pass only because they
+    call `requirement_matches_status_filter` directly and never touch the live
+    surface.
+
+    Consequences for this spec:
+
+    - Section 3 of the sketch stands as written: AC2's fix site is the git-backend
+      status arm at **git_backend_cmd.rs:1805**, before `expand_filter_spec`. Do not
+      "fix" AC2 by adding a `ListStatusFilter::Deferred` arm — that satisfies a unit
+      test and leaves the reported command still erroring.
+    - Adding an arm to `ListStatusFilter` for legacy parity is optional. If you do,
+      note it breaks the **exhaustive** match at lib.rs:19068-19082 (the EPIC child
+      rollup over `Shelved` / `NeedsDecision` / `None`), plus the `matches!` sites at
+      lib.rs:18984/18988 and lib.rs:63939/63941.
+    - Whichever AC2 fix lands, drive the fixture through the real list surface. A
+      `-p aida-cli-lib --lib` filter cannot reach it.
+
+    Sibling defect filed as **BUG-1771** (`aida list --status shelved /
+    needs-decision are dead on the git-backend path`). The two specs share one fix
+    site; wiring lens tokens into the git-backend status arm once satisfies
+    `deferred`, `shelved` and `needs-decision` together, so BUG-1771 is the better
+    spec to implement first if only one is taken.
+
+    Also recorded for AC1, verified by reading the enum rather than assuming: adding
+    a `NeedsAttentionLens::Deferred` variant will break the exhaustive match at
+    lib.rs:19068 and must also be handled at lib.rs:18986, 18990, 19028 (the badge
+    renderer, which is generic over `label()`/`palette_key()` and needs no change
+    beyond the new arms), 63939 and 63941. `status_glyph_for_profile`
+    (status_display.rs:121) needs a `"deferred"` arm or the lens renders with the
+    neutral-bullet fallback.
+  created_at: 2026-10-02T14:15:12.063490389Z
+  modified_at: 2026-10-02T14:15:12.063490389Z
   session_id: 6b6263ef-7534-4ca6-873c-25ab949a24ae
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
