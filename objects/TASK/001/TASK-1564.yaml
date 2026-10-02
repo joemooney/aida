@@ -59,12 +59,12 @@ description: |
 
   No change to drain phase detection, retry behavior, the failure exit code, or the seat-routing rules.
   No bulk re-processing of historical phase-failure specs beyond the two named in criterion 5.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T03:41:56.604921140Z
-modified_at: 2026-10-02T08:21:35.836197606Z
+modified_at: 2026-10-02T08:21:43.691263617Z
 req_type: Task
 comments:
 - id: 01a0fb9b-1c89-7d73-8574-45063ec260f7
@@ -227,6 +227,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fbb4-7883-78e1-b14c-9bd2ebb954c1
+  author: aida-auto-bump
+  timestamp: 2026-10-02T08:21:43.683845614Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fbb4-788b-7211-aa0b-98100e73b176
+  timestamp: 2026-10-02T08:21:43.691261882Z
+  agent: advisor
+  commit_sha: ee351818820ce02cb2ffeee8911d09f55f9d3dd2
+  summary: Completed via merge ee351818
 filed_at:
   code_sha: 9a9993bcee35f415eafeabb439b88bfa028be810
   branch: main
@@ -239,3 +252,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-02T08:21:35.836197606Z
   implemented_by: joe
+  completed_at: 2026-10-02T08:21:43.683810542Z
+  completion_sha: ee351818820ce02cb2ffeee8911d09f55f9d3dd2
