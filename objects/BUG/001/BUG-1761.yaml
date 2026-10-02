@@ -68,7 +68,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T01:59:34.641082053Z
-modified_at: 2026-10-02T02:41:31.820119957Z
+modified_at: 2026-10-02T02:52:17.730334035Z
 req_type: Bug
 comments:
 - id: 01a0fa78-526e-7563-b63b-69fedbeba7c0
@@ -193,6 +193,79 @@ comments:
     one-liner, and the reason I am recommending it rather than slipping it in.
   created_at: 2026-10-02T02:41:31.820119957Z
   modified_at: 2026-10-02T02:41:31.820119957Z
+  session_id: 68b75920-ae12-44c6-8460-645047bfd97e
+- id: 01a0fa86-ddc2-7ba3-aa11-63da10275317
+  author: joe
+  content: |
+    ROUND 1 IMPLEMENTED — and the implementer corrected a real flaw in the advisor's brief
+
+    Implemented by a dispatched codex implementer, reviewed and re-verified by the advisor. Branch
+    `bug-1761`.
+
+    ## The implementer's correction, which I accepted
+
+    My round-1 brief said to map every non-`Found` `PrLookup` variant to `None`, with the comment that a
+    forge which cannot answer must never refuse. **Those two instructions contradicted each other.** With
+    all failures collapsed to `None`, control falls through to the branch arm — and an offline machine with
+    a stale local branch would then be **refused**, which is exactly the outcome the brief said must never
+    happen.
+
+    The implementer caught it and threaded a second value instead of collapsing:
+
+    ```rust
+    let (open_pr, branch_probe_allowed) =
+        match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
+            crate::PrLookup::Found(info) => (Some(info), false),
+            crate::PrLookup::NoOpenPr   => (None, true),
+            // Forge failures mean unknown, not "no PR".
+            crate::PrLookup::GhMissing
+            | crate::PrLookup::GhFailed(_)
+            | crate::PrLookup::GhUnreachable(_) => (None, false),
+        };
+    let branch_exists = branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+    ```
+
+    The branch arm now fires **only** on an explicit `NoOpenPr` — a forge that answered and said there is
+    no PR. `GhMissing`, `GhFailed` and `GhUnreachable` proceed, and the `&&` short-circuit means
+    `branch_exists_anywhere` is not even called in that case, so the git probe is skipped too. This is
+    better than what I specified and it is what shipped.
+
+    ## What landed
+
+    `aida-cli-lib/src/queue_cmd.rs` — `PreclaimDecision` + `preclaim_collision_check` (a pure decision
+    function in the shape of `dup_pickup_recheck`, advisor added its doc comment), and the wiring in
+    `handle_queue_work` after the TASK-619 dup-pickup recheck and before the claim.
+    `aida-cli-lib/src/tests/bug_1761_preclaim_collision_tests.rs` — 5 tests, registered from `lib.rs`
+    following the neighbouring `bug_*_tests.rs` convention.
+
+    Refusal order is open-PR first, then branch: the PR is the more specific and more actionable collision,
+    so it is reported in preference to the branch that PR is built on.
+
+    ## Measurements — advisor re-ran every one rather than trusting the verdict
+
+    | Check | Result |
+    |---|---|
+    | `cargo test -p aida-cli-lib bug_1761` | **5 passed / 0 failed**, all five named in the log |
+    | `cargo test -p aida-cli-lib criteria_red_run` | **15 passed / 0 failed**, including `queue_work_calls_the_hook_after_worktree_creation_before_launch` — the source-scanning guard over the edited function |
+    | `cargo fmt --all -- --check` | exit **0** |
+    | clippy, new code | **no** warning site in the added ranges (8676–8712, 11690–11733); the nearest, 8728, is pre-existing code shifted by the insertion. 198 crate warnings are pre-existing |
+    | AC5 mutation proof | guard neutered to `Proceed` unconditionally → **3 passed / 2 failed** (both refusal tests red, observed live); restored → **5 passed / 0 failed** |
+    | `scripts/check-portability.sh` | exit **0** (implementer) |
+
+    The mutation proof's shape is worth recording: only the two **refusal** tests can witness the mutation.
+    The three `Proceed` cases pass either way by construction, so a mutation proof that demanded all five go
+    red would have been asking for the impossible.
+
+    ## Still open after this round
+
+    - Spec *Required behavior* §4 — `aida session end` restoring the status it bumped — is **not** in this
+      round and is in none of the five ACs. See the earlier advisor comment.
+    - The recommended narrowing of the branch arm to unmerged-only (761 retained local spec branches on the
+      dev host) remains a recommendation, not code. See the earlier advisor comment.
+    - Full workspace suite not run by the implementer, by instruction. A **new source file** is one of this
+      repo's two full-suite triggers, so the advisor runs it at integration.
+  created_at: 2026-10-02T02:52:17.730334035Z
+  modified_at: 2026-10-02T02:52:17.730334035Z
   session_id: 68b75920-ae12-44c6-8460-645047bfd97e
 history:
 - id: 01a0fa56-cf3d-7c23-9bbe-8bba9f3a577e
