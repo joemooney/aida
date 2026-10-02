@@ -13,12 +13,12 @@ description: |
   - The verifier rejects stale or non-terminal pipeline evidence and names both expected and observed heads.
   - GitHub and GitLab paths behave consistently.
   - Regression coverage reproduces direct phase-3 re-entry on an already-green change.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:41.023690139Z
-modified_at: 2026-10-02T01:22:49.722639095Z
+modified_at: 2026-10-02T01:23:09.037438535Z
 req_type: Bug
 tags:
 - auto-complete
@@ -73,6 +73,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a0fa35-406d-7bd2-b28c-e70c65be4bc9
+  author: aida-session-start
+  timestamp: 2026-10-02T01:23:09.037438131Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
