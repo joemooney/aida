@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:41.023690139Z
-modified_at: 2026-10-02T01:23:09.037438535Z
+modified_at: 2026-10-02T01:27:40.653164521Z
 req_type: Bug
 tags:
 - auto-complete
@@ -37,6 +37,108 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a0f9da exited with code 1 after 303ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1819` is not pickable for fresh work: Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1819 was not advanced. No triage reason was given.'
   created_at: 2026-10-02T01:21:48.664029734Z
   modified_at: 2026-10-02T01:21:48.664029734Z
+- id: 01a0fa39-656d-7e00-a2be-b96bcba055b7
+  author: joe
+  content: |
+    ## Advisor review of PR #2319 (independent — derived the mechanism before reading the diff)
+
+    Reviewed from the advisor seat at origin/main `3494256297`, head `bug-1819`. I mapped the defect
+    independently first (and nearly dispatched a duplicate implementer — see the note at the end), so this
+    is a comparison against an independently-derived fix, not a read-through.
+
+    **Verdict: the approach is right and the risky parts are right.** One actionable finding, two notes.
+
+    ### The defect, confirmed
+
+    On a `--from-pr` re-entry at phase 3, `handle_from_pr` verified `facts.ci_green` and then dropped
+    every trace of it: `ResumeEntry` carried only `{start_phase, branch, pr, head_sha, from_pr}`, so
+    `RealPhaseDriver::ci_terminal_sha` stayed `None`. The refusal the field trips is **`run_reviewer`**
+    (`lib.rs:109033` pre-PR), *not* `verify_ci_for_review` — `verify_ci_for_review` is called from
+    `auto_complete.rs:4173`, which sits **inside** the `else` arm of the phase-2 block, so a re-entry past
+    CI never reaches it. Both sites carry the same string, which is why the observed message is ambiguous
+    about which one fired.
+
+    Two alternatives are correctly *not* taken, and both are worth recording because they look attractive:
+
+    - **Re-entering at phase 2 to re-probe** (the shape `finish_spec_after_ci` uses with an explicit
+      BUG-1460 comment) is not available here: phase 2 is implementer-session-coupled, which
+      `from_pr_plan`'s own test comment ("deliberately never enters at CI — that entry is
+      implementer-coupled") and `clamp_resume_start_phase`'s comment both state.
+    - **Resolving the head lazily at review time** would make the BUG-1460 comparison vacuous
+      (current-vs-current). Resolving it at reconciliation, as this PR does, leaves the existing
+      `run_reviewer` guard covering the whole reconciliation→review window.
+
+    ### Soundness points I checked and found correct
+
+    - `facts.ci_green = false` is now assigned unconditionally for every forge-backed run, discarding
+      `probe_resume_facts`' weaker bit. This is **strictly stricter**, not a regression: in the healthy
+      case both sides resolve to the PR/MR head and the check passes.
+    - The newly much-more-reachable "route to phase 2" path is safe: `end_implementer_session` returns
+      `Ok(())` when no lease is recorded (BUG-1145, `lib.rs:106549`).
+    - `probe_resume_facts` computes `ci_green = pr_merged || <probe>`; the merged-implies-green shortcut
+      can never reach the seed, because `from_pr_plan` returns `RefuseAlreadyMerged` first.
+    - `probe_ci_state_for_branch_github` had exactly one caller (`forge.rs:1631`); its removal is clean
+      and the replacement argv only *adds* `headRefOid`.
+    - The GitLab staleness case genuinely fails closed: newest pipeline green at Y while the MR head is
+      Z → mismatch → refuse → phase 2.
+
+    ### Finding 1 (actionable) — the wiring that fixes the bug is the one part no test covers
+
+    `handle_from_pr` has **zero test callers** (`grep` finds the definition, one production caller in
+    `queue_cmd.rs:6484`, and one doc comment) and it returns `!`, so it is structurally untestable as
+    written. The three new tests cover the pure verifier `verified_from_pr_ci_head` and the
+    `seed_resume_state` setter — both good, both mutation-provable. But nothing covers the assignment
+    between them.
+
+    Concretely: change `ci_terminal_sha: resume_ci_terminal_sha` back to `None` in the `ResumeEntry`
+    literal and **every test still passes** — the reported bug returns silently. That is the mutation AC5
+    ("regression coverage reproduces direct phase-3 re-entry on an already-green change") is asking for,
+    and it is the half that is missing: the verifier and the setter are covered, the re-entry that
+    composes them is not.
+
+    Cheapest honest fix: extract the new block's decision into a pure helper — e.g.
+    `from_pr_ci_evidence(pr, expected_head, &evidence) -> (bool, Option<String>, Option<bool>, Option<String>)`
+    returning `(ci_green, ci_terminal_sha, ci_terminal_green, refusal)` — and assert the verified-green
+    case yields `Some(sha)/Some(true)`. That makes the mutation detectable without making a divergent
+    function testable.
+
+    ### Note 2 — GitHub and GitLab reach the same outcome through different guarantees
+
+    The doc comment says `head_sha` is "the PR/MR head on GitHub and the newest pipeline SHA on GitLab",
+    which is accurate and important, but the consequence is not spelled out: on **GitLab** the check
+    verifies *"CI tested this exact sha"*; on **GitHub** both sides of the comparison are the head read
+    twice (`change_metadata.head_sha` vs `headRefOid`), so it verifies *"two head reads agree"* and relies
+    on the provider semantic that `statusCheckRollup` is head-scoped. The outcomes are equivalent in
+    practice; the guarantees are not. Worth one sentence on `verified_from_pr_ci_head` so a later reader
+    does not assume GitHub binds the CI result to a sha.
+
+    ### Note 3 — minor
+
+    - A forge-metadata blip (`change_metadata(...).ok()` → `None`) now yields `expected == "<unknown>"` and
+      routes an otherwise-reviewable run through phase 2. Fail-closed and the printed warning says why, so
+      this is a deliberate change in failure *shape* rather than a defect — recording it so it is not a
+      surprise in the field.
+    - `change_metadata` + `gh pr list` both run before `from_pr_plan` is consulted, so an already-merged or
+      already-Completed spec pays two forge calls before being refused.
+    - A `PhaseFailure` is constructed only to extract `.reason` into `resume_ci_refusal`. Harmless; the
+      error type is just wider than this caller needs.
+    - `resume_ci_refusal` is printed only under `if start_phase == Phase::Ci`. That is equivalent to "a
+      refusal happened" (because `ci_gated_start_phase` is applied last and forces Ci on any non-green), so
+      the guard is correct but the coupling is implicit.
+
+    ### Process note
+
+    `aida queue work BUG-1819` in the advisor session handed me branch `bug-1819-**2**` — the `-2` suffix
+    was the only signal that `bug-1819` and PR #2319 already existed. The lease and worktree have been
+    released and the empty branch deleted; no duplicate work landed. Checking `gh pr list` before
+    `aida queue work` would have caught it one step earlier, and `aida show` gave no hint that the spec was
+    already in flight.
+
+    **CI at the time of review: `merge-hold-gate` pass, `Build (ubuntu-latest)` PENDING** (run
+    36950296851). Not merge-ready yet on the required checks.
+  created_at: 2026-10-02T01:27:40.653164521Z
+  modified_at: 2026-10-02T01:27:40.653164521Z
+  session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
 history:
 - id: 01a0f9cd-b3e9-74d1-8fc2-c1b55a7ac24e
   author: aida-orchestrator-phase1
