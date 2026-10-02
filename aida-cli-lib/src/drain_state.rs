@@ -61,6 +61,12 @@ pub(crate) struct DrainMember {
     /// The PR number once a phase has discovered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pr: Option<u32>,
+    /// Head produced by phase 1 and verified against `pr`. Together these
+    /// fields are the durable handoff into phase 2; the local worktree branch
+    /// is only a fallback for legacy state.
+    // trace:BUG-1818 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) head_sha: Option<String>,
     /// RFC-3339 timestamp when this spec's drain run started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) started_at: Option<String>,
@@ -76,6 +82,7 @@ impl DrainMember {
             spec: spec.into(),
             state: STATE_QUEUED.to_string(),
             pr: None,
+            head_sha: None,
             started_at: None,
             finished_at: None,
         }
@@ -85,6 +92,21 @@ impl DrainMember {
     pub(crate) fn is_running(&self) -> bool {
         aida_core::liveness::drain_member_is_running(&self.state)
     }
+}
+
+/// Persist phase 1's verified forge identity and produced head before phase 2
+/// starts. Best-effort like the other live drain-state updates.
+// trace:BUG-1818 | ai:codex
+pub(crate) fn set_change_binding(project_root: &Path, spec: &str, pr: u32, head_sha: &str) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) else {
+        return;
+    };
+    member.pr = Some(pr);
+    member.head_sha = Some(head_sha.to_string());
+    let _ = state.write(project_root);
 }
 
 /// The full state of a live (or crashed) `--auto-complete` drain. Serialized
@@ -3253,5 +3275,23 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         assert!(!record_stopped(dir.path(), "sigterm"));
         assert!(!drain_state_path(dir.path()).exists());
+    }
+
+    // trace:BUG-1818 | ai:codex
+    #[test]
+    fn bug_1818_phase1_change_binding_persists_identifier_and_exact_head() {
+        let dir = tempfile::tempdir().unwrap();
+        DrainState::new_single("BUG-1818", "run", false)
+            .write(dir.path())
+            .unwrap();
+
+        set_change_binding(dir.path(), "BUG-1818", 138, "abcdef0123456789");
+
+        let state = DrainState::read(dir.path()).unwrap();
+        assert_eq!(state.members[0].pr, Some(138));
+        assert_eq!(
+            state.members[0].head_sha.as_deref(),
+            Some("abcdef0123456789")
+        );
     }
 }

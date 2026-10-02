@@ -41059,6 +41059,17 @@ pub(crate) enum CiProbe {
     },
 }
 
+// trace:BUG-1818 | ai:codex
+fn ci_probe_change_id(probe: &CiProbe) -> Option<u32> {
+    match probe {
+        CiProbe::PrNoChecks { pr_number }
+        | CiProbe::InProgress { pr_number }
+        | CiProbe::Green { pr_number }
+        | CiProbe::Red { pr_number, .. } => Some(*pr_number),
+        CiProbe::NoSignal(_) => None,
+    }
+}
+
 /// Pure policy for an unavailable CI probe while a wait is active.
 /// Transient failures get the configured retry budget; permanent failures
 /// close the wait immediately, and exhaustion returns `NoSignal` so the drain
@@ -95863,6 +95874,7 @@ fn handle_from_pr(
                 start_phase,
                 branch,
                 pr,
+                head_sha: None,
                 from_pr: true,
             });
             let result = run_auto_complete(
@@ -96931,7 +96943,7 @@ fn run_auto_complete(
     // (CI / reviewer / merge / …) have the context they need.
     let start_phase = match &resume {
         Some(r) => {
-            driver.seed_resume_state(r.branch.clone(), r.pr);
+            driver.seed_resume_state(r.branch.clone(), r.pr, r.head_sha.clone());
             driver.from_pr = r.from_pr;
             r.start_phase
         }
@@ -97976,6 +97988,7 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             start_phase: auto_complete::Phase::Ci,
             branch,
             pr,
+            head_sha: None,
             from_pr: true,
         });
         run_auto_complete(
@@ -100274,6 +100287,7 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             start_phase: auto_complete::Phase::Ci,
             branch,
             pr,
+            head_sha: None,
             from_pr: true,
         });
         run_auto_complete(
@@ -104921,6 +104935,9 @@ struct RealPhaseDriver {
     /// run. CI/reviewer probes must remain on this PR.
     // trace:BUG-1244 | ai:codex
     phase_done_pr: Option<u32>,
+    /// Exact commit produced by phase 1 and bound to `phase_done_pr`.
+    // trace:BUG-1818 | ai:codex
+    phase_done_head: Option<String>,
     ci_run_id: Option<String>,
     /// PR head for which phase 2 observed terminal CI. Phase 3 may only review
     /// this exact head and records the conclusion in its verdict artifact.
@@ -105222,6 +105239,10 @@ struct ResumeEntry {
     start_phase: auto_complete::Phase,
     branch: Option<String>,
     pr: Option<u32>,
+    /// Phase-1 head persisted in drain state. A resumed phase 2 compares the
+    /// forge's current head to this value instead of blessing a moved change.
+    // trace:BUG-1818 | ai:codex
+    head_sha: Option<String>,
     from_pr: bool,
 }
 
@@ -105238,6 +105259,61 @@ enum RetractionOwnership {
     Foreign,
     /// The probe itself failed, or the forge withheld the author.
     Unverified,
+}
+
+/// Validate the phase-1 change binding before phase 2 uses its source branch.
+/// Kept pure so exact-head and attribution failures stay regression-testable.
+// trace:BUG-1818 | ai:codex
+fn verified_phase2_branch(
+    pr: u32,
+    expected_head: &str,
+    metadata: &crate::forge::ChangeMetadata,
+    credit: PrCreditMatch,
+    spec: &str,
+) -> Result<String, auto_complete::PhaseFailure> {
+    if metadata.state != crate::forge::ChangeState::Open {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!("phase-1 PR/MR {pr} is {:?}, not open", metadata.state),
+        ));
+    }
+    if !expected_head.eq_ignore_ascii_case(metadata.head_sha.trim()) {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!(
+                "phase-1 PR/MR {pr} head mismatch: produced `{expected_head}`, forge reports `{}`",
+                metadata.head_sha
+            ),
+        ));
+    }
+    match credit {
+        PrCreditMatch::Dispatched => {}
+        PrCreditMatch::Other(other) => {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ShippedMismatch,
+                format!(
+                    "phase-1 PR/MR {pr} at `{}` credits {other}, not {spec}",
+                    metadata.head_sha
+                ),
+            ));
+        }
+        PrCreditMatch::Unknown => {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::ShippedMismatch,
+                format!(
+                    "could not verify that phase-1 PR/MR {pr} at `{}` covers {spec}; refusing phase 2",
+                    metadata.head_sha
+                ),
+            ));
+        }
+    }
+    if metadata.head_ref.trim().is_empty() {
+        return Err(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::CiUnavailable,
+            format!("phase-1 PR/MR {pr} did not report a source branch"),
+        ));
+    }
+    Ok(metadata.head_ref.clone())
 }
 
 impl RealPhaseDriver {
@@ -105314,6 +105390,7 @@ impl RealPhaseDriver {
             implementer_lease: None,
             pr_number: None,
             phase_done_pr: None,
+            phase_done_head: None,
             ci_run_id: None,
             ci_terminal_sha: None,
             ci_terminal_green: None,
@@ -106526,12 +106603,20 @@ impl RealPhaseDriver {
     /// phases would have discovered, so the resumed phases (CI / reviewer /
     /// merge / pull) have the context they need. Called once before
     /// `orchestrate_with_resume` on a resume. trace:STORY-492 | ai:claude
-    fn seed_resume_state(&mut self, branch: Option<String>, pr: Option<u32>) {
+    fn seed_resume_state(
+        &mut self,
+        branch: Option<String>,
+        pr: Option<u32>,
+        head_sha: Option<String>,
+    ) {
         if branch.is_some() {
             self.branch = branch;
         }
         if pr.is_some() {
             self.pr_number = pr;
+        }
+        if head_sha.is_some() {
+            self.phase_done_head = head_sha;
         }
     }
 
@@ -107709,6 +107794,19 @@ mod bug_1629_phase1_recovery_tests;
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
+        if self.phase_done_head.is_none() {
+            self.phase_done_head = self
+                .implementer_worktree
+                .as_deref()
+                .and_then(|worktree| aida_core::git_ops::head_sha(worktree).ok())
+                .or_else(|| {
+                    self.pr_number
+                        .and_then(|pr| pr_head_sha_best_effort(self, pr))
+                });
+        }
+        if let (Some(pr), Some(head)) = (self.phase_done_pr, self.phase_done_head.as_deref()) {
+            drain_state::set_change_binding(&self.project_root, &self.spec, pr, head);
+        }
     }
 
     fn phase_done_pr_number(&self) -> Option<u32> {
@@ -108823,13 +108921,74 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Ci);
-        let branch = self.branch.clone().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Internal,
-                "internal: branch not resolved before the CI phase",
-            )
-        })?;
-        self.ensure_implementer_branch_pushed(&branch)?;
+        let mut branch = self.branch.clone().unwrap_or_default();
+
+        // Phase 1's verified change identity is authoritative. Re-resolve it
+        // by ID, prove both attribution and exact head, then use the forge's
+        // source branch for CI. This supports local staging branches (and
+        // branches without upstreams) that pushed into an existing PR/MR.
+        // Only legacy/resume state without a binding falls back to branch
+        // lookup and its local push behavior. trace:BUG-1818 | ai:codex
+        if let Some(pr) = self.phase_done_pr {
+            let expected_head = self.phase_done_head.as_deref().ok_or_else(|| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!(
+                        "phase 1 recorded PR/MR {pr} without its produced head SHA; refusing an unpinned phase-2 lookup"
+                    ),
+                )
+            })?;
+            let forge = self.lifecycle_forge();
+            let mut sink = network_retry::NoopSink;
+            let metadata = forge
+                .change_metadata(u64::from(pr), &mut sink)
+                .map_err(|e| {
+                    auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CiUnavailable,
+                        format!("could not resolve phase-1 PR/MR {pr} by identifier: {e:#}"),
+                    )
+                })?;
+            let credit = pr_credit_match_with_sink(
+                &self.project_root,
+                pr,
+                &self.spec,
+                Some(&metadata.title),
+                &mut sink,
+            );
+            branch = verified_phase2_branch(pr, expected_head, &metadata, credit, &self.spec)?;
+            self.branch = Some(branch.clone());
+        } else {
+            if branch.is_empty() {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    "internal: neither a verified PR/MR identifier nor a local branch was resolved before the CI phase",
+                ));
+            }
+            let forge = self.lifecycle_forge();
+            if let Ok(changes) = forge.list_changes(crate::forge::ChangeFilter {
+                base: None,
+                open_only: true,
+            }) {
+                let matches = changes
+                    .into_iter()
+                    .filter(|change| change.branch == branch)
+                    .collect::<Vec<_>>();
+                if matches.len() > 1 {
+                    let evidence = matches
+                        .iter()
+                        .map(|change| format!("{} (`{}`)", change.id, change.branch))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CiUnavailable,
+                        format!(
+                            "multiple open PR/MR matches for fallback branch `{branch}`: {evidence}; refusing an ambiguous phase-2 lookup"
+                        ),
+                    ));
+                }
+            }
+            self.ensure_implementer_branch_pushed(&branch)?;
+        }
 
         // Probe, then block until CI is terminal. `lifecycle:trivial` remains
         // represented by a forge-level NoCi result, but a running check is
@@ -108887,6 +109046,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             };
             terminal_event_emitted =
                 !matches!(probe, CiProbe::InProgress { .. } | CiProbe::NoSignal(_));
+        }
+
+        if let (Some(expected), Some(actual)) = (self.phase_done_pr, ci_probe_change_id(&probe)) {
+            if actual != expected {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!(
+                        "phase-2 CI lookup for source branch `{branch}` resolved PR/MR {actual}, but phase 1 verified PR/MR {expected}; refusing the ambiguous match"
+                    ),
+                ));
+            }
         }
 
         match probe {
