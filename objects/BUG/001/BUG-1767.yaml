@@ -140,7 +140,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:05:44.820925638Z
-modified_at: 2026-10-02T23:08:46.861035903Z
+modified_at: 2026-10-02T23:26:23.180687649Z
 req_type: Bug
 comments:
 - id: 01a0fc1b-6260-7050-8448-3e53502762f7
@@ -209,6 +209,12 @@ comments:
     The existing ACs are fully aligned with this decision and should be implemented as written.
   created_at: 2026-10-02T14:18:24.650654940Z
   modified_at: 2026-10-02T14:18:24.650654940Z
+- id: 01a0fef0-b5cc-78e2-8e11-4ca44e07fa0c
+  author: joe
+  content: 'ADVISOR REVIEW VERDICT (relay #15, PR #2359): MERGE-READY. Advisor read the full diff; codex static review (read-only) raised one blocker, DEMOTED with mechanism: the --card surface renders the STORED status via status_display::parked_status_badge (status_display.rs:259-267, badge of req.status unless a parked lens applies) — it never displays the derived rollup, so there is no derived-as-stored confusion to disclose, and its next block is serialize-cluster only, so no archive prescription either; stored-only card rendering is pre-existing and outside this spec''s blast radius. Codex MINOR noted (JSON tests cover the TOON helper, not the emitted status+stored_status pair together) — acceptable; PR records a live JSON check. Advisor verification: derived_status_annotation fires only when both statuses parse to lifecycle states and differ (custom statuses and spelling variants stay silent, AC3 controls pin agreement byte-identically); all three disclosure surfaces wired (TOON via toon_show_status, human Status line + foot reprint via status_note, JSON next via show_spec_next); next-action branch requires terminal-derived + non-terminal-stored and prescribes aida edit --status completed, never archive; implementation matches the recorded DECISION (Options 1+2, no stored-status auto-bump). CI red is the expected bug_1723 inventory guard (7586 passed / 1 failed) — clears via update-branch after #2353 merges. Watch item only: if a future change ever feeds a non-epic divergent effective status (e.g. a deferred surface), the ''derived from child rollup'' wording would mislabel it.'
+  created_at: 2026-10-02T23:26:23.180687649Z
+  modified_at: 2026-10-02T23:26:23.180687649Z
+  session_id: 7cd9388e-4505-4ed8-992f-c4d97a202bd8
 history:
 - id: 01a0fc16-0bb2-7b33-843a-1352924c07cb
   author: joe
