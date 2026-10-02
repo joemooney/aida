@@ -81,7 +81,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-10-02T22:46:53.017005242Z
+modified_at: 2026-10-02T23:18:10.503600613Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -224,6 +224,12 @@ comments:
   created_at: 2026-10-02T22:46:53.017005242Z
   modified_at: 2026-10-02T22:46:53.017005242Z
   session_id: 4a4b848c-a019-49f6-aaa6-c381acf18e52
+- id: 01a0fee9-3147-7f43-b3b5-8894ca07059a
+  author: joe
+  content: 'ADVISOR REVIEW DISPOSITION (relay #14, PR #2356): MERGE-READY pending the known CI guard clear. Codex (read-only, static) raised two blockers, both verified real and both DEMOTED to recorded justifications — they are behavior changes in the SAFE direction on platforms outside CI coverage, and AC7 asked for routing through the canonical predicate, which is exactly what happened. (1) merge_lock.rs pid_alive non-unix: was always-true (TTL-only reclaim, a cannot-probe workaround), now the canonical single-pid sysinfo probe — a genuinely dead holder''s lock reclaims promptly on Windows instead of pinning until TTL; a live holder still probes alive. (2) vendor_activity.rs lease_pid_alive non-unix: was always-false, now the canonical probe — a live creator now suppresses cleanup on Windows (more conservative). Codex missed a third delta the advisor records here for completeness: vendor_activity''s old local helper treated EPERM as dead (rc==0 only); the canonical predicate treats EPERM as alive, so on unix a creator pid owned by another user now counts as activity — also the conservative direction. This comment is the AC7 per-helper justification record for both call sites. Zombie core verified: /proc stat parsed from the LAST ), unreadable state degrades to not-a-zombie (kill answer stands), non-Linux unix degrades to today''s behaviour per AC3, pid 0 rejected in the wrapper. Merge condition: Build green after update-branch once #2353 lands (current failure is the expected bug_1723 inventory guard, 7581 passed / 1 failed).'
+  created_at: 2026-10-02T23:18:10.503600613Z
+  modified_at: 2026-10-02T23:18:10.503600613Z
+  session_id: a4861695-0967-4442-a984-92e100a5580a
 history:
 - id: 01a0f2e8-a08c-7791-a627-87ed4b1d9b75
   author: joe
