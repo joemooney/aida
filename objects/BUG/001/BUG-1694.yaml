@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T19:29:58.004516622Z
-modified_at: 2026-10-02T19:27:42.162289104Z
+modified_at: 2026-10-02T20:01:21.521894888Z
 req_type: Bug
 tags:
 - needs-sketch
@@ -207,6 +207,26 @@ comments:
   modified_at: 2026-10-02T19:27:42.162289104Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
   relayed_from: reviewer
+- id: 01a0fe35-0071-72e3-8c40-c9c32e805162
+  author: claude-product
+  content: |
+    CI verdict reading for PR #2348 at head 8239f89def:
+
+    - CI workflow (gating, Linux): Build (ubuntu-latest) PASS (run 37054207891). merge-hold-gate PASS.
+    - Cross-platform (nightly) workflow: Build (macos-latest) FAIL — the three bug_1769 phase-1
+      recovery tests, identical to the failure on bug-1723-work run 37049233271 which contains none of
+      this branch's changes. Pre-existing, tracked as BUG-1776 (draft, filed 2026-10-02).
+    - Build (windows-latest): the PR-wide 16-test red is tracked as BUG-1777 (draft, filed 2026-10-02).
+    - Per ADR-62 (accepted), macOS and Windows results do not gate a merge; Linux does.
+
+    All 10 BUG-1694/TASK-1543 targeted tests pass on every platform that reached them (7536 passed on
+    the failing macOS job; the 3 failures are orchestrator tests untouched by this diff).
+
+    Merge-ready pending operator: reviewer APPROVE (codex, round 2, no findings) and advisor sketch
+    signoff (round 3 APPROVE) are recorded on BUG-1694.
+  created_at: 2026-10-02T20:01:21.521894888Z
+  modified_at: 2026-10-02T20:01:21.521894888Z
+  session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
 history:
 - id: 01a0e458-e89b-7d73-88ff-54128f30291b
   author: joe
