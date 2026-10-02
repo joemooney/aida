@@ -297,6 +297,20 @@ impl AgentClassifyContext {
 /// busy/idle behaviour for free; missing file / section / keys all fall
 /// through to defaults — a config error never blocks `aida status`.
 /// trace:STORY-435 | ai:claude
+///
+/// TRUST DOCTRINE for `.aida/config.toml` (BUG-1723 decision, 2026-10-02):
+/// the file is worktree-resident and committable, so any branch can ship its
+/// own copy. A value read from the branch-local copy may therefore only tune
+/// POLICY — timeouts, thresholds, role lists, display preferences. It may
+/// NOT select an executable, a shell command, or a credential: those must
+/// come from the running binary, from outside the worktree, or from the
+/// trusted default-branch copy via `crate::trusted_config` (TASK-969).
+/// This is the same doctrine BUG-1624 established for `.aida/session-env.sh`.
+/// Every section/key read from the branch-local copy is enumerated and
+/// classified in `scripts/config-trust.toml`, enforced by the guard in
+/// `tests/bug_1723_config_trust_tests.rs` — a new key fails that guard until
+/// it is classified there.
+// trace:BUG-1723 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     pub(crate) busy_threshold_secs: u64,
