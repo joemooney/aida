@@ -13,12 +13,12 @@ description: |
   - The verifier rejects stale or non-terminal pipeline evidence and names both expected and observed heads.
   - GitHub and GitLab paths behave consistently.
   - Regression coverage reproduces direct phase-3 re-entry on an already-green change.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T21:52:41.023690139Z
-modified_at: 2026-10-01T23:44:27.907531173Z
+modified_at: 2026-10-02T01:21:48.664032331Z
 req_type: Bug
 tags:
 - auto-complete
@@ -32,6 +32,11 @@ comments:
   content: 'Implemented verified --from-pr CI evidence handoff: GitHub captures headRefOid with the PR rollup, GitLab captures the newest pipeline sha, reconciliation accepts only terminal green evidence for the exact PR/MR and head, and ResumeEntry seeds that proof into direct reviewer re-entry. Stale/nonterminal evidence names expected and observed heads and re-enters at phase 2. Verified with targeted BUG-1819, from_pr, CI action, drain resume, and forge test suites plus cargo check/fmt.'
   created_at: 2026-10-01T23:40:36.501677959Z
   modified_at: 2026-10-01T23:40:36.501677959Z
+- id: 01a0fa34-0678-7463-b8b4-d1bb6d8c7d9a
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a0f9da exited with code 1 after 303ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1819` is not pickable for fresh work: Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1819 was not advanced. No triage reason was given.'
+  created_at: 2026-10-02T01:21:48.664029734Z
+  modified_at: 2026-10-02T01:21:48.664029734Z
 history:
 - id: 01a0f9cd-b3e9-74d1-8fc2-c1b55a7ac24e
   author: aida-orchestrator-phase1
@@ -54,6 +59,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a0fa34-0678-7463-b8b4-d1a6053b6a4c
+  author: joe
+  timestamp: 2026-10-02T01:21:48.664019514Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
@@ -75,12 +87,4 @@ implementation_info:
     git diff --check
   implemented_at: 2026-10-01T23:40:53.670977623Z
   implemented_by: joe.mooney
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: launch-refused
-  detail: 'phase 1 child session 01a0f9da exited with code 1 after 303ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: `BUG-1819` is not pickable for fresh work: Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`. The single clean replacement launch already ran and was refused; no session lease was left behind and BUG-1819 was not advanced'
-  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1819`.'
-  shelved_by: advisor
-  shelved_at: 2026-10-01T23:44:27.907531173Z
 interface_changes: {}
