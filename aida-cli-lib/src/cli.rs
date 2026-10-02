@@ -2930,6 +2930,48 @@ pub enum WorktreeCommand {
         json: bool,
     },
 
+    /// Reclaim disk by deleting stale `target/` build caches inside this
+    /// repository's worktrees. A `target/` is a cache, never a source of truth
+    /// — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports
+    /// reclaimable bytes and every worktree it held back, and deletes only with
+    /// `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim`
+    /// removes the regenerable cache inside worktrees that are KEPT, which is
+    /// the space `aida session reap` cannot reach and `cargo clean` targets
+    /// wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e.
+    /// the main checkout's live cache, not the stale one). The main checkout's
+    /// `target/` is never a candidate; nor is `.aida-store`, a worktree held by
+    /// a live session, a worktree whose branch has an open PR, or a cache
+    /// touched in the last `--min-age-mins` minutes.
+    // trace:TASK-1562 | ai:claude
+    Reclaim {
+        /// Actually delete. Without this the command only reports.
+        #[clap(long)]
+        apply: bool,
+
+        /// Treat a `target/` touched within this many minutes as a possible
+        /// in-flight build and skip it.
+        #[clap(long, value_name = "MINS", default_value_t = 60)]
+        min_age_mins: u64,
+
+        /// Stop deleting once the filesystem is at or below this used
+        /// percentage, leaving the remaining caches warm.
+        #[clap(long, value_name = "PCT")]
+        target_pct: Option<u8>,
+
+        /// Also reclaim worktrees held by a live session lease.
+        #[clap(long)]
+        include_live: bool,
+
+        /// Also reclaim worktrees whose branch has an open pull request. Also
+        /// waives the fail-safe hold applied when open-PR state cannot be read.
+        #[clap(long)]
+        include_open_prs: bool,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete
     /// on hand-back) so build caches survive across fan-outs. Dissolves the
     /// cargo-cache poison and branch-stacking hazards of destroy-and-recreate.

@@ -2671,7 +2671,7 @@ enabled = true
 # name = "disk-headroom-guard-route"
 # seats = ["advisor"]
 # on = ["CronJobFailed:disk-headroom-guard"]
-# prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
+# prompt = "Free disk space dropped below the configured floor. Reclaim stale worktree build caches with `aida worktree reclaim` (dry run by default; `--apply` deletes), remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
 # enabled = false
 #
 # Runaway-seat watchdog: trips on a seat woken far too often, spending far
