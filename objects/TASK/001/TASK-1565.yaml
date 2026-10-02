@@ -1,0 +1,84 @@
+id: 01a0fc0c-ef5c-7612-b415-eb209aea3b13
+spec_id: TASK-1565
+agreed_id: TASK-1565
+title: Performance guard trips on a 0.2-point proportion margin and one 9449 ms call measured under fleet contention — decide whether to recalibrate the budget or make the measurement contention-aware
+description: |
+  OBSERVED (advisor pass on the routed `performance-guard-route` job, relay session #10,
+  2026-10-02): `aida doctor check performance --fail-on-findings` trips with
+
+    `aida show` exceeded its 1000 ms budget on 10.2% of 205 calls in the last 24h
+    (tolerated 10.0%, worst 9449 ms); CEILING BREACHED — a single call ran 9449 ms
+    against a 5000 ms ceiling
+
+  Two independent things trip here and they need separate decisions:
+
+  1. The PROPORTION arm is 10.2% against a 10.0% tolerance — a 0.2-point margin, i.e.
+     one or two calls either side of the line on a 205-call sample. On its own this is
+     noise, not a signal.
+  2. The CEILING arm is categorical: one call took 9449 ms against a 5000 ms ceiling.
+     The guard's own remedy text says this "trips regardless of the proportion, because
+     a proportion cannot express one bad call".
+
+  WHY THIS IS AN OPERATOR DECISION AND NOT A STRAIGHT REGRESSION FILING: the 24h window
+  this measured is a window in which this host ran a sustained multi-core agent fleet.
+  Sampled during the advisor pass, one `agy` process alone was at 125% CPU with a second
+  at 9%, 1-minute load 3.73 on 6 cores, and cargo is 2-slot gated machine-wide so builds
+  queue rather than yield. A 9449 ms `aida show` on a host in that state is not evidence
+  of a code regression in `aida show`; it is evidence that the budget is being measured
+  under contention it was probably not calibrated for.
+
+  The per-binary breakdown supports that reading rather than a code regression: the rates
+  are scattered (f3cde6e60e 7.8% of 115, 1660445110 4.5% of 44, 0bd634c 50.0% of 18,
+  d93fabb432 6.2% of 16, b785274c7b 0.0% of 12) with no monotonic worsening across the
+  lineage. A real regression in `aida show` would concentrate in the newest binaries.
+
+  THE DECISION TO MAKE (operator's, not an agent's — the guard's remedy text explicitly
+  says "raise the ceiling deliberately ... with the consequence in front of you"):
+
+    (a) Keep the budget as calibrated and accept that the guard will trip whenever the
+        fleet is busy — i.e. treat the trip as a load signal, not a perf signal. Cheap,
+        but it trains the seat to ignore the guard, which is the worst outcome.
+    (b) Raise the ceiling deliberately in [performance.budgets] to a number that holds
+        under the fleet contention this host actually runs. Needs a number chosen with
+        the consequence stated, not fitted to today's worst sample.
+    (c) Make the measurement contention-aware — record host load alongside each sample
+        and either exclude or separately bucket calls taken under load above a threshold.
+        This is the only option that makes the guard mean the same thing on a quiet and a
+        busy host, and it is the most work.
+
+  NOT PART OF THIS: the `failure_trips` entry still carried in
+  .aida-store/schedule/performance-guard.yaml from 2026-09-29 is a DIFFERENT failure —
+  `audit_error: malformed typed doctor output: trailing characters at line 30 column 1`.
+  That is a parse failure, not a measurement, and it did not recur in the 2026-10-02
+  run (result `failed:1`, no audit_error). It is noted here only so a later reader does
+  not conflate the two; if it recurs it belongs to the bug-triage lane.
+
+  ## Acceptance
+  - One of (a), (b) or (c) is chosen on the record, with the consequence of the choice
+    stated rather than implied.
+  - If (b): the new ceiling and tolerance are written to [performance.budgets] together
+    with WHY that number, and a test or the guard's own output states the contention
+    assumption the number embeds.
+  - If (c): a call sampled under host load above the chosen threshold is demonstrably
+    bucketed or excluded, proven by a fixture with two samples that differ only in
+    recorded load.
+  - The guard's finding text distinguishes the proportion arm from the ceiling arm clearly
+    enough that a seat can tell a 0.2-point proportion wobble from a categorical ceiling
+    breach without reading the source.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T09:58:21.276137615Z
+modified_at: 2026-10-02T09:58:21.276137615Z
+req_type: Task
+tags:
+- measurement observability needs-operator-decision
+filed_at:
+  code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: d5361d99-df2f-496e-9322-ef0a7eb10836
