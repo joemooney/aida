@@ -3,12 +3,12 @@ spec_id: BUG-1681
 agreed_id: BUG-1681
 title: aida ps labels done-and-approved specs waiting for integration as 'stalled — resume/rebrief', guesses fan-out ownership for unrelated specs, and shows fan-out subagents with the parent's role
 description: 'Seen 2026-09-26: specs set to done with a posted ''Review: APPROVE'' (or inside an open integration PR) were shown as ''⚠ stalled ... resume/rebrief''; STORY-1425 was listed as ''likely worked by a fan-out'' though no subagent worked it; Agent-tool subagents implementing/reviewing appeared with role ''advisor'' (the parent session''s role). Acceptance: 1. A spec at done with an approving review, or whose branch is in an open integration PR, shows ''awaiting integration (PR #N)'' instead of stalled, with no rebrief hint. 2. The fan-out attribution only names a spec when a live subagent''s worktree/branch matches it. 3. Fan-out rows show ''subagent'' (or the role recorded at dispatch) rather than inheriting the parent''s role. Fixture tests.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:51:56.911021216Z
-modified_at: 2026-10-02T15:42:43.342929441Z
+modified_at: 2026-10-02T15:42:44.230207790Z
 req_type: Bug
 comments:
 - id: 01a0dfef-386d-79a3-8fb7-6b6bf8f43c90
@@ -114,3 +114,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fd48-3a06-7ea3-86f7-b180b44949c9
+  author: joe
+  timestamp: 2026-10-02T15:42:44.230206459Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-02T15:42:44.230185966Z
