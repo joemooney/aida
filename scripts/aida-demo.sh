@@ -15,10 +15,9 @@
 #
 # Design note:
 #   This script uses the manual commit-trailer + auto-bump path for the
-#   main flow (steps 1-12) to keep the demo scripted-friendly (interactive
-#   Claude Code sessions would halt a scripted demo). Option [1] of the
-#   explore menu shows the equivalent flow using `claude -p` directly,
-#   which is what `aida queue work --no-human=both` invokes for phase 1.
+#   main flow (steps 1-12) to keep the demo scripted-friendly. Option [1]
+#   of the explore menu walks through the implementer phase manually; the
+#   demo refuses direct full-access vendor launches.
 #   BUG-386 (full 38-skill scaffolding) shipped in this demo's authoring
 #   session, so /aida-pickup and /aida-pr ARE available in fresh projects
 #   for the interactive path.
@@ -42,6 +41,13 @@ AUTO_CLEANUP=0
 # so the abort trap knows not to re-fire when the script exits normally.
 DEMO_COMPLETE=0
 
+# trace:BUG-1688 | ai:codex
+demo_refuse_vendor_launch() {
+    local surface="$1"
+    echo "ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: $surface does not start a full-access Claude process." >&2
+    return 78
+}
+
 # Resolve script's absolute path BEFORE any later 'cd' into the demo
 # project, so fallback paths (e.g. the glossary template under
 # aida-core/templates/) stay reachable after the cwd changes. Old
@@ -56,6 +62,13 @@ AIDA_DEMO_SCRIPT_DIR="$(cd "$(dirname "$AIDA_DEMO_SCRIPT_PATH")" 2>/dev/null && 
 for arg in "$@"; do
     case "$arg" in
         --auto-cleanup) AUTO_CLEANUP=1 ;;
+        --vendor-launch-fixture)
+            # Used by tests with recording vendor shims; no demo project or
+            # remote repository is created by this fixture mode.
+            demo_refuse_vendor_launch "queue walkthrough" || [ "$?" -eq 78 ]
+            demo_refuse_vendor_launch "Claude self-test" || [ "$?" -eq 78 ]
+            exit 0
+            ;;
         -h|--help)
             sed -n '2,/^# trace/p' "$0" | sed 's/^# \?//'
             exit 0
@@ -772,29 +785,20 @@ while true; do
     do_clear
     case "${choice,,}" in
         1)
-            box_title "See aida queue work happen" "claude -p does the implementer phase"
+            box_title "See the queue work lifecycle" "manual implementer phase"
             echo
             note_box --title "What this walkthrough does" \
-              "Files a tiny task, queues it, then invokes 'claude -p' (the" \
-              "same headless claude that 'aida queue work --no-human=both'" \
-              "calls internally for the implementer phase). Claude reads" \
-              "the spec, makes the edit, commits with the (SPEC-ID) trailer." \
+              "Files a tiny task, queues it, then demonstrates the" \
+              "implementer phase manually. Direct full-access vendor" \
+              "launches are refused. You make the edit and commit with" \
+              "the (SPEC-ID) trailer." \
               "We then close the loop with 'aida pull' (auto-bump scanner)" \
               "and verify the queue is empty + spec Completed." \
               "" \
-              "Real work, real claude API call, real auto-bump."
+              "Real work, no vendor launch, real auto-bump."
             echo
-
-            # Prereq: is claude on PATH?
-            if ! command -v claude >/dev/null 2>&1; then
-                fail "claude CLI not on PATH — option [1] needs it for the implementer phase"
-                dim "   install: https://docs.claude.com/claude-code"
-                dim "   or pick option [6] (queue primitives, no claude needed)"
-                echo
-                step_pause "Press Enter to return to the menu"
-                continue
-            fi
-            ok "claude CLI found: $(command -v claude)"
+            demo_refuse_vendor_launch "queue walkthrough" || true
+            note "Continue with the manual walkthrough below."
             echo
             step_pause "Press Enter to begin substep (1) — file the task"
 
@@ -825,46 +829,27 @@ while true; do
             echo
             show_cmd "demo$" aida queue list
             echo
-            step_pause "Press Enter to run substep (3) — claude -p does the work"
+            step_pause "Press Enter to run substep (3) — implement the task manually"
 
-            # ── Substep 3: claude -p does the implementer phase ────────────
+            # ── Substep 3: manual implementer phase ───────────────────────
             do_clear
-            note_box --title "Substep (3) of 5 — claude -p does the implementer phase" \
-              "Calling 'claude -p' with --permission-mode bypassPermissions" \
-              "and a tight prompt to: append the line, stage, commit with" \
-              "the (SPEC-ID) trailer. This is exactly what 'aida queue work" \
-              "--no-human=both' calls for phase 1 (we skip --auto-complete" \
-              "because the demo project has no CI/reviewer workflow yet)." \
-              "" \
-              "Expect ~30-60s while claude thinks and acts."
+            note_box --title "Substep (3) of 5 — manual implementer phase" \
+              "No full-access vendor process is started. Run the displayed" \
+              "edit, stage, and commit commands to continue the walkthrough." \
+              "  echo 'Goodbye, World!' >> README.md" \
+              "  git add README.md" \
+              "  git commit -m '[AI:claude] feat: add goodbye message ($GOODBYE_SPEC)'"
             echo
-
-            # trace:BUG-707 | ai:claude — top-level code, `local` is illegal here
-            claude_prompt="You are the implementer in headless mode for spec $GOODBYE_SPEC of an AIDA demo. Do EXACTLY this and nothing more:
-
-1. Run: echo 'Goodbye, World!' >> README.md
-2. Run: git add README.md
-3. Run: git commit -m '[AI:claude] feat: add goodbye message ($GOODBYE_SPEC)'
-
-When done, print the single line: DONE — committed $GOODBYE_SPEC"
-
-            show_cmd "demo$" claude -p --permission-mode bypassPermissions "$claude_prompt"
-            claude_exit=$?
-
-            if [ "$claude_exit" -ne 0 ] || ! git log -1 --pretty=%s | grep -qF "($GOODBYE_SPEC)"; then
-                fail "claude -p didn't land the expected commit (exit $claude_exit)"
-                note "Falling back to manual implementation so the demo can proceed:"
-                show_cmd "demo$" sh -c "echo 'Goodbye, World!' >> README.md"
-                show_cmd "demo$" git add README.md
-                show_cmd "demo$" env AIDA_RELEASE=1 git commit -m "[AI:claude] feat: add goodbye message ($GOODBYE_SPEC)"
-            fi
+            show_cmd "demo$" sh -c "echo 'Goodbye, World!' >> README.md"
+            show_cmd "demo$" git add README.md
+            show_cmd "demo$" env AIDA_RELEASE=1 git commit -m "[AI:claude] feat: add goodbye message ($GOODBYE_SPEC)"
             echo
             step_pause "Press Enter to see substep (4) — verify what claude did"
 
             # ── Substep 4: see what claude produced ────────────────────────
             do_clear
             note_box --title "Substep (4) of 5 — verify what claude did" \
-              "The commit log + the README content show the implementer's" \
+              "The commit log + the README content show the implementation's" \
               "output. The (SPEC-ID) trailer is the auto-bump signal the" \
               "next 'aida pull' will pick up."
             echo
@@ -898,7 +883,7 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
               "trailer + 'aida pull' = automatic substrate-side closure." \
               "" \
               "That's the full 'aida queue work' contract: pick → claim →" \
-              "claude implements → commit with trailer → pull auto-bumps."
+              "manual edit → commit with trailer → pull auto-bumps."
             ;;
         2)
             heading "aida history events — the substrate ledger"
@@ -1012,50 +997,12 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
               "                   'claude -p'). Composes with any autonomy mode."
 
             echo
-            note "Step 1: Self-test — can we invoke 'claude -p' headless on this machine?"
-            note "        (the autonomous-drain primitive — runs each lifecycle phase"
-            note "        via a non-interactive 'claude -p' invocation)"
+            note "Step 1: the full-access Claude self-test is disabled in this demo."
+            note "        No vendor launch is made; the command surface is shown"
+            note "        below for inspection only."
             echo
-            if ! command -v claude >/dev/null 2>&1; then
-                fail "claude CLI not on PATH — skip this option, or install Claude Code first"
-                note "       Install: https://docs.claude.com/claude-code"
-                echo
-            else
-                ok "claude CLI found: $(command -v claude)"
-                dim "    version: $(claude --version 2>&1 | head -1)"
-                echo
-                note "Probing: claude -p 'reply with the single word OK'"
-                echo
-                probe_out=$(timeout 60 claude -p --permission-mode bypassPermissions \
-                    "reply with the single word OK" 2>&1 | tr -d '\r' | head -5)
-                probe_exit=$?
-                if [ $probe_exit -eq 0 ] && printf '%s' "$probe_out" | grep -qiE '\bOK\b'; then
-                    ok "claude -p self-test PASSED — autonomous drain is workable on this machine"
-                    dim "    probe response: $(printf '%s' "$probe_out" | head -1)"
-                    echo
-                    note_box --title "In your real project — try the drain" \
-                      "  # Tag a few low-risk specs as a batch:" \
-                      "  aida edit STORY-X --tags batch:overnight" \
-                      "  aida edit TASK-Y  --tags batch:overnight" \
-                      "" \
-                      "  # Drain the batch with advisor on standby:" \
-                      "  aida queue work --batch overnight --zen --auto-complete" \
-                      "" \
-                      "  # Or unattended overnight (advisor tier resolves forks):" \
-                      "  aida queue work --batch overnight --no-human --auto-complete" \
-                      "" \
-                      "Per-spec cost is real (CI runs + review tokens). Start with" \
-                      "1-2 small specs to calibrate before larger batches."
-                else
-                    fail "claude -p self-test FAILED (exit $probe_exit)"
-                    dim "    output: $(printf '%s' "$probe_out" | head -2)"
-                    echo
-                    note "       Common causes:"
-                    note "         • 'claude' not authenticated — run 'claude' once interactively"
-                    note "         • API key not set / network blocked"
-                    note "         • timeout (>60s) — model may be cold or rate-limited"
-                fi
-            fi
+            demo_refuse_vendor_launch "Claude self-test" || true
+            echo
             echo
             note "Contract surface — what's actually behind --zen + --auto-complete:"
             show_cmd "demo$" aida queue work --help 2>&1 | grep -E '^[[:space:]]*--(zen|auto-complete|no-human|max|batch)' | head -10
@@ -1121,7 +1068,7 @@ note_box --title "Where to go from here" \
   "available out of the box." \
   "" \
   "To see the interactive implementer experience the demo's option" \
-  "[1] simulates with 'claude -p':" \
+  "[1] walks through the implementer phase manually:" \
   "" \
   "  cd $DEMO_LOCAL_DIR     # or your real AIDA project" \
   "  aida queue work TASK-N           # claims lease, launches claude" \

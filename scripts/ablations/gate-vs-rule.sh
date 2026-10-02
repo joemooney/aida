@@ -31,6 +31,12 @@
 
 set -euo pipefail
 
+# trace:BUG-1688 | ai:codex
+# This research runner has no unattended caller and directly launches a
+# full-access vendor. Keep its historical entry point fail-closed.
+echo "ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: gate-vs-rule ablation is disabled because it launches a full-access vendor directly." >&2
+exit 78
+
 # ---------------------------------------------------------------------------
 # Locate the repo + the real hook template (the gate under test).
 # ---------------------------------------------------------------------------

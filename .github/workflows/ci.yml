@@ -227,6 +227,18 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_git_guardrails_parse.sh
 
+      # trace:BUG-1688 | ai:claude
+      # The five shipped scripts with no legitimate unattended caller
+      # must refuse a direct full-access vendor launch. The fixture puts
+      # recording shims on the vendor hooks and asserts the recorder is never
+      # invoked, so this is the only thing that proves the refusal still holds
+      # after an edit to those scripts. Gated on full_ci because the fixture's
+      # route audit uses ripgrep, which only the full_ci dependency step
+      # installs; a docs-only PR cannot change a shell script's behaviour.
+      - name: Run shipped full-access launch refusal fixtures
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_bug_1688_shipped_launch_refusals.sh
+
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test
