@@ -8,10 +8,30 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:45.174321949Z
-modified_at: 2026-07-22T15:34:54.701548254Z
+modified_at: 2026-10-02T06:34:52.468485726Z
 req_type: Bug
 tags:
 - aida:review needs-repro-verification from-downstream:quizdom
+comments:
+- id: 01a0fb52-a4b4-7993-a6d8-a779d153c8d7
+  author: joe
+  content: |-
+    ## Triage Investigation (aida-triage)
+
+    ### Status: Verified / Largely Already Covered by BUG-440 + BUG-431
+
+    ### Code Verification
+    Inspected current main at `aida-cli-lib/src/lib.rs:90250-90377` and `task_518_pr_to_spec_tests.rs`:
+    1. **Ancestry Collapse (BUG-431)**: `reduce_to_most_specific_specs` (`lib.rs:90073`) walks the requirement graph. If `EPIC-X` is marked as a `Parent` of `STORY-Y`, the epic is pruned and only the child story survives in both the `delivered` and `referenced` pools.
+    2. **Delivered vs Referenced (BUG-440)**: `pick_pr_spec` (`lib.rs:90262`) prioritizes delivered specs (subject trailer `(SPEC-ID)` and review-story covers/implements links) over purely referenced ones.
+    3. **Surviving Fallback**: The error `"PR-{} has multiple backing specs: {}"` only fires when:
+       - Multiple delivered specs exist AND they lack a `Parent`/`Child` relationship linking them in the store.
+       - Or zero delivered specs exist, and multiple unrelated referenced specs survive.
+
+    ### Recommendation
+    The defect as filed ('reviewer bails on epic+child') is covered whenever the epic-child relationship exists in the store. If an unlinked pair occurs, the disambiguation error is expected behavior per BUG-440 acceptance. This spec can be closed as completed/verified by BUG-440 and BUG-431.
+  created_at: 2026-10-02T06:34:52.468485726Z
+  modified_at: 2026-10-02T06:34:52.468485726Z
 deferred: true
 deferred_at: 2026-07-22T15:34:54.701548254Z
 deferred_until: the repro is re-run on current main (a7cd68909+) and still fails — then file a real, mechanism-confirmed spec
