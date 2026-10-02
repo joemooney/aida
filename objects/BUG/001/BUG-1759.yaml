@@ -61,12 +61,12 @@ description: |
   Filed from the advisor seat while pre-measuring BUG-1758. BUG-1758's AC6 asks for a repo-wide survey
   of the same *shape*; this is a different defect found by the same sweep, filed separately rather than
   silently widening BUG-1758's scope. Related: BUG-1758, BUG-1757, BUG-1755.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:17:53.606632960Z
-modified_at: 2026-10-01T18:18:00.744874585Z
+modified_at: 2026-10-02T02:15:36.109233184Z
 req_type: Bug
 history:
 - id: 01a0f8b0-06a8-7602-a994-690954e3c51c
@@ -76,6 +76,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0fa65-45ad-7521-9b87-7bbfadb16e59
+  author: aida-session-start
+  timestamp: 2026-10-02T02:15:36.109232805Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f3cde6e60e24e992989a3062364cad56bb28d712
   branch: main
