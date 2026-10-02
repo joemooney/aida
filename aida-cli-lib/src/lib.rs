@@ -96067,31 +96067,41 @@ pub(crate) fn probe_drain_state(project_root: &std::path::Path) -> DrainStatePro
 // trace:BUG-1574 | ai:claude
 /// Pure fail-closed decision core for any unattended git-mutating action
 /// (steal, rebase, force-push) against `spec`'s branch:
-///   - `req: None` (store unreadable OR spec unresolved) → refuse. Both
-///     collapse to the same outcome because neither is distinguishable
-///     as "safe" from the caller's point of view.
+///   - `req: None` (store unreadable OR spec unresolved) → refuse, except for
+///     exact synthetic review scopes (`PR-N` / `MR-N`), which deliberately do
+///     not exist as requirements.
 ///   - `spec` is keyboard-only ([`spec_is_keyboard_only`]) → refuse.
 ///   - [`DrainStateProbe::Malformed`] → refuse (a torn/corrupt
 ///     `drain-state.json` must never read as "no batch active").
 ///   - a batch IS active and `spec` is not a declared member → refuse.
-/// `None` (no refusal) only when the spec resolves, is not keyboard-only,
-/// and either no batch is active or `spec` is one of its members.
+/// `None` (no refusal) only when the spec resolves and is not keyboard-only,
+/// or the scope is an exact synthetic review scope; the drain must also have
+/// no active batch or include `spec` among its members.
 pub(crate) fn unattended_git_mutation_refusal_for(
     spec: &str,
     req: Option<&aida_core::Requirement>,
     drain: &DrainStateProbe,
 ) -> Option<String> {
-    let Some(req) = req else {
-        return Some(format!(
-            "{spec} could not be resolved (store unreadable or spec unknown) — refusing an \
-             unattended rebase/force-push/steal (fail closed)"
-        ));
-    };
-    if spec_is_keyboard_only(req) {
-        return Some(format!(
-            "{spec} is keyboard-only (tag or execution_mode) — refusing an unattended \
-             rebase/force-push/steal"
-        ));
+    // Review sessions own synthetic PR-N / MR-N scopes rather than a
+    // requirement. Requiring a store row here makes a clean dead reviewer
+    // lease impossible to reclaim with --steal. Exact parsing matters: an
+    // ordinary unknown spec must retain the fail-closed behavior.
+    // trace:BUG-1820 | ai:codex
+    match req {
+        Some(req) if spec_is_keyboard_only(req) => {
+            return Some(format!(
+                "{spec} is keyboard-only (tag or execution_mode) — refusing an unattended \
+                 rebase/force-push/steal"
+            ));
+        }
+        Some(_) => {}
+        None if parse_review_scope(spec).is_some() => {}
+        None => {
+            return Some(format!(
+                "{spec} could not be resolved (store unreadable or spec unknown) — refusing an \
+                 unattended rebase/force-push/steal (fail closed)"
+            ));
+        }
     }
     match drain {
         DrainStateProbe::NoActiveDrain => None,
@@ -96318,6 +96328,47 @@ mod bug_1574_unattended_git_mutation_tests {
             unattended_git_mutation_refusal_for("TASK-1", None, &DrainStateProbe::NoActiveDrain);
         assert!(reason.is_some());
         assert!(reason.unwrap().contains("fail closed"));
+    }
+
+    // BUG-1820: reviewer leases use synthetic scopes, so a missing
+    // requirement is expected for both forge spellings. The exact parser
+    // keeps unknown and malformed ids on the fail-closed path.
+    // trace:BUG-1820 | ai:codex
+    #[test]
+    fn allows_synthetic_pr_and_mr_scopes_without_requirement_rows() {
+        for scope in ["PR-26", "MR-26", "pr-26", "mr-26"] {
+            assert!(
+                unattended_git_mutation_refusal_for(scope, None, &DrainStateProbe::NoActiveDrain)
+                    .is_none(),
+                "synthetic review scope {scope} must not require a requirement row"
+            );
+        }
+    }
+
+    #[test]
+    fn malformed_review_like_scopes_still_fail_closed() {
+        for scope in ["PR-x", "MR-", "PR-26-extra", "REVIEW-26"] {
+            let reason =
+                unattended_git_mutation_refusal_for(scope, None, &DrainStateProbe::NoActiveDrain);
+            assert!(
+                reason.is_some_and(|reason| reason.contains("fail closed")),
+                "review-like scope {scope} must not bypass requirement lookup"
+            );
+        }
+    }
+
+    #[test]
+    fn synthetic_review_scope_still_refuses_malformed_drain_state() {
+        let reason =
+            unattended_git_mutation_refusal_for("MR-26", None, &DrainStateProbe::Malformed);
+        assert!(reason.is_some_and(|reason| reason.contains("fail closed")));
+    }
+
+    #[test]
+    fn synthetic_review_scope_outside_active_batch_still_refuses() {
+        let drain = active(Some("night-0920"), &["STORY-207"]);
+        let reason = unattended_git_mutation_refusal_for("PR-26", None, &drain);
+        assert!(reason.is_some_and(|reason| reason.contains("night-0920")));
     }
 
     // ── keyboard-only: tag wins even when execution_mode is drain ──────────
@@ -96558,6 +96609,24 @@ mod bug_1574_unattended_git_mutation_tests {
             "a declared-but-unresolvable store must refuse"
         );
         assert!(reason.unwrap().contains("fail closed"));
+    }
+
+    #[test]
+    fn wrapper_allows_synthetic_review_scopes_with_an_unresolvable_store() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "store_path = \"nonexistent-store\"\n",
+        )
+        .unwrap();
+
+        for scope in ["PR-26", "MR-26"] {
+            assert!(
+                unattended_git_mutation_refusal(dir.path(), scope, "steal", None).is_none(),
+                "synthetic review scope {scope} must not depend on store lookup"
+            );
+        }
     }
 
     // ── dedupe: a second refusal for the same (spec, branch) is a no-op ────
