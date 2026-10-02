@@ -74441,6 +74441,26 @@ fn auto_complete_failure_bug_parent_spec(req: &aida_core::Requirement) -> Option
     Some(parent)
 }
 
+/// BUG-1768: is there a Draft auto-drafted phase-failure finding whose parent is
+/// already `Completed`? Deliberately NOT
+/// `auto_resolve_failure_bugs_for_completed_specs(store, &[], ..)`: the guards
+/// below only need to know *whether* such work exists, and that function also
+/// builds a completion label per hit, which shells out to `git show`. Asking the
+/// question this way short-circuits on the first hit and never runs git, so the
+/// overwhelmingly common answer (none) costs one cheap scan.
+// trace:BUG-1768 | ai:claude
+fn has_orphaned_failure_finding(store: &aida_core::RequirementsStore) -> bool {
+    store.requirements.iter().any(|req| {
+        auto_complete_failure_bug_parent_spec(req).is_some_and(|parent| {
+            store.requirements.iter().any(|p| {
+                (p.spec_id.as_deref() == Some(parent.as_str())
+                    || p.agreed_id.as_deref() == Some(parent.as_str()))
+                    && matches!(p.status, RequirementStatus::Completed)
+            })
+        })
+    })
+}
+
 fn reject_resolved_auto_complete_failure_bug(
     req: &mut aida_core::Requirement,
     completed_spec: &str,
@@ -75919,16 +75939,14 @@ fn auto_bump_done_to_completed_with(
 
     // BUG-1768: resolving a finding whose parent completed outside this pass is
     // work this pass must still do, so it has to count as a reason to continue
-    // past the nothing-to-do guard. An empty `completed` list exercises exactly
-    // the retroactive branch of the sweep. trace:BUG-1768 | ai:claude
-    let orphaned_failure_findings =
-        auto_resolve_failure_bugs_for_completed_specs(&store, &[], project_root);
+    // past the nothing-to-do guard. trace:BUG-1768 | ai:claude
+    let orphaned_finding_pending = has_orphaned_failure_finding(&store);
 
     if candidates.is_empty()
         && pr_to_sha.is_empty()
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
-        && orphaned_failure_findings.is_empty()
+        && !orphaned_finding_pending
     {
         return Ok((Vec::new(), true));
     }
@@ -76097,18 +76115,26 @@ fn auto_bump_done_to_completed_with(
     // BUG-1768: the second nothing-to-do guard. A pass with an orphaned finding
     // to resolve and nothing to flip reaches here, so this one has to admit the
     // same reason to continue as the guard above it. trace:BUG-1768 | ai:claude
-    if flips.is_empty()
+    let has_flip_work = !(flips.is_empty()
         && stale_review_flips.is_empty()
         && stranded_review_pr.is_empty()
-        && closure_holds.is_empty()
-        && orphaned_failure_findings.is_empty()
-    {
+        && closure_holds.is_empty());
+
+    if !has_flip_work && !orphaned_finding_pending {
         return Ok((Vec::new(), true));
     }
 
     // ── Step 5: write the flips ──
+    //
+    // BUG-1768: gated on there actually being flips. Before this bug the guard
+    // above made that implicit — the only way to reach here was with work to
+    // write. An orphaned finding is now also a way to reach here, and on the
+    // legacy store path this block's `update_atomically` rewrites the whole
+    // store whether or not its closure changes a single spec, so an ungated
+    // Step 5 would turn "reject one finding" into a full-store write, plus a
+    // `GitBackend` open on the canonical path. trace:BUG-1768 | ai:claude
     let now = chrono::Utc::now();
-    if store_path.is_dir() {
+    if has_flip_work && store_path.is_dir() {
         // Git-canonical store: targeted per-spec writes — read the ONE spec,
         // apply the flip, commit its one YAML with subject `update SPEC-ID`
         // (the same BUG-634 targeted path `aida edit` uses via
@@ -76176,7 +76202,7 @@ fn auto_bump_done_to_completed_with(
                 backend.update_requirement(&r)?;
             }
         }
-    } else {
+    } else if has_flip_work {
         // Legacy YAML/SQLite store: keep the atomic full-store write.
         let flips_for_write = flips.clone();
         let stale_for_write = stale_review_flips.clone();
