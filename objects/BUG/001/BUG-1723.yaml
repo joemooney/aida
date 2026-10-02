@@ -48,12 +48,12 @@ description: |
 
   Verified while filing: no executable-selecting key is read from config.toml today, so this is
   preventive, not a live breach.
-status: Planned
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T06:06:38.663034493Z
-modified_at: 2026-10-02T14:17:40.081952499Z
+modified_at: 2026-10-02T18:12:44.648100321Z
 req_type: Bug
 comments:
 - id: 01a0fc39-30c5-7543-9388-2868c8fdbc2d
@@ -159,6 +159,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
+- id: 01a0fdd1-8fe8-7093-b6c8-67428345fc77
+  author: joe
+  timestamp: 2026-10-02T18:12:44.648098645Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: InProgress
 filed_at:
   code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
   branch: main
