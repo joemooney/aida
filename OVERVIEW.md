@@ -305,3 +305,25 @@ For project conventions (commit format, scaffold/template architecture, CLI refe
 | [docs/architecture/mcp-coordination-surface.md](docs/architecture/mcp-coordination-surface.md) | The MCP transport layer over the filesystem-canonical coordination substrate |
 | [docs/autonomous-drain.md](docs/autonomous-drain.md) | Practical user guide to `--auto-complete` and `--no-human` (paired with the autonomy architecture doc above) |
 | [docs/plans/](docs/plans/) | Archived implementation plans (one per `YYYY-MM-DD-<slug>.md`) |
+
+
+### Bounded cache reads
+
+Compatible cache-backed reads coordinate through a canonical `refresh.lock`
+flock. An incremental winner makes one SQLite attempt; other readers poll
+committed metadata for at most `AIDA_CACHE_READ_WAIT_MS` (default 1500ms), shared
+across backend opens in the invocation. Advisory paths use a zero wait budget.
+Rows and freshness metadata come from one pinned SQLite snapshot. An invocation
+collector preserves stale observations across later fresh reads; CLI object JSON
+outputs carry `cache`, arrays retain their shape with a stderr note, and MCP
+calls that touch tolerant reads include `structuredContent.cache` plus text.
+
+Before the worker slice lands, a compatible non-TTY full-rebuild winner returns
+`refreshing: "deferred"`; an incremental SQLite busy result returns `writer_busy`.
+These labels promise no autonomous progress. `worker_running` records an observed
+refresh-flock holder, including an inline refresher. Explicit `aida cache rebuild`
+or a later strict operation can restore freshness. Interactive human TTY full
+rebuilds remain strict, as do mutations, gates and explicit cache operations.
+Missing/unreadable cache and incompatible-schema paths retain their strict/error
+handling; no incompatible rows are served. Durable requests, worker scheduling,
+and the separately bounded single-spec show path are separate work.

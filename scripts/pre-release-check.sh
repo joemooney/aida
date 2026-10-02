@@ -42,6 +42,8 @@ refresh=0
 # defeating the freshness gate. trace:TASK-284 | ai:claude
 parse_iso_to_epoch() {
     local iso="$1" out
+    # trace:BUG-1750 | ai:codex
+    # portable-fallback: BSD date parses ISO timestamps with -j -u -f.
     if out=$(date -d "$iso" +%s 2>/dev/null); then
         echo "$out"
         return 0

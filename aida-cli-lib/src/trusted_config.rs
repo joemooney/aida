@@ -92,6 +92,36 @@ pub fn read_trusted_config_toml(project_root: &Path) -> Option<String> {
     read_config_at_sha(project_root, &sha)
 }
 
+/// Read the default-branch config using only local git refs. This is for
+/// display-only probes on hot paths where asking `gh` for the default branch
+/// on every review would add a network call. It preserves the trusted-config
+/// boundary: only a local default branch ref is read, never the worktree copy.
+// trace:TASK-1545 | ai:codex
+pub fn read_trusted_config_toml_local(project_root: &Path) -> Option<String> {
+    let branch_ref = local_default_branch_ref(project_root)?;
+    let sha = rev_parse_commit(project_root, &branch_ref)?;
+    read_config_at_sha(project_root, &sha)
+}
+
+fn local_default_branch_ref(project_root: &Path) -> Option<String> {
+    let symbolic = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|branch| !branch.is_empty());
+    if symbolic.is_some() {
+        return symbolic;
+    }
+    ["origin/main", "origin/master", "main", "master"]
+        .into_iter()
+        .find(|branch| rev_parse_commit(project_root, branch).is_some())
+        .map(str::to_string)
+}
+
 /// `git show <sha>:.aida/config.toml`. `None` on any non-zero exit (file
 /// absent at that commit) or spawn failure.
 fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<String> {

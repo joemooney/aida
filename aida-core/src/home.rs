@@ -193,7 +193,9 @@ mod tests {
                     stack.push(p);
                     continue;
                 }
-                if p.extension().is_none_or(|e| e != "rs") || p.ends_with("home.rs") {
+                if p.extension().is_none_or(|e| e != "rs")
+                    || p == Path::new(env!("CARGO_MANIFEST_DIR")).join("src/home.rs")
+                {
                     continue;
                 }
                 let text = std::fs::read_to_string(&p).unwrap();

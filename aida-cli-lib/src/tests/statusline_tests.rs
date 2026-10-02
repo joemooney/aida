@@ -651,19 +651,12 @@ fn bg_spawn_fresh_boundary_is_strict_less_than() {
 /// the same process; we serialize via a static mutex so they
 /// don't trample each other's env.
 fn with_bg_fetch_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
-    // BUG-697: shared process-global env lock (was a module-local mutex).
-    let _guard = crate::test_env::env_lock();
-    let prev = std::env::var("AIDA_BG_FETCH").ok();
-    match val {
-        Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
-        None => std::env::remove_var("AIDA_BG_FETCH"),
-    }
-    let result = f();
-    match prev {
-        Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
-        None => std::env::remove_var("AIDA_BG_FETCH"),
-    }
-    result
+    // BUG-697 / TASK-1532: route through EnvVarGuard. trace:TASK-1532 | ai:agy
+    let _guard = match val {
+        Some(v) => crate::test_env::EnvVarGuard::set("AIDA_BG_FETCH", v),
+        None => crate::test_env::EnvVarGuard::unset("AIDA_BG_FETCH"),
+    };
+    f()
 }
 
 #[test]

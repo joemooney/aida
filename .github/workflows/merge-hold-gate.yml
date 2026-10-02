@@ -14,8 +14,21 @@ name: merge-hold-gate
 #
 # To enforce: Settings -> Branches -> protect `main` -> Require status checks ->
 # add `merge-hold-gate`, with "Do not allow bypassing" / enforce_admins ON so the
-# hold binds everyone; clearing the label (a human/advisor review, or
-# `aida merge-hold clear <pr>`) re-runs this and lets the merge proceed.
+# hold binds everyone; clearing the hold (`aida merge-hold clear <pr>`) re-runs
+# this and lets the merge proceed.
+#
+# BUG-1693: label state alone cannot release a previously held PR. `aida
+# merge-hold clear` keeps the persistent `aida:merge-hold-recorded` label and
+# adds `aida:merge-hold-cleared` after writing its local clearance record, so
+# dropping `aida:merge-hold` by hand leaves history without clearance and this
+# check still fails. This is a forge-side integrity check, not protection from
+# an admin token running as the same user; see docs/cli/08-reporting.md.
+# Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
+# the most recent hold has a recorded clearance; this makes label-only gate logic sound.
+#
+# The `run:` block below is the shipped artifact that
+# tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
+# against this file rather than against a copy of it. Keep the gate logic here.
 
 on:
   pull_request:
@@ -29,12 +42,23 @@ jobs:
   merge-hold-gate:
     runs-on: ubuntu-latest
     steps:
-      - name: Refuse while the supervised merge-hold label is present
+      - name: Require recorded clearance for every previously held PR
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          if printf '%s' "$LABELS" | tr ',' '\n' | grep -qx 'aida:merge-hold'; then
-            echo "::error::This PR carries 'aida:merge-hold' — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Clear the hold (review it, then \`aida merge-hold clear <pr>\` or remove the label) to let the merge proceed."
+          has_label() {
+            printf '%s' "$LABELS" | tr ',' '\n' | grep -Fqx "$1"
+          }
+          if has_label aida:merge-hold; then
+            echo "::error::This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Only the human-gated \`aida merge-hold clear <pr>\` path can release it."
             exit 1
           fi
-          echo "No supervised merge-hold label present — gate passes."
+          if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then
+            echo "::error::This PR was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
+            exit 1
+          fi
+          if has_label aida:merge-hold-cleared && ! has_label aida:merge-hold-recorded; then
+            echo "::error::Clearance label has no matching recorded hold."
+            exit 1
+          fi
+          echo "Merge-hold gate passes: no active hold, or a recorded clearance exists."

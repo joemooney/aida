@@ -201,10 +201,51 @@ fn normalize_volatile(mut value: serde_json::Value) -> serde_json::Value {
     // Separate process invocations can cross a one-second boundary while
     // reporting the same session. The contract is the field/schema and all
     // stable values, not equality of a live elapsed-time sample.
+    // trace:BUG-1692 | ai:codex
+    // History can switch from a git walk to its warmed cache between these
+    // invocations; source and index_tip describe that provenance, not the
+    // history answer, so keep comparing count and every event field below.
     if let Some(object) = value.as_object_mut() {
         object.remove("idle_secs");
+        object.remove("source");
+        object.remove("index_tip");
     }
     value
+}
+
+#[test]
+fn history_json_comparison_ignores_cache_provenance_only() {
+    let walked = serde_json::json!({
+        "source": "git-walk",
+        "index_tip": null,
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+    let cached = serde_json::json!({
+        "source": "history-cache",
+        "index_tip": "abc123",
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+
+    assert_eq!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(cached.clone())
+    );
+
+    let mut different_count = cached.clone();
+    different_count["count"] = serde_json::json!(2);
+    assert_ne!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(different_count)
+    );
+
+    let mut different_event = cached;
+    different_event["events"][0]["kind"] = serde_json::json!("spec.updated");
+    assert_ne!(
+        normalize_volatile(walked),
+        normalize_volatile(different_event)
+    );
 }
 
 #[test]
@@ -593,7 +634,18 @@ fn bug_1635_history_formats_agree_on_event_count() {
         let n = json["count"].as_u64().unwrap() as usize;
         assert!(n >= 1, "[{label}] expected events: {json}");
         assert_eq!(rows(&human), n, "[{label}] human:\n{human}");
-        assert_eq!(rows(&toon), n, "[{label}] toon:\n{toon}");
+        // trace:TASK-1526 | ai:codex
+        // Only the event table's rows count; the separate cache object also
+        // has indented fields and must not masquerade as another event.
+        let toon_rows = toon
+            .lines()
+            .skip_while(|line| !line.starts_with("events["))
+            .skip(1)
+            .take_while(|line| line.starts_with("  "))
+            .count();
+        assert_eq!(toon_rows, n, "[{label}] toon:\n{toon}");
+        assert_eq!(json["cache"]["stale"], false);
+        assert!(toon.contains("cache:\n  stale: false"), "{toon}");
         assert_eq!(toon_count(&toon), n, "[{label}] toon:\n{toon}");
         assert!(
             !toon.lines().any(|l| l == "view: history"),

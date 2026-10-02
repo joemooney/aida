@@ -170,3 +170,62 @@ aida list --status draft
 
 ```
 User: /aida-evaluate FR-0042
+
+Agent: Loading FR-0042.
+
+  Evaluating: FR-0042
+  Title: Export reports to CSV
+  Type: functional
+  Status: draft
+
+  Scoring clarity, completeness, testability, consistency and feasibility
+  against the requirements and features already defined in the project.
+
+Agent: ## Evaluation Results for FR-0042
+
+  **Quality Score**: 6/10
+
+  ### Strengths
+  - The export format is named explicitly, so the output is unambiguous.
+  - Scope is a single feature, appropriate for a functional requirement.
+
+  ### Issues Found
+  1. **[high]** missing_criteria: No acceptance criteria, so there is no
+     pass/fail condition to verify against.
+     Suggestion: State which columns the CSV contains and what happens
+     when the report is empty.
+  2. **[medium]** vague_language: "should handle large reports
+     appropriately" has more than one interpretation.
+     Suggestion: Replace it with an observable outcome.
+
+  ### Suggested Improvements
+  Export a finished report to CSV. The file contains one row per line item
+  with the columns id, date, account, description and amount. An empty
+  report still writes the header row. The export streams, so a report of
+  any size is written without being held in memory.
+
+  Rationale: turns two untestable phrases into observable outcomes, which
+  raises testability and completeness without widening scope.
+
+Agent: 6/10 is "Fair - some issues need addressing". Follow-up options:
+  1. Improve description - apply the suggestion above
+  2. Split into children - not recommended, scope is already one feature
+  3. Find related - search for an existing export requirement
+  4. Accept as-is - not recommended below a score of 7
+  5. Add comment - record this evaluation without changing the description
+
+User: 1, and record the evaluation too.
+
+Agent: Applying the improvement, then recording the score.
+
+  $ aida edit FR-0042 --description "Export a finished report to CSV. ..."
+  FR-0042 updated
+
+  $ aida comment add FR-0042 "AI Evaluation: Score 6/10 - no acceptance
+    criteria and one vague phrase; description rewritten with per-column
+    detail and an explicit empty-report case."
+  comment added to FR-0042
+
+  FR-0042 re-scores at 9/10 and is ready for implementation. Run
+  /aida-plan FR-0042 when you want an implementation plan.
+```

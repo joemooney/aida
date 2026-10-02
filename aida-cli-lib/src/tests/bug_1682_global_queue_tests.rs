@@ -4,6 +4,7 @@
 // trace:BUG-1682 | ai:codex
 
 use super::*;
+use crate::process_retry::RetryEtxtbsy;
 use aida_core::DatabaseBackend;
 use std::collections::BTreeSet;
 use std::process::{Child, Command, Stdio};
@@ -120,7 +121,7 @@ fn spawn(home: &Path, action: &str, index: usize, pause: &str) -> (Process, Path
     } else {
         DEADLINE
     };
-    (Process(cmd.spawn().unwrap(), timeout), ctl)
+    (Process(cmd.spawn_retrying_etxtbsy().unwrap(), timeout), ctl)
 }
 
 fn scenario(name: &str) {
@@ -404,11 +405,12 @@ fn errors() {
     for p in blockers {
         std::fs::remove_dir(p).unwrap();
     }
-    // This is a single-test child, so changing this test-only hook cannot
-    // race another test or change a production home resolver.
-    std::env::set_var("BUG_1682_PANIC", "1");
-    assert!(std::panic::catch_unwind(|| add(ROLE, entry(1, 0))).is_err());
-    std::env::remove_var("BUG_1682_PANIC");
+    // Route through EnvVarGuard so this panic test holds the process-global env lock.
+    // trace:TASK-1532 | ai:agy
+    {
+        let _env = crate::test_env::EnvVarGuard::set("BUG_1682_PANIC", "1");
+        assert!(std::panic::catch_unwind(|| add(ROLE, entry(1, 0))).is_err());
+    }
     assert_eq!(std::fs::read(&path).unwrap(), committed);
     let (mut next, _) = spawn(&home(), "one", 2, "");
     next.success();

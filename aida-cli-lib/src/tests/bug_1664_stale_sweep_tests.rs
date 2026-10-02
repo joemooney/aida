@@ -6,8 +6,9 @@
 //!
 //! Every fixture is a temporary git-canonical store. The stale snapshot is
 //! produced the way it happens in the field: the cache is current, another
-//! writer commits straight to the store, and a live foreign writer (pid 1)
-//! holds the cache lock sidecar, so the read path serves the old rows.
+//! writer commits straight to the store, and another process holds the refresh
+//! flock, so this reader loses the single flight and serves the old rows.
+//! trace:TASK-1526 | ai:claude
 // trace:BUG-1664 | ai:claude
 #![cfg(unix)]
 
@@ -22,6 +23,9 @@ struct Fixture {
     tmp: TempDir,
     store_root: PathBuf,
     cache_path: PathBuf,
+    // Holds the refresh flock for as long as the fixture lives, once a test
+    // asks for a stale snapshot. trace:TASK-1526 | ai:claude
+    foreign: std::cell::RefCell<Option<crate::stale_cache_fixture::ForeignRefresh>>,
 }
 
 impl Fixture {
@@ -42,6 +46,7 @@ impl Fixture {
             tmp,
             store_root,
             cache_path,
+            foreign: std::cell::RefCell::new(None),
         }
     }
 
@@ -102,18 +107,25 @@ impl Fixture {
         external.update_requirement(&req).unwrap();
     }
 
-    /// A live foreign process (pid 1) holds the cache write lock, so reads
-    /// serve the last committed snapshot instead of catching up.
+    /// Make every subsequent read on this thread serve the last committed
+    /// (stale) snapshot: another thread takes the refresh flock, so this thread
+    /// loses the single flight and falls back to the committed rows once its
+    /// bounded read budget expires.
+    ///
+    /// Before TASK-1526 this planted a `.lock-info` sidecar for a live foreign
+    /// PID. That shortcut is gone — the sidecar is a diagnostic and never
+    /// authorizes stale serving — so the fixture now holds the refresh flock,
+    /// which is the mechanism the shipped read path actually loses to.
+    // trace:TASK-1526 | ai:claude
+    /// Calling this twice re-arms the same condition, so the previous holder is
+    /// released before the new one takes the flock; acquiring first would make
+    /// the fixture contend with itself.
     fn hold_foreign_writer(&self) {
-        let info = aida_core::CacheLockInfo {
-            pid: 1,
-            command: "test-foreign-writer".to_string(),
-            started_at: chrono::Utc::now().to_rfc3339(),
-            user: "test".to_string(),
-            ..Default::default()
-        };
-        let sidecar = PathBuf::from(format!("{}.lock-info", self.cache_path.display()));
-        std::fs::write(sidecar, serde_json::to_string(&info).unwrap()).unwrap();
+        let mut slot = self.foreign.borrow_mut();
+        *slot = None;
+        *slot = Some(crate::stale_cache_fixture::hold_foreign_refresh(
+            &self.cache_path,
+        ));
     }
 
     /// The status the (stale) cache serves for `spec_id`.

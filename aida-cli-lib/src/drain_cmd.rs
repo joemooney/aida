@@ -5,12 +5,45 @@
 //! `lib.rs`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 const DRAIN_STOP_FILE: &str = "drain-stop.json";
 const DRAIN_STOP_ENV: &str = "AIDA_DRAIN_STOP_FILE";
+
+// trace:BUG-1822 | ai:codex
+fn drain_start_mode_flag(selector: Option<&str>, batch: Option<&str>, once: bool) -> &'static str {
+    if selector.is_none() && batch.is_none() && !once {
+        "--drain"
+    } else {
+        "--auto-complete"
+    }
+}
+
+#[cfg(test)]
+mod bug_1822_tests {
+    use super::drain_start_mode_flag;
+
+    #[test]
+    fn queue_wide_start_uses_only_the_drain_alias() {
+        assert_eq!(drain_start_mode_flag(None, None, false), "--drain");
+    }
+
+    #[test]
+    fn scoped_starts_use_auto_complete() {
+        assert_eq!(
+            drain_start_mode_flag(Some("BUG-1"), None, false),
+            "--auto-complete"
+        );
+        assert_eq!(
+            drain_start_mode_flag(None, Some("nightly"), false),
+            "--auto-complete"
+        );
+        assert_eq!(drain_start_mode_flag(None, None, true), "--auto-complete");
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DrainStopRequest {
@@ -250,11 +283,16 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 _ => None,
             };
             if let (
-                drain_state::DrainStatus::None | drain_state::DrainStatus::Stale(_),
+                drain_state::DrainStatus::None
+                | drain_state::DrainStatus::Stale(_)
+                | drain_state::DrainStatus::Stopped(_),
                 Some(lock),
             ) = (&status, &live_lock)
             {
-                let stale_state = matches!(status, drain_state::DrainStatus::Stale(_));
+                let stale_state = matches!(
+                    status,
+                    drain_state::DrainStatus::Stale(_) | drain_state::DrainStatus::Stopped(_)
+                );
                 if json_output {
                     println!(
                         "{}",
@@ -316,6 +354,12 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                     );
                 }
                 drain_state::DrainStatus::Stale(state) => {
+                    print!(
+                        "{}",
+                        drain_state::render_human_with_context(&state, true, &project_root)
+                    );
+                }
+                drain_state::DrainStatus::Stopped(state) => {
                     print!(
                         "{}",
                         drain_state::render_human_with_context(&state, true, &project_root)
@@ -439,7 +483,9 @@ fn handle_shelved_resume(spec: &str, json: bool) -> Result<()> {
     if json {
         cmd.arg("--json");
     }
-    let status = cmd.status().context("launching the resumed drain")?;
+    let status = cmd
+        .status_retrying_etxtbsy()
+        .context("launching the resumed drain")?;
     if status.success() {
         Ok(())
     } else {
@@ -484,10 +530,7 @@ fn handle_drain_start(
     } else if once {
         args.push("next".into());
     }
-    args.push("--auto-complete".into());
-    if selector.is_none() && batch.is_none() && !once {
-        args.push("--drain".into());
-    }
+    args.push(drain_start_mode_flag(selector, batch, once).into());
     if let Some(batch) = batch.filter(|s| !s.trim().is_empty()) {
         args.push("--batch".into());
         args.push(batch.to_string());
@@ -536,7 +579,7 @@ fn handle_drain_start(
         .current_dir(&root)
         .args(&args)
         .env(DRAIN_STOP_ENV, drain_stop_path(&root))
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to run `aida {}`", args.join(" ")))?;
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -718,7 +761,7 @@ pub(crate) fn drain_clear(
              orchestrator exits.",
             state.orchestrator_pid
         ),
-        drain_state::DrainStatus::Stale(_) => {
+        drain_state::DrainStatus::Stale(_) | drain_state::DrainStatus::Stopped(_) => {
             drain_state::DrainState::clear(project_root)?;
             if json {
                 println!("{{\"status\":\"cleared\"}}");
@@ -1113,7 +1156,10 @@ pub(crate) fn handle_drain_resume(
                     start_phase,
                     branch,
                     pr,
+                    head_sha: member.as_ref().and_then(|m| m.head_sha.clone()),
                     from_pr: false,
+                    ci_terminal_sha: None,
+                    ci_terminal_green: None,
                 })
             };
             // BUG-438: when we re-enter past phase 1, the crashed implementer's

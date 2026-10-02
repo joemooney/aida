@@ -53,6 +53,7 @@ use crate::maintenance_schedule::{
     crontab_has_repair_target, render_tick_cron_line, tick_cron_marker, tick_invocation,
     CronDriverStatus, DriverInstallOutcome, TickInvocation,
 };
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -236,7 +237,8 @@ fn run_bounded(mut cmd: std::process::Command, timeout: Duration) -> BoundedRun 
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = match cmd.spawn() {
+    // trace:BUG-1735 | ai:claude
+    let mut child = match cmd.spawn_retrying_etxtbsy() {
         Ok(c) => c,
         Err(e) => return BoundedRun::SpawnFailed(e.to_string()),
     };

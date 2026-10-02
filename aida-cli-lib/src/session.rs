@@ -14,6 +14,7 @@
 //!
 //! trace:FR-1-043 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::path::{Path, PathBuf};
@@ -1244,7 +1245,7 @@ pub fn spawn_vendor_headless_with_seat(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok(status)
@@ -1415,7 +1416,7 @@ pub(crate) fn spawn_reviewer_launch_plan(
 ) -> Result<std::process::ExitStatus> {
     std::process::Command::new(&plan.program)
         .args(&plan.args)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", plan.program))
 }
 
@@ -2063,6 +2064,91 @@ pub fn claude_contained_flags() -> Vec<String> {
         "--settings".to_string(),
         claude_contained_settings_json(),
     ]
+}
+
+/// Which AIDA surface a supervised seat gets. TASK-1558 default is `Off`: SPIKE-73 measured MCP at
+/// ~1.8-2x the CLI's cost for identical or worse success over a 72-cell matrix, and the result is
+/// structural — on-demand schema loading does not rescue it. No shipped skill references the MCP
+/// surface, and every generated seat brief already speaks in `aida ...` CLI verbs.
+///
+/// Only claude exposes launch-time MCP flags. Codex and antigravity register MCP in their own
+/// config files, so this cannot be enforced at launch for them.
+// trace:TASK-1558 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AgentMcpSurface {
+    /// No MCP servers at all; the `aida` CLI is the surface.
+    #[default]
+    Off,
+    /// Only AIDA's own server definition (BUG-1698).
+    Aida,
+    /// Inject nothing; the vendor's own MCP configuration applies, trust prompt included.
+    Native,
+}
+
+impl AgentMcpSurface {
+    // trace:TASK-1558 | ai:claude
+    pub(crate) fn parse(raw: &str) -> Result<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "off" | "none" | "cli" => Ok(Self::Off),
+            "aida" => Ok(Self::Aida),
+            "native" | "vendor" => Ok(Self::Native),
+            other => anyhow::bail!(
+                "[agents] mcp value `{other}` is not recognised — expected `off` (no MCP, the \
+                 `aida` CLI is the surface), `aida` (attach AIDA's own server) or `native` (leave \
+                 the vendor's MCP configuration alone)"
+            ),
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Aida => "aida",
+            Self::Native => "native",
+        }
+    }
+}
+
+/// The MCP launch flags for a claude seat under `surface`.
+///
+/// BUG-1698: every `aida agent new claude` launch in an AIDA repo used to stop on Claude Code's
+/// project-MCP trust modal —
+///
+///   New MCP server found in this project: aida
+///   > Continue without using this MCP server
+///
+/// in a PTY nobody was watching, blocking the caller until it was killed. `--permission-mode
+/// bypassPermissions` does NOT dismiss it; project-MCP trust is a separate gate from tool
+/// permission mode (probed on claude v2.1.283). `--strict-mcp-config` closes the gate under both
+/// `Off` and `Aida` because nothing from `.mcp.json` is consulted — so a checkout cannot smuggle a
+/// command in under the name `aida`.
+// trace:BUG-1698 | ai:claude
+// trace:TASK-1558 | ai:claude
+pub(crate) fn claude_mcp_flags(surface: AgentMcpSurface) -> Vec<String> {
+    match surface {
+        AgentMcpSurface::Off => vec!["--strict-mcp-config".to_string()],
+        AgentMcpSurface::Aida => vec![
+            "--mcp-config".to_string(),
+            aida_mcp_server_config_json(),
+            "--strict-mcp-config".to_string(),
+        ],
+        AgentMcpSurface::Native => Vec::new(),
+    }
+}
+
+/// The `aida` server definition AIDA vouches for, built here rather than read from the
+/// repository.
+// trace:BUG-1698 | ai:claude
+pub(crate) fn aida_mcp_server_config_json() -> String {
+    serde_json::json!({
+        "mcpServers": {
+            "aida": {
+                "command": "aida",
+                "args": ["mcp-serve"]
+            }
+        }
+    })
+    .to_string()
 }
 
 fn claude_contained_settings_json() -> String {
@@ -2743,7 +2829,7 @@ pub fn exec_vendor_headless(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .spawn()
+        .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     if vendor != HeadlessVendor::Claude {
         if let Some(id) = lease_id {
@@ -2985,7 +3071,7 @@ pub fn spawn_claude_headless_resume(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
     tee.stop();
     Ok(status)
@@ -4129,26 +4215,24 @@ mod tests {
     /// test acquires this at its top; mutators still set/remove the var within
     /// their body — those changes are also undone by the drop restore.
     /// trace:BUG-581 | ai:claude
+    // BUG-697 / TASK-1532: route through EnvVarGuard. trace:BUG-581 trace:TASK-1532 | ai:agy
     struct OsWrapEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarGuard,
     }
 
     impl OsWrapEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved = std::env::var_os("AIDA_OS_WRAP");
-            std::env::remove_var("AIDA_OS_WRAP");
-            Self { _lock: lock, saved }
-        }
-    }
-
-    impl Drop for OsWrapEnvGuard {
-        fn drop(&mut self) {
-            match &self.saved {
-                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-                None => std::env::remove_var("AIDA_OS_WRAP"),
+            Self {
+                _guard: crate::test_env::EnvVarGuard::unset("AIDA_OS_WRAP"),
             }
+        }
+
+        fn set(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.reset(val);
+        }
+
+        fn unset(&mut self) {
+            self._guard.reset_unset();
         }
     }
 
@@ -4197,44 +4281,33 @@ mod tests {
     }
 
     /// RAII guard for the `AIDA_AGENT_CMD` resolver tests. It shares the
-    /// `OS_WRAP_ENV_LOCK` so it is mutually exclusive with the os_wrap
+    /// `ENV_LOCK` so it is mutually exclusive with the os_wrap
     /// program-resolution tests — those call `claude_program_and_args`, which now
     /// reads `AIDA_AGENT_CMD`, so a concurrently-set override must never leak into
     /// their clean-baseline `program == "claude"` assertions. Saves + clears both
     /// `AIDA_AGENT_CMD` and `AIDA_OS_WRAP` on construct (a clean, os_wrap-off
     /// baseline), restores both on drop.
-    // trace:TASK-1081 | ai:claude
+    // trace:TASK-1081 trace:TASK-1532 | ai:agy
     struct AgentCmdEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved_cmd: Option<std::ffi::OsString>,
-        saved_wrap: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarsGuard,
     }
 
     impl AgentCmdEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved_cmd = std::env::var_os("AIDA_AGENT_CMD");
-            let saved_wrap = std::env::var_os("AIDA_OS_WRAP");
-            std::env::remove_var("AIDA_AGENT_CMD");
-            std::env::remove_var("AIDA_OS_WRAP");
             Self {
-                _lock: lock,
-                saved_cmd,
-                saved_wrap,
+                _guard: crate::test_env::EnvVarsGuard::apply(&[
+                    ("AIDA_AGENT_CMD", None),
+                    ("AIDA_OS_WRAP", None),
+                ]),
             }
         }
-    }
 
-    impl Drop for AgentCmdEnvGuard {
-        fn drop(&mut self) {
-            match &self.saved_cmd {
-                Some(v) => std::env::set_var("AIDA_AGENT_CMD", v),
-                None => std::env::remove_var("AIDA_AGENT_CMD"),
-            }
-            match &self.saved_wrap {
-                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-                None => std::env::remove_var("AIDA_OS_WRAP"),
-            }
+        fn set_cmd(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.set_key("AIDA_AGENT_CMD", val);
+        }
+
+        fn unset_cmd(&mut self) {
+            self._guard.unset_key("AIDA_AGENT_CMD");
         }
     }
 
@@ -4246,7 +4319,7 @@ mod tests {
     // trace:TASK-1081 | ai:claude
     #[test]
     fn agent_cmd_override_swaps_program_keeps_argv() {
-        let _env = AgentCmdEnvGuard::acquire();
+        let mut _env = AgentCmdEnvGuard::acquire();
 
         // Unset → the native vendor binaries, byte-identical to today.
         assert_eq!(resolve_agent_program("claude"), "claude");
@@ -4254,7 +4327,7 @@ mod tests {
 
         // Set at a trivial fake exe → that program replaces every vendor binary.
         let fake = "/tmp/aida-fake-agent-task-1081";
-        std::env::set_var("AIDA_AGENT_CMD", fake);
+        _env.set_cmd(fake);
         assert_eq!(resolve_agent_program("claude"), fake);
         assert_eq!(resolve_agent_program("codex"), fake);
 
@@ -4269,9 +4342,9 @@ mod tests {
         assert_eq!(args, claude_args, "argv is passed through unchanged");
 
         // Empty / whitespace override is treated as unset — fall back to native.
-        std::env::set_var("AIDA_AGENT_CMD", "   ");
+        _env.set_cmd("   ");
         assert_eq!(resolve_agent_program("claude"), "claude");
-        std::env::remove_var("AIDA_AGENT_CMD");
+        _env.unset_cmd();
         assert_eq!(resolve_agent_program("claude"), "claude");
     }
 
@@ -5474,34 +5547,28 @@ mod tests {
             )));
     }
 
-    // STORY-683 / BUG-697: serialize the tests that mutate the process-global
-    // `AIDA_HEADLESS_VENDOR` env var on the ONE shared env lock
-    // (crate::test_env::env_lock) — same parallel-env hazard as os_wrap.
-
+    // STORY-683 / BUG-697 / TASK-1532: route through EnvVarGuard. trace:TASK-1532 | ai:agy
     struct HeadlessVendorEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarGuard,
     }
 
     impl HeadlessVendorEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved = std::env::var_os("AIDA_HEADLESS_VENDOR");
-            std::env::remove_var("AIDA_HEADLESS_VENDOR");
+            let guard = crate::test_env::EnvVarGuard::unset("AIDA_HEADLESS_VENDOR");
             // TASK-1116: the flag-override tier is a process-global too — clear
             // it under the same lock so a prior override-setting test can never
             // leak into an env/knob/default assertion.
             set_headless_vendor_override(None);
-            Self { _lock: lock, saved }
+            Self { _guard: guard }
+        }
+
+        fn set(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.reset(val);
         }
     }
 
     impl Drop for HeadlessVendorEnvGuard {
         fn drop(&mut self) {
-            match &self.saved {
-                Some(v) => std::env::set_var("AIDA_HEADLESS_VENDOR", v),
-                None => std::env::remove_var("AIDA_HEADLESS_VENDOR"),
-            }
             // TASK-1116: reset the override tier so it does not survive the test.
             set_headless_vendor_override(None);
         }
@@ -5731,16 +5798,16 @@ mod tests {
     /// trace:STORY-683 | ai:claude
     #[test]
     fn resolve_headless_vendor_env_override() {
-        let _env = HeadlessVendorEnvGuard::acquire();
+        let mut _env = HeadlessVendorEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "nonsense");
+        _env.set("nonsense");
         assert_eq!(
             resolve_headless_vendor(tmp.path()),
             HeadlessVendor::Claude,
@@ -5901,10 +5968,10 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn preflight_vendor_binary_fails_closed_for_unreachable_binary() {
-        let _env = AgentCmdEnvGuard::acquire();
+        let mut _env = AgentCmdEnvGuard::acquire();
         let missing = "/tmp/aida-bug-1607-missing-agent-binary-does-not-exist";
         let _ = std::fs::remove_file(missing);
-        std::env::set_var("AIDA_AGENT_CMD", missing);
+        _env.set_cmd(missing);
 
         // A tempdir standing in for "nothing has been created yet" — the
         // state right before `session_start` would mint a lease/worktree.
@@ -5932,11 +5999,11 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn preflight_vendor_binary_succeeds_for_reachable_binary() {
-        let _env = AgentCmdEnvGuard::acquire();
+        let mut _env = AgentCmdEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
         let fake = tmp.path().join("fake-agent");
         std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
-        std::env::set_var("AIDA_AGENT_CMD", fake.to_str().unwrap());
+        _env.set_cmd(fake.to_str().unwrap());
 
         preflight_vendor_binary(HeadlessVendor::Codex)
             .expect("an existing (mock) binary must pass the preflight");
@@ -5959,11 +6026,11 @@ mod tests {
     // trace:BUG-1607 | ai:claude
     #[test]
     fn preflight_launch_vendor_refuses_interactive_agy_even_when_binary_reachable() {
-        let _env = AgentCmdEnvGuard::acquire();
+        let mut _env = AgentCmdEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
         let fake = tmp.path().join("fake-agy");
         std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
-        std::env::set_var("AIDA_AGENT_CMD", fake.to_str().unwrap());
+        _env.set_cmd(fake.to_str().unwrap());
 
         // Binary IS reachable (the mock exists) — the old
         // `preflight_vendor_binary`-only check would have passed here,
@@ -6256,12 +6323,12 @@ mod tests {
     // trace:TASK-1116 | ai:claude
     #[test]
     fn resolve_headless_vendor_flag_override_wins_over_env_and_knob() {
-        let _env = HeadlessVendorEnvGuard::acquire();
+        let mut _env = HeadlessVendorEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
 
         // Set up the LOSING tiers: env says codex, the config knob says codex.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
             "[orchestrator]\nheadless_vendor = \"codex\"\n",
@@ -6285,12 +6352,12 @@ mod tests {
         );
 
         // Flipped: override codex still wins regardless of the lower tiers.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         set_headless_vendor_override(Some(HeadlessVendor::Codex));
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
 
         // TASK-1048: the agy override wins over the codex env + codex knobs too.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         set_headless_vendor_override(Some(HeadlessVendor::Agy));
         assert_eq!(
             resolve_headless_vendor(tmp.path()),
@@ -6299,7 +6366,7 @@ mod tests {
         );
 
         // Clearing the override falls back to the env/knob tiers (now claude).
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         set_headless_vendor_override(None);
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
     }
@@ -6640,7 +6707,7 @@ mod tests {
     fn aida_os_wrap_env_overrides_config() {
         // Serialize env mutation across the os_wrap tests + start clean; the
         // guard's drop restores the ambient AIDA_OS_WRAP (BUG-581). trace:BUG-581
-        let _env = OsWrapEnvGuard::acquire();
+        let mut _env = OsWrapEnvGuard::acquire();
 
         // Config says OFF (no config at all).
         let off_dir = tempfile::tempdir().unwrap();
@@ -6655,7 +6722,7 @@ mod tests {
 
         // Override ON forces true even when config is off.
         for truthy in ["1", "true", "TRUE", "Yes", " yes "] {
-            std::env::set_var("AIDA_OS_WRAP", truthy);
+            _env.set(truthy);
             assert!(
                 os_wrap_enabled(off_dir.path()),
                 "AIDA_OS_WRAP={truthy:?} must force os_wrap ON over an off config"
@@ -6664,7 +6731,7 @@ mod tests {
 
         // Override OFF forces false even when config is on.
         for falsey in ["0", "false", "FALSE", "No", " no "] {
-            std::env::set_var("AIDA_OS_WRAP", falsey);
+            _env.set(falsey);
             assert!(
                 !os_wrap_enabled(on_dir.path()),
                 "AIDA_OS_WRAP={falsey:?} must force os_wrap OFF over an on config"
@@ -6672,7 +6739,7 @@ mod tests {
         }
 
         // Unrecognized value → ignored → config wins.
-        std::env::set_var("AIDA_OS_WRAP", "maybe");
+        _env.set("maybe");
         assert!(
             !os_wrap_enabled(off_dir.path()),
             "garbage AIDA_OS_WRAP must fall through to the (off) config"
@@ -6683,7 +6750,7 @@ mod tests {
         );
 
         // Unset → config wins in both directions.
-        std::env::remove_var("AIDA_OS_WRAP");
+        _env.unset();
         assert!(!os_wrap_enabled(off_dir.path()));
         assert!(os_wrap_enabled(on_dir.path()));
     }
@@ -6697,7 +6764,7 @@ mod tests {
     fn interactive_path_wraps_when_enabled_unchanged_when_off() {
         // Serialize + clean env baseline; the guard restores it on drop
         // (BUG-581). trace:BUG-581
-        let _env = OsWrapEnvGuard::acquire();
+        let mut _env = OsWrapEnvGuard::acquire();
 
         let resolved_binary = "/usr/local/bin/claude";
         let args = vec![
@@ -6718,7 +6785,7 @@ mod tests {
         assert_eq!(out_args, args, "args unchanged when off");
 
         // ON via the env override.
-        std::env::set_var("AIDA_OS_WRAP", "1");
+        _env.set("1");
         let on_dir = tempfile::tempdir().unwrap();
         match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
             Ok((program, out_args)) => {

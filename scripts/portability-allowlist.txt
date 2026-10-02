@@ -217,3 +217,9 @@ toml-path-interpolation	aida-cli-lib/src/tests/story_827_init_readme_registry_te
 # text around the placeholder (`= \"{a}/x\"`, `= \"{a}{b}\"`), a
 # single-quoted literal (`= '{x}'`), and raw-string templates (r#"k = "{x}""#).
 # trace:BUG-1650 | ai:claude
+gnu-only-coreutils	scripts/ablations/ryo-friction-benchmark.sh:sed -i "s/^Blocks:.*/Blocks: $id/" "$dir/specs/$blockedby.md"
+gnu-only-coreutils	scripts/glyph-lint.sh:count=$(grep -oP "[$GLYPHS]" "$f" 2>/dev/null | wc -l || true)
+gnu-only-coreutils	scripts/multi-clone-harness.sh:HOME="$WORKDIR/home" sed -i \
+gnu-only-coreutils	scripts/release.sh:marker_epoch=$(date -d "$last_updated" +%s 2>/dev/null || true)
+gnu-only-coreutils	scripts/restart-mcp-servers.sh:exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null)" || continue
+gnu-only-coreutils	tests/test_restore_git_mtimes.sh:sed -i 's/Hello, world!/Changed/' "$fixture/src/main.rs"

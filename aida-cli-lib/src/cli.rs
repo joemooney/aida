@@ -166,10 +166,26 @@ pub enum InternalCommand {
     /// session that is not worktree-scoped.
     // trace:TASK-1178 | ai:claude
     WorktreeScopeGate,
+
+    /// Query effective solo mode for the Claude advisor-code-guard PreToolUse
+    /// hook. Exits 0 when solo mode is active and 1 when it is off; prints
+    /// nothing.
+    // trace:BUG-1748 | ai:codex
+    SoloActive,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Inspect or provision the three repository-level merge-hold label definitions.
+    // trace:BUG-1747 | ai:codex
+    Labels {
+        /// Create any definitions that are missing from this repository.
+        #[clap(long)]
+        create_missing: bool,
+        /// Emit one JSON document.
+        #[clap(long)]
+        json: bool,
+    },
     /// List every active merge-hold: marker-backed holds AND holds that exist
     /// only as the `aida:merge-hold` label (shown as `label-only (no marker)`).
     /// Each row is the held PR + the hold reason. A marker whose PR merged or
@@ -3478,6 +3494,9 @@ pub enum RemoteCommand {
     MirrorPush {
         /// The remote the triggering push targets (hook argument $1).
         pushed_remote: String,
+        /// Preview mirror updates without changing any mirror remote.
+        #[clap(long)]
+        dry_run: bool,
     },
 
     /// Push origin's tips of the default branch and the spec store to every
@@ -8195,9 +8214,18 @@ pub enum BriefCommand {
 pub enum AgentCommand {
     /// Launch a new agent process.
     ///
-    /// This lane spawns a one-shot agent that does its work, ships a PR, and
-    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
-    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
+    /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
+    /// to its prompt — so a seat that has finished its work still holds this command.
+    /// Budget for that: run it where you can leave it, or stop the seat with
+    /// `aida agent stop <name>` once it reports. To tell a finished seat from a working
+    /// one without attaching, read the CPU column in `aida agent status`: seconds of CPU
+    /// across hours of age means the seat is idle at its prompt. Do NOT rely on the
+    /// `status` column for that — it reports `busy` for a seat whose worktree any live
+    /// lease covers, which for the main checkout is effectively always.
+    ///
+    /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
+    /// phase, or the merge for you. For a supervised end-to-end drain
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
@@ -8443,8 +8471,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8580,8 +8615,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -8701,8 +8743,15 @@ pub enum AgentNewCommand {
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
+
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
 
         /// Do not send the automatic role-aware initial message.
         #[clap(long)]
@@ -14332,8 +14381,9 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
         assert!(matches!(
             cli.command,
-            Command::Remote(RemoteCommand::MirrorPush { pushed_remote })
+            Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
                 if pushed_remote == "origin"
+                    && !dry_run
         ));
     }
 
@@ -15271,6 +15321,18 @@ mod tests {
         assert!(
             flat.contains("--fail-on-findings"),
             "`aida doctor --help` no longer names --fail-on-findings; got:\n{help}"
+        );
+    }
+
+    // trace:TASK-200 | ai:codex
+    #[test]
+    fn agent_new_help_discloses_foreground_blocking_behavior() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["agent", "new"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("BLOCKS until") && flat.contains("does not exit when its turn ends"),
+            "`aida agent new --help` no longer explains the foreground blocking behavior; got:\n{help}"
         );
     }
 

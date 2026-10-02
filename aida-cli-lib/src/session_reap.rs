@@ -170,7 +170,8 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
         AgentWorktreeVerdict::Removable(reason) => {
             ReapVerdict::Reap(format!("spec finished, process exited, {reason}"))
         }
-        AgentWorktreeVerdict::Keep(reason) => ReapVerdict::Skip(reason),
+        // trace:BUG-1719 | ai:codex
+        AgentWorktreeVerdict::Keep { reason, .. } => ReapVerdict::Skip(reason),
     }
 }
 
@@ -402,9 +403,21 @@ pub(crate) fn spec_trailer_landed_on(
     branch: &str,
     spec: &str,
 ) -> bool {
+    spec_landing_commit(project_root, default_ref, branch, spec).is_some()
+}
+
+/// Return the first commit after `branch` diverged that names `spec` as
+/// delivered. This is the landing point used by recency checks.
+// trace:BUG-1718 | ai:codex
+pub(crate) fn spec_landing_commit(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+    spec: &str,
+) -> Option<String> {
     let spec = spec.trim();
     if spec.is_empty() || branch.trim().is_empty() {
-        return false;
+        return None;
     }
     let run = |args: &[&str]| -> Option<String> {
         std::process::Command::new("git")
@@ -423,34 +436,45 @@ pub(crate) fn spec_trailer_landed_on(
         default_ref,
         branch,
     ]) else {
-        return false;
+        return None;
     };
     let merge_base = merge_base.trim();
     if merge_base.is_empty() {
-        return false;
+        return None;
     }
     // `--grep` is a cheap literal pre-filter (it also matches longer ids that
     // share the prefix); the parsers below make the exact decision.
     let Some(log) = run(&[
         "log",
-        "--format=%B%x00",
+        "--format=%H%x00%B%x00",
         "--fixed-strings",
         "--regexp-ignore-case",
         &format!("--grep={spec}"),
         &format!("{merge_base}..{default_ref}"),
     ]) else {
-        return false;
+        return None;
     };
-    log.split('\0')
-        .map(str::trim)
-        .filter(|message| !message.is_empty())
-        .filter(|message| !is_plan_commit_subject(message.lines().next().unwrap_or("")))
-        .any(|message| {
-            extract_spec_ids_from_commit(message)
-                .into_iter()
-                .chain(extract_referenced_spec_ids_from_commit(message))
-                .any(|id| id.eq_ignore_ascii_case(spec))
-        })
+    let mut commits = log.split('\0');
+    let mut matches = Vec::new();
+    while let (Some(sha), Some(message)) = (commits.next(), commits.next()) {
+        let sha = sha.trim();
+        let message = message.trim();
+        if sha.is_empty()
+            || message.is_empty()
+            || is_plan_commit_subject(message.lines().next().unwrap_or(""))
+        {
+            continue;
+        }
+        if extract_spec_ids_from_commit(message)
+            .into_iter()
+            .chain(extract_referenced_spec_ids_from_commit(message))
+            .any(|id| id.eq_ignore_ascii_case(spec))
+        {
+            matches.push(sha.to_string());
+        }
+    }
+    // `git log` is newest-first; the landing is the oldest qualifying commit.
+    matches.pop()
 }
 
 /// Is `worktree`'s HEAD a symbolic ref to `refs/heads/<branch>`? A detached
@@ -687,9 +711,9 @@ pub(crate) fn gather_merge_facts_pinned(
     // of its own branch and no PR of its own; the landing commit on the
     // default branch names it in a trailer instead. Local and cheap, so it
     // runs before (and can spare) the forge lookup.
-    let spec_trailer_on_main = probe.is_some_and(|(default_ref, tip)| {
-        spec_trailer_landed_on(project_root, default_ref, tip, spec)
-    });
+    let landing_commit = probe
+        .and_then(|(default_ref, tip)| spec_landing_commit(project_root, default_ref, tip, spec));
+    let spec_trailer_on_main = landing_commit.is_some();
     // Only pay for the forge lookup when the cheap probes were inconclusive
     // (the squash-merge case) AND everything else already points at a reap.
     // The forge is asked by branch NAME; the content proof below still runs
@@ -885,6 +909,16 @@ fn reap_one(
     lease: &SessionLease,
     checked_tip: Option<&str>,
 ) -> String {
+    reap_one_with_missing_worktree_hook(project_root, lease, checked_tip, || {})
+}
+
+// trace:TASK-1543 | ai:codex
+fn reap_one_with_missing_worktree_hook(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    checked_tip: Option<&str>,
+    before_missing_worktree_clear: impl FnOnce(),
+) -> String {
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
     let branch = lease.branch.trim();
 
@@ -960,22 +994,76 @@ fn reap_one(
     }
     // A worktree directory removed by hand leaves a prunable registration
     // behind; clear it so no dangling entry still names the deleted branch.
-    // `prune` only drops entries whose directories are gone.
-    // trace:BUG-1657 | ai:claude
+    // Scope removal to this lease path rather than a repo-wide prune so
+    // another session's temporarily unavailable worktree keeps its registration.
+    // trace:BUG-1657 trace:TASK-1543 | ai:antigravity
     if worktree_missing {
-        let _ = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["worktree", "prune"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+        if !clear_missing_worktree_registration(
+            project_root,
+            &lease.worktree_path,
+            before_missing_worktree_clear,
+        ) && lease.worktree_path.exists()
+        {
+            return "reaped — lease released (worktree path reappeared; registration kept)"
+                .to_string();
+        }
     }
     if delete_branch_at(project_root, branch, checked_tip) {
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
         format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
     }
+}
+
+// Clear only the administrative registration for an absent lease path. Never
+// ask Git to remove a worktree here: the path can reappear after the early scan.
+// trace:TASK-1543 | ai:codex
+fn clear_missing_worktree_registration(
+    project_root: &std::path::Path,
+    worktree_path: &std::path::Path,
+    before_clear: impl FnOnce(),
+) -> bool {
+    if worktree_path.exists() {
+        return false;
+    }
+    before_clear();
+    if worktree_path.exists() {
+        return false;
+    }
+
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--git-common-dir"])
+        .output();
+    let Ok(output) = output else { return false };
+    if !output.status.success() {
+        return false;
+    }
+    let common_dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+    let common_dir = if common_dir.is_absolute() {
+        common_dir
+    } else {
+        project_root.join(common_dir)
+    };
+    let worktrees_dir = common_dir.join("worktrees");
+    let expected_gitdir = worktree_path.join(".git");
+    let Ok(entries) = std::fs::read_dir(worktrees_dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let admin_dir = entry.path();
+        let Ok(gitdir) = std::fs::read_to_string(admin_dir.join("gitdir")) else {
+            continue;
+        };
+        if std::path::Path::new(gitdir.trim()) == expected_gitdir {
+            if worktree_path.exists() {
+                return false;
+            }
+            return std::fs::remove_dir_all(admin_dir).is_ok();
+        }
+    }
+    false
 }
 
 /// Does local branch `branch` still point at `tip`? `None` (never pinned) or
@@ -1486,3 +1574,9 @@ mod task_1179_chain_suggest_tests;
 #[cfg(test)]
 #[path = "tests/bug_1657_batched_reap_tests.rs"]
 mod bug_1657_batched_reap_tests;
+
+// Reap polish: scoped missing worktree removal and porcelain -z lock detection.
+// trace:TASK-1543 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1543_reap_polish_tests.rs"]
+mod task_1543_reap_polish_tests;

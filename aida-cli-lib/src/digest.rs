@@ -1585,7 +1585,7 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
         process,
         capabilities,
     };
-    serde_json::to_string_pretty(&doc).context("serialize digest as JSON")
+    crate::cache_output::json_pretty(&doc).context("serialize digest as JSON")
 }
 
 // Internal Serialize for shapes only used by render_json (the cluster_prs /

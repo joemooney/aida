@@ -16,6 +16,7 @@
 //!
 //! trace:STORY-600 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use std::io::Write;
 use std::path::Path;
@@ -204,7 +205,7 @@ fn page_through(pager: &[String], content: &str) -> Result<()> {
     let mut child = Command::new(prog)
         .args(args)
         .stdin(Stdio::piped())
-        .spawn()?;
+        .spawn_retrying_etxtbsy()?;
     if let Some(mut stdin) = child.stdin.take() {
         // Ignore a broken pipe (user quit the pager early).
         let _ = stdin.write_all(content.as_bytes());

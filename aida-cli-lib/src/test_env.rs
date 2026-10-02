@@ -24,6 +24,8 @@
 //! local mutex. trace:TASK-521 trace:BUG-697 | ai:claude
 
 use std::ffi::{OsStr, OsString};
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 /// Global mutex serialising every env-var swap that routes through
@@ -34,15 +36,87 @@ use std::sync::{Mutex, MutexGuard};
 /// mutations are not hot.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+/// Process-unique token for the calling thread. `ThreadId::as_u64` is
+/// unstable, so [`env_lock`] mints its own monotonic token per thread to
+/// detect same-thread reentrance. Tokens are never reused, so a finished
+/// thread's token can never be mistaken for a live one. 0 means "unowned".
+static NEXT_THREAD_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    static THREAD_TOKEN: u64 = NEXT_THREAD_TOKEN.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Token of the thread currently holding the env lock, or 0 when unheld.
+static ENV_LOCK_OWNER: AtomicU64 = AtomicU64::new(0);
+
+fn thread_token() -> u64 {
+    THREAD_TOKEN.with(|t| *t)
+}
+
+/// TASK-1559: RAII wrapper around the env-lock guard that publishes the
+/// owning thread on acquire and clears it on release. `Drop` for this struct
+/// runs BEFORE its fields drop, so ownership is cleared while the mutex is
+/// still held — a waiter that acquires next can never observe a stale owner.
+/// It also runs on unwind, so a holder that panics does not leave ownership
+/// pointing at a dead thread (which would wedge that thread's later
+/// acquisitions into a spurious panic instead of succeeding).
+pub(crate) struct EnvLockGuard {
+    _inner: MutexGuard<'static, ()>,
+}
+
+impl Drop for EnvLockGuard {
+    fn drop(&mut self) {
+        ENV_LOCK_OWNER.store(0, Ordering::Release);
+    }
+}
+
 /// BUG-697: the ONE process-global env lock. Every test helper that mutates
 /// or reads env-derived state must serialise on this — the module-local
 /// mutexes that used to guard individual keys now delegate here so a swap
 /// under one helper can never overlap a read/swap under another (the
 /// `setenv` realloc race). Poison-tolerant like the guards. Hold the returned
 /// guard for the whole mutate→read→restore window; do NOT nest a second
-/// acquisition (incl. an `EnvVarGuard`) under it — the lock is not reentrant.
-pub(crate) fn env_lock() -> MutexGuard<'static, ()> {
-    ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+/// acquisition (incl. an `EnvVarGuard`) under it — the lock is not reentrant,
+/// and TASK-1559 makes nesting panic immediately rather than hang.
+pub(crate) fn env_lock() -> EnvLockGuard {
+    let me = thread_token();
+    // TASK-1559: nesting is a hang, not an error, because the lock is not
+    // reentrant — so detect it BEFORE blocking and report it instead. A
+    // different thread's token here is ordinary contention: fall through and
+    // block. Only this thread ever writes or clears its own token, so a
+    // match cannot be a false positive.
+    if ENV_LOCK_OWNER.load(Ordering::Acquire) == me {
+        // A plain `panic!` rather than `assert_ne!`: the token values are an
+        // implementation detail, and `assert_ne!` would append a confusing
+        // "left: 1, right: 1" to the one message that has to be legible.
+        panic!(
+            "ENV_LOCK already held by this thread — do not nest env_lock() or \
+             construct an EnvVarGuard/EnvVarsGuard inside an env_lock() scope. \
+             Scope the guard to the window that needs it, or use EnvVarsGuard \
+             to set several keys under a single acquisition. This panic \
+             replaces the self-deadlock that nesting used to cause (TASK-1559)."
+        );
+    }
+    let inner = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    ENV_LOCK_OWNER.store(me, Ordering::Release);
+    EnvLockGuard { _inner: inner }
+}
+
+/// True when THIS thread is currently holding [`env_lock`] — i.e. whatever
+/// the ambient env says right now, this test put it there on purpose and no
+/// sibling can change it underneath.
+///
+/// BUG-1743: that distinction is what separates a test that *deliberately*
+/// points an env-derived anchor somewhere (and is therefore serialised
+/// against every other setter) from one that merely *inherited* a sibling's
+/// pin and is about to write into a temp tree it does not own and cannot
+/// keep alive. Only the second is a bug, and only this predicate can tell
+/// them apart: the paths themselves are indistinguishable, since both are
+/// `tempfile` roots under `/tmp`.
+// trace:BUG-1743 | ai:claude
+#[cfg(test)]
+pub(crate) fn holds_env_lock() -> bool {
+    ENV_LOCK_OWNER.load(Ordering::Acquire) == thread_token()
 }
 
 /// RAII guard that sets (or unsets) an env var for the guard's lifetime
@@ -55,7 +129,7 @@ pub(crate) struct EnvVarGuard {
     // _guard holds ENV_LOCK; field-ordered last so it drops after
     // `prev` is read by `Drop` — Rust drops fields in declaration order,
     // so the lock is the last thing released.
-    _guard: MutexGuard<'static, ()>,
+    _guard: EnvLockGuard,
 }
 
 /// Multi-key variant of [`EnvVarGuard`] for tests that need SEVERAL env
@@ -64,7 +138,7 @@ pub(crate) struct EnvVarGuard {
 /// lock ONCE and sets/restores every key under it. trace:TASK-818
 pub(crate) struct EnvVarsGuard {
     prev: Vec<(&'static str, Option<OsString>)>,
-    _guard: MutexGuard<'static, ()>,
+    _guard: EnvLockGuard,
 }
 
 impl EnvVarsGuard {
@@ -85,7 +159,7 @@ impl EnvVarsGuard {
     /// under test must hold one of these guards too, or it races the setters.
     // trace:TASK-148 | ai:claude
     pub(crate) fn apply(pairs: &[(&'static str, Option<&str>)]) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let mut prev = Vec::with_capacity(pairs.len());
         for (key, value) in pairs {
             prev.push((*key, std::env::var_os(key)));
@@ -113,11 +187,31 @@ impl EnvVarsGuard {
     /// the test process.
     // trace:BUG-1627 | ai:claude
     pub(crate) fn snapshot(keys: &[&'static str]) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         Self {
             prev,
             _guard: guard,
+        }
+    }
+
+    pub(crate) fn set_key(&mut self, key: &'static str, value: impl AsRef<OsStr>) {
+        if !self.prev.iter().any(|(k, _)| *k == key) {
+            self.prev.push((key, std::env::var_os(key)));
+        }
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var(key, value);
+        }
+    }
+
+    pub(crate) fn unset_key(&mut self, key: &'static str) {
+        if !self.prev.iter().any(|(k, _)| *k == key) {
+            self.prev.push((key, std::env::var_os(key)));
+        }
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(key);
         }
     }
 }
@@ -143,7 +237,7 @@ impl EnvVarGuard {
     /// test doesn't cascade into "every later test panics on lock
     /// acquisition" and mask the real failure.
     pub(crate) fn set(key: &'static str, value: impl AsRef<OsStr>) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK; no other test routed through
         // this helper mutates env vars without acquiring the same lock.
@@ -161,7 +255,7 @@ impl EnvVarGuard {
     /// Remove `key` for the guard's lifetime. Same locking + restoration
     /// discipline as [`Self::set`].
     pub(crate) fn unset(key: &'static str) -> Self {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let guard = env_lock();
         let prev = std::env::var_os(key);
         // SAFETY: serialised by ENV_LOCK.
         #[allow(unused_unsafe)]
@@ -193,6 +287,33 @@ impl EnvVarGuard {
         #[allow(unused_unsafe)]
         unsafe {
             std::env::remove_var(self.key);
+        }
+    }
+
+    /// Acquire the crate-wide env lock, prepend `dir` to `PATH`, and restore
+    /// the previous `PATH` on drop. Prepending (instead of overwriting) keeps
+    /// existing PATH binaries reachable from concurrent subprocesses.
+    // trace:TASK-1532 | ai:agy
+    pub(crate) fn prepend_path(dir: impl AsRef<Path>) -> Self {
+        let guard = env_lock();
+        let prev = std::env::var_os("PATH");
+        let new = match &prev {
+            Some(v) => {
+                let mut s = std::ffi::OsString::from(dir.as_ref().as_os_str());
+                s.push(":");
+                s.push(v);
+                s
+            }
+            None => dir.as_ref().as_os_str().to_os_string(),
+        };
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var("PATH", &new);
+        }
+        Self {
+            key: "PATH",
+            prev,
+            _guard: guard,
         }
     }
 }
@@ -280,6 +401,90 @@ impl Drop for AmbientGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// TASK-1559 AC1: a second `env_lock()` on a thread that already holds it
+    /// panics immediately instead of self-deadlocking.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn nested_env_lock_panics_instead_of_deadlocking() {
+        let _outer = env_lock();
+        let _inner = env_lock();
+    }
+
+    /// TASK-1559 AC2: constructing an `EnvVarGuard` inside an `env_lock()`
+    /// scope panics. This is the exact shape that shipped in TASK-1532 —
+    /// `publish_fixture_receipt` held the lock and then set a guard under it —
+    /// so it is the case the tripwire exists for.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn env_var_guard_inside_env_lock_scope_panics() {
+        let _outer = env_lock();
+        let _guard = EnvVarGuard::set("AIDA_TEST_GUARD_REENTRANCE", "x");
+    }
+
+    /// TASK-1559 AC2: the multi-key guard is covered too — it acquires the
+    /// same lock, so nesting it is the same defect.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    #[should_panic(expected = "ENV_LOCK already held by this thread")]
+    fn env_vars_guard_inside_env_lock_scope_panics() {
+        let _outer = env_lock();
+        let _guard = EnvVarsGuard::set(&[("AIDA_TEST_GUARD_REENTRANCE_MULTI", "x")]);
+    }
+
+    /// TASK-1559 AC3 + AC4: the tripwire must not fire on legitimate use.
+    /// Sequential same-thread acquisitions, a hand-off to another thread, and
+    /// genuine cross-thread contention all still succeed.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    fn sequential_and_cross_thread_acquisition_still_work() {
+        // AC4: acquire/release/acquire on one thread.
+        drop(env_lock());
+        drop(env_lock());
+
+        // AC4: released here, acquired on a different thread — ownership must
+        // not be left behind pointing at this thread.
+        std::thread::spawn(|| drop(env_lock())).join().unwrap();
+        // ...and back again, so the other thread left nothing behind either.
+        drop(env_lock());
+
+        // AC3: cross-thread contention. The waiter signals before it tries to
+        // acquire and this thread only releases afterwards. That ordering does
+        // not *guarantee* the waiter is parked in the mutex when the release
+        // happens, but either interleaving must complete without panicking,
+        // which is the property under test — a stale or cross-thread owner
+        // would trip the assert instead.
+        let held = env_lock();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            tx.send(()).unwrap();
+            let _g = env_lock();
+            "acquired"
+        });
+        rx.recv().unwrap();
+        drop(held);
+        assert_eq!(waiter.join().unwrap(), "acquired");
+
+        // The lock is free and unowned again.
+        drop(env_lock());
+    }
+
+    /// TASK-1559 AC5: a holder that panics must clear ownership on unwind.
+    /// If it did not, this thread's next acquisition would hit the reentrance
+    /// tripwire instead of succeeding — trading the old deadlock for a new
+    /// spurious panic.
+    // trace:TASK-1559 | ai:claude
+    #[test]
+    fn env_lock_ownership_is_cleared_when_a_holder_panics() {
+        let outcome = std::panic::catch_unwind(|| {
+            let _g = env_lock();
+            panic!("poisoning the env lock intentionally");
+        });
+        assert!(outcome.is_err());
+        drop(env_lock());
+    }
 
     /// Setting then dropping restores the prior value (when one existed).
     #[test]
@@ -430,4 +635,232 @@ mod tests {
         drop(g);
         assert!(std::env::var(KEY).is_err());
     }
+
+    /// TASK-1532 acceptance 2: A source-scan test fails on any raw
+    /// set_var/remove_var in test code outside the helpers.
+    // trace:TASK-1532 | ai:agy
+    #[test]
+    fn no_raw_env_writes_in_test_code() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut offenders = scan_raw_env_writes_in_dir(&manifest_dir.join("src"));
+        if manifest_dir.join("tests").is_dir() {
+            offenders.extend(scan_raw_env_writes_in_dir(&manifest_dir.join("tests")));
+        }
+        assert!(
+            offenders.is_empty(),
+            "found raw env::set_var / remove_var in test code outside helpers:\n{}",
+            offenders.join("\n")
+        );
+    }
+}
+
+/// Scan `src_dir` for raw `env::set_var` / `env::remove_var` in test code.
+pub(crate) fn scan_raw_env_writes_in_dir(src_dir: &Path) -> Vec<String> {
+    let mut offenders = Vec::new();
+    let mut stack = vec![src_dir.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|e| e == "rs") {
+                let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if file_name == "test_env.rs" || file_name == "test_home.rs" {
+                    continue;
+                }
+                let is_test_file = p.components().any(|c| c.as_os_str() == "tests");
+                let content = match std::fs::read_to_string(&p) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                let lines: Vec<&str> = content.lines().collect();
+                if is_test_file {
+                    for (i, line) in lines.iter().enumerate() {
+                        let trimmed = line.trim_start();
+                        if trimmed.starts_with("//")
+                            || trimmed.starts_with("*")
+                            || trimmed.starts_with("/*")
+                        {
+                            continue;
+                        }
+                        if line.contains("allow-raw-env-write:") {
+                            continue;
+                        }
+                        if line.contains("env::set_var(") || line.contains("env::remove_var(") {
+                            offenders.push(format!("{}:{}: {}", p.display(), i + 1, line.trim()));
+                        }
+                    }
+                } else {
+                    // Scan #[cfg(...test...)] mod blocks
+                    let mut idx = 0;
+                    while idx < content.len() {
+                        let rest = &content[idx..];
+                        let pos = match rest.find("#[cfg(") {
+                            Some(p) => idx + p,
+                            None => break,
+                        };
+                        let bracket_close = match content[pos..].find(']') {
+                            Some(b) => pos + b,
+                            None => {
+                                idx = pos + "#[cfg(".len();
+                                continue;
+                            }
+                        };
+                        let attr = &content[pos..=bracket_close];
+                        if !attr.contains("test") {
+                            idx = bracket_close + 1;
+                            continue;
+                        }
+                        let after_cfg = bracket_close + 1;
+                        if let Some(brace_at) = find_mod_block_brace(&content, after_cfg) {
+                            if let Some(end_brace) = find_matching_brace(&content, brace_at) {
+                                let block = &content[brace_at..end_brace];
+                                let start_line = content[..brace_at].matches('\n').count() + 1;
+                                for (j, line) in block.lines().enumerate() {
+                                    let trimmed = line.trim_start();
+                                    if trimmed.starts_with("//")
+                                        || trimmed.starts_with("*")
+                                        || trimmed.starts_with("/*")
+                                    {
+                                        continue;
+                                    }
+                                    if line.contains("allow-raw-env-write:") {
+                                        continue;
+                                    }
+                                    if line.contains("env::set_var(")
+                                        || line.contains("env::remove_var(")
+                                    {
+                                        offenders.push(format!(
+                                            "{}:{}: {}",
+                                            p.display(),
+                                            start_line + j,
+                                            line.trim()
+                                        ));
+                                    }
+                                }
+                                idx = end_brace;
+                                continue;
+                            }
+                        }
+                        idx = after_cfg;
+                    }
+                }
+            }
+        }
+    }
+
+    offenders
+}
+
+fn find_mod_block_brace(source: &str, start: usize) -> Option<usize> {
+    let mut i = start;
+    let len = source.len();
+    while i < len {
+        let rest = &source[i..];
+        if let Some(c) = rest.chars().next() {
+            if c.is_whitespace() {
+                i += c.len_utf8();
+                continue;
+            }
+        }
+        if rest.starts_with("//") {
+            i = rest.find('\n').map_or(len, |p| i + p);
+            continue;
+        }
+        if rest.starts_with("/*") {
+            if let Some(p) = rest.find("*/") {
+                i += p + 2;
+                continue;
+            } else {
+                return None;
+            }
+        }
+        if rest.starts_with('#') {
+            if let Some(bracket_open) = rest.find('[') {
+                if let Some(bracket_close) = rest[bracket_open..].find(']') {
+                    i += bracket_open + bracket_close + 1;
+                    continue;
+                }
+            }
+            return None;
+        }
+        if rest.starts_with("mod ") || rest.starts_with("mod\t") || rest.starts_with("mod\n") {
+            let semi = rest.find(';');
+            let brace = rest.find('{');
+            match (semi, brace) {
+                (Some(s), Some(b)) if b < s => return Some(i + b),
+                (None, Some(b)) => return Some(i + b),
+                _ => return None,
+            }
+        }
+        break;
+    }
+    None
+}
+
+fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    let mut i = open_brace;
+    let len = source.len();
+
+    while i < len {
+        let rest = &source[i..];
+        if rest.starts_with("//") {
+            i = rest.find('\n').map_or(len, |p| i + p);
+            continue;
+        }
+        if rest.starts_with("/*") {
+            if let Some(p) = rest.find("*/") {
+                i += p + 2;
+                continue;
+            } else {
+                return None;
+            }
+        }
+        if rest.starts_with('"') {
+            i += 1;
+            while i < len {
+                if source.as_bytes()[i] == b'\\' {
+                    i += 2;
+                } else if source.as_bytes()[i] == b'"' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        if rest.starts_with('\'') {
+            i += 1;
+            while i < len {
+                if source.as_bytes()[i] == b'\\' {
+                    i += 2;
+                } else if source.as_bytes()[i] == b'\'' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            continue;
+        }
+        let c = rest.chars().next().unwrap();
+        if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(i + 1);
+            }
+        }
+        i += c.len_utf8();
+    }
+    None
 }

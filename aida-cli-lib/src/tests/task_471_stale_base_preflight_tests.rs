@@ -78,12 +78,10 @@ fn classify_with_gitignore_refuses_heuristic_target_dir() {
 
 #[cfg(unix)]
 fn fake_gh(dir: &std::path::Path, head_oid: &str) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
-
     let path = dir.join("gh");
-    std::fs::write(
-            &path,
-            format!(
+    crate::test_exec::write_executable(
+        &path,
+        format!(
                 "#!/bin/sh\n\
                  if [ \"$1\" = pr ] && [ \"$2\" = view ]; then\n\
                    printf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{}\",\"isCrossRepository\":false,\"headRepository\":{{\"nameWithOwner\":\"local/aida\"}},\"isDraft\":false}}'\n\
@@ -93,11 +91,7 @@ fn fake_gh(dir: &std::path::Path, head_oid: &str) -> std::path::PathBuf {
                  exit 1\n",
                 head_oid
             ),
-        )
-        .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 

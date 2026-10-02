@@ -71,11 +71,9 @@ fn interactive_mode_does_not_auto_rebase() {
 #[cfg(unix)]
 #[test]
 fn clean_auto_rebase_proceeds_without_retrying_preflight() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = tempfile::tempdir().unwrap();
     let fake_aida = tmp.path().join("aida");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_aida,
         "#!/bin/sh\n\
              if [ \"$1\" = pr ] && [ \"$2\" = rebase ] && [ \"$4\" = --no-smoke ]; then\n\
@@ -83,11 +81,7 @@ fn clean_auto_rebase_proceeds_without_retrying_preflight() {
              fi\n\
              echo unexpected aida args: \"$@\" >&2\n\
              exit 1\n",
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_aida, perms).unwrap();
+    );
 
     // BUG-409: make the fixture a fresh, fully-isolated git repo (the spec's
     // prescribed fix). The driver runs git/aida against `project_root`; an
@@ -127,8 +121,6 @@ fn clean_auto_rebase_proceeds_without_retrying_preflight() {
 #[cfg(unix)]
 #[test]
 fn force_push_refusal_is_typed_and_not_retryable() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = tempfile::tempdir().unwrap();
     let fake_aida = tmp.path().join("aida");
     // BUG-1295: exit code, not the echoed prose, is what the driver
@@ -136,14 +128,10 @@ fn force_push_refusal_is_typed_and_not_retryable() {
     // The message is still asserted below (it's still what a human/the
     // recovery hint sees), but it no longer drives classification, so it
     // is free to be reworded independently of this test.
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_aida,
         "#!/bin/sh\necho 'Refusing to force-push: remote commit not incorporated by patch-id. Force-pushing would DROP it. Recover by git fetch origin topic && git rebase origin/topic' >&2\nexit 18\n",
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_aida, perms).unwrap();
+    );
 
     let mut driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
     driver.aida_exe = fake_aida;
@@ -161,20 +149,14 @@ fn force_push_refusal_is_typed_and_not_retryable() {
 #[cfg(unix)]
 #[test]
 fn conflicting_rebase_is_typed_and_keeps_the_manual_recipe() {
-    use std::os::unix::fs::PermissionsExt;
-
     let tmp = tempfile::tempdir().unwrap();
     let fake_aida = tmp.path().join("aida");
     // BUG-1295: `17` = `pr_rebase::REBASE_EXIT_CODE_CONFLICT` — the exit
     // code drives classification now, not the echoed prose below.
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_aida,
         "#!/bin/sh\necho 'rebase hit 1 conflict(s) — aborted, worktree cleaned' >&2\necho 'Error: rebase aborted due to conflicts' >&2\nexit 17\n",
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&fake_aida, perms).unwrap();
+    );
 
     let mut driver = driver(Some(auto_complete::NoHumanMode::ReviewerOnly), false, false);
     driver.aida_exe = fake_aida;

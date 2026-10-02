@@ -180,6 +180,14 @@ pub struct AcquireOptions {
     /// vendors dependencies through `.gitmodules`.
     // trace:BUG-899 | ai:codex
     pub init_submodules: bool,
+    /// Opt-in parent directory for the worktrees this pool creates. `None` (the
+    /// default) keeps the historical sibling layout, `<project_root>/../<name>`.
+    /// When set, every created worktree lands at `<parent_dir>/<name>` instead,
+    /// so an editor/agent folder-trust grant on that ONE directory covers every
+    /// worktree AIDA will ever mint (folder trust inherits from a parent).
+    /// Resolved from `[worktree_pool] worktree_parent`.
+    // trace:BUG-1700 | ai:claude
+    pub parent_dir: Option<PathBuf>,
 }
 
 impl Default for AcquireOptions {
@@ -190,6 +198,7 @@ impl Default for AcquireOptions {
             lease_ttl_secs: None,
             post_create_hooks: Vec::new(),
             init_submodules: true,
+            parent_dir: None,
         }
     }
 }
@@ -393,15 +402,100 @@ fn next_pool_name(pool: &Pool, project_root: &Path) -> (String, usize) {
     }
 }
 
-fn pool_path_for(project_root: &Path, name: &str) -> PathBuf {
+/// Where a newly created AIDA worktree lands — the SINGLE placement rule for
+/// every worktree this crate or the CLI mints, pooled or not.
+///
+/// `parent_dir` is the opt-in `[worktree_pool] worktree_parent`: when set, every
+/// worktree is nested under that ONE directory so a single folder-trust grant
+/// covers all of them. When unset the historical sibling layout is preserved
+/// exactly, so nothing moves under a live fleet. A relative `parent_dir`
+/// resolves against the project root (an absolute one is used as given).
+///
+/// TASK-1561: public because the pool was NOT the only creator. The CLI's
+/// pickup fallback (`pickup_worktree_path`) open-coded the sibling half of this
+/// rule and never consulted `worktree_parent`, so every worktree minted when the
+/// warm pool could not serve one escaped the trusted parent. Two copies of a
+/// placement rule is how that happened; there is now one.
+// trace:BUG-1700 | ai:claude
+// trace:TASK-1561 | ai:claude
+pub fn worktree_placement_path(
+    project_root: &Path,
+    name: &str,
+    parent_dir: Option<&Path>,
+) -> PathBuf {
+    if let Some(parent) = parent_dir {
+        let base = if parent.is_absolute() {
+            parent.to_path_buf()
+        } else {
+            project_root.join(parent)
+        };
+        // TASK-1561: normalise, because this path is PRINTED (the `queue work
+        // --dry-run` preview) and COMPARED (git's worktree registry, and the
+        // folder-trust check's lexical `starts_with`). The documented relative
+        // example is `"../aida-worktrees"`, so the raw join spells the parent
+        // `<root>/../aida-worktrees` while `git worktree add` records
+        // `<root-parent>/aida-worktrees`. Preview and reality then disagree as
+        // strings for the same directory — the exact divergence BUG-1628
+        // consolidated these paths to prevent — and BUG-1700's trust comparison
+        // needed its own normaliser for the same reason.
+        //
+        // Lexical, not `canonicalize`: the directory need not exist yet. The
+        // caveat is a `..` that crosses a SYMLINKED project root, where the
+        // kernel would resolve it against the link target instead; the lexical
+        // reading is chosen deliberately because it is the one the operator
+        // wrote, and because it is what the folder-trust check already compares,
+        // so the single-grant guarantee holds.
+        return normalize_path_lexically(&base.join(name));
+    }
     // Siblings of the project root (../aida-pool-<slug>-<n>), matching AIDA's
     // existing `../aida-<slug>` worktree convention. Falls back to nesting
     // under the root if it has no parent (a filesystem root — never in
     // practice).
+    //
+    // NOT normalised: with the key unset this must stay byte-identical to the
+    // historical layout so nothing moves under a live fleet, and a project root
+    // that itself contains `..` would otherwise come back respelled.
     match project_root.parent() {
         Some(parent) => parent.join(name),
         None => project_root.join(name),
     }
+}
+
+/// Resolve `.` and `..` components WITHOUT touching the filesystem.
+///
+/// Deliberately lexical, not `canonicalize`: the comparisons this feeds must work
+/// for a directory that does not exist yet, and must not follow symlinks
+/// differently on the two sides. A leading `..` that would escape a relative root
+/// is kept, so one path cannot silently become a different one.
+///
+/// TASK-1561: lives here, beside the placement rule, because the two always
+/// travel together — a configured `worktree_parent` is relative in the shipped
+/// example, and every consumer of the resulting path either prints it or
+/// lexically compares it.
+// trace:BUG-1700 | ai:claude
+// trace:TASK-1561 | ai:claude
+pub fn normalize_path_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match out.components().next_back() {
+                // A real directory name is popped.
+                Some(Component::Normal(_)) => {
+                    out.pop();
+                }
+                // At the root, `..` is the root itself (`/..` is `/` on POSIX),
+                // so it is dropped rather than kept.
+                Some(Component::RootDir) | Some(Component::Prefix(_)) => {}
+                // A RELATIVE path with nothing to pop must KEEP the `..`;
+                // dropping it would turn one path into a different one.
+                _ => out.push(component.as_os_str()),
+            },
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Acquire a worktree from the pool: prefer an idle clean tree (reset-not-
@@ -460,7 +554,15 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         }
 
         let (name, _) = next_pool_name(pool, project_root);
-        let path = pool_path_for(project_root, &name);
+        let path = worktree_placement_path(project_root, &name, opts.parent_dir.as_deref());
+        // A configured worktree_parent may not exist yet; `git worktree add`
+        // will not create intermediate directories for us.
+        // trace:BUG-1700 | ai:claude
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("create worktree parent directory {}", parent.display())
+            })?;
+        }
         git_ops::add_detached_worktree(project_root, &path, &base_ref)
             .with_context(|| format!("create pool worktree {}", path.display()))?;
         git_ops::ensure_aida_runtime_excluded(&path)
@@ -789,6 +891,68 @@ mod tests {
         assert_eq!(n, 2);
     }
 
+    // BUG-1700: the opt-in `[worktree_pool] worktree_parent` derivation. Folder
+    // trust inherits from a parent directory, so nesting every AIDA-created
+    // worktree under one parent lets the operator trust it once.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn pool_path_defaults_to_sibling_of_project_root() {
+        let root = Path::new("/work/myrepo");
+        assert_eq!(
+            worktree_placement_path(root, "aida-pool-myrepo-0", None),
+            PathBuf::from("/work/aida-pool-myrepo-0"),
+            "unset worktree_parent must preserve the historical sibling layout"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn pool_path_uses_absolute_configured_parent() {
+        let root = Path::new("/work/myrepo");
+        assert_eq!(
+            worktree_placement_path(
+                root,
+                "aida-pool-myrepo-0",
+                Some(Path::new("/trusted/aida-worktrees"))
+            ),
+            PathBuf::from("/trusted/aida-worktrees/aida-pool-myrepo-0")
+        );
+    }
+
+    // A relative parent resolves against the project root, not the process cwd,
+    // so the layout does not depend on where `aida` was invoked from.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn pool_path_resolves_relative_configured_parent_against_project_root() {
+        let root = Path::new("/work/myrepo");
+        assert_eq!(
+            worktree_placement_path(root, "aida-pool-myrepo-0", Some(Path::new("../wt"))),
+            // TASK-1561: normalised, not `/work/myrepo/../wt/...` — this path is
+            // printed and lexically compared, so it must be spelled the way git
+            // and the folder-trust check spell it.
+            PathBuf::from("/work/wt/aida-pool-myrepo-0")
+        );
+    }
+
+    // AC3: two repos sharing ONE worktree_parent must not collide. The name is
+    // namespaced by the project dir slug, and that has to keep holding when the
+    // parent is shared explicitly rather than implied by `..`.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn distinct_projects_sharing_one_parent_do_not_collide() {
+        let shared = Path::new("/trusted/aida-worktrees");
+        let a = Path::new("/work/alpha");
+        let b = Path::new("/elsewhere/beta");
+        let (name_a, _) = next_pool_name(&Pool::default(), a);
+        let (name_b, _) = next_pool_name(&Pool::default(), b);
+        assert_ne!(name_a, name_b, "names are namespaced by project slug");
+        assert_ne!(
+            worktree_placement_path(a, &name_a, Some(shared)),
+            worktree_placement_path(b, &name_b, Some(shared)),
+            "two repos sharing one worktree_parent must not collide"
+        );
+    }
+
     #[test]
     fn read_state_empty_when_absent() {
         let dir = tempfile::tempdir().unwrap();
@@ -1036,20 +1200,10 @@ mod git_integration_tests {
         let root = repo.path();
         // `acquire` shells out to git, so the protocol allowance has to be in
         // the process env; hold the crate-wide env lock across the whole
-        // set -> acquire -> restore window. trace:BUG-1666 | ai:claude
-        let lock = crate::TEST_ENV_LOCK
-            .lock()
-            .unwrap_or_else(|err| err.into_inner());
-        let old = std::env::var_os("GIT_ALLOW_PROTOCOL");
-        std::env::set_var("GIT_ALLOW_PROTOCOL", "file");
+        // set -> acquire -> restore window. trace:BUG-1666 trace:TASK-1532 | ai:agy
+        let _env = crate::test_env::EnvVarGuard::set("GIT_ALLOW_PROTOCOL", "file");
 
         let path = acquire(root, &opts());
-
-        match old {
-            Some(v) => std::env::set_var("GIT_ALLOW_PROTOCOL", v),
-            None => std::env::remove_var("GIT_ALLOW_PROTOCOL"),
-        }
-        drop(lock);
         let path = path.unwrap();
         assert!(
             path.join("external/dep/README.md").is_file(),

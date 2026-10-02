@@ -6,6 +6,7 @@
 //! reports a recommended winner — report-only, never merges.
 // trace:SPIKE-78 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
@@ -750,7 +751,7 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
             "aida-compete",
         ])
         .current_dir(&project_root)
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false);
     if !commented {
@@ -804,7 +805,9 @@ fn spawn_judge(
     if judge_vendor.needs_stdin_closed() {
         judge_cmd.stdin(std::process::Stdio::null());
     }
-    let o = judge_cmd.output().context("failed to spawn the judge")?;
+    let o = judge_cmd
+        .output_retrying_etxtbsy()
+        .context("failed to spawn the judge")?;
     let mut s = String::from_utf8_lossy(&o.stdout).to_string();
     s.push_str(&String::from_utf8_lossy(&o.stderr));
     Ok(s)
@@ -892,7 +895,7 @@ fn run_compete_arm(
     let vendor_out = std::process::Command::new(command)
         .args(argv)
         .current_dir(&worktree_dir)
-        .output();
+        .output_retrying_etxtbsy();
     let ran = match &vendor_out {
         Ok(o) if o.status.success() => Ran::Ok,
         Ok(_) => Ran::Failed,
@@ -1049,7 +1052,7 @@ fn exclude_compete_logs_in_worktree(worktree_dir: &std::path::Path) {
 fn binary_on_path(name: &str) -> bool {
     std::process::Command::new(name)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }

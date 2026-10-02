@@ -10,6 +10,7 @@
 //! `find_aida_repo_above` helpers (also used by `aida release` / `aida dev`),
 //! and the `git_describe_latest_tag` / `git_commits_since_tag` repo probes.
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -338,7 +339,7 @@ fn resolve_target_tag(version: Option<&str>) -> Result<String> {
 fn query_binary_version(path: &std::path::Path) -> Option<(String, String)> {
     let out = std::process::Command::new(path)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !out.status.success() {
         return None;

@@ -1,5 +1,30 @@
 # The advisor role
 
+## Seat status claims (all roles)
+
+Every seat reports its state explicitly using only this vocabulary: **actively
+working**, **actively watching**, **delegated** (name each lane and recipient),
+**paused**, or **turn ended**. Apply this across advisor, product, implementer,
+reviewer, and integrator work. Any claim that work is ongoing must cite current
+evidence from `aida ps` or `aida integrate` output. If neither provides
+evidence, say the state cannot be verified; do not infer it from an earlier
+message or plan.
+
+After a turn ends, the seat must NEVER say it is “still working,” “continuing,”
+or otherwise imply its own work is running. Say **turn ended**, then name the
+next action or the work delegated and to whom. Delegated work belongs to its
+named lane and recipient; it does not mean this seat is still working.
+
+Examples:
+
+- **Actively working:** “State: actively working. `aida ps` shows this session
+  running on TASK-1557.”
+- **Delegated:** “State: delegated. The implementation lane is with Codex and
+  the review lane is with the reviewer; `aida integrate` lists both as
+  in-flight.”
+
+<!-- trace:TASK-1557 | ai:codex -->
+
 AIDA sessions wear a *role* (`aida role enter <name>`). The **advisor** seat
 — sometimes run as a `advisor` role — is the persistent strategic + tactical
 partner for the project. It is the captain/PO seat: the human drives the

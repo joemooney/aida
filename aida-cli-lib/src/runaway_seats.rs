@@ -1706,30 +1706,42 @@ mod tests {
         for i in 0..5 {
             write(&dir, &format!("big-{i}.jsonl"), &one);
         }
+        let fixture_bytes = 5 * one.len() as u64;
         let src = sources(tmp.path());
         let now = t0() + Duration::minutes(60);
+        // The default 10s scan budget would cut the run short on a slow host
+        // and leave the byte/file counts below, which are the real assertions
+        // here, measuring the cutoff instead of the work. This test is about
+        // bytes, not about the cutoff, so raise the cutoff out of the way and
+        // let the ceiling below catch a genuine hang. trace:BUG-1730
+        let policy = WatchdogPolicy {
+            time_budget_ms: 600_000,
+            ..WatchdogPolicy::default()
+        };
         let started = Instant::now();
-        let (_, coverage) = scan(
-            "aida",
-            &src,
-            &WatchdogPolicy::default(),
-            now,
-            &HashMap::new(),
-        );
+        let (_, coverage) = scan("aida", &src, &policy, now, &HashMap::new());
         assert!(!coverage.partial);
-        assert!(
-            started.elapsed().as_secs() < 3,
-            "took {:?}",
-            started.elapsed()
+        // "Bounded" is a claim about work, not about wall clock, so assert the
+        // work directly: exactly one pass over the fixture, no file read twice.
+        // This holds on any host, which the old `elapsed().as_secs() < 3` did
+        // not — it had barely 30% margin and went red under ordinary load.
+        // trace:BUG-1730
+        assert_eq!(coverage.files_scanned, 5);
+        assert_eq!(coverage.bytes_read, fixture_bytes);
+        // The real coverage is the two assertions above, which hold anywhere.
+        // The 3s budget is kept as a performance signal on a quiet host; the
+        // 60s ceiling is the hang guard and is enforced on every host.
+        crate::test_timing::assert_within_budget(
+            started,
+            std::time::Duration::from_secs(3),
+            std::time::Duration::from_secs(60),
+            "watchdog scan of 5 storm transcripts",
         );
-        let (_, again) = scan(
-            "aida",
-            &src,
-            &WatchdogPolicy::default(),
-            now,
-            &HashMap::new(),
-        );
+        let (_, again) = scan("aida", &src, &policy, now, &HashMap::new());
+        // `files_scanned` counts files with NEW bytes, so a steady-state
+        // rescan must touch none of them.
         assert_eq!(again.bytes_read, 0);
+        assert_eq!(again.files_scanned, 0);
     }
 
     #[test]

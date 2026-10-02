@@ -61,6 +61,12 @@ pub(crate) struct DrainMember {
     /// The PR number once a phase has discovered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pr: Option<u32>,
+    /// Head produced by phase 1 and verified against `pr`. Together these
+    /// fields are the durable handoff into phase 2; the local worktree branch
+    /// is only a fallback for legacy state.
+    // trace:BUG-1818 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) head_sha: Option<String>,
     /// RFC-3339 timestamp when this spec's drain run started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) started_at: Option<String>,
@@ -76,6 +82,7 @@ impl DrainMember {
             spec: spec.into(),
             state: STATE_QUEUED.to_string(),
             pr: None,
+            head_sha: None,
             started_at: None,
             finished_at: None,
         }
@@ -85,6 +92,21 @@ impl DrainMember {
     pub(crate) fn is_running(&self) -> bool {
         aida_core::liveness::drain_member_is_running(&self.state)
     }
+}
+
+/// Persist phase 1's verified forge identity and produced head before phase 2
+/// starts. Best-effort like the other live drain-state updates.
+// trace:BUG-1818 | ai:codex
+pub(crate) fn set_change_binding(project_root: &Path, spec: &str, pr: u32, head_sha: &str) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) else {
+        return;
+    };
+    member.pr = Some(pr);
+    member.head_sha = Some(head_sha.to_string());
+    let _ = state.write(project_root);
 }
 
 /// The full state of a live (or crashed) `--auto-complete` drain. Serialized
@@ -136,9 +158,22 @@ pub(crate) struct DrainState {
     // trace:STORY-1054 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) current_vendor: Option<String>,
+    /// Canonical review story selected for the current PR/MR. Persisting this
+    /// makes phase-3 retries reuse the same hand-off even when legacy duplicate
+    /// stories exist in different queue identities. trace:BUG-1817 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) review_spec: Option<String>,
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
+    /// RFC-3339 time of a deliberate stop request.
+    // trace:TASK-1542 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) stopped_at: Option<String>,
+    /// Free-text reason for a deliberate stop.
+    // trace:TASK-1542 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) stopped_reason: Option<String>,
     /// RFC-3339 timestamp the drain started.
     pub(crate) started_at: String,
     /// Plain-language prediction of the post-drain state — which queue items
@@ -312,7 +347,10 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
+            stopped_at: None,
+            stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_single(spec),
             run_uuid: run_uuid.to_string(),
@@ -339,7 +377,10 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
+            stopped_at: None,
+            stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_batch(batch_name),
             run_uuid: String::new(),
@@ -365,7 +406,10 @@ impl DrainState {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
+            stopped_at: None,
+            stopped_reason: None,
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_next_n(n),
             run_uuid: String::new(),
@@ -933,6 +977,16 @@ fn set_phase_inner_with_tuning(
     );
 }
 
+/// Persist the canonical phase-3 hand-off chosen by auto-queue. Best-effort,
+/// matching the rest of the drain observability state. trace:BUG-1817 | ai:codex
+pub(crate) fn set_review_spec(project_root: &Path, review_spec: &str) {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return;
+    };
+    state.review_spec = Some(review_spec.to_string());
+    let _ = state.write(project_root);
+}
+
 /// BUG-286: append a retry event to the live drain-state file. Best-effort —
 /// a missing drain-state file silently no-ops so non-orchestrator paths
 /// (`aida pull`, `aida push`, manual `gh pr view`) that piggy-back on
@@ -1066,6 +1120,11 @@ pub(crate) enum DrainStatus {
     /// crashed or was killed without cleaning up. `aida drain clear`
     /// removes it.
     Stale(DrainState),
+    /// The file exists, its `orchestrator_pid` is dead, AND the file records a
+    /// deliberate stop — a stopped wave, not a crash; resumable, and
+    /// `aida drain clear` removes the file.
+    // trace:TASK-1542 | ai:codex
+    Stopped(DrainState),
 }
 
 /// Context-aware next command for `aida drain status`.
@@ -1092,11 +1151,28 @@ pub(crate) fn probe(project_root: &Path) -> DrainStatus {
         Some(state) => {
             if process_probe::pid_is_alive(state.orchestrator_pid) {
                 DrainStatus::Active(state)
+            } else if state.stopped_at.is_some() {
+                DrainStatus::Stopped(state)
             } else {
                 DrainStatus::Stale(state)
             }
         }
     }
+}
+
+/// Stamp the deliberate-stop record on the drain-state file. Idempotent: the
+/// FIRST stop time wins, the reason is refreshed. Best-effort — a missing or
+/// unparseable file is a no-op. True when a record was written.
+// trace:TASK-1542 | ai:codex
+pub(crate) fn record_stopped(project_root: &Path, reason: &str) -> bool {
+    let Some(mut state) = DrainState::read(project_root) else {
+        return false;
+    };
+    if state.stopped_at.is_none() {
+        state.stopped_at = Some(chrono::Utc::now().to_rfc3339());
+    }
+    state.stopped_reason = Some(reason.to_string());
+    state.write(project_root).is_ok()
 }
 
 /// Render an RFC-3339 timestamp in the user's local timezone for display;
@@ -1493,7 +1569,28 @@ fn render_human_inner(
         },
     };
 
-    if stale {
+    let stopped = stale && state.stopped_at.is_some();
+    if stopped {
+        out.push_str(&format!(
+            "{}\n",
+            format!(
+                "{} Drain stopped — orchestrator (pid {}) exited after a stop request.",
+                glyph(crate::glyphs::Glyph::Warning),
+                state.orchestrator_pid
+            )
+            .yellow()
+            .bold()
+        ));
+        out.push_str(&format!(
+            "  Reason: {} · stopped {}\n\n",
+            state.stopped_reason.as_deref().unwrap_or("unknown"),
+            state
+                .stopped_at
+                .as_deref()
+                .map(fmt_local)
+                .unwrap_or_else(|| "unknown time".to_string())
+        ));
+    } else if stale {
         out.push_str(&format!(
             "{}\n",
             format!(
@@ -1598,6 +1695,8 @@ fn render_human_inner(
             ));
         }
         out.push_str(&format!("  On exit: {}\n", state.on_drain_complete));
+    } else if stopped {
+        out.push_str("  Run `aida drain clear` to remove this stopped drain's file.\n");
     } else {
         out.push_str("  Run `aida drain clear` to remove this stale file.\n");
     }
@@ -1724,11 +1823,11 @@ fn render_toon_inner(
 ) -> String {
     match status {
         DrainStatus::None => crate::toon::scalar("status", "none"),
-        DrainStatus::Active(state) | DrainStatus::Stale(state) => {
-            let status_word = if matches!(status, DrainStatus::Active(_)) {
-                "active"
-            } else {
-                "stale"
+        DrainStatus::Active(state) | DrainStatus::Stale(state) | DrainStatus::Stopped(state) => {
+            let status_word = match status {
+                DrainStatus::Active(_) => "active",
+                DrainStatus::Stopped(_) => "stopped",
+                _ => "stale",
             };
             let mut out = crate::toon::scalar("status", status_word);
             out.push('\n');
@@ -1784,13 +1883,13 @@ fn render_json_inner(
 ) -> String {
     let value = match status {
         DrainStatus::None => serde_json::json!({ "status": "none" }),
-        DrainStatus::Active(state) | DrainStatus::Stale(state) => {
+        DrainStatus::Active(state) | DrainStatus::Stale(state) | DrainStatus::Stopped(state) => {
             let mut obj = serde_json::to_value(state).unwrap_or_else(|_| serde_json::json!({}));
             if let Some(map) = obj.as_object_mut() {
-                let word = if matches!(status, DrainStatus::Active(_)) {
-                    "active"
-                } else {
-                    "stale"
+                let word = match status {
+                    DrainStatus::Active(_) => "active",
+                    DrainStatus::Stopped(_) => "stopped",
+                    _ => "stale",
                 };
                 map.insert("status".to_string(), serde_json::json!(word));
                 // Serde emitted `state.members`; the reader must see the VIEW.
@@ -1941,7 +2040,10 @@ mod tests {
             phase_attempt: None,
             current_session_id: None,
             current_vendor: None,
+            review_spec: None,
             orchestrator_pid: std::process::id(),
+            stopped_at: None,
+            stopped_reason: None,
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
             on_drain_complete: predict_single("STORY-301"),
             run_uuid: String::new(),
@@ -2498,6 +2600,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn review_spec_round_trips_for_retry_reuse() {
+        let dir = tempfile::tempdir().unwrap();
+        single_state().write(dir.path()).unwrap();
+        set_review_spec(dir.path(), "STORY-1817");
+        assert_eq!(
+            DrainState::read(dir.path()).unwrap().review_spec.as_deref(),
+            Some("STORY-1817")
+        );
+    }
+
     // set_member_outcome marks completed/failed and records the PR.
     #[test]
     fn set_member_outcome_marks_terminal_state() {
@@ -3043,5 +3156,142 @@ mod tests {
         assert!(predict_batch("autonomy-modes").contains("batch:autonomy-modes"));
         assert!(predict_batch("autonomy-modes").contains("NOT"));
         assert!(predict_next_n(3).contains("next 3"));
+    }
+
+    #[test]
+    // trace:TASK-1542 | ai:codex
+    fn task_1542_record_stop_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.orchestrator_pid = std::process::id().saturating_add(1_000_000);
+        state.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        let first = DrainState::read(dir.path()).unwrap().stopped_at.unwrap();
+        assert!(record_stopped(dir.path(), "changed"));
+        let reread = DrainState::read(dir.path()).unwrap();
+        assert_eq!(reread.stopped_at.as_deref(), Some(first.as_str()));
+        assert_eq!(reread.stopped_reason.as_deref(), Some("changed"));
+    }
+
+    #[test]
+    // trace:TASK-1542 | ai:codex
+    fn task_1542_probe_returns_stopped_stale_and_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut dead = single_state();
+        dead.orchestrator_pid = std::process::id().saturating_add(1_000_000);
+        dead.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        assert!(matches!(probe(dir.path()), DrainStatus::Stopped(_)));
+        dead.stopped_at = None;
+        dead.write(dir.path()).unwrap();
+        assert!(matches!(probe(dir.path()), DrainStatus::Stale(_)));
+        dead.orchestrator_pid = std::process::id();
+        dead.stopped_at = Some(chrono::Utc::now().to_rfc3339());
+        dead.write(dir.path()).unwrap();
+        assert!(matches!(probe(dir.path()), DrainStatus::Active(_)));
+    }
+
+    #[test]
+    // trace:TASK-1542 | ai:codex
+    fn task_1542_human_stopped_and_active_rendering() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.orchestrator_pid = std::process::id().saturating_add(1_000_000);
+        state.stopped_reason = Some("sigterm".into());
+        state.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        let probed = probe(dir.path());
+        assert!(matches!(&probed, DrainStatus::Stopped(_)));
+        let DrainStatus::Stopped(state) = probed else {
+            unreachable!()
+        };
+        let stopped = render_human_inner(&state, true, None, chrono::Utc::now());
+        assert!(stopped.contains("stopped") && stopped.contains("sigterm"));
+        assert!(!stopped.contains("crashed"));
+        let active = render_human_inner(&single_state(), false, None, chrono::Utc::now());
+        assert!(!active.contains("stopped") && !active.contains("Stale"));
+    }
+
+    /// The wind-down window: between the handler stamping the stop record and
+    /// the process actually exiting, the pid is still alive, so `probe` says
+    /// Active and the renderer must show the ORDINARY active report — a live
+    /// drain announced as "stopped" would read as finished while it is still
+    /// integrating. `stopped_at` alone must never flip the framing.
+    // trace:TASK-1542 | ai:claude
+    #[test]
+    fn task_1542_a_live_drain_carrying_a_stop_record_still_renders_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.orchestrator_pid = std::process::id();
+        state.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        let probed = probe(dir.path());
+        assert!(matches!(&probed, DrainStatus::Active(_)));
+        let DrainStatus::Active(live) = probed else {
+            unreachable!()
+        };
+        assert!(live.stopped_at.is_some(), "the record IS on the state");
+        let rendered = render_human_inner(&live, false, None, chrono::Utc::now());
+        assert!(rendered.contains("Active drain"));
+        assert!(!rendered.contains("Drain stopped"));
+        assert!(!rendered.contains("drain clear"));
+    }
+
+    #[test]
+    // trace:TASK-1542 | ai:codex
+    fn task_1542_json_and_toon_status_words() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.orchestrator_pid = std::process::id().saturating_add(1_000_000);
+        state.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        let stopped = probe(dir.path());
+        state.stopped_at = None;
+        state.stopped_reason = None;
+        state.write(dir.path()).unwrap();
+        let stale = probe(dir.path());
+        state.orchestrator_pid = std::process::id();
+        state.write(dir.path()).unwrap();
+        assert!(record_stopped(dir.path(), "sigterm"));
+        let active = probe(dir.path());
+        for (status, expected) in [(stopped, "stopped"), (stale, "stale"), (active, "active")] {
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&render_json_inner(
+                    &status,
+                    None,
+                    chrono::Utc::now()
+                ))
+                .unwrap()["status"],
+                expected
+            );
+            assert!(render_toon_inner(&status, None, chrono::Utc::now())
+                .contains(&format!("status: {expected}")));
+        }
+    }
+
+    #[test]
+    // trace:TASK-1542 | ai:codex
+    fn task_1542_record_stopped_missing_file_is_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!record_stopped(dir.path(), "sigterm"));
+        assert!(!drain_state_path(dir.path()).exists());
+    }
+
+    // trace:BUG-1818 | ai:codex
+    #[test]
+    fn bug_1818_phase1_change_binding_persists_identifier_and_exact_head() {
+        let dir = tempfile::tempdir().unwrap();
+        DrainState::new_single("BUG-1818", "run", false)
+            .write(dir.path())
+            .unwrap();
+
+        set_change_binding(dir.path(), "BUG-1818", 138, "abcdef0123456789");
+
+        let state = DrainState::read(dir.path()).unwrap();
+        assert_eq!(state.members[0].pr, Some(138));
+        assert_eq!(
+            state.members[0].head_sha.as_deref(),
+            Some("abcdef0123456789")
+        );
     }
 }

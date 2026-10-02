@@ -5,6 +5,7 @@
 //! `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use std::path::Path;
 
@@ -344,7 +345,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display, "--zen"]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display, "--zen"])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
         }
         AdvanceAction::Decision => {
@@ -360,7 +364,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
             println!(
                 "  {} tip: {} drains every ready item at once.",
@@ -763,7 +770,7 @@ fn print_queue_mutation_destination(
     if output_format_is_json() {
         println!(
             "{}",
-            serde_json::to_string_pretty(&queue_mutation_destination_json(
+            crate::cache_output::json_pretty(&queue_mutation_destination_json(
                 action, spec_id, title, details
             ))?
         );
@@ -7202,7 +7209,7 @@ pub(crate) fn handle_queue_progress(
     let empty_progress_json = |note: &str| -> Result<()> {
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": 0,
                 "in_progress": 0,
                 "done": 0,
@@ -7454,7 +7461,7 @@ pub(crate) fn handle_queue_progress(
             .into();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": remaining,
                 "in_progress": working,
                 "done": in_flight,
@@ -7791,7 +7798,7 @@ pub(crate) fn handle_rework_entry(
 fn run_aida_interactive(args: &[&str]) -> Result<()> {
     let status = std::process::Command::new(crate::aida_exe_path())
         .args(args)
-        .status()?;
+        .status_retrying_etxtbsy()?;
     anyhow::ensure!(status.success(), "`aida {}` failed", args.join(" "));
     Ok(())
 }
@@ -8357,12 +8364,12 @@ pub(crate) fn handle_queue_rework(
                         "--tags",
                         "loop-guard,review-recurrence",
                     ])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(finding.success(), "could not file repeated-review finding");
                 let brief = std::process::Command::new(&exe)
                     .current_dir(&root)
                     .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(
                     brief.success(),
                     "could not write repeated-review advisor brief"
@@ -8664,6 +8671,54 @@ pub(crate) fn queue_work_plan_wants_pr_head_branch(plan: &QueueWorkPlan) -> bool
                 "In Progress" | "InProgress" | "Done"
             )
         })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PreclaimDecision {
+    Proceed,
+    Refuse(String),
+}
+
+/// BUG-1761: the pre-claim collision decision for `aida queue work <SPEC>`.
+///
+/// The command used to signal "someone is already on this spec" only as a
+/// branch-name suffix. It had the information and discarded it: it had to
+/// check that `bug-1819` existed in order to pick `bug-1819-2`, so at that
+/// moment it knew a branch for the spec existed — and it bumped the status,
+/// took a lease and minted a worktree anyway, next to an open PR another
+/// agent was actively implementing.
+///
+/// Pure by design, in the shape of `dup_pickup_recheck`: the caller runs the
+/// forge and branch probes and passes primitives in, so the whole truth table
+/// is unit-testable without a forge. Ordering matters — an open PR is the more
+/// specific and more actionable collision, so it is reported in preference to
+/// the branch that PR is built on.
+///
+/// `branch_exists` must be false whenever the forge could not answer. A
+/// lookup failure means "cannot tell", not "no PR", and refusing on it would
+/// let a network blip block every pickup on the machine.
+// trace:BUG-1761 | ai:codex
+pub(crate) fn preclaim_collision_check(
+    spec_display: &str,
+    open_pr: Option<(u64, &str, &str)>,
+    branch: &str,
+    branch_exists: bool,
+    bypass: bool,
+) -> PreclaimDecision {
+    if bypass {
+        return PreclaimDecision::Proceed;
+    }
+    if let Some((number, title, url)) = open_pr {
+        return PreclaimDecision::Refuse(format!(
+            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display} --from-pr`, or take it over deliberately with `--force-claim`.",
+        ));
+    }
+    if branch_exists {
+        return PreclaimDecision::Refuse(format!(
+            "Branch `{branch}` exists, but no open PR was found for it. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
+        ));
+    }
+    PreclaimDecision::Proceed
 }
 
 fn rework_pr_head_branch_override(
@@ -9130,7 +9185,14 @@ pub(crate) fn resolve_queue_work_plan(
     // Composes with STORY-66/STORY-90 (auto-queue at PR-create) which
     // produce these stories. trace:TASK-85 | ai:claude
     if let Some((forge, n)) = parse_review_scope(arg) {
-        let matches: Vec<aida_core::QueueEntry> = entries
+        // Auto-queue writes under the producer's queue identity. Reviewers may
+        // run under a role-scoped or ordinary identity, so resolve PR/MR
+        // hand-offs from every queue file using the same reviewer-route
+        // semantics as the writer. trace:BUG-1817 | ai:codex
+        let review_entries = queue_role_fallback::queue_entries_routed_to_role(
+            storage, "reviewer", /* include_completed */ false,
+        )?;
+        let matches: Vec<aida_core::QueueEntry> = review_entries
             .iter()
             .filter(|e| {
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
@@ -9158,16 +9220,39 @@ pub(crate) fn resolve_queue_work_plan(
                 // classifier the review-envelope guard uses.
                 let why =
                     crate::classify_review_story_lookup(&entries, &store, forge, n).describe();
+                let identities = storage.queue_users().unwrap_or_default();
+                let searched = if identities.is_empty() {
+                    "no persisted queue identities".to_string()
+                } else {
+                    format!(
+                        "queue identities [{}] for role reviewer",
+                        identities.join(", ")
+                    )
+                };
                 anyhow::bail!(
-                    "no queued review story for {} ({}) — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) after searching {}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
                     why,
+                    searched,
                     n,
                     n
                 );
             }
-            1 => {
-                let entry = matches.into_iter().next().unwrap();
+            _ => {
+                // Legacy retries may have left duplicates. Select the same
+                // stable canonical story every time instead of blocking phase
+                // 3; auto-queue will stop creating new duplicates.
+                let persisted = find_main_worktree_root()
+                    .ok()
+                    .and_then(|root| drain_state::DrainState::read(&root))
+                    .and_then(|state| state.review_spec);
+                let canonical =
+                    canonical_review_story(&store, forge, n, None, persisted.as_deref())
+                        .and_then(|req| matches.iter().find(|e| e.requirement_id == req.id))
+                        .or_else(|| matches.iter().min_by_key(|e| e.requirement_id))
+                        .cloned()
+                        .expect("non-empty matches");
+                let entry = canonical;
                 let req = store
                     .requirements
                     .iter()
@@ -9197,26 +9282,6 @@ pub(crate) fn resolve_queue_work_plan(
                     anchor_display,
                     anchor_title: req.title.clone(),
                 });
-            }
-            _ => {
-                let label = format_review_label(forge, n);
-                let mut msg = format!(
-                    "{} matches {} queued review stories — pass the specific spec_id instead:",
-                    label,
-                    matches.len()
-                );
-                for e in &matches {
-                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    {
-                        let id = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or("?");
-                        msg.push_str(&format!("\n  · {} — {}", id, req.title));
-                    }
-                }
-                anyhow::bail!(msg);
             }
         }
     }
@@ -10762,7 +10827,9 @@ pub(crate) fn handle_queue_work(
     if contained {
         std::env::set_var("AIDA_CONTAINED", "1");
     }
-    let (permission_mode, permission_mode_origin) = if contained {
+    let explicit_permission_mode = permission_mode.is_some();
+    let mut bypass_prompt_declined = false;
+    let (mut permission_mode, permission_mode_origin) = if contained {
         (Some("dontAsk".to_string()), "contained sandbox")
     } else {
         resolve_queue_work_permission_mode(
@@ -10773,6 +10840,26 @@ pub(crate) fn handle_queue_work(
             plan_only,
         )
     };
+    // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
+    // orchestrated children already passed dispatch authority and must not hang.
+    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+        let orchestrated = project_root_for_config
+            .as_deref()
+            .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
+        if !orchestrated {
+            if let Some(root) = project_root_for_config.as_deref() {
+                let mut argv = vec![
+                    "--permission-mode".to_string(),
+                    "bypassPermissions".to_string(),
+                ];
+                crate::gate_agent_bypass(root, vendor, &mut argv, false, explicit_permission_mode)?;
+                if !argv.iter().any(|a| a == "bypassPermissions") {
+                    permission_mode = None;
+                    bypass_prompt_declined = true;
+                }
+            }
+        }
+    }
     if permission_mode.is_none() && !contained {
         maybe_show_faithful_launcher_notice();
     }
@@ -11053,7 +11140,16 @@ pub(crate) fn handle_queue_work(
         format!(
             "{} {}",
             permission_mode.as_deref().unwrap_or("native").cyan(),
-            format!("({})", permission_mode_origin).dimmed()
+            format!(
+                "({}{})",
+                permission_mode_origin,
+                if bypass_prompt_declined {
+                    "; prompt declined; native"
+                } else {
+                    ""
+                }
+            )
+            .dimmed()
         ),
     );
     line("skill", prompt.cyan().to_string());
@@ -11607,6 +11703,52 @@ pub(crate) fn handle_queue_work(
         ) {
             anyhow::bail!("{}", msg);
         }
+    }
+
+    // BUG-1761: the suffix allocator already knows when the spec branch is
+    // occupied; expose that collision before claiming status, lease, or tree.
+    // trace:BUG-1761 | ai:codex
+    let preclaim_orchestrator_corroborated = {
+        let root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        orchestrator::detect(&root).is_orchestrated()
+    };
+    let preclaim_review_session = plan.review_target.is_some()
+        || role == "reviewer"
+        || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+    let preclaim_bypass = force_claim
+        || queue_work_plan_wants_pr_head_branch(&plan)
+        || preclaim_review_session
+        || preclaim_orchestrator_corroborated
+        || resume.is_some()
+        || branch_override.is_some();
+    if !preclaim_bypass {
+        let (open_pr, branch_probe_allowed) =
+            match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
+                crate::PrLookup::Found(info) => (Some(info), false),
+                crate::PrLookup::NoOpenPr => (None, true),
+                // Forge failures mean unknown, not "no PR". Skip the branch
+                // refusal too, so an offline or gh-less pickup proceeds.
+                crate::PrLookup::GhMissing
+                | crate::PrLookup::GhFailed(_)
+                | crate::PrLookup::GhUnreachable(_) => (None, false),
+            };
+        let branch = slugify(&plan.scope);
+        let branch_exists =
+            branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+        if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
+            &plan.scope,
+            open_pr
+                .as_ref()
+                .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
+            &branch,
+            branch_exists,
+            preclaim_bypass,
+        ) {
+            anyhow::bail!("{}", msg);
+        };
     }
 
     // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
@@ -13412,7 +13554,7 @@ pub(crate) fn handle_queue_recover(
         std::process::Command::new(&aida)
             .current_dir(&project_root)
             .args(args)
-            .status()
+            .status_retrying_etxtbsy()
     };
     let run_git =
         |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
@@ -14381,7 +14523,7 @@ pub(crate) fn handle_queue_integrate(
                         let status = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(integrate::promotion_rebase_args(pr, &parent_sha))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match status {
                             Ok(s) if s.success() => {
                                 // The child now forks straight from the default
@@ -14819,7 +14961,7 @@ pub(crate) fn handle_queue_integrate(
                         let rb = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(build_integrate_rebase_args(pr))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match rb {
                             Ok(s) if s.success() => {
                                 println!(
@@ -14890,7 +15032,7 @@ pub(crate) fn handle_queue_integrate(
                 // before the parent loop finishes. trace:BUG-748 | ai:codex
                 .env("AIDA_DRAIN_BORROW", "1")
                 .args(integrate::drive_args(pr_num, integrate_headless))
-                .status();
+                .status_retrying_etxtbsy();
             match status {
                 Ok(s) if s.success() => {
                     integrated_total += 1;

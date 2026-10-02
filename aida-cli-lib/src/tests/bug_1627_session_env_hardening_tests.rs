@@ -53,14 +53,12 @@ fn bug_1627_nul_value_is_dropped_from_eval_lines() {
 
 /// `session start --launch` / `queue work`: a NUL value used to panic in
 /// `std::env::set_var`. Now it is skipped and the process env is untouched.
+// trace:TASK-1532 | ai:agy
 #[test]
 fn bug_1627_apply_session_env_to_process_skips_nul_values() {
-    let _restore = crate::test_env::EnvVarsGuard::snapshot(&SESSION_ENV_KEYS);
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var("CARGO_TARGET_DIR");
-        std::env::remove_var("AIDA_AGENT_TYPE");
-    }
+    let mut _restore = crate::test_env::EnvVarsGuard::snapshot(&SESSION_ENV_KEYS);
+    _restore.unset_key("CARGO_TARGET_DIR");
+    _restore.unset_key("AIDA_AGENT_TYPE");
     let applied = std::panic::catch_unwind(|| {
         apply_session_env_to_process(
             "export CARGO_TARGET_DIR='/w/tar\0get'\nexport AIDA_AGENT_TYPE='codex\0'\n",
@@ -128,11 +126,8 @@ fn bug_1627_agent_type_accepts_only_known_types() {
 /// The in-process path applies the same agent-type filter.
 #[test]
 fn bug_1627_apply_session_env_to_process_drops_unknown_agent_type() {
-    let _restore = crate::test_env::EnvVarsGuard::snapshot(&SESSION_ENV_KEYS);
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var("AIDA_AGENT_TYPE");
-    }
+    let mut _restore = crate::test_env::EnvVarsGuard::snapshot(&SESSION_ENV_KEYS);
+    _restore.unset_key("AIDA_AGENT_TYPE");
     let applied = apply_session_env_to_process("export AIDA_AGENT_TYPE='not-an-agent'\n");
     assert!(
         !applied.iter().any(|n| n == "AIDA_AGENT_TYPE"),

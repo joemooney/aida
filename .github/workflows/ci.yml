@@ -208,10 +208,24 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_mcp_doc_consistency.sh
 
+      # BUG-1693: the merge-hold gate is the server-side half of the
+      # integrity floor, so its fixtures must run against the shipped
+      # workflow/template rather than a copy of the logic. Build-free (it
+      # extracts and executes the YAML `run:` blocks), so it is not gated on
+      # full_ci — a docs-only PR can still touch the gate's prose.
+      # trace:BUG-1693 | ai:claude
+      - name: Run merge-hold gate fixtures
+        run: bash tests/test_merge_hold_gate.sh
+
       # STORY-670: advisor-code-guard PreToolUse hook decision matrix.
       - name: Run advisor-code-guard hook test
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_advisor_code_guard.sh
+
+      # BUG-1751: portable JSON parsing in the git guardrails PreToolUse hook.
+      - name: Run git-guardrails parse test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_git_guardrails_parse.sh
 
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
@@ -402,6 +416,10 @@ jobs:
       # prose-classification ratchet rule. trace:STORY-1382 | ai:claude
       - name: Prose-classification rule fixtures
         run: python3 -m unittest tests/test_prose_classification_rule.py
+
+      # BUG-1689: test fake_gh fixtures must use the ETXTBSY-safe shared writer.
+      - name: Executable fixture ratchet
+        run: python3 -m unittest tests/test_executable_fixture_ratchet.py
 
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'

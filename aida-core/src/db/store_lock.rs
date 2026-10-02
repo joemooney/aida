@@ -167,6 +167,11 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
     })
 }
 
+// trace:TASK-1526 | ai:codex
+pub(super) fn holding_write() -> bool {
+    HELD.with(|held| !held.borrow().is_empty())
+}
+
 /// Whether this thread currently holds the store write lock for `root`.
 #[cfg(test)]
 pub(crate) fn held_by_this_thread(root: &Path) -> bool {

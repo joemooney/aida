@@ -15,6 +15,7 @@ import pty
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 from test_mcp_stdio import McpClient, content_text, parse_spec_id
 
@@ -157,6 +158,9 @@ def main():
             target = scope + ":first"
             saved = run(*base, "--template", template, "--save-as-template", target)
             assert path.read_bytes() != before_inline
+            saved_config = tomllib.loads(path.read_text())
+            assert saved_config["history"]["keep"] == 1
+            assert saved_config["history"]["templates"]["first"] == template
             assert "Updated " in saved.stderr
             if scope == "project":
                 assert "commit this tracked config change" in saved.stderr
@@ -283,7 +287,15 @@ def main():
                             mcp = content_text(dates_client.tool("history", {"since": "2h", "limit": 2, "template": layout, **filt}))
                             assert mcp == wanted, (zone, mode, layout, mcp, wanted)
                     plain = json.loads(content_text(dates_client.tool("history", {"limit":100})))
+                    # TASK-1526 labels a stale-allowed read on BOTH surfaces with
+                    # the same in-band carrier, so this pre-existing CLI/MCP parity
+                    # assertion still holds unmodified. MCP additionally repeats the
+                    # label on its envelope (`structuredContent.cache`) plus a
+                    # trailing note, because it has no stderr for the note; that is
+                    # additive and must not replace the in-band `cache` key.
+                    # trace:TASK-1526 | ai:claude
                     assert plain == selected_dates
+                    assert selected_dates["cache"] == {"stale": False}
                 finally:
                     dates_client.close()
                 for alias in ["full", "oneline"]:

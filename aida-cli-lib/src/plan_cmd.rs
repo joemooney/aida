@@ -11,6 +11,7 @@
 //! `build_reusable_helpers_section` likewise stays in `main.rs` (shared with
 //! the `aida ultraplan` prompt assembler).
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
 pub(crate) fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
@@ -410,7 +411,7 @@ fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<Capt
     let view = std::process::Command::new(&gh)
         .current_dir(project_root)
         .args(["pr", "view", &n_str, "--json", "number,title,body,commits"])
-        .output()
+        .output_retrying_etxtbsy()
         .with_context(|| format!("`gh pr view {number}` failed to spawn"))?;
     if !view.status.success() {
         anyhow::bail!(
@@ -452,7 +453,7 @@ fn fetch_captured_pr(project_root: &std::path::Path, number: u64) -> Result<Capt
     let changed_files: Vec<String> = std::process::Command::new(&gh)
         .current_dir(project_root)
         .args(["pr", "diff", &n_str, "--name-only"])
-        .output()
+        .output_retrying_etxtbsy()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| {
@@ -575,7 +576,7 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                 } else {
                     let status = std::process::Command::new(crate::aida_exe_path())
                         .args(["edit", &real_id, "--status", "planned"])
-                        .status()?;
+                        .status_retrying_etxtbsy()?;
                     if status.success() {
                         println!(
                             "  {} {} → Planned (plan: {})",
@@ -846,7 +847,7 @@ fn plan_fan_out(
             );
             let status = std::process::Command::new(&exe)
                 .args(["queue", "work", sid, "--plan-only"])
-                .status()
+                .status_retrying_etxtbsy()
                 .with_context(|| format!("could not launch the plan session for {sid}"))?;
             if !status.success() {
                 eprintln!(
@@ -863,7 +864,7 @@ fn plan_fan_out(
 
         let status = std::process::Command::new(&exe)
             .args(["plan", "promote", sid])
-            .status()
+            .status_retrying_etxtbsy()
             .with_context(|| format!("could not run `aida plan promote {sid}`"))?;
         if status.success() {
             promoted += 1;

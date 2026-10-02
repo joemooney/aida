@@ -12,6 +12,7 @@
 // reaches all of it via `crate::`.
 // trace:SPIKE-78 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -610,7 +611,7 @@ pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
 fn agent_cli_detected(program: &str) -> bool {
     std::process::Command::new(program)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -1183,14 +1184,21 @@ fn write_memory_lane_artifact(
     Ok(true)
 }
 
-/// The skill packs the memory-lane footprint writes its two skills into:
-/// `.claude/skills`, the portable `.agents/skills`, and a legacy
-/// `.codex/skills` only when it already exists as a real directory.
-// trace:BUG-1639 | ai:claude
-fn memory_lane_skill_packs(root: &std::path::Path) -> Vec<&'static str> {
+/// The skill packs the memory-lane footprint writes its two skills into,
+/// based on the project's selected agent profiles.
+// trace:TASK-1528 | ai:codex
+fn memory_lane_skill_packs(
+    root: &std::path::Path,
+    include_portable: bool,
+    include_legacy_codex: bool,
+) -> Vec<&'static str> {
     use aida_core::scaffolding::inventory::{LEGACY_CODEX_PACK, PORTABLE_PACK};
-    let mut packs = vec![".claude/skills", PORTABLE_PACK];
-    let legacy_is_real_dir = aida_core::scaffolding::symlink_target(&root.join(".codex")).is_none()
+    let mut packs = vec![".claude/skills"];
+    if include_portable {
+        packs.push(PORTABLE_PACK);
+    }
+    let legacy_is_real_dir = include_legacy_codex
+        && aida_core::scaffolding::symlink_target(&root.join(".codex")).is_none()
         && std::fs::symlink_metadata(root.join(LEGACY_CODEX_PACK))
             .is_ok_and(|m| m.file_type().is_dir());
     if legacy_is_real_dir {
@@ -1228,10 +1236,12 @@ pub(crate) fn write_memory_lane_scaffolding(
         // trace:TASK-1503 | ai:claude
         let names: std::collections::BTreeSet<String> =
             MEMORY_LANE_SKILLS.iter().map(|n| n.to_string()).collect();
-        // `.agents/skills` is the pack Codex and Antigravity read; a legacy
-        // `.codex/skills` pack is kept level only when it already exists.
-        // trace:BUG-1639 | ai:claude
-        for pack in memory_lane_skill_packs(root) {
+        // `.agents/skills` is used only by Codex and Antigravity; legacy
+        // `.codex/skills` is kept only for selected Codex projects.
+        // trace:TASK-1528 | ai:codex
+        let selection = read_enabled_agent_selection(root).unwrap_or_else(AgentSelection::all);
+        let include_portable = selection.codex || selection.antigravity;
+        for pack in memory_lane_skill_packs(root, include_portable, selection.codex) {
             let mut plan = aida_core::scaffolding::refresh::plan_skill_pack(
                 root,
                 std::path::Path::new(pack),
@@ -4424,7 +4434,9 @@ pub(crate) fn handle_init_distributed_worktree(
                     .and_then(crate::forge::project_path_of);
                 if let Some(argv) = kind.set_default_branch_cmd(cb, project_ref.as_deref()) {
                     if let Some((prog, args)) = argv.split_first() {
-                        let out = std::process::Command::new(prog).args(args).output();
+                        let out = std::process::Command::new(prog)
+                            .args(args)
+                            .output_retrying_etxtbsy();
                         if let Ok(o) = out {
                             if o.status.success() {
                                 println!("  {} set forge default branch to {}", "Done".green(), cb);
@@ -5526,6 +5538,26 @@ mod task_1503_memory_lane_manifest_tests {
         );
         let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
         scaffolder.apply(&preview).unwrap();
+    }
+
+    // trace:TASK-1528 | ai:codex
+    #[test]
+    fn claude_only_memory_lane_does_not_write_portable_skills() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let store = aida_core::RequirementsStore::default();
+        super::write_enabled_agent_selection(
+            root,
+            super::AgentSelection {
+                claude: true,
+                codex: false,
+                antigravity: false,
+            },
+        )
+        .unwrap();
+        write_memory_lane_scaffolding(root, &store, "test", false, false).unwrap();
+        assert!(!root.join(".agents/skills").exists());
+        assert!(root.join(".claude/skills/aida-capture/SKILL.md").is_file());
     }
 
     /// BUG-1645 L4: memory-lane init's scaffold commit includes the per-pack

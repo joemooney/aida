@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-537 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -351,7 +352,7 @@ fn is_interactive() -> bool {
 fn is_on_path(bin: &str) -> bool {
     Command::new(bin)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -877,7 +878,12 @@ fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
 
 fn glab_config_path() -> Option<PathBuf> {
     // trace:TASK-1513 | ai:claude
-    aida_core::home::config_dir().map(|dir| dir.join("glab-cli").join("config.yml"))
+    // trace:TASK-1553 | ai:codex
+    aida_core::home::config_dir().map(|dir| {
+        #[cfg(test)]
+        crate::test_home::assert_hermetic(&dir);
+        dir.join("glab-cli").join("config.yml")
+    })
 }
 
 fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> {
@@ -1266,9 +1272,16 @@ pub fn mirror_pre_push_hook_script() -> String {
      # mirror failure warns and never blocks the push. Safe to delete;\n\
      # reinstall with `aida remote mirror <name>`.\n\
      unset GIT_DIR GIT_WORK_TREE\n\
-     # trace:TASK-154 | ai:codex\n\
+     # Git runs pre-push for dry-runs but omits the flag from the hook environment.\n\
+     git_args=$(ps -p \"$PPID\" -o args= 2>/dev/null) || { echo \"mirror-push: could not inspect git arguments; skipped\" >&2; exit 0; }\n\
+     case \" $git_args \" in *\" --dry-run \"*|*\" -n \"*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac\n\
+     # trace:BUG-1706 | ai:codex\n\
      if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then\n\
-     \u{20} aida remote mirror-push \"$1\" || true\n\
+     \u{20} if [ -n \"$mirror_dry_run\" ]; then\n\
+     \u{20} \u{20} aida remote mirror-push \"$1\" --dry-run || true\n\
+     \u{20} else\n\
+     \u{20} \u{20} aida remote mirror-push \"$1\" || true\n\
+     \u{20} fi\n\
      fi\n\
      exit 0\n"
         .to_string()
@@ -1303,11 +1316,16 @@ pub fn mirror_push_refspecs(ref_lines: &str) -> Vec<String> {
 
 /// `aida remote mirror-push <pushed-remote>` — the hook's plumbing target.
 /// Reads the pre-push ref lines from stdin and fans them out.
-pub fn handle_remote_mirror_push(project_root: &Path, pushed_remote: &str) -> Result<()> {
+// trace:BUG-1706 | ai:codex
+pub fn handle_remote_mirror_push(
+    project_root: &Path,
+    pushed_remote: &str,
+    dry_run: bool,
+) -> Result<()> {
     let mut ref_lines = String::new();
     use std::io::Read;
     std::io::stdin().lock().read_to_string(&mut ref_lines).ok();
-    run_mirror_push(project_root, pushed_remote, &ref_lines)
+    run_mirror_push(project_root, pushed_remote, &ref_lines, dry_run)
 }
 
 /// Fan the pushed refs out to every configured mirror hub. Every hub is
@@ -1321,7 +1339,12 @@ pub fn handle_remote_mirror_push(project_root: &Path, pushed_remote: &str) -> Re
 /// non-zero. The pre-push hook shim runs this with `|| true`, so the
 /// triggering origin push is still never blocked.
 // trace:BUG-1676 | ai:claude
-pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str) -> Result<()> {
+pub fn run_mirror_push(
+    project_root: &Path,
+    pushed_remote: &str,
+    ref_lines: &str,
+    dry_run: bool,
+) -> Result<()> {
     // Only a push to origin fans out — a push to a mirror (including the
     // hook's own nested pushes) is a no-op, which also breaks recursion.
     if pushed_remote != "origin" {
@@ -1362,21 +1385,26 @@ pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str
             );
             continue;
         }
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args([
-                "push",
-                "--quiet",
-                crate::git_arg_guard::END_OF_OPTIONS,
-                mirror,
-            ]) // trace:BUG-1622 | ai:claude
+        let mut command = Command::new("git");
+        command.arg("-C").arg(project_root).args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            "--quiet",
+        ]);
+        if dry_run {
+            command.arg("--dry-run");
+        }
+        let out = command
+            .arg(crate::git_arg_guard::END_OF_OPTIONS)
+            .arg(mirror) // trace:BUG-1622 | ai:claude
             .args(&refspecs)
             .output();
         match out {
             Ok(o) if o.status.success() => {
+                let action = if dry_run { "would mirror" } else { "mirrored" };
                 println!(
-                    "  mirrored {} ref(s) → {mirror}: {}",
+                    "  {action} {} ref(s) → {mirror}: {}",
                     refspecs.len(),
                     refspecs
                         .iter()
@@ -1384,6 +1412,12 @@ pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str
                         .collect::<Vec<_>>()
                         .join(", ")
                 );
+                if dry_run {
+                    let preview = String::from_utf8_lossy(&o.stdout);
+                    if !preview.trim().is_empty() {
+                        print!("{preview}");
+                    }
+                }
             }
             Ok(o) => {
                 let detail = git_push_failure_detail(&String::from_utf8_lossy(&o.stderr));
@@ -2999,6 +3033,86 @@ host = \"should.not.count\"
             s.trim_end().ends_with("exit 0"),
             "hook must never block the push"
         );
+        assert!(s.contains("--dry-run") && s.contains(" -n "));
+    }
+
+    #[test]
+    fn mirror_hook_forwards_dry_run_spellings_as_preview_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let log = tmp.path().join("calls");
+        let fake_aida = bin.join("aida");
+        // trace:BUG-1725 | ai:claude
+        crate::test_exec::write_executable(
+            &fake_aida,
+            format!(
+                "#!/bin/sh\nif [ \"$3\" = --help ]; then exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\n",
+                log.display()
+            ),
+        );
+        let fake_ps = bin.join("ps");
+        crate::test_exec::write_executable(
+            &fake_ps,
+            "#!/bin/sh\nprintf '%s\\n' \"$AIDA_TEST_PARENT_ARGS\"\n",
+        );
+        let hook = tmp.path().join("pre-push");
+        crate::test_exec::write_executable(&hook, mirror_pre_push_hook_script());
+
+        for args in ["git push --dry-run origin main", "git push origin main -n"] {
+            let status = Command::new("/bin/sh")
+                .arg(&hook)
+                .arg("origin")
+                .env("PATH", &bin)
+                .env("AIDA_TEST_PARENT_ARGS", args)
+                .stdin(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        let status = Command::new("/bin/sh")
+            .arg(&hook)
+            .arg("origin")
+            .env("PATH", &bin)
+            .env("AIDA_TEST_PARENT_ARGS", "git push origin main")
+            .stdin(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let calls = std::fs::read_to_string(log).unwrap();
+        let calls: Vec<_> = calls.lines().collect();
+        assert_eq!(
+            calls,
+            [
+                "remote mirror-push origin --dry-run",
+                "remote mirror-push origin --dry-run",
+                "remote mirror-push origin"
+            ]
+        );
+    }
+
+    #[test]
+    fn mirror_push_dry_run_does_not_update_mirror_ref() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let sha = init_repo_with_commit(&project);
+        let mirror = tmp.path().join("mirror.git");
+        git(tmp.path(), &["init", "-q", "--bare", "mirror.git"]);
+        git(
+            &project,
+            &["remote", "add", "mirror", mirror.to_str().unwrap()],
+        );
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[store.sync]\nmirror_remotes = [\"mirror\"]\n",
+        )
+        .unwrap();
+        let lines = format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
+
+        run_mirror_push(&project, "origin", &lines, true).unwrap();
+        assert!(git_out(&mirror, &["rev-parse", "refs/heads/main"]).is_none());
     }
 
     #[test]
@@ -3053,6 +3167,7 @@ host = \"should.not.count\"
             tmp.path(),
             "gitlab",
             "refs/heads/main x refs/heads/main y\n",
+            false,
         )
         .unwrap();
     }
@@ -3092,7 +3207,7 @@ host = \"should.not.count\"
         // mirror below), the unconfigured hub is a reported skip, and the
         // dead hub's failure now surfaces as a non-zero exit instead of a
         // silent 0.
-        let err = run_mirror_push(&project, "origin", &lines).unwrap_err();
+        let err = run_mirror_push(&project, "origin", &lines, false).unwrap_err();
         assert!(
             err.to_string().contains("1 mirror push(es) failed")
                 && err.to_string().contains("dead"),
@@ -3392,12 +3507,12 @@ host = \"should.not.count\"
         let sha = init_repo_with_commit(&project);
         // No mirrors configured at all → Ok, nothing pushed.
         let lines = format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
-        run_mirror_push(&project, "origin", &lines).unwrap();
+        run_mirror_push(&project, "origin", &lines, false).unwrap();
         // Only the store branch in the push → Ok, nothing to mirror.
         let store_only = format!("refs/heads/aida-store {sha} refs/heads/aida-store {ZEROS}\n");
-        run_mirror_push(&project, "origin", &store_only).unwrap();
+        run_mirror_push(&project, "origin", &store_only, false).unwrap();
         // A push to the mirror itself → Ok (recursion guard).
-        run_mirror_push(&project, "mirror", &lines).unwrap();
+        run_mirror_push(&project, "mirror", &lines, false).unwrap();
     }
 
     // One-command setup is idempotent: remote wired, config listed, hook

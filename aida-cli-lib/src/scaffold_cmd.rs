@@ -43,6 +43,23 @@ pub(crate) fn handle_scaffold_command(
             let config = crate::init_cmd::scaffold_config_for_project(&root);
             let status = check_scaffold_status(&store, &root, &config, db_path);
 
+            // Existing per-vendor packs remain maintained for compatibility;
+            // make their legacy status visible even when clean.
+            // trace:TASK-1519 | ai:codex
+            let legacy_packs: Vec<_> = [
+                (".codex/skills", "Codex"),
+                (".antigravity/skills", "Antigravity"),
+            ]
+            .into_iter()
+            .filter(|(path, _)| {
+                std::fs::symlink_metadata(root.join(path)).is_ok_and(|m| m.file_type().is_dir())
+            })
+            .map(|(path, vendor)| format!("{vendor}: {path}"))
+            .collect();
+            if !legacy_packs.is_empty() {
+                println!("Legacy skill packs maintained: {}", legacy_packs.join(", "));
+            }
+
             // Generate HTML report if requested
             if *report {
                 let html = generate_scaffold_html_report(&store, &root, &config, db_path, &status)?;
@@ -398,7 +415,13 @@ pub(crate) fn handle_scaffold_command(
 
             let dest = output.clone().unwrap_or_else(|| {
                 // trace:TASK-1513 | ai:claude
+                // trace:TASK-1553 | ai:codex
                 aida_core::home::config_dir()
+                    .map(|p| {
+                        #[cfg(test)]
+                        crate::test_home::assert_hermetic(&p);
+                        p
+                    })
                     .map(|p| p.join("aida/templates"))
                     .unwrap_or_else(|| std::path::PathBuf::from("templates"))
             });

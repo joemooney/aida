@@ -203,22 +203,10 @@ fn review_session_does_not_loosen_other_states() {
 // `session_start` with the backing spec id as `owns`. The reviewer role itself
 // must still classify the launch as review-shaped so Done remains reviewable.
 // trace:BUG-882 | ai:codex
+// trace:TASK-1532 | ai:agy
 #[test]
 fn reviewer_role_marks_spec_scoped_session_as_review() {
-    let _guard = crate::test_env::env_lock();
-    struct RestoreReviewVerdictFile(Option<String>);
-    impl Drop for RestoreReviewVerdictFile {
-        fn drop(&mut self) {
-            match self.0.as_ref() {
-                Some(path) => std::env::set_var("AIDA_REVIEW_VERDICT_FILE", path),
-                None => std::env::remove_var("AIDA_REVIEW_VERDICT_FILE"),
-            }
-        }
-    }
-
-    let _restore_verdict_file =
-        RestoreReviewVerdictFile(std::env::var("AIDA_REVIEW_VERDICT_FILE").ok());
-    std::env::remove_var("AIDA_REVIEW_VERDICT_FILE");
+    let _guard = crate::test_env::EnvVarGuard::unset("AIDA_REVIEW_VERDICT_FILE");
 
     assert!(
         session_start_is_review_session(None, Some("reviewer")),

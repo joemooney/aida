@@ -7,6 +7,7 @@
 //!
 //! trace:STORY-1052 | ai:codex
 
+use crate::process_retry::RetryEtxtbsy;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -679,7 +680,7 @@ fn queued_spec_ids() -> std::collections::HashSet<String> {
     let exe = crate::aida_exe_path();
     let Ok(out) = std::process::Command::new(exe)
         .args(["queue", "list", "--json"])
-        .output()
+        .output_retrying_etxtbsy()
     else {
         return set;
     };
@@ -734,7 +735,7 @@ fn queue_add_implementer(spec: &str) -> bool {
     let exe = crate::aida_exe_path();
     std::process::Command::new(exe)
         .args(["queue", "add", spec, "--for", "implementer", "--no-scope"])
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -742,7 +743,10 @@ fn queue_add_implementer(spec: &str) -> bool {
 /// Print the `aida awaiting` human-decision surface (best-effort).
 fn print_awaiting_surface() {
     let exe = crate::aida_exe_path();
-    if let Ok(out) = std::process::Command::new(exe).args(["awaiting"]).output() {
+    if let Ok(out) = std::process::Command::new(exe)
+        .args(["awaiting"])
+        .output_retrying_etxtbsy()
+    {
         let text = String::from_utf8_lossy(&out.stdout);
         if !text.trim().is_empty() {
             print!("{text}");

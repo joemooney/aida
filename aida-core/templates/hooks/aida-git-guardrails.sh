@@ -32,8 +32,48 @@ trap __aida_hook_unexpected_error ERR
 # Read the tool use from stdin
 INPUT=$(cat)
 
+# Deliberately duplicated in aida-advisor-code-guard.sh: scaffolded hooks are
+# self-contained, so keep this parser byte-identical in both templates.
+__aida_json_field() {
+    local field="$1"
+    awk -v wanted="$field" '
+    { text = text (NR > 1 ? "\n" : "") $0 }
+    END {
+        pattern = "\"" wanted "\"[ \t\r\n]*:[ \t\r\n]*\""
+        from = 1
+        while (from <= length(text) && match(substr(text, from), pattern)) {
+            start = from + RSTART - 1
+            before = start - 1
+            while (before > 0 && substr(text, before, 1) ~ /[ \t\r\n]/) before--
+            # Valid JSON escapes quotes of nested keys, so this branch is unreachable
+            # for well-formed input and is deliberately untested; retain malformed-input defense.
+            if (before == 0 || (substr(text, before, 1) != "{" && substr(text, before, 1) != ",")) {
+                from = start + RLENGTH
+                continue
+            }
+            i = start + RLENGTH
+            value = ""
+            while (i <= length(text)) {
+                c = substr(text, i, 1)
+                if (c == "\"") { printf "%s", value; exit }
+                if (c == "\\" && i < length(text)) {
+                    e = substr(text, i + 1, 1)
+                    if (e == "\"" || e == "\\" || e == "/") value = value e
+                    else if (e == "n") value = value "\n"
+                    else if (e == "r") value = value "\r"
+                    else if (e == "t") value = value "\t"
+                    else if (e == "u") value = value "\\u" # Leave \uXXXX escapes as-is.
+                    else value = value "\\" e
+                    i += 2
+                } else { value = value c; i++ }
+            }
+            exit
+        }
+    }'
+}
+
 # Extract the command from the Bash tool input
-COMMAND=$(echo "$INPUT" | grep -oP '"command"\s*:\s*"\K[^"]*' 2>/dev/null || echo "")
+COMMAND=$(printf '%s' "$INPUT" | __aida_json_field command)
 
 # If no command found (not a Bash tool call), allow
 if [ -z "$COMMAND" ]; then

@@ -65,6 +65,120 @@ pub struct LiveSession {
     pub stale_cwd: bool,
 }
 
+/// Process-tree snapshot with integer ages sampled once at probe time.
+#[derive(Debug, Clone)]
+pub struct ProcTree {
+    nodes: Vec<ProcNode>,
+}
+
+/// One process leader and its parent, with age in whole seconds.
+#[derive(Debug, Clone)]
+pub struct ProcNode {
+    pub pid: u32,
+    pub ppid: Option<u32>,
+    pub age_secs: Option<i64>,
+}
+
+/// A root's descendants, split into the ages that were sampled and a count of
+/// the ones that were not.
+///
+/// BUG-1727: a bare `Vec<i64>` cannot encode "this descendant is live but I
+/// could not age it", so a caller that saw only the ages had no way to tell an
+/// empty subtree apart from an unsampleable one and fell toward Idle on both.
+/// The count travels beside the ages so the caller can fail toward Busy on
+/// incomplete evidence, matching the missing-root fail-safe.
+// trace:BUG-1727 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DescendantAges {
+    /// One age in whole seconds per descendant whose start time was sampled.
+    pub ages: Vec<i64>,
+    /// Descendants reachable from the root whose age could not be sampled.
+    pub unsampled: usize,
+}
+
+impl ProcTree {
+    // trace:BUG-1704 | ai:codex
+    pub fn from_nodes(nodes: Vec<ProcNode>) -> Self {
+        Self { nodes }
+    }
+
+    /// Descendant ages and unsampled count, excluding the root; `None` means the
+    /// root was not sampled.
+    // trace:BUG-1727 | ai:claude
+    pub fn descendant_age_summary(&self, root: u32) -> Option<DescendantAges> {
+        if !self.nodes.iter().any(|node| node.pid == root) {
+            return None;
+        }
+        let mut summary = DescendantAges::default();
+        for node in &self.nodes {
+            if node.pid == root {
+                continue;
+            }
+            let mut current = node.ppid;
+            let mut seen = std::collections::HashSet::new();
+            while let Some(pid) = current {
+                if pid == root {
+                    match node.age_secs {
+                        Some(age_secs) => summary.ages.push(age_secs),
+                        // Reached the root, so this descendant is real; only its age is
+                        // missing. Report it rather than dropping it. trace:BUG-1727
+                        None => summary.unsampled += 1,
+                    }
+                    break;
+                }
+                if !seen.insert(pid) {
+                    break;
+                }
+                current = self
+                    .nodes
+                    .iter()
+                    .find(|candidate| candidate.pid == pid)
+                    .and_then(|parent| parent.ppid);
+            }
+        }
+        Some(summary)
+    }
+}
+
+/// Return a memoized process tree snapshot for short-lived CLI runs only.
+///
+/// The snapshot is memoized for the process lifetime. A long-lived caller,
+/// such as an MCP server or watch loop, must use
+/// [`probe_process_tree_uncached`] because a stale tree omits recently-started
+/// children and therefore fails toward Idle.
+// trace:BUG-1704 | ai:codex
+pub fn probe_process_tree() -> ProcTree {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<ProcTree> = OnceLock::new();
+    CACHE.get_or_init(probe_process_tree_uncached).clone()
+}
+
+// trace:BUG-1704 | ai:codex
+pub fn probe_process_tree_uncached() -> ProcTree {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
+    let nodes = sys
+        .processes()
+        .values()
+        .filter_map(|proc| {
+            if proc.thread_kind().is_some() {
+                return None;
+            }
+            let start = proc.start_time();
+            Some(ProcNode {
+                pid: proc.pid().as_u32(),
+                ppid: proc.parent().map(|parent| parent.as_u32()),
+                age_secs: (start != 0).then(|| (now - start as i64).max(0)),
+            })
+        })
+        .collect();
+    ProcTree::from_nodes(nodes)
+}
+
 /// Window for "this jsonl was just written" — short enough that a quiescent
 /// session won't be classified as live, long enough to absorb a normal
 /// inter-tool-call gap.
@@ -328,6 +442,14 @@ fn is_claude_process(name: &str, cmd: &[String]) -> bool {
         .unwrap_or(false)
 }
 
+// trace:TASK-1499 | ai:codex
+fn is_aida_process(name: &str, cmd: &[String]) -> bool {
+    let matches = |s: &str| {
+        basename(s).eq_ignore_ascii_case("aida") || basename(s).eq_ignore_ascii_case("aida.exe")
+    };
+    matches(name) || cmd.first().is_some_and(|first| matches(first))
+}
+
 fn basename(arg: &str) -> &str {
     Path::new(arg)
         .file_name()
@@ -491,6 +613,51 @@ pub fn nearest_claude_in_chain<'a>(
     chain
         .into_iter()
         .find(|(_, name, cmd)| is_claude_process(name, cmd))
+        .map(|(pid, _, _)| pid)
+}
+
+/// Return the nearest AIDA process in `start`'s inclusive ancestor chain.
+/// Each PID is refreshed as it is visited, so this is not a consistent
+/// process-table snapshot. If an ancestor exits between refreshes, the walk
+/// can end early and spuriously decline the `AIDA_BIN` override; callers then
+/// fall back to the running executable and PATH in `aida_bin::resolve`;
+/// that resolver emits no separate decline diagnostic. Traversal stops on
+/// missing parents, PID 1, or a repeated PID.
+// trace:TASK-1499 | ai:codex
+pub fn nearest_aida_ancestor_pid(start: u32) -> Option<u32> {
+    let mut sys = System::new();
+    let mut chain = Vec::new();
+    let mut cur = sysinfo::Pid::from_u32(start);
+    let mut seen = std::collections::HashSet::new();
+    while seen.insert(cur) {
+        sys.refresh_process_specifics(
+            cur,
+            ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always),
+        );
+        let Some(proc) = sys.process(cur) else { break };
+        chain.push((cur.as_u32(), proc.name().to_string(), proc.cmd().to_vec()));
+        let Some(parent) = proc.parent() else { break };
+        if parent == sysinfo::Pid::from_u32(1) || parent == cur {
+            break;
+        }
+        cur = parent;
+    }
+    nearest_aida_in_chain(
+        chain
+            .iter()
+            .map(|(pid, name, cmd)| (*pid, name.as_str(), cmd.as_slice())),
+    )
+}
+
+/// Select the nearest AIDA process from an already-walked chain, nearest first.
+/// Kept pure so process identification can be tested without a live tree.
+// trace:TASK-1499 | ai:codex
+pub fn nearest_aida_in_chain<'a>(
+    chain: impl IntoIterator<Item = (u32, &'a str, &'a [String])>,
+) -> Option<u32> {
+    chain
+        .into_iter()
+        .find(|(_, name, cmd)| is_aida_process(name, cmd))
         .map(|(pid, _, _)| pid)
 }
 
@@ -1212,6 +1379,24 @@ mod tests {
         assert_eq!(nearest_claude_in_chain(chain), None);
     }
 
+    #[test]
+    fn nearest_aida_in_chain_selects_nearest_and_none_without_aida() {
+        let chain = vec![
+            (10, "worker", vec!["worker".to_string()]),
+            (11, "aida", vec!["aida".to_string()]),
+            (12, "aida", vec!["aida".to_string()]),
+        ];
+        assert_eq!(
+            nearest_aida_in_chain(chain.iter().map(|(p, n, c)| (*p, *n, c.as_slice()))),
+            Some(11)
+        );
+        let chain = vec![(10, "shell", vec!["bash".to_string()])];
+        assert_eq!(
+            nearest_aida_in_chain(chain.iter().map(|(p, n, c)| (*p, *n, c.as_slice()))),
+            None
+        );
+    }
+
     // trace:BUG-752 | ai:claude
     #[test]
     fn nearest_claude_in_chain_matches_via_cmd_fallback() {
@@ -1632,5 +1817,209 @@ started_at = "2026-01-01T00:00:00Z"
     fn lease_without_pid_signal_is_undetermined_not_reclaimable() {
         let v = classify_stale_lease_recovery(LeaseState::Dormant, None, true, 0);
         assert_eq!(v, StaleLeaseRecovery::UnknownLiveness);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn descendant_age_summary_terminates_on_a_parent_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: Some(2),
+                age_secs: Some(20),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: Some(10),
+            },
+        ]);
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![10],
+                unsampled: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn descendant_age_summary_traverses_through_a_node_with_unknown_age() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: Some(120),
+            },
+        ]);
+        // The intermediate is itself a descendant, so it is reported unsampled
+        // as well as traversed. trace:BUG-1727 | ai:claude
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 1,
+            })
+        );
+    }
+
+    /// BUG-1727 AC1 reverses BUG-1704's behaviour here. This descendant used to be
+    /// dropped, which let a seat with a live-but-unsampleable child read Idle; the
+    /// missing-root case already failed toward Busy. Both are "the probe could not
+    /// see", so both now resolve the same way: the caller is told it exists.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn descendant_age_summary_reports_an_unsampled_descendant_instead_of_dropping_it() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+        ]);
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![],
+                unsampled: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn descendant_age_summary_still_returns_none_for_an_absent_root() {
+        let tree = ProcTree::from_nodes(vec![ProcNode {
+            pid: 2,
+            ppid: Some(1),
+            age_secs: Some(120),
+        }]);
+        assert_eq!(tree.descendant_age_summary(1), None);
+    }
+
+    #[test]
+    fn descendant_age_summary_traverses_two_stacked_unknown_age_intermediates() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 4,
+                ppid: Some(3),
+                age_secs: Some(120),
+            },
+        ]);
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn descendant_age_summary_finds_an_unknown_age_root() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        // The root's own missing age is not a descendant signal: the root is excluded,
+        // and its liveness is established by the pid probe, not by its age.
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![120],
+                unsampled: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn descendant_age_summary_terminates_with_an_unknown_age_node_in_a_cycle() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(3),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(2),
+                age_secs: Some(120),
+            },
+        ]);
+        // Neither node reaches the root, so neither is a descendant. An unknown age
+        // only counts once the walk has proved the node hangs off the root.
+        assert_eq!(
+            tree.descendant_age_summary(1),
+            Some(DescendantAges {
+                ages: vec![],
+                unsampled: 0,
+            })
+        );
+    }
+
+    #[test]
+    fn descendant_age_summary_counts_an_unsampled_leaf_and_keeps_a_known_sibling() {
+        let tree = ProcTree::from_nodes(vec![
+            ProcNode {
+                pid: 1,
+                ppid: None,
+                age_secs: Some(300),
+            },
+            ProcNode {
+                pid: 2,
+                ppid: Some(1),
+                age_secs: None,
+            },
+            ProcNode {
+                pid: 3,
+                ppid: Some(1),
+                age_secs: Some(120),
+            },
+        ]);
+        let summary = tree.descendant_age_summary(1).unwrap();
+        assert_eq!(summary.ages, vec![120]);
+        assert_eq!(summary.unsampled, 1);
     }
 }

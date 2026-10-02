@@ -3,12 +3,13 @@ use super::{
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
     dispatched_branch_head_sha, ensure_implementer_branch_pushed, find_orchestrated_lease,
     head_commit_message, headless_log_is_zero_bytes, lease_path, list_leases,
-    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
-    parse_agent_gates_from_config, prepare_orchestrated_lease_receipt,
-    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
-    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
-    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
-    ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
+    missing_implementer_worktree_push_gate, orchestrated_lease_receipt_path,
+    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
+    pushed_branch_commits_ahead_default, read_commits_in_range, resolve_shelve_gate_range,
+    try_open_orchestrator_pr_for_no_pr_worktree, verified_phase2_branch,
+    watchdog_failure_with_committed_work, AgentGateOnFail, PrCreditMatch, RealPhaseDriver,
+    SessionLease, ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -18,6 +19,63 @@ use aida_core::{
 use chrono::{DateTime, Utc};
 use std::process::Command;
 use uuid::Uuid;
+
+fn phase2_metadata(head_ref: &str, head_sha: &str) -> crate::forge::ChangeMetadata {
+    crate::forge::ChangeMetadata {
+        state: crate::forge::ChangeState::Open,
+        title: "fix: regression (BUG-1818)".to_string(),
+        author: Some("tester".to_string()),
+        merged_at: None,
+        base_ref: "main".to_string(),
+        head_ref: head_ref.to_string(),
+        head_sha: head_sha.to_string(),
+        is_draft: false,
+        is_cross_repository: false,
+        head_repo: None,
+    }
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_uses_the_forge_source_branch_not_the_local_staging_branch() {
+    let metadata = phase2_metadata("bug-138", "abc123456789");
+    let branch = verified_phase2_branch(
+        138,
+        "abc123456789",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap();
+    assert_eq!(branch, "bug-138");
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_refuses_an_exact_head_mismatch_with_evidence() {
+    let metadata = phase2_metadata("bug-138", "new-head");
+    let failure = verified_phase2_branch(
+        138,
+        "produced-head",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap_err();
+    assert!(failure.reason.contains("138"));
+    assert!(failure.reason.contains("produced-head"));
+    assert!(failure.reason.contains("new-head"));
+
+    let prefix_only = phase2_metadata("bug-138", "abcdef0123456789");
+    assert!(verified_phase2_branch(
+        138,
+        "abcdef0",
+        &prefix_only,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .is_err());
+}
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -121,7 +179,13 @@ fn publish_fixture_receipt(
     claude_id: &str,
     lease: &SessionLease,
 ) -> std::path::PathBuf {
-    let _guard = crate::test_env::env_lock();
+    // NOTE: no outer `env_lock()` here. `EnvVarGuard` below acquires the same
+    // non-reentrant ENV_LOCK, so holding it across this whole helper would
+    // self-deadlock every caller. Nothing above that guard touches process env
+    // -- `prepare_orchestrated_lease_receipt` only writes the tempdir and the
+    // child `Command`'s own env -- so the lock is only needed for the window
+    // where `publish_orchestrated_lease_receipt_from_env` reads it.
+    // trace:TASK-1532 | ai:claude
     let mut child = Command::new("true");
     let receipt = prepare_orchestrated_lease_receipt(&mut child, root, claude_id);
     assert!(receipt.parent().unwrap().is_dir());
@@ -134,13 +198,11 @@ fn publish_fixture_receipt(
         .expect("phase child inherits the receipt path");
     assert_eq!(std::path::PathBuf::from(&inherited), receipt);
 
-    let previous = std::env::var_os(ORCHESTRATED_LEASE_RECEIPT_ENV);
-    std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
-    let result = publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease);
-    match previous {
-        Some(value) => std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, value),
-        None => std::env::remove_var(ORCHESTRATED_LEASE_RECEIPT_ENV),
-    }
+    let result = {
+        // trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarGuard::set(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
+        publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease)
+    };
     result.unwrap();
     assert!(
         receipt.is_file(),
@@ -173,19 +235,8 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
 
 fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
     let path = root.join("gh");
-    write_executable(&path, body);
+    crate::test_exec::write_executable(&path, body);
     path
-}
-
-fn write_executable(path: &std::path::Path, body: &str) {
-    std::fs::write(&path, body).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&path, perms).unwrap();
-    }
 }
 
 #[test]
@@ -516,6 +567,45 @@ fn phase2_push_guard_failure_leaves_worktree_intact_and_ahead() {
     assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "1");
 }
 
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_accepts_removed_worktree_when_published_heads_match() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, Some("abc123"), Some("ABC123"))
+        .unwrap();
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_without_remote_evidence() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, None, Some("abc123"))
+        .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("origin branch `bug-1823`"));
+    assert!(err.reason.contains("could not be verified as published"));
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_when_published_heads_differ() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(
+        &gone,
+        "bug-1823",
+        2317,
+        Some("local-head"),
+        Some("pr-head"),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("local-head"));
+    assert!(err.reason.contains("pr-head"));
+}
+
 #[test]
 fn orchestrator_pr_body_names_orchestrator_opened_fallback() {
     let (title, body) = orchestrator_pr_title_and_body(
@@ -670,7 +760,7 @@ fn phase1_nonzero_implementer_exit_with_open_pr_still_proceeds() {
     git(&root, &["checkout", "-q", "-b", branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -983,7 +1073,7 @@ fn headless_implementer_empty_launch_retries_and_releases_leases() {
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     let stub = root.join("aida-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1032,12 +1122,7 @@ EOF
 printf '%s\n' "$sid" >> .aida/attempts
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
 
     let mut d = driver(root, "BUG-826");
     d.aida_exe = stub;
@@ -1082,7 +1167,7 @@ fn empty_launch_release_removes_the_matching_lease() {
     assert!(headless_log_is_zero_bytes(root, session_id));
     let mut d = driver(root, "BUG-826");
     let stub = root.join("aida-session-end-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1093,12 +1178,7 @@ if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
 fi
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
     d.aida_exe = stub;
     d.release_empty_launch_lease(session_id);
     assert!(
@@ -1154,9 +1234,8 @@ fn repo_with_pushed_branch_ahead_of_origin_default(
 /// can run to COMPLETION instead of stopping at the forge boundary.
 #[cfg(unix)]
 fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1166,11 +1245,7 @@ fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::Pa
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1266,9 +1341,8 @@ fn fake_gh_with_existing_open_pr(
     existing_pr: u64,
     branch: &str,
 ) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh-existing-pr");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1279,11 +1353,7 @@ fn fake_gh_with_existing_open_pr(
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1543,7 +1613,7 @@ fn phase1_refuses_when_implementer_ends_on_another_specs_branch() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -2234,7 +2304,7 @@ fn phase1_reports_attribution_unknown_for_a_trailerless_rename_not_a_swap() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail

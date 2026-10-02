@@ -42,6 +42,7 @@ pub(crate) fn handle_doctor_command(
             all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         });
     };
     match cmd {
@@ -111,6 +112,7 @@ pub(crate) fn handle_doctor_command(
                 all: all || *sub_all,
                 since: since.map(str::to_string),
                 fail_on_findings: *fail_on_findings,
+                quiet_output: false,
             })
         }
         cli::DoctorCommand::Heal {
@@ -128,6 +130,7 @@ pub(crate) fn handle_doctor_command(
             all: all || *sub_all,
             since: since.map(str::to_string),
             fail_on_findings: false,
+            quiet_output: false,
         }),
         cli::DoctorCommand::MigrateCounterScope {
             to,
@@ -309,6 +312,22 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
         all: false,
         since: None,
         fail_on_findings: false,
+        quiet_output: false,
+    })
+}
+
+// trace:BUG-1718 | ai:codex
+pub(crate) fn run_merged_agent_worktree_gc_quiet() -> Result<()> {
+    doctor_multi_agent(DoctorRunOptions {
+        heal: true,
+        yes: true,
+        category: Some("merged-agent-worktrees".to_string()),
+        json: false,
+        force: true,
+        all: false,
+        since: None,
+        fail_on_findings: false,
+        quiet_output: true,
     })
 }
 
@@ -316,7 +335,11 @@ pub(crate) fn run_merged_agent_worktree_gc(yes: bool, force: bool, json: bool) -
 // STORY-462 — `aida doctor`: multi-agent state drift diagnostics + healing.
 // ----------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+// `Default` is every field's zero: a plain `aida doctor` run with no flags. Added
+// so a test can name only the option it cares about and stay compiling when a
+// new flag lands, rather than re-listing every field.
+// trace:BUG-1734 | ai:claude
+#[derive(Debug, Clone, Default)]
 struct DoctorRunOptions {
     heal: bool,
     yes: bool,
@@ -333,6 +356,8 @@ struct DoctorRunOptions {
     /// rather than a contract change to a shared surface.
     // trace:STORY-1422 | ai:claude
     fail_on_findings: bool,
+    // trace:BUG-1718 | ai:codex
+    quiet_output: bool,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -345,7 +370,7 @@ pub(crate) struct DoctorHealResult {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
-struct DoctorReport {
+pub(crate) struct DoctorReport {
     total: usize,
     findings: Vec<DoctorFinding>,
     #[serde(skip_serializing_if = "is_zero_usize")]
@@ -360,6 +385,11 @@ struct DoctorReport {
     // trace:BUG-1573 | ai:codex
     #[serde(skip_serializing_if = "Vec::is_empty")]
     performance_audits: Vec<schedule_ledger::PerformanceAudit>,
+    /// BUG-1745: the failure reason, carried INSIDE the single stdout document
+    /// instead of appended to it as a second document.
+    // trace:BUG-1745 | ai:codex
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
     /// STORY-1462: what the runaway-seat watchdog could and could not see.
     // trace:STORY-1462 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -375,9 +405,45 @@ impl DoctorReport {
             healed: Vec::new(),
             bwrap: Some(bwrap_status_line()),
             performance_audits: Vec::new(),
+            error: None,
             runaway_seats: None,
         }
     }
+}
+
+// trace:BUG-1749 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_test_report() -> DoctorReport {
+    let mut report = DoctorReport::from_findings(vec![DoctorFinding {
+        category: "performance".into(),
+        id: "synthetic".into(),
+        summary: "synthetic finding".into(),
+        action: "inspect".into(),
+        safe_heal: false,
+    }]);
+    report.error = Some("synthetic failure reason".into());
+    report
+        .performance_audits
+        .push(schedule_ledger::PerformanceAudit {
+            command: "synthetic".into(),
+            budget_ms: 1,
+            over_budget: 1,
+            denominator: 1,
+            proportion_millipercent: 1_000,
+            tolerated_millipercent: 0,
+            window_hours: 1,
+            worst_ms: Some(2),
+            excluded_samples: 0,
+            lineage_scoped: false,
+            ceiling_ms: None,
+            ceiling_breached: false,
+        });
+    report
+}
+
+#[cfg(test)]
+pub(super) fn bug_1745_test_envelope() -> String {
+    serde_json::to_string_pretty(&bug_1745_test_report()).unwrap()
 }
 
 fn is_zero_usize(n: &usize) -> bool {
@@ -396,8 +462,35 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // trace:BUG-1719 | ai:codex
+    let mut merged_agent_worktrees_reclaimable = 0;
     let mut hidden_completed_without_commit = 0;
     let mut performance_audits = Vec::new();
+
+    // trace:BUG-1693 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "merge-hold-integrity")? {
+        findings.extend(
+            crate::merge_hold::unrecorded_marker_removals(&project_root)
+                .into_iter()
+                .map(|pr| DoctorFinding {
+                    category: "merge-hold-integrity".to_string(),
+                    id: format!("PR-{pr}-marker-missing"),
+                    summary: format!("PR #{pr} has a recorded hold placement, but its marker disappeared without a clearance record."),
+                    action: format!("inspect the PR and local .aida/events.jsonl; keep or restore the hold unless a human clearance was recorded"),
+                    safe_heal: false,
+                }),
+        );
+        // trace:BUG-1747 | ai:codex
+        findings.extend(merge_hold_label_definition_findings(
+            crate::merge_hold::label_definitions(&project_root),
+        ));
+        // A recorded Unsynced state is the durable observation from the last
+        // sync attempt. Re-syncing with `list --fix` records Synced only after
+        // the forge confirms it; avoid one forge read per hold here.
+        // trace:BUG-1747 | ai:codex
+        findings.extend(unsynced_merge_hold_findings(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     // TASK-673: the completed-without-commit integrity check runs git scans
     // (a default-branch `git log` + `git grep`) so it is kept OUT of the hot
@@ -445,7 +538,10 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // path and appended here where only `aida doctor` reaches it. Honours the
     // same `--category` filter. trace:TASK-878 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "merged-agent-worktrees")? {
-        findings.extend(scan_merged_agent_worktrees(&project_root));
+        // trace:BUG-1719 | ai:codex
+        let scan = scan_merged_agent_worktrees_with_count(&project_root);
+        merged_agent_worktrees_reclaimable = scan.reclaimable_count;
+        findings.extend(scan.findings);
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -584,6 +680,17 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-1700: the folder-trust gate that silently strands an interactive
+    // `aida agent new claude --spec` launch. Read-only (it never writes the
+    // operator's ~/.claude.json) and silent unless the worktree parent really
+    // lacks a covering trust record. Opt-in path for the same reason as
+    // disk-headroom: it reads a file outside the project.
+    // trace:BUG-1700 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
+        findings.extend(scan_agent_worktree_trust(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-1462: the runaway-seat watchdog. Reads the trailing day of this
     // project's session transcripts (incrementally, via a per-file watermark)
     // and trips on per-session wake/token/repeated-prompt/idle anomalies and
@@ -620,66 +727,184 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
     }
 
-    if opts.json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, opts.heal)?;
-        if let Some(coverage) = &report.runaway_seats {
-            print!("{}", crate::runaway_seats::render_coverage(coverage));
-        }
-        // STORY-707: `aida doctor` is the check-everything home. The heavy
-        // orientation diagnostics that used to ride bare `aida status` — PR/CI
-        // (a `gh` network call), live-session/lease liveness, worktree probes,
-        // the full fleet roster, and cross-clone coordination — now surface
-        // HERE, not on the fast default `aida status`. Gated to the full,
-        // unfiltered text run (no `--category` narrow filter) so a targeted
-        // `aida doctor check --category X` stays focused. trace:STORY-707
-        if opts.category.is_none() {
-            print_doctor_status_diagnostics(&project_root, &store);
-        }
-    }
-
-    // STORY-1127: permission posture is intended as a check/gate category: a
-    // flagged full-access or incoherent sandbox state must produce a non-zero
-    // exit so headless drains and scripts cannot miss it.
-    // trace:STORY-1127 | ai:codex
-    if !opts.heal
+    // trace:BUG-1749 | ai:codex
+    let reason = if !opts.heal
         && !report.findings.is_empty()
         && opts.category.as_deref().is_some()
         && doctor_category_selected(opts.category.as_deref(), "permission-posture")?
     {
-        anyhow::bail!("permission-posture finding(s) detected — see the report above");
-    }
-
-    // The opt-in gate. Deliberately GENERAL rather than a second hardcoded
-    // category beside the permission-posture check above. That one is the
-    // precedent, and adding a second special case is exactly how two categories
-    // end up behaving differently under one verb — which a later reader
-    // "fixes" in the wrong direction, and the wrong direction here is silence.
-    // A caller that wants to be gated asks, and asks in the job definition
-    // where the next reader can see that the job is gating.
-    // trace:STORY-1422 | ai:claude
-    if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
+        Some("permission-posture finding(s) detected — see the report above".to_string())
+    } else if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
+        Some(format!(
             "{} finding(s) in {} — failing because --fail-on-findings was requested",
             report.findings.len(),
             opts.category.as_deref().unwrap_or("all categories")
+        ))
+    } else {
+        let failed = report
+            .healed
+            .iter()
+            .filter(|r| r.status == "failed")
+            .count();
+        (failed > 0).then(|| format!("{failed} finding(s) failed to heal — see the report above"))
+    };
+
+    if opts.quiet_output {
+        eprintln!("  ✓ merged-agent-worktrees cleanup checked ({merged_agent_worktrees_reclaimable} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
+    } else {
+        return emit_doctor_report(
+            report,
+            reason,
+            doctor_render_mode(opts.json),
+            opts.heal,
+            |report| {
+                if let Some(coverage) = &report.runaway_seats {
+                    print!("{}", crate::runaway_seats::render_coverage(coverage));
+                }
+                // STORY-707: full human doctor includes orientation diagnostics.
+                if opts.category.is_none() {
+                    print_doctor_status_diagnostics(&project_root, &store);
+                }
+            },
         );
     }
 
-    // BUG-471: heal now continues past a single finding's failure (no more
-    // first-error abort), so the failure signal moves to the exit code — bail
-    // non-zero after the report so scripts/automation still notice.
-    // trace:BUG-471 | ai:claude
-    let failed = report
-        .healed
-        .iter()
-        .filter(|r| r.status == "failed")
-        .count();
-    if failed > 0 {
-        anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
+    // trace:BUG-1718 | ai:codex
+    if opts.quiet_output {
+        return Ok(());
     }
+
     Ok(())
+}
+
+fn merge_hold_label_definition_findings(
+    definitions: crate::merge_hold::LabelDefinitions,
+) -> Vec<DoctorFinding> {
+    use crate::merge_hold::LabelDefinitions;
+    match definitions {
+        LabelDefinitions::Read { missing, .. } => missing
+            .into_iter()
+            .map(|name| DoctorFinding {
+                category: "merge-hold-integrity".into(),
+                id: format!("merge-hold-label-{name}-undefined"),
+                summary: format!("Required merge-hold label `{name}` is undefined; the required `merge-hold-gate` check cannot enforce a hold without it."),
+                action: "aida merge-hold labels --create-missing".into(),
+                safe_heal: false,
+            })
+            .collect(),
+        LabelDefinitions::Unknown(why) => vec![DoctorFinding {
+            category: "merge-hold-integrity".into(),
+            id: "merge-hold-labels-undetermined".into(),
+            summary: format!("Could not determine merge-hold label definitions: {why}"),
+            action: "aida merge-hold labels".into(),
+            safe_heal: false,
+        }],
+        LabelDefinitions::NoForge => Vec::new(),
+    }
+}
+
+fn unsynced_merge_hold_findings(root: &std::path::Path) -> Vec<DoctorFinding> {
+    crate::merge_hold::list_holds(root)
+        .into_iter()
+        .filter_map(|(pr, _)| {
+            let crate::merge_hold::LabelState::Unsynced(err) =
+                crate::merge_hold::read_label_state(root, pr)
+            else {
+                return None;
+            };
+            let mut action = "aida merge-hold list --fix".to_string();
+            if err.contains("missing label definition") {
+                action.push_str("; aida merge-hold labels --create-missing");
+            }
+            Some(DoctorFinding {
+                category: "merge-hold-integrity".into(),
+                id: format!("PR-{pr}-hold-label-unsynced"),
+                summary: format!("PR #{pr} has its Layer 1 hold marker armed, but the forge label never landed; the required `merge-hold-gate` check does not enforce this hold."),
+                action,
+                safe_heal: false,
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod bug_1747_tests {
+    use super::*;
+    use crate::merge_hold::{LabelDefinitions, LabelState};
+
+    #[test]
+    fn bug_1747_label_definition_results_map_to_findings() {
+        assert!(
+            merge_hold_label_definition_findings(LabelDefinitions::Read {
+                present: Vec::new(),
+                missing: Vec::new()
+            })
+            .is_empty()
+        );
+        let findings = merge_hold_label_definition_findings(LabelDefinitions::Read {
+            present: Vec::new(),
+            missing: vec!["aida:merge-hold", "aida:merge-hold-recorded"],
+        });
+        assert_eq!(findings.len(), 2);
+        for (finding, name) in findings
+            .iter()
+            .zip(["aida:merge-hold", "aida:merge-hold-recorded"])
+        {
+            assert_eq!(finding.id, format!("merge-hold-label-{name}-undefined"));
+            assert!(finding.summary.contains(name));
+            assert_eq!(finding.action, "aida merge-hold labels --create-missing");
+            assert!(!finding.safe_heal);
+        }
+        let unknown = merge_hold_label_definition_findings(LabelDefinitions::Unknown(
+            "forge unavailable".into(),
+        ));
+        assert_eq!(unknown.len(), 1);
+        assert_eq!(unknown[0].id, "merge-hold-labels-undetermined");
+        assert!(unknown[0].summary.contains("forge unavailable"));
+        assert!(merge_hold_label_definition_findings(LabelDefinitions::NoForge).is_empty());
+    }
+
+    #[test]
+    fn bug_1747_only_unsynced_live_holds_are_findings() {
+        let dir = tempfile::tempdir().unwrap();
+        for pr in [101, 102, 103] {
+            crate::merge_hold::write_hold(dir.path(), pr, "fixture").unwrap();
+        }
+        crate::merge_hold::record_label_state(
+            dir.path(),
+            101,
+            &LabelState::Unsynced("missing label definition(s): aida:merge-hold".into()),
+        )
+        .unwrap();
+        crate::merge_hold::record_label_state(dir.path(), 102, &LabelState::Synced).unwrap();
+        let findings = unsynced_merge_hold_findings(dir.path());
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "PR-101-hold-label-unsynced");
+        assert_eq!(
+            findings[0].action,
+            "aida merge-hold list --fix; aida merge-hold labels --create-missing"
+        );
+    }
+
+    // Pin the doctor action sniff to the producer's actual Display wording.
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn bug_1747_definition_missing_display_recommends_provisioning() {
+        let dir = tempfile::tempdir().unwrap();
+        crate::merge_hold::write_hold(dir.path(), 104, "fixture").unwrap();
+        let error = crate::merge_hold::LabelSyncError::DefinitionMissing {
+            names: vec!["aida:merge-hold".into()],
+            detail: "'aida:merge-hold' not found".into(),
+        }
+        .to_string();
+        crate::merge_hold::record_label_state(dir.path(), 104, &LabelState::Unsynced(error))
+            .unwrap();
+        let findings = unsynced_merge_hold_findings(dir.path());
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0]
+            .action
+            .ends_with("aida merge-hold labels --create-missing"));
+    }
 }
 
 /// TASK-1473: the light entry path for `aida doctor check runaway-seats`.
@@ -714,23 +939,17 @@ fn doctor_check_runaway_seats_light(json: bool, fail_on_findings: bool) -> Resul
     let mut report = DoctorReport::from_findings(findings);
     report.runaway_seats = Some(coverage);
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
+    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| {
+        format!(
+            "{} finding(s) in runaway-seats — failing because --fail-on-findings was requested",
+            report.findings.len()
+        )
+    });
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |report| {
         if let Some(coverage) = &report.runaway_seats {
             print!("{}", crate::runaway_seats::render_coverage(coverage));
         }
-    }
-
-    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in runaway-seats — failing because --fail-on-findings was requested",
-            report.findings.len()
-        );
-    }
-    Ok(())
+    })
 }
 
 /// BUG-1675: the light entry path for `aida doctor check disk-headroom`,
@@ -744,20 +963,11 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = disk_headroom_light_report(&project_root);
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
-    }
-
-    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
-            report.findings.len()
-        );
-    }
-    Ok(())
+    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        report.findings.len()
+    ));
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
 }
 
 // trace:TASK-1544 | ai:codex
@@ -768,18 +978,14 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         "remote-drift" => remote_drift_light_report(&project_root),
         _ => unreachable!("only store-free categories dispatch here"),
     };
-    if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
-    }
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
+    let failing = fail_on_findings && !report.findings.is_empty();
+    let reason = failing.then(|| {
+        format!(
             "{} finding(s) in {category} — failing because --fail-on-findings was requested",
             report.findings.len()
-        );
-    }
-    Ok(())
+        )
+    });
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
 }
 
 // trace:TASK-1544 | ai:codex
@@ -842,7 +1048,7 @@ mod task_1544_light_doctor_tests;
 /// a loadable store.
 // trace:BUG-1675 | ai:claude
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
-    disk_headroom_light_report_with(project_root, disk_free_bytes)
+    disk_headroom_light_report_with(project_root, disk_free_bytes, cargo_slot_dir())
 }
 
 /// [`disk_headroom_light_report`] with the free-space probe injected, so a
@@ -851,14 +1057,31 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
 fn disk_headroom_light_report_with(
     project_root: &std::path::Path,
     free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+    // BUG-1702: injected, not discovered. Reading the real `$XDG_RUNTIME_DIR` here would put
+    // host state back into tests whose whole point is a pinned verdict.
+    // trace:BUG-1702 | ai:claude
+    cargo_slot_dir: Option<std::path::PathBuf>,
 ) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
-    DoctorReport::from_findings(disk_headroom_findings(
-        free_bytes(project_root),
-        min_free_gib,
-    ))
+    let mut findings = disk_headroom_findings(free_bytes(project_root), min_free_gib);
+    // BUG-1702: the runtime tmpfs holding the Cargo slot locks is a separate, much smaller
+    // filesystem than the project's, so the project-root floor above never sees it fill.
+    // trace:BUG-1702 | ai:claude
+    if let Some(slot_dir) = cargo_slot_dir {
+        findings.extend(cargo_slot_findings(
+            free_bytes(&slot_dir),
+            &cargo_slot_target_artifacts(&slot_dir),
+            CARGO_SLOT_MIN_FREE_GIB,
+        ));
+    }
+    DoctorReport::from_findings(findings)
 }
+
+/// A Rust link step for this workspace needs comfortably more than a GiB of scratch; below this
+/// the failure mode is "Disk full?" and a bus error, not a compile error.
+// trace:BUG-1702 | ai:claude
+const CARGO_SLOT_MIN_FREE_GIB: u64 = 1;
 
 #[cfg(test)]
 #[path = "tests/bug_1675_disk_headroom_light_tests.rs"]
@@ -867,6 +1090,11 @@ mod bug_1675_disk_headroom_light_tests;
 #[cfg(test)]
 #[path = "tests/task_1534_worktree_gc_batch_landed_tests.rs"]
 mod task_1534_worktree_gc_batch_landed_tests;
+
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_1719_doctor_prose_tests.rs"]
+mod bug_1719_doctor_prose_tests;
 
 /// TASK-1124: which deployed Codex prompts in `dir` (normally `~/.codex/prompts`)
 /// have drifted from the current source templates. A prompt that EXISTS but
@@ -991,6 +1219,41 @@ fn scan_scaffold_drift(
     // Codex skills are missing. trace:BUG-1639 | ai:claude
     let config = crate::init_cmd::scaffold_config_for_project(project_root);
     let portable_selected = config.generate_codex_skills || config.generate_antigravity_skills;
+    // Codex silently skips symlinked SKILL.md files in the shared pack.
+    // Report them without attempting a repair; they may be user-owned links.
+    // trace:TASK-1519 | ai:codex
+    if let Ok(entries) = std::fs::read_dir(project_root.join(".agents/skills")) {
+        let links: Vec<_> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path().join("SKILL.md");
+                std::fs::symlink_metadata(&path)
+                    .ok()
+                    .filter(|meta| meta.file_type().is_symlink())
+                    .map(|_| {
+                        path.strip_prefix(project_root)
+                            .unwrap_or(&path)
+                            .display()
+                            .to_string()
+                    })
+            })
+            .collect();
+        if !links.is_empty() {
+            findings.push(DoctorFinding {
+                category: "scaffold-drift".to_string(),
+                id: "scaffold-drift/agents-skill-symlink".to_string(),
+                summary: format!(
+                    "{} .agents/skills SKILL.md file(s) are symlinks; Codex does not load them",
+                    links.len()
+                ),
+                action: format!(
+                    "Replace these links with regular-file copies: {}",
+                    links.join(", ")
+                ),
+                safe_heal: false,
+            });
+        }
+    }
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
     // Compare path components so Windows' backslashes do not hide scaffold
@@ -1282,6 +1545,641 @@ fn disk_headroom_finding(free_bytes: u64, min_free_gib: u64) -> Option<DoctorFin
             .to_string(),
         safe_heal: false,
     })
+}
+
+/// The Cargo slot coordination directory, `$XDG_RUNTIME_DIR/cargo-slots-<uid>`.
+///
+/// AIDA does not create this directory — it is a host convention, and seats are handed
+/// `--add-dir <it>` so codex can `flock` the slot files. None when the runtime dir is unset or
+/// the directory does not exist, so hosts without the convention stay silent.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_dir() -> Option<std::path::PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    let uid = users_uid()?;
+    let dir = std::path::PathBuf::from(runtime).join(format!("cargo-slots-{uid}"));
+    dir.is_dir().then_some(dir)
+}
+
+fn users_uid() -> Option<u32> {
+    // `id -u` without pulling in a libc dependency for one number.
+    let out = std::process::Command::new("id").arg("-u").output().ok()?;
+    String::from_utf8(out.stdout).ok()?.trim().parse().ok()
+}
+
+/// Entries in the slot directory that mean a Cargo TARGET directory was pointed at it.
+///
+/// The slot directory is for advisory lock files. A target directory there fills the runtime
+/// tmpfs, which is small. Returns `(name, marker)` pairs. Pure over `dir`.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_target_artifacts(dir: &std::path::Path) -> Vec<String> {
+    const PROFILE_DIRS: [&str; 4] = ["debug", "release", "wasm32-unknown-unknown", "tmp"];
+    const TARGET_MARKERS: [&str; 3] = [".rustc_info.json", "CACHEDIR.TAG", ".cargo-lock"];
+    let mut found = Vec::new();
+    for marker in TARGET_MARKERS {
+        if dir.join(marker).exists() {
+            found.push(marker.to_string());
+        }
+    }
+    for profile in PROFILE_DIRS {
+        let candidate = dir.join(profile);
+        // An EMPTY `tmp/` is normal scratch; only a populated one is a target artifact.
+        let populated = std::fs::read_dir(&candidate)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+        if candidate.is_dir() && populated {
+            found.push(format!("{profile}/"));
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// BUG-1702: the runtime tmpfs holding the Cargo slot locks is small (7.1 GiB on the dev host).
+/// On 2026-09-27 it held a 6.8 GiB `debug/` target directory and a 280 MiB per-review target
+/// directory, at 0 bytes free; an implementer's build died at link time with "Disk full?" and a
+/// bus error, and it correctly refused to commit anything. A full `/run/user` also threatens the
+/// systemd user session and dbus sockets, so this is not only a build failure mode.
+///
+/// Two findings, because they need different actions: the artifacts are the cause, the free space
+/// is the symptom. Pure over its inputs so both verdicts are testable without a real tmpfs.
+// trace:BUG-1702 | ai:claude
+fn cargo_slot_findings(
+    free_bytes: Option<u64>,
+    artifacts: &[String],
+    min_free_gib: u64,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+
+    if !artifacts.is_empty() {
+        findings.push(DoctorFinding {
+            category: "disk-headroom".to_string(),
+            id: "cargo-slot-target-dir".to_string(),
+            summary: format!(
+                "the Cargo slot directory holds build artifacts ({}) — a target directory was \
+                 pointed at the runtime tmpfs, which is for lock files only",
+                artifacts.join(", ")
+            ),
+            action: "never set CARGO_TARGET_DIR under $XDG_RUNTIME_DIR — `--add-dir <slot dir>` \
+                     grants lock access, not a target location. Delete the artifacts and KEEP \
+                     every `*.lock` file"
+                .to_string(),
+            safe_heal: false,
+        });
+    }
+
+    if let Some(free) = free_bytes {
+        let floor = min_free_gib.saturating_mul(1024 * 1024 * 1024);
+        if free < floor {
+            let free_mib = free as f64 / (1024.0 * 1024.0);
+            findings.push(DoctorFinding {
+                category: "disk-headroom".to_string(),
+                id: "cargo-slot-free".to_string(),
+                summary: format!(
+                    "the Cargo slot filesystem has {free_mib:.0} MiB free, below the \
+                     {min_free_gib} GiB a link step needs — builds will fail with \"Disk full?\" \
+                     or a bus error rather than a compile error"
+                ),
+                action: "reclaim the runtime tmpfs (`du -sh $XDG_RUNTIME_DIR/*`), keeping the \
+                         slot `*.lock` files; a seat that fails a build here is not failing on \
+                         your code"
+                    .to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+
+    findings
+}
+
+/// Resolve where interactive agent launches will find their worktree, and warn when that
+/// directory carries no Claude Code folder-trust record.
+///
+/// Claude Code gates a directory it has never been launched in behind an interactive
+/// folder-trust modal ("Quick safety check: Is this a project you created or one you trust?").
+/// A fresh per-spec worktree is exactly such a directory, so `aida agent new claude --spec <ID>`
+/// stops dead on a modal in a PTY nobody is watching. Trust INHERITS from a parent directory
+/// (probed 2026-09-27 with a control), which is what `[worktree_pool] worktree_parent` exists to
+/// exploit: nest every worktree under ONE directory, trust that once, and no future worktree
+/// prompts again.
+///
+/// This check is strictly READ-ONLY. AIDA never writes `~/.claude.json` and never marks a
+/// directory trusted on the operator's behalf — that grant is the operator's to give.
+///
+/// Silent when trust cannot be determined (no readable `~/.claude.json`), so an unreadable
+/// config reads as unknown rather than as a false alarm.
+// trace:BUG-1700 | ai:claude
+fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let configured = crate::worktree_pool_config_worktree_parent(project_root);
+    let resolved = resolve_worktree_parent(project_root, configured.as_deref());
+    let parent = normalize_path_lexically(&resolved);
+    let trusted = claude_trusted_paths();
+    let breadth = trusted.as_deref().and_then(|trusted| {
+        covering_trusted_ancestor(&parent, trusted).map(|ancestor| TrustBreadth {
+            unrelated_dirs: count_unrelated_child_dirs(&ancestor, project_root, &parent),
+        })
+    });
+    worktree_trust_findings(&resolved, configured.is_some(), trusted.as_deref(), breadth)
+}
+
+// trace:BUG-1744 | ai:codex
+fn count_unrelated_child_dirs(
+    ancestor: &std::path::Path,
+    project_root: &std::path::Path,
+    worktree_parent: &std::path::Path,
+) -> usize {
+    let Ok(entries) = std::fs::read_dir(ancestor) else {
+        return 0;
+    };
+    let project_root = normalize_path_lexically(project_root);
+    let worktree_parent = normalize_path_lexically(worktree_parent);
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            let entry_path = normalize_path_lexically(&entry.path());
+            !entry.file_name().to_string_lossy().starts_with('.')
+                && entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && entry_path != project_root
+                && entry_path != worktree_parent
+        })
+        .count()
+}
+
+/// The directory newly created pool worktrees land in — mirrors `worktree_pool::pool_path_for`'s
+/// parent selection: the configured `worktree_parent` (relative resolved against the project
+/// root), else the project root's own parent (the historical sibling layout).
+// trace:BUG-1700 | ai:claude
+fn resolve_worktree_parent(
+    project_root: &std::path::Path,
+    configured: Option<&std::path::Path>,
+) -> std::path::PathBuf {
+    match configured {
+        Some(p) if p.is_absolute() => p.to_path_buf(),
+        Some(p) => project_root.join(p),
+        None => project_root
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| project_root.to_path_buf()),
+    }
+}
+
+/// Resolve `.` and `..` components WITHOUT touching the filesystem.
+///
+/// TASK-1561: delegates to `worktree_pool::normalize_path_lexically`. This used
+/// to be a second copy; the placement rule needs the same normalisation for the
+/// same reason (a relative `worktree_parent` is the shipped example, and the
+/// resulting path is both printed and lexically compared), and two copies of a
+/// path rule is how `worktree_parent` came to be honoured by the pool and by
+/// nothing else.
+// trace:BUG-1700 | ai:claude
+// trace:TASK-1561 | ai:claude
+fn normalize_path_lexically(path: &std::path::Path) -> std::path::PathBuf {
+    aida_core::worktree_pool::normalize_path_lexically(path)
+}
+
+/// Paths with an accepted Claude Code folder-trust record, from `~/.claude.json`. `None` when the
+/// file is absent or unparseable — the caller must then stay silent rather than guess.
+// trace:BUG-1700 | ai:claude
+fn claude_trusted_paths() -> Option<Vec<std::path::PathBuf>> {
+    // `crate::home_dir()`, not a direct HOME read: it is the crate's single home
+    // resolver and carries the cfg(test) redirect to a temp home, enforced by the
+    // `no_direct_home_resolution_in_crate` guard (TASK-1513). That redirect also
+    // keeps this check from reading a developer's REAL ~/.claude.json under test.
+    let home = crate::home_dir()?;
+    let body = std::fs::read_to_string(home.join(".claude.json")).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&body).ok()?;
+    let projects = value.get("projects")?.as_object()?;
+    Some(
+        projects
+            .iter()
+            .filter(|(_, v)| {
+                v.get("hasTrustDialogAccepted")
+                    .and_then(|t| t.as_bool())
+                    .unwrap_or(false)
+            })
+            .map(|(k, _)| std::path::PathBuf::from(k))
+            .collect(),
+    )
+}
+
+/// Breadth of unrelated directories covered by a trusted ancestor.
+// trace:BUG-1744 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TrustBreadth {
+    /// Direct child directories of the covering trusted ancestor that are neither
+    /// the project root nor the resolved worktree parent — the unrelated projects
+    /// the one grant also covers.
+    unrelated_dirs: usize,
+}
+
+/// Find the trusted ancestor that covers the resolved worktree parent.
+// trace:BUG-1744 | ai:codex
+fn covering_trusted_ancestor(
+    parent: &std::path::Path,
+    trusted: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
+    trusted
+        .iter()
+        .map(|path| normalize_path_lexically(path))
+        .find(|path| parent.starts_with(path))
+}
+
+/// Pure verdict: does `parent` (or an ancestor of it) carry a trust record?
+///
+/// Pure over its inputs so the inheritance rule is testable without a real `~/.claude.json` or a
+/// spawned agent — which is what makes this assertable at all, since the modal only appears in an
+/// interactive TUI.
+// trace:BUG-1700 | ai:claude
+fn worktree_trust_findings(
+    parent: &std::path::Path,
+    parent_configured: bool,
+    trusted: Option<&[std::path::PathBuf]>,
+    breadth: Option<TrustBreadth>,
+) -> Vec<DoctorFinding> {
+    let Some(trusted) = trusted else {
+        return Vec::new();
+    };
+    // `starts_with` is purely LEXICAL, so it must not see unresolved `..`. A
+    // relative `worktree_parent = "../aida-worktrees"` resolves to
+    // `<root>/../aida-worktrees`, which does not lexically start with the
+    // `<parent-of-root>/aida-worktrees` spelling `~/.claude.json` records — so
+    // an already-trusted directory would be reported as untrusted. Normalise
+    // both sides before comparing. trace:BUG-1700 | ai:claude
+    let parent = normalize_path_lexically(parent);
+    if let Some(ancestor) = covering_trusted_ancestor(&parent, trusted) {
+        if let Some(breadth) = breadth {
+            if !parent_configured && breadth.unrelated_dirs >= 1 {
+                let finding = DoctorFinding {
+                    category: "agent-launch".to_string(),
+                    id: "worktree-folder-trust-breadth".to_string(),
+                    summary: format!(
+                        "the grant on {} also covers {} unrelated directories, though nothing is broken today",
+                        ancestor.display(), breadth.unrelated_dirs
+                    ),
+                    action: "set `[worktree_pool] worktree_parent` in .aida/config.toml to one directory (e.g. \"../aida-worktrees\") and accept the folder-trust prompt there once".to_string(),
+                    safe_heal: false,
+                };
+                return vec![finding];
+            }
+        }
+        return Vec::new();
+    }
+    let parent = parent.as_path();
+    let action = if parent_configured {
+        format!(
+            "launch an interactive agent in {} ONCE and accept the folder-trust prompt; every \
+             worktree nests under it, so trust inherits and no later worktree prompts again",
+            parent.display()
+        )
+    } else {
+        format!(
+            "set `[worktree_pool] worktree_parent` in .aida/config.toml to one directory (e.g. \
+             \"../aida-worktrees\") and accept the folder-trust prompt there ONCE — otherwise \
+             every new spec worktree under {} is a fresh untrusted path with its own modal",
+            parent.display()
+        )
+    };
+    vec![DoctorFinding {
+        category: "agent-launch".to_string(),
+        id: "worktree-folder-trust".to_string(),
+        summary: format!(
+            "worktrees are created under {}, which has no Claude Code folder-trust record — an \
+             interactive `aida agent new claude --spec <ID>` there stops on a folder-trust \
+             modal instead of starting work (headless drains are unaffected)",
+            parent.display()
+        ),
+        action,
+        safe_heal: false,
+    }]
+}
+
+#[cfg(test)]
+mod bug_1700_worktree_trust_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    // The whole point of `worktree_parent`: trust INHERITS, so a grant on the
+    // parent covers every worktree nested under it and doctor stays silent.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn trusted_parent_covers_nested_worktrees() {
+        let trusted = vec![PathBuf::from("/home/op/aida-worktrees")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            None
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn trusted_ancestor_further_up_also_covers() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            None
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn untrusted_parent_is_reported_once_and_is_not_auto_healable() {
+        let trusted = vec![PathBuf::from("/home/op/other")];
+        let f = worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            None,
+        );
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].category, "agent-launch");
+        assert_eq!(f[0].id, "worktree-folder-trust");
+        assert!(
+            f[0].summary.contains("/home/op/aida-worktrees"),
+            "the finding must name the directory: {}",
+            f[0].summary
+        );
+        assert!(
+            !f[0].safe_heal,
+            "granting folder trust is the operator's call — never auto-healed"
+        );
+    }
+
+    // A sibling of a trusted path is NOT covered: `starts_with` must compare
+    // whole path components, not string prefixes, or `/home/op/aida-worktrees2`
+    // would be wrongly judged trusted by `/home/op/aida-worktrees`.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn string_prefix_sibling_is_not_treated_as_trusted() {
+        let trusted = vec![PathBuf::from("/home/op/aida-worktrees")];
+        assert_eq!(
+            worktree_trust_findings(
+                Path::new("/home/op/aida-worktrees2"),
+                true,
+                Some(&trusted),
+                None
+            )
+            .len(),
+            1,
+            "a sibling sharing a string prefix must not inherit trust"
+        );
+    }
+
+    // Unknown trust (no readable ~/.claude.json) must read as unknown, not as a
+    // problem — otherwise doctor cries wolf on every host without the file.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn unknown_trust_is_silent() {
+        assert!(worktree_trust_findings(Path::new("/home/op/wt"), true, None, None).is_empty());
+    }
+
+    // With no worktree_parent configured the advice is to configure one; with
+    // one configured the advice is to trust that directory once. Different
+    // actions, so the operator is never told to do the wrong thing.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn action_differs_on_whether_a_parent_is_configured() {
+        let trusted: Vec<PathBuf> = Vec::new();
+        let configured =
+            worktree_trust_findings(Path::new("/home/op/wt"), true, Some(&trusted), None);
+        assert!(
+            configured[0].action.contains("ONCE"),
+            "configured: {}",
+            configured[0].action
+        );
+        let unset = worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted), None);
+        assert!(
+            unset[0].action.contains("worktree_parent"),
+            "unset must point at the setting: {}",
+            unset[0].action
+        );
+    }
+
+    // The regression an independent review caught: `starts_with` is lexical, so a
+    // relative `worktree_parent` resolving to `<root>/../aida-worktrees` did not
+    // match the normalised `/home/joe/ai/aida-worktrees` that ~/.claude.json
+    // records — doctor cried wolf on an ALREADY-trusted directory.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn a_relative_parent_with_dotdot_matches_its_normalised_trusted_form() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        let unnormalised = Path::new("/home/joe/ai/aida/../aida-worktrees");
+        assert!(
+            !unnormalised.starts_with(&trusted[0]),
+            "precondition: the raw path must NOT lexically match, or this test proves nothing"
+        );
+        assert!(
+            worktree_trust_findings(unnormalised, true, Some(&trusted), None).is_empty(),
+            "an already-trusted directory reached via `..` must not be reported"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_does_not_make_a_sibling_match() {
+        let trusted = vec![PathBuf::from("/home/joe/ai/aida-worktrees")];
+        assert_eq!(
+            worktree_trust_findings(
+                Path::new("/home/joe/ai/aida/../aida-worktrees2"),
+                true,
+                Some(&trusted),
+                None
+            )
+            .len(),
+            1,
+            "normalising must not loosen the sibling check"
+        );
+    }
+
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn lexical_normalisation_resolves_dot_and_dotdot_without_the_filesystem() {
+        for (input, want) in [
+            ("/a/b/../c", "/a/c"),
+            ("/a/./b", "/a/b"),
+            ("/a/b/../../c", "/c"),
+            ("/a/b/c/../..", "/a"),
+            ("relative/../x", "x"),
+        ] {
+            assert_eq!(
+                normalize_path_lexically(Path::new(input)),
+                PathBuf::from(want),
+                "normalising {input}"
+            );
+        }
+    }
+
+    // A `..` with nothing to pop must be KEPT, not silently dropped — dropping it
+    // would turn one path into a different one.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn normalisation_keeps_a_dotdot_it_cannot_resolve() {
+        assert_eq!(
+            normalize_path_lexically(Path::new("../x")),
+            PathBuf::from("../x")
+        );
+        assert_eq!(
+            normalize_path_lexically(Path::new("/..")),
+            PathBuf::from("/")
+        );
+    }
+
+    // The resolver must mirror `worktree_pool::pool_path_for`'s parent choice,
+    // or doctor would advise trusting a directory the pool never uses.
+    // trace:BUG-1700 | ai:claude
+    #[test]
+    fn resolver_mirrors_the_pool_parent_choice() {
+        let root = Path::new("/work/myrepo");
+        assert_eq!(
+            resolve_worktree_parent(root, None),
+            PathBuf::from("/work"),
+            "unset => the project root's parent (sibling layout)"
+        );
+        assert_eq!(
+            resolve_worktree_parent(root, Some(Path::new("/trusted/wt"))),
+            PathBuf::from("/trusted/wt")
+        );
+        assert_eq!(
+            resolve_worktree_parent(root, Some(Path::new("../wt"))),
+            PathBuf::from("/work/myrepo/../wt"),
+            "relative resolves against the project root, as the pool does"
+        );
+    }
+}
+
+#[cfg(test)]
+mod bug_1744_trust_breadth_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn broad_ancestor_with_unset_parent_discloses_the_narrow_remediation() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        let findings = worktree_trust_findings(
+            Path::new("/home/op"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 5 }),
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "worktree-folder-trust-breadth");
+        assert_eq!(findings[0].category, "agent-launch");
+        assert!(findings[0].summary.contains("/home/op"));
+        assert!(findings[0].summary.contains('5'));
+        assert!(findings[0].action.contains("worktree_parent"));
+        assert!(!findings[0].safe_heal);
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn configured_and_trusted_stays_silent_even_under_a_broad_grant() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            true,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 5 })
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn single_project_parent_is_not_a_broad_grant() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(worktree_trust_findings(
+            Path::new("/home/op"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 0 })
+        )
+        .is_empty());
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn unknown_breadth_is_silent() {
+        let trusted = vec![PathBuf::from("/home/op")];
+        assert!(
+            worktree_trust_findings(Path::new("/home/op"), false, Some(&trusted), None).is_empty()
+        );
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn an_untrusted_parent_still_reports_the_original_finding_id() {
+        let trusted = vec![PathBuf::from("/home/op/other")];
+        let findings = worktree_trust_findings(
+            Path::new("/home/op/aida-worktrees"),
+            false,
+            Some(&trusted),
+            Some(TrustBreadth { unrelated_dirs: 9 }),
+        );
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "worktree-folder-trust");
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn counts_only_unrelated_sibling_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        let worktrees = root.path().join("worktrees");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::create_dir(&worktrees).unwrap();
+        for name in ["one", "two", "three", ".hidden"] {
+            std::fs::create_dir(root.path().join(name)).unwrap();
+        }
+        std::fs::write(root.path().join("file"), b"file").unwrap();
+        assert_eq!(
+            count_unrelated_child_dirs(root.path(), &project, &worktrees),
+            3
+        );
+    }
+
+    // An ancestor we cannot list must not be reported as a broad grant.
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn an_unreadable_ancestor_counts_as_no_breadth() {
+        let root = tempfile::tempdir().unwrap();
+        let missing_ancestor = root.path().join("never-created");
+        let project = root.path().join("project");
+        let worktrees = root.path().join("worktrees");
+        assert_eq!(
+            count_unrelated_child_dirs(&missing_ancestor, &project, &worktrees),
+            0
+        );
+    }
+
+    // trace:BUG-1744 | ai:codex
+    #[test]
+    fn the_trust_scan_never_writes_the_claude_config() {
+        let fake_home = tempfile::tempdir().unwrap();
+        let project_root = tempfile::tempdir().unwrap();
+        let trusted_parent = project_root.path().parent().unwrap();
+        let config_path = fake_home.path().join(".claude.json");
+        let config = serde_json::json!({
+            "projects": {
+                trusted_parent.to_string_lossy().as_ref(): {
+                    "hasTrustDialogAccepted": true
+                }
+            }
+        });
+        std::fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+        let before = std::fs::read(&config_path).unwrap();
+        let fake_home_path = fake_home.path().to_str().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", fake_home_path)]);
+
+        drop(scan_agent_worktree_trust(project_root.path()));
+
+        assert_eq!(std::fs::read(&config_path).unwrap(), before);
+    }
 }
 
 /// STORY-1367: free space on the filesystem holding `project_root`, via
@@ -3752,11 +4650,21 @@ fn heal_doctor_stale_remote_branch(
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
 #[derive(Debug, Clone, PartialEq, Eq)]
+// trace:BUG-1719 | ai:codex
 pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
     Removable(String),
     /// Dirty, carrying unmerged work, or no merge signal → keep, flag operator.
-    Keep(String),
+    Keep { reason: String, actionable: bool },
+}
+
+// trace:BUG-1719 | ai:codex
+fn agent_worktree_keep_action(actionable: bool) -> String {
+    if actionable {
+        "operator decision: review and keep, open a PR, or remove by hand".to_string()
+    } else {
+        "no action required — kept because batched content is undecidable".to_string()
+    }
 }
 
 /// Inputs to the pure agent-worktree classifier — every git/forge probe result
@@ -3811,13 +4719,15 @@ pub(crate) struct AgentWorktreeFacts {
 /// model: a dirty worktree is always kept; removal needs a positive merged
 /// signal AND zero unique unmerged commits; otherwise the worktree is kept and
 // flagged. trace:TASK-878 | ai:claude
+// trace:BUG-1719 | ai:codex
 pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     // KEEP first — uncommitted work is unambiguously "has work". Clean != no
     // work, but dirty is definitely work; never delete it.
     if facts.dirty {
-        return AgentWorktreeVerdict::Keep(
-            "uncommitted changes present — never auto-removed".to_string(),
-        );
+        return AgentWorktreeVerdict::Keep {
+            reason: "uncommitted changes present — never auto-removed".to_string(),
+            actionable: true,
+        };
     }
 
     // A positive "this work has shipped" signal — either suffices.
@@ -3834,7 +4744,10 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
 
     let Some(merged_reason) = merged_reason else {
         // No merged signal at all → never remove; flag for the operator.
-        return AgentWorktreeVerdict::Keep("no merge signal — operator decision".to_string());
+        return AgentWorktreeVerdict::Keep {
+            reason: "no merge signal — operator decision".to_string(),
+            actionable: true,
+        };
     };
 
     // Even with a merged signal, a branch carrying genuinely-unique unmerged
@@ -3855,10 +4768,21 @@ pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktr
                 facts.unique_unmerged_commits
             ));
         }
-        return AgentWorktreeVerdict::Keep(format!(
-            "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
-            facts.unique_unmerged_commits
-        ));
+        if facts.spec_trailer_on_main {
+            // trace:BUG-1718 | ai:codex
+            return AgentWorktreeVerdict::Keep { reason: format!(
+                "{merged_reason}; {} unique unmerged commit(s) are a squash-ancestry artifact from a \
+                 batched integration merge, and content is undecidable — no action required",
+                facts.unique_unmerged_commits
+            ), actionable: false };
+        }
+        return AgentWorktreeVerdict::Keep {
+            reason: format!(
+                "{merged_reason}, but {} unique unmerged commit(s) — keep, operator decision",
+                facts.unique_unmerged_commits
+            ),
+            actionable: true,
+        };
     }
 
     AgentWorktreeVerdict::Removable(merged_reason.to_string())
@@ -4222,7 +5146,20 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// removal stays gated behind --yes --force + the STORY-666 sign-off) or Keep
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
+// trace:BUG-1719 | ai:codex
+#[cfg(test)]
 pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    scan_merged_agent_worktrees_with_count(project_root).findings
+}
+
+// trace:BUG-1719 | ai:codex
+struct AgentWorktreeScan {
+    findings: Vec<DoctorFinding>,
+    reclaimable_count: usize,
+}
+
+// trace:BUG-1719 | ai:codex
+fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> AgentWorktreeScan {
     use std::process::Command as PCmd;
 
     let git = |args: &[&str]| -> Option<u32> {
@@ -4244,7 +5181,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     // Without a resolvable default branch we cannot corroborate merges; stay
     // silent rather than risk flagging live worktrees.
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
-        return Vec::new();
+        return AgentWorktreeScan {
+            findings: Vec::new(),
+            reclaimable_count: 0,
+        };
     };
 
     let project_canon = project_root
@@ -4254,7 +5194,13 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
     let leases = list_leases(project_root);
 
     let mut findings = Vec::new();
+    let mut reclaimable_count = 0;
     for wt in list_worktrees(project_root) {
+        // Missing registrations are stale bookkeeping, not actionable findings.
+        // trace:BUG-1718 | ai:codex
+        if !wt.path.exists() {
+            continue;
+        }
         let wt_canon = wt.path.canonicalize().unwrap_or_else(|_| wt.path.clone());
         // Never touch the main worktree or the store worktree.
         if wt_canon == project_canon || wt.branch.as_deref() == Some("aida-store") {
@@ -4377,19 +5323,15 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         // on the default branch names it in a trailer instead. Local and cheap, so
         // it runs before (and can spare) the forge lookup.
         // trace:TASK-1534 | ai:antigravity
-        let spec_trailer_on_main = if !ancestor_of_main && !dirty {
-            candidate_specs.iter().any(|spec| {
-                crate::session_reap::spec_trailer_landed_on(
-                    project_root,
-                    &default_ref,
-                    branch,
-                    spec,
-                )
+        // trace:BUG-1718 | ai:codex
+        let landing_commit = if !ancestor_of_main && !dirty {
+            candidate_specs.iter().find_map(|spec| {
+                crate::session_reap::spec_landing_commit(project_root, &default_ref, branch, spec)
             })
         } else {
-            false
+            None
         };
-
+        let spec_trailer_on_main = landing_commit.is_some();
         // Only consult the forge when the cheap ancestry/trailer probes were
         // inconclusive (covers the single-PR squash-merge case) and the worktree
         // is clean — a dirty worktree is kept regardless, so skip the network call.
@@ -4429,6 +5371,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
 
         match classify_agent_worktree(&facts) {
             AgentWorktreeVerdict::Removable(reason) => {
+                reclaimable_count += 1;
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4446,7 +5389,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                     safe_heal: false,
                 });
             }
-            AgentWorktreeVerdict::Keep(reason) => {
+            AgentWorktreeVerdict::Keep { reason, actionable } => {
+                // trace:BUG-1718 | ai:codex
+                // trace:BUG-1719 | ai:codex
+                let action = agent_worktree_keep_action(actionable);
                 findings.push(DoctorFinding {
                     category: "merged-agent-worktrees".to_string(),
                     id: wt.path.display().to_string(),
@@ -4454,7 +5400,7 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
                         "agent worktree {} on `{branch}` flagged: {reason}",
                         wt.path.display()
                     ),
-                    action: "operator decision: review and keep, or remove by hand".to_string(),
+                    action,
                     // Never auto-removed — flag-only.
                     safe_heal: false,
                 });
@@ -4462,7 +5408,10 @@ pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec
         }
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
-    findings
+    AgentWorktreeScan {
+        findings,
+        reclaimable_count,
+    }
 }
 
 /// TASK-878: remove one merged agent worktree + delete its branch. Only
@@ -4620,6 +5569,213 @@ fn print_doctor_status_diagnostics(
     print_status_worktrees_section(project_root, true);
     print_status_open_prs_section(project_root, true);
     print_status_coordination_section(&store_path, chrono::Utc::now(), true);
+}
+
+// trace:BUG-1749 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DoctorRenderMode {
+    Human,
+    Toon,
+    Json,
+}
+
+// trace:BUG-1749 | ai:codex
+pub(crate) fn doctor_render_mode_from(
+    json_flag: bool,
+    pin: Option<crate::OutputFormat>,
+    agent: bool,
+) -> DoctorRenderMode {
+    if json_flag || matches!(pin, Some(crate::OutputFormat::Json)) {
+        DoctorRenderMode::Json
+    } else if matches!(pin, Some(crate::OutputFormat::Human)) {
+        DoctorRenderMode::Human
+    } else if matches!(pin, Some(crate::OutputFormat::Toon)) || agent {
+        DoctorRenderMode::Toon
+    } else {
+        DoctorRenderMode::Human
+    }
+}
+
+// trace:BUG-1749 | ai:codex
+fn doctor_render_mode(json_flag: bool) -> DoctorRenderMode {
+    doctor_render_mode_from(
+        json_flag,
+        crate::output_format_override(),
+        crate::agent_output_mode(),
+    )
+}
+
+// trace:BUG-1749 | ai:codex
+pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
+    use crate::toon::{error_block, scalar, table_raw};
+    let mut blocks = vec![scalar("total", &report.total.to_string())];
+    if report.hidden_completed_without_commit != 0 {
+        blocks.push(scalar(
+            "hidden_completed_without_commit",
+            &report.hidden_completed_without_commit.to_string(),
+        ));
+    }
+    if !report.findings.is_empty() {
+        let rows = report
+            .findings
+            .iter()
+            .map(|f| {
+                vec![
+                    f.category.clone(),
+                    f.id.clone(),
+                    f.summary.clone(),
+                    f.action.clone(),
+                    f.safe_heal.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "findings",
+            &["category", "id", "summary", "action", "safe_heal"],
+            &rows,
+        ));
+    }
+    if !report.healed.is_empty() {
+        let rows = report
+            .healed
+            .iter()
+            .map(|r| {
+                vec![
+                    r.category.clone(),
+                    r.id.clone(),
+                    r.action.clone(),
+                    r.status.clone(),
+                    r.detail.clone().unwrap_or_default(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "healed",
+            &["category", "id", "action", "status", "detail"],
+            &rows,
+        ));
+    }
+    if let Some(v) = &report.bwrap {
+        blocks.push(scalar("bwrap", v));
+    }
+    if !report.performance_audits.is_empty() {
+        let rows = report
+            .performance_audits
+            .iter()
+            .map(|a| {
+                vec![
+                    a.command.clone(),
+                    a.budget_ms.to_string(),
+                    a.over_budget.to_string(),
+                    a.denominator.to_string(),
+                    a.proportion_millipercent.to_string(),
+                    a.tolerated_millipercent.to_string(),
+                    a.window_hours.to_string(),
+                    a.worst_ms.map(|v| v.to_string()).unwrap_or_default(),
+                    a.excluded_samples.to_string(),
+                    a.lineage_scoped.to_string(),
+                    a.ceiling_ms.map(|v| v.to_string()).unwrap_or_default(),
+                    a.ceiling_breached.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "performance_audits",
+            &[
+                "command",
+                "budget_ms",
+                "over_budget",
+                "denominator",
+                "proportion_millipercent",
+                "tolerated_millipercent",
+                "window_hours",
+                "worst_ms",
+                "excluded_samples",
+                "lineage_scoped",
+                "ceiling_ms",
+                "ceiling_breached",
+            ],
+            &rows,
+        ));
+    }
+    if let Some(c) = &report.runaway_seats {
+        for (k, v) in [
+            ("runaway_seats_files_scanned", c.files_scanned.to_string()),
+            ("runaway_seats_bytes_read", c.bytes_read.to_string()),
+            ("runaway_seats_sessions", c.sessions.to_string()),
+            (
+                "runaway_seats_sessions_timing_unknown",
+                c.sessions_timing_unknown.to_string(),
+            ),
+            ("runaway_seats_partial", c.partial.to_string()),
+            ("runaway_seats_elapsed_ms", c.elapsed_ms.to_string()),
+        ] {
+            blocks.push(scalar(k, &v));
+        }
+        blocks.push(scalar("runaway_seats_verdict", &c.verdict));
+        if !c.sources.is_empty() {
+            let rows = c
+                .sources
+                .iter()
+                .map(|s| {
+                    vec![
+                        s.source.clone(),
+                        s.path.clone(),
+                        s.state.clone(),
+                        s.detail.clone(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            blocks.push(table_raw(
+                "runaway_seats_sources",
+                &["source", "path", "state", "detail"],
+                &rows,
+            ));
+        }
+        if !c.still_active.is_empty() {
+            let rows = c
+                .still_active
+                .iter()
+                .map(|v| vec![v.clone()])
+                .collect::<Vec<_>>();
+            blocks.push(table_raw("runaway_seats_still_active", &["finding"], &rows));
+        }
+    }
+    if let Some(v) = &report.error {
+        blocks.push(error_block(v, None));
+    }
+    blocks.join("\n")
+}
+
+// trace:BUG-1749 | ai:codex
+fn emit_doctor_report(
+    mut report: DoctorReport,
+    reason: Option<String>,
+    mode: DoctorRenderMode,
+    healed: bool,
+    human_extras: impl FnOnce(&DoctorReport),
+) -> Result<()> {
+    match mode {
+        DoctorRenderMode::Json => {
+            report.error = reason.clone();
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        DoctorRenderMode::Toon => {
+            report.error = reason.clone();
+            print!("{}", render_doctor_report_toon(&report));
+        }
+        DoctorRenderMode::Human => {
+            render_doctor_report(&report, healed)?;
+            human_extras(&report);
+        }
+    }
+    match reason {
+        None => Ok(()),
+        Some(_) if mode != DoctorRenderMode::Human => {
+            Err(anyhow::Error::new(crate::TypedPayloadEmitted))
+        }
+        Some(msg) => Err(anyhow::anyhow!("{msg}")),
+    }
 }
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
@@ -5167,6 +6323,8 @@ fn heal_doctor_finding(
         // detector self-gates on git-canonical mode + an attached store
         // worktree). trace:BUG-563 | ai:claude
         "store-tracked-runtime" => heal_doctor_store_tracked_runtime(project_root, finding),
+        // trace:TASK-1547 | ai:codex
+        "store-staging-ignore" => heal_doctor_store_staging_ignore(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
@@ -5777,36 +6935,67 @@ fn heal_doctor_store_tracked_runtime(
 /// the STORE worktree's `.gitignore`. Each concern has its own idempotence
 /// sentinel; returns whether either guard was appended.
 // trace:BUG-563 | ai:claude
+// trace:TASK-1556 | ai:codex
+const STORE_RUNTIME_GITIGNORE_PATTERNS: &[&str] = &[
+    ".aida/node.toml",
+    ".aida/dispenser.toml",
+    ".aida/*.lock",
+    ".aida/cache.db",
+    ".aida/cache.db-journal",
+    ".aida/cache.db-shm",
+    ".aida/cache.db-wal",
+];
+
 fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
+    ensure_store_tracked_runtime_gitignore_with_patterns(
+        store_worktree,
+        aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS,
+    )
+}
+
+// trace:TASK-1556 | ai:codex
+fn ensure_store_tracked_runtime_gitignore_with_patterns(
+    store_worktree: &std::path::Path,
+    staging_patterns: &[&str],
+) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = store_worktree.join(".gitignore");
-    let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+    let existing_bytes = std::fs::read(&gitignore_path).unwrap_or_default();
+    let existing = String::from_utf8_lossy(&existing_bytes);
     let lines: Vec<&str> = existing.lines().map(str::trim).collect();
     let mut blocks = String::new();
 
-    // `.aida/node.toml` is BUG-563's load-bearing pattern: it conflicts on
-    // every cross-clone rebase.
-    if !lines.contains(&".aida/node.toml") {
+    // Check every line in the runtime block so new rules cannot be hidden
+    // behind a one-pattern sentinel.
+    let missing_runtime_patterns: Vec<_> = STORE_RUNTIME_GITIGNORE_PATTERNS
+        .iter()
+        .filter(|pattern| !lines.contains(pattern))
+        .collect();
+    if !missing_runtime_patterns.is_empty() {
         blocks.push_str(
-            "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
-             .aida/node.toml\n\
-             .aida/dispenser.toml\n\
-             .aida/*.lock\n\
-             .aida/cache.db\n\
-             .aida/cache.db-journal\n\
-             .aida/cache.db-shm\n\
-             .aida/cache.db-wal\n",
+            "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n",
         );
+        for pattern in missing_runtime_patterns {
+            blocks.push_str(pattern);
+            blocks.push('\n');
+        }
     }
 
     // BUG-1677 staging ignores are owned by fs_atomic. Keep them in this
     // tracked store `.gitignore`, never the shared project `info/exclude`, so
     // lock-free `git add -A .` cannot stage a temp file or hide user files.
-    // trace:BUG-1677 | ai:claude
-    let staging_patterns = aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS;
-    if !lines.contains(&staging_patterns[0]) {
-        blocks.push('\n');
-        blocks.push_str(&aida_core::fs_atomic::store_staging_ignore_block());
+    // trace:TASK-1547 | ai:codex
+    // trace:TASK-1556 | ai:codex
+    let missing_staging_patterns: Vec<_> = staging_patterns
+        .iter()
+        .filter(|pattern| !lines.contains(pattern))
+        .collect();
+    if !missing_staging_patterns.is_empty() {
+        blocks.push_str("\n# Atomic-write staging files (temp+rename) — never tracked\n");
+        for pattern in missing_staging_patterns {
+            blocks.push_str(pattern);
+            blocks.push('\n');
+        }
     }
     if blocks.is_empty() {
         return Ok(false);
@@ -5816,9 +7005,166 @@ fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> R
         .append(true)
         .open(&gitignore_path)
         .with_context(|| format!("opening {}", gitignore_path.display()))?;
-    f.write_all(blocks.as_bytes())
+    if !existing_bytes.is_empty() {
+        f.write_all(b"\n").with_context(|| {
+            format!("separating appended rules in {}", gitignore_path.display())
+        })?;
+    }
+    f.write_all(blocks.trim_start_matches('\n').as_bytes())
         .with_context(|| format!("appending to {}", gitignore_path.display()))?;
     Ok(true)
+}
+
+// A git -C on a missing/non-repository store path walks upward. Require the
+// exact `.aida-store` directory to be the repository root before any writes.
+// trace:TASK-1547 | ai:codex
+fn is_intended_store_worktree(
+    project_root: &std::path::Path,
+    store_worktree: &std::path::Path,
+) -> bool {
+    let Some(canonical_store) =
+        aida_core::store_locate::detect_distributed_store_from(project_root)
+    else {
+        return false;
+    };
+    let Ok(expected_root) = std::fs::canonicalize(store_worktree) else {
+        return false;
+    };
+    if std::fs::canonicalize(canonical_store).ok().as_ref() != Some(&expected_root) {
+        return false;
+    }
+    let Ok(output) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_worktree)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let reported = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !std::fs::canonicalize(reported).is_ok_and(|root| root == expected_root) {
+        return false;
+    }
+    // A standalone repository at `.aida-store` can pass the root check too.
+    // An attached linked worktree has a `.git` file and resolves a distinct
+    // git-dir and common-dir; require both, plus the canonical orphan branch.
+    if !std::fs::symlink_metadata(store_worktree.join(".git"))
+        .is_ok_and(|metadata| metadata.file_type().is_file())
+    {
+        return false;
+    }
+    let git_value = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(store_worktree)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    let (Some(git_dir), Some(common_dir), Some(branch)) = (
+        git_value(&["rev-parse", "--git-dir"]),
+        git_value(&["rev-parse", "--git-common-dir"]),
+        git_value(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+    ) else {
+        return false;
+    };
+    if git_dir == common_dir || branch != "aida-store" {
+        return false;
+    }
+    let canonical_common_dir = |root: &std::path::Path| {
+        let common_dir = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["rev-parse", "--git-common-dir"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())?;
+        let common_dir = std::path::PathBuf::from(common_dir);
+        let common_dir = if common_dir.is_absolute() {
+            common_dir
+        } else {
+            root.join(common_dir)
+        };
+        std::fs::canonicalize(common_dir).ok()
+    };
+    matches!(
+        (
+            canonical_common_dir(store_worktree),
+            canonical_common_dir(project_root)
+        ),
+        (Some(store_common_dir), Some(project_common_dir))
+            if store_common_dir == project_common_dir
+    )
+}
+
+// TASK-1547: repair the independent staging-ignore finding on the orphan
+// branch, including stores already healed by BUG-563.
+// trace:TASK-1547 | ai:codex
+fn heal_doctor_store_staging_ignore(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let store_worktree = project_root.join(".aida-store");
+    if !is_intended_store_worktree(project_root, &store_worktree) {
+        return Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: finding.action.clone(),
+            status: "failed".to_string(),
+            detail: Some(
+                ".aida-store is not the root of an attached git worktree; left unchanged"
+                    .to_string(),
+            ),
+        });
+    }
+    let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+    if appended {
+        let add = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store_worktree)
+            .args(["add", ".gitignore"])
+            .status()
+            .with_context(|| "staging store .gitignore".to_string())?;
+        if !add.success() {
+            anyhow::bail!("git add .gitignore failed in store worktree");
+        }
+        let commit = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store_worktree)
+            .args([
+                "commit",
+                "--only",
+                "--quiet",
+                "-m",
+                "chore(store): ignore atomic staging files (TASK-1547 TASK-1556)",
+                "--",
+                ".gitignore",
+            ])
+            .status()
+            .with_context(|| "committing staging ignores on store worktree".to_string())?;
+        if !commit.success() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "failed".to_string(),
+                detail: Some("commit on store worktree failed".to_string()),
+            });
+        }
+    }
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "append missing staging patterns and commit on store worktree".to_string(),
+        status: if appended { "healed" } else { "skipped" }.to_string(),
+        detail: None,
+    })
 }
 
 // TASK-570: heal an orphan queue entry by routing through the same
@@ -5919,23 +7265,208 @@ mod story_462_doctor_tests {
         (dir, store)
     }
 
-    const BUG_563_RUNTIME_PATTERNS: &str =
-        "# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n\
-.aida/node.toml\n\
-.aida/dispenser.toml\n\
-.aida/*.lock\n\
-.aida/cache.db\n\
-.aida/cache.db-journal\n\
-.aida/cache.db-shm\n\
-.aida/cache.db-wal\n";
+    fn bug_563_runtime_patterns() -> String {
+        format!(
+            "# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n{}",
+            STORE_RUNTIME_GITIGNORE_PATTERNS
+                .iter()
+                .map(|pattern| format!("{pattern}\n"))
+                .collect::<String>()
+        )
+    }
+
+    fn task_1547_linked_store(
+        branch: &str,
+        contents: &str,
+    ) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let run_git = |cwd: &std::path::Path, args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        run_git(project, &["init", "--initial-branch=main", "-q"]);
+        run_git(project, &["config", "user.name", "AIDA Fixture"]);
+        run_git(
+            project,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        run_git(project, &["add", ".aida/config.toml"]);
+        run_git(project, &["commit", "-qm", "fixture project"]);
+        let store = project.join(".aida-store");
+        run_git(
+            project,
+            &["worktree", "add", "-b", branch, store.to_str().unwrap()],
+        );
+        std::fs::write(store.join(".gitignore"), contents).unwrap();
+        run_git(&store, &["add", ".gitignore"]);
+        run_git(&store, &["commit", "-qm", "fixture store"]);
+        (dir, store)
+    }
+
+    fn task_202_git(cwd: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn task_202_project(root: &std::path::Path) {
+        std::fs::create_dir_all(root).unwrap();
+        task_202_git(root, &["-c", "init.defaultBranch=main", "init", "-q"]);
+        task_202_git(root, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            root,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        task_202_git(root, &["add", ".aida/config.toml"]);
+        task_202_git(root, &["commit", "-qm", "fixture project"]);
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_accepts_linked_aida_store_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        task_202_git(&project, &["checkout", "--orphan", "aida-store"]);
+        task_202_git(
+            &project,
+            &["commit", "--allow-empty", "-qm", "fixture store branch"],
+        );
+        task_202_git(&project, &["checkout", "main"]);
+        task_202_git(
+            &project,
+            &["worktree", "add", store.to_str().unwrap(), "aida-store"],
+        );
+        assert!(is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_foreign_linked_worktree() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let foreign = tmp.path().join("foreign");
+        task_202_project(&foreign);
+        let store = project.join(".aida-store");
+        task_202_git(
+            &foreign,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "aida-store",
+                store.to_str().unwrap(),
+            ],
+        );
+
+        // Establish that checks 1–4 hold, so only common-dir ownership rejects it.
+        assert_eq!(
+            aida_core::store_locate::detect_distributed_store_from(&project)
+                .unwrap()
+                .canonicalize()
+                .unwrap(),
+            store.canonicalize().unwrap()
+        );
+        let git_value = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git {args:?} failed");
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        };
+        assert_eq!(
+            std::fs::canonicalize(git_value(&["rev-parse", "--show-toplevel"])).unwrap(),
+            store.canonicalize().unwrap()
+        );
+        assert!(std::fs::symlink_metadata(store.join(".git"))
+            .unwrap()
+            .file_type()
+            .is_file());
+        assert_ne!(
+            git_value(&["rev-parse", "--git-dir"]),
+            git_value(&["rev-parse", "--git-common-dir"])
+        );
+        assert_eq!(
+            git_value(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+            "aida-store"
+        );
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
+
+    // trace:TASK-202 | ai:codex
+    #[test]
+    fn is_intended_store_rejects_standalone_repository() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path().join("project");
+        task_202_project(&project);
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        task_202_git(
+            &store,
+            &["-c", "init.defaultBranch=aida-store", "init", "-q"],
+        );
+        task_202_git(&store, &["config", "user.name", "AIDA Fixture"]);
+        task_202_git(
+            &store,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::write(store.join("seed"), "fixture").unwrap();
+        task_202_git(&store, &["add", "seed"]);
+        task_202_git(&store, &["commit", "-qm", "fixture store"]);
+        assert!(store.join(".git").is_dir());
+        assert!(!is_intended_store_worktree(&project, &store));
+    }
 
     #[test]
     fn bug_1677_appends_staging_ignores_to_bug_563_guarded_store() {
-        let (_dir, store) = bug_1677_store_gitignore(BUG_563_RUNTIME_PATTERNS);
+        let runtime_patterns = bug_563_runtime_patterns();
+        let (_dir, store) = bug_1677_store_gitignore(&runtime_patterns);
 
         assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
 
         let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert_eq!(
+            content,
+            format!(
+                "{runtime_patterns}\n{}",
+                aida_core::fs_atomic::store_staging_ignore_block()
+            )
+        );
         for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
             assert!(
                 content.lines().any(|line| line.trim() == *pattern),
@@ -5947,7 +7478,8 @@ mod story_462_doctor_tests {
     #[test]
     fn bug_1677_both_gitignore_guards_present_is_noop() {
         let contents = format!(
-            "{BUG_563_RUNTIME_PATTERNS}\n{}",
+            "{}\n{}",
+            bug_563_runtime_patterns(),
             aida_core::fs_atomic::store_staging_ignore_block()
         );
         let (_dir, store) = bug_1677_store_gitignore(&contents);
@@ -5968,6 +7500,422 @@ mod story_462_doctor_tests {
         assert!(content.contains(".aida/node.toml"));
         for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
             assert!(content.lines().any(|line| line.trim() == *pattern));
+        }
+    }
+
+    #[test]
+    fn task_1547_finding_fires_for_bug_563_healed_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "mode = \"distributed\"\n",
+        )
+        .unwrap();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+
+        let findings =
+            collect_doctor_findings(project, &aida_core::RequirementsStore::default(), None)
+                .unwrap();
+        assert!(findings
+            .iter()
+            .any(|finding| finding.category == "store-staging-ignore"));
+        assert!(detect_store_tracked_runtime(project).is_empty());
+    }
+
+    #[test]
+    fn task_1547_user_lines_keep_content_and_order_and_repair_is_idempotent() {
+        let original = "# user's first rule\nnotes.tmp.txt\ncustom/**\n";
+        let (_dir, store) = bug_1677_store_gitignore(original);
+
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let repaired = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert!(repaired.starts_with(original));
+        assert!(repaired
+            .lines()
+            .any(|line| line.trim() == "objects/**/*.tmp.*"));
+        assert!(!repaired.lines().any(|line| line.trim() == "*.tmp.*"));
+        assert!(!ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(store.join(".gitignore")).unwrap(),
+            repaired
+        );
+    }
+
+    #[test]
+    fn task_1547_crlf_user_bytes_are_preserved_with_one_separator() {
+        let original = b"# user rule\r\ncustom/**\r\n";
+        let (_dir, store) = bug_1677_store_gitignore(std::str::from_utf8(original).unwrap());
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let repaired = std::fs::read(store.join(".gitignore")).unwrap();
+        assert!(repaired.starts_with(original));
+        assert_eq!(&repaired[original.len()..original.len() + 1], b"\n");
+        assert!(String::from_utf8_lossy(&repaired[original.len()..])
+            .starts_with("\n# Per-clone runtime state"));
+    }
+
+    #[test]
+    fn task_1547_missing_final_newline_is_added_as_one_separator() {
+        let original = b"# user rule\ncustom/**";
+        let (_dir, store) = bug_1677_store_gitignore(std::str::from_utf8(original).unwrap());
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let repaired = std::fs::read(store.join(".gitignore")).unwrap();
+        assert!(repaired.starts_with(original));
+        assert_eq!(&repaired[original.len()..original.len() + 1], b"\n");
+        assert!(String::from_utf8_lossy(&repaired[original.len()..])
+            .starts_with("\n# Per-clone runtime state"));
+    }
+
+    #[test]
+    fn task_1547_non_worktree_store_fails_closed_without_writes_or_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        let run_git = |cwd: &std::path::Path, args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        assert!(run_git(project, &["init", "-q"]).status.success());
+        assert!(run_git(project, &["config", "user.name", "AIDA Fixture"])
+            .status
+            .success());
+        assert!(run_git(
+            project,
+            &["config", "user.email", "aida-fixture@example.invalid"]
+        )
+        .status
+        .success());
+        assert!(run_git(project, &["add", ".aida-store/.gitignore"])
+            .status
+            .success());
+        assert!(run_git(project, &["commit", "-qm", "parent baseline"])
+            .status
+            .success());
+        let before = std::fs::read(store.join(".gitignore")).unwrap();
+        let head_before = run_git(project, &["rev-parse", "HEAD"]);
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(std::fs::read(store.join(".gitignore")).unwrap(), before);
+        assert_eq!(
+            run_git(project, &["rev-parse", "HEAD"]).stdout,
+            head_before.stdout
+        );
+        assert!(run_git(project, &["diff", "--quiet"]).status.success());
+    }
+
+    #[test]
+    fn task_1547_standalone_store_repo_fails_closed_without_file_index_or_head_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store)
+            .args(["init", "-b", "aida-store", "-q"])
+            .status()
+            .unwrap()
+            .success());
+        git(&["config", "user.name", "AIDA Fixture"]);
+        git(&["config", "user.email", "aida-fixture@example.invalid"]);
+        git(&["add", ".gitignore"]);
+        git(&["commit", "-qm", "fixture baseline"]);
+        let before_file = std::fs::read(store.join(".gitignore")).unwrap();
+        let before_head = git(&["rev-parse", "HEAD"]).stdout;
+        let before_index = git(&["write-tree"]).stdout;
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(
+            std::fs::read(store.join(".gitignore")).unwrap(),
+            before_file
+        );
+        assert_eq!(git(&["rev-parse", "HEAD"]).stdout, before_head);
+        assert_eq!(git(&["write-tree"]).stdout, before_index);
+    }
+
+    #[test]
+    fn task_1547_foreign_linked_store_fails_closed_without_file_index_or_head_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("project");
+        let foreign = dir.path().join("foreign");
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(&foreign).unwrap();
+        let git = |cwd: &std::path::Path, args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output
+        };
+        git(&project, &["init", "--initial-branch=main", "-q"]);
+        git(&project, &["config", "user.name", "AIDA Fixture"]);
+        git(
+            &project,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        git(&project, &["add", ".aida/config.toml"]);
+        git(&project, &["commit", "-qm", "fixture project"]);
+
+        git(&foreign, &["init", "--initial-branch=main", "-q"]);
+        git(&foreign, &["config", "user.name", "AIDA Fixture"]);
+        git(
+            &foreign,
+            &["config", "user.email", "aida-fixture@example.invalid"],
+        );
+        std::fs::write(foreign.join("README"), "foreign repository\n").unwrap();
+        git(&foreign, &["add", "README"]);
+        git(&foreign, &["commit", "-qm", "fixture foreign repository"]);
+        git(
+            &foreign,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "aida-store",
+                store.to_str().unwrap(),
+            ],
+        );
+        std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
+        git(&store, &["add", ".gitignore"]);
+        git(&store, &["commit", "-qm", "fixture store"]);
+
+        let before_file = std::fs::read(store.join(".gitignore")).unwrap();
+        let before_head = git(&store, &["rev-parse", "HEAD"]).stdout;
+        let before_index = git(&store, &["write-tree"]).stdout;
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(&project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(
+            std::fs::read(store.join(".gitignore")).unwrap(),
+            before_file
+        );
+        assert_eq!(git(&store, &["rev-parse", "HEAD"]).stdout, before_head);
+        assert_eq!(git(&store, &["write-tree"]).stdout, before_index);
+        assert!(git(&store, &["status", "--porcelain"]).stdout.is_empty());
+    }
+
+    #[test]
+    fn task_1547_wrong_branch_store_fails_closed_without_file_index_or_head_changes() {
+        let (_dir, store) = task_1547_linked_store("wrong-store", &bug_563_runtime_patterns());
+        let project = store.parent().unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        let before_file = std::fs::read(store.join(".gitignore")).unwrap();
+        let before_head = git(&["rev-parse", "HEAD"]).stdout;
+        let before_index = git(&["write-tree"]).stdout;
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".into(),
+            id: ".gitignore".into(),
+            summary: "missing staging ignores".into(),
+            action: "append staging ignores".into(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "failed");
+        assert_eq!(
+            std::fs::read(store.join(".gitignore")).unwrap(),
+            before_file
+        );
+        assert_eq!(git(&["rev-parse", "HEAD"]).stdout, before_head);
+        assert_eq!(git(&["write-tree"]).stdout, before_index);
+    }
+
+    #[test]
+    fn task_1547_fully_guarded_store_is_byte_identical() {
+        let contents = format!(
+            "{}\n{}",
+            bug_563_runtime_patterns(),
+            aida_core::fs_atomic::store_staging_ignore_block()
+        );
+        let (_dir, store) = bug_1677_store_gitignore(&contents);
+        let project = store.parent().unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "mode = \"distributed\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        let before = std::fs::read(store.join(".gitignore")).unwrap();
+
+        assert!(crate::detect_store_missing_staging_ignores(project).is_empty());
+        assert!(!ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        assert_eq!(std::fs::read(store.join(".gitignore")).unwrap(), before);
+    }
+
+    #[test]
+    fn task_1547_repair_commits_store_gitignore_on_orphan_branch() {
+        let (_dir, store) = task_1547_linked_store("aida-store", &bug_563_runtime_patterns());
+        let project = store.parent().unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        assert!(git(&["init", "-q"]).status.success());
+        assert!(git(&["config", "user.name", "AIDA Fixture"])
+            .status
+            .success());
+        assert!(
+            git(&["config", "user.email", "aida-fixture@example.invalid"])
+                .status
+                .success()
+        );
+        assert!(git(&["add", ".gitignore"]).status.success());
+        std::fs::write(store.join("unrelated.txt"), "baseline\n").unwrap();
+        assert!(git(&["add", "unrelated.txt"]).status.success());
+        assert!(git(&["commit", "-qm", "fixture baseline"]).status.success());
+        std::fs::write(store.join("unrelated.txt"), "user staged change\n").unwrap();
+        assert!(git(&["add", "unrelated.txt"]).status.success());
+
+        let finding = DoctorFinding {
+            category: "store-staging-ignore".to_string(),
+            id: ".gitignore".to_string(),
+            summary: "store .gitignore is missing the staging-ignore patterns".to_string(),
+            action: "append staging ignores".to_string(),
+            safe_heal: true,
+        };
+        let result = heal_doctor_store_staging_ignore(project, &finding).unwrap();
+
+        assert_eq!(result.status, "healed");
+        assert!(git(&["diff", "--quiet"]).status.success());
+        assert!(!git(&["diff", "--cached", "--quiet"]).status.success());
+        assert_eq!(
+            String::from_utf8(git(&["diff", "--cached", "--name-only"]).stdout)
+                .unwrap()
+                .trim(),
+            "unrelated.txt"
+        );
+        let head = String::from_utf8(git(&["log", "-1", "--format=%s"]).stdout).unwrap();
+        assert!(head.contains("TASK-1547 TASK-1556"));
+        let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
+            assert!(content.lines().any(|line| line.trim() == *pattern));
+        }
+    }
+
+    #[test]
+    fn task_1556_store_with_only_first_staging_pattern_gets_the_rest() {
+        let (_dir, store) = bug_1677_store_gitignore("objects/**/*.tmp.*\n");
+        assert!(ensure_store_tracked_runtime_gitignore(&store).unwrap());
+        let content = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        for pattern in aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS {
+            assert!(
+                content.lines().any(|line| line.trim() == *pattern),
+                "missing {pattern}"
+            );
+        }
+        assert_eq!(content.matches("objects/**/*.tmp.*").count(), 1);
+    }
+
+    #[test]
+    fn task_1556_injected_sixth_pattern_is_appended_when_first_five_exist() {
+        let five = aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS;
+        let sixth = "new-area/**/*.tmp.*";
+        let mut injected = five.to_vec();
+        injected.push(sixth);
+        let contents = format!("{}\n", five.join("\n"));
+        let (_dir, store) = bug_1677_store_gitignore(&contents);
+
+        assert!(ensure_store_tracked_runtime_gitignore_with_patterns(&store, &injected).unwrap());
+        let repaired = std::fs::read_to_string(store.join(".gitignore")).unwrap();
+        assert!(repaired.lines().any(|line| line.trim() == sixth));
+        for pattern in five {
+            assert_eq!(
+                repaired
+                    .lines()
+                    .filter(|line| line.trim() == *pattern)
+                    .count(),
+                1
+            );
         }
     }
 
@@ -6259,7 +8207,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -6298,7 +8246,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -6560,7 +8508,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -6574,7 +8522,7 @@ mod story_462_doctor_tests {
         };
         assert!(matches!(
             classify_agent_worktree(&facts),
-            AgentWorktreeVerdict::Keep(_)
+            AgentWorktreeVerdict::Keep { .. }
         ));
     }
 
@@ -6924,6 +8872,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8239,6 +10188,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8311,6 +10261,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8349,6 +10300,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8406,6 +10358,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8552,6 +10505,39 @@ hostname = "localhost"
     // TASK-1484: a LIVE owner past its expected duration is reported as
     // diagnostic evidence but never healed; a reused PID reads as dead.
     // trace:TASK-1484 | ai:claude
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn doctor_reports_unknown_foreign_lock_overrun_without_healing() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
+        let path = aida_core::cache_lock_info_path(&cache);
+        let info = aida_core::CacheLockInfo {
+            pid: u32::MAX,
+            boot_id: Some("foreign boot".into()),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(10)).to_rfc3339(),
+            expected_duration_secs: Some(60),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_vec(&info).unwrap()).unwrap();
+        let findings = collect_doctor_findings(
+            root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("stale-locks"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1);
+        assert!(!findings[0].safe_heal);
+        assert!(findings[0].summary.contains("unknown owner identity"));
+        assert_eq!(
+            heal_doctor_stale_lock(&findings[0]).unwrap().status,
+            "skipped"
+        );
+        assert!(path.exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn doctor_reports_live_lock_overrun_without_healing_it() {
@@ -8668,6 +10654,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8714,6 +10701,7 @@ hostname = "localhost"
                 all: false,
                 since: None,
                 fail_on_findings: false,
+                quiet_output: false,
             },
         )
         .unwrap();
@@ -8816,6 +10804,7 @@ hostname = "localhost"
             all: false,
             since: None,
             fail_on_findings: false,
+            quiet_output: false,
         };
         let result = heal_doctor_finding(project_root, &finding, &opts).unwrap();
         assert_eq!(result.status, "healed");
@@ -9006,6 +10995,212 @@ hostname = "localhost"
             .output()
             .unwrap();
         assert!(out.status.success(), "git {:?}: {:?}", args, out);
+    }
+
+    /// A git-canonical project root, ready for the BUG-1734 gates: distributed
+    /// config plus a present `.aida-store`. Tempdir-only — nothing here reads
+    /// the developer's machine, which is the point: the condition this check
+    /// names happens to exist on one host, and a test that depended on it would
+    /// pass there and nowhere else.
+    // trace:BUG-1734 | ai:claude
+    fn git_canonical_root_1734(root: &std::path::Path) {
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+    }
+
+    /// AC1: distributed mode + `requirements.db` in the root → one warning
+    /// naming the file and its mtime, wired through to `aida doctor`'s own
+    /// finding list, and never auto-healable.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn legacy_store_in_root_is_flagged_on_a_git_canonical_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        git_canonical_root_1734(root);
+        std::fs::write(root.join("requirements.db"), b"SQLite format 3\0").unwrap();
+
+        let hits = detect_legacy_store_in_root(root);
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert_eq!(hits[0].name, "requirements.db");
+        assert_eq!(hits[0].len, 16);
+        // AC1 names the mtime. Asserted as a shape, not a value: pinning the
+        // date would only restate the clock the fixture just used.
+        let when = hits[0].modified.as_deref().expect("mtime not reported");
+        assert_eq!(when.len(), 10, "expected YYYY-MM-DD, got {when:?}");
+
+        // Wiring: it reaches the finding list `aida doctor` prints, under the
+        // category the alias table resolves, and is not auto-healable.
+        let store = aida_core::models::RequirementsStore::new();
+        let findings = collect_doctor_findings(root, &store, Some("legacy-store-in-root")).unwrap();
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].category, "legacy-store-in-root");
+        assert_eq!(findings[0].id, "requirements.db");
+        assert!(!findings[0].safe_heal, "must never be auto-healed");
+        assert!(findings[0].summary.contains("requirements.db"));
+        assert!(findings[0].summary.contains("BUG-1732"));
+
+        // AC4's other half, mechanically: the heal dispatcher has no arm for
+        // this category, so a `--heal` run reports it and leaves the file
+        // alone. Asserted rather than assumed, because sharing
+        // `legacy-store-cruft`'s category would have routed it into a `git rm`.
+        let healed = heal_doctor_finding(root, &findings[0], &DoctorRunOptions::default()).unwrap();
+        assert_eq!(healed.status, "skipped", "{healed:?}");
+        assert!(
+            root.join("requirements.db").exists(),
+            "the heal path removed a file this check must never touch"
+        );
+    }
+
+    /// AC2: the same project with no legacy store in its root says nothing.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_git_canonical_root_without_a_legacy_store_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git_canonical_root_1734(root);
+        assert!(detect_legacy_store_in_root(root).is_empty());
+    }
+
+    /// AC3: in legacy mode the file IS the store, so the check must be silent.
+    ///
+    /// Both legacy shapes: a config that does not declare distributed mode, and
+    /// no `.aida/config.toml` at all. The second is what pins the gate to THIS
+    /// root: swapping the root-local read for `distributed_mode_declared_from`
+    /// climbs to the distributed parent and warns about a file that is not that
+    /// parent's concern.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_legacy_mode_root_with_a_requirements_db_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let declared = dir.path().join("declared-legacy");
+        std::fs::create_dir_all(declared.join(".aida")).unwrap();
+        std::fs::write(
+            declared.join(".aida/config.toml"),
+            "[store]\nmode = \"local\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(declared.join(".aida-store")).unwrap();
+        std::fs::write(declared.join("requirements.db"), b"x").unwrap();
+        assert!(
+            detect_legacy_store_in_root(&declared).is_empty(),
+            "a config that does not declare distributed mode must be silent"
+        );
+
+        // No config at all, nested under a distributed parent. The child gets
+        // its own `.aida-store` so the second gate cannot be what makes this
+        // pass: the only thing left to stop it is gate 1 reading THIS root's
+        // config and finding none.
+        let parent = dir.path().join("distributed-parent");
+        git_canonical_root_1734(&parent);
+        let child = parent.join("legacy-child");
+        std::fs::create_dir_all(child.join(".aida-store")).unwrap();
+        std::fs::write(child.join("requirements.db"), b"x").unwrap();
+        assert!(
+            detect_legacy_store_in_root(&child).is_empty(),
+            "a root with no config of its own must not inherit the parent's mode"
+        );
+    }
+
+    /// The second gate, beyond the filed acceptance: a config that declares
+    /// distributed mode before its store exists is mid-migration, and there the
+    /// legacy file may still be what actually gets read. Telling that operator
+    /// to relocate their live store would be worse than saying nothing.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_distributed_config_with_no_store_yet_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[store]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("requirements.db"), b"x").unwrap();
+        // No `.aida-store/` and no `aida-store` branch.
+        assert!(detect_legacy_store_in_root(root).is_empty());
+    }
+
+    /// The partition with `legacy-store-cruft`: a file that detector reports
+    /// (a cruft-shaped name that is TRACKED) is left to it, so one file never
+    /// yields two findings with contradictory remedies — `git rm` there,
+    /// relocate here. An UNTRACKED `requirements.yaml` is invisible to
+    /// `git ls-files` and therefore ours.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn a_tracked_requirements_yaml_is_left_to_legacy_store_cruft() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        git752(root, &["init", "-q", "-b", "main"]);
+        git752(root, &["config", "user.email", "t@t.t"]);
+        git752(root, &["config", "user.name", "t"]);
+        git_canonical_root_1734(root);
+        std::fs::write(root.join("requirements.yaml"), "legacy: store\n").unwrap();
+
+        // Untracked → ours.
+        assert_eq!(
+            detect_legacy_store_in_root(root)
+                .iter()
+                .map(|h| h.name.clone())
+                .collect::<Vec<_>>(),
+            vec!["requirements.yaml".to_string()]
+        );
+
+        // Tracked → theirs, and we stand down.
+        git752(root, &["add", "requirements.yaml"]);
+        git752(root, &["commit", "-qm", "track it"]);
+        assert!(
+            detect_legacy_store_in_root(root).is_empty(),
+            "a tracked cruft-shaped path must be left to legacy-store-cruft"
+        );
+    }
+
+    /// AC4: the operator is told to relocate, and never to delete.
+    // trace:BUG-1734 | ai:claude
+    #[test]
+    fn the_action_says_relocate_and_never_delete() {
+        let hit = LegacyStoreInRoot {
+            name: "requirements.db".to_string(),
+            len: 1_700_000,
+            modified: Some("2026-03-18".to_string()),
+        };
+        let action = legacy_store_in_root_action(&hit);
+        assert!(action.contains("move"), "{action}");
+        assert!(action.contains("do not delete it"), "{action}");
+        // Not merely "mentions delete somewhere": no imperative to delete.
+        assert!(!action.contains("rm "), "{action}");
+        assert!(!action.contains("delete it\n"), "{action}");
+
+        let summary = legacy_store_in_root_summary(&hit);
+        assert!(summary.contains("requirements.db"), "{summary}");
+        assert!(summary.contains("1700000 bytes"), "{summary}");
+        // Labelled UTC: an operator comparing against `ls` (local time) may
+        // otherwise read a one-day discrepancy as a wrong answer.
+        assert!(
+            summary.contains("last modified 2026-03-18 UTC"),
+            "{summary}"
+        );
+        assert!(summary.contains("does not read it"), "{summary}");
+        assert!(summary.contains("BUG-1732"), "{summary}");
+
+        // The mtime is optional, and its absence must not leave a dangling
+        // clause in the middle of the sentence.
+        let no_mtime = LegacyStoreInRoot {
+            modified: None,
+            ..hit
+        };
+        let summary = legacy_store_in_root_summary(&no_mtime);
+        assert!(!summary.contains("last modified"), "{summary}");
+        assert!(summary.contains("bytes) sits in the root"), "{summary}");
     }
 
     /// TASK-752: a distributed/git-canonical project (config declares

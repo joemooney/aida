@@ -165,3 +165,12 @@ These files are operational defaults, not a permission model. Only enable flags
 you are comfortable applying to every supervised launch in that scope. In
 particular, unsafe permission or sandbox bypass flags are the operator's
 responsibility and should not be enabled casually in shared projects.
+# Local AIDA executable selection
+
+Agent launch previews (`--no-exec --verbose`) report the AIDA executable path
+and the selected build profile. Child AIDA commands use `AIDA_BIN` when set,
+otherwise the running executable, then PATH. Set `AIDA_BIN` to an executable
+or an AIDA checkout directory. A checkout with both `target/debug/aida` and
+`target/release/aida` selects the newer build by modification time; equal
+timestamps select release. `AIDA_BUILD_PROFILE=debug` or `release` pins a
+checkout profile and fails clearly if that build is unavailable.

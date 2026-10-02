@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::drain_lock::{drain_lock_path, DrainLock};
+use crate::process_retry::RetryEtxtbsy;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -21,6 +22,8 @@ const SIGTERM: i32 = 15;
 
 /// Env var carrying the fake drain's project root to the re-exec'd child.
 const CHILD_ROOT_ENV: &str = "AIDA_TEST_TASK_1518_SIGTERM_ROOT";
+// trace:TASK-1542 | ai:codex
+const CHILD_STOP_ROOT_ENV: &str = "AIDA_TEST_TASK_1542_STOP_ROOT";
 
 /// Populate `root` as a fake drain: the drain lock recorded for `pid`, two
 /// leases (one created by `pid`, one by another process) and no stop request.
@@ -318,6 +321,38 @@ fn task_1518_borrowed_child_marks_leases_but_writes_no_stop_request() {
     );
     assert_eq!(report.leases_marked, vec!["aaaa11112222".to_string()]);
     assert!(drain_lock_path(root).exists());
+}
+
+/// The SAME proxy decision, extended to TASK-1542's stopped record: it lands
+/// in `.aida/drain-state.json`, which like the stop request is ONE file per
+/// project root owned by the parent wave. A borrowed child that stamped it
+/// would make `aida drain status` report the whole wave as deliberately
+/// stopped the moment the parent later exits — reclassifying a crash as an
+/// intentional stop on the strength of one killed internal child drive.
+// trace:TASK-1542 | ai:claude
+#[test]
+fn task_1542_borrowed_child_writes_no_stopped_record_on_the_parents_state() {
+    let pid = std::process::id();
+    let tmp = fake_drain(pid);
+    let root = tmp.path();
+    let mut parent_state = crate::drain_state::DrainState::new_single("TASK-1542", "run", false);
+    parent_state.orchestrator_pid = pid;
+    parent_state.write(root).unwrap();
+
+    let report = on_first_term(root, pid, true);
+    assert!(!report.stop_requested);
+    let after = crate::drain_state::DrainState::read(root).expect("the parent state survives");
+    assert!(
+        after.stopped_at.is_none() && after.stopped_reason.is_none(),
+        "a borrowed child must leave the parent wave's drain-state unstamped"
+    );
+
+    // ...and the unborrowed drain in the same root DOES stamp it, so the
+    // assertion above is about the borrow flag and not about a broken writer.
+    on_first_term(root, pid, false);
+    let after = crate::drain_state::DrainState::read(root).unwrap();
+    assert!(after.stopped_at.is_some());
+    assert_eq!(after.stopped_reason.as_deref(), Some(REASON_SIGTERM));
 }
 
 // --- `aida drain stop --now` ------------------------------------------------
@@ -730,7 +765,7 @@ fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
         .args(["real_sigterm_child_body", "--nocapture", "--test-threads=1"])
         .env(CHILD_ROOT_ENV, &root)
         .env_remove("AIDA_DRAIN_TERM_GRACE_SECS")
-        .output()
+        .output_retrying_etxtbsy()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -756,4 +791,127 @@ fn task_1518_real_sigterm_in_a_child_process_releases_lock_and_marks_leases() {
         stderr.contains("drain lock released"),
         "the child must report the release on the way out:\n{stderr}"
     );
+}
+
+#[cfg(unix)]
+#[test]
+// trace:TASK-1542 | ai:codex
+fn task_1542_real_sigterm_stop_child_body() {
+    let Some(root) = std::env::var_os(CHILD_STOP_ROOT_ENV).map(PathBuf::from) else {
+        return;
+    };
+    use std::os::unix::process::ExitStatusExt;
+    let pid = std::process::id();
+    populate_fake_drain(&root, pid);
+    let mut state = crate::drain_state::DrainState::new_single("TASK-1542", "test-run", false);
+    state.orchestrator_pid = pid;
+    state.write(&root).unwrap();
+    let mut grandchild = std::process::Command::new("sleep")
+        .arg("60")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let child_pid = grandchild.id();
+    let start = aida_core::liveness::process_start_identity(child_pid).unwrap();
+    std::fs::write(
+        lease_path(&root, "aaaa11112222"),
+        format!(
+            "id = \"aaaa11112222\"\ncreator_pid = {pid}\nactive_pid = {child_pid}\n\
+             active_pid_start_time = {}\n",
+            aida_core::toml_quote::toml_string(&start)
+        ),
+    )
+    .unwrap();
+    let slot: GuardSlot = Arc::new(Mutex::new(None));
+    install(DrainTermContext {
+        project_root: root.clone(),
+        drain_pid: pid,
+        guard: Arc::downgrade(&slot),
+        grace: Duration::from_secs(3),
+        term_flag: process_term_flag(),
+        borrowed: false,
+    })
+    .unwrap();
+    // SAFETY: signalling our own pid with the handler registered immediately above.
+    unsafe {
+        libc::kill(pid as libc::pid_t, libc::SIGTERM);
+    }
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(status) = grandchild.try_wait().unwrap() {
+            assert_eq!(
+                status.signal(),
+                Some(15),
+                "vendor child should receive SIGTERM"
+            );
+            eprintln!("TASK-1542_VENDOR_CHILD_TERMINATED_BY_SIGTERM");
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "vendor child was not terminated before grace deadline"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::thread::sleep(Duration::from_secs(15));
+    panic!("handler failed to force exit");
+}
+
+#[cfg(unix)]
+#[test]
+// trace:TASK-1542 | ai:codex
+fn task_1542_real_sigterm_forwards_and_leaves_stopped_state() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let exe = crate::aida_exe_path();
+    let output = std::process::Command::new(exe)
+        .args([
+            "real_sigterm_stop_child_body",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(CHILD_STOP_ROOT_ENV, &root)
+        .env_remove("AIDA_DRAIN_TERM_GRACE_SECS")
+        .output_retrying_etxtbsy()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let lease = std::fs::read_to_string(lease_path(&root, "aaaa11112222")).unwrap();
+    let grandchild_pid = toml::from_str::<toml::Value>(&lease).unwrap()["active_pid"]
+        .as_integer()
+        .unwrap() as u32;
+    let start = toml::from_str::<toml::Value>(&lease).unwrap()["active_pid_start_time"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // Leave no stray `sleep` behind, however the child fared — and do it
+    // BEFORE the assertions, so a failing assertion still cleans up. The
+    // identity check is what makes this safe: a pid recycled since the child
+    // wrote the lease has a different start time and is left alone.
+    if aida_core::liveness::process_identity_is_alive(grandchild_pid, Some(&start)) {
+        // SAFETY: `grandchild_pid` is a live, identity-corroborated process
+        // this test's own child spawned; it is > 1, so no process group or
+        // init is reachable from here.
+        unsafe {
+            libc::kill(grandchild_pid as libc::pid_t, libc::SIGKILL);
+        }
+    }
+    assert_eq!(
+        output.status.code(),
+        Some(SIGTERM_EXIT_CODE),
+        "stdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("TASK-1542_VENDOR_CHILD_TERMINATED_BY_SIGTERM"),
+        "{stderr}"
+    );
+    let state = crate::drain_state::DrainState::read(&root).expect("leftover drain state");
+    assert!(state.stopped_at.is_some());
+    assert_eq!(state.stopped_reason.as_deref(), Some("sigterm"));
+    assert!(matches!(
+        crate::drain_state::probe(&root),
+        crate::drain_state::DrainStatus::Stopped(_)
+    ));
 }

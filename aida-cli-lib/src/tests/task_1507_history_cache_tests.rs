@@ -867,7 +867,7 @@ fn history_cache_unwritable_dir_falls_back_to_git_walk() {
     std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
     if std::fs::write(ro.join("probe"), "x").is_ok() {
         // Running with privileges that ignore permissions: nothing to test.
-        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::mark_executable(&ro);
         return;
     }
     let db = ro.join(history_cache::history_db_file_name());
@@ -878,7 +878,7 @@ fn history_cache_unwritable_dir_falls_back_to_git_walk() {
         .unwrap()
         .0
         .is_empty());
-    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::mark_executable(&ro);
 }
 
 #[test]
@@ -958,10 +958,18 @@ fn history_cache_ignores_requirements_cache_and_store_locks() {
     let got = history_cache::serve_at(&fx.store, &db, &opts(), GENEROUS)
         .unwrap()
         .expect("served while other locks are held");
-    assert!(
-        started.elapsed() < Duration::from_secs(5),
-        "history must not wait on other locks (took {:?})",
-        started.elapsed()
+    // Load-bearing, so the original 5s literal stays fatal as the ceiling:
+    // nothing else here distinguishes serving without waiting from blocking
+    // on one of the held locks, and the call is passed a GENEROUS (120s)
+    // budget it would happily spend. Nominal is an index catch-up over a
+    // handful of specs — 16ms measured in a debug build on a quiet host — so
+    // the 5s ceiling is ~300x nominal; the 1s budget is the performance
+    // signal. trace:BUG-1731 | ai:claude
+    crate::test_timing::assert_within_budget(
+        started,
+        Duration::from_secs(1),
+        Duration::from_secs(5),
+        "history served while the cache, sidecar and store-write locks are held",
     );
     assert_eq!(got.events, walk);
     drop(held);
@@ -982,7 +990,17 @@ fn history_cache_concurrent_indexer_serves_snapshot_or_falls_back() {
     fx.put(&s);
     fx.commit("add STORY-14");
     assert!(serve(&fx, &opts()).is_none());
-    assert!(started.elapsed() < Duration::from_secs(5));
+    // Load-bearing for the same reason as above: `serve` returning None is
+    // the fallback, and only the clock shows it fell back *without waiting*
+    // on the held indexer lock. Original 5s literal kept as the ceiling, at
+    // ~250x the 20ms measured in a debug build on a quiet host.
+    // trace:BUG-1731 | ai:claude
+    crate::test_timing::assert_within_budget(
+        started,
+        Duration::from_secs(1),
+        Duration::from_secs(5),
+        "snapshot serve and fallback while another process holds the indexer lock",
+    );
     drop(lock);
     assert_parity(&fx, &opts(), "after the lock is released");
 }

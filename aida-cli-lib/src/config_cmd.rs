@@ -395,6 +395,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "security-relevant — edit ~/.aida/agents.toml deliberately",
         },
     },
+    // trace:TASK-1500 | ai:codex
+    KnobSpec {
+        section: "agents",
+        key: "confirm_bypass",
+        doc: "Require interactive confirmation before supervised launches disable permission prompts.",
+        default: "true",
+        edit: EditSafety::ReadOnly { reason: "human consent setting — edit ~/.aida/config.toml deliberately" },
+    },
     // trace:STORY-807 | ai:codex
     KnobSpec {
         section: "agents",
@@ -557,6 +565,26 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::ReadOnly {
             reason: "toggle with `aida review mode mass-change on|off` — the on-verb stamps the clock",
+        },
+    },
+    // trace:STORY-1476 | ai:claude — code-exec opt-in: read ONLY from
+    // ~/.aida/config.toml; a repo-level value is ignored on purpose.
+    KnobSpec {
+        section: "review",
+        key: "run_acceptance_commands",
+        doc: "Whether graded review may execute acceptance commands written into a spec (global config only; default off).",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "code-exec opt-in: edit ~/.aida/config.toml by hand",
+        },
+    },
+    KnobSpec {
+        section: "review",
+        key: "acceptance_command_allow",
+        doc: "Allowlist of exact command word-sequences graded review may run; a trailing `*` permits any arguments, a lone `*` permits anything.",
+        default: "(none)",
+        edit: EditSafety::ReadOnly {
+            reason: "code-exec allowlist: edit ~/.aida/config.toml by hand",
         },
     },
     // --- [protocol]. trace:TASK-1290 ---
@@ -814,6 +842,8 @@ fn render_effective_policy(project_root: &std::path::Path) {
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct PermissionPostureReport {
     pub agents: Vec<PermissionPostureRow>,
+    pub confirm_bypass: String,
+    pub confirm_bypass_source: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub findings: Vec<PermissionPostureFinding>,
 }
@@ -983,7 +1013,11 @@ pub(crate) fn set_permission_posture_gated(
             return Ok(None);
         }
     }
-    apply_permission_posture(project_root, tier, scope).map(Some)
+    if tier == ConfigPermissionTier::Bypass {
+        apply_confirmed_bypass_posture(project_root, scope).map(Some)
+    } else {
+        apply_permission_posture(project_root, tier, scope).map(Some)
+    }
 }
 
 // trace:STORY-1128 | ai:codex
@@ -1019,6 +1053,33 @@ pub(crate) struct PermissionPostureWriteResult {
 
 // trace:STORY-1128 | ai:codex
 pub(crate) fn apply_permission_posture(
+    project_root: &std::path::Path,
+    tier: ConfigPermissionTier,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPostureWriteResult> {
+    // trace:TASK-1531 | ai:codex
+    // Defense in depth: this shared writer is also used by non-interactive
+    // setup/doctor paths. Only set_permission_posture_gated may authorize the
+    // bypass tier after the terminal confirmation.
+    if tier == ConfigPermissionTier::Bypass {
+        anyhow::bail!(
+            "refusing to write the bypass posture outside the terminal confirmation gate"
+        );
+    }
+    write_permission_posture(project_root, tier, scope)
+}
+
+// Private so only this module's typed terminal gate can select the bypass
+// tier. Keep callers on apply_permission_posture for ordinary posture writes.
+// trace:TASK-1531 | ai:codex
+fn apply_confirmed_bypass_posture(
+    project_root: &std::path::Path,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPostureWriteResult> {
+    write_permission_posture(project_root, ConfigPermissionTier::Bypass, scope)
+}
+
+fn write_permission_posture(
     project_root: &std::path::Path,
     tier: ConfigPermissionTier,
     scope: PermissionPostureScope,
@@ -1315,7 +1376,13 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
         .iter()
         .flat_map(|a| a.findings.iter().cloned())
         .collect();
-    PermissionPostureReport { agents, findings }
+    let confirm = crate::bypass_confirm::load(project_root);
+    PermissionPostureReport {
+        agents,
+        findings,
+        confirm_bypass: if confirm.on { "on" } else { "off" }.to_string(),
+        confirm_bypass_source: confirm.source,
+    }
 }
 
 fn render_permission_posture_report(report: &PermissionPostureReport) {
@@ -1323,6 +1390,10 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
     println!(
         "  {}",
         "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
+    );
+    println!(
+        "  Confirm bypass: {} ({})",
+        report.confirm_bypass, report.confirm_bypass_source
     );
     println!();
     println!(
@@ -2282,18 +2353,69 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 format!("on until {}", expires_at.format("%Y-%m-%d %H:%M UTC"))
             }
         };
+        // Spec-authored acceptance commands: the effective policy comes from
+        // the same loader graded review uses, so what `config show` says is
+        // exactly what the next review will honour. trace:STORY-1476 | ai:claude
+        let (run_value, allow_value, exec_source) =
+            match crate::acceptance_command_policy_global_quiet() {
+                Ok(policy) => (
+                    "true".to_string(),
+                    format!("[{}]", policy.allow.join(", ")),
+                    PolicySource::GlobalConfig,
+                ),
+                Err(reason) => {
+                    // Match the resolver used by acceptance_command_policy_global_quiet;
+                    // otherwise AIDA_HOME could make the displayed source disagree
+                    // with the policy that graded review actually reads.
+                    // trace:TASK-1545 | ai:codex
+                    let declared = crate::home_dir()
+                        .map(|h| h.join(".aida/config.toml"))
+                        .and_then(|p| std::fs::read_to_string(p).ok())
+                        .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
+                        .is_some_and(|v| {
+                            config_lookup(Some(&v), "review", "run_acceptance_commands").is_some()
+                                || config_lookup(Some(&v), "review", "acceptance_command_allow")
+                                    .is_some()
+                        });
+                    (
+                        if declared {
+                            format!("false ({reason})")
+                        } else {
+                            "false".to_string()
+                        },
+                        "(none)".to_string(),
+                        if declared {
+                            PolicySource::GlobalConfig
+                        } else {
+                            PolicySource::Default
+                        },
+                    )
+                }
+            };
         PolicySection {
             section: "review",
             header: "[review]".to_string(),
-            rows: vec![PolicyRow {
-                key: "mass_change_mode",
-                value,
-                source: if configured {
-                    PolicySource::ProjectConfig
-                } else {
-                    PolicySource::Default
+            rows: vec![
+                PolicyRow {
+                    key: "mass_change_mode",
+                    value,
+                    source: if configured {
+                        PolicySource::ProjectConfig
+                    } else {
+                        PolicySource::Default
+                    },
                 },
-            }],
+                PolicyRow {
+                    key: "run_acceptance_commands",
+                    value: run_value,
+                    source: exec_source,
+                },
+                PolicyRow {
+                    key: "acceptance_command_allow",
+                    value: allow_value,
+                    source: exec_source,
+                },
+            ],
         }
     });
 
@@ -4177,10 +4299,15 @@ mod bug_533_config_show_tests {
             "{contained}"
         );
 
-        apply_permission_posture(
+        let mut input = std::io::Cursor::new(b"yes\n".to_vec());
+        let mut out = Vec::new();
+        set_permission_posture_gated(
             dir.path(),
             ConfigPermissionTier::Bypass,
             PermissionPostureScope::Local,
+            true,
+            &mut input,
+            &mut out,
         )
         .unwrap();
         let bypass = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
@@ -4740,6 +4867,84 @@ mod bug_1667_bypass_gate_tests {
                 assert!(!src.contains(needle), "{name} references {needle}");
             }
         }
+    }
+
+    /// trace:TASK-1531 | ai:codex
+    /// Audit production sources so future call sites cannot bypass the gate.
+    #[test]
+    fn task_1531_bypass_writer_has_a_defence_in_depth_gate() {
+        let src = include_str!("config_cmd.rs");
+        let writer = src
+            .split_once("pub(crate) fn apply_permission_posture(")
+            .unwrap()
+            .1
+            .split_once("fn permission_posture_paths(")
+            .unwrap()
+            .0;
+        assert!(writer.contains("tier == ConfigPermissionTier::Bypass"));
+        assert!(writer.contains("anyhow::bail!"));
+
+        // The gated function is the only production path with authority to
+        // invoke the bypass writer. Audit other Rust modules with writer call
+        // sites too, so a future direct bypass literal fails.
+        //
+        // Split on the first test MODULE, not on any `#[cfg(test)]`: this file
+        // carries a bare `#[cfg(test)] fn known_config_sections()` at ~775,
+        // far above the gate (~969) and the writer's caller (~1049), so
+        // splitting on the attribute alone truncated `production` to a prefix
+        // that contained none of the code this test audits — every assertion
+        // below then read an empty slice.
+        let production = src.split("#[cfg(test)]\nmod ").next().unwrap();
+        let call = "apply_permission_posture(project_root, tier, scope)";
+        let gate = production
+            .split_once("pub(crate) fn set_permission_posture_gated(")
+            .unwrap()
+            .1
+            .split_once("pub(crate) enum PermissionPostureScope")
+            .unwrap()
+            .0;
+        assert!(gate.contains("confirm_bypass_at_terminal"));
+        assert!(gate.contains(call));
+        assert!(gate.contains("apply_confirmed_bypass_posture(project_root, scope)"));
+        assert_eq!(
+            production
+                .matches(
+                    "write_permission_posture(project_root, ConfigPermissionTier::Bypass, scope)"
+                )
+                .count(),
+            1,
+            "the dedicated bypass writer must have one gate-owned caller"
+        );
+
+        for (name, source) in [
+            ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
+            ("lib.rs", include_str!("lib.rs")),
+        ] {
+            let mut rest = source;
+            while let Some((_, after)) = rest.split_once("apply_permission_posture(") {
+                let args = after.split(')').next().unwrap_or(after);
+                assert!(
+                    !args.contains("ConfigPermissionTier::Bypass"),
+                    "{name} passes Bypass directly to apply_permission_posture"
+                );
+                rest = after;
+            }
+        }
+    }
+
+    /// trace:TASK-1531 | ai:codex
+    #[test]
+    fn task_1531_posture_writer_refuses_bypass_directly() {
+        let dir = tempfile::tempdir().unwrap();
+        seed(dir.path());
+        let error = apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("terminal confirmation gate"));
+        assert_untouched(dir.path());
     }
 }
 

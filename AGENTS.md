@@ -9,6 +9,12 @@ See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
 and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
 <!-- trace:STORY-1477 | ai:codex -->
 
+Merge-hold gate checks now require recorded clearance for any PR carrying the
+persistent `aida:merge-hold-recorded` label; local event history reports marker
+deletion without clearance. The same-user/admin-token limit and protected-broker
+boundary are documented in [reporting](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:BUG-1693 | ai:codex -->
+
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
 keep git and the spec store coherent, and leave durable traces for the
@@ -24,6 +30,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
+
+## Cache read behavior
+
+Compatible read snapshots use a single refresh flock and a shared bounded wait.
+Before the detached worker slice lands, non-TTY full-rebuild reads report
+`deferred`; a one-attempt incremental SQLite contention reports `writer_busy`.
+Neither state promises background progress. `worker_running` means an observed
+refresh flock holder (including an inline refresher). `aida cache rebuild` and
+mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
 
