@@ -45,13 +45,33 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T12:47:21.787131796Z
-modified_at: 2026-10-02T12:47:21.787131796Z
+modified_at: 2026-10-02T13:19:14.012767213Z
 req_type: Task
 tags:
 - build
 - generated-mirror
 - needs-triage
 - papercut
+comments:
+- id: 01a0fcc4-d85c-7a51-b84f-7d61cd8df8df
+  author: joe
+  content: |
+    Reproduced independently in relay session #16, in a brand-new worktree created
+    from `main` at `30638a79ea`. A plain `cargo check -p aida-cli-lib --lib` left
+    `aida-cli-lib/src/generated/aida.rs` modified; so did the later `cargo test` and
+    `make check-ci-fast` runs. It had to be reverted with `git checkout --` twice
+    during the BUG-1769 work to keep that PR's diff clean, and the first commit
+    attempt had already staged it.
+
+    So this is not a one-worktree artifact: every seat that builds this crate picks
+    up the same spurious modification, and any seat that runs `git add -A` ships an
+    unrelated proto change. That is also one plausible contributor to the
+    long-standing uncommitted files in `/home/joe/ai/aida` — a build alone is enough
+    to dirty a file there, so "whose lane is this?" has at least one answer that is
+    nobody's.
+  created_at: 2026-10-02T13:19:14.012767213Z
+  modified_at: 2026-10-02T13:19:14.012767213Z
+  session_id: 20dd6351-ab65-4ffc-b7b1-573c5920c935
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
