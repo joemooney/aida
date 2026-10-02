@@ -58,12 +58,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:01:14.949714475Z
-modified_at: 2026-10-02T21:01:14.949714475Z
+modified_at: 2026-10-02T21:01:50.716754659Z
 req_type: Task
 tags:
 - ci
 - cross-platform
 - windows
+comments:
+- id: 01a0fe6c-60fc-7a60-9f37-123f2c336513
+  author: joe
+  content: 'DEFERRED by operator decision (Joe, 2026-10-02, relay session #12): file now, implement later — do not queue or auto-pick. The live binary predates BUG-1687''s --status deferred (PR #2340, open); once #2340 merges, run: aida edit TASK-1571 --status deferred'
+  created_at: 2026-10-02T21:01:50.716754659Z
+  modified_at: 2026-10-02T21:01:50.716754659Z
+  session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
 filed_at:
   code_sha: 15ad0ac1672652ed1549509ba53da57cc113f05b
   branch: main
