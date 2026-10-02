@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T23:53:14.519131201Z
-modified_at: 2026-10-02T09:11:59.455612960Z
+modified_at: 2026-10-02T10:07:43.445487620Z
 req_type: Task
 tags:
 - docs:impacted
@@ -208,6 +208,53 @@ comments:
   created_at: 2026-10-02T08:47:50.517838422Z
   modified_at: 2026-10-02T08:47:50.517838422Z
   session_id: d5361d99-df2f-496e-9322-ef0a7eb10836
+- id: 01a0fc15-8355-7a80-a41c-6bb1f9deebd0
+  author: joe
+  content: |
+    ## CI round 1 on 4fc22b7efe — ubuntu RED, one test
+
+    `Build (ubuntu-latest)` failed at step 12 `Run tests`. Exactly one failing
+    test in the whole job (verified: one `test result: FAILED` line across the
+    1.7 MB job log, so the second panic at `bug_1682_global_queue_tests.rs:77`
+    is a child-process panic inside a passing test, not a second failure):
+
+    ```
+    aida-cli/tests/bug_1502_format_json_audit.rs:463
+    checked_in_audit_is_exhaustive_and_every_honoured_probe_parses
+    assertion `left == right` failed: regenerate the BUG-1502 audit
+    ```
+
+    The set difference between the two sides is a single element: the live
+    clap-derived catalog contains `aida worktree reclaim`; the checked-in
+    `docs/cli-format-json-audit.md` does not.
+
+    `merge-hold-gate` was green. macos/windows were still running.
+
+    ## Why the local verification missed it
+
+    The guard lives in **`aida-cli`'s integration tests**, and the pre-push
+    verification was `cargo test -p aida-cli-lib --lib -- task_1562` plus
+    `make check-ci-fast`. Neither can reach it: `-p aida-cli-lib --lib` is the
+    wrong crate *and* the wrong target kind, and `check-ci-fast` is by design the
+    gates that need no build. So this is not a `check-ci-fast` gap — it is a
+    test-selection gap.
+
+    **The durable rule: adding a leaf to `cli.rs` obligates regenerating
+    `docs/cli-format-json-audit.md`.** The audit is produced by
+    `scripts/generate-format-json-audit.py <AIDA_BINARY> <OUTPUT>` from
+    `aida help commands --json --hidden`, so it cannot be hand-maintained
+    correctly — it must be regenerated from a binary built on the branch.
+
+    `aida worktree reclaim` declares a local `--json` flag and is not one of the
+    eleven hermetic probes the end-to-end test executes, so the generator's own
+    classifier lands it on `COULD NOT VERIFY` — the same outcome its siblings
+    `aida worktree list` and `aida worktree gc` already carry. That is the honest
+    value: the leaf declares JSON, and the hermetic audit has no worktree
+    fixture to probe it against. It is NOT `JSON honoured`, which would make the
+    e2e test try to execute it.
+  created_at: 2026-10-02T10:07:43.445487620Z
+  modified_at: 2026-10-02T10:07:43.445487620Z
+  session_id: 2f2ab833-51fe-47ff-8f5d-d73c37ec27d8
 history:
 - id: 01a0f4cf-4af6-7b01-b92a-98b2f93c6fda
   author: joe
