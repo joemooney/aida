@@ -47,13 +47,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:08:45.792442925Z
-modified_at: 2026-10-02T19:08:58.990611808Z
+modified_at: 2026-10-02T19:20:46.559950373Z
 req_type: Bug
 tags:
 - cross-platform
 - from-triage
 - macos
 - nightly
+comments:
+- id: 01a0fe0f-d8df-70a3-929b-281eeae522c1
+  author: joe
+  content: 'Scope correction: this is not nightly-only. The same three tests fail the Build (macos-latest) job on every open PR''s CI run today: PR #2341 (run job 110922761390, head task-1567-work) and PR #2345 (job 110978167065, head 67f1098ab5, branch bug-1723-work — a docs+guard change nowhere near the orchestrator) both fail exactly bug_1629_phase1_recovery_tests::bug_1769_advance_{during_the_run_resolves_the_pr_instead_of_relaunching, whose_pr_already_merged_completes_the_drive, with_no_locatable_pr_pauses_rather_than_demoting}, with 7539/7531 other tests passing. Ubuntu passes the same suites. Until this is fixed or the tests are quarantined on macOS, every PR''s macOS gate is red regardless of its content. Panic shape on #2345: PhaseFailure kind LaunchRefused, reason ''phase 1 child session … exited with code 1 … the store reports NFR-56 as Approved''.'
+  created_at: 2026-10-02T19:20:46.559950373Z
+  modified_at: 2026-10-02T19:20:46.559950373Z
+  session_id: d5ee562a-7ce2-403d-8384-8ef61700260f
 filed_at:
   code_sha: 2779659ec636e12e5076c52efedf61147fbcd850
   branch: main
