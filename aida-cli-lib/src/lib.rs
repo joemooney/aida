@@ -1042,6 +1042,10 @@ mod bug_1749_doctor_toon_tests;
 #[cfg(test)]
 #[path = "tests/story_737_delight_tests.rs"]
 mod story_737_delight_tests;
+// trace:TASK-1555 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1555_ci_gate_tiers_tests.rs"]
+mod task_1555_ci_gate_tiers_tests;
 
 /// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
 /// dispatch. The `aida` binary is a stub that calls this — keeping the
