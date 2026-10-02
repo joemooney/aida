@@ -1,0 +1,33 @@
+id: 01a0fefd-2812-75b2-a43d-0b68b3e9b4a9
+spec_id: BUG-1782
+agreed_id: BUG-1782
+title: 'Three lib tests can never pass from a linked worktree under session-env.sh: they exec the built aida and refuse a binary outside the checkout, but the shared CARGO_TARGET_DIR guarantees exactly that'
+description: |-
+  Observed 2026-10-02 on branch bug-1767 (worktree /home/joe/ai/aida-worktrees/aida-bug-1767, session 01a0feb5f426).
+
+  `cargo test -p aida-cli-lib --lib` from a linked worktree fails 3 tests deterministically (light or heavy load, two runs):
+
+  - bug_1745_error_channel_tests::performance_command_stdout_round_trips_into_failure_trip
+  - bug_1749_doctor_toon_tests::json_spellings_match_and_human_pin_stays_on_stderr
+  - bug_1749_doctor_toon_tests::performance_failure_stdout_is_one_parseable_toon_document
+
+  Each panics at bug_1749_doctor_toon_tests.rs:68 (and the bug_1745 analogue): 'refusing to exercise a binary outside this checkout'. The guard is correct in intent (never test a foreign binary), but .aida/session-env.sh (STORY-52) sets CARGO_TARGET_DIR=/home/joe/ai/aida/target for every worktree session, so the built binary ALWAYS lives outside the worktree checkout and the three tests are unconditionally red in the blessed dev setup. CI passes them (target inside checkout), so a worktree lane cannot reproduce union-green locally — the same class as BUG-1563.
+
+  Remedy directions (advisor to choose): (1) have the guard accept a binary under $CARGO_TARGET_DIR when that env var is set by the session env (it is still OUR build); (2) have these tests build/copy the binary into a temp dir inside the checkout; (3) have them SKIP with a loud note when CARGO_TARGET_DIR points outside, so a worktree suite run is honest rather than red.
+
+  Acceptance sketch: from a linked worktree with session-env sourced, the three tests pass (or visibly skip with a named reason), and a genuinely foreign binary (e.g. a copied system aida) still trips the refusal — mutation-proven both directions.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T23:39:58.866513959Z
+modified_at: 2026-10-02T23:39:58.866513959Z
+req_type: Bug
+filed_at:
+  code_sha: e09fb9a464089fcf16198470406dd52228ecabe2
+  branch: bug-1767
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 63672f7e-d507-4105-8604-8598b2023338
