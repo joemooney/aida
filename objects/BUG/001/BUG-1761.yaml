@@ -1,0 +1,80 @@
+id: 01a0fa56-99f1-7be0-bfba-b62a19050e36
+spec_id: BUG-1761
+agreed_id: BUG-1761
+title: aida queue work claims a spec that already has an open PR, signalling the collision only as a branch-name suffix, and leaves the status stuck on backout
+description: |
+  OBSERVED (2026-10-01, relay advisor session #19): `aida queue work <SPEC>` claimed a spec that already
+  had an open PR being actively implemented by another agent, and the only signal it gave was the branch
+  suffix.
+
+  ## What happened
+
+  BUG-1819 was assigned to the advisor seat. `aida show BUG-1819` reported `status: needs-attention` with
+  `owner: ""` and gave no indication that work was in flight. `aida queue work BUG-1819` then:
+
+  1. bumped the spec Approved → In Progress,
+  2. took a lease,
+  3. created a worktree on branch **`bug-1819-2`**.
+
+  The `-2` suffix was the *only* evidence that `bug-1819` already existed. It did — along with
+  **PR #2319**, "[AI:codex] fix(orchestrator): seed verified from-pr CI state (BUG-1819)", open against
+  `main` with CI running. A full dispatch brief was nearly written before `gh pr list` revealed it.
+
+  ## Why this is a substrate defect, not operator error
+
+  The command **already had the information and discarded it.** It had to check for the existing branch in
+  order to pick `-2`, so at that moment it knew a branch for this spec existed. It encoded that knowledge
+  in a filename suffix instead of surfacing it.
+
+  Worse, backing out leaves the spec corrupted: `aida session end` deletes the lease but **leaves the
+  status at In Progress**, which is exactly the state whose own error message reads "spec `X` is InProgress
+  but no local lease holds it ... a prior `aida queue work` run left the status stuck". The operator who
+  cleans up correctly still has to hand-restore the status, and a second agent hitting that spec is refused
+  until someone does.
+
+  ## Required behavior
+
+  1. Before claiming, `aida queue work <SPEC>` resolves whether an open PR/MR already names the spec (the
+     same forge-first resolution `aida review` and `probe_resume_facts` already use) and, if one exists,
+     **refuses by default** with the PR number, title and CI state, plus the two honest next actions:
+     `--from-pr` to drive the existing PR, or `--force-claim` to take over deliberately.
+  2. The same refusal covers an existing local branch for the spec. Silently allocating `<branch>-2` is the
+     defect; a suffix is not a warning.
+  3. On refusal, nothing is mutated — no status bump, no lease, no worktree.
+  4. Status restoration on backout: `aida session end` on a session whose spec it bumped should restore the
+     prior status, or say plainly that it did not and print the exact `aida edit` to run.
+
+  ## Acceptance criteria
+
+  1. With an open PR naming the spec, `aida queue work <SPEC>` exits non-zero, mutates nothing, and names
+     the PR number and state. Prove by asserting the spec's status and the lease directory are unchanged.
+  2. `--force-claim` still claims, and the refusal text names it.
+  3. With an existing local branch and no PR, the command refuses rather than allocating a `-2` suffix.
+  4. Regression: the normal case (no PR, no branch) is unchanged.
+  5. Mutation proof: revert the pre-claim probe and show the new test goes red.
+
+  ## Out of scope
+
+  Changing `--from-pr` itself, or the lease model. This is purely a pre-claim guard plus honest backout.
+
+  ## Notes
+
+  Filed from the advisor seat with firsthand evidence: the lease was released, the worktree removed, the
+  empty `bug-1819-2` branch deleted, and BUG-1819's status hand-restored to `needs-attention`. Cost was
+  roughly a third of a session. Related: BUG-1820 (stale MR-scoped leases) is the same family — claim and
+  lease state not reconciling against the forge before acting.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T01:59:34.641082053Z
+modified_at: 2026-10-02T01:59:34.641082053Z
+req_type: Bug
+filed_at:
+  code_sha: 3494256297782724ed0bb05e8c5b134808c16274
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
