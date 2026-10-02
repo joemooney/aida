@@ -96,7 +96,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T18:21:51.793308105Z
-modified_at: 2026-10-02T01:28:33.446051340Z
+modified_at: 2026-10-02T01:30:12.498556372Z
 req_type: Bug
 comments:
 - id: 01a0f8b3-f579-7513-8100-0183cfc5c782
@@ -247,6 +247,44 @@ comments:
     restored, it is merely not currently violated.
   created_at: 2026-10-02T01:28:33.446051340Z
   modified_at: 2026-10-02T01:28:33.446051340Z
+  session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
+- id: 01a0fa3b-b692-7c11-8702-4be44c1e6622
+  author: joe
+  content: |
+    ## Refinement to the AC1 decision above — the scaffolder COPIES hooks; only this repo symlinks them
+
+    Correcting one claim in the previous comment before it costs a dispatch round. I wrote that a symlinked
+    hook "is how this repo already installs `commit-msg` and `pre-commit`". That is true of **this checkout**
+    (`ls -la .git/hooks` shows both as symlinks into `aida-core/templates/hooks/`, hand-wired for
+    dogfooding), but it is **not** how AIDA installs them for anyone else.
+
+    `aida init`'s scaffolder writes git hooks as **regular files with embedded content** —
+    `aida-core/src/scaffolding/mod.rs:2267-2360` creates `.git/hooks/commit-msg` (`:2273`),
+    `pre-commit` (`:2297`), `post-commit` (`:2324`) and `prepare-commit-msg` (`:2356`) from
+    `include_str!`-backed templates (`scaffolding/hooks.rs:21-24`). A copied hook is precisely
+    **BUG-1738**'s defect: it never updates once written.
+
+    Consequence for the implementer, and it narrows the work usefully:
+
+    - **Scope BUG-1760 to this repository's own dogfooding invariant**, which is what the spec is actually
+      about: `make check-templates` exiting 0 on a clean checkout of *this* repo, and agents in *this* repo
+      not reading superseded recipes. A **symlinked** `post-merge` / `post-checkout` / `post-rewrite` hook
+      in `.git/hooks` achieves that and cannot drift, matching how this checkout already carries
+      `commit-msg` and `pre-commit`.
+    - **Do not add the new hook to the scaffolder's generated set.** Shipping it downstream would inherit
+      BUG-1738's never-updates defect, and the pack this hook regenerates (`.agents/skills`) is a
+      developer-facing artifact of this repo, not something a downstream project receives. If shipping it is
+      wanted, that is a separate spec gated on BUG-1738, and it should say so rather than doing it here.
+    - Note there is no `post-merge` / `post-checkout` / `post-rewrite` master in
+      `aida-core/templates/hooks/` today (the directory has 17 entries; `aida-post-commit.sh` is the closest
+      shape to copy). A new master belongs there, with `make sync-templates`/`check-templates` discipline
+      applied to it like any other template.
+
+    Everything else in the previous comment stands: option (b), the CI-can-never-catch-it argument for
+    rejecting (a), the delete-mutation argument, the main-checkout-only and already-built constraints, the
+    false-green reporting fix in `agent_skill_pack.rs`, and the 2-of-2 AC5 measurement.
+  created_at: 2026-10-02T01:30:12.498556372Z
+  modified_at: 2026-10-02T01:30:12.498556372Z
   session_id: f694ec8d-cf7c-4c10-ac55-aec96f4cb690
 history:
 - id: 01a0f8b3-abff-77d2-a69c-dabe4b43776a
