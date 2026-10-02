@@ -63,12 +63,12 @@ description: |
   `"doctor check performance --fail-on-findings"` — it is an identity predicate at
   `maintenance_schedule.rs:3146` and load-bearing in nine places. No change to the scaffolded or
   in-repo `.aida/config.toml`.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T04:39:31.501218455Z
-modified_at: 2026-10-02T04:01:35.185619123Z
+modified_at: 2026-10-02T04:01:41.256577194Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -420,6 +420,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fac6-6581-7b62-a143-a28128242286
+  author: aida-auto-bump
+  timestamp: 2026-10-02T04:01:41.249339565Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fac6-6588-7b62-8d5f-83148c88478a
+  timestamp: 2026-10-02T04:01:41.256576173Z
+  agent: advisor
+  commit_sha: 85aea1c60fcc36a4c4756fd8047c6342208616c5
+  summary: Completed via merge 85aea1c6
 filed_at:
   code_sha: ef0c0905b569b305beb7b907cf6e7d9e1a4b17f3
   branch: main
@@ -432,3 +445,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-02T04:01:35.185619123Z
   implemented_by: joe
+  completed_at: 2026-10-02T04:01:41.249313364Z
+  completion_sha: 85aea1c60fcc36a4c4756fd8047c6342208616c5
