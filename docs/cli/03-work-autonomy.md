@@ -51,6 +51,7 @@ Three cross-cutting truths the tree assumes:
 
 **Key options / subcommands (rationale only).**
 - `queue work <SPEC> --auto-complete` — the drain. Add `nextN` (e.g. `next5`) to drain several; `--batch NAME` to drain a tagged cluster; `--no-human=both` to run it fully headless.
+- `queue work --drain` — drain every currently eligible item for the selected role. This queue-wide alias supplies the full headless lifecycle defaults itself; do not combine it with `--auto-complete`.
 - `queue work --auto-complete --require-head` (also `burndown run --require-head`) — a wave pins the binary that launched it, so when you drain the AIDA repo itself on a dev build, launch checks that build against the default branch HEAD. A build that is behind (or has diverged) prints a one-line warning and the wave still runs it, which is how you deliberately pin an older binary to bisect an orchestration regression. `--require-head`, or `[drain] require_head = true` in `.aida/config.toml`, turns that warning into a refusal naming the fix (`make build-fast`, then rerun). A build *ahead* of HEAD counts as current; released binaries and downstream projects are never checked; `.aida/drain.lock` records `launched_stale` when a wave launched on a stale build.
 - `queue list` — merges your local (per-project) queue with your active role's *global* queue, tagging cross-project entries with `[origin:<project>]`. The `--global` / `--local` flags scope it when the merge is noise.
 - `queue advance` — walk the whole queue and push each item to its *next* step: autonomous items drain, human-required ones (review / `--zen` / decision) get dispatched interactively. Where `queue work` picks up *one* head, `advance` processes the queue to a resolution and never silently hides work it can't auto-handle.
@@ -129,17 +130,19 @@ order = "priority"   # or "queue" for strict queue-insertion order
 
 ### `aida drain`
 
-**One line** — inspect the `--auto-complete` drain that's currently running.
+**One line** — start, stop, or inspect an autonomous queue drain.
 
-**Mental model.** A drain is a long-lived process walking the queue through the full lifecycle. `drain status` is the window into it: what command launched it, the batch members and each one's lifecycle state, the current phase, and — crucially — **a prediction of what happens to the queue when the current session exits**.
+**Mental model.** A drain is a long-lived process walking the queue through the full lifecycle. `aida drain start` is the thin front door over `queue work`: with no selector, batch, or `--once`, it launches queue-wide mode; scoped starts use `--auto-complete` instead. `drain status` is the window into it: what command launched it, the batch members and each one's lifecycle state, the current phase, and — crucially — **a prediction of what happens to the queue when the current session exits**. `drain stop` requests a clean stop at the next spec boundary.
 
-**Reach for it when** — a drain is running and you want to know "where is it, and is it safe to close this terminal?" Prints `No drain in progress.` (exit 0) when none is running, so it's safe to poll.
+**Reach for it when** — you want `aida drain start` to process the eligible queue, or a drain is running and you want to know "where is it, and is it safe to close this terminal?" `aida drain status` prints `No drain in progress.` (exit 0) when none is running, so it's safe to poll.
 
-**Don't reach for it when** — you want to *start* a drain (`queue work --auto-complete`) or see the *ready set* before one starts (`burndown plan`). `drain` is observation of an in-flight run only.
+**Don't reach for it when** — you need the lower-level `queue work` controls directly, or want to see the *ready set* before one starts (`burndown plan`).
 
 **A spec won't drain?** If the queue says it needs a guided/operator session, run `aida derisk <ID>` to launch the advisor de-risking workflow for that spec.
 
-**Chains with** — the observation counterpart to `queue work --auto-complete`; pairs with `aida findings` to triage anything the drain shelved.
+**Chains with** — `aida drain start` → `aida drain status` / `aida drain tail` → `aida drain stop`; pairs with `aida findings` to triage anything the drain shelved.
+
+<!-- doc-intent: BUG-1822 -->
 
 ---
 

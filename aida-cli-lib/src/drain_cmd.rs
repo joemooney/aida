@@ -13,6 +13,38 @@ use serde::{Deserialize, Serialize};
 const DRAIN_STOP_FILE: &str = "drain-stop.json";
 const DRAIN_STOP_ENV: &str = "AIDA_DRAIN_STOP_FILE";
 
+// trace:BUG-1822 | ai:codex
+fn drain_start_mode_flag(selector: Option<&str>, batch: Option<&str>, once: bool) -> &'static str {
+    if selector.is_none() && batch.is_none() && !once {
+        "--drain"
+    } else {
+        "--auto-complete"
+    }
+}
+
+#[cfg(test)]
+mod bug_1822_tests {
+    use super::drain_start_mode_flag;
+
+    #[test]
+    fn queue_wide_start_uses_only_the_drain_alias() {
+        assert_eq!(drain_start_mode_flag(None, None, false), "--drain");
+    }
+
+    #[test]
+    fn scoped_starts_use_auto_complete() {
+        assert_eq!(
+            drain_start_mode_flag(Some("BUG-1"), None, false),
+            "--auto-complete"
+        );
+        assert_eq!(
+            drain_start_mode_flag(None, Some("nightly"), false),
+            "--auto-complete"
+        );
+        assert_eq!(drain_start_mode_flag(None, None, true), "--auto-complete");
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DrainStopRequest {
     requested_at_utc: String,
@@ -498,10 +530,7 @@ fn handle_drain_start(
     } else if once {
         args.push("next".into());
     }
-    args.push("--auto-complete".into());
-    if selector.is_none() && batch.is_none() && !once {
-        args.push("--drain".into());
-    }
+    args.push(drain_start_mode_flag(selector, batch, once).into());
     if let Some(batch) = batch.filter(|s| !s.trim().is_empty()) {
         args.push("--batch".into());
         args.push(batch.to_string());
