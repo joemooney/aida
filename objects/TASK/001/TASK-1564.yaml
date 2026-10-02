@@ -1,0 +1,76 @@
+id: 01a0fab4-51fc-7f53-9924-48a1a8c16f62
+spec_id: TASK-1564
+agreed_id: TASK-1564
+title: Record a drain phase failure as a comment on the parent spec, not as its own draft spec
+description: |
+  **Operator decision, 2026-10-01.** Each drain phase failure currently lands as its own **draft spec**
+  and costs a triage. The advisor seat recommended the change below across several sessions; the
+  operator accepted it on 2026-10-01.
+
+  ## Why this is worth implementing rather than tolerating
+
+  Filing and completion are at a dead heat, measured on this repo:
+
+  | date | specs filed | specs completed |
+  |---|---|---|
+  | 2026-09-28 | 26 | 28 |
+  | 2026-09-29 | 11 | 10 |
+  | 2026-09-30 | 21 | 17 |
+  | 2026-10-01 | 24 | 19 |
+
+  The real implementable backlog has sat at ~37 items (14 bug, 14 task, 8 story, 1 spike — the other 32
+  of the 70 "approved" are accepted ADRs, not work). It is not growing, and it is not draining either.
+  Phase-failure drafts are a known, mechanical contributor to the filing side of that equation, and they
+  are the only contributor a code change can remove.
+
+  Two of the currently-approved specs are themselves phase-failure records (`BUG-1716`
+  "auto-complete failure: phase 1 (implementer) on TASK-204" and `BUG-1713` "auto-complete failure:
+  phase 2 (ci) on BUG-1689"), both filed 2026-09-28 and neither triaged since. That is the shape of the
+  problem: the record is real, but a draft spec is the wrong container for it, because a draft spec
+  demands a disposition from a human while a comment simply informs the next reader of the parent.
+
+  ## Required behavior
+
+  A drain phase failure is recorded as a **comment on the parent spec**, not as a new draft spec. It is
+  promoted to its own spec only when a human or the advisor seat judges it a distinct defect.
+
+  The comment must carry everything the draft carried, so nothing is lost by the change: the phase that
+  failed, the role/seat, the parent spec, the commit or branch under test, the captured failure output
+  (or a path to it), and the timestamp.
+
+  ## Acceptance criteria
+
+  1. A drain phase failure appends a comment to the parent spec and creates **no** new spec object.
+     Assert by counting spec objects before and after an induced phase failure.
+  2. The comment contains the failed phase name, the seat/role, the examined commit or branch, and the
+     captured failure text (or a resolvable path to it). Assert on the comment body, not on a log line.
+  3. Promotion stays available and is explicit: a command (or a documented `aida add` recipe) turns such
+     a comment into a child spec related to the parent, for the case where it really is a distinct
+     defect.
+  4. Nothing silently swallows a phase failure. The non-zero exit, the ledger entry, and any existing
+     routing to a due seat are unchanged — only the **container for the narrative record** moves.
+     Assert the exit code and the ledger entry are untouched.
+  5. The existing phase-failure drafts (`BUG-1716`, `BUG-1713`) are dispositioned as part of this work:
+     either promoted (if still real) or rejected with a reason. They are the migration case.
+  6. Mutation proof: revert the change and show that an induced phase failure creates a spec object
+     again, turning criterion 1 red.
+
+  ## Out of scope
+
+  No change to drain phase detection, retry behavior, the failure exit code, or the seat-routing rules.
+  No bulk re-processing of historical phase-failure specs beyond the two named in criterion 5.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T03:41:56.604921140Z
+modified_at: 2026-10-02T03:41:56.604921140Z
+req_type: Task
+filed_at:
+  code_sha: 9a9993bcee35f415eafeabb439b88bfa028be810
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 1d7813fc-728c-4a86-bee2-03e780d5b022
