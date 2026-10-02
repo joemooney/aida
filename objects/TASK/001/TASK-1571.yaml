@@ -1,0 +1,74 @@
+id: 01a0fe6b-d545-7f63-8878-8f83482997aa
+spec_id: TASK-1571
+agreed_id: TASK-1571
+title: Demote the Build (windows-latest) CI leg to a non-blocking nightly until BUG-1777 is under control
+description: |
+  ## Summary
+
+  Demote the `Build (windows-latest)` CI leg from a per-PR required check to a
+  non-blocking scheduled nightly, until the Windows red backlog (BUG-1777) is
+  under control. Mirror of the TASK-1570 macOS pattern (PR #2352), with one
+  deliberate difference: Windows is DEMOTED to nightly, not removed, because the
+  failures sit in genuinely platform-shaped code and the signal must keep
+  flowing.
+
+  Operator decision 2026-10-02 (Joe, relay session #12): approved as a deferred
+  task — "disable windows and open as a deferred task".
+
+  ## Why demote instead of keep-or-delete
+
+  - The per-PR gate is already dead signal: PRs #2341, #2345, #2348, #2349 are
+    all treated as merge-ready over the identical Windows red (BUG-1777's set).
+    A red gate that is routinely overridden trains the override habit and hides
+    any NEW red inside the known red.
+  - It is the most expensive leg: ~50 min per push (~25 min for the aida-cli-lib
+    suite alone), pure latency on every merge-readiness check during backlog
+    drain.
+  - Unlike macOS, the failures are in platform-shaped code (exe resolution,
+    path/trust handling, file-removal semantics, HOME lookup, cached git
+    backend) — likely real Windows bugs, ~10 distinct root causes. A nightly
+    keeps a fresh failure corpus feeding BUG-1777 and bounds the dark period to
+    one day.
+
+  ## Acceptance criteria
+
+  1. `Build (windows-latest)` no longer runs on pull_request / push CI events;
+     per-PR merge-readiness is judged without it (same mechanism TASK-1570 used
+     for macOS legs — edit the matrix/conditions in .github/workflows/ci.yml,
+     keyed to the exact step/job names).
+  2. A scheduled (nightly) workflow still runs the full windows-latest Build
+     job, non-blocking, so BUG-1777 keeps receiving a current failure corpus.
+  3. Re-enable condition stated in the workflow comment and on this spec:
+     restore the per-PR leg after N (suggest 3) consecutive green nightly
+     windows runs, i.e. after BUG-1777 is fixed.
+  4. Before merging, check whether the Release matrix ships windows binaries to
+     users; if yes, say so on this spec — it raises the priority of BUG-1777
+     but does not block this demotion (the nightly covers honesty).
+  5. ci-gate-tiers.toml and any gate-name-keyed config stay consistent with the
+     exact renamed/conditioned step names (keys are EXACT ci.yml step names).
+
+  ## Related
+
+  - BUG-1777: the tracked Windows red (identical 16-test set across branches;
+    corroborated on PR #2348 job 110994767531, 15 aida-cli-lib + 1 aida-core
+    failures).
+  - TASK-1570 / PR #2352: the macOS disable this mirrors.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T21:01:14.949714475Z
+modified_at: 2026-10-02T21:01:14.949714475Z
+req_type: Task
+tags:
+- ci
+- cross-platform
+- windows
+filed_at:
+  code_sha: 15ad0ac1672652ed1549509ba53da57cc113f05b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: fe09d7678e
+  vendor: antigravity
+  session: 05aca398-12b9-4f85-8d34-61b3f3d760a9
