@@ -111,3 +111,11 @@
   added_at: 2026-10-02T22:34:14.781894025Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0fe76-8414-7722-a00c-b7b32b7d64b0
+  position: 405000
+  added_by: role:implementer
+  note: 'TASK-1527 follow-up slice 2: lock the refresh-request sidecar RMW on reaper/cache_cmd paths; approved 2026-10-02, queued by advisor relay #14'
+  added_at: 2026-10-02T22:34:15.449687328Z
+  for_role: implementer
+  added_by_machine: imac
