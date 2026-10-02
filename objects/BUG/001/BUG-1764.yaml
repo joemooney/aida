@@ -72,7 +72,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T04:13:57.890825536Z
-modified_at: 2026-10-02T05:28:05.087252780Z
+modified_at: 2026-10-02T06:56:34.385103115Z
 req_type: Bug
 comments:
 - id: 01a0fadc-8d6e-7bf3-83c1-859dc5980e29
@@ -312,6 +312,97 @@ comments:
     to `process_identity_is_alive` / drain / solo reclaim semantics.
   created_at: 2026-10-02T05:26:40.333602580Z
   modified_at: 2026-10-02T05:26:40.333602580Z
+  session_id: 9d040115-a2e5-4c27-bbcd-7d48337f3273
+- id: 01a0fb66-8251-7242-8b4f-bef3318a6886
+  author: joe
+  content: |
+    Implemented on branch `bug-1764`, PR #2328. Record of what was built and measured.
+
+    ## The survey correction stands: three readers, not one
+
+    Fixed all three, routed through one pure predicate (`coordination::claim_staleness`
+    + `partition_claims`) so a claim the reporting surfaces hide is exactly one
+    `decide_claim` would already reclaim:
+
+    | site | surface | now |
+    |---|---|---|
+    | `print_cross_clone_leases` | `aida session leases` | stale hidden by default, shown under `--all` with the reason |
+    | `print_status_coordination_section` | `aida status`, `--full`, **`aida doctor`** | stale excluded from both arms; count line says how many were suppressed |
+    | `team::build_team_view` | `aida team` | `active_claims` filtered |
+
+    ## Measured on the live store, not a fixture
+
+        # before — rendered unconditionally
+        BUG-1817   spock   4   implementer   26055s        <- ttl_secs = 1800
+        # after, default
+        · 1 stale cross-clone lease hidden · aida session leases --all to list, …
+        # after, --all
+        BUG-1817  spock  4  implementer  28365s  ⚠ stale heartbeat 28365s old, past its 1800s TTL
+        # status section, was "211 active claims"
+        no active claims · 213 stale claims on the store · aida session leases --all to inspect
+        # --prune-stale on non-terminal stdin
+        error: "refusing to prune non-interactively without --yes (…)"
+        # store byte-identical after: 212 files before and after
+
+    ## Mutation proof — coverage is non-vacuous
+
+    Three disjoint mutants applied together (TTL clause → `if false`; `same_host` →
+    `false`; `strictly_alive_with`'s missing-record branch → `return true`):
+    **6 of 8 failed, each panicking at its OWN assertion** — `coordination.rs:1754`,
+    `:1777`, `:1819`, `:1856`, `:1901`, `team.rs:615`. The 2 survivors are the two
+    negative tests that must survive: `ephemeral_session_pid_death_is_not_staleness`
+    (a session lease outlives its launching shell) and
+    `strict_probe_rejects_a_recycled_pid` (never reaches the missing-record branch).
+    Reverted with `git checkout --`, absence confirmed by grep. No stash.
+
+    ## Two CI gates caught real problems, both fixed honestly
+
+    1. `cli::tests::source_doc_comments_carry_no_spec_id_provenance` — my
+       `--prune-stale` help text said "Before BUG-1764 …", and clap pulls `///` into
+       `--help`, so that would have printed an internal id to users. Reworded; the id
+       stays on the `//  trace:` line. **Allowlist not widened.**
+    2. The portability ratchet — the new fixture hand-wrote
+       `clone_path = "{path}"`, a TOML *basic* string, so a Windows path's
+       backslashes would read as escapes. Now serializes the real `Claim` struct,
+       which also keeps the fixture faithful to the production writer.
+       **Baseline not regenerated.**
+
+    ## Deliberate scope decisions
+
+    - `aida_core::liveness::process_identity_is_alive` **left alone.** It trusts a
+      missing `pid_start_time` by design (the TASK-1284 degrade), which is right for
+      reclaiming a drain/solo lock and wrong for reporting. A test pins that contrast
+      so it is not "fixed" later by accident.
+    - The predicate is **TTL-first**, because a session lease is not
+      `process_backed`. That ordering is what neutralises the filed PID collision: no
+      pid value can grant life to an aged-out claim, so pid 2 / pid 202 colliding
+      with live kernel threads is structurally harmless rather than argued away.
+    - Clause 5 (GC of the accumulated lease files) **out of scope**, as directed.
+    - The "cross-clone" section header was **not** renamed. Clause 3 asks for correct
+      evaluation, not new wording, and renaming four surfaces is a separate cosmetic
+      change.
+
+    ## Consequence found while implementing — filed as BUG-1765
+
+    Nothing refreshes a **session lease's** `heartbeat_at`; only the drain lock has a
+    heartbeat thread. So a session-lease claim is TTL-expired 1800s after creation
+    even while its session is actively working — and `decide_claim` has ALWAYS
+    treated it as reclaimable from that moment, meaning the cross-clone registry
+    stops coordinating after 30 minutes. This fix makes the display agree with that,
+    which is the honest reading, but it also makes the consequence visible: a long
+    session's claim drops out of the default listing. That is a substrate defect, not
+    a display one. **BUG-1765**, High, approved.
+
+    ## Local suite note
+
+    The local `cargo test --workspace` run reported 7482 passed / 3 failed, and all
+    three failures are `refusing to exercise a binary outside this checkout` —
+    an artifact of running with `CARGO_TARGET_DIR` pointed at the parent checkout's
+    `target/`. The control is CI's own run on head `4daca5cb2e`, where those same
+    three tests passed (7483 passed / 1 failed, the only failure being the doc-comment
+    guard above). Not a code defect.
+  created_at: 2026-10-02T06:56:34.385103115Z
+  modified_at: 2026-10-02T06:56:34.385103115Z
   session_id: 9d040115-a2e5-4c27-bbcd-7d48337f3273
 history:
 - id: 01a0fad1-d73e-70f1-9163-1abe5ec89ac1
