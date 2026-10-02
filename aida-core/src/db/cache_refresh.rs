@@ -366,6 +366,12 @@ pub enum RefreshState {
     WorkerRunning,
     WriterBusy,
     Deferred,
+    /// A refresh request is filed and a detached worker was spawned
+    /// (TASK-1527). To the reader this is "refreshing" exactly like
+    /// `WorkerRunning`; the distinct variant keeps `cache status`, JSON and
+    /// MCP labels honest about WHICH mechanism is in flight.
+    // trace:TASK-1527 | ai:claude
+    Requested,
 }
 
 // trace:TASK-1526 | ai:codex
@@ -395,7 +401,7 @@ impl StaleServe {
             });
         match self.refreshing {
             RefreshState::Deferred => format!("note: showing results cached at {time}; refresh is deferred. Run `aida cache rebuild` for current data."),
-            RefreshState::WorkerRunning => format!("note: showing results cached at {time}; the cache is refreshing. Re-run in a few seconds for current data."),
+            RefreshState::WorkerRunning | RefreshState::Requested => format!("note: showing results cached at {time}; the cache is refreshing. Re-run in a few seconds for current data."),
             RefreshState::WriterBusy => format!("note: showing results cached at {time}; the cache write lock was busy and refresh was deferred. Re-run to retry, or run `aida cache rebuild` for current data."),
         }
     }

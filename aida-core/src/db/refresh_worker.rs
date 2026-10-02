@@ -86,61 +86,102 @@ pub fn run_refresh_worker(backend: &CachedGitBackend) -> Result<WorkerOutcome> {
     Ok(WorkerOutcome::Refreshed)
 }
 
+/// `AIDA_CACHE_NO_DETACH=1` (CI, tests) forbids spawning: a stale reader
+/// refreshes inline strictly instead — today's behaviour (sketch Q1).
+// trace:TASK-1527 | ai:claude
+pub fn no_detach() -> bool {
+    std::env::var("AIDA_CACHE_NO_DETACH").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: records would-be spawns instead of forking real processes,
+    /// so reader-protocol tests stay hermetic (fixtures and fake HOME only).
+    pub(super) static SPAWN_LOG: std::cell::RefCell<Option<Vec<std::path::PathBuf>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// Spawn the detached worker for the store at `store_root`. Returns the child
 /// pid. The caller decides WHETHER to spawn (request filed, backoff clear,
-/// `AIDA_CACHE_NO_DETACH` unset); this helper only refuses recursion: a worker
-/// never spawns a worker.
+/// [`no_detach`] unset); this helper only refuses recursion: a worker never
+/// spawns a worker.
 // trace:TASK-1527 | ai:claude
 pub fn spawn_detached_worker(store_root: &Path, cache_path: &Path) -> std::io::Result<u32> {
-    use std::process::{Command, Stdio};
     if std::env::var_os("AIDA_CACHE_WORKER").is_some() {
+        let _ = store_root;
         return Err(std::io::Error::other(
             "refusing to spawn a refresh worker from inside a refresh worker",
         ));
     }
-    rotate_log(cache_path)?;
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(refresh_request::refresh_log_path(cache_path))?;
-    let mut cmd = Command::new(std::env::current_exe()?);
-    cmd.arg("cache")
-        .arg("refresh")
-        .arg("--worker")
-        .arg("--store")
-        .arg(store_root)
-        .arg("--cache")
-        .arg(cache_path)
-        .env("AIDA_CACHE_WORKER", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(log.try_clone()?))
-        .stderr(Stdio::from(log));
-    #[cfg(unix)]
+    // Under cfg(test), current_exe() is the TEST binary: a real spawn would
+    // re-enter the harness with `cache refresh --worker` args. Armed tests
+    // observe the spawn; everything else gets a refusal that surfaces as a
+    // recorded failed attempt (the Deferred path).
+    #[cfg(test)]
     {
-        use std::os::unix::process::CommandExt;
-        // Safety: setsid is async-signal-safe; nothing else runs pre-exec.
-        unsafe {
-            cmd.pre_exec(|| {
-                libc::setsid();
-                Ok(())
-            });
+        let intercepted = SPAWN_LOG.with(|log| {
+            if let Some(entries) = log.borrow_mut().as_mut() {
+                entries.push(cache_path.to_path_buf());
+                true
+            } else {
+                false
+            }
+        });
+        if intercepted {
+            Ok(0)
+        } else {
+            Err(std::io::Error::other(
+                "detached spawn disabled under cfg(test); arm SPAWN_LOG or set AIDA_CACHE_NO_DETACH",
+            ))
         }
     }
-    #[cfg(windows)]
+    #[cfg(not(test))]
     {
-        use std::os::windows::process::CommandExt;
-        const DETACHED_PROCESS: u32 = 0x0000_0008;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        use std::process::{Command, Stdio};
+        rotate_log(cache_path)?;
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(refresh_request::refresh_log_path(cache_path))?;
+        let mut cmd = Command::new(std::env::current_exe()?);
+        cmd.arg("cache")
+            .arg("refresh")
+            .arg("--worker")
+            .arg("--store")
+            .arg(store_root)
+            .arg("--cache")
+            .arg(cache_path)
+            .env("AIDA_CACHE_WORKER", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log.try_clone()?))
+            .stderr(Stdio::from(log));
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            // Safety: setsid is async-signal-safe; nothing else runs pre-exec.
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const DETACHED_PROCESS: u32 = 0x0000_0008;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        }
+        let mut child = cmd.spawn()?;
+        let pid = child.id();
+        // Reap in the background so a long-lived parent (the MCP server)
+        // accumulates no zombies, without blocking this reader on the refresh.
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(pid)
     }
-    let mut child = cmd.spawn()?;
-    let pid = child.id();
-    // Reap in the background so a long-lived parent (the MCP server)
-    // accumulates no zombies, without blocking this reader on the refresh.
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-    Ok(pid)
 }
 
 /// The worker log is append-only; cap it at ~1 MB by rotating to `.1` so a

@@ -451,7 +451,37 @@ impl CachedGitBackend {
         self.full_rebuild(&head, true)
     }
 
-    /// Single-flight pre-C reader protocol. Sidecars are diagnostics only.
+    /// A reader that cannot refresh inline files the durable request and
+    /// spawns the detached worker (STORY-1484 slice C). Returns `None` when
+    /// the cache was brought current on the spot (`AIDA_CACHE_NO_DETACH`, or
+    /// amendment A7's crash-loop fallback to the strict inline path), else
+    /// the label to serve: `Requested` after a successful spawn, `Deferred`
+    /// when the spawn itself failed (recorded, so backoff still engages).
+    // trace:TASK-1527 | ai:claude
+    fn file_and_spawn_refresh(&self) -> Result<Option<super::cache_refresh::RefreshState>> {
+        use super::cache_refresh::RefreshState;
+        use super::{refresh_request, refresh_worker};
+        if refresh_worker::no_detach() {
+            self.ensure_cache_fresh()?;
+            return Ok(None);
+        }
+        let cache_path = self.cache.path();
+        let head = self.current_head_sha();
+        let request = refresh_request::file_request(cache_path, &head)?;
+        if request.spawning_suppressed(chrono::Utc::now()) {
+            self.ensure_cache_fresh()?;
+            return Ok(None);
+        }
+        match refresh_worker::spawn_detached_worker(self.inner.path(), cache_path) {
+            Ok(_) => Ok(Some(RefreshState::Requested)),
+            Err(e) => {
+                refresh_request::record_failed_attempt(cache_path, &format!("spawn failed: {e}"))?;
+                Ok(Some(RefreshState::Deferred))
+            }
+        }
+    }
+
+    /// Single-flight reader protocol. Sidecars are diagnostics only.
     // trace:TASK-1526 | ai:codex
     pub fn freshen_for_read(
         &self,
@@ -518,7 +548,12 @@ impl CachedGitBackend {
                         self.ensure_cache_fresh()?;
                         return Ok(None);
                     }
-                    return Ok(Some(RefreshState::Deferred));
+                    // The request is filed while the flock is still held, so
+                    // no reader ever observes a free lock with no pending
+                    // request; the worker's acquire patience covers the gap
+                    // until this guard drops at return (TASK-1527).
+                    // trace:TASK-1527 | ai:claude
+                    return self.file_and_spawn_refresh();
                 }
                 Ok(None) => {
                     let limit = if migration && !budget.0.is_zero() {
@@ -537,7 +572,19 @@ impl CachedGitBackend {
                         // Final lock observation: never claim a departed holder.
                         let state = match RefreshLock::try_acquire(self.cache.path()) {
                             Ok(None) => RefreshState::WorkerRunning,
-                            Ok(Some(_)) => RefreshState::Deferred,
+                            Ok(Some(_guard)) => {
+                                // The holder departed without finishing. Hand
+                                // the work to the detached worker rather than
+                                // inheriting it past the read budget.
+                                // trace:TASK-1527 | ai:claude
+                                if !self.cache.is_stale(&self.current_head_sha())? {
+                                    return Ok(None);
+                                }
+                                match self.file_and_spawn_refresh()? {
+                                    None => return Ok(None),
+                                    Some(state) => state,
+                                }
+                            }
                             Err(_) => {
                                 self.ensure_cache_fresh()?;
                                 return Ok(None);
@@ -551,14 +598,15 @@ impl CachedGitBackend {
                     }
                     cache_refresh::wait_poll(remaining.min(Duration::from_millis(100)));
                     // A departed holder does not transfer its unfinished work to
-                    // this loser or restart the wait with another backend.
+                    // this loser or restart the wait with another backend; the
+                    // detached worker inherits it instead (TASK-1527).
                     match RefreshLock::try_acquire(self.cache.path()) {
-                        Ok(Some(_)) if !migration => {
-                            return Ok(if self.cache.is_stale(&self.current_head_sha())? {
-                                Some(RefreshState::Deferred)
-                            } else {
-                                None
-                            })
+                        Ok(Some(_guard)) if !migration => {
+                            if !self.cache.is_stale(&self.current_head_sha())? {
+                                return Ok(None);
+                            }
+                            // trace:TASK-1527 | ai:claude
+                            return self.file_and_spawn_refresh();
                         }
                         _ => {}
                     }
@@ -3566,7 +3614,7 @@ mod tests {
 
     // trace:TASK-1526 | ai:codex
     #[test]
-    fn non_tty_full_rebuild_winner_serves_deferred_without_worker() {
+    fn non_tty_full_rebuild_winner_files_request_and_serves_deferred_when_spawn_refused() {
         use super::super::cache_refresh::*;
         for stamp in ["", "missing", "non-ancestor", "large-diff", "decline"] {
             let dir = tempdir().unwrap();
@@ -3649,8 +3697,101 @@ mod tests {
             let counts = test_counts();
             assert_eq!(counts.get("full_rebuild"), None);
             assert_eq!(counts.get("write_attempt"), None);
-            assert!(!path.with_extension("db.refresh-request").exists());
+            // TASK-1527: the winner now files the durable request before
+            // serving stale; the cfg(test) spawn refusal is recorded on it,
+            // which is the Deferred-not-Requested evidence.
+            // trace:TASK-1527 | ai:claude
+            let request = super::super::refresh_request::load(&path)
+                .expect("the deferred winner must leave a refresh request");
+            assert_eq!(
+                request.target_head,
+                crate::git_ops::head_sha(&store).unwrap()
+            );
+            assert!(request
+                .last_error()
+                .is_some_and(|e| e.contains("spawn failed")));
         }
+    }
+
+    /// Amendment A7's named test: three failed worker attempts inside the
+    /// window stop the spawning, and the reader takes today's strict inline
+    /// path instead of serving stale forever.
+    // trace:TASK-1527 | ai:claude
+    #[test]
+    fn worker_crash_loop_stops_spawning() {
+        use super::super::cache_refresh::*;
+        use super::super::refresh_request;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        // Three stale reads: each files the request and records the refused
+        // spawn (cfg(test) never forks), serving stale honestly each time.
+        for _ in 0..3 {
+            let scope = CacheReadScope::new();
+            scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+            backend.list_summaries(&ListFilter::default()).unwrap();
+            assert_eq!(scope.metadata()["refreshing"], "deferred");
+        }
+        let failures = refresh_request::load(&path).unwrap();
+        assert_eq!(
+            failures
+                .attempts
+                .iter()
+                .filter(|a| a.error.is_some())
+                .count(),
+            3
+        );
+        assert!(failures.spawning_suppressed(chrono::Utc::now()));
+        // The fourth reader must stop spawning and refresh strictly inline.
+        test_counts();
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        let rows = backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(
+            rows.iter().any(|r| r.title == "gen1"),
+            "served CURRENT data"
+        );
+        assert!(
+            scope.stale().is_none(),
+            "an inline refresh is not a stale serve"
+        );
+        assert_eq!(
+            refresh_request::load(&path)
+                .unwrap()
+                .attempts
+                .iter()
+                .filter(|a| a.error.is_some())
+                .count(),
+            3,
+            "the suppressed reader must not record a fourth attempt"
+        );
+    }
+
+    /// A successful spawn labels the read `requested` and leaves the request
+    /// targeting the head the worker must reach.
+    // trace:TASK-1527 | ai:claude
+    #[test]
+    fn deferred_winner_with_a_live_spawn_serves_requested() {
+        use super::super::cache_refresh::*;
+        use super::super::{refresh_request, refresh_worker};
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        refresh_worker::SPAWN_LOG.with(|log| *log.borrow_mut() = Some(Vec::new()));
+        let scope = CacheReadScope::new();
+        scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+        backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["refreshing"], "requested");
+        let spawned = refresh_worker::SPAWN_LOG.with(|log| log.borrow_mut().take().unwrap());
+        assert_eq!(spawned.len(), 1, "exactly one worker spawn per stale read");
+        let request = refresh_request::load(&path).unwrap();
+        assert_eq!(
+            request.target_head,
+            crate::git_ops::head_sha(&store).unwrap()
+        );
+        assert!(request.last_error().is_none());
     }
 
     // trace:TASK-1526 | ai:codex
