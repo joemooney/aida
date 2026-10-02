@@ -1,0 +1,84 @@
+id: 01a0fad1-a302-7cc0-8b62-92e9fce8585f
+spec_id: BUG-1764
+agreed_id: BUG-1764
+title: Lease liveness trusts bare PID existence, so a PID collision with a kernel thread keeps a dead session's lease alive forever
+description: |
+  A lease whose owning process is gone can be kept alive indefinitely by a PID
+  collision, because the liveness check has no reliable way to tell "pid 2 is my
+  agent" from "pid 2 is kthreadd".
+
+  Measured 2026-10-01 on host `imac`, against the eight leases that
+  `aida session leases` reports under "Cross-clone leases (other clones)" for
+  clone_path `/tmp/aida-nightshift`:
+
+  | lease file | recorded pid | pid_start_time | what that pid is TODAY |
+  |---|---|---|---|
+  | bug-1689  | 663 | 2026-09-28T11:52:05Z | dead |
+  | bug-1692  | 202 | **absent**           | **live: `kworker/R-nvme-reset-wq`, started Sep 4 (boot)** |
+  | bug-1706  | 484 | 2026-09-28T11:37:39Z | dead |
+  | pr-2256   | 2   | 2026-09-28T12:26:18Z | **live: `kthreadd`, started Sep 4 (boot)** |
+  | story-1479| 326 | 2026-09-28T07:49:00Z | dead |
+  | task-1500 | 338 | **absent**           | dead |
+  | task-1531 | 337 | **absent**           | dead |
+  | task-1553 | 695 | 2026-09-28T12:38:41Z | dead |
+
+  Two independent defects:
+
+  1. **PID collision gives a dead session a live liveness signal.** The
+     `/tmp/aida-nightshift` clone recorded namespace-local PIDs in the single digits
+     to low hundreds. Those PIDs are now kernel threads on the host. Any check that
+     asks only "does this pid exist" sees `pr-2256` and `bug-1692` as live forever.
+     `pid_start_time` is the disambiguator and it works for the six that have it
+     (recorded start Sep 28 vs actual process start Sep 4 — an obvious mismatch), but:
+
+  2. **`pid_start_time` is optional and three of the eight leases do not carry it.**
+     `bug-1692`, `task-1500` and `task-1531` have no `pid_start_time` field at all, so
+     for those there is nothing to compare against and a collision is undetectable.
+     `bug-1692` is the case where both defects land together: no start time AND a live
+     colliding kernel thread.
+
+  Compounding: nothing else expires these. `ttl_secs = 1800` is recorded on every
+  lease and is apparently not enforced for display — the store holds 219 lease files,
+  some from June, and `aida session leases` surfaces only these. And a lease whose
+  `clone_path` differs from the current clone is classified "cross-clone" and exposes
+  no lease id, so `aida session end` cannot reach it:
+
+      $ aida session end --spec BUG-1689 --yes --skip-ci
+      error: "No lease found for spec `BUG-1689` ..."
+
+  `aida session reap` also never touches them: it requires spec Done/Completed +
+  branch merged + process exited.
+
+  Note the "cross-clone" framing is misleading here and may itself deserve a fix:
+  `host = "imac"` on all eight, and the machine running the query IS `imac`. These are
+  same-host, different-clone-path leases, so the host's own process table is fully
+  authoritative about them — the check does not need to probe a remote host at all.
+
+  Acceptance:
+  1. Lease liveness treats a pid as live only when `pid_start_time` is present AND
+     matches the process's actual start time within a tolerance; a mismatch is dead.
+  2. A lease with no `pid_start_time` is not trusted as live on pid existence alone.
+     Decide and document the fallback (TTL/heartbeat age), and make it expire.
+  3. A lease whose `host` equals the querying host is evaluated against the local
+     process table even when `clone_path` differs, rather than being filed as
+     unreachable "cross-clone".
+  4. There is a supported way to clear a stale lease the current clone does not own.
+     Today the only remedy is deleting `.aida-store/coordination/leases/*.toml` by hand.
+  5. Fixture test per clause. The collision case is reproducible without root: record
+     a lease with `pid = 2` and a `pid_start_time` later than boot, and assert it reads
+     dead.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T04:13:57.890825536Z
+modified_at: 2026-10-02T04:13:57.890825536Z
+req_type: Bug
+filed_at:
+  code_sha: 85aea1c60fcc36a4c4756fd8047c6342208616c5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 37866160-9ec6-4e9b-a86b-8da41edb7a26
