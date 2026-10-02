@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-09-29T05:52:01.850096620Z
+modified_at: 2026-10-02T10:43:20.016529117Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -90,6 +90,40 @@ comments:
   created_at: 2026-09-29T05:52:00.573853065Z
   modified_at: 2026-09-29T05:52:00.573853065Z
   session_id: 90913ac5-fbfb-4527-a436-ca91b9307726
+- id: 01a0fc36-1d50-7851-8280-114a2ae1e495
+  author: joe
+  content: |
+    Advisor disposition (relay session #12, 2026-10-02): APPROVED. Every load-bearing
+    claim re-verified against main at 30638a79ea, 5 days after filing.
+
+    - `pub is_draft: bool` is still at **pr_rebase.rs:224** exactly as filed, parsed
+      at pr_rebase.rs:251 and stored at :274.
+    - It is consumed by **nothing**: the only readers of that field are its own unit
+      tests (pr_rebase.rs:982, :998). 35 `is_draft` hits exist across the tree, and
+      every other one is a different concept -- spec Draft status (health_metrics.rs,
+      lib.rs) or the `review:draft-only` tag (`is_draft_only_tagged`, pr_ship.rs:922).
+      No merge or review path reads the PR's draft state.
+    - `gh pr ready` still appears **nowhere** in the tree. Verified by grepping for
+      the subcommand and for a bare `"ready"` argument; all hits are unrelated (test
+      control files, `zen_drive` verdict strings).
+
+    So the consequence chain as filed is intact and the bug is live.
+
+    ONE CORRECTION for the implementer: the `draft_notice` reference is stale. There
+    is no `preflight_retraction.rs`. The "or let the drain retry" wording is now at
+    **implementer_preflight.rs:99**. AC3 applies there.
+
+    AC1 is a deliberate design fork (un-draft the reused PR, vs. stop treating a
+    draft PR as published and open a fresh one) and the spec correctly requires
+    recording why. Both options are legitimate; the advisor is not pre-empting the
+    choice. Note for whoever takes it: the filed text observes that the previous
+    close-only behaviour did not have this trap, which is evidence for the
+    open-a-fresh-PR branch, but draft-first was an operator-approved change, so
+    un-drafting is the option that preserves that decision. State the choice against
+    those two facts.
+  created_at: 2026-10-02T10:43:20.016529117Z
+  modified_at: 2026-10-02T10:43:20.016529117Z
+  session_id: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 history:
 - id: 01a0e37a-9904-77c0-a710-ba44bf6762bd
   author: joe
