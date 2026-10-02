@@ -1,10 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-10-02T09:57:00.250232702Z
+last_run: 2026-10-02T19:05:05.398550183Z
 last_by:
   seat: advisor
-  session: d5361d99-df2f-496e-9322-ef0a7eb10836
+  session: 54f4de70-b131-41b6-b8b6-9904154b654a
   vendor: antigravity
 result: done
-note: 'Resolved by `aida db sync --push`: the aida-store mirror had not fanned out to gitlab since routine store writes only reach origin (BUG-1746). `aida remote status` now reports all hubs agreeing on main, aida-store, and the v0.15.0 release tag. No force-push was used.'
-due_since: 2026-10-02T17:08:15.201556442Z
-due_reason: on CronJobFailed:hub-drift-guard
