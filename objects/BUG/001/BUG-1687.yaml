@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T15:43:10.664271898Z
+modified_at: 2026-10-02T15:43:11.967951195Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -216,6 +216,81 @@ comments:
   created_at: 2026-10-02T14:56:02.558431644Z
   modified_at: 2026-10-02T14:56:02.558431644Z
   session_id: 4d15c9cf-9632-421e-973e-436f4d2e6185
+- id: 01a0fd48-a65f-7510-9ce7-c1f2ff1c955b
+  author: joe
+  content: |-
+    Implemented in PR #2340 (branch bug-1687-work, stacked on #2339 / bug-1771-work
+    because the fix builds on that PR's split_status_lens_spec + LENS_FILTER_TOKENS
+    table). All four ACs covered; both halves proved by mutation.
+
+    ## One deviation from the signed-off sketch, and why
+
+    The sketch said to add `NeedsAttentionLens::Deferred { trigger }`, checked
+    before the NeedsAttention gate, and pre-authorized the exhaustive-match sites
+    that would break. I did NOT do that. Deferral is implemented as its own
+    presentation-level override (`status_display::deferred_display_label` /
+    `deferred_badge` / `spec_status_badge`) instead.
+
+    The reason is BUG-1771, which landed between the sketch and the implementation:
+    it made `NeedsAttentionLens`'s variants the thing `--status shelved` /
+    `--status needs-decision` SELECT ON, via `row_parked_lens`. The sketch's own
+    argument against a `RequirementStatus::Deferred` variant now applies one level
+    down — a spec can be deferred at ANY stored status, so putting deferral in the
+    lens enum would have meant a spec that is both shelved and deferred reports
+    lens = Deferred and silently drops out of `--status shelved`. Keeping the two
+    apart also means zero exhaustive matches had to change, so the pre-authorized
+    list of break sites (lib.rs 19068 / 18986 / 18990 / 19028 / 63939 / 63941) went
+    unused. Everything else in the sketch stands and was followed, including the
+    AC2 fix site and the `status_glyph_for_profile` arm (Glyph::Hourglass ⏳, not
+    the shelf's ⏸).
+
+    ## What each AC is satisfied by
+
+    - **AC1** — the override is applied at all four surfaces, not just the human
+      one: the `Status:` line and its TASK-269 reprint, the AGENT-MODE TOON head
+      (`status: deferred`, with `stored_status` and `deferred_until` beside it), and
+      `--json`. `aida show --json` previously emitted no defer field at ALL — not
+      `deferred`, not `deferred_until` — so the report's claim that `--json` reports
+      deferred = true was not true of `aida show`; it now is.
+    - **AC2** — `--status deferred` opens the defer axis rather than widening a
+      status query. Two consequences worth knowing before touching this: a bare
+      token leaves the status filter UNSET, so it must suppress the STORY-723
+      open-lens default itself or a deferred-and-Completed row is re-hidden (that
+      one line has its own mutation proof); and the token inherits `--deferred`'s
+      precedence, so `--all` / `--archived` still widen to DeferFilter::Both.
+    - **AC3** — satisfied by construction, as the sketch predicted, plus an
+      end-to-end round-trip fixture asserting `stored_status` is byte-identical
+      before defer / during defer / after undefer.
+    - **AC4** — the list filter and every show surface read ONE predicate,
+      `status_display::is_deferred`, which mirrors the cache's own `DEFER_TAG_LIKE`
+      (the flag OR a legacy `deferred:*` tag). A fixture asserts show and list
+      claim the same spec, and that `--status needs-decision` does not also claim it.
+
+    ## Judgment call worth a second opinion at review
+
+    `aida show` on a punted-then-deferred spec still prints the punt RECORD block,
+    headed "Needs Attention — punted:" with its category and reason, below a Status
+    line that now reads Deferred. I left it: it is a factual account of an event
+    that did happen, not a claim about current state, and AC1 is about the status
+    the surface presents. The fixture therefore asserts per STATUS LINE rather than
+    over the whole body. If a reviewer reads AC1 more strictly than that, the block
+    header is the thing to relabel.
+
+    ## Verification
+
+    make check-ci-fast: 16 gates passed, exit 0. New fixture: 4 passed.
+    status_display units: 19 passed. Four mutations, each witnessed by a DIFFERENT
+    assertion: (1) drop the token row -> all 4 fail with the original refusal, and
+    the message prints "a view lens ()", proving it reads the table; (2) token
+    accepted but axis unwired -> all 4 fail with the WRONG SET, not an error, so the
+    wiring is not dead weight riding on the token; (3) display override removed,
+    filters intact -> the 2 show tests fail with the exact filed symptom while the 2
+    list tests still PASS, which is what makes the two halves independently
+    witnessed; (4) open-lens bypass dropped -> only the deferred-and-Completed
+    assertion fails.
+  created_at: 2026-10-02T15:43:11.967951195Z
+  modified_at: 2026-10-02T15:43:11.967951195Z
+  session_id: 424a5502-c151-4790-9c94-668cb6da6dd9
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
