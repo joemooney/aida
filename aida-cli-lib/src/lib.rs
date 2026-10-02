@@ -25504,6 +25504,21 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "runaway-seats",
     ),
+    // BUG-1738: the pre-push mirror hook is generated once, at
+    // `aida remote mirror` time, and never re-generated — so a generator fix
+    // (BUG-1706's --dry-run forwarding) silently never reaches hooks
+    // installed before it. Compares the installed hook against the current
+    // generator; recognizes only AIDA's own banner, so a custom pre-push
+    // hook is never flagged. Report-only. trace:BUG-1738 | ai:claude
+    (
+        &[
+            "mirror-hook-drift",
+            "mirror-hook",
+            "pre-push-hook",
+            "hook-drift",
+        ],
+        "mirror-hook-drift",
+    ),
 ];
 
 /// `id-collisions` doctor findings: one per id that resolves to more than one

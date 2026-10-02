@@ -1259,21 +1259,33 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
 /// pre-push hook without clobbering a user's custom one.
 const MIRROR_HOOK_MARKER: &str = "aida remote mirror-push";
 
+/// First line of the generated hook's comment banner. The doctor
+/// `mirror-hook-drift` scan recognizes AIDA's own hook by THIS line, not by
+/// `MIRROR_HOOK_MARKER`: the installer tells owners of a custom pre-push
+/// hook to paste the marker line (`aida remote mirror-push "$1" || true`)
+/// into their hook, so the marker also matches hooks AIDA must never offer
+/// to rewrite. Embedded in `mirror_pre_push_hook_script` so the generator
+/// and the recognizer cannot drift apart.
+// trace:BUG-1738 | ai:claude
+pub(crate) const MIRROR_HOOK_HEADER: &str =
+    "# Mirror fan-out pre-push hook — installed by `aida remote mirror`.";
+
 /// The pre-push hook shim `aida remote mirror` installs. POSIX sh — git runs
 /// hooks under /bin/sh. Pipes the ref lines git feeds the hook straight
 /// through to the plumbing subcommand and always exits 0, so mirroring can
 /// never block the origin push (even when `aida` is not on PATH or an older
 /// binary lacks the hidden plumbing subcommand).
 pub fn mirror_pre_push_hook_script() -> String {
+    format!(
     "#!/bin/sh\n\
-     # Mirror fan-out pre-push hook — installed by `aida remote mirror`.\n\
+     {MIRROR_HOOK_HEADER}\n\
      # Fans each code ref pushed to origin out to every configured mirror hub\n\
      # ([store.sync] mirror_remotes in .aida/config.toml). Best-effort: a\n\
      # mirror failure warns and never blocks the push. Safe to delete;\n\
      # reinstall with `aida remote mirror <name>`.\n\
      unset GIT_DIR GIT_WORK_TREE\n\
      # Git runs pre-push for dry-runs but omits the flag from the hook environment.\n\
-     git_args=$(ps -p \"$PPID\" -o args= 2>/dev/null) || { echo \"mirror-push: could not inspect git arguments; skipped\" >&2; exit 0; }\n\
+     git_args=$(ps -p \"$PPID\" -o args= 2>/dev/null) || {{ echo \"mirror-push: could not inspect git arguments; skipped\" >&2; exit 0; }}\n\
      case \" $git_args \" in *\" --dry-run \"*|*\" -n \"*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac\n\
      # trace:BUG-1706 | ai:codex\n\
      if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then\n\
@@ -1284,7 +1296,7 @@ pub fn mirror_pre_push_hook_script() -> String {
      \u{20} fi\n\
      fi\n\
      exit 0\n"
-        .to_string()
+    )
 }
 
 /// Parse the ref lines git feeds a pre-push hook on stdin
@@ -1878,23 +1890,29 @@ fn add_mirror_remote_to_config(project_root: &Path, name: &str) -> Result<bool> 
 }
 
 /// Resolve the repo's hooks directory (`git rev-parse --git-path hooks`, so
-/// linked worktrees and `core.hooksPath` are honored) and install the mirror
-/// pre-push shim there. Idempotent: refreshes its own hook in place, never
+/// linked worktrees and `core.hooksPath` are honored). Shared by the
+/// installer and the doctor `mirror-hook-drift` scan so the hook they write
+/// and the hook they inspect are always the same file.
+// trace:BUG-1738 | ai:claude
+pub(crate) fn repo_hooks_dir(project_root: &Path) -> std::path::PathBuf {
+    let rel = git_out(project_root, &["rev-parse", "--git-path", "hooks"])
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| ".git/hooks".to_string());
+    let p = Path::new(&rel);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        project_root.join(p)
+    }
+}
+
+/// Install the mirror pre-push shim into the repo's hooks directory.
+/// Idempotent: refreshes its own hook in place, never
 /// clobbers a custom pre-push hook (prints the one line to add instead).
 fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
     let check = crate::glyph(crate::glyphs::Glyph::Check);
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
-    let rel = git_out(project_root, &["rev-parse", "--git-path", "hooks"])
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| ".git/hooks".to_string());
-    let hooks_dir = {
-        let p = Path::new(&rel);
-        if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            project_root.join(p)
-        }
-    };
+    let hooks_dir = repo_hooks_dir(project_root);
     std::fs::create_dir_all(&hooks_dir)
         .with_context(|| format!("failed to create {}", hooks_dir.display()))?;
     let target = hooks_dir.join("pre-push");
