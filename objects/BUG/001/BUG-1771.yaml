@@ -58,13 +58,29 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T14:13:04.482813479Z
-modified_at: 2026-10-02T14:25:38.864901824Z
+modified_at: 2026-10-02T14:55:40.168025331Z
 req_type: Bug
 tags:
 - cli
 - filter
 - list
 - reporting
+comments:
+- id: 01a0fd1d-2288-7951-a861-3f438ace437c
+  author: joe
+  content: |-
+    Implemented 2026-10-02 (relay session #19) — PR https://github.com/joemooney/aida/pull/2339 on branch bug-1771-work.
+
+    Fix shape: the lenses are not statuses (both parked kinds sit at the stored NeedsAttention, told apart by which field the spec carries), so there is no cache column to filter on. The git-backend status arm now splits lens tokens out of the spec, widens the cache query to needs-attention, and narrows the returned rows by lens. AC4 is honoured as 'both halves': --status shelved,approved keeps the Approved rows and narrows only the parked ones; an explicit --status shelved,needs-attention keeps every parked row.
+
+    AC3 is mechanical rather than textual: LENS_FILTER_TOKENS is one table read by the splitter, the legacy listing path, and the refusal message, with a unit test asserting every row splits out as a lens AND appears in the refusal.
+
+    AC2 coverage is aida-cli/tests/bug_1771_status_lens_filters.rs, driving the shipped binary. Both halves proved by mutation: reverting the status arm fails all 3 tests with the original error; keeping the widening while deleting only the post-query narrowing fails 2 of 3.
+
+    One correction to the filing: the filing suggested that fixing this site would satisfy BUG-1687 AC2 (aida list --status deferred) at the same time. It does not. 'deferred' is the orthogonal defer view-flag axis (DeferFilter), not a lens over NeedsAttention, so it needs its own token handling rather than an entry in LENS_FILTER_TOKENS. The split/refusal machinery added here is the right place to hang it.
+  created_at: 2026-10-02T14:55:40.168025331Z
+  modified_at: 2026-10-02T14:55:40.168025331Z
+  session_id: 4d15c9cf-9632-421e-973e-436f4d2e6185
 history:
 - id: 01a0fcf8-9fa1-7890-824e-fd98464a44c5
   author: joe
