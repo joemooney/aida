@@ -1035,6 +1035,9 @@ fn history_should_exclude_meta(include_meta: bool, type_filter: Option<&str>) ->
 #[path = "tests/bug_1745_error_channel_tests.rs"]
 mod bug_1745_error_channel_tests;
 #[cfg(test)]
+#[path = "tests/bug_1749_doctor_toon_tests.rs"]
+mod bug_1749_doctor_toon_tests;
+#[cfg(test)]
 #[path = "tests/story_737_delight_tests.rs"]
 mod story_737_delight_tests;
 

@@ -370,7 +370,7 @@ pub(crate) struct DoctorHealResult {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
-struct DoctorReport {
+pub(crate) struct DoctorReport {
     total: usize,
     findings: Vec<DoctorFinding>,
     #[serde(skip_serializing_if = "is_zero_usize")]
@@ -411,9 +411,9 @@ impl DoctorReport {
     }
 }
 
-// trace:BUG-1745 | ai:codex
+// trace:BUG-1749 | ai:codex
 #[cfg(test)]
-pub(super) fn bug_1745_test_envelope() -> String {
+pub(super) fn bug_1745_test_report() -> DoctorReport {
     let mut report = DoctorReport::from_findings(vec![DoctorFinding {
         category: "performance".into(),
         id: "synthetic".into(),
@@ -438,7 +438,12 @@ pub(super) fn bug_1745_test_envelope() -> String {
             ceiling_ms: None,
             ceiling_breached: false,
         });
-    serde_json::to_string_pretty(&report).unwrap()
+    report
+}
+
+#[cfg(test)]
+pub(super) fn bug_1745_test_envelope() -> String {
+    serde_json::to_string_pretty(&bug_1745_test_report()).unwrap()
 }
 
 fn is_zero_usize(n: &usize) -> bool {
@@ -722,25 +727,46 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         report.healed = heal_doctor_findings(&project_root, &report.findings, &opts)?;
     }
 
+    // trace:BUG-1749 | ai:codex
+    let reason = if !opts.heal
+        && !report.findings.is_empty()
+        && opts.category.as_deref().is_some()
+        && doctor_category_selected(opts.category.as_deref(), "permission-posture")?
+    {
+        Some("permission-posture finding(s) detected — see the report above".to_string())
+    } else if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
+        Some(format!(
+            "{} finding(s) in {} — failing because --fail-on-findings was requested",
+            report.findings.len(),
+            opts.category.as_deref().unwrap_or("all categories")
+        ))
+    } else {
+        let failed = report
+            .healed
+            .iter()
+            .filter(|r| r.status == "failed")
+            .count();
+        (failed > 0).then(|| format!("{failed} finding(s) failed to heal — see the report above"))
+    };
+
     if opts.quiet_output {
         eprintln!("  ✓ merged-agent-worktrees cleanup checked ({merged_agent_worktrees_reclaimable} reclaimable); details: `aida doctor --category merged-agent-worktrees`");
-    } else if opts.json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        render_doctor_report(&report, opts.heal)?;
-        if let Some(coverage) = &report.runaway_seats {
-            print!("{}", crate::runaway_seats::render_coverage(coverage));
-        }
-        // STORY-707: `aida doctor` is the check-everything home. The heavy
-        // orientation diagnostics that used to ride bare `aida status` — PR/CI
-        // (a `gh` network call), live-session/lease liveness, worktree probes,
-        // the full fleet roster, and cross-clone coordination — now surface
-        // HERE, not on the fast default `aida status`. Gated to the full,
-        // unfiltered text run (no `--category` narrow filter) so a targeted
-        // `aida doctor check --category X` stays focused. trace:STORY-707
-        if opts.category.is_none() {
-            print_doctor_status_diagnostics(&project_root, &store);
-        }
+        return emit_doctor_report(
+            report,
+            reason,
+            doctor_render_mode(opts.json),
+            opts.heal,
+            |report| {
+                if let Some(coverage) = &report.runaway_seats {
+                    print!("{}", crate::runaway_seats::render_coverage(coverage));
+                }
+                // STORY-707: full human doctor includes orientation diagnostics.
+                if opts.category.is_none() {
+                    print_doctor_status_diagnostics(&project_root, &store);
+                }
+            },
+        );
     }
 
     // trace:BUG-1718 | ai:codex
@@ -748,46 +774,6 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         return Ok(());
     }
 
-    // STORY-1127: permission posture is intended as a check/gate category: a
-    // flagged full-access or incoherent sandbox state must produce a non-zero
-    // exit so headless drains and scripts cannot miss it.
-    // trace:STORY-1127 | ai:codex
-    if !opts.heal
-        && !report.findings.is_empty()
-        && opts.category.as_deref().is_some()
-        && doctor_category_selected(opts.category.as_deref(), "permission-posture")?
-    {
-        anyhow::bail!("permission-posture finding(s) detected — see the report above");
-    }
-
-    // The opt-in gate. Deliberately GENERAL rather than a second hardcoded
-    // category beside the permission-posture check above. That one is the
-    // precedent, and adding a second special case is exactly how two categories
-    // end up behaving differently under one verb — which a later reader
-    // "fixes" in the wrong direction, and the wrong direction here is silence.
-    // A caller that wants to be gated asks, and asks in the job definition
-    // where the next reader can see that the job is gating.
-    // trace:STORY-1422 | ai:claude
-    if !opts.heal && opts.fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in {} — failing because --fail-on-findings was requested",
-            report.findings.len(),
-            opts.category.as_deref().unwrap_or("all categories")
-        );
-    }
-
-    // BUG-471: heal now continues past a single finding's failure (no more
-    // first-error abort), so the failure signal moves to the exit code — bail
-    // non-zero after the report so scripts/automation still notice.
-    // trace:BUG-471 | ai:claude
-    let failed = report
-        .healed
-        .iter()
-        .filter(|r| r.status == "failed")
-        .count();
-    if failed > 0 {
-        anyhow::bail!("{failed} finding(s) failed to heal — see the report above");
-    }
     Ok(())
 }
 
@@ -953,23 +939,17 @@ fn doctor_check_runaway_seats_light(json: bool, fail_on_findings: bool) -> Resul
     let mut report = DoctorReport::from_findings(findings);
     report.runaway_seats = Some(coverage);
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
+    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| {
+        format!(
+            "{} finding(s) in runaway-seats — failing because --fail-on-findings was requested",
+            report.findings.len()
+        )
+    });
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |report| {
         if let Some(coverage) = &report.runaway_seats {
             print!("{}", crate::runaway_seats::render_coverage(coverage));
         }
-    }
-
-    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in runaway-seats — failing because --fail-on-findings was requested",
-            report.findings.len()
-        );
-    }
-    Ok(())
+    })
 }
 
 /// BUG-1675: the light entry path for `aida doctor check disk-headroom`,
@@ -983,26 +963,17 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = disk_headroom_light_report(&project_root);
 
-    if json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
-    }
-
-    // Mirrors the `--fail-on-findings` gate in `doctor_multi_agent`.
-    if fail_on_findings && !report.findings.is_empty() {
-        anyhow::bail!(
-            "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
-            report.findings.len()
-        );
-    }
-    Ok(())
+    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        report.findings.len()
+    ));
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
 }
 
 // trace:TASK-1544 | ai:codex
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
-    let mut report = match category {
+    let report = match category {
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         _ => unreachable!("only store-free categories dispatch here"),
@@ -1014,21 +985,7 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
             report.findings.len()
         )
     });
-    if json {
-        // The reason rides INSIDE the one document on stdout. trace:BUG-1745
-        report.error = reason.clone();
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        render_doctor_report(&report, false)?;
-    }
-    match reason {
-        None => Ok(()),
-        // Typed path: stdout already carries the reason, so the global renderer
-        // must stay silent.
-        // trace:BUG-1745 | ai:codex
-        Some(_) if json => Err(anyhow::Error::new(crate::TypedPayloadEmitted)),
-        Some(msg) => Err(anyhow::anyhow!("{msg}")),
-    }
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
 }
 
 // trace:TASK-1544 | ai:codex
@@ -5612,6 +5569,213 @@ fn print_doctor_status_diagnostics(
     print_status_worktrees_section(project_root, true);
     print_status_open_prs_section(project_root, true);
     print_status_coordination_section(&store_path, chrono::Utc::now(), true);
+}
+
+// trace:BUG-1749 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DoctorRenderMode {
+    Human,
+    Toon,
+    Json,
+}
+
+// trace:BUG-1749 | ai:codex
+pub(crate) fn doctor_render_mode_from(
+    json_flag: bool,
+    pin: Option<crate::OutputFormat>,
+    agent: bool,
+) -> DoctorRenderMode {
+    if json_flag || matches!(pin, Some(crate::OutputFormat::Json)) {
+        DoctorRenderMode::Json
+    } else if matches!(pin, Some(crate::OutputFormat::Human)) {
+        DoctorRenderMode::Human
+    } else if matches!(pin, Some(crate::OutputFormat::Toon)) || agent {
+        DoctorRenderMode::Toon
+    } else {
+        DoctorRenderMode::Human
+    }
+}
+
+// trace:BUG-1749 | ai:codex
+fn doctor_render_mode(json_flag: bool) -> DoctorRenderMode {
+    doctor_render_mode_from(
+        json_flag,
+        crate::output_format_override(),
+        crate::agent_output_mode(),
+    )
+}
+
+// trace:BUG-1749 | ai:codex
+pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
+    use crate::toon::{error_block, scalar, table_raw};
+    let mut blocks = vec![scalar("total", &report.total.to_string())];
+    if report.hidden_completed_without_commit != 0 {
+        blocks.push(scalar(
+            "hidden_completed_without_commit",
+            &report.hidden_completed_without_commit.to_string(),
+        ));
+    }
+    if !report.findings.is_empty() {
+        let rows = report
+            .findings
+            .iter()
+            .map(|f| {
+                vec![
+                    f.category.clone(),
+                    f.id.clone(),
+                    f.summary.clone(),
+                    f.action.clone(),
+                    f.safe_heal.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "findings",
+            &["category", "id", "summary", "action", "safe_heal"],
+            &rows,
+        ));
+    }
+    if !report.healed.is_empty() {
+        let rows = report
+            .healed
+            .iter()
+            .map(|r| {
+                vec![
+                    r.category.clone(),
+                    r.id.clone(),
+                    r.action.clone(),
+                    r.status.clone(),
+                    r.detail.clone().unwrap_or_default(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "healed",
+            &["category", "id", "action", "status", "detail"],
+            &rows,
+        ));
+    }
+    if let Some(v) = &report.bwrap {
+        blocks.push(scalar("bwrap", v));
+    }
+    if !report.performance_audits.is_empty() {
+        let rows = report
+            .performance_audits
+            .iter()
+            .map(|a| {
+                vec![
+                    a.command.clone(),
+                    a.budget_ms.to_string(),
+                    a.over_budget.to_string(),
+                    a.denominator.to_string(),
+                    a.proportion_millipercent.to_string(),
+                    a.tolerated_millipercent.to_string(),
+                    a.window_hours.to_string(),
+                    a.worst_ms.map(|v| v.to_string()).unwrap_or_default(),
+                    a.excluded_samples.to_string(),
+                    a.lineage_scoped.to_string(),
+                    a.ceiling_ms.map(|v| v.to_string()).unwrap_or_default(),
+                    a.ceiling_breached.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "performance_audits",
+            &[
+                "command",
+                "budget_ms",
+                "over_budget",
+                "denominator",
+                "proportion_millipercent",
+                "tolerated_millipercent",
+                "window_hours",
+                "worst_ms",
+                "excluded_samples",
+                "lineage_scoped",
+                "ceiling_ms",
+                "ceiling_breached",
+            ],
+            &rows,
+        ));
+    }
+    if let Some(c) = &report.runaway_seats {
+        for (k, v) in [
+            ("runaway_seats_files_scanned", c.files_scanned.to_string()),
+            ("runaway_seats_bytes_read", c.bytes_read.to_string()),
+            ("runaway_seats_sessions", c.sessions.to_string()),
+            (
+                "runaway_seats_sessions_timing_unknown",
+                c.sessions_timing_unknown.to_string(),
+            ),
+            ("runaway_seats_partial", c.partial.to_string()),
+            ("runaway_seats_elapsed_ms", c.elapsed_ms.to_string()),
+        ] {
+            blocks.push(scalar(k, &v));
+        }
+        blocks.push(scalar("runaway_seats_verdict", &c.verdict));
+        if !c.sources.is_empty() {
+            let rows = c
+                .sources
+                .iter()
+                .map(|s| {
+                    vec![
+                        s.source.clone(),
+                        s.path.clone(),
+                        s.state.clone(),
+                        s.detail.clone(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            blocks.push(table_raw(
+                "runaway_seats_sources",
+                &["source", "path", "state", "detail"],
+                &rows,
+            ));
+        }
+        if !c.still_active.is_empty() {
+            let rows = c
+                .still_active
+                .iter()
+                .map(|v| vec![v.clone()])
+                .collect::<Vec<_>>();
+            blocks.push(table_raw("runaway_seats_still_active", &["finding"], &rows));
+        }
+    }
+    if let Some(v) = &report.error {
+        blocks.push(error_block(v, None));
+    }
+    blocks.join("\n")
+}
+
+// trace:BUG-1749 | ai:codex
+fn emit_doctor_report(
+    mut report: DoctorReport,
+    reason: Option<String>,
+    mode: DoctorRenderMode,
+    healed: bool,
+    human_extras: impl FnOnce(&DoctorReport),
+) -> Result<()> {
+    match mode {
+        DoctorRenderMode::Json => {
+            report.error = reason.clone();
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        DoctorRenderMode::Toon => {
+            report.error = reason.clone();
+            print!("{}", render_doctor_report_toon(&report));
+        }
+        DoctorRenderMode::Human => {
+            render_doctor_report(&report, healed)?;
+            human_extras(&report);
+        }
+    }
+    match reason {
+        None => Ok(()),
+        Some(_) if mode != DoctorRenderMode::Human => {
+            Err(anyhow::Error::new(crate::TypedPayloadEmitted))
+        }
+        Some(msg) => Err(anyhow::anyhow!("{msg}")),
+    }
 }
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
