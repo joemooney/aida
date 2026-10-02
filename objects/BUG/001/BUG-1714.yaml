@@ -71,7 +71,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T12:33:02.774229129Z
-modified_at: 2026-10-02T19:43:42.688711877Z
+modified_at: 2026-10-02T20:25:28.502563872Z
 req_type: Bug
 comments:
 - id: 01a0fe24-d860-7e60-8670-1af414041f65
@@ -80,6 +80,13 @@ comments:
   created_at: 2026-10-02T19:43:42.688711877Z
   modified_at: 2026-10-02T19:43:42.688711877Z
   session_id: b60cff1c-3dc3-4a0a-ae64-2c8966f495bd
+- id: 01a0fe4b-14b6-7b70-9ef7-92bf7d7682dc
+  author: joe
+  content: |
+    Independent cross-vendor review (codex, static, read-only sandbox, 2026-10-02) of PR #2350 at d29effa2f2: VERDICT REQUEST_CHANGES. One blocker, verified by the advisor against the diff and AC2's own text ("an Inconclusive result never permits a merge"): in hold_inconclusive_publication, both hold layers (typed marker write + label sync) are best-effort; if BOTH fail the PR is left open with no hold layer, i.e. mergeable while unverified. Reviewer also confirmed the decision split itself is correct (no inconclusive case reaches close-as-refused; no genuine failure is held open) and that tests witness the distinction but not the marker-write-failure path. Rework dispatched to a codex implementer: double-failure now falls back to the fail-closed close with an honest (never "refused") notice; new test + mutation proof required.
+  created_at: 2026-10-02T20:25:28.502563872Z
+  modified_at: 2026-10-02T20:25:28.502563872Z
+  session_id: 36d8236a-e4eb-4af0-8043-25d75751b21d
 history:
 - id: 01a0e801-478f-7b31-9c8f-8a1761335c13
   author: joe
