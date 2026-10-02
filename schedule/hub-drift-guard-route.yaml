@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Reconciled by fast-forward, no force push: gitlab main was 2 behind origin (c096deb7c4..3494256297, ancestry verified before pushing) and aida-store was 7 behind local while origin was in sync, so ''aida remote reconcile --execute'' pushed the union to gitlab only. ''aida remote status'' now reports main, aida-store and release v0.15.0 all in sync on both hubs. Root cause is the known one (BUG-1746): routine store writes go to origin only, and the gitlab mirror fans out only on ''aida db sync --push''; the main-branch lag came from four PRs merged forge-side on origin without a mirror-sync.'
+due_since: 2026-10-02T04:55:19.909603996Z
+due_reason: on CronJobFailed:hub-drift-guard
