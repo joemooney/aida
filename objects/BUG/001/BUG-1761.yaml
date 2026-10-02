@@ -68,7 +68,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T01:59:34.641082053Z
-modified_at: 2026-10-02T02:36:24.558721098Z
+modified_at: 2026-10-02T02:41:31.820119957Z
 req_type: Bug
 comments:
 - id: 01a0fa78-526e-7563-b63b-69fedbeba7c0
@@ -139,6 +139,60 @@ comments:
     for an open PR and a local branch first, per this spec's own lesson; both clear).
   created_at: 2026-10-02T02:36:24.558721098Z
   modified_at: 2026-10-02T02:36:24.558721098Z
+  session_id: 68b75920-ae12-44c6-8460-645047bfd97e
+- id: 01a0fa7d-02ac-76b1-ad2c-f7de8ed77067
+  author: joe
+  content: |
+    ADVISOR MEASUREMENT — AC3's branch arm will fire far more often than the filed case suggests
+
+    Measured on `main` @ `53484fbff7` while round 1 was in flight:
+
+    ```
+    git branch --list | grep -cE "(bug|story|task|epic|adr|prin)-[0-9]+"   ->  761
+    ```
+
+    **761 retained local spec-shaped branches.** This repo retains merged branches locally by standing
+    operator preference (branch deletion requires confirmation), and `gh pr merge --delete-branch` only
+    removes the *remote* one. `branch_exists_anywhere` (`lib.rs:36824`) checks `refs/heads/<slug>` locally
+    **and** `origin`, so the local half matches for every spec that was ever worked.
+
+    ## What that means for AC3
+
+    AC3 — "with an existing local branch and no PR, the command refuses rather than allocating a `-2`
+    suffix" — is implemented as written in round 1. But the arm it adds does **not** only catch the filed
+    scenario (a branch *with* an open PR). It also fires on **re-pickup of any previously-worked spec whose
+    PR has since merged**, because a merged PR is not an open PR, so the PR arm misses and the branch arm
+    catches. With 761 such branches on this host, that is the common case, not the edge case.
+
+    I judge this **acceptable for round 1 and not a reason to change the AC**, for three reasons:
+
+    1. The refusal is cheap to clear and names its own remedies — round 1's message names deleting the
+       stale branch, `--branch <name>`, and `--force-claim` (which restores the historical `-2` suffixing).
+    2. `queue work` on an already-worked spec is genuinely worth a pause. Silent `-2` allocation is exactly
+       the defect this spec was filed about.
+    3. Narrowing the arm unilaterally would be me rewriting an acceptance criterion mid-implementation,
+       which is the operator's call, not the implementer's or the advisor's.
+
+    ## Recommended refinement — for the operator to accept or decline, NOT taken in round 1
+
+    Narrow the branch arm to refuse only when the existing branch carries **commits not reachable from
+    `main`**. A fully-merged stale branch carries no information worth warning about, so it could fall
+    through to the historical suffix behaviour silently; an unmerged branch means real work that a `-2`
+    would orphan, which is the case worth refusing.
+
+    This would cut the refusal rate on this host from ~761 candidate branches to just those with live work,
+    without weakening the filed scenario at all (BUG-1819's `bug-1819` branch had an open PR and unmerged
+    commits, so it would still refuse on both arms).
+
+    Deliberately **not** implemented in round 1: it is a change to AC3's predicate, so it needs to be an
+    acceptance criterion before it is code. Note the standing caution that
+    `git merge-base --is-ancestor` reports NO for every squash-merged branch — this repo squash-merges, so
+    an ancestry test is the **wrong** predicate here and would mark all 761 as unmerged. Any
+    implementation of this refinement must resolve merged-ness via the forge (`gh pr list --head <branch>
+    --state all`), not via git ancestry. That is the detail that makes this a real spec rather than a
+    one-liner, and the reason I am recommending it rather than slipping it in.
+  created_at: 2026-10-02T02:41:31.820119957Z
+  modified_at: 2026-10-02T02:41:31.820119957Z
   session_id: 68b75920-ae12-44c6-8460-645047bfd97e
 history:
 - id: 01a0fa56-cf3d-7c23-9bbe-8bba9f3a577e
