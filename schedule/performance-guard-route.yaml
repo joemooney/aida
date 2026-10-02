@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Investigated. The trip is NOT a code regression in `aida show`: the proportion arm is 10.2% against a 10.0% tolerance (0.2-point margin on a 205-call sample) and the ceiling arm is one 9449 ms call, both measured in a 24h window during which this host ran a sustained agent fleet (one agy process at 125% CPU, load 3.73 on 6 cores, cargo 2-slot gated). Per-binary rates are scattered with no worsening across the lineage, which a real regression would show. Raising a budget is explicitly an operator decision, so the three options and their consequences are filed as TASK-1565 (draft, needs-operator-decision) rather than decided here. Separately: the 2026-09-29 failure_trips entry carrying ''malformed typed doctor output'' is a DIFFERENT, parse-level failure that did not recur in the 2026-10-02 run; noted in TASK-1565 so the two are not conflated.'
+due_since: 2026-10-02T11:01:05.194947578Z
+due_reason: on CronJobFailed:performance-guard
