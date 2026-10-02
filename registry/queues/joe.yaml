@@ -36,27 +36,3 @@
   added_by: joe
   added_at: 2026-10-02T18:19:49.479833860Z
   for_role: advisor
-- user_id: joe
-  requirement_id: 01a0e458-76f4-73f2-b4d8-d50e9580d33b
-  position: 36000
-  added_by: joe
-  added_at: 2026-10-02T19:01:50.259157754Z
-  for_role: product
-- user_id: joe
-  requirement_id: 01a0e801-1f36-7161-a76c-e98e52b47fee
-  position: 37000
-  added_by: joe
-  added_at: 2026-10-02T19:12:06.690087372Z
-  for_role: advisor
-- user_id: joe
-  requirement_id: 01a0fb39-1a20-7f62-b4f1-e55cdb2d1cae
-  position: 38000
-  added_by: joe
-  added_at: 2026-10-02T19:47:14.879938910Z
-  for_role: advisor
-- user_id: joe
-  requirement_id: 01a0fe42-9267-7753-9d2a-839091b9289a
-  position: 39000
-  added_by: joe
-  added_at: 2026-10-02T20:16:19.331542730Z
-  for_role: advisor
