@@ -89,6 +89,6 @@
   position: 406000
   added_by: role:implementer
   note: 'REWORK for PR #2357 (branch bug-1690): one accepted blocker — spec_is_draft_only_tagged (lib.rs:106672) must fail CLOSED (store-load failure OR spec-not-found skips the un-draft with a warning naming why, suppressed under the if !self.json idiom); plus a call-site witness test driving a phase-1 adoption point (lib.rs:107372 / 110451 — seam tests only call the helper directly today). Full mechanism in the BUG-1690 spec comment ''ADVISOR REVIEW VERDICT (relay #14)''. Push to the SAME branch bug-1690. Spec reads status Done — the rework signal lives in that verdict comment; do NOT merge #2357 before this lands.'
-  added_at: 2026-10-02T23:26:43.398985178Z
+  added_at: 2026-10-02T23:27:21.209590268Z
   for_role: implementer
   added_by_machine: imac
