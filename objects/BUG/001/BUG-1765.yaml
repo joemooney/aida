@@ -91,8 +91,33 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T06:06:58.592573376Z
-modified_at: 2026-10-02T06:08:25.206551313Z
+modified_at: 2026-10-02T06:34:15.908663819Z
 req_type: Bug
+comments:
+- id: 01a0fb52-15e4-7630-b1be-78a01c7cc2df
+  author: joe
+  content: |-
+    ## Triage Investigation (aida-triage)
+
+    ### Status: Reproduced (Substrate architectural defect)
+
+    ### Root Cause
+    1. In `aida-cli-lib/src/coordination.rs:363-371`, session-lease claims written to `.aida-store/coordination/leases/<scope>.toml` carry `ttl_secs: 1800` and `process_backed: false` (because the creating `aida session start` process exits immediately).
+    2. Whole-crate search via codegraph + grep confirms that `heartbeat_lock_claim` is called ONLY by long-lived locks with background heartbeat threads (`drain_lock.rs:314` and `solo_lock.rs:302`). Nothing ever refreshes `heartbeat_at` for session leases.
+    3. Consequently, in `decide_claim` (`coordination.rs:220-231`), exactly 1800s after session start, `aged_out` evaluates to true. Any peer clone running `aida session start` or `aida queue work` is told to `ClaimDecision::Reclaim`, causing cross-clone race collisions on active work.
+    4. Furthermore, under BUG-1764's staleness predicate, after 1800s the claim is hidden from `aida session leases`.
+
+    ### Affected Sites across Crate
+    - `aida-cli-lib/src/coordination.rs:decide_claim` (reclaim decision)
+    - `aida-cli-lib/src/coordination.rs:build_claim` (initial claim creation with ttl=1800)
+    - Display readers: `session leases`, `doctor`, `team::build_team_view`
+
+    ### Recommended Fix Strategy
+    As noted in the spec options, session leases are worktree/session backed rather than daemon-process backed.
+    - For same-host claims (`host == our_host`): do not rely on 1800s TTL expiry. Instead, check if the worktree exists and whether a live agent session or active process is present (or probe session liveness).
+    - For cross-host claims: require a explicit heartbeat refresh mechanism (e.g. hooked into session command execution / status line / MCP keepalive) or fallback to requiring explicit release / operator confirmation rather than silent auto-reclaim after 30 minutes.
+  created_at: 2026-10-02T06:34:15.908663819Z
+  modified_at: 2026-10-02T06:34:15.908663819Z
 history:
 - id: 01a0fb3a-6c76-7133-9c90-ac6be4867834
   author: joe
