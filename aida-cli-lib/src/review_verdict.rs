@@ -229,6 +229,109 @@ pub fn is_outstanding_refusal(verdict: &RecordedVerdict, spec_completed: bool) -
     verdict.kind.blocks_done() && !verdict.is_closed() && !spec_completed
 }
 
+/// BUG-1773: a rework hold DERIVED from the verdict corpus, for a PR that has
+/// no hold marker of its own.
+///
+/// `aida awaiting`'s `held_prs` was built from `.aida/merge-holds/PR-<n>` only,
+/// and only `handle_review_record_at` writes those markers. Every other
+/// producer of a verdict artifact — the reviewer skill's direct write adopted
+/// by `adopt_direct_write`, `stamp_pr_review_verdict`, a hand-edited file —
+/// armed nothing, so a `request-changes` recorded at a PR's exact head was
+/// invisible to the one view whose job is to surface it (BUG-1705 measured
+/// this on PR #2242).
+// trace:BUG-1773 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CorpusHold {
+    /// The head the refusal was recorded against — the PR's CURRENT head, by
+    /// construction.
+    pub sha: String,
+    /// The verdict word as recorded, or `"conflicting"` for an integrity error.
+    pub verdict_raw: String,
+    /// Findings recorded against this head, for the row's count.
+    pub findings: usize,
+    /// Set when the corpus cannot be reconciled at this head (two reviewers
+    /// disagreeing at one commit, an unattributed retained round). The hold
+    /// stands: that is a state a human must resolve, not one to render silent.
+    pub integrity_error: Option<String>,
+}
+
+/// Does the verdict corpus hold `current_sha`? `bodies` are the raw artifacts
+/// keyed to this PR (`PR-<n>` and the spec); `spec_completed` comes from the
+/// caller's store (this module stays filesystem-only by design).
+///
+/// This is the POSITIVE form — *is there an outstanding refusal AT the current
+/// head* — and it is deliberately NOT `local_verdict_blocks_merge`, which is
+/// the fail-closed MERGE test (`true` whenever an artifact exists and the head
+/// is not cleanly approved, and `true` on an unknown head). Wiring that into a
+/// view would list every open PR carrying any stale verdict plus every PR whose
+/// head could not be read. A view fails OPEN on an unknown head; the gate fails
+/// CLOSED. The two share `reconcile_artifacts_for_sha`, not the policy.
+///
+/// `reconcile_artifacts_for_sha` does NOT read `closed_by_merge` — it parses raw
+/// JSON and never consults it — so the closed-verdict exclusion is applied here
+/// explicitly, matching `is_outstanding_refusal`'s two BUG-1529 escapes.
+// trace:BUG-1773 | ai:claude
+pub fn corpus_hold_at_head(
+    bodies: &[String],
+    current_sha: Option<&str>,
+    spec_completed: bool,
+) -> Option<CorpusHold> {
+    // A view fails open: an unreadable head is not evidence of a refusal.
+    let current_sha = current_sha?;
+    // BUG-1529 escape 2: a Completed spec's work shipped by definition.
+    if spec_completed {
+        return None;
+    }
+    // BUG-1529 escape 1: a verdict closed out by a merge is the original
+    // refusal plus a record that the branch moved on — not an open refusal.
+    // An unparseable body is NOT dropped here: it cannot be shown closed, and
+    // reconcile below turns it into the integrity error it is.
+    let live: Vec<&str> = bodies
+        .iter()
+        .filter(|body| parse_recorded_verdict(body).is_none_or(|v| !v.is_closed()))
+        .map(String::as_str)
+        .collect();
+    if live.is_empty() {
+        return None;
+    }
+    match reconcile_artifacts_for_sha(live.iter().copied(), current_sha) {
+        // A blocker recorded against this exact head. `reconcile` only
+        // accumulates recordings whose sha matches, so a verdict left behind at
+        // an older head reaches `Ok(None)` below and holds nothing.
+        Ok(Some(kind)) if kind.blocks_done() => {
+            let blocking: Vec<RecordedVerdict> = live
+                .iter()
+                .filter_map(|body| parse_recorded_verdict(body))
+                .filter(|v| {
+                    v.kind.blocks_done()
+                        && v.reviewed_sha
+                            .as_deref()
+                            .is_some_and(|sha| same_reviewed_sha(sha, current_sha))
+                })
+                .collect();
+            let findings = blocking.iter().map(|v| v.findings.len()).sum();
+            let verdict_raw = blocking
+                .first()
+                .map(|v| v.raw.clone())
+                .unwrap_or_else(|| kind.canonical().unwrap_or("request-changes").to_string());
+            Some(CorpusHold {
+                sha: current_sha.to_string(),
+                verdict_raw,
+                findings,
+                integrity_error: None,
+            })
+        }
+        // Cleanly approved at this head, or nothing recorded against it.
+        Ok(_) => None,
+        Err(message) => Some(CorpusHold {
+            sha: current_sha.to_string(),
+            verdict_raw: "conflicting".to_string(),
+            findings: 0,
+            integrity_error: Some(message),
+        }),
+    }
+}
+
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
 /// `bug-775` and `BUG-775` resolve to the same record.
 /// Stage `body` in a temp file next to `path`, rename it into place (atomic
