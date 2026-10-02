@@ -617,6 +617,7 @@ fn task_1518_ps_reads_a_marked_lease_as_stopped_not_dead() {
         agreed_id: Some("TASK-1".into()),
         spec_id: Some("TASK-1".into()),
         title: "stopped wave".into(),
+        status: "in-progress".to_string(),
         in_progress: true,
         orphan_excluded_type: false,
     }];

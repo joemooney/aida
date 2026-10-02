@@ -52,6 +52,7 @@ fn in_progress_spec(disp: &str, title: &str) -> RunningWorkSpec {
         agreed_id: Some(disp.into()),
         spec_id: Some(format!("{disp}-001")),
         title: title.into(),
+        status: "in-progress".to_string(),
         in_progress: true,
         orphan_excluded_type: false,
     }
