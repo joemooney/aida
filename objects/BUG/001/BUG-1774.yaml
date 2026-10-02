@@ -66,12 +66,30 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T17:36:32.762478821Z
-modified_at: 2026-10-02T18:20:30.819003718Z
+modified_at: 2026-10-02T18:42:12.301288138Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a0e68a-df5c-7073-ba6c-4593e16daeb4
   created_at: 2026-10-02T17:36:35.106771097Z
+comments:
+- id: 01a0fdec-88cd-7792-ae57-e64054131ff5
+  author: joe
+  content: |
+    Implementation decisions (advisor seat, relay session #24):
+
+    1. GATE PLACEMENT: the corpus gate runs inside each real Forge::merge_change impl (GitHub, GitLab, pure-git) via one shared merge_hold::enforce_corpus_gate_before_merge — GitLab and pure-git previously had NO chokepoint at all (the BUG-1167 marker check was GitHub-only). A wiring source-guard counts the three calls.
+    2. HEAD RESOLUTION IS LAZY: a PR with no verdict artifacts pays no forge read. A pinned merge (match_head) is judged at the pin — that is the only commit the merge can land; otherwise the live head via change_status (pure-git: local rev-parse). Unknown head + artifact on file = fail closed (AC2).
+    3. CLOSED VERDICTS ARE EXCLUDED before judging (BUG-1529: closed = history), so a follow-up PR of a spec with a closed verdict is not refused. local_verdict_blocks_merge does NOT apply this exclusion — a latent over-refusal in the wave path, left untouched (not this spec).
+    4. MIRRORS ARM ONLY ON A DEFINITE AT-HEAD BLOCKER (CorpusArm carried inside the gate's own Refuse variant — AC4's one-predicate requirement). Fail-closed refusals with no definite blocker (unknown head, stale verdicts, conflicting corpus) refuse WITHOUT arming: mirroring uncertainty would label every PR whose head cannot be read.
+    5. DELIBERATE TIGHTENING: `merge-hold clear` + `aida pr ship` no longer merges over a live refusal at head — the corpus gate re-refuses and re-arms. AC3 mandates this; the refusal message speaks the only release syntax (`aida review record <KEY> --verdict approved --sha <new-head> --pr <N>`).
+    6. reconcile_artifacts_for_sha returns RequestChanges whenever ANY blocker exists at the sha, even the same reviewer later approving at the same sha — so AC3's "head must move past the rejected sha" is enforced by the shared mechanism, not re-derived.
+    7. The BUG-1705 witness shape (artifact with no sha provenance) reaches reconcile's Err branch → the gate refuses on integrity, matching the sibling view's hold.
+
+    Mutation proofs (five mutations, disjoint witnesses): release arm broken → only the two release tests fail; Ok(None) fails open → only the two AC3 hold tests; closed filter dropped → only the closed-verdict test; replacing write instead of composing → only the AC6 recusal test; unknown head fails open → only the AC2 test.
+  created_at: 2026-10-02T18:42:12.301288138Z
+  modified_at: 2026-10-02T18:42:12.301288138Z
+  session_id: c4648770-265f-4076-8eb4-e7d0564b3853
 history:
 - id: 01a0fdb0-99b5-7ff0-b408-7325337ed230
   author: joe
