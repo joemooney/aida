@@ -105,8 +105,23 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T02:28:19.528938397Z
-modified_at: 2026-10-02T02:28:27.841801289Z
+modified_at: 2026-10-02T14:19:48.484789610Z
 req_type: Bug
+comments:
+- id: 01a0fcfc-4d84-7793-a508-5a6bd8d7d792
+  author: joe
+  content: |-
+    DECISION: Add to `aida dev activate` and refuse to clobber existing hooks.
+
+    ### Decision & Rationale
+
+    1. **Mechanism:** The `make install-agent-skill-hooks` call will be added to `aida dev activate` (in `aida-cli-lib/src/dev_cmd.rs`). This is the strongest option because `aida dev activate` is explicitly intended for initializing the in-repo development environment. Tying it to `make build` would add overhead to every single build and obscure its purpose, while a docs-only `CLAUDE.md` line is easily missed.
+    2. **Clobbering:** The Makefile target will be updated to refuse with a clear warning message if it encounters an existing hook that is not already our symlink, instead of silently overwriting it with `ln -sfn`. Chaining is too complex for this simple symlink mechanism and could introduce brittle shell-script parsing.
+
+    ### Acceptance Criteria Updates
+    The ACs remain as written, with the decisions above resolving the open questions.
+  created_at: 2026-10-02T14:19:48.484789610Z
+  modified_at: 2026-10-02T14:19:48.484789610Z
 history:
 - id: 01a0fa71-0c41-78a3-b0ce-64fc38f5b774
   author: joe
