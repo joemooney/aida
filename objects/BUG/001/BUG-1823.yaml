@@ -36,12 +36,12 @@ description: |
   ## Recurse-fix
 
   Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T23:25:23.418148112Z
-modified_at: 2026-10-02T00:02:12.230252806Z
+modified_at: 2026-10-02T02:13:21.068839823Z
 req_type: Bug
 tags:
 - auto-complete
@@ -89,6 +89,19 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a0fa63-3625-7ad3-815e-f692b86d704d
+  author: aida-auto-bump
+  timestamp: 2026-10-02T02:13:21.061384409Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0fa63-362c-7943-84b3-42b3e94b900e
+  timestamp: 2026-10-02T02:13:21.068838955Z
+  agent: aida
+  commit_sha: 6f5d7800b153ad62a256baee308ea591bc2d0eb0
+  summary: Completed via merge 6f5d7800
 filed_at:
   code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
   branch: main
@@ -100,11 +113,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-01T23:58:22.979926016Z
   implemented_by: joe.mooney
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: tool-exit
-  detail: 'could not verify implementer branch before phase-2 CI/teardown: could not invoke `git branch --show-current`: No such file or directory (os error 2) (attempt 3/3)'
-  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0f9e46e0f --skip-ci`'
-  shelved_by: advisor
-  shelved_at: 2026-10-02T00:02:12.230252806Z
+  completed_at: 2026-10-02T02:13:21.061380164Z
+  completion_sha: 6f5d7800b153ad62a256baee308ea591bc2d0eb0
