@@ -157,7 +157,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:57:32.637932108Z
-modified_at: 2026-10-02T12:04:46.121131598Z
+modified_at: 2026-10-02T12:46:58.748966031Z
 req_type: Bug
 tags:
 - cli
@@ -233,6 +233,56 @@ comments:
   created_at: 2026-10-02T11:16:52.433672328Z
   modified_at: 2026-10-02T11:16:52.433672328Z
   session_id: 80a149f2-df5e-43a1-9400-e2ad67e7819c
+- id: 01a0fca7-50bc-7010-b541-91916ae56d6e
+  author: joe
+  content: |
+    Implemented on branch `bug-1770-work`, PR #2333 (relay session #15).
+
+    **The write-path count was wrong in this spec, and wrong again in my own survey.**
+    The spec named 3 sites. I grepped `tags.insert(` and found 7. The real number is
+    **10** — the other three build a set with `.collect()` and assign it, so that
+    idiom can never see them. The compiler found one (`edit_requirement_cli`, the
+    second backend AC2 names, which had its own `split(',')`); an independent
+    `codex exec --sandbox read-only` reviewer found the rest: `mcp.rs`
+    (`add_requirement` + the MCP tag-replace path), `prompts.rs` (the interactive
+    wizard), and `schedule_cmd.rs` (`schedule add --tags`, which is copied onto the
+    requirement on **every firing**, so one blob accepted there reappears
+    indefinitely).
+
+    All ten now route through one shared rule (`validate_tag_value`) and, where the
+    argument is a comma list, one shared parser (`parse_tag_list`), so a future site
+    cannot split the string itself and reintroduce the hole.
+
+    **AC1's message needed more than one repair shape.** Suggesting `--tags a,b` to
+    an MCP client names a form that surface does not accept — authoritative and
+    unusable, which is worse than the blob. The refusal now renders in the caller's
+    own syntax: `--tags a,b`, `--add-tag a --add-tag b`, or `"tags": ["a", "b"]`.
+
+    **AC1 excludes `--remove-tag` deliberately,** and a test pins it: the existing
+    blobs can only be named verbatim, so refusing whitespace there would leave them
+    unrepairable by the incremental form.
+
+    **AC5 mutation proof**, with `validate_tag_value` neutralised: unit 4 passed /
+    4 failed and black-box 1 passed / 2 failed — the refusal tests fail while the
+    controls (colon-namespaced round-trip, `--remove-tag` tolerance, comma split,
+    and AC3's reporting, which is a different mechanism) still pass. That shape is
+    what shows the tests witness this defect rather than something broader.
+
+    **AC7 — blast radius re-measured today** across all 4734 store objects:
+    **275 carry a whitespace blob, trapping 442 distinct tag words** (BUG 139,
+    TASK 67, STORY 38, ADR 22, EPIC 5, SPIKE 3, PRIN 1). Untouched by this PR, as
+    AC7 scopes. The sweep is filed as **TASK-1566** with the canonical detector, the
+    repair recipe, and the BUG-1252 interaction a naive repair would trip (a
+    `--tags` replace that drops a structural tag is correctly refused, so the
+    replacement set must be the union of the split blob and the already-separate
+    tags).
+
+    AC3/AC4's reporting half reuses the ~137 lines abandoned on `bug-1542-tag-report`
+    when PR #2084 closed, retraced from the rejected BUG-1542 to this spec — which is
+    the filing BUG-1542's own rejection asked for. That branch can now be deleted.
+  created_at: 2026-10-02T12:46:58.748966031Z
+  modified_at: 2026-10-02T12:46:58.748966031Z
+  session_id: 4dbc7b5e-a08e-4242-b502-dcb152ac27f5
 history:
 - id: 01a0fc43-5c24-7611-b3e1-13d9c4a3dbcb
   author: joe
