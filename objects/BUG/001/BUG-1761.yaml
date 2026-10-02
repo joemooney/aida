@@ -63,12 +63,12 @@ description: |
   empty `bug-1819-2` branch deleted, and BUG-1819's status hand-restored to `needs-attention`. Cost was
   roughly a third of a session. Related: BUG-1820 (stale MR-scoped leases) is the same family — claim and
   lease state not reconciling against the forge before acting.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T01:59:34.641082053Z
-modified_at: 2026-10-02T01:59:48.285182215Z
+modified_at: 2026-10-02T02:34:21.565219677Z
 req_type: Bug
 history:
 - id: 01a0fa56-cf3d-7c23-9bbe-8bba9f3a577e
@@ -78,6 +78,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0fa76-71fd-70c2-a38c-c0dada1d1a3f
+  author: aida-session-start
+  timestamp: 2026-10-02T02:34:21.565219252Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3494256297782724ed0bb05e8c5b134808c16274
   branch: main
