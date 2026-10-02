@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:42:42.799238808Z
-modified_at: 2026-10-02T22:22:14.368165658Z
+modified_at: 2026-10-02T23:18:03.340573850Z
 req_type: Bug
 comments:
 - id: 01a0df9e-ff69-7022-a2cb-472b529cbb79
@@ -28,6 +28,12 @@ comments:
   created_at: 2026-09-26T21:28:54.377334092Z
   modified_at: 2026-09-26T21:28:54.377334092Z
   session_id: 71dca616-6150-461d-b64f-18c8288c6e1c
+- id: 01a0fee9-154c-7ed3-929a-0c3401c57d42
+  author: joe
+  content: 'ADVISOR REVIEW DISPOSITION (relay #14, PR #2355): MERGE-READY pending the known CI guard clear. Codex (read-only, static) raised one blocker: sh -c true classifies as nontrivial (first word sh) and, as the sole executable criterion, reaches the Rung-2 auto-approve branch again. Advisor verified the mechanism is real but dispositioned it NON-BLOCKING for this PR: AC1 of this spec DEFINES trivial as first-word-in-list, so the implementation matches the approved contract exactly, and the STORY-1476 trust gate means an untrusted wrapper does not run (NotRun escalates) — the bypass requires an operator-trusted wrapper command set. The gap is filed as BUG-1781 (draft, wrapper unwrapping before classification) rather than blocking a correct-to-spec fix of the primary hole. Codex found no other defects (no minors). Also noting for the record: the lane left no implementation comment on this spec — the PR body carries the report (design per the 2026-09-26 draft comment, STORY-1476 overlap integrated, mutation proof claimed). Merge condition: Build green after update-branch once #2353 lands (current failure is the expected bug_1723 inventory guard).'
+  created_at: 2026-10-02T23:18:03.340573850Z
+  modified_at: 2026-10-02T23:18:03.340573850Z
+  session_id: a4861695-0967-4442-a984-92e100a5580a
 history:
 - id: 01a0df94-2661-7b32-be51-51d035035578
   author: aida-session-start
