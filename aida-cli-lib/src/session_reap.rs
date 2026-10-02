@@ -1081,16 +1081,19 @@ fn clear_missing_worktree_registration(
         return RegistrationClearOutcome::Declined;
     }
 
+    // Unreadable repository state cannot establish that no registration names
+    // this path — decline loudly rather than fall through to branch deletion.
+    // trace:BUG-1694 | ai:claude
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
         .args(["rev-parse", "--git-common-dir"])
         .output();
     let Ok(output) = output else {
-        return RegistrationClearOutcome::NoRegistration;
+        return RegistrationClearOutcome::Declined;
     };
     if !output.status.success() {
-        return RegistrationClearOutcome::NoRegistration;
+        return RegistrationClearOutcome::Declined;
     }
     let common_dir = std::path::PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
     let common_dir = if common_dir.is_absolute() {
@@ -1100,8 +1103,15 @@ fn clear_missing_worktree_registration(
     };
     let worktrees_dir = common_dir.join("worktrees");
     let expected_gitdir = worktree_path.join(".git");
-    let Ok(entries) = std::fs::read_dir(worktrees_dir) else {
-        return RegistrationClearOutcome::NoRegistration;
+    // A missing worktrees dir means no registrations exist at all (the common
+    // already-pruned case); any OTHER read failure is unreadable state and
+    // declines like the above. trace:BUG-1694 | ai:claude
+    let entries = match std::fs::read_dir(worktrees_dir) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return RegistrationClearOutcome::NoRegistration;
+        }
+        Err(_) => return RegistrationClearOutcome::Declined,
     };
     for entry in entries.flatten() {
         let admin_dir = entry.path();

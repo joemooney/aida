@@ -177,3 +177,27 @@ fn bug_1694_relative_lease_path_declines_registration_clear() {
         "expected a reported decline, got: {outcome}"
     );
 }
+
+/// Fail closed: unreadable repository state (no git repo at the root) cannot
+/// establish that no registration names the path — the clear declines rather
+/// than silently proceeding.
+#[test]
+fn bug_1694_unreadable_repository_state_declines_registration_clear() {
+    let tmp = tempfile::tempdir().unwrap();
+    let not_a_repo = tmp.path().join("not-a-repo");
+    std::fs::create_dir_all(&not_a_repo).unwrap();
+    let missing = tmp.path().join("missing-wt");
+    let outcome = clear_missing_worktree_registration(&not_a_repo, &missing, || {}, || {});
+    assert_eq!(outcome, RegistrationClearOutcome::Declined);
+}
+
+/// A repo with no worktrees dir at all has nothing to clear — that is the
+/// common already-pruned case and must NOT decline (a decline would skip the
+/// caller's branch cleanup).
+#[test]
+fn bug_1694_absent_worktrees_dir_reports_no_registration() {
+    let (tmp, root) = create_fixture_repo();
+    let missing = tmp.path().join("missing-wt");
+    let outcome = clear_missing_worktree_registration(&root, &missing, || {}, || {});
+    assert_eq!(outcome, RegistrationClearOutcome::NoRegistration);
+}
