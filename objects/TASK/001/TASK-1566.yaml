@@ -1,0 +1,111 @@
+id: 01a0fc98-51a0-7f00-b17d-7b0c40537c29
+spec_id: TASK-1566
+agreed_id: TASK-1566
+title: Sweep the 275 store objects whose tags list holds a whitespace blob, so the 442 tag words trapped inside them become visible to tag-keyed filters again
+description: |
+  BUG-1770 fixes the *writer* — after it merges, no new whitespace blob tag can be
+  created. AC7 of that spec explicitly scopes the existing objects out and asks for
+  the sweep to be filed on its own. This is that filing.
+
+  ## Measured today (2026-10-02), from the canonical store, not inferred
+
+  Scanning all **4734** objects under `.aida-store/objects` for a `tags:` list item
+  containing whitespace:
+
+  - **275 objects** carry at least one blob tag
+  - **442 distinct tag words** are trapped inside them
+  - by prefix: BUG 139, TASK 67, STORY 38, ADR 22, EPIC 5, SPIKE 3, PRIN 1
+
+  Representative examples (verbatim list items):
+
+      TASK-978:  "parent:EPIC-54 redesign tui liveness visibility"
+      TASK-1415: "parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate"
+      TASK-1175: "docs aida:burndown followup:TASK-1172 from-drain"
+
+  ## Why this is not cosmetic
+
+  A blob is invisible to every exact-match consumer while looking correct to a
+  human. The examples above swallow `parent:`, `severity:`, `followup:` and
+  `aida:*` tags — the structural families AIDA's own conventions, filters and
+  sweeps are built on. Proved on an open spec in relay session #14:
+  `aida list --tags orchestrator --all` returned **0** for BUG-1768, whose blob
+  contained `orchestrator`; only reproducing the whole blob verbatim found it. An
+  advisor reads that empty result as "no such work".
+
+  BUG-1252 already protects structural tags from being silently DROPPED by a
+  `--tags` replace. These 275 objects are the population where they were never
+  correctly written in the first place, so that protection has nothing to protect.
+
+  ## The detector
+
+  A blob is not visible in the rendered `tags:` line — the rendering joins tags
+  with spaces, so one blob renders byte-identically to the N tags it looks like.
+  Two reliable detectors:
+
+  1. **Canonical (use this for the sweep):** a `tags:` YAML list item containing
+     whitespace. One regex over `.aida-store/objects/**/*.yaml`.
+  2. **By eye, from `aida show` alone:** a **non-alphabetical run** inside an
+     otherwise sorted tag line. A `--tags` replace normalises the set and stores it
+     alphabetised, so authored-order words appearing before sorted ones is the tell.
+
+  ## The repair
+
+  `aida edit <ID> --tags <full,comma,separated,set>` — a full replace of the
+  object's whole tag set with the blob split on whitespace. Confirmed working on
+  BUG-1769 and BUG-1768; after the repair the line renders fully alphabetically,
+  which is the verification.
+
+  Note that `--tags` REPLACES, and `enforce_structural_tag_replacement`
+  (BUG-1252) refuses a replace that drops a structural tag — so the replacement
+  set must be the union of the split blob and every tag already stored
+  separately, or the repair will be correctly refused. That refusal is a feature
+  here: it will catch a sweep that computed the set wrong.
+
+  Note also that BUG-1770 deliberately does NOT validate `--remove-tag`, so a
+  blob can be named verbatim and removed; `--add-tag` for each word is the other
+  repair shape and avoids the replace semantics entirely.
+
+  ## Acceptance
+
+  1. A command or script enumerates every store object with a whitespace tag list
+     item, printing id, the blob verbatim, and the proposed split. Read-only;
+     propose-by-default, no mutation without an explicit apply flag.
+  2. The apply path repairs an object by writing the union of (blob split on
+     whitespace) and (tags already stored as separate items), so no tag is lost
+     and BUG-1252's structural guard has nothing to refuse.
+  3. Idempotent: a second run over a repaired store reports zero candidates.
+  4. A test seeds an object whose `tags:` has one blob item plus one clean item,
+     runs the repair, and asserts the STORED YAML LIST — not the rendered line —
+     now has N+1 separate items with no whitespace in any of them. The rendering
+     cannot witness this regression and must not be the assertion.
+  5. A control: an object with a colon-namespaced tag (`severity:major`) and no
+     blob is left byte-identical by both the report and the apply path.
+  6. Run it against the real store and record the before/after counts in the PR
+     (275 → 0 expected, on today's measurement).
+
+  ## Sequencing
+
+  Do this AFTER BUG-1770 merges. Repairing first would leave the writer armed and
+  the population would start growing again from the next `--tags "a b"`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T12:30:35.936668372Z
+modified_at: 2026-10-02T12:30:35.936668372Z
+req_type: Task
+tags:
+- data-repair
+- migration
+- needs-triage
+- severity:major
+- silent-noop
+- tags
+filed_at:
+  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 4dbc7b5e-a08e-4242-b502-dcb152ac27f5
