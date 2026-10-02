@@ -68,8 +68,78 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T01:59:34.641082053Z
-modified_at: 2026-10-02T02:34:21.565219677Z
+modified_at: 2026-10-02T02:36:24.558721098Z
 req_type: Bug
+comments:
+- id: 01a0fa78-526e-7563-b63b-69fedbeba7c0
+  author: joe
+  content: |
+    ADVISOR PRE-MEASUREMENT + TWO SCOPE DECISIONS (relay advisor session #21, 2026-10-01)
+
+    Surveyed on `main` @ `53484fbff7` before dispatching round 1. Recording the decisions here so they are
+    on the spec, not only in the brief.
+
+    ## Root cause, measured
+
+    `handle_queue_work` (`aida-cli-lib/src/queue_cmd.rs:10439`) performs the entire claim — status bump,
+    lease, worktree — in the single `session_start(` call at **`queue_cmd.rs:11715`**. Nothing before it
+    mutates the store or the lease directory, so a guard placed before that line satisfies AC3's "nothing is
+    mutated" with no rollback code at all.
+
+    The `-2` comes from `resolve_session_branch` (`lib.rs:37108`): with `branch_style: "auto"` it walks
+    `slug`, `slug-2..-10`, `slug-<date>`, `slug-<date>-2..-10` and returns the first free name. That
+    allocator is also what `aida session start` uses directly, where auto-suffixing is the documented
+    STORY-65 behaviour, so the fix refuses *earlier* on the `queue work` path instead of changing it.
+
+    There is already a PR-head-branch reuse path — `rework_pr_head_branch_override` (`:8676`), gated by
+    `queue_work_plan_wants_pr_head_branch` (`:8665`) — but it only fires when `status_at_plan` is
+    `In Progress` or `Done`. **BUG-1819 sat at `Needs Attention`, which is outside that set**, so the
+    override did not fire and the pickup fell through to the suffix allocator. That is the precise gap.
+
+    ## The bypass set, and why `queue_work_plan_wants_pr_head_branch` is the right discriminator
+
+    `handle_queue_work` has a **second caller**: `handle_queue_rework`'s `--work` chain at
+    `queue_cmd.rs:8528`, which passes `force_claim: false`. A rework pickup legitimately has an open PR, so
+    a guard keyed only on `--force-claim` would refuse the very PR it is reworking and break the drain.
+
+    Measured resolution: `rework_target_for_mode(current, launches_work: true)` (`:6896`) delegates to
+    `rework_smart_target` (`:6870`), and `rework_smart_target(NeedsAttention) = Some(InProgress)`. The
+    rework **bumps the status to InProgress before chaining**, so at plan-resolution time
+    `status_at_plan == "In Progress"`, `queue_work_plan_wants_pr_head_branch` is true, and the guard bypasses
+    automatically. The same predicate correctly does NOT bypass BUG-1819's `Needs Attention` case.
+    `queue work --from-pr` never reaches `handle_queue_work` at all (it routes to `handle_from_pr`, `:6484`),
+    so it needs no bypass. Full bypass set in the brief; AC4's regression suite must cover the rework path
+    explicitly.
+
+    An unreachable forge must also never refuse: `PrLookup::GhMissing | GhFailed | GhUnreachable` all mean
+    "cannot tell", and refusing on them would let a network blip block every pickup on the machine. Only
+    `Found` refuses; `NoOpenPr` falls through to the branch check.
+
+    ## DECISION 1 — the refusal names the PR number, title, url and OPEN state, not a CI state
+
+    *Required behavior* §1 asks for "the PR number, title and CI state". `OpenPrInfo` (`lib.rs`, above
+    `:43652`) carries exactly `number`, `title`, `url`, `head_branch` — **no CI state**. Obtaining one means
+    a second forge round-trip on the refusal path, adding a failure mode to an error path.
+
+    **AC1, which is the measured contract, asks only for "the PR number and state"** — and the open-PR
+    lookup establishes "open" by construction. Decision: satisfy AC1 as written and skip the CI-state fetch.
+    Flagged rather than dropped silently; reopen if the refusal proves hard to act on in practice.
+
+    ## DECISION 2 — *Required behavior* §4 (status restoration on `session end` backout) is deferred
+
+    §4 appears in the prose but in **none of the five acceptance criteria**, and it touches a different
+    command. Once §§1–3 land nothing is mutated on refusal, which removes the common path to the corrupted
+    status it describes. Round 1 therefore leaves `aida session end` untouched; the advisor will file the
+    remainder as its own spec if it still bites. Called out so the gap between the prose and the ACs is a
+    recorded decision rather than an omission.
+
+    ## Dispatch
+
+    Round 1 brief: `.aida/handoff/advisor/bug-1761-round1-brief.md`. Branch `bug-1761` (unsuffixed — checked
+    for an open PR and a local branch first, per this spec's own lesson; both clear).
+  created_at: 2026-10-02T02:36:24.558721098Z
+  modified_at: 2026-10-02T02:36:24.558721098Z
+  session_id: 68b75920-ae12-44c6-8460-645047bfd97e
 history:
 - id: 01a0fa56-cf3d-7c23-9bbe-8bba9f3a577e
   author: joe
