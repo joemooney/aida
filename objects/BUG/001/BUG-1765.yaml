@@ -1,0 +1,103 @@
+id: 01a0fb39-1a20-7f62-b4f1-e55cdb2d1cae
+spec_id: BUG-1765
+agreed_id: BUG-1765
+title: A session-lease claim is never heartbeated, so its 1800s TTL expires it while the session is still live and a peer clone is told to reclaim it
+description: |
+  A session-lease claim on the shared `coordination/leases/` registry is written
+  once and never updated, but carries `ttl_secs = 1800`. Nothing refreshes its
+  `heartbeat_at`, so every session lease becomes TTL-expired 30 minutes after
+  `aida session start` — while its session is still actively working.
+
+  Found while implementing BUG-1764 (the display-side defect). It is a SEPARATE,
+  substrate-side defect and it predates that fix.
+
+  ## Measurement
+
+  `coordination.rs` states the design explicitly in its module docs:
+
+      //!   `heartbeat_at = started_at` so the TTL backstop still works.
+
+  and the only writer of a later `heartbeat_at` is `heartbeat_lock_claim`, called
+  from exactly one place — `drain_lock.rs`'s background heartbeat thread, which
+  exists for the DRAIN and SOLO locks:
+
+      $ grep -rn "heartbeat_lock_claim" aida-cli-lib/src/
+      coordination.rs:  (definition)
+      drain_lock.rs:    crate::coordination::heartbeat_lock_claim(
+
+  There is no equivalent for a session lease. Reproduced live: a claim created by
+  `aida queue work BUG-1764` at `2026-10-02T05:28:00Z` was reported stale 1800s
+  later, with the owning session still running.
+
+  ## Why it matters beyond display
+
+  `decide_claim` has ALWAYS treated this as reclaimable — the universal TTL
+  backstop is the only clause that applies to a non-`process_backed` claim:
+
+      let aged_out = holder.heartbeat_age_secs(now).map(|age| age > holder.ttl_secs)
+      if aged_out { return ClaimDecision::Reclaim { ... } }
+
+  So a peer clone running `aida session start --owns <scope>` 31 minutes after
+  another clone claimed that same scope is told to RECLAIM it, not refused —
+  which is precisely the duplicate-work / merge-race that STORY-637's cross-clone
+  registry exists to prevent. The cross-clone lease registry therefore stops
+  coordinating anything after 30 minutes.
+
+  BUG-1764 made the reporting surfaces agree with this (a claim they now hide is
+  one `decide_claim` would reclaim), which is the honest reading but also makes
+  the consequence visible: a long session's claim drops out of the default
+  `aida session leases` listing after 30 minutes.
+
+  ## The decision this needs
+
+  Two coherent options; this spec should pick one deliberately rather than drift:
+
+  1. **Heartbeat the session lease.** Give the lease claim the same treatment the
+     drain lock has. Harder than the drain case: the drain lock is held by a
+     long-lived process that can run a thread, whereas the session lease's
+     creating process exits immediately. The refresh would have to be driven by
+     something that outlives it — the session's own activity (a hook, the next
+     `aida` invocation from inside that worktree), or a periodic sweep.
+  2. **Stop pretending the TTL applies.** If a session lease genuinely cannot be
+     heartbeated, then `ttl_secs` is the wrong mechanism for it and the honest
+     liveness signal is the one the LOCAL lease table already uses: does the
+     worktree still exist, and is there a live `claude` in it. Cross-clone that is
+     only answerable for a SAME-HOST claim (which BUG-1764 clause 3 established is
+     fully probeable) — and for a genuinely remote clone, nothing short of a
+     heartbeat can answer it, so refusing-with-an-escape-hatch may beat a silent
+     30-minute expiry.
+
+  Option 2 is the better default if a heartbeat cannot be made reliable: a
+  coordination primitive that silently stops coordinating is worse than one that
+  admits it cannot see a remote peer.
+
+  ## Acceptance
+
+  1. A decision is recorded on this spec for which option above is taken, with the
+     reasoning, before implementation.
+  2. A session lease held by a LIVE session is not reported reclaimable by
+     `decide_claim` purely because 1800s elapsed. Fixture: a claim whose session
+     is live, aged past `ttl_secs`, must not yield `ClaimDecision::Reclaim`.
+  3. A session lease whose holder is genuinely gone IS still reclaimable — the
+     fix must not trade a false expiry for a permanent deadlock. Fixture: the
+     dead-holder case still reclaims.
+  4. `aida session leases` reports a live long-running cross-clone session as
+     live, not stale. This is the user-visible symptom BUG-1764's fix exposes.
+  5. Whatever mechanism is chosen is documented in `coordination.rs`'s module
+     docs, replacing the current `heartbeat_at = started_at` note, so the next
+     reader does not re-derive this.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-02T06:06:58.592573376Z
+modified_at: 2026-10-02T06:06:58.592573376Z
+req_type: Bug
+filed_at:
+  code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f3cde6e60e
+  vendor: antigravity
+  session: 9d040115-a2e5-4c27-bbcd-7d48337f3273
