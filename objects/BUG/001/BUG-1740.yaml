@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-02T16:27:56.885926537Z
+modified_at: 2026-10-02T16:59:45.000186848Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -379,6 +379,93 @@ comments:
   created_at: 2026-10-02T14:02:44.032263756Z
   modified_at: 2026-10-02T14:02:44.032263756Z
   session_id: bda69c2d-94ea-4e14-802c-29cc2207a98f
+- id: 01a0fd8e-bbe8-7b30-9f7a-c8a9d520629c
+  author: joe
+  content: |
+    Implemented on branch `bug-1740`, PR #2342 (base `main`), commit `c78c62838a`.
+    Deviation-free against the seven acceptance criteria; two findings below that a
+    reviewer should read before the diff.
+
+    **Finding 1 — the filed mechanism is still live at HEAD, but its downstream
+    consumer is not.** BUG-1681 (merged as #2337, after this was filed) narrowed
+    fan-out attribution so a live subagent is credited to a spec only when its
+    branch/worktree names that spec, or when it holds that spec's own leased
+    worktree. That blocks every current consumer of the fan-out set for today's
+    lease shapes, so `aida awaiting --json` already read `possibly_subagent: false`
+    on both binaries. The self-corroboration BUG-1740 describes was untouched by
+    BUG-1681 and is still present: measured on this repository at `fe09d7678e`,
+    the live fan-out set held **2** leases and after the fix holds **0**. Both are
+    root-pinned (`worktree_path == parent_project_root`), pid-less, 3 months and
+    10 days old, and `aida ps --json` named as their holder the exact claude pid
+    hosting the session that ran the command (`590458`, present in the reporting
+    `aida`'s ancestor chain).
+
+    **Finding 2 — AC3's named specs are gone.** BUG-1688, BUG-1693 and BUG-1695 are
+    no longer In-Progress; the only orphans today are BUG-1687 and BUG-1771, and
+    both already read `false`. AC3's before/after is therefore byte-identical, and
+    that is reported in the PR as a finding rather than presented as a pass. The
+    `2 → 0` measurement above is the real-repository evidence; the end-to-end
+    witness is a constructed fixture, because no spec in the store currently has
+    the lease shape that reaches the flag.
+
+    **AC1 — the rule, chosen and written down.** A `harness-worktree` lease pinned
+    to the project root is excluded from the fan-out set outright, even when a
+    distinct live worker backs it. The root is where the operator's session sits
+    and where every `aida` runs, and `has_live_claude` matches on
+    `cwd.starts_with(worktree_path)`, so a root-pinned lease absorbs every claude
+    anywhere under the checkout. A genuine fan-out does not need it — the harness
+    gives each Agent-tool subagent its own worktree, and the lease pinned there
+    still counts. The rationale is in the doc comment on
+    `ps_lease_is_project_root_pinned`. Decided from the lease alone
+    (`worktree_path == parent_project_root`), so the predicate stays pure.
+
+    **AC2 — and where it stops.** The caller's whole pid chain (not just
+    `std::process::id()`; the invoking session is an *ancestor*) is subtracted from
+    the live set before fan-out liveness is classified. Scoped to the cwd/presence
+    arm and never to an explicit `active_pid`: an Agent-tool subagent executes
+    inside the parent claude process, so its lease's `active_pid` is legitimately
+    an ancestor of any `aida` the advisor runs from that session (BUG-1656's
+    fixture shape). Subtracting the caller there would delete TASK-1064's case,
+    which this spec's Do-not section forbids. The distinction recorded in the code:
+    `active_pid` is a positive claim by the lease's minter; presence in a directory
+    is an inference, and the observer's presence is not evidence of a worker.
+
+    **AC4** — covered by a dedicated corner and by the second half of the
+    end-to-end test, where the only change between the two halves is which pid is
+    live.
+
+    **AC5 — four corners plus three.** New file
+    `aida-cli-lib/src/tests/bug_1740_fanout_self_corroboration_tests.rs`, 7 tests:
+    root-pinned + caller-only; root-pinned + distinct worker (AC1's rule asserted);
+    non-root + worker (fan-out); no harness lease; non-root + caller-only with a
+    same-tree worker control; an *ancestor* of the caller; and the end-to-end
+    orphan pass with its worker control.
+
+    **AC6 — mutation, both directions.** Removing the root-pinned exclusion fails
+    exactly one test (`…_even_with_a_distinct_live_worker`) — the caller-only root
+    test still passes, because rule 2 catches it, which is what makes the two rules
+    independently witnessed rather than one rule tested twice. Removing the caller
+    subtraction fails exactly three (the two caller-identity corners and the
+    end-to-end test) while the root and AC4 corners pass. Disjoint witnesses,
+    nothing green both ways.
+
+    **Why no existing test caught this:** four fixtures asserted fan-out liveness
+    with `pid: std::process::id()` (three in `bug_1681_ps_reporting_tests`, one in
+    `story_696_ps_tests`). They made the test process its own subagent. They now
+    use a worker pid, and that change is part of the evidence.
+
+    **AC7 — answered and filed.** No, the root-pinned lease is not legitimate.
+    `lease_spec_for_start` writes `worktree_path = payload.cwd`, so a subagent with
+    no worktree of its own on `main` produces exactly this record, and nothing
+    reaps it when `SubagentStop` never arrives. Filed as **BUG-1772**; not fixed
+    here.
+
+    **Verification:** `make check-ci-fast` exit 0, 16 gates passed;
+    `cargo test -p aida-cli-lib --lib` 7546 passed / 0 failed / 2 ignored;
+    clippy no new warnings; `cargo fmt --all` clean.
+  created_at: 2026-10-02T16:59:45.000186848Z
+  modified_at: 2026-10-02T16:59:45.000186848Z
+  session_id: 9128ae3a-ad73-43ef-b6ef-021513ef8317
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
