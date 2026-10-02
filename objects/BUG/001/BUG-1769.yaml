@@ -205,7 +205,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:40:04.826717728Z
-modified_at: 2026-10-02T12:50:56.332560985Z
+modified_at: 2026-10-02T13:18:47.626397875Z
 req_type: Bug
 tags:
 - auto-complete
@@ -285,6 +285,70 @@ comments:
   created_at: 2026-10-02T10:55:06.484427599Z
   modified_at: 2026-10-02T10:55:06.484427599Z
   session_id: 8e6a376b-16ed-45f7-a6ee-ea30765c7868
+- id: 01a0fcc4-714a-7ca3-aaca-2f2543d342ca
+  author: joe
+  content: |
+    Implemented on `bug-1769-work`, PR #2334 (commit `6751d37cfe`).
+
+    **The missing input.** `recover_lost_child_state` decided from lease-absent +
+    receipt-absent + the retry budget and nothing else. It now reads `spec_status`
+    before spending the BUG-1629 replacement launch or returning a failure, which is
+    the substrate verification BUG-1140 mandated and the BUG-1629 branch had been
+    short-circuiting.
+
+    **AC2's discriminator.** `phase1_entry_spec_status: Option<Option<RequirementStatus>>`
+    on `RealPhaseDriver`, set by `capture_phase1_entry_spec_status` at the top of
+    `RealPhaseDriver::run_implementer`. The outer `Option` is the captured/not-captured
+    flag, not a status: `run_implementer` is re-entered by the BUG-1629 replacement
+    launch and the BUG-826 relaunches, and a second capture would overwrite the entry
+    reading with a mid-run one and destroy the comparison. Either reading being absent
+    is UNKNOWN, never success, so the fail-safe answer is the pre-fix behaviour.
+    `Done` and `Completed` count; `Rejected`, `Superseded` and `NeedsAttention` do
+    not — reading those as success would turn a declined spec into a shipped one.
+
+    **AC1's resolution.** `resolve_phase1_finished_without_lease` resolves against
+    the pinned phase-1 branch by reusing `detect_phase1_pr` and
+    `try_open_orchestrator_pr_for_no_pr_worktree`: `PrOpened` into CI + review,
+    `AlreadyMerged` (BUG-709) when the implementer shipped it itself, the BUG-893
+    recovery for committed-but-unopened work, and `Inconclusive` — never a
+    `PhaseFailure` — when no PR can be found or opened.
+
+    **Fixture finding worth keeping.** `bug_1629_phase1_recovery_tests.rs`'s
+    `project()` helper creates only `.aida/sessions`, so there is no store and
+    `spec_status()` returns `None`: every pre-existing fixture in that file exercises
+    the no-advance path by accident. The BUG-1769 fixtures build a real
+    git-canonical store, and because `GitBackend` reads the working tree a stub child
+    advances the spec with a plain `sed` on the YAML and no commit — so the advance
+    really happens mid-run, between the entry capture and the lost-child recovery.
+    The PR lookups go through the TASK-1421 `forge_factory` seam (`RecordingForge`),
+    so the tests are hermetic: no `gh`, no network.
+
+    **Mutation proofs (AC6), `cp` + restore, never `git stash`.**
+
+    - Mutation 1, the AC1 substrate read removed: **4 passed / 4 failed.** The three
+      advance tests fail, and so does the AC3 message test. The four that stayed
+      green are the right shape — the stale-Done control (AC7), the storeless
+      control (AC8), the idempotent-capture test (AC2), and the pure decision test.
+    - Mutation 2, the entry-status comparison dropped: **6 passed / 2 failed.**
+      Exactly the stale-Done control and the pure decision test fail, and the three
+      advance tests still pass — so AC7's control is not vacuous: it witnesses the
+      before-and-after comparison specifically, which is the one hazard this spec
+      singled out.
+
+    **Local evidence.** `--lib bug_1769` 8 passed / 0 failed; `--lib bug_1629` 30
+    passed / 0 failed; `launch_refusal_shelves_and_never_reaches_ci_or_reviewer`
+    passes untouched as AC5 requires; `make check-ci-fast` 16 gates passed; clippy
+    exit 0 with **no diagnostic in any added line range** (checked against the
+    diff's own hunk spans; the crate's 208 warnings are unchanged from `main`);
+    `glyph-lint --block` OK.
+
+    **A guard caught one thing worth recording.** The pre-commit hook refuses a
+    `trace:` marker on a `///` doc comment, because clap pulls `///` blocks into
+    `--help` and the SPEC-ID would leak into user-facing output. Three of mine had
+    to be demoted to plain `//` lines below the doc block.
+  created_at: 2026-10-02T13:18:47.626397875Z
+  modified_at: 2026-10-02T13:18:47.626397875Z
+  session_id: 20dd6351-ab65-4ffc-b7b1-573c5920c935
 history:
 - id: 01a0fc41-116a-7423-aabd-28082d0088c9
   author: joe
