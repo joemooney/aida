@@ -12,13 +12,6 @@
   added_at: 2026-10-02T16:27:18.404854463Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a0f2cc-eb2e-7523-a19d-3e000807018d
-  position: 34000
-  added_by: joe
-  added_at: 2026-10-02T22:21:50.079091352Z
-  for_role: product
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0df06-d7ef-7793-b469-4ce0ce365e61
   position: 36000
   added_by: joe
