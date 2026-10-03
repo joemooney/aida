@@ -26,11 +26,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-03T22:20:06.308355532Z
+modified_at: 2026-10-03T22:31:54.655901518Z
 req_type: Bug
 tags:
 - pull
 - reporting
+comments:
+- id: 01a103e5-321f-7310-a478-e9f1bdc250be
+  author: ai:codex:joe
+  content: 'Implementation note: missing code/store pull legs now print a WARNING-level line (keeping the existing exit behavior); the remote-drift doctor category reports the local orphan store''s ahead-of-origin commit count and recommends aida push. Added regression tests for the warning label and a three-commit store-ahead case. Normal pull paths are unchanged.'
+  created_at: 2026-10-03T22:31:54.655901518Z
+  modified_at: 2026-10-03T22:31:54.655901518Z
 history:
 - id: 01a103ce-75a5-7c31-accb-2bcbfa1f5f6d
   author: joe
