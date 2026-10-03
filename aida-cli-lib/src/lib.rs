@@ -18962,6 +18962,11 @@ enum ListStatusFilter {
     Stored(RequirementStatus),
     Shelved,
     NeedsDecision,
+    // trace:BUG-1687 | ai:claude — the deferred VIEW axis as a `--status`
+    // token. Kept in step with the git-backend path on purpose: BUG-1771's
+    // lesson was that a token accepted on one listing path and refused on the
+    // other is worse than one refused everywhere.
+    Deferred,
 }
 
 // trace:STORY-1023 | ai:codex
@@ -18971,18 +18976,28 @@ enum ListStatusFilter {
 // `match`. The two paths had already drifted once: these tokens worked here and
 // errored on the shipped (distributed-mode) CLI.
 fn parse_list_status_filter(status_str: &str) -> Result<ListStatusFilter> {
-    match status_display::lens_filter_key(status_str) {
-        Some("Shelved") => Ok(ListStatusFilter::Shelved),
-        Some("NeedsDecision") => Ok(ListStatusFilter::NeedsDecision),
-        // A token in the shared table with no arm here is a wiring gap, not a
-        // stored status — say so rather than letting `parse_status` reject it
-        // with a message that denies the token exists.
-        Some(key) => anyhow::bail!(
-            "status lens '{status_str}' (key '{key}') is accepted by \
-             `aida list --status` but not wired into this listing path"
-        ),
-        None => parse_status(status_str).map(ListStatusFilter::Stored),
+    if let Some(key) = status_display::lens_filter_key(status_str) {
+        return match key {
+            "Shelved" => Ok(ListStatusFilter::Shelved),
+            "NeedsDecision" => Ok(ListStatusFilter::NeedsDecision),
+            // A token in the shared table with no arm here is a wiring gap, not
+            // a stored status — say so rather than letting `parse_status` reject
+            // it with a message that denies the token exists.
+            key => anyhow::bail!(
+                "status lens '{status_str}' (key '{key}') is accepted by \
+                 `aida list --status` but not wired into this listing path"
+            ),
+        };
     }
+    // trace:BUG-1687 | ai:claude — same single-table discipline for the view
+    // axes: the token set lives in `VIEW_FILTER_TOKENS`, not in a second
+    // hand-written match that can drift from it.
+    if let Some(axis) = status_display::view_filter_axis(status_str) {
+        return match axis {
+            status_display::ViewFilterAxis::Deferred => Ok(ListStatusFilter::Deferred),
+        };
+    }
+    parse_status(status_str).map(ListStatusFilter::Stored)
 }
 
 fn requirement_matches_status_filter(
@@ -19002,6 +19017,10 @@ fn requirement_matches_status_filter(
             effective_needs_attention_lens(store, req, &display_status),
             Some(status_display::NeedsAttentionLens::NeedsDecision { .. })
         ),
+        // trace:BUG-1687 | ai:claude — the defer axis, read through the same
+        // flag-OR-legacy-tag predicate the cache query uses, so the two listing
+        // paths return the same set.
+        ListStatusFilter::Deferred => status_display::is_deferred(req),
     }
 }
 
@@ -19324,7 +19343,12 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // BUG-626: an epic's displayed status is the read-only rollup of its
     // children, not the stored field. trace:BUG-626 | ai:claude
     let display_status = effective_display_status(&store, req);
-    let status_str = if matches!(display_status, RequirementStatus::NeedsAttention) {
+    // BUG-1687: deferral is a display override that outranks both the parked
+    // lens and the stored status — a deferred spec must not read as "act now".
+    // trace:BUG-1687 | ai:claude
+    let status_str = if let Some(badge) = status_display::deferred_badge(req) {
+        badge
+    } else if matches!(display_status, RequirementStatus::NeedsAttention) {
         effective_needs_attention_lens(&store, req, &display_status)
             .map(|lens| needs_attention_badge_for_lens(&lens))
             .unwrap_or_else(|| status_display::parked_status_badge(req))

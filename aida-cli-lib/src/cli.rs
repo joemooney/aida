@@ -9331,15 +9331,20 @@ pub enum Command {
         #[clap(value_name = "STATUS", verbatim_doc_comment)]
         shortcut: Option<String>,
 
-        /// Filter by status. Accepts a stored status, a comma-separated OR
-        /// set (`--status draft,approved`), the `open` / `closed` aliases
-        /// (`open` = Draft, Approved, Planned, InProgress, NeedsAttention;
-        /// `closed` = Done, Completed, Rejected), and the `shelved` /
-        /// `needs-decision` lenses over the parked (needs-attention) set.
+        /// Filter by status. Accepts a comma-separated OR set
+        /// (`--status draft,approved`) and the `open` / `closed` aliases:
+        /// `open` = Draft, Approved, Planned, InProgress, NeedsAttention;
+        /// `closed` = Done, Completed, Rejected. Three non-stored tokens are
+        /// also accepted: `shelved` and `needs-decision` narrow the parked
+        /// (needs-attention) set, and `deferred` is a spelling of `--deferred`
+        /// — the primed/conditional shelf, which is a view flag rather than a
+        /// status, so it composes as an AND (`--status deferred,approved`).
         // trace:TASK-0415 | ai:claude
         // trace:BUG-1771 | ai:claude — the two lenses were accepted only by the
         // legacy centralized listing, so this surface could not name them until
         // the git-backend path learned them.
+        // trace:BUG-1687 | ai:claude — `deferred` used to be refused here with
+        // a message that denied the token existed.
         #[clap(long)]
         status: Option<String>,
 
