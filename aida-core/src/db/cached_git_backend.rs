@@ -434,21 +434,19 @@ impl CachedGitBackend {
                 }
             }
         }
-        // TASK-1515: re-capture HEAD immediately before the rebuild loads the
-        // worktree, so the stamp is never older than a HEAD captured before
-        // the incremental attempts, and never newer than the rows: the load
-        // reads at or after this HEAD. If HEAD moves DURING the load, the
-        // stamp is older than some rows. That usually heals on the next
-        // incremental (it re-reads every file changed since the stamp), but
-        // not always: a file changed during the load and then reverted shows
-        // no net change in that diff, so its newer (or ghost) row persists
-        // until a full rebuild. Tracked separately as BUG-1663.
+        // TASK-1515: re-check staleness at a freshly captured HEAD before
+        // paying for the rebuild. The rebuild derives its own stamp HEAD,
+        // verified unchanged across its store load (`load_at_stable_head`),
+        // so a commit landing mid-load can no longer strand a ghost or
+        // reverted row that the incremental diff from an older stamp would
+        // never see again.
         // trace:TASK-1515 | ai:claude
+        // trace:BUG-1663 | ai:claude
         let head = self.current_head_sha();
         if !self.cache.is_stale(&head)? {
             return Ok(());
         }
-        self.full_rebuild(&head, true)
+        self.full_rebuild(true)
     }
 
     /// A reader that cannot refresh inline files the durable request and
@@ -700,25 +698,61 @@ impl CachedGitBackend {
             .map(|_| ())
     }
 
+    /// Load the whole store for a rebuild, returning the HEAD the rebuild
+    /// must stamp: one verified unchanged across the load.
+    ///
+    /// The load reads the live tree, so a commit landing mid-load leaves the
+    /// rows newer than a HEAD captured before it — and the one stamp that is
+    /// provably consistent with the rows is a pre-load HEAD that equals the
+    /// post-load HEAD. Stamping the post-load HEAD alone would be wrong in
+    /// the other direction: rows read BEFORE a mid-load commit would carry
+    /// its label and never be re-read. So on a mid-load HEAD move, retry the
+    /// load (bounded, like TASK-1515's incremental retries).
+    ///
+    /// When every bounded attempt races a commit, give up and stamp the
+    /// final attempt's PRE-load HEAD: older than (or equal to) everything
+    /// that load read, so the next refresh re-reads whatever changed since
+    /// it. The one shape that diff cannot see — a file changed during the
+    /// load and reverted (or deleted) by a later commit — now needs the tree
+    /// to change during every attempt, instead of once.
+    // trace:BUG-1663 | ai:claude
+    fn load_at_stable_head(&self) -> Result<(RequirementsStore, String)> {
+        const STABLE_LOAD_ATTEMPTS: usize = 3;
+        let mut head = self.current_head_sha();
+        for attempt in 1..=STABLE_LOAD_ATTEMPTS {
+            #[cfg(test)]
+            tests::bug_1663_during_rebuild_load();
+            let store = self
+                .inner
+                .load()
+                .context("Failed to load git store for cache rebuild")?;
+            let after = self.current_head_sha();
+            if after == head || attempt == STABLE_LOAD_ATTEMPTS {
+                return Ok((store, head));
+            }
+            head = after;
+        }
+        unreachable!("the final attempt returns above")
+    }
+
     /// Full authoritative rebuild: load the whole store and re-project every
-    /// row. The fallback whenever incremental can't be proven safe.
+    /// row. The fallback whenever incremental can't be proven safe. The
+    /// stamped HEAD is derived here, verified stable across the load.
     // trace:BUG-636
-    fn full_rebuild(&self, head: &str, refresh_only: bool) -> Result<()> {
+    // trace:BUG-1663 | ai:claude
+    fn full_rebuild(&self, refresh_only: bool) -> Result<()> {
         #[cfg(test)]
         super::cache_refresh::test_count("full_rebuild");
-        let store = self
-            .inner
-            .load()
-            .context("Failed to load git store for cache rebuild")?;
+        let (store, head) = self.load_at_stable_head()?;
         // Save-time reconciliation must rebuild even at the same HEAD: it
         // may have preserved unloaded objects, including uncommitted fixtures.
         // Only freshness-driven refreshes may skip an already committed refill.
         // trace:TASK-1526 | ai:codex
         if refresh_only {
             self.cache
-                .rebuild_for_refresh(&store, head, self.inner.path())?;
+                .rebuild_for_refresh(&store, &head, self.inner.path())?;
         } else {
-            self.cache.rebuild_from_store(&store, head)?;
+            self.cache.rebuild_from_store(&store, &head)?;
         }
         Ok(())
     }
@@ -727,11 +761,8 @@ impl CachedGitBackend {
     /// git store after a cache operation discovers schema drift.
     // trace:BUG-1097 | ai:codex
     fn rebuild_after_cache_schema_drift(&self) -> Result<()> {
-        let head = self.current_head_sha();
-        let store = self
-            .inner
-            .load()
-            .context("Failed to load git store for cache schema-drift rebuild")?;
+        // trace:BUG-1663 | ai:claude
+        let (store, head) = self.load_at_stable_head()?;
         self.cache.rebuild_from_store_after_schema_drift(&store, &head)
             .map_err(|err| {
                 if super::cache::is_cache_read_only_error(&err) || super::cache::is_cache_unwritable_error(&err) {
@@ -1070,8 +1101,8 @@ impl CachedGitBackend {
     /// Force a full cache rebuild, regardless of staleness. Used by the
     /// `aida cache rebuild` CLI command.
     pub fn rebuild_cache(&self) -> Result<usize> {
-        let head = self.current_head_sha();
-        let store = self.inner.load()?;
+        // trace:BUG-1663 | ai:claude
+        let (store, head) = self.load_at_stable_head()?;
         let n = self.cache.rebuild_from_store(&store, &head)?;
         Ok(n)
     }
@@ -1365,9 +1396,7 @@ impl DatabaseBackend for CachedGitBackend {
                 self.cache.rebuild_from_store(store, &head)
             })?;
         } else {
-            self.with_cache_schema_retry("rebuild cache after save", || {
-                self.full_rebuild(&head, false)
-            })?;
+            self.with_cache_schema_retry("rebuild cache after save", || self.full_rebuild(false))?;
         }
         Ok(())
     }
@@ -3443,6 +3472,180 @@ mod tests {
             task_1515_read(&raw),
             (Some(head), vec![last.clone(), last]),
             "the rebuild stamps the HEAD its rows were loaded at"
+        );
+    }
+
+    // ---------------------------------------------------------------- BUG-1663
+
+    thread_local! {
+        /// Test hook run inside the rebuild's stable-head load loop, after
+        /// the pre-load HEAD capture and before the store load — the window
+        /// a mid-load external commit lands in (thread-local, so parallel
+        /// tests never see each other's hook).
+        // trace:BUG-1663 | ai:claude
+        static BUG_1663_DURING_REBUILD_LOAD: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+            std::cell::RefCell::new(None);
+    }
+
+    /// Called from `load_at_stable_head` under `cfg(test)`.
+    // trace:BUG-1663 | ai:claude
+    pub(super) fn bug_1663_during_rebuild_load() {
+        let hook = BUG_1663_DURING_REBUILD_LOAD.with(|h| h.borrow_mut().take());
+        if let Some(mut f) = hook {
+            f();
+            BUG_1663_DURING_REBUILD_LOAD.with(|h| {
+                let mut slot = h.borrow_mut();
+                if slot.is_none() {
+                    *slot = Some(f);
+                }
+            });
+        }
+    }
+
+    // trace:BUG-1663 | ai:claude
+    fn bug_1663_clear_hook() {
+        BUG_1663_DURING_REBUILD_LOAD.with(|h| *h.borrow_mut() = None);
+    }
+
+    /// Raw row probe on a separate connection: no backend read, so it can
+    /// never trigger the freshen it is trying to observe the absence of.
+    // trace:BUG-1663 | ai:claude
+    fn bug_1663_raw_row_count(cache_path: &Path, spec_id: &str) -> i64 {
+        rusqlite::Connection::open(cache_path)
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM requirements_cache WHERE spec_id = ?1",
+                [spec_id],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    // BUG-1663: a full rebuild used to stamp the HEAD captured BEFORE its
+    // store load. A spec committed while the load ran was still projected
+    // into the cache (the load reads the live tree), but its commit came
+    // after the stamp; when a LATER commit deleted the spec again before any
+    // refresh ran, the incremental diff from that stamp saw the file absent
+    // at both endpoints — no net change — so the ghost row survived every
+    // refresh until a manual full rebuild. The rebuild now re-checks HEAD
+    // after the load and retries, so its stamp matches the tree the rows
+    // came from and the delete is visible to the next diff.
+    // trace:BUG-1663 | ai:claude
+    #[test]
+    fn bug_1663_spec_committed_mid_rebuild_load_then_deleted_leaves_no_ghost_row() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        // Erase the recorded head so the next freshen must take the
+        // full-rebuild path (nothing to diff from).
+        backend.cache().set_source_head_sha("").unwrap();
+
+        // While the rebuild's load runs, an external writer commits FR-1-004.
+        let ghost: std::rc::Rc<std::cell::RefCell<Option<Requirement>>> = Default::default();
+        {
+            let root = store_root.clone();
+            let ghost = ghost.clone();
+            BUG_1663_DURING_REBUILD_LOAD.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    if ghost.borrow().is_some() {
+                        return; // one mid-load commit; retries see a stable tree
+                    }
+                    let before = crate::git_ops::head_sha(&root).unwrap();
+                    let ext = GitBackend::new(&root).unwrap();
+                    let req = ext
+                        .add_requirement(sample_req("FR-1-004", "ghost"))
+                        .unwrap();
+                    assert_ne!(
+                        crate::git_ops::head_sha(&root).unwrap(),
+                        before,
+                        "the mid-load add must land as a store commit"
+                    );
+                    *ghost.borrow_mut() = Some(req);
+                }));
+            });
+        }
+        let result = backend.ensure_cache_fresh();
+        bug_1663_clear_hook();
+        result.unwrap();
+        let ghost = ghost
+            .borrow_mut()
+            .take()
+            .expect("the hook must have run during the rebuild load");
+        // The mid-load spec IS in the projection (the load read the live
+        // tree), and the stamp must match that tree, not the pre-load HEAD.
+        assert_eq!(
+            bug_1663_raw_row_count(&cache_path, "FR-1-004"),
+            1,
+            "the rebuild load must have seen the mid-load commit"
+        );
+        let built_at = backend.cache().built_at().unwrap();
+
+        // A later commit deletes the spec again, BEFORE any refresh runs.
+        GitBackend::new(&store_root)
+            .unwrap()
+            .delete_requirement(&ghost.id)
+            .unwrap();
+
+        // The next refresh must converge: no ghost row.
+        backend.ensure_cache_fresh().unwrap();
+        assert_eq!(
+            bug_1663_raw_row_count(&cache_path, "FR-1-004"),
+            0,
+            "a spec deleted after the rebuild must not survive as a ghost row"
+        );
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(crate::git_ops::head_sha(&store_root).unwrap().as_str())
+        );
+        assert_eq!(
+            backend.cache().built_at().unwrap(),
+            built_at,
+            "the convergence must come from the incremental diff, not another full rebuild"
+        );
+    }
+
+    // BUG-1663: the stable-head load retry is bounded. When an external
+    // writer lands a commit during EVERY load attempt, the rebuild gives up
+    // after the last one and stamps that attempt's PRE-load HEAD — older
+    // than (or equal to) every row it loaded, so the next refresh still
+    // re-reads the trailing commits — rather than looping forever or
+    // stamping a HEAD newer than rows it read before a mid-load commit.
+    // trace:BUG-1663 | ai:claude
+    #[test]
+    fn bug_1663_rebuild_load_retry_is_bounded_and_stamps_the_last_preload_head() {
+        let dir = tempdir().unwrap();
+        let (backend, store_root, cache_path) = task_1515_backend(dir.path());
+        backend.cache().set_source_head_sha("").unwrap();
+
+        let shas: std::rc::Rc<std::cell::RefCell<Vec<String>>> = Default::default();
+        {
+            let root = store_root.clone();
+            let shas = shas.clone();
+            BUG_1663_DURING_REBUILD_LOAD.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    let n = shas.borrow().len() + 1;
+                    let sha = task_1515_external_retitle(&root, &format!("load{n}"));
+                    shas.borrow_mut().push(sha);
+                }));
+            });
+        }
+        let result = backend.ensure_cache_fresh();
+        bug_1663_clear_hook();
+        result.unwrap();
+
+        let shas = shas.borrow().clone();
+        assert_eq!(shas.len(), 3, "one mid-load commit per bounded attempt");
+        assert_eq!(
+            backend.cache().source_head_sha().unwrap().as_deref(),
+            Some(shas[1].as_str()),
+            "an exhausted retry stamps the final attempt's pre-load HEAD"
+        );
+
+        // Honestly stale, so the next refresh converges on the real HEAD.
+        backend.ensure_cache_fresh().unwrap();
+        let raw = rusqlite::Connection::open(&cache_path).unwrap();
+        assert_eq!(
+            task_1515_read(&raw),
+            (Some(shas[2].clone()), vec!["load3".into(), "load3".into()])
         );
     }
 
