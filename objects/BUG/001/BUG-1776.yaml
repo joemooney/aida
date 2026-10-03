@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:08:45.792442925Z
-modified_at: 2026-10-03T06:31:38.642806346Z
+modified_at: 2026-10-03T07:42:54.605135664Z
 req_type: Bug
 tags:
 - cross-platform
@@ -68,3 +68,8 @@ comments:
   created_at: 2026-10-02T20:20:38.985237908Z
   modified_at: 2026-10-02T20:20:38.985237908Z
   session_id: 36d8236a-e4eb-4af0-8043-25d75751b21d
+- id: 01a100b7-4a9c-7f10-a2ff-4ef9cda7accd
+  author: joe
+  content: 'Implementation PR #2371: portable awk-based fixture update. Verified the recovery tests and the full macOS suite on 2026-10-03. The Cross-platform workflow macOS enablement was temporary and has been restored. Commit 404a373e82; PR https://github.com/joemooney/aida/pull/2371.'
+  created_at: 2026-10-03T07:42:54.605135664Z
+  modified_at: 2026-10-03T07:42:54.605135664Z
