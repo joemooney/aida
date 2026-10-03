@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:35:52.920359192Z
+modified_at: 2026-10-03T10:50:21.014565195Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -154,6 +154,11 @@ comments:
   content: 'AC1/AC6 evidence: Cross-platform run 37107077548 reports `-p aida-cli-lib --lib` as 7446 passed, 0 failed, 15 ignored (0 filtered out), compared with the recorded 7146 passed, 7 failed, 12 ignored baseline. Six named Windows cases now pass; the POSIX shell test is intentionally absent under its explicit Unix cfg. The full Windows job remains red only on the unrelated current-main BUG-1778 failed-hint-write fixture. AC5 still needs individual behavioral mutation proofs for the pre-existing BUG-1777 fixes; this implementation does not claim that acceptance is complete.'
   created_at: 2026-10-03T10:35:52.920359192Z
   modified_at: 2026-10-03T10:35:52.920359192Z
+- id: 01a10162-e5d6-7223-a087-f906715710f5
+  author: ai:codex:joe
+  content: 'CI follow-up: run 37117042040 caught that the added workflow fixture step was missing from scripts/ci-gate-tiers.toml. Classified it as fast and verified `task_1555_every_ci_build_gate_is_classified_for_the_local_runner` passes locally. A corrected CI run will validate the workflow.'
+  created_at: 2026-10-03T10:50:21.014565195Z
+  modified_at: 2026-10-03T10:50:21.014565195Z
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
