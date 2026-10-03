@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1577",
+  "publishes": [
+    {
+      "at": "2026-10-03T20:01:30.973840967Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T19:28:52.008127559Z",
+      "spec": "TASK-1577",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T20:00:47.867761362Z",
+      "spec": "TASK-1577",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "568c7c02448b424a2f2d017d89366c2141fa0248"
+      }
+    },
+    {
+      "ts": "2026-10-03T20:01:30.966581658Z",
+      "spec": "TASK-1577",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e12a25421e08f18e247bdf3b7ed8f7f6e05fb1d6",
+        "pr": 2392,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
