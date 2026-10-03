@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1740",
+  "publishes": [
+    {
+      "at": "2026-10-03T10:06:12.111827119Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-30T14:52:09.702349694Z",
+      "spec": "BUG-1740",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-02T16:57:52.298566704Z",
+      "spec": "BUG-1740",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1740",
+        "branch": "bug-1740",
+        "first_seen": "2026-10-02T16:57:52.298517271+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T09:25:55.051019629Z",
+      "spec": "BUG-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2342,
+        "verdict": "APPROVED",
+        "reviewed_sha": "98096b117a6122c2de7afdf90e61c4dec38cbc56"
+      }
+    },
+    {
+      "ts": "2026-10-03T09:48:31.377053316Z",
+      "spec": "BUG-1740",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "25de9b32c7982ccced697cb24573a2975b2e9420"
+      }
+    }
+  ]
+}
