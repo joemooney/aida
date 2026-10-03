@@ -25,11 +25,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
-filed_at:
-  code_sha: b170cc9eeee9e36a187bc5cb40a57c6428bf88cc
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: e6c1176655
-  vendor: antigravity
-  session: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
