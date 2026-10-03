@@ -1,0 +1,43 @@
+id: 01a101f4-7982-7ac2-851d-e85cddfdf1ec
+spec_id: BUG-1789
+agreed_id: BUG-1789
+title: role enter's resume picker reads ~1.4GB of session logs per interactive invocation (minutes under disk contention)
+description: |
+  Interactive `aida role enter <role>` took ~6.5 minutes on 2026-10-03 (two concurrent invocations of `role enter product`, pids 3995969/3996161, both in D state the whole time).
+
+  **Root cause (code):** the STORY-821 resume picker (`pick_recent_session_for_role`, `aida-cli-lib/src/role_cmd.rs:329`) calls `session::list_role_sessions(role, 8)` → `collect_global_project_sessions(150)` (`aida-cli-lib/src/session.rs:3336`). That scan:
+
+  1. Enumerates every `.jsonl` under `~/.claude/projects/*`, the entire `~/.codex/sessions` tree recursively, and antigravity session dirs.
+  2. Sorts by mtime and truncates to `session_scan_limit(150)` = **1500 files** (`limit*10`, floor 150) — to ultimately show at most 8 picker rows.
+  3. Parses each file with `parse_session_meta_for_agent`, capped at 400 **lines** per file (BUG-1593). Codex rollout events are single huge lines (host average 1.5 MB/file, 2.3 GB across 1545 files), so a 400-line cap is no byte bound at all — many files are read nearly whole.
+
+  **Measured:** the stuck process had rchar 1.42 GB / read_bytes 242 MB after 5m22s, fd 3 walking rollout files newest→oldest (down to 2026-09-10 before finishing). So every interactive `role enter` re-reads ~1.4 GB, uncached and with zero reuse between invocations.
+
+  **Aggravating host condition (not the bug, but why it was minutes rather than seconds):** sda was saturated during the window — ~88% util, avg queue ~296, 63 ms write await — by an antigravity session (pid 3903170) rewriting its 32 MB conversation SQLite WAL at a sustained ~74 MB/s. Cold reads crawled at <1 MB/s. The scan's cost must not assume an idle disk.
+
+  **Why `role enter advisor` from a script looked fine:** the picker short-circuits when stdin/stderr are not TTYs or AIDA_HEADLESS=1, so only interactive invocations pay.
+
+  **Fix directions (for the owning implementer to weigh):**
+  - Bound the per-file parse by **bytes**, not lines (e.g. read at most 256 KB per file); the markers the parser needs (session_meta first line, role markers, aiTitle) live near the head.
+  - Shrink the candidate set before parsing: the picker needs 8 rows of one role in the current project family; 1500 files is a 10× multiplier on an internal 150, i.e. ~190× the displayed rows. Walk newest-first and stop early once enough matching sessions are found, rather than parsing the whole truncated set.
+  - Cache parse results keyed by (path, mtime) — session logs are append-only and the metadata parsed is from the file head, so cached entries stay valid.
+  - Consider pruning the codex walk by date-named directories (`YYYY/MM/DD`) so a 6-month archive is never statted, let alone opened.
+
+  **Workarounds available today:** `aida role enter <role> --no-resume`, or `[role] resume_prompt = false` in `.aida/config.toml`, or AIDA_HEADLESS=1.
+
+  **Acceptance sketch:** with a fixture of ≥1500 synthetic session logs including multi-MB single-line codex rollouts, interactive `role enter` completes the resume-picker scan reading a bounded number of bytes (assert via rchar or an injected counter, e.g. <50 MB), and still resolves role/title/cwd for the picker rows correctly.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T13:29:21.538417538Z
+modified_at: 2026-10-03T13:29:21.538417538Z
+req_type: Bug
+filed_at:
+  code_sha: 2ec18b6144e682de43a7227cb5b8dd96e2343be7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 821f2c6107
+  vendor: antigravity
+  session: 81be7622-d357-4a9c-904d-8d88acc536d7
