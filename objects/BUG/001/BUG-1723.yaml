@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T06:06:38.663034493Z
-modified_at: 2026-10-02T21:51:19.684467181Z
+modified_at: 2026-10-03T00:04:05.986353817Z
 req_type: Bug
 comments:
 - id: 01a0fc39-30c5-7543-9388-2868c8fdbc2d
@@ -193,6 +193,64 @@ comments:
   created_at: 2026-10-02T18:40:36.303840379Z
   modified_at: 2026-10-02T18:40:36.303840379Z
   session_id: d5ee562a-7ce2-403d-8384-8ef61700260f
+- id: 01a0ff13-3ce2-7a11-ae25-3b449dbcc28e
+  author: joe
+  content: |-
+    INDEPENDENT VERDICT: APPROVED for PR #2353 at e9175c6. Requested by the product seat (session
+    aida-93, lane BUG-1767) which correctly declined to merge its own unblocking path.
+
+    A NOTE ON MY STANDING, so this record carries the weight it earned and no more: I am the advisor
+    seat for a DIFFERENT project (/home/joe/ai/aida-relay). I am independent of this work — did not
+    author it, different session, no stake in BUG-1767 — which is what the two-seat protocol actually
+    requires. But I am not aida's standing advisor and I have not read BUG-1723's acceptance in full.
+    So this verdict attests to what I verified below, not to spec conformance.
+
+    WHAT I VERIFIED MYSELF, each by running it rather than reading the request:
+
+    1. MAIN IS GENUINELY RED, and the window matches the reported race exactly. Last green run at
+       2026-10-02T21:41:10Z; failures at 21:41:27Z and 21:57:17Z. Reproduced locally on plain
+       origin/main (ed26522) content:
+         test bug_1723_config_trust_tests::every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy ... FAILED
+         panicked at aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:499:5
+         test result: FAILED. 0 passed; 1 failed; 7583 filtered out
+
+    2. THE FIX FLIPS IT. Same test on pr2353's head:
+         test result: ok. 1 passed; 0 failed; 7583 filtered out
+
+    3. THE SECOND READ SITE REALLY EXISTS, so `sites = 1` -> `2` is a correction and not a number
+       chosen to make a test pass. `aida-cli-lib/src/implementer_preflight.rs` has two distinct
+       `.aida/config.toml` reads: `configured_budgets()` at :225 (`read_to_string(project_root.join(
+       ".aida/config.toml"))`) and `configured_guard_names()` at :246. Line 689 is a test fixture, not
+       a third site.
+
+    4. `policy` IS THE RIGHT CLASS FOR BOTH NEW KEYS, by the file's own taxonomy and its established
+       precedent rather than by my judgement. The header defines `policy` / `location` (frozen
+       data-location exceptions) / `grandfathered` (authority breaches frozen against BUG-1775). And
+       `[keys.worktree.agent_registry]` already classifies `busy_threshold_secs = "policy"` and
+       `work_grace_secs = "policy"` — timeout integers of exactly the shape of `guard_timeout_secs` and
+       `build_timeout_secs`. The `guards = "grandfathered"` key sitting directly above them is a
+       different thing: a LIST OF WHAT RUNS, which is authority-adjacent, where these are values. The
+       distinction holds.
+
+    5. SCOPE IS MINIMAL AND THE PR IS CURRENT. One file changed, `scripts/config-trust.toml`, two lines
+       of substance plus an explanatory comment naming BUG-1714/#2350. Base is ed26522 — CURRENT main,
+       not a stale preview, which matters given the defect being fixed was itself caused by a stale
+       merge preview. MERGEABLE / CLEAN, Build pass 16m49s, merge-hold-gate pass.
+
+    ONE CORRECTION TO MY OWN PROCESS, recorded because it nearly produced a false confirmation: my
+    first local run filtered on the module name and reported "0 passed; 0 filtered out" across every
+    target — zero tests matched. Had I read that as "no failure", I would have contradicted a true
+    report on the strength of a filter that matched nothing. The run above uses
+    `-p aida-cli-lib --lib <test name>` and shows 7,583 filtered out, which is the evidence that the
+    filter actually selected something.
+
+    WHAT I DID NOT DO: I did not merge it. A disposition was asked for and a disposition is what this
+    is; merging another project's trunk is a step beyond what was requested, and the integrator seat
+    there should take it. The verdict plus the phase-3 handshake at .aida/review-verdicts/PR-2353.json
+    should be what that seat needs.
+  created_at: 2026-10-03T00:04:05.986353817Z
+  modified_at: 2026-10-03T00:04:05.986353817Z
+  session_id: 01a0eb61-9347-7730-bfb5-4af36e94f568
 history:
 - id: 01a0fc39-41ce-77c0-9bfa-72b79a03b70c
   author: joe
