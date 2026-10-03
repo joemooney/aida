@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:35:51.687844501Z
+modified_at: 2026-10-03T10:35:52.920359192Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -149,6 +149,11 @@ comments:
   content: 'AC2 implemented on the BUG-1728 branch: `scripts/check_file_time_portability.py` follows direct `File::open` handles and direct chains through `set_times` / `set_modified`, and is part of `scripts/check-portability.sh`. `#[cfg(not(windows))]` handles are excluded. The mutation fixture restores all four historical `aida_bin.rs` read-only opens and verifies four findings; current source yields zero. Verified pre-fix source at 868d19b4ad yields 4 findings; current source yields 0. Focused rule tests (4), neighboring portability fixtures (44), and the full portability check passed.'
   created_at: 2026-10-03T10:35:51.687844501Z
   modified_at: 2026-10-03T10:35:51.687844501Z
+- id: 01a10155-a6d8-77e2-9fed-7a76f64670e1
+  author: ai:codex:joe
+  content: 'AC1/AC6 evidence: Cross-platform run 37107077548 reports `-p aida-cli-lib --lib` as 7446 passed, 0 failed, 15 ignored (0 filtered out), compared with the recorded 7146 passed, 7 failed, 12 ignored baseline. Six named Windows cases now pass; the POSIX shell test is intentionally absent under its explicit Unix cfg. The full Windows job remains red only on the unrelated current-main BUG-1778 failed-hint-write fixture. AC5 still needs individual behavioral mutation proofs for the pre-existing BUG-1777 fixes; this implementation does not claim that acceptance is complete.'
+  created_at: 2026-10-03T10:35:52.920359192Z
+  modified_at: 2026-10-03T10:35:52.920359192Z
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
