@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1480",
+  "publishes": [
+    {
+      "at": "2026-10-03T22:30:34.217441745Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-26T05:25:05.435911746Z",
+      "spec": "STORY-1480",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-09-26T05:26:28.868563438Z",
+      "spec": "STORY-1480",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-02T03:48:54.824954486Z",
+      "spec": "STORY-1480",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T03:07:11.907918837Z",
+      "spec": "STORY-1480",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1480",
+        "branch": "story-1480",
+        "first_seen": "2026-10-03T03:07:11.907870723+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T05:17:09.555989582Z",
+      "spec": "STORY-1480",
+      "seat": "product",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2367,
+        "verdict": "APPROVED",
+        "reviewed_sha": "c6ccdeb77f"
+      }
+    },
+    {
+      "ts": "2026-10-03T05:18:57.120253840Z",
+      "spec": "STORY-1480",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ecfd9affc313ea192e7cb50781041831ac3e2d53",
+        "pr": 2367,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-03T05:20:03.320581860Z",
+      "spec": "STORY-1480",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-03T07:40:36.890956785Z",
+      "spec": "STORY-1480",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1480",
+        "branch": "origin/story-1480",
+        "first_seen": "2026-10-03T07:40:36.890908395+00:00"
+      }
+    }
+  ]
+}
