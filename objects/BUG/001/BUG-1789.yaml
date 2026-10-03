@@ -26,13 +26,21 @@ description: |
   **Workarounds available today:** `aida role enter <role> --no-resume`, or `[role] resume_prompt = false` in `.aida/config.toml`, or AIDA_HEADLESS=1.
 
   **Acceptance sketch:** with a fixture of ≥1500 synthetic session logs including multi-MB single-line codex rollouts, interactive `role enter` completes the resume-picker scan reading a bounded number of bytes (assert via rchar or an injected counter, e.g. <50 MB), and still resolves role/title/cwd for the picker rows correctly.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T13:29:21.538417538Z
-modified_at: 2026-10-03T13:29:21.538417538Z
+modified_at: 2026-10-03T15:53:47.805511400Z
 req_type: Bug
+history:
+- id: 01a10278-b61d-7ed2-8d1e-d00a076f9cd9
+  author: joe
+  timestamp: 2026-10-03T15:53:47.805506035Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 2ec18b6144e682de43a7227cb5b8dd96e2343be7
   branch: main
