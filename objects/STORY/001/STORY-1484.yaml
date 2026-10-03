@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-03T05:39:31.544400404Z
+modified_at: 2026-10-03T05:39:34.416501924Z
 req_type: Story
 tags:
 - cache
@@ -245,4 +245,10 @@ comments:
   content: 'INDEPENDENT ADVISOR AMENDMENT — BUG-1674 sketch signed off APPROVED with binding amendments on BUG-1674 (Codex advisor, independent GPT-6 Astra correctness consultation). Add single-spec show to the stale-allowed protocol, using slice B''s APIs and A9 collector/output contract. For show specifically, Q1''s TTY inline rebuild, Q2''s 15s migration wait, A7''s worker-crash strict fallback and C''s no-detach override cannot bypass the shared 4s operational deadline / externally measured <5000ms invocation ceiling (<=1500ms aggregate cache wait). No full-scan/rebuild/schema-repair fallback in bounded show. Before C, serve a compatible labelled snapshot with honest no-worker state; incompatible/unusable schema or unprovable identity gets a bounded explicit error. Thus no TASK-1527 dependency is needed for show. Identity rows and metadata share a pinned SQLite read transaction; chosen UUID/native path/requested alias are validated against a bounded single-object committed YAML blob at cache_head when serving historically; label covers object, identity completeness and derived fields. Known ambiguity refuses, unseen collisions are not claimed absent, and mutable parseable partial YAML is not a historical snapshot. Detailed tests, semantics, scope and dogfood closure gates are in BUG-1674''s ADVISOR SIGNOFF. Product handoff: BUG-1674 should be blocked-by TASK-1526 (an actual API prerequisite), not merely sequencing-held; product records that edge before pickup. TASK-1526 has live overlapping cache edits and an unresolved non-show B/C interim fork; this amendment does not approve that unrelated fork or authorize overlapping work. No queue/relations/dispatch altered by this advisor.'
   created_at: 2026-09-27T03:44:24.500576572Z
   modified_at: 2026-09-27T03:44:24.500576572Z
+- id: 01a10046-5f90-7103-936b-8e25184bbe18
+  author: joe
+  content: BUG-1674 routes aida show through this story's reader protocol and adds it to the stale-allowed command list (description updated). show's spec body was already authoritative YAML; the remaining strict path was the interactive (TTY) single-flight winner, which performed the pre-slice-C inline rebuild and could park ~25 s in the SQLite retry ladder behind a live writer, then fail. It now makes exactly one bounded rebuild attempt and, on write-lock contention, files the durable refresh request, spawns the detached worker, and serves the labelled committed snapshot — same as every other reader. A free lock keeps the inline rebuild unchanged (tty_full_rebuild_winner_remains_strict_before_c still passes).
+  created_at: 2026-10-03T05:39:34.416501924Z
+  modified_at: 2026-10-03T05:39:34.416501924Z
+  session_id: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
 execution_mode: guided
