@@ -26,11 +26,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-03T22:31:54.655901518Z
+modified_at: 2026-10-03T22:37:53.399601409Z
 req_type: Bug
 tags:
 - pull
 - reporting
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a103ea-9c33-7050-b396-4869df40d16d
+  created_at: 2026-10-03T22:37:53.399596791Z
+  created_by: joe
 comments:
 - id: 01a103e5-321f-7310-a478-e9f1bdc250be
   author: ai:codex:joe
