@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-10-03T02:57:19.274090285Z
+modified_at: 2026-10-03T03:34:59.380423614Z
 req_type: Story
 tags:
 - aida:history
@@ -111,6 +111,21 @@ comments:
   created_at: 2026-10-03T02:57:19.274090285Z
   modified_at: 2026-10-03T02:57:19.274090285Z
   session_id: a5729e8f-bc58-4486-8b68-94299f9cd0dc
+- id: 01a0ffd4-5034-7251-8d7a-1c217ee41fbe
+  author: joe
+  content: |-
+    Slices B+C implemented (advisor seat under Joe's 2026-10-02 TASK/STORY mandate); PR #2367 opened, stacked on #2366 (base story-1479; rebase onto main after #2366 merges).
+
+    Slice B (acceptance 3), commit ffff9f59c2: interactive surfaces emit the drain's lifecycle kinds with empty run_uuid + seat stamp — queue work claim (session_start's Approved→InProgress bump) → PhaseEntered{implementer,1}; pr_ship_create_pr → PhaseDonePr (specs from head-commit trailers); pr ship CI wait → CiTerminal (after BUG-1180 refinement); queue-recover adoption → PhaseEntered+PhaseDonePr pair. New kind PlanRecorded{verified} from plan promote/import-plan/plan verify PASS — silent, lifecycle-publishable, monitor contract 1.6.0 + migration note. Timeline closes implementer spans at PhaseDonePr (mutation proof: removing the closer fails exactly story_1480_interactive_path_claims_work_instead_of_unknown).
+
+    Slice C (acceptance 4), commit 1a0bb1f4cd: PuntFiled starts a parked span like SpecShelved (store NA interval remains the cross-machine park record, events refine locally); MergeHoldChanged{placed:true} → bounded 'awaiting merge' wait cleared by matching release or PrMerged, same label/class as the derived awaiting-merge span so overlap agrees instead of disputing; uncleared hold = note only. Both mutation-proved (each removal fails exactly its own test). Cycle-time note reworded: CI signals come from the local feed AND the published record.
+
+    Acceptance 5 (≤10% unknown) deliberately not measured: per the sketch it must run on specs completed THROUGH the new paths, which ship with this PR; baseline (7d work share 0.09%) stands until new-path completions accumulate.
+
+    Evidence: 13 new fixture tests; 95 module regressions green; check-ci-fast 17 gates green on both commits.
+  created_at: 2026-10-03T03:34:59.380423614Z
+  modified_at: 2026-10-03T03:34:59.380423614Z
+  session_id: cb79afe6-1a86-4a40-9f0a-fbb0a431ca36
 history:
 - id: 01a0e346-3f80-7321-99e7-c3edaf383f34
   author: aida-session-start
