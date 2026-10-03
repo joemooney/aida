@@ -124,6 +124,7 @@ pub(crate) fn is_code_file(path: &str) -> bool {
 // trace:STORY-684 trace:BUG-622
 pub(crate) fn refusal<'a, I>(
     role: &str,
+    role_source: &str,
     staged_paths: I,
     auto_complete: bool,
     solo_active: bool,
@@ -152,13 +153,13 @@ where
     if code_files.is_empty() {
         return None;
     }
-    Some(build_refusal_message(&code_files))
+    Some(build_refusal_message(&code_files, role_source))
 }
 
 /// Build the operator-facing refusal text. Kept separate so the wording is
 /// unit-testable and the decision logic stays terse.
 // trace:STORY-684
-fn build_refusal_message(code_files: &[&str]) -> String {
+fn build_refusal_message(code_files: &[&str], role_source: &str) -> String {
     let mut shown = code_files.to_vec();
     shown.sort_unstable();
     shown.dedup();
@@ -172,7 +173,7 @@ fn build_refusal_message(code_files: &[&str]) -> String {
     // stays legible under any terminal profile without routing through the glyph
     // registry. trace:STORY-684
     format!(
-        "Refusing commit: you are in the ADVISOR seat (AIDA_SESSION_ROLE=advisor) and \
+        "Refusing commit: you are in the ADVISOR seat (role decided by {role_source}) and \
 this commit stages code.\nThe advisor seat does specs, routing, and review -- not \
 implementation. Staged code:\n{}{}\nPick one:\n  \
 - aida role enter implementer              : switch hats and implement it yourself\n  \
@@ -281,7 +282,7 @@ fn staged_paths(root: &Path, include_unstaged: bool) -> Vec<String> {
 /// false because git has already staged everything by the time the hook runs.
 // trace:STORY-684
 pub(crate) fn enforce_at_commit(root: &Path, include_unstaged: bool) -> anyhow::Result<()> {
-    let role = crate::effective_role_with_roster().0;
+    let (role, role_source) = effective_role_for_commit(root);
     let auto_complete = std::env::var("AIDA_AUTO_COMPLETE")
         .map(|v| !v.is_empty())
         .unwrap_or(false);
@@ -295,6 +296,7 @@ pub(crate) fn enforce_at_commit(root: &Path, include_unstaged: bool) -> anyhow::
     let paths = staged_paths(root, include_unstaged);
     if let Some(msg) = refusal(
         &role,
+        &role_source,
         paths.iter().map(String::as_str),
         auto_complete,
         solo,
@@ -306,12 +308,138 @@ pub(crate) fn enforce_at_commit(root: &Path, include_unstaged: bool) -> anyhow::
     Ok(())
 }
 
+/// A worktree lease describes the session doing this checkout's work, so it
+/// takes precedence over the machine-wide team roster for this commit gate.
+/// Outside a leased worktree the established roster → env → default order
+/// remains in effect.
+// trace:BUG-1792 | ai:codex
+fn effective_role_for_commit(root: &Path) -> (String, &'static str) {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| root.to_path_buf());
+    effective_role_for_commit_at(root, &cwd)
+}
+
+fn effective_role_for_commit_at(root: &Path, cwd: &Path) -> (String, &'static str) {
+    effective_role_for_commit_with_fallback(root, cwd, crate::effective_role_with_roster())
+}
+
+fn effective_role_for_commit_with_fallback(
+    root: &Path,
+    cwd: &Path,
+    fallback: (String, crate::team::RoleSource),
+) -> (String, &'static str) {
+    if let Some(role) = crate::active_lease_for_cwd(root, cwd).and_then(|lease| lease.role) {
+        if !role.trim().is_empty() {
+            return (
+                crate::canonical_role_name(role.trim()),
+                "worktree session lease",
+            );
+        }
+    }
+    let (role, source) = fallback;
+    role_with_source(role, source)
+}
+
+fn role_with_source(role: String, source: crate::team::RoleSource) -> (String, &'static str) {
+    let source = match source {
+        crate::team::RoleSource::Roster => "shared team roster",
+        crate::team::RoleSource::Env => "AIDA_SESSION_ROLE environment",
+        crate::team::RoleSource::Default => "default role",
+    };
+    (role, source)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn refuse(role: &str, paths: &[&str]) -> Option<String> {
-        refusal(role, paths.iter().copied(), false, false, false, false)
+        refusal(
+            role,
+            "test source",
+            paths.iter().copied(),
+            false,
+            false,
+            false,
+            false,
+        )
+    }
+
+    #[test]
+    fn refusal_identifies_role_source() {
+        let message = refusal(
+            "advisor",
+            "shared team roster",
+            ["src/main.rs"],
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(message.contains("role decided by shared team roster"));
+    }
+
+    #[test]
+    fn worktree_lease_role_takes_precedence_over_roster_role() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let worktree = root.join("worker");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let sessions = root.join(".aida/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join("lease-1.toml"),
+            format!("id='lease-1'\nscope='BUG-1'\nslug='bug-1'\nowner='test'\nworktree_path='{}'\nbranch='bug-1'\nstarted_at='2026-01-01T00:00:00Z'\nhostname='test'\nrole='implementer'\n", worktree.display()),
+        ).unwrap();
+        let user = crate::current_user_id(None);
+        let store = root.join(".aida-store");
+        let registry = store.join("registry");
+        std::fs::create_dir_all(&registry).unwrap();
+        let roster = crate::team::TeamRoster {
+            members: [(user.clone(), "advisor".to_string())]
+                .into_iter()
+                .collect(),
+        };
+        std::fs::write(
+            registry.join("team.toml"),
+            toml::to_string(&roster).unwrap(),
+        )
+        .unwrap();
+        let roster_role = crate::team::effective_role_for_user(&store, &user);
+        assert_eq!(
+            roster_role,
+            ("advisor".into(), crate::team::RoleSource::Roster)
+        );
+        let leased_role =
+            effective_role_for_commit_with_fallback(root, &worktree, roster_role.clone());
+        assert_eq!(
+            leased_role,
+            ("implementer".into(), "worktree session lease")
+        );
+        assert!(refusal(
+            &leased_role.0,
+            leased_role.1,
+            ["src/implementation.rs"],
+            false,
+            false,
+            false,
+            false,
+        )
+        .is_none());
+
+        let operator_role = effective_role_for_commit_with_fallback(root, root, roster_role);
+        assert_eq!(operator_role, ("advisor".into(), "shared team roster"));
+        let message = refusal(
+            &operator_role.0,
+            operator_role.1,
+            ["src/implementation.rs"],
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(message.contains("role decided by shared team roster"));
     }
 
     // ── file classification ──
@@ -410,6 +538,7 @@ mod tests {
         assert!(
             refusal(
                 "advisor",
+                "test source",
                 ["src/main.rs"].into_iter(),
                 true,
                 false,
@@ -426,6 +555,7 @@ mod tests {
         assert!(
             refusal(
                 "advisor",
+                "test source",
                 ["src/main.rs"].into_iter(),
                 false,
                 true,
@@ -442,6 +572,7 @@ mod tests {
         assert!(
             refusal(
                 "advisor",
+                "test source",
                 ["src/main.rs"].into_iter(),
                 false,
                 false,
@@ -463,6 +594,7 @@ mod tests {
         assert!(
             refusal(
                 "advisor",
+                "test source",
                 ["src/main.rs"].into_iter(),
                 false,
                 false,
@@ -482,6 +614,7 @@ mod tests {
         assert!(
             refusal(
                 "advisor",
+                "test source",
                 ["src/main.rs"].into_iter(),
                 false,
                 false,
