@@ -688,8 +688,7 @@ exec /usr/bin/git "$@"
         project_root.display()
     );
     std::fs::write(&mock_git, mock_script).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&mock_git, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::mark_executable(&mock_git).unwrap();
 
     let mut new_path = mock_dir.path().to_string_lossy().into_owned();
     if let Ok(old_path) = std::env::var("PATH") {
