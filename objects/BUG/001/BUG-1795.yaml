@@ -1,0 +1,44 @@
+id: 01a10352-9ed5-71b2-a719-2145090d8ca9
+spec_id: BUG-1795
+agreed_id: BUG-1795
+title: queue list's toon/agent and JSON fast-path emitters silently ignore --batch/--tag/--tag-prefix/scope filters
+description: |
+  From TASK-1574 intake (AIDA-57 item 1, measured in aida-relay 2026-10-01, re-verified here 2026-10-03 on aida 0.15.0 e1422ae139).
+
+  SYMPTOM, re-measured today: `aida queue list --for implementer --batch this-batch-does-not-exist` returns the identical 12-row queue as no filter at all. The filter is silently ignored.
+
+  MECHANISM (traced, current source):
+  - The real filter chain — scope/status (queue_cmd.rs:~1938), `--batch` (TASK-229, :1961), `--tag` (:1973), `--tag-prefix` (:1985) — lives only in the human-format branch.
+  - The TOON/agent emitter (queue_cmd.rs:~1641-1740, fields `{id,title,status,for_role,reviewer_state}`) filters ONLY by role and terminal-status. Agents get this branch BY DEFAULT (piped output), so every agent-run verification of a groom/batch is false.
+  - The BUG-616/618 cache-fast JSON branch (behind queue_list_json_requested, :~1522) returns before the filter chain too — the relay team's original fingerprint.
+
+  CLASS, not instance: --batch, --tag, --tag-prefix, --scope/status are all bypassed in both non-human branches.
+
+  WHY IT MATTERS: /aida-backlog-groom step 6 names `aida queue list --batch NAME` as the verification that a groom landed; an operator or agent cannot distinguish a correct groom from a broken one.
+
+  ANSWERED (the relay's open question, by code read, NOT by draining): `aida queue work --batch` does NOT share the bypass — resolve_batch_members_with_context (lib.rs:99438) enforces `batch:NAME` tag match at lib.rs:99509 and applies the BUG-1017 fresh-pickup policy (done specs not re-drained) and BUG-1120 (guided/operator modes skipped). Batch-scoped drains are safe; only the LIST views lie.
+
+  ACCEPTANCE:
+  1. All four filters (--batch, --tag, --tag-prefix, scope/status) take effect in every output format: human, toon/agent, --json fast path.
+  2. `--batch does-not-exist` returns count 0 in all three formats (test each).
+  3. The fast paths may implement filtering their own way, but a shared test pins list-parity: same filter args → same member set across formats.
+  4. Mutation-proof one direction per format (remove the filter application → test fails).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:51:48.693477250Z
+modified_at: 2026-10-03T19:51:48.693477250Z
+req_type: Bug
+tags:
+- agent-output
+- filters
+- queue
+filed_at:
+  code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
