@@ -7,18 +7,33 @@ description: |-
 
   BLOCKING — no witness: the spec's acceptance sketch requires 'a doctor probe or test witnesses this' and the PR body itself flags the bug-protocol test requirement as MISSING. Extract the path composition in session_start (target.join("worktrees").join(wt_name)) into a pure helper and unit-test it: two distinct worktree names yield distinct dirs, and the shim body (render_session_env_file already has a test seam) contains target/worktrees/<name>. Prove the test fails without the fix by reverting the session_start hunk.
   Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T11:14:32.300269078Z
-modified_at: 2026-10-03T11:14:32.300269078Z
+modified_at: 2026-10-03T11:27:24.868799227Z
 req_type: Task
 tags:
 - carried-from:BUG-1783
 - finding-hash:55c6a4d3
 - from-review:BUG-1783
 - kind:carried-forward
+comments:
+- id: 01a10184-d4e1-7ae0-8b9d-9b3b9d8684ea
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Addressed in merged BUG-1783 head bd265fc3: path composition extracted to pure helper isolate_cargo_target_dir (lib.rs 42766) with unit tests test_isolate_cargo_target_dir_appends_worktree_name (two distinct names -> distinct dirs) and ..._falls_back_on_missing_name in statusline_tests.rs 5582/5602.'
+  created_at: 2026-10-03T11:27:24.868799227Z
+  modified_at: 2026-10-03T11:27:24.868799227Z
+  session_id: 830bc57c-1e7c-4a1a-b596-9e812ffd3f27
+history:
+- id: 01a10184-d4f8-7921-b1cc-b45aa03fa146
+  author: joe
+  timestamp: 2026-10-03T11:27:24.920405309Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c980a7937637ee228b687375b47549f35b49fbd3
   branch: main
