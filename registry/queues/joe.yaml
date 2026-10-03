@@ -12,3 +12,11 @@
   note: Promoted from finding TASK-1-197 via `aida findings promote`
   added_at: 2026-10-03T19:26:02.083054612Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a10350-e89c-7271-bcb4-95ddb0068054
+  position: 29000
+  added_by: joe
+  note: auto-queued by `session end` (01a1032b); covers 1 spec
+  added_at: 2026-10-03T19:50:02.372479592Z
+  for_role: reviewer
+  added_by_machine: imac
