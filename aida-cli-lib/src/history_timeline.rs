@@ -273,7 +273,9 @@ fn norm_status(s: &str) -> String {
         .collect()
 }
 
-fn is_status(s: &str, want: &str) -> bool {
+// Shared with the aggregate cycle-time view (STORY-1479), which must agree
+// with this module about what "Completed" is.
+pub(crate) fn is_status(s: &str, want: &str) -> bool {
     norm_status(s) == norm_status(want)
 }
 
@@ -1383,8 +1385,7 @@ pub(crate) fn collect_store_markers(
             spec_id
         );
     }
-    let mut markers: Vec<StoreMarker> = Vec::new();
-    let mut unparsed = 0usize;
+    let mut touches: Vec<(crate::history::CommitMeta, String, String)> = Vec::new();
     // Oldest first.
     for commit in commits.iter().rev() {
         let changed = crate::history::run_git(
@@ -1406,48 +1407,73 @@ pub(crate) fn collect_store_markers(
             if path.is_empty() || !path.starts_with("objects/") || !path.ends_with(".yaml") {
                 continue;
             }
-            let after = crate::history::git_show_blob(store_path, &commit.sha, path).ok();
-            let before =
-                crate::history::git_show_blob(store_path, &format!("{}^", commit.sha), path).ok();
-            let Ok(at) = DateTime::parse_from_rfc3339(&commit.iso_timestamp) else {
-                unparsed += 1;
-                continue;
-            };
-            let at = at.with_timezone(&Utc);
-            let mut decoded = Vec::new();
-            crate::history::decode_into_events(
-                commit,
-                status,
-                path,
-                before.as_deref(),
-                after.as_deref(),
-                &mut decoded,
-            );
-            for ev in decoded {
-                match ev.kind {
-                    crate::history::EventKind::Added { .. } => {
-                        // The filed status comes from the added revision's own
-                        // YAML in this same snapshot; it is never assumed to
-                        // have been Draft.
-                        let filed = after
-                            .as_deref()
-                            .and_then(yaml_status)
-                            .unwrap_or_else(|| "(unrecorded)".to_string());
-                        markers.push(StoreMarker {
-                            at,
-                            sha: commit.sha.clone(),
-                            kind: StoreMarkerKind::Filed { status: filed },
-                        });
-                    }
-                    crate::history::EventKind::StatusChange { from, to } => {
-                        markers.push(StoreMarker {
-                            at,
-                            sha: commit.sha.clone(),
-                            kind: StoreMarkerKind::Status { from, to },
-                        });
-                    }
-                    _ => {}
+            touches.push((commit.clone(), status.to_string(), path.to_string()));
+        }
+    }
+    let mut fetch =
+        |rev: &str, path: &str| crate::history::git_show_blob(store_path, rev, path).ok();
+    let markers = markers_from_touches(&touches, &mut fetch, &mut notes);
+    Ok((markers, notes))
+}
+
+/// Decode store markers from an already-known, oldest-first list of
+/// `(commit, name-status letter, object path)` touches. Shared by the
+/// per-spec collector above and the aggregate cycle-time view (STORY-1479),
+/// whose single whole-branch `--name-status` walk supplies the touches for
+/// many specs without a per-spec `git log`/`git show` pair — the decoding
+/// itself stays this one function, so the two views cannot disagree about
+/// what a filing or a transition is. `fetch_blob` is `(rev, path) → body`
+/// so the aggregate view can serve blobs from one long-lived
+/// `git cat-file --batch` instead of a process per touch.
+// trace:STORY-1479 | ai:claude
+pub(crate) fn markers_from_touches(
+    touches: &[(crate::history::CommitMeta, String, String)],
+    fetch_blob: &mut dyn FnMut(&str, &str) -> Option<String>,
+    notes: &mut Vec<String>,
+) -> Vec<StoreMarker> {
+    let mut markers: Vec<StoreMarker> = Vec::new();
+    let mut unparsed = 0usize;
+    for (commit, status, path) in touches {
+        let after = fetch_blob(&commit.sha, path);
+        let before = fetch_blob(&format!("{}^", commit.sha), path);
+        let Ok(at) = DateTime::parse_from_rfc3339(&commit.iso_timestamp) else {
+            unparsed += 1;
+            continue;
+        };
+        let at = at.with_timezone(&Utc);
+        let mut decoded = Vec::new();
+        crate::history::decode_into_events(
+            commit,
+            status,
+            path,
+            before.as_deref(),
+            after.as_deref(),
+            &mut decoded,
+        );
+        for ev in decoded {
+            match ev.kind {
+                crate::history::EventKind::Added { .. } => {
+                    // The filed status comes from the added revision's own
+                    // YAML in this same snapshot; it is never assumed to
+                    // have been Draft.
+                    let filed = after
+                        .as_deref()
+                        .and_then(yaml_status)
+                        .unwrap_or_else(|| "(unrecorded)".to_string());
+                    markers.push(StoreMarker {
+                        at,
+                        sha: commit.sha.clone(),
+                        kind: StoreMarkerKind::Filed { status: filed },
+                    });
                 }
+                crate::history::EventKind::StatusChange { from, to } => {
+                    markers.push(StoreMarker {
+                        at,
+                        sha: commit.sha.clone(),
+                        kind: StoreMarkerKind::Status { from, to },
+                    });
+                }
+                _ => {}
             }
         }
     }
@@ -1458,7 +1484,7 @@ pub(crate) fn collect_store_markers(
             unparsed
         ));
     }
-    Ok((markers, notes))
+    markers
 }
 
 fn parse_store_log(log: &str, notes: &mut Vec<String>) -> Vec<crate::history::CommitMeta> {

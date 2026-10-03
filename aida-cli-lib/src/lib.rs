@@ -190,8 +190,10 @@ mod history_layout;
 mod history_cache;
 // trace:STORY-1478 | ai:claude — per-spec work/wait/unknown timeline.
 mod history_timeline;
+// trace:STORY-1479 | ai:claude — aggregate cycle-time breakdown over completed specs.
 mod human_audit;
 mod human_cmd;
+mod metrics_cycle_time;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;
