@@ -137,3 +137,57 @@ fn bug_1668_prompt_notes_trivial_only_passes() {
     assert!(prompt.contains("[PASSED (exit 0)] `git --version`"));
     assert!(!prompt.contains("trivial and verifies nothing"));
 }
+
+/// BUG-1781: Standard wrapper commands unwrapping
+#[cfg(unix)]
+#[test]
+fn bug_1781_wrappers_escalate_properly() {
+    // These escalate because their payloads are trivial
+    let verdict = run("## Acceptance\n- [ ] `sh -c true`\n", None);
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.summary.contains(TRIVIAL_ONLY_SUMMARY));
+
+    let verdict = run("## Acceptance\n- [ ] `env true`\n", None);
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.summary.contains(TRIVIAL_ONLY_SUMMARY));
+
+    let verdict = run("## Acceptance\n- [ ] `/bin/true`\n", None);
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.summary.contains(TRIVIAL_ONLY_SUMMARY));
+
+    let verdict = run("## Acceptance\n- [ ] `env VAR=1 sh -c 'true'`\n", None);
+    assert_eq!(verdict.overall_verdict, "escalated");
+    assert!(verdict.summary.contains(TRIVIAL_ONLY_SUMMARY));
+
+    // A genuinely nontrivial payload still approves
+    let verdict = run(
+        "## Acceptance\n- [ ] `sh -c \"git --version\"`\n- [ ] `true`\n",
+        None,
+    );
+    assert_eq!(verdict.overall_verdict, "approved");
+    assert!(!verdict.summary.contains(TRIVIAL_ONLY_SUMMARY));
+}
+
+/// BUG-1781: Check edge cases for wrapper unwrap
+#[test]
+fn bug_1781_wrapper_logic_edge_cases() {
+    assert!(is_trivial_command("sh -c true"));
+    assert!(is_trivial_command("sh -c 'true'"));
+    assert!(is_trivial_command("/bin/true"));
+    assert!(is_trivial_command("env VAR=1 true"));
+    assert!(is_trivial_command("env VAR=1 sh -c true"));
+    assert!(is_trivial_command("nohup nice env /bin/true"));
+
+    // Nested wrappers should be recursively unwrapped
+    assert!(is_trivial_command("sh -c \"env VAR=1 true\""));
+
+    // Flags before -c should be skipped
+    assert!(is_trivial_command("sh -x -c true"));
+
+    // Quotes after an env wrapper should be stripped
+    assert!(is_trivial_command("env VAR=1 'true'"));
+
+    // Genuinely nontrivial wrapped commands
+    assert!(!is_trivial_command("sh -c \"git log\""));
+    assert!(!is_trivial_command("env VAR=1 cargo test"));
+}

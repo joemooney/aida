@@ -416,14 +416,68 @@ pub const TRIVIAL_COMMAND_WORDS: &[&str] = &[
     "true", ":", "echo", "printf", "test", "[", "cat", "ls", "exit", "sleep", "pwd",
 ];
 
+/// Standard command wrappers that are unwrapped during trivial-command classification
+/// to prevent evasion of the trivial check via trivial payload wrapping.
+// trace:BUG-1781 | ai:antigravity
+pub const TRIVIAL_COMMAND_WRAPPERS: &[&str] = &[
+    "env", "nice", "nohup", "timeout", "sh", "bash", "dash", "zsh",
+];
+
 /// True when `command`'s first whitespace-split word is in
 /// [`TRIVIAL_COMMAND_WORDS`]. An empty command is trivial too.
+/// Standard wrappers (like `env`, `sh -c`, `nohup`) and path prefixes are peeled
+/// away before checking the list.
 // trace:BUG-1668 | ai:claude
+// trace:BUG-1781 | ai:antigravity
 pub fn is_trivial_command(command: &str) -> bool {
-    match command.split_whitespace().next() {
-        Some(first) => TRIVIAL_COMMAND_WORDS.contains(&first),
-        None => true,
+    let mut words = command.split_whitespace();
+    let mut current = words.next();
+
+    while let Some(word) = current {
+        let unquoted = word.trim_matches(|c| c == '\'' || c == '"');
+        let basename = unquoted.rsplit('/').next().unwrap_or(unquoted);
+
+        match basename {
+            "nice" | "nohup" | "timeout" => {
+                current = words.next();
+                continue;
+            }
+            "sh" | "bash" | "dash" | "zsh" => {
+                let mut found_c = false;
+                for next_word in words.by_ref() {
+                    if next_word == "-c" {
+                        found_c = true;
+                        break;
+                    }
+                }
+
+                if found_c {
+                    if let Some(payload_first) = words.next() {
+                        current = Some(payload_first);
+                        continue;
+                    }
+                }
+                return false;
+            }
+            "env" => {
+                current = None;
+                for next_word in words.by_ref() {
+                    if !next_word.contains('=') {
+                        current = Some(next_word);
+                        break;
+                    }
+                }
+                if current.is_some() {
+                    continue;
+                } else {
+                    return false;
+                }
+            }
+            _ => return TRIVIAL_COMMAND_WORDS.contains(&basename),
+        }
     }
+
+    true
 }
 
 /// Summary line used when every passed executable check is trivial.
