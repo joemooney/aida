@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T23:05:49.231905547Z
-modified_at: 2026-10-02T23:05:54.241115894Z
+modified_at: 2026-10-03T08:40:14.050277701Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,3 +30,10 @@ relationships:
   target_id: 01a0e379-fde8-7261-b0a8-4957d9558167
   created_at: 2026-10-02T23:05:54.241112856Z
   created_by: joe
+comments:
+- id: 01a100eb-c5e2-7152-a144-fc3014a8c0c4
+  author: joe
+  content: 'ADVISOR (session #13, 2026-10-03): HOLD on PR #2357 STANDS. New head 2fa3aabf is only a merge of origin/main into bug-1690 (union of RecordingForge is_draft with TASK-1552 fields); spec_is_draft_only_tagged and bug_1690_undraft_reuse_tests.rs are byte-identical to the held tip 5fbd75c13b (verified by diff). The hold condition — a NEW commit making spec_is_draft_only_tagged fail CLOSED — remains unmet. No re-review until that lands.'
+  created_at: 2026-10-03T08:40:14.050277701Z
+  modified_at: 2026-10-03T08:40:14.050277701Z
+  session_id: 07536013-6404-4481-ad2b-6d7e5611c18d
