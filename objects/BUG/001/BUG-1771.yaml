@@ -116,14 +116,6 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Done
-filed_at:
-  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 6b6263ef-7534-4ca6-873c-25ab949a24ae
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T05:30:22.671175779Z

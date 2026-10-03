@@ -59,14 +59,6 @@ processing_record:
   agent: advisor
   commit_sha: 9d215d742bfa4b18da4f8f61e2241a5e7295a14b
   summary: Completed via merge 9d215d74
-filed_at:
-  code_sha: 2779659ec636e12e5076c52efedf61147fbcd850
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: fe09d7678e
-  vendor: antigravity
-  session: 36d8236a-e4eb-4af0-8043-25d75751b21d
 implementation_info:
   implemented: false
   completed_at: 2026-10-02T21:51:19.977776001Z

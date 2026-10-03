@@ -26,11 +26,3 @@ relationships:
   target_id: 01a0df0b-ae41-7031-bc31-6425ece75175
   created_at: 2026-10-03T00:37:32.922013144Z
   created_by: joe
-filed_at:
-  code_sha: ad7ecdb79b7dde72fb1b37165ba4d31a0f56471e
-  branch: task-1550-work
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: d5b1957658
-  vendor: antigravity
-  session: 12540508-66a6-4ecc-8c45-2c357657fc9c

@@ -89,13 +89,6 @@ history:
     old_value: Done
     new_value: Completed
 execution_mode: drain
-filed_at:
-  code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 8bd9fbb3d6
-  vendor: codex
 implementation_info:
   implemented: true
   test_coverage_notes: |-

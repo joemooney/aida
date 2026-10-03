@@ -25,16 +25,7 @@ created_at: 2026-10-03T00:55:51.688625132Z
 modified_at: 2026-10-03T00:55:55.483910743Z
 req_type: Story
 relationships:
-- rel_type:
-    custom: implements
+- rel_type: !Custom implements
   target_id: 01a0e873-ba47-7cd0-9ed5-ac4edb2ea337
   created_at: 2026-10-03T00:55:55.483907699Z
   created_by: joe
-filed_at:
-  code_sha: 652988516774b0fcffbadd15f7bbc4083ea0a25c
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: d5b1957658
-  vendor: antigravity
-  session: e459708a-7d33-4dff-a162-385b0d7034b2

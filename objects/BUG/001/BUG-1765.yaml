@@ -207,14 +207,6 @@ processing_record:
   commit_sha: 1751f6eec5b3cfb2aa4bd0641d7bef7cd90e4f9d
   summary: 'Independent cross-vendor codex review (static): probe only adds liveness, TTL backstop and lock paths unchanged, decision-level tests witness the fix. Non-blocking: no test for an aged stale holder-table entry.'
   review_verdict: approved
-filed_at:
-  code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 9d040115-a2e5-4c27-bbcd-7d48337f3273
 implementation_info:
   implemented: false
   completed_at: 2026-10-02T21:40:19.259331940Z

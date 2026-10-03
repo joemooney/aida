@@ -423,14 +423,6 @@ processing_record:
   commit_sha: 8a6608bc1c4431ea9d2087663a52037c6370441f
   summary: Completed via merge 8a6608bc
 execution_mode: drive
-filed_at:
-  code_sha: b04601845909f555a23c71fa3548fc5c967d8659
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: b046018459
-  vendor: antigravity
-  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
 implementation_info:
   implemented: false
   completed_at: 2026-09-28T20:17:48.930037262Z

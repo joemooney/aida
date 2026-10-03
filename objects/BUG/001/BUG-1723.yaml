@@ -287,14 +287,6 @@ processing_record:
   commit_sha: d5b19576580b61e1535bfd961e9a78d86a56e47c
   summary: 'Independent advisor review of PR 2345: docs+guard only; guard wired and mutation-proven; detector idiom coverage independently confirmed; AC4 amendments verified on TASK-1499 and BUG-1679; macOS/Windows reds tracked by BUG-1776/1777.'
   review_verdict: approved
-filed_at:
-  code_sha: 0c3ef5cb6b8d45bb15924642fe6d8d5b3bf7e933
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 0c3ef5cb6b
-  vendor: antigravity
-  session: a1b56cce-0ca3-42c2-8ccf-ff605a280cc4
 implementation_info:
   implemented: false
   completed_at: 2026-10-02T21:51:19.670998725Z

@@ -112,7 +112,6 @@ comments:
   created_at: 2026-10-02T19:03:21.472427573Z
   modified_at: 2026-10-02T19:03:21.472427573Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
-  relayed_from: advisor
 - id: 01a0fdff-f49c-7b83-9f72-bb3e000d4373
   author: claude-product
   content: |
@@ -184,7 +183,6 @@ comments:
   created_at: 2026-10-02T19:05:35.136727379Z
   modified_at: 2026-10-02T19:05:35.136727379Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
-  relayed_from: advisor
 - id: 01a0fe16-3052-7782-b051-b54989d221e7
   author: codex-reviewer
   content: |-
@@ -206,7 +204,6 @@ comments:
   created_at: 2026-10-02T19:27:42.162289104Z
   modified_at: 2026-10-02T19:27:42.162289104Z
   session_id: 30cb7925-b218-482f-9ec3-0d0693dfbef5
-  relayed_from: reviewer
 - id: 01a0fe35-0071-72e3-8c40-c9c32e805162
   author: claude-product
   content: |

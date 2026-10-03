@@ -97,8 +97,7 @@ tags:
 - auto-complete
 - orchestrator
 relationships:
-- rel_type:
-    custom: implemented-by
+- rel_type: !Custom implemented-by
   target_id: 01a0fc7c-f7b8-7250-96d7-46bd1072e02e
   created_at: 2026-10-02T12:00:53.039321364Z
   created_by: joe
@@ -130,14 +129,6 @@ processing_record:
   agent: aida
   commit_sha: 5a560f7aad3a0150ebcce4724daa9e7af1e0a322
   summary: Completed via merge 5a560f7a
-filed_at:
-  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 150b90a6-1a01-4ac8-abd7-f51bd5fc364a
 implementation_info:
   implemented: false
   completed_at: 2026-10-02T15:10:27.574781554Z

@@ -28,10 +28,3 @@ history:
 deferred: true
 deferred_at: 2026-10-02T06:46:08.543991191Z
 deferred_until: tomorrow
-filed_at:
-  code_sha: dc3b03058ebb7a643db1b03cde6c98ac8a53ca20
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity

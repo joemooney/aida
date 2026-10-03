@@ -203,13 +203,6 @@ processing_record:
   commit_sha: 4679b544ceb292688f969d02791d8689a3f37869
   summary: Completed via merge 4679b544
 execution_mode: drain
-filed_at:
-  code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 6d0d20a762
-  vendor: codex
 implementation_info:
   implemented: true
   test_coverage_notes: |-

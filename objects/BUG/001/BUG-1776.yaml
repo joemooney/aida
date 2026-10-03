@@ -42,12 +42,12 @@ description: |
   immediate work. Also observed while triaging: the SCHEDULED nightly run on main has
   been `cancelled` four days running (2026-09-29..10-02), so the nightly tracking-issue
   automation never fires; the only completed cross-platform runs are PR-triggered.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:08:45.792442925Z
-modified_at: 2026-10-03T06:31:30.548433664Z
+modified_at: 2026-10-03T06:31:38.642806346Z
 req_type: Bug
 tags:
 - cross-platform

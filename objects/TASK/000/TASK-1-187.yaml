@@ -83,14 +83,6 @@ processing_record:
   commit_sha: 7268c61cd730cd8399c3c75edea5aab6cedb5e2a
   summary: 'APPROVED. All 7 acceptance criteria met, verified by execution not by reading. Tests: --lib bypass_confirm ''test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 7287 filtered out''; --lib confirm_bypass ''ok. 1 passed; 0 failed'' (AC7, Decision matrix untouched and absent from the diff). Non-vacuity proven independently by reinstating the old function body: 3 of 5 new tests failed for the right reasons -- preserves_non_bypass_permission_mode_values (left ["next"] vs right ["--permission-mode","acceptEdits","next"], the filed over-strip finding), preserves_unpaired_bypass_tokens_and_trailing_permission_flag (left ["tail"], collateral over-strip), strips_equals_bypass_and_preserves_equals_non_bypass (equals-form bypass survived, the fail-open direction). Restored clean, re-confirmed 8/8. The other two tests pass either way and are correctly regression-preservation for AC1-first-half and AC4. AC5 and AC6 both genuinely covered: a bare bypassPermissions positional and a trailing valueless --permission-mode are both asserted preserved, no panic. fmt clean. Clippy''s only hit in the file is line 49 (pre-existing identical-branches in resolve()), not a changed line. Literal check: every string in the diff is an argv flag token, zero operator-facing prose, and the two eprintln! call sites live in lib.rs which the diff does not touch. FOLLOW-ON, not a blocker: the detector in gate_agent_bypass (lib.rs:28903-28910) matches only the bare token, so it never fires on the equals form; decide() short-circuits to Proceed and no confirmation is requested, making the new equals-form arm unreachable from the real call path. Grep confirms --permission-mode=bypassPermissions is handled nowhere else in the crate, and lib.rs:29787 help text advertises that exact spelling to operators. Filed separately; this change is strictly better than the status quo.'
   review_verdict: approved
-filed_at:
-  code_sha: ad76e9e46f42c9ce35589ad7c4b7c541cee74884
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: 2166ffe1f5
-  vendor: antigravity
-  session: 7121c883-8051-4f5d-bccc-4953b9b1748d
 implementation_info:
   implemented: false
   completed_at: 2026-09-28T21:41:09.000785822Z

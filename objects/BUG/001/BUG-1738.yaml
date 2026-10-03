@@ -211,11 +211,3 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-filed_at:
-  code_sha: 181bbf4c35cd8da3e146dbf8aa44253bf2ec86e9
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7d85a8057d
-  vendor: antigravity
-  session: 08266c5d-f39e-4334-b87d-f481a6ba1b02

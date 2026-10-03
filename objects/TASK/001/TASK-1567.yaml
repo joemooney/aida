@@ -141,14 +141,6 @@ processing_record:
   commit_sha: 652988516774b0fcffbadd15f7bbc4083ea0a25c
   summary: 'Protobuf-mirror drift gate: delete-before-compare with absence/tracked/dirty preconditions; 3-mutation proof + negative control in the PR; codex index-anchored-diff blocker verified and demoted (CI checkout has index==HEAD); step executed+passed in ubuntu job 110922761308.'
   review_verdict: approved
-filed_at:
-  code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 4dbc7b5e-a08e-4242-b502-dcb152ac27f5
 implementation_info:
   implemented: false
   completed_at: 2026-10-03T00:45:53.981923518Z

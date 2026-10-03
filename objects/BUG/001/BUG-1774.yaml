@@ -119,14 +119,6 @@ processing_record:
   commit_sha: 7c7db5f60f02efa5e038b4d2ca63771ad47859a6
   summary: 'Independent review of PR #2360 at 2b6a3af141: corpus-derived merge chokepoint wired into all three Forge providers; fail-closed on unknown head and unreadable artifact; AC3 release cases verified by re-running both mutation directions locally (Ok(None)->Clear fails exactly the two hold tests; release arm broken fails exactly the two release tests); mirrors armed only from the gate''s own CorpusArm; recusal non-displacement proven at the new caller. 16/16 module tests, 225 merge_hold/forge lib tests, check-ci-fast 17/17, CI Build green at this head.'
   review_verdict: approved
-filed_at:
-  code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: fe09d7678e
-  vendor: antigravity
-  session: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
 implementation_info:
   implemented: false
   completed_at: 2026-10-03T04:21:21.296635065Z

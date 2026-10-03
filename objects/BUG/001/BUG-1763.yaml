@@ -79,8 +79,7 @@ created_at: 2026-10-02T03:41:29.241583054Z
 modified_at: 2026-10-03T04:20:46.041631147Z
 req_type: Bug
 relationships:
-- rel_type:
-    custom: implemented-by
+- rel_type: !Custom implemented-by
   target_id: 01a0ff32-cbcc-7663-bfa0-548a8425574c
   created_at: 2026-10-03T00:38:54.438245768Z
   created_by: joe
@@ -141,14 +140,6 @@ processing_record:
   commit_sha: 976c008cb11ecf596aeb88f20f6a9c08fa8c3456
   summary: 'PR #2361 approved: branch arm narrowed to unmerged-only, merged-ness via forge (--state merged, head-keyed), fail-open on probe failure, lazy probe, bypass chain intact; AC1-8 witnessed by tests, CI Build green'
   review_verdict: approved
-filed_at:
-  code_sha: 9a9993bcee35f415eafeabb439b88bfa028be810
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 1d7813fc-728c-4a86-bee2-03e780d5b022
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T00:38:57.784400214Z

@@ -86,10 +86,3 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
-filed_at:
-  code_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 6d0d20a762
-  vendor: codex

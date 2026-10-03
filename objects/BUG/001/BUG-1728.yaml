@@ -149,11 +149,3 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
-filed_at:
-  code_sha: 7d85a8057d6ab4aaf62b3426db351c94ecd93a34
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: 7d85a8057d
-  vendor: antigravity
-  session: bbb293b3-f4f2-43f8-8826-e8243d458597

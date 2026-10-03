@@ -251,14 +251,6 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
-filed_at:
-  code_sha: 0cfa45fc848540063cc4df1035ffc85030cb5649
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: f3cde6e60e
-  vendor: antigravity
-  session: 2f2ab833-51fe-47ff-8f5d-d73c37ec27d8
 implementation_info:
   implemented: true
   implemented_at: 2026-10-02T23:08:46.861035903Z

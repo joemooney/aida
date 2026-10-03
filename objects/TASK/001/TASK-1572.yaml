@@ -13,11 +13,3 @@ req_type: Task
 tags:
 - list
 - status-lens
-filed_at:
-  code_sha: ed26522695f1bfa9b73c42221a2904e47a19cc16
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: d5b1957658
-  vendor: antigravity
-  session: 05aca398-12b9-4f85-8d34-61b3f3d760a9
