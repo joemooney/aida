@@ -518,6 +518,7 @@ mod tests {
         );
     }
 
+    // trace:BUG-1777 | ai:codex
     #[test]
     fn raw_home_lookup_scan_catches_std_home_multiline_and_decoy_exemptions() {
         let temp = tempfile::tempdir().unwrap();
@@ -532,8 +533,12 @@ mod tests {
         std::fs::write(src.join("other.rs"), "std::env::var_os(\n \"HOME\"\n);\n").unwrap();
         let found = raw_home_lookup_offenders(temp.path());
         assert_eq!(found.len(), 2, "{found:#?}");
-        assert!(found.iter().any(|p| p.ends_with("foo/home.rs:1")));
-        assert!(found.iter().any(|p| p.ends_with("other.rs:1")));
+        assert!(found
+            .iter()
+            .any(|p| p.replace('\\', "/").ends_with("foo/home.rs:1")));
+        assert!(found
+            .iter()
+            .any(|p| p.replace('\\', "/").ends_with("other.rs:1")));
     }
 
     /// The shared `aida-core` resolvers follow the redirected home too, so a

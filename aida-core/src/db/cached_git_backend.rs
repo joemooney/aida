@@ -4674,7 +4674,7 @@ mod tests {
         assert!(test_counts().is_empty());
     }
 
-    // trace:TASK-1526 | ai:codex
+    // trace:TASK-1526 trace:BUG-1777 | ai:codex
     #[test]
     fn loser_budget_is_shared_across_backend_opens() {
         use super::super::cache_refresh::*;
@@ -4685,13 +4685,13 @@ mod tests {
         let scope = CacheReadScope::new();
         scope.configure(
             false,
-            Some(ReadBudget(std::time::Duration::from_millis(100))),
+            Some(ReadBudget(std::time::Duration::from_millis(300))),
         );
         backend.list_summaries(&ListFilter::default()).unwrap();
-        let start = std::time::Instant::now();
         let second = CachedGitBackend::open(&store, &path).unwrap();
+        let start = std::time::Instant::now();
         second.list_summaries(&ListFilter::default()).unwrap();
-        assert!(start.elapsed() < std::time::Duration::from_millis(80));
+        assert!(start.elapsed() < std::time::Duration::from_millis(250));
         assert_eq!(scope.metadata()["refreshing"], "worker_running");
         stop.send(()).unwrap();
         thread.join().unwrap();

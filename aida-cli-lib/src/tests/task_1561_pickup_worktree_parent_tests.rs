@@ -64,12 +64,19 @@ fn unset_key_preserves_the_historical_sibling_path_byte_for_byte() {
 
 // AC1 — an absolute configured parent captures the pickup path. This is the
 // placement the warm-pool fallback used to ignore.
+// trace:BUG-1777 | ai:codex
 #[test]
 fn absolute_configured_parent_captures_the_pickup_path() {
-    let (_dir, root) = project_with_config(Some(&config("/trusted/aida-worktrees")));
+    let (dir, root) = project_with_config(None);
+    let trusted = dir.path().join("trusted").join("aida-worktrees");
+    std::fs::write(
+        root.join(".aida").join("config.toml"),
+        config(&trusted.to_string_lossy()),
+    )
+    .unwrap();
     assert_eq!(
         pickup_worktree_path(&root, "bug-1743").unwrap(),
-        PathBuf::from("/trusted/aida-worktrees/repo-bug-1743")
+        trusted.join("repo-bug-1743")
     );
 }
 
@@ -126,9 +133,16 @@ fn tilde_configured_parent_expands_through_the_shared_home_resolver() {
 // AC3, caller 2 of 3 — `resolve_pickup_workspace` (the auto-complete phase-1
 // fallback) derives its path from the same resolver, so it inherits the key.
 // Needs a real repo because it also resolves a free branch name.
+// trace:BUG-1777 | ai:codex
 #[test]
 fn resolve_pickup_workspace_inherits_the_configured_parent() {
-    let (_dir, root) = project_with_config(Some(&config("/trusted/aida-worktrees")));
+    let (dir, root) = project_with_config(None);
+    let trusted = dir.path().join("trusted").join("aida-worktrees");
+    std::fs::write(
+        root.join(".aida").join("config.toml"),
+        config(&trusted.to_string_lossy()),
+    )
+    .unwrap();
     let status = std::process::Command::new("git")
         .arg("-C")
         .arg(&root)
@@ -138,7 +152,7 @@ fn resolve_pickup_workspace_inherits_the_configured_parent() {
     assert!(status.success(), "git init");
 
     let (path, branch) = resolve_pickup_workspace(&root, "BUG-1743", "auto").unwrap();
-    assert_eq!(path, PathBuf::from("/trusted/aida-worktrees/repo-bug-1743"));
+    assert_eq!(path, trusted.join("repo-bug-1743"));
     assert_eq!(branch, "bug-1743");
 }
 

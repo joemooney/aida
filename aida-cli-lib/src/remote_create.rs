@@ -3054,6 +3054,11 @@ host = \"should.not.count\"
         assert!(s.contains("--dry-run") && s.contains(" -n "));
     }
 
+    // This integration seam executes a POSIX `/bin/sh` hook; native Windows
+    // runners do not provide `/bin/sh`. The script remains covered on Windows
+    // by `mirror_hook_script_is_a_posix_best_effort_shim` above.
+    // trace:BUG-1777 | ai:codex
+    #[cfg(unix)]
     #[test]
     fn mirror_hook_forwards_dry_run_spellings_as_preview_only() {
         let tmp = tempfile::tempdir().unwrap();

@@ -21,6 +21,7 @@ fn doctor_envelope_carries_error_and_performance_audits() {
 // `cargo test` the resolver returns target/<profile>/deps/<runner>, so the
 // binary sits two levels up.
 // trace:BUG-1745 | ai:codex
+// trace:BUG-1777 | ai:codex
 fn built_aida_binary() -> std::path::PathBuf {
     let runner = crate::resolve_aida_exe();
     // Prove the resolver handed back THIS build's test runner before deriving a
@@ -36,10 +37,7 @@ fn built_aida_binary() -> std::path::PathBuf {
          a different binary; unset it and re-run",
         runner.display()
     );
-    let binary = deps
-        .parent()
-        .expect("deps has a target/<profile> parent")
-        .join("aida");
+    let profile_dir = deps.parent().expect("deps has a target/<profile> parent");
     // `deps` alone only narrows; it cannot prove ownership, since an honored
     // AIDA_BIN override could in principle sit under some other build's `deps`.
     // CARGO_MANIFEST_DIR is baked in at compile time and no environment variable
@@ -48,6 +46,22 @@ fn built_aida_binary() -> std::path::PathBuf {
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("the crate directory sits inside the workspace root");
+    let binary_name = format!("aida{}", std::env::consts::EXE_SUFFIX);
+    // The cross-platform workflow prebuilds release artifacts before running
+    // debug test binaries; local `cargo test` builds only the current profile.
+    let mut candidates = vec![
+        checkout.join("target/release").join(&binary_name),
+        profile_dir.join(&binary_name),
+    ];
+    if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
+        let target_dir = std::path::PathBuf::from(target_dir);
+        candidates.insert(0, target_dir.join("release").join(&binary_name));
+        candidates.push(target_dir.join(profile_dir.file_name().unwrap()).join(&binary_name));
+    }
+    let binary = candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| profile_dir.join(&binary_name));
     let is_in_checkout = binary.starts_with(checkout);
     let is_in_target_dir = std::env::var_os("CARGO_TARGET_DIR")
         .map(|dir| binary.starts_with(std::path::PathBuf::from(dir)))

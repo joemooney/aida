@@ -1118,7 +1118,7 @@ fn clear_missing_worktree_registration(
         let Ok(gitdir) = std::fs::read_to_string(admin_dir.join("gitdir")) else {
             continue;
         };
-        if std::path::Path::new(gitdir.trim()) == expected_gitdir {
+        if worktree_gitdir_matches(gitdir.trim(), &expected_gitdir) {
             if worktree_path.exists() {
                 return RegistrationClearOutcome::Declined;
             }
@@ -1138,6 +1138,31 @@ fn clear_missing_worktree_registration(
         }
     }
     RegistrationClearOutcome::NoRegistration
+}
+
+// Windows' Git for Windows and `std::fs::canonicalize` can spell the same
+// worktree with different separator, case, or `\\?\` prefix forms. The path
+// is already constrained to an absolute path from this lease; normalize those
+// Windows spelling differences before matching the stale administrative link.
+// trace:BUG-1777 | ai:codex
+fn worktree_gitdir_matches(recorded: &str, expected: &std::path::Path) -> bool {
+    #[cfg(windows)]
+    {
+        let key = |path: &str| {
+            let path = path.replace('\\', "/");
+            let path = path
+                .strip_prefix("//?/UNC/")
+                .map(|unc| format!("//{unc}"))
+                .or_else(|| path.strip_prefix("//?/").map(str::to_string))
+                .unwrap_or(path);
+            path.trim_end_matches('/').to_ascii_lowercase()
+        };
+        return key(recorded) == key(&expected.to_string_lossy());
+    }
+    #[cfg(not(windows))]
+    {
+        std::path::Path::new(recorded) == expected
+    }
 }
 
 /// Does local branch `branch` still point at `tip`? `None` (never pinned) or

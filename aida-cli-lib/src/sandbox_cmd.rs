@@ -489,7 +489,7 @@ mod tests {
     /// BUG-1695: a bare retry would hide a genuine leak, so the give-up error
     /// names what survived. Pins the bound as well: exactly `attempts` passes,
     /// never an unbounded loop.
-    // trace:BUG-1695 | ai:claude
+    // trace:BUG-1695 trace:BUG-1777 | ai:claude+codex
     #[test]
     fn remove_tree_is_bounded_and_names_what_survived() {
         let tmp = TempDir::new().unwrap();
@@ -514,7 +514,7 @@ mod tests {
             calls, SANDBOX_REMOVE_ATTEMPTS,
             "bounded at {SANDBOX_REMOVE_ATTEMPTS} passes, not {calls}"
         );
-        let msg = err.to_string();
+        let msg = err.to_string().replace('\\', "/");
         assert!(
             msg.contains("still present:"),
             "the give-up error must diagnose itself, got: {msg}"
@@ -552,7 +552,7 @@ mod tests {
     /// that happened to clear within three passes would leave no trace at all.
     /// So a successful retry reports the pass count and names what blocked the
     /// pass that failed.
-    // trace:BUG-1695 | ai:claude
+    // trace:BUG-1695 trace:BUG-1777 | ai:claude+codex
     #[test]
     fn a_successful_retry_is_not_silent_and_names_what_blocked_it() {
         let tmp = TempDir::new().unwrap();
@@ -583,7 +583,7 @@ mod tests {
             1,
             "exactly one diagnostic for the one race, got {reports:?}"
         );
-        let msg = &reports[0];
+        let msg = reports[0].replace('\\', "/");
         assert!(
             msg.contains("needed 2 of 3 passes"),
             "it must state how many passes the removal took, got: {msg}"
