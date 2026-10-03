@@ -33,12 +33,12 @@ description: |
      note the fixture-shape trap: chmod vs symlink-out trip different clauses),
      asserts the read SUCCEEDS with a stale label, and fails against the shipped
      `?` (mutation-proven both directions).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:12:30.302363871Z
-modified_at: 2026-10-02T21:41:30.220256681Z
+modified_at: 2026-10-03T07:02:05.668102374Z
 req_type: Bug
 tags:
 - cache
@@ -52,3 +52,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a10091-ec54-7552-ad8e-09be411484d8
+  author: aida-auto-bump
+  timestamp: 2026-10-03T07:02:05.652323052Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a10091-ec64-76a1-8e3b-34a2a8d38a1f
+  timestamp: 2026-10-03T07:02:05.668100252Z
+  agent: implementer
+  commit_sha: fd7437abe917015cf3cee4ae7012f188a210eb30
+  summary: Completed via merge fd7437ab
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T07:02:05.652284579Z
+  completion_sha: fd7437abe917015cf3cee4ae7012f188a210eb30
