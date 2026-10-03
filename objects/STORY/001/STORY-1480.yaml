@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-10-03T22:30:32.389956477Z
+modified_at: 2026-10-03T22:41:56.732272363Z
 req_type: Story
 tags:
 - aida:history
@@ -132,6 +132,58 @@ comments:
   created_at: 2026-10-03T05:20:18.256697898Z
   modified_at: 2026-10-03T05:20:18.256697898Z
   session_id: 12540508-66a6-4ecc-8c45-2c357657fc9c
+- id: 01a103ee-61fc-72c2-bf79-b354ace747ab
+  author: joe
+  content: |-
+    Advisor reconciliation (2026-10-03): PR #2367 MERGED 2026-10-03T05:17Z at merge commit ecfd9affc313 (on origin/main, trailer STORY-1480), independent review verdict approved recorded 05:17Z (.aida/review-verdicts/STORY-1480.json), all checks green. Spec was stale at in-progress because the squash merge hid ancestry and the merge commit was already local before the done flip, so the pull-time auto-bump never saw it as new. Flipping done→completed directly; evidence above is what the auto-bump would have required. Note for EPIC-73: acceptance 5 (≤10% unknown re-measurement) is by design a post-merge measurement on specs completed THROUGH the new paths — re-run view: metrics-cycle-time
+    schema_version: 1
+    since: "2026-09-26T22:39:47.071Z"
+    until: ""
+    as_of: "2026-10-03T22:39:47.071Z"
+    completed_in_window: 229
+    included: 219
+    partial_coverage: 0
+    work_s: 19666.720
+    wait_s: 14770907.361
+    unknown_s: 8872905.919
+    elapsed_s: 23663480.000
+    activities[7]{activity,class,count,p50_s,p90_s,total_s}:
+      implementer,work,26,10.985,1219.995,19666.720
+      queued,wait,267,10424.000,136788.000,12672942.001
+      awaiting approval,wait,141,47.000,16691.000,1769683.000
+      parked,wait,37,5550.000,15385.421,255007.924
+      awaiting merge,wait,13,1662.677,13888.304,73274.436
+      unexplained,unknown,225,7037.128,70868.000,8863978.265
+      disputed,unknown,1,8927.654,8927.654,8927.654
+    ci_red: 10
+    ci_runs: 26
+    reviewer_bounced: 0
+    reviewer_reviewed: 0
+    implementer_passes_avg: 0.146
+    shelves: 13
+    shelved_total_s: 255007.924
+    slowest[5]{id,elapsed_s,dominant_activity,dominant_pct}:
+      STORY-1385,700364.000,queued,50.2
+      STORY-1386,699737.000,unexplained,49.9
+      BUG-1535,637331.000,unexplained,61.6
+      STORY-1479,622153.000,unexplained,56.0
+      BUG-1556,602029.000,unexplained,63.5
+    excluded[10]{id,reason}:
+      BUG-1534,no drain events on this machine (work likely ran elsewhere)
+      BUG-1684,no drain events on this machine (work likely ran elsewhere)
+      BUG-1817,no drain events on this machine (work likely ran elsewhere)
+      STORY-1382,no drain events on this machine (work likely ran elsewhere)
+      STORY-1427,no drain events on this machine (work likely ran elsewhere)
+      STORY-1462,no drain events on this machine (work likely ran elsewhere)
+      STORY-1464,no drain events on this machine (work likely ran elsewhere)
+      STORY-1491,no drain events on this machine (work likely ran elsewhere)
+      TASK-1-187,no drain events on this machine (work likely ran elsewhere)
+      TASK-1554,no drain events on this machine (work likely ran elsewhere)
+    notes[1]{note}:
+      forge timestamps are not consulted by this aggregate view; CI signals come from the local drain feed and each spec's published timing record after a batch of new completions.
+  created_at: 2026-10-03T22:41:56.732272363Z
+  modified_at: 2026-10-03T22:41:56.732272363Z
+  session_id: cfca8ab5-1095-4c8e-84e9-efb0fe97ac1e
 history:
 - id: 01a0e346-3f80-7321-99e7-c3edaf383f34
   author: aida-session-start
