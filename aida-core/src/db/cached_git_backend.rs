@@ -545,8 +545,25 @@ impl CachedGitBackend {
                         }
                     }
                     if cache_refresh::read_policy().0 && !budget.0.is_zero() {
-                        self.ensure_cache_fresh()?;
-                        return Ok(None);
+                        // One bounded attempt only: the pre-C inline rebuild a
+                        // TTY reader performs must not park in the SQLite
+                        // retry ladder behind a live writer (~25 s, then a
+                        // hard error — past ADR-53's 5 s interaction
+                        // ceiling). On write-lock contention this winner
+                        // degrades to the same reader protocol as every
+                        // other caller: file the durable request, spawn the
+                        // detached worker, and serve the committed snapshot
+                        // with a stale label. A free lock keeps the inline
+                        // rebuild (and its fresh result) unchanged.
+                        // trace:BUG-1674 | ai:claude
+                        let attempt = super::cache::ReadRefreshAttempt::new();
+                        let result = self.ensure_cache_fresh();
+                        drop(attempt);
+                        match result {
+                            Ok(()) => return Ok(None),
+                            Err(e) if !super::cache::is_cache_lock_error(&e) => return Err(e),
+                            Err(_) => return self.file_and_spawn_refresh(),
+                        }
                     }
                     // The request is filed while the flock is still held, so
                     // no reader ever observes a free lock with no pending
@@ -3832,6 +3849,60 @@ mod tests {
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert_eq!(scope.metadata()["stale"], false);
         assert_eq!(test_counts().get("full_rebuild"), Some(&1));
+    }
+
+    /// BUG-1674's ceiling shape: a TTY reader whose stale cache needs a FULL
+    /// rebuild while a live foreign writer holds the SQLite write lock. The
+    /// inline rebuild gets exactly one bounded attempt — never the ~25 s
+    /// retry ladder followed by a hard error — and the winner degrades to
+    /// the reader protocol: durable request filed, labelled committed
+    /// snapshot served, exit success.
+    // trace:BUG-1674 | ai:claude
+    #[test]
+    fn tty_full_rebuild_winner_bounded_behind_live_writer() {
+        use super::super::cache_refresh::*;
+        use super::super::refresh_request;
+        let dir = tempdir().unwrap();
+        let (backend, store, path) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&store, "gen1");
+        backend.cache().set_source_head_sha("").unwrap();
+        let holder = rusqlite::Connection::open(&path).unwrap();
+        holder.execute_batch("BEGIN IMMEDIATE").unwrap();
+        let scope = CacheReadScope::new();
+        scope.configure(true, None);
+        test_counts();
+        let start = std::time::Instant::now();
+        let rows = backend.list_summaries(&ListFilter::default()).unwrap();
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(5),
+            "a contended TTY read must stay bounded, took {:?}",
+            start.elapsed()
+        );
+        assert_eq!(rows.len(), 3);
+        assert!(
+            rows.iter().any(|r| r.title == "gen0"),
+            "served the committed snapshot"
+        );
+        // cfg(test) refuses the detached spawn, so the filed request reports
+        // Deferred; outside tests this is Requested with a live worker.
+        assert_eq!(scope.metadata()["refreshing"], "deferred");
+        assert_eq!(scope.metadata()["stale"], true);
+        let counts = test_counts();
+        assert_eq!(counts.get("full_rebuild"), Some(&1), "one attempt");
+        assert_eq!(counts.get("retry_sleep"), None, "never entered the ladder");
+        let request = refresh_request::load(&path)
+            .expect("the contended winner must leave a durable refresh request");
+        assert_eq!(
+            request.target_head,
+            crate::git_ops::head_sha(&store).unwrap()
+        );
+        holder.execute_batch("ROLLBACK").unwrap();
+        // With the writer gone the next strict refresh restores freshness.
+        backend.rebuild_cache().unwrap();
+        let scope = CacheReadScope::new();
+        let rows = backend.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(scope.metadata()["stale"], false);
+        assert!(rows.iter().any(|r| r.title == "gen1"));
     }
 
     // trace:TASK-1526 | ai:codex
