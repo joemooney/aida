@@ -15,10 +15,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:59:54.517765581Z
-modified_at: 2026-10-03T04:59:59.579511815Z
+modified_at: 2026-10-03T09:00:15.836637148Z
 req_type: Bug
 relationships:
 - rel_type: References
   target_id: 01a0db2e-4812-7643-a970-9072d8614ccb
   created_at: 2026-10-03T04:59:59.579507067Z
   created_by: joe
+comments:
+- id: 01a100fe-1c5c-7f51-b784-c599b293b60b
+  author: joe
+  content: 'Advisor triage 2026-10-03: verified WORK_PHASES (history_timeline.rs:47) and the skip at :664; emitter-side inherited-role slug claim consistent with session_start. ACs 1-3 adopted as filed; AC1''s either/or must be decided explicitly in the PR (one mechanism, not both). Note: STORY-1480 AC5 measurement stays blocked until this lands or is accounted for in the measurement window (AC3). Approving.'
+  created_at: 2026-10-03T09:00:15.836637148Z
+  modified_at: 2026-10-03T09:00:15.836637148Z
+  session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
