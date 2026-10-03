@@ -1,0 +1,33 @@
+id: 01a103e6-4edb-7f83-83a7-f7876c73e725
+spec_id: STORY-1517
+agreed_id: STORY-1517
+title: 'Review PR-2396: [AI:codex] fix(awaiting): query shipped sibling evidence lazily (TASK-1575)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-1575`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2396>
+  - Branch: `task-1575` → `main`
+
+  ## Covers
+
+  - TASK-1575
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2396` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T22:33:07.547659810Z
+modified_at: 2026-10-03T22:33:07.547659810Z
+req_type: Story
+filed_at:
+  code_sha: dc237ef5b214eaf85203c65fd062b44153d07c08
+  branch: task-1575
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
