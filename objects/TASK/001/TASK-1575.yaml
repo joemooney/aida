@@ -64,7 +64,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:02:47.325576068Z
-modified_at: 2026-10-03T22:48:30.170531461Z
+modified_at: 2026-10-03T23:52:00.420332543Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -78,6 +78,11 @@ comments:
   content: 'Implementation on branch task-1575: pass-1 Counted(0) branches are retained as same-spec merged-evidence carriers; pass 2 queries them only for specs with survivors and marks the bounded scan incomplete when required carrier evidence cannot be fetched. Added a fixture proving both detector paths suppress the stale ancestor; mutation run with carrier queries disabled failed as expected. Targeted tests: carrier fixture, lazy per-head operation-count pin, starvation fixture, and truncation-honesty fixture passed; cargo fmt and git diff --check passed.'
   created_at: 2026-10-03T22:22:11.604264097Z
   modified_at: 2026-10-03T22:22:11.604264097Z
+- id: 01a1042e-86a4-7f12-b112-a469beca6d45
+  author: joe
+  content: 'Rework for PR #2396 at 8f448c153e: moved count-based evidenced truncation ahead of incomplete-carrier filtering so filtering cannot promote never-evidenced survivors; the no-snapshot carrier branch now marks the scan incomplete. Added both targeted regression tests. Finding-1 pin was red before the ordering fix (reported TASK-1582 without its --head query), then green after; snapshot-none incomplete pin passed. Existing carrier fixture, lazy per-head operation-count, starvation, and truncation-honesty tests passed; cargo fmt and git diff --check passed. Pushed to the same PR branch.'
+  created_at: 2026-10-03T23:52:00.420332543Z
+  modified_at: 2026-10-03T23:52:00.420332543Z
 history:
 - id: 01a0fffa-efcd-7443-907a-499e5ae89031
   author: joe
