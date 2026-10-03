@@ -11,12 +11,12 @@ description: |
   - Provide a cutover manifest and fixture/test matrix for unknown repos, alternate/stale/copied clients, repo-A to repo-B grants/transcripts/artifacts, untrusted host principals, scheduled/watch expiry, and rollback. State any host facts/permissions that need Joe's separate approval and any unresolved feasibility mismatch.
   - Link the independently signed BUG-1669 sketch/advisor amendments M1-M5 and TASK-1549 ADR, without claiming protection is deployed.
   Out of scope: modifying launch code or host services, enrolling projects, installing VMs/broker, moving credentials, disabling existing user jobs, or waiving human/merge gates.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:34:45.887469118Z
-modified_at: 2026-09-27T12:39:04.552936586Z
+modified_at: 2026-10-03T00:25:42.446568696Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -29,3 +29,11 @@ comments:
   content: 'PROXY DEPENDENCY NOTE (orchestrator for Joe): TASK-1550 acceptance requires linking the TASK-1549 ADR. Added explicit blocked-by edge so host-wide inventory/cutover work cannot be queued or marked ready before that ADR exists. This records sequencing only; no new host-policy or deployment decision.'
   created_at: 2026-09-27T12:39:04.552936586Z
   modified_at: 2026-09-27T12:39:04.552936586Z
+history:
+- id: 01a0ff27-052e-7152-8f2f-7218ae01a1c9
+  author: aida-session-start
+  timestamp: 2026-10-03T00:25:42.446568054Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
