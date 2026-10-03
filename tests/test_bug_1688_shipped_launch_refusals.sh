@@ -57,7 +57,16 @@ for script in \
     assert_refused "$script" "disabled because it launches a full-access vendor"
 done
 
-# trace:BUG-1784 | ai:codex
+# trace:BUG-1784 | ai:antigravity
+claude_shim_dir="$tmp/claude-shim"
+mkdir -p "$claude_shim_dir"
+cat > "$claude_shim_dir/claude" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$0 $*" >> "$AIDA_VENDOR_CALL_LOG"
+SH
+chmod +x "$claude_shim_dir/claude"
+PATH="$claude_shim_dir:$PATH"
+export PATH
 assert_refused_py "$ROOT/bench/agent-surface/run_bench.py" "disabled because it launches a full-access vendor directly" matrix
 assert_refused_py "$ROOT/bench/agent-surface/run_bench.py" "disabled because it launches a full-access vendor directly" run --condition cli --task foo
 
@@ -91,4 +100,4 @@ fi
 echo 'Disposition: scripts/aida-demo.sh = manual queue walkthrough + refused Claude self-test.'
 echo 'Disposition: gate-vs-rule.sh and gate-vs-rule-i2.sh through i4.sh = typed exit-78 refusal.'
 echo 'Audit: no other shipped shell script contains either full-access launch flag.'
-echo 'BUG-1688: all five shipped script fixtures refused; vendor launch count = 0'
+echo 'BUG-1688: all seven refusal surfaces refused; vendor launch count = 0'

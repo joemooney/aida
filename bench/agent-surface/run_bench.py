@@ -492,7 +492,7 @@ RESEED_PER_RUN_TASKS = {"chained_followup"}
 
 
 def cmd_matrix(args):
-    # trace:BUG-1784 | ai:codex
+    # trace:BUG-1784 | ai:antigravity
     print("ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: bench matrix is disabled because it launches a full-access vendor directly.", file=sys.stderr)
     sys.exit(78)
     conditions = load_json("conditions.json")
@@ -532,7 +532,7 @@ def cmd_matrix(args):
 
 
 def cmd_run(args):
-    # trace:BUG-1784 | ai:codex
+    # trace:BUG-1784 | ai:antigravity
     print("ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: bench run is disabled because it launches a full-access vendor directly.", file=sys.stderr)
     sys.exit(78)
     conditions = load_json("conditions.json")
