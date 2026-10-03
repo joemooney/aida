@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1728",
+  "publishes": [
+    {
+      "at": "2026-10-03T19:38:49.160280155Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-29T15:38:50.807628981Z",
+      "spec": "BUG-1728",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-02T14:21:54.880927148Z",
+      "spec": "BUG-1728",
+      "seat": "reviewer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Planned"
+      }
+    },
+    {
+      "ts": "2026-10-03T12:02:00.419494251Z",
+      "spec": "BUG-1728",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1728",
+        "branch": "bug-1728",
+        "first_seen": "2026-10-03T12:02:00.419448027+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:38:31.969623711Z",
+      "spec": "BUG-1728",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "fd693d089bb320a2d0e268e46a32b9b638bd9b46"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:38:49.152726250Z",
+      "spec": "BUG-1728",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "71ecbbb52c3aa8819c8b9a289e9594c8d70270ec",
+        "pr": 2377,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
