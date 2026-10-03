@@ -15,12 +15,12 @@ description: |
 
   WHAT DOES NOT CHANGE
   `.aida/events.jsonl` format, rotation, and kill switch; objects/ layout (no sibling files in objects shard dirs — the store scanner globs `*.yaml` there); drain emit sites; `aida db sync` mechanics (its `git add -A .` is the backstop that eventually commits any stray record).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T02:37:12.431866097Z
-modified_at: 2026-10-03T02:37:12.431866097Z
+modified_at: 2026-10-03T02:37:34.520982881Z
 req_type: Decision
 tags:
 - aida:history
@@ -30,6 +30,14 @@ relationships:
 - rel_type: Child
   target_id: 01a0db2e-4812-7643-a970-9072d8614ccb
   created_at: 2026-10-03T02:37:26.922349541Z
+history:
+- id: 01a0ff9f-bfb8-7a13-9c3d-bcfa841a3b41
+  author: joe
+  timestamp: 2026-10-03T02:37:34.520980639Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 652988516774b0fcffbadd15f7bbc4083ea0a25c
   branch: main
