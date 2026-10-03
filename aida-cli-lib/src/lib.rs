@@ -18962,18 +18962,24 @@ enum ListStatusFilter {
     NeedsDecision,
 }
 
+// trace:STORY-1023 | ai:codex
+// trace:BUG-1771 | ai:claude — the token set now comes from the shared
+// `status_display::LENS_FILTER_TOKENS` table the git-backend list path and its
+// "Unknown status filter" refusal also read, instead of a second hand-written
+// `match`. The two paths had already drifted once: these tokens worked here and
+// errored on the shipped (distributed-mode) CLI.
 fn parse_list_status_filter(status_str: &str) -> Result<ListStatusFilter> {
-    let normalized: String = status_str
-        .trim()
-        .chars()
-        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
-        .flat_map(char::to_lowercase)
-        .collect();
-    match normalized.as_str() {
-        // trace:STORY-1023 | ai:codex
-        "shelved" => Ok(ListStatusFilter::Shelved),
-        "needsdecision" => Ok(ListStatusFilter::NeedsDecision),
-        _ => parse_status(status_str).map(ListStatusFilter::Stored),
+    match status_display::lens_filter_key(status_str) {
+        Some("Shelved") => Ok(ListStatusFilter::Shelved),
+        Some("NeedsDecision") => Ok(ListStatusFilter::NeedsDecision),
+        // A token in the shared table with no arm here is a wiring gap, not a
+        // stored status — say so rather than letting `parse_status` reject it
+        // with a message that denies the token exists.
+        Some(key) => anyhow::bail!(
+            "status lens '{status_str}' (key '{key}') is accepted by \
+             `aida list --status` but not wired into this listing path"
+        ),
+        None => parse_status(status_str).map(ListStatusFilter::Stored),
     }
 }
 

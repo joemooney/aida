@@ -281,7 +281,11 @@ pub enum ServerCommand {
 
     /// List requirements from server
     List {
-        /// Filter by status
+        /// Filter by status (exact match on a single stored status; the
+        /// server-side filter accepts no comma sets, aliases, or lenses)
+        // trace:BUG-1771 | ai:claude — the REST filter is an exact match on
+        // the Debug-formatted status, so this surface must not advertise the
+        // local list command's set/alias/lens syntax.
         #[clap(long)]
         status: Option<String>,
 
@@ -9327,11 +9331,15 @@ pub enum Command {
         #[clap(value_name = "STATUS", verbatim_doc_comment)]
         shortcut: Option<String>,
 
-        /// Filter by status. Accepts a comma-separated OR set
-        /// (`--status draft,approved`) and the `open` / `closed` aliases:
-        /// `open` = Draft, Approved, Planned, InProgress, NeedsAttention;
-        /// `closed` = Done, Completed, Rejected.
+        /// Filter by status. Accepts a stored status, a comma-separated OR
+        /// set (`--status draft,approved`), the `open` / `closed` aliases
+        /// (`open` = Draft, Approved, Planned, InProgress, NeedsAttention;
+        /// `closed` = Done, Completed, Rejected), and the `shelved` /
+        /// `needs-decision` lenses over the parked (needs-attention) set.
         // trace:TASK-0415 | ai:claude
+        // trace:BUG-1771 | ai:claude — the two lenses were accepted only by the
+        // legacy centralized listing, so this surface could not name them until
+        // the git-backend path learned them.
         #[clap(long)]
         status: Option<String>,
 
