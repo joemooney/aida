@@ -2,13 +2,32 @@ id: 01a10154-30f7-79a0-ab57-e25867c8ce45
 spec_id: TASK-1577
 agreed_id: TASK-1577
 title: Cleanup target/worktrees/<name> upon session end
-description: ''
+description: |
+  `aida session start` isolates each session worktree's cargo build output into the parent checkout's `target/worktrees/<worktree-dir-name>` (`isolate_cargo_target_dir`, BUG-1783) and bakes that path into the worktree's `.aida/session-env.sh`. `aida session end` removes the worktree and lease but never that directory, so every ended session leaves a multi-GB stale build tree behind in the parent's `target/` (see also the host discipline "reclaim disk via worktree targets").
+
+  Make `aida session end` clean up the session's isolated target directory.
+
+  ACCEPTANCE CRITERIA
+
+  AC1. After a successful worktree removal, `aida session end` also removes the session's isolated cargo target directory (`<parent-target>/worktrees/<worktree-dir-name>`) when it exists.
+
+  AC2. The deletion is guarded so it can only ever remove an isolated per-worktree directory: the path must end in `worktrees/<name>` where `<name>` is the ended worktree's directory name. `isolate_cargo_target_dir`'s no-file-name fallback returns the PARENT target dir itself — that path must never be deletable. The guard is unit-tested in both directions (accepts the isolated path; refuses the parent/fallback path).
+
+  AC3. Deletion is best-effort: a failure (permission, busy mount, etc.) prints a warning naming the path and does NOT fail the session end — the lease is still deleted and the command still succeeds.
+
+  AC4. No-ops stay silent: a worktree-less lease (BUG-734) and a worktree whose isolated target dir does not exist produce no error and no warning.
+
+  AC5. The Effects preview block names the target directory that will be removed when it exists (same place that today promises `git worktree remove ...`).
+
+  AC6. Design note, implementer's choice with rationale in the commit: derive the path by reading the recorded `CARGO_TARGET_DIR` from the worktree's own `.aida/session-env.sh` (parse_session_env exists) before removal, or recompute via `isolate_cargo_target_dir` from the same inputs session start used. Either way AC2's guard applies to whatever path results.
+
+  AC7. Mutation proof: the covering test fails when the deletion call is removed (prove the test fails without the fix).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T10:34:17.207943821Z
-modified_at: 2026-10-03T10:34:26.478990557Z
+modified_at: 2026-10-03T19:28:34.666127217Z
 req_type: Task
 relationships:
 - rel_type: References
