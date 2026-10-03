@@ -58,7 +58,8 @@ tags:
 - failed-flag-signal
 - returning-user
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e389c-0743-7e90-9573-6675859c9cd8
   created_at: 2026-05-18T01:03:33.850683163Z
   created_by: joe

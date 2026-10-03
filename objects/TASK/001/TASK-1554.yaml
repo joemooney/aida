@@ -19,7 +19,8 @@ created_at: 2026-09-27T17:20:00.790572735Z
 modified_at: 2026-09-28T02:01:39.419121809Z
 req_type: Task
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0e5a1-6769-70e0-8955-99752fb5887b
   created_at: 2026-09-28T01:29:27.068405409Z
   created_by: joe

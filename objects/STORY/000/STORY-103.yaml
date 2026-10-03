@@ -33,39 +33,48 @@ created_at: 2026-05-12T15:01:22.042635935Z
 modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1afc-fc7a-7fd1-b0e4-5113c6ce3dc8
   created_at: 2026-05-12T15:01:24.437402597Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1af9-a4a3-74a0-a7de-a337983a9c44
   created_at: 2026-05-12T15:01:26.489000950Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1abd-d1ca-7be0-8369-58ef2fd82957
   created_at: 2026-05-12T15:01:28.696362917Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1b05-1ae2-78b2-b689-ff036718b194
   created_at: 2026-05-12T15:01:30.694890030Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1ae7-59a5-7513-a3c6-027aa616101d
   created_at: 2026-05-12T15:01:32.883681646Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1ad3-4090-7310-ad61-23d794ab9c2d
   created_at: 2026-05-12T15:01:35.098183637Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e12f7-93b1-7eb3-aeab-1e3b1fed837e
   created_at: 2026-05-12T15:01:37.227020498Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e12f8-7fac-7b00-978b-ea133369a89a
   created_at: 2026-05-12T15:01:39.404610121Z
   created_by: joe
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 019e1543-a707-7ba1-9d1e-ecbec841fabe
   created_at: 2026-05-12T15:01:42.784425961Z
   created_by: joe
