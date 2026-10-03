@@ -38,12 +38,12 @@ description: |
   1. Build (windows-latest) on the Cross-platform workflow is green on a PR whose base is main.
   2. Any test exempted from Windows carries an explicit cfg + comment naming the Windows behavior it
      cannot have, rather than a silent skip.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:33:17.896248217Z
-modified_at: 2026-10-03T06:31:31.871259710Z
+modified_at: 2026-10-03T06:37:33.308808871Z
 req_type: Bug
 tags:
 - ci
