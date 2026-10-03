@@ -3,12 +3,12 @@ spec_id: BUG-1781
 agreed_id: BUG-1781
 title: 'Trivial-criteria guard (BUG-1668) is bypassed by wrapper commands: sh -c true classifies as nontrivial via its first word'
 description: 'Found by the cross-vendor codex review of PR #2355 (BUG-1668), advisor-verified against the code. BUG-1668 AC1 deliberately defines trivial by the command''s FIRST whitespace-split word against a fixed list, so a wrapper form - sh -c true, bash -c true, env true, or an absolute path like /bin/true - classifies as nontrivial. With such a wrapper as the only executable criterion, the Rung-2 auto-approve branch is reachable again: the exact failure BUG-1668 closed, one wrapper away. Mitigation today: the STORY-1476 trust gate means an untrusted command does not run (NotRun escalates), so the bypass requires the operator to have trusted the wrapper command set; this is why it is a follow-up, not a reopen. Acceptance: 1. Classification unwraps the standard wrappers before consulting TRIVIAL_COMMAND_WORDS: env (with VAR=val prefixes), sh/bash/dash/zsh -c (classify the first word of the -c payload), nice/nohup/timeout prefixes, and a path-prefixed command (basename it). Define the unwrap list once, beside TRIVIAL_COMMAND_WORDS, with a doc comment. 2. A wrapper whose payload cannot be confidently extracted stays nontrivial (today''s behaviour) - do not guess. 3. Tests: sh -c true escalates when it is the only passing criterion; env true escalates; /bin/true escalates; sh -c with a genuinely nontrivial payload still approves; mutation proof that disabling the unwrap re-approves the sh -c true case. 4. Do not widen BUG-1668''s list itself; this spec is only about unwrapping. Note: this description deliberately avoids backtick-quoted commands so graded review of this spec does not parse them as executable criteria.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T23:17:40.961747791Z
-modified_at: 2026-10-02T23:41:11.112035072Z
+modified_at: 2026-10-03T13:33:56.169854929Z
 req_type: Bug
 tags:
 - from-review:BUG-1668
@@ -21,3 +21,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a101f8-aa41-7563-a4c8-a07235ead463
+  author: aida-auto-bump
+  timestamp: 2026-10-03T13:33:56.161971281Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a101f8-aa49-7551-8f13-c0ac184134c0
+  timestamp: 2026-10-03T13:33:56.169853148Z
+  agent: aida
+  commit_sha: 7f8be3c392828212204f3791028c6ae29b16a24a
+  summary: Completed via merge 7f8be3c3
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T13:33:56.161945032Z
+  completion_sha: 7f8be3c392828212204f3791028c6ae29b16a24a
