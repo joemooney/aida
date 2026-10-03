@@ -25,7 +25,8 @@ created_at: 2026-09-27T21:00:10.134435787Z
 modified_at: 2026-09-28T02:00:59.753199010Z
 req_type: Task
 relationships:
-- rel_type: !Custom child-of
+- rel_type:
+    custom: child-of
   target_id: 01a0cc94-cd72-7353-8ff8-c4db03f0cbd0
   created_at: 2026-09-27T21:00:41.984616141Z
   created_by: joe

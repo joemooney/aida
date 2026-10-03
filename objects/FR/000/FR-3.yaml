@@ -11,7 +11,8 @@ created_at: 2025-11-25T21:30:08.455035192Z
 modified_at: 2026-05-31T21:36:46.262164594Z
 req_type: Functional
 relationships:
-- rel_type: !Custom sprint_assignment
+- rel_type:
+    custom: sprint_assignment
   target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
   created_at: 2025-12-20T20:28:18.520129345Z
   created_by: Joe Mooney

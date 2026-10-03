@@ -30,11 +30,13 @@ req_type: Story
 tags:
 - release workflow meta-task aida:release
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a490-b00e-7e92-84fe-1f4b2a41506a
   created_at: 2026-09-15T10:15:45.863418824Z
   created_by: joe
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a0a509-6a06-7612-be56-9d9636e56959
   created_at: 2026-09-15T12:27:41.169476810Z
   created_by: joe

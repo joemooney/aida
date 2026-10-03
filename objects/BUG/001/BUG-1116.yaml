@@ -29,7 +29,8 @@ tags:
 - reliability
 - role
 relationships:
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 01a097f6-e959-7fa1-a897-107fe82b2341
   created_at: 2026-09-12T23:32:21.001485026Z
   created_by: joe

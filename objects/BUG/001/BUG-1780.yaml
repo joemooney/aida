@@ -37,12 +37,12 @@ description: |
      shape and passes after (mutation-proven both directions).
   3. The recovery text names the concurrent-fetch cause with "re-run aida pull"
      as the first suggestion, ahead of the diverged/untracked cases.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:53:46.571609440Z
-modified_at: 2026-10-02T21:55:01.404927477Z
+modified_at: 2026-10-03T06:39:03.913511326Z
 req_type: Bug
 tags:
 - cli
@@ -56,3 +56,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1007c-d6e9-7f72-9fcb-9b95d033ccee
+  author: aida-session-start
+  timestamp: 2026-10-03T06:39:03.913510886Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
