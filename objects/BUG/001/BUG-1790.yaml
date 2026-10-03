@@ -1,0 +1,19 @@
+id: 01a101fd-8239-7182-90dd-94df63233db6
+spec_id: BUG-1790
+agreed_id: BUG-1790
+title: char boundary panic in is_default_visible_comment
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T13:39:13.593837287Z
+modified_at: 2026-10-03T13:39:13.593837287Z
+req_type: Bug
+filed_at:
+  code_sha: 2ec18b6144e682de43a7227cb5b8dd96e2343be7
+  branch: fix-bug-1669
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 821f2c6107
+  vendor: antigravity
