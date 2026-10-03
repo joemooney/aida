@@ -10,12 +10,12 @@ description: |-
   2. A test covers an interactive claim under a non-implementer inherited role (e.g. advisor): the resulting timeline attributes the claim-to-PhaseDonePr stretch as work, not unknown.
   3. The AC5 measurement procedure on STORY-1480 notes whether its window predates or spans this fix.
   References: STORY-1480 (AC5), PR #2367, ADR-64.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:59:54.517765581Z
-modified_at: 2026-10-03T09:00:15.836637148Z
+modified_at: 2026-10-03T09:00:17.145897424Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -29,3 +29,11 @@ comments:
   created_at: 2026-10-03T09:00:15.836637148Z
   modified_at: 2026-10-03T09:00:15.836637148Z
   session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
+history:
+- id: 01a100fe-2179-7920-9795-6edb639373f4
+  author: joe
+  timestamp: 2026-10-03T09:00:17.145895731Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
