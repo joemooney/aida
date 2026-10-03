@@ -4822,7 +4822,7 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     findings
 }
 
-// trace:BUG-1796 | ai:codex
+// trace:BUG-1796.ac18732d | ai:codex
 #[cfg(test)]
 mod bug_1796_orphan_store_doctor_tests {
     use super::*;

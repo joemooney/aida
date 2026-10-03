@@ -73601,10 +73601,19 @@ fn pull_skip_warning(message: &str) -> String {
     format!("{} {message}", "Warning:".yellow().bold())
 }
 
+fn pull_code_start_line(branch: &str) -> String {
+    format!("{} {} ← origin", "Pulling code".cyan().bold(), branch)
+}
+
+fn pull_store_start_line() -> String {
+    format!("{} aida-store ← origin", "Pulling store".cyan().bold())
+}
+
 #[cfg(test)]
 mod bug_1796_pull_skip_warning_tests {
-    use super::pull_skip_warning;
+    use super::{pull_code_start_line, pull_skip_warning, pull_store_start_line};
 
+    // trace:BUG-1796.ac5879d3 | ai:codex
     #[test]
     fn skipped_pull_legs_are_labeled_as_warnings() {
         for leg in ["code", "store"] {
@@ -73612,6 +73621,14 @@ mod bug_1796_pull_skip_warning_tests {
             assert!(line.contains("Warning:"), "{line}");
             assert!(line.contains(&format!("skipping {leg} pull")), "{line}");
         }
+    }
+
+    // Pin the ordinary two-leg headings byte-for-byte; only missing-leg output
+    // changed for BUG-1796. trace:BUG-1796.ac09cb6d | ai:codex
+    #[test]
+    fn normal_two_leg_pull_headings_keep_their_legacy_bytes() {
+        assert_eq!(pull_code_start_line("main"), "Pulling code main ← origin");
+        assert_eq!(pull_store_start_line(), "Pulling store aida-store ← origin");
     }
 }
 
@@ -73656,7 +73673,7 @@ fn handle_pull_command(
         } else {
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
-            println!("{} {} ← origin", "Pulling code".cyan().bold(), branch);
+            println!("{}", pull_code_start_line(&branch));
             // STORY-86: snapshot HEAD before pull so the auto-bump scan
             // can range over exactly what landed. None on first ever
             // commit / empty repo — the helper falls back to HEAD~50.
@@ -73980,7 +73997,7 @@ fn handle_pull_command(
         }
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-        println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+        println!("{}", pull_store_start_line());
 
         // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
         // can summarize what landed once it completes. None when the
