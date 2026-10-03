@@ -1,0 +1,30 @@
+id: 01a10333-4d17-7182-bc6e-1024eb8f6404
+spec_id: TASK-1-197
+title: 'AC2: the recording-shim proof never intercepts run_bench.py — AIDA_ABLATION_CLA…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1784, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC2: the recording-shim proof never intercepts run_bench.py — AIDA_ABLATION_CLAUDE/CODEX are not consulted and 'claude' is hard-coded, so the empty-call-log assert cannot witness a bench regression. Add a PATH-prepended 'claude' shim (writing to AIDA_VENDOR_CALL_LOG) around the two assert_refused_py calls so the existing [ -s $calls ] check covers the python paths.
+
+  PR: #2386
+  Reviewed sha: 37885818c8937a0435f6b1d57d55fe17f2c0ee9a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T19:17:36.151604853Z
+modified_at: 2026-10-03T19:17:36.151604853Z
+req_type: Task
+tags:
+- carried-from:BUG-1784
+- finding-hash:14bbdf83
+- from-review:PR-2386
+- kind:carried-forward
+filed_at:
+  code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
