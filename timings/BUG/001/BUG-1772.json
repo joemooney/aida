@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1772",
+  "publishes": [
+    {
+      "at": "2026-10-03T16:05:32.775648129Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-02T17:35:18.921425379Z",
+      "spec": "BUG-1772",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T14:03:18.305182911Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T14:23:38.299930048Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2385
+      }
+    },
+    {
+      "ts": "2026-10-03T14:44:38.067895543Z",
+      "spec": "BUG-1772",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1772",
+        "branch": "bug-1772",
+        "first_seen": "2026-10-03T14:44:38.067835097+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T15:13:49.903589684Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T16:04:50.765235318Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-03T16:05:07.279755895Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-03T16:05:16.929005700Z",
+      "spec": "BUG-1772",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2385
+      }
+    },
+    {
+      "ts": "2026-10-03T16:05:32.763633697Z",
+      "spec": "BUG-1772",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b2bd2da8bd384211af97741fdd2c9ae8631d4e8b",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
