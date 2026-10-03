@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1771",
+  "publishes": [
+    {
+      "at": "2026-10-03T10:07:19.068229471Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-02T14:15:50.063073901Z",
+      "spec": "BUG-1771",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-02T18:35:03.388144404Z",
+      "spec": "BUG-1771",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1771",
+        "branch": "bug-1771-work",
+        "first_seen": "2026-10-02T18:35:03.388087938+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T04:06:38.613566410Z",
+      "spec": "BUG-1771",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2339,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "6ea481398c2d082db816ab4dc000673e742f388a"
+      }
+    },
+    {
+      "ts": "2026-10-03T04:06:39.277588281Z",
+      "spec": "BUG-1771",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Functional fix is correct and well-evidenced (split/widen/narrow with true OR-union semantics, shared LENS_FILTER_TOKENS table, black-box integration tests, both-direction mutation proofs) — but the new --status help text was added to the WRONG command and is false there, while the real surface's help was left silent.",
+        "recovery_hint": "address the review findings, move BUG-1771 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-03T04:34:10.165265391Z",
+      "spec": "BUG-1771",
+      "seat": "product",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "7ffe5767a0"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:07:19.060212144Z",
+      "spec": "BUG-1771",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "99c881dfd2a40ce5f3bd781f635b30c44631574d",
+        "pr": 2339,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
