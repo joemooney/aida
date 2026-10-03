@@ -1,0 +1,20 @@
+id: 01a1004e-86e2-73f0-8104-ba9dfd582e1a
+spec_id: BUG-1787
+agreed_id: BUG-1787
+title: 'Dead assignment: cache.rs empty-migration error arm sets migration_pending=true that the post-match reassignment immediately overwrites'
+description: 'cargo check on main warns unused_assignments at aida-core/src/db/cache.rs:1332 (introduced by BUG-1752, #2311): the read-only/unwritable error arm assigns migration_pending = true, then the line after the match reassigns migration_pending = (outcome == EmptyMigration::NowHasRows), which is also true because the arm returns NowHasRows. Behavior is correct; the inner assignment is dead but the warning now appears in every workspace check (surfaced during aida pull 2026-10-02). Fix: delete the dead assignment (or make the arm the sole assignment site). Acceptance: cargo check --workspace emits no unused_assignments warning for cache.rs; no behavior change (existing migration-pending tests still pass).'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T05:48:28.770432153Z
+modified_at: 2026-10-03T05:48:28.770432153Z
+req_type: Bug
+filed_at:
+  code_sha: 5aa07b0d983d2e1a9a0862c2e88eddecde631e26
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: b2eb8bcb-bd00-406a-ab22-6e3f3f8bc3d7
