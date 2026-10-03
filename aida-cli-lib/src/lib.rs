@@ -38755,9 +38755,15 @@ fn session_start(
     // detect a parent target/, write it into the lease, and drop a
     // `.aida/session-env.sh` shim the user sources after `cd`.
     // trace:STORY-52 | ai:claude
+    // BUG-1783: append worktree-specific subdir so concurrent builds
+    // across main and worktrees don't silently overwrite each other's
+    // artifacts.
+    // trace:BUG-1783 | ai:codex
     let cargo_target_dir = detect_cargo_target_dir(&project_root);
     if let Some(target) = &cargo_target_dir {
-        write_session_env_file(&worktree_path, target).with_context(|| {
+        let wt_name = worktree_path.file_name().unwrap_or_default();
+        let isolated_target = target.join("worktrees").join(wt_name);
+        write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
         })?;
     }
@@ -42753,12 +42759,13 @@ fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::
 
 /// STORY-52: write the worktree-local `.aida/session-env.sh` that the user
 /// sources after `cd`-ing into the session worktree. Sourcing it sets
-/// `CARGO_TARGET_DIR` to the parent's `target/` so cargo reuses that build
-/// cache instead of rebuilding from scratch. The file is written into the
-/// worktree's `.aida/` (created here if it doesn't already exist), which
+/// `CARGO_TARGET_DIR` to the parent's `target/worktrees/<branch>` (BUG-1783) so
+/// cargo reuses the build cache without colliding with main. The file is written
+/// into the worktree's `.aida/` (created here if it doesn't already exist), which
 /// lives alongside the symlinked runtime subdirs (sessions/, roles/,
 /// cache.db, etc.) that `session_start` set up moments earlier.
 /// trace:STORY-52 | ai:claude
+/// trace:BUG-1783 | ai:codex
 fn write_session_env_file(
     worktree_path: &std::path::Path,
     cargo_target_dir: &std::path::Path,
