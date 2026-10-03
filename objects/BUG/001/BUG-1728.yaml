@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T19:37:12.443391376Z
+modified_at: 2026-10-03T19:37:13.749620151Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -196,6 +196,12 @@ comments:
   content: 'Advisor AC4 cross-reference: failure 7 (declined_override_resolves_to_running_executable_before_path) ↔ BUG-1669. Root cause per BUG-1777 (#2375): the test fixture wrote a candidate binary named ''aida'' with no .exe suffix, so Windows resolution could never accept the running-exe candidate; the fixture now uses EXE_SUFFIX and the test passes (runs 37107077548 and 37146160923). Disposition: FIXTURE fix, not a resolver change — but the resolver-side questions this failure surfaced (is_executable accepting any unix execute bit; bare/relative-path resolution order) remain owned by BUG-1669, which is Approved + operator-held; its spec carries the decision/supplement trail. Failure 6 root cause (also from BUG-1777): Git for Windows vs canonicalized paths spelled the same .git registration differently; worktree_gitdir_matches now normalizes before comparing — stated root cause, fixed, not cfg-gated.'
   created_at: 2026-10-03T19:37:12.443391376Z
   modified_at: 2026-10-03T19:37:12.443391376Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
+- id: 01a10345-4515-7681-bd53-c4baab8db325
+  author: joe
+  content: 'Advisor AC5 qualification (recorded per the drain handoff): Family A (the two read-only File::open set_times/set_modified sites, = 4 call sites) is mutation-proved GENERICALLY by the AC2 guard fixtures rather than per-test revert: scripts/check_file_time_portability.py reports all 4 historical sites on the pre-fix tree (verified at 868d19b4ad) and 0 on the current tree, and tests/test_file_time_portability_rule.py re-proves both directions in CI on every run (restores the four File::open forms → 4 findings; writable-handle form → 0). The Windows-only fixture fixes themselves shipped in BUG-1777 (#2375) before this PR; their per-test witness is the baseline-vs-closing comparison (each named baseline failure → ok in runs 37107077548 / 37146160923) rather than a local revert-and-rerun, which is not executable from this Linux host. AC3''s triage answer is on this spec (comments 01a0fcfd / 01a1014b) and cited in the BUG-1777 commit trail.'
+  created_at: 2026-10-03T19:37:13.749620151Z
+  modified_at: 2026-10-03T19:37:13.749620151Z
   session_id: 424cc773-b969-4027-95eb-13a904e9c298
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
