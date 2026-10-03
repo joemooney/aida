@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1668",
+  "publishes": [
+    {
+      "at": "2026-10-03T07:16:26.918959795Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-26T21:29:27.630128387Z",
+      "spec": "BUG-1668",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1668",
+        "branch": "claude/bug-1668",
+        "first_seen": "2026-09-26T21:29:27.630069717+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-02T03:48:57.189381028Z",
+      "spec": "BUG-1668",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T01:27:03.378074732Z",
+      "spec": "BUG-1668",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1668",
+        "branch": "bug-1668",
+        "first_seen": "2026-10-03T01:27:03.378052480+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T07:16:06.703360447Z",
+      "spec": "BUG-1668",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "a3d6ac7250923b7a7be5c8ea4d0ffdc665b31409"
+      }
+    }
+  ]
+}
