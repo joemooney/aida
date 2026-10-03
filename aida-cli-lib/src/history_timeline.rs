@@ -681,6 +681,11 @@ fn phase_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Cand
                 EventKind::PhaseEntered { .. } => same_run,
                 EventKind::CiTerminal { .. } => same_run && slug_l == "ci",
                 EventKind::PrMerged { .. } => same_run && slug_l == "merge",
+                // STORY-1480: the PR opening ends implementer work. In a
+                // drain the next phase entry closes it anyway; this is what
+                // closes the INTERACTIVE claim (both ends empty-run), whose
+                // next lifecycle record is `aida pr`'s PhaseDonePr.
+                EventKind::PhaseDonePr { .. } => same_run && slug_l == "implementer",
                 // A park ends work whoever recorded it; the shelve path does
                 // not always carry the run UUID.
                 EventKind::SpecShelved { .. } => same_run || later.ev.run_uuid.is_empty(),
@@ -2260,6 +2265,97 @@ mod tests {
             .post_completion_spans
             .iter()
             .any(|s| s.start == at("2026-09-25T23:50:00Z")));
+    }
+
+    /// STORY-1480 Slice B: the SAME no-drain shape as TASK-1507, but worked
+    /// after the interactive emitters exist — the queue-work claim records
+    /// `PhaseEntered{implementer}` (empty run), `aida pr`'s creation records
+    /// `PhaseDonePr`, the ship's CI wait records `CiTerminal`, and the merge
+    /// records `PrMerged`. The implementer span and the awaiting-merge wait
+    /// now materialize instead of the whole working day reading unknown.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_interactive_path_claims_work_instead_of_unknown() {
+        let store = vec![
+            filed("2026-09-25T08:15:03Z", "Approved", "bbb00000"),
+            tr(
+                "2026-09-25T10:52:03Z",
+                "Approved",
+                "In Progress",
+                "bbb11111",
+            ),
+            tr(
+                "2026-09-25T23:48:38Z",
+                "In Progress",
+                "Completed",
+                "bbb22222",
+            ),
+        ];
+        let events = vec![
+            // The claim (session_start's Approved → InProgress bump).
+            rec("2026-09-25T10:52:03Z", "", 7100, phase(1, "implementer", 1)),
+            rec(
+                "2026-09-25T13:19:11Z",
+                "",
+                7140,
+                EventKind::UnshippedWorkDetected {
+                    spec: "TASK-1507".into(),
+                    branch: "task-1507".into(),
+                    first_seen: "2026-09-25T13:19:11Z".into(),
+                },
+            ),
+            // `aida pr` opened the PR: the work-done boundary.
+            rec(
+                "2026-09-25T23:20:00Z",
+                "",
+                7180,
+                EventKind::PhaseDonePr { pr: 2190 },
+            ),
+            // The ship's CI wait reached green.
+            rec(
+                "2026-09-25T23:40:30Z",
+                "",
+                7190,
+                EventKind::CiTerminal { green: true },
+            ),
+            rec(
+                "2026-09-25T23:45:00Z",
+                "",
+                7200,
+                EventKind::PrMerged { pr: 2190 },
+            ),
+            rec(
+                "2026-09-25T23:48:40Z",
+                "",
+                7203,
+                EventKind::SpecCompleted {
+                    commit: "bbb22222".into(),
+                    pr: Some(2190),
+                    closed_by: "reconcile-status".into(),
+                },
+            ),
+        ];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+
+        // The claim → PR-open stretch is implementer WORK now.
+        let imp = find(&t, "implementer").expect("an implementer span");
+        assert_eq!(imp.class, SpanClass::Work);
+        assert_eq!(imp.start, at("2026-09-25T10:52:03Z"));
+        assert_eq!(imp.end, at("2026-09-25T23:20:00Z"));
+
+        // PR open → merge is an awaiting-merge wait.
+        let wait = find(&t, "awaiting merge").expect("an awaiting-merge span");
+        assert_eq!(wait.start, at("2026-09-25T23:20:00Z"));
+        assert_eq!(wait.end, at("2026-09-25T23:45:00Z"));
+
+        // The shape that used to be >50% unknown is now mostly attributed.
+        assert!(
+            t.totals.work > t.totals.unknown,
+            "work {} should exceed unknown {} once the interactive path is instrumented",
+            t.totals.work,
+            t.totals.unknown
+        );
     }
 
     /// An in-phase retry is not a park, repeated phases are numbered, and

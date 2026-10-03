@@ -85,6 +85,7 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         | RunCompleted { .. }
         | QueueDrained { .. }
         | UnshippedWorkDetected { .. }
+        | PlanRecorded { .. }
         | GateHeld { .. } => true,
         UnreadMail
         | CompeteOutcome { .. }
@@ -334,6 +335,30 @@ mod tests {
         assert!(matches!(rec.events[1].kind, EventKind::PrMerged { pr: 7 }));
         assert_eq!(rec.publishes.len(), 1);
         assert_eq!(rec.publishes[0].closed_by, "done");
+    }
+
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn plan_recorded_is_lifecycle_evidence_and_publishes() {
+        assert!(lifecycle_publishable(&EventKind::PlanRecorded {
+            verified: false
+        }));
+        let (_g, project, store) = fixture();
+        write_feed(
+            &project,
+            &[ev(
+                "2026-10-01T09:00:00Z",
+                "TASK-11",
+                EventKind::PlanRecorded { verified: true },
+            )],
+        );
+        let path = publish_to_store(&store, &project, "TASK-11", "done").expect("published");
+        let rec: TimingRecord =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(matches!(
+            rec.events[0].kind,
+            EventKind::PlanRecorded { verified: true }
+        ));
     }
 
     // trace:STORY-1480 | ai:claude

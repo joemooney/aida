@@ -38883,6 +38883,31 @@ fn session_start(
         false
     };
 
+    // STORY-1480: the Approved → InProgress bump IS the interactive claim —
+    // emit the same PhaseEntered the drain's implementer phase emits, with an
+    // empty run_uuid (no orchestrator run), so an interactively-worked spec's
+    // timeline gets a work-span start instead of reading unknown. Keyed to
+    // the bump, so a rework re-entry (NeedsAttention → InProgress goes
+    // through other doors) and a re-claim never double-emit.
+    // trace:STORY-1480 | ai:claude
+    if bumped_to_in_progress {
+        events::emit_interactive_lifecycle(
+            &project_root,
+            &[owns.to_string()],
+            &events::EventKind::PhaseEntered {
+                idx: 1,
+                slug: inherited_role
+                    .clone()
+                    .unwrap_or_else(|| "implementer".to_string()),
+                vendor: None,
+                seat: None,
+                model: None,
+                effort: None,
+                attempt: 1,
+            },
+        );
+    }
+
     // STORY-73: human output to stderr, eval-friendly export to stdout when
     // stdout is captured (i.e., the shell wrapper's `eval "$(...)"` is
     // running). Direct invocation (TTY stdout) prints only the human output

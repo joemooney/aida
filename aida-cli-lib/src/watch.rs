@@ -575,6 +575,15 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 "night shift tick".to_string()
             },
         ),
+        // trace:STORY-1480 | ai:claude
+        EventKind::PlanRecorded { verified } => (
+            "plan-recorded",
+            if *verified {
+                "plan verified".to_string()
+            } else {
+                "plan recorded".to_string()
+            },
+        ),
         EventKind::Unknown => (
             "unknown",
             "unrecognized event (newer drain binary?)".to_string(),
