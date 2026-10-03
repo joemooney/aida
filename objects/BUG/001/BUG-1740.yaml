@@ -103,12 +103,12 @@ description: |
 
   - Recovering BUG-1693's and BUG-1688's stranded WIP is queue hygiene and needs its own seat.
   - `pid_is_alive` treating a zombie as alive — separate spec.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-03T10:06:11.458389286Z
+modified_at: 2026-10-03T10:06:37.728095815Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -500,7 +500,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1013a-de97-7da1-81bb-5b1a6ec7f61a
+  author: aida-auto-bump
+  timestamp: 2026-10-03T10:06:37.719992165Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1013a-dea0-74d3-86d8-099b40926dac
+  timestamp: 2026-10-03T10:06:37.728086798Z
+  agent: aida
+  brief_ref: .aida/agent-briefs/claude/BUG-1740-continuation-2026-10-03T0920Z.md
+  commit_sha: efe2dd35dd99c29e8cbcd39f61ce43925a50e785
+  summary: 'Re-review at 25de9b32c7 after CI-red rework. The red CI (run 37112944620) was a missed fixture adaptation, not a product defect: the bug_1656 possibly_subagent test used the test process''s own pid as the harness lease''s active_pid, which BUG-1740''s AC2 exclusion now correctly refuses as self-corroboration. Rework is test-only (+30/-5, single file, verified by diff): the fixture spawns a real child as the distinct worker pid (ReapOnDrop kill+wait guard incl. panic path), preserving the BUG-1656/BUG-1681 witness per AC4. Mutation proof re-read from /tmp/bug1740-redfix-mutation-proof.txt: with ps_live_fanout_leases forced empty the adapted test fails on its own assertion; reverted, passes. Targeted modules 84/84 green; check-ci-fast exit 0; sleep-spawn idiom precedented un-gated in this suite (task_1518/1542, task_492, agent_launcher). Production code unchanged from the previously approved 98096b117a. Merge gated on CI green at this sha by a non-recording seat.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T10:06:11.458389286Z
   implemented_by: joe
+  completed_at: 2026-10-03T10:06:37.719963973Z
+  completion_sha: efe2dd35dd99c29e8cbcd39f61ce43925a50e785
