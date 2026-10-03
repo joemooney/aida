@@ -1,5 +1,6 @@
 id: 01a10179-0f22-7c40-93c0-3755af7bda88
 spec_id: TASK-1-193
+agreed_id: TASK-210
 title: DOC/CODE MISMATCH — write_session_env_file's doc comment now says target/worktr…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

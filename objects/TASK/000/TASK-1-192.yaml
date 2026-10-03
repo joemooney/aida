@@ -1,5 +1,6 @@
 id: 01a10179-0d0a-7c90-bd47-d2aa8a47c94f
 spec_id: TASK-1-192
+agreed_id: TASK-213
 title: CORRECTNESS — worktree_path.file_name().unwrap_or_default() degrades to an EMPT…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
