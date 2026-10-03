@@ -1,0 +1,24 @@
+id: 01a10294-230f-7ac1-bc6f-4c3a78f5fe4c
+spec_id: TASK-1578
+agreed_id: TASK-1578
+title: 'Role-enter picker: stop parsing an in-project session log once its resolved role is rejected (BUG-1789 follow-up)'
+description: |-
+  BUG-1789 bounded the resume-picker scan with a per-file 2 MiB cap and a 45 MiB total budget, and made foreign-project logs cost only their head. In-project logs whose role does NOT match still cost a full per-file cap, so on a single-project host the picker for a rarely used role stops after ~22 recent multi-MB Codex rollouts (previously it looked at up to 1500 files). Fix direction: pass a role pre-check into parse_session_meta_counted and stop once a tier-1 role marker is resolved and rejected (tier-2 fallback still requires the full window). Optional extras: pre-filter Claude entries by ~/.claude/projects/<encoded-cwd> dir name; resolve_resume_target matches the id prefix against file stems before parsing.
+
+  ## Acceptance
+  - With 200 in-project multi-MB rollouts of a non-matching tier-1 role, the role scan reads only their heads and reaches older matching sessions.
+  - Tier-2-only sessions still resolve as before.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T16:23:45.167588033Z
+modified_at: 2026-10-03T16:23:45.167588033Z
+req_type: Task
+filed_at:
+  code_sha: d0b630b3987c3e7c929073abbb33e7841e3dce43
+  branch: docs-auto-rebase
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
