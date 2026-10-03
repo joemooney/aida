@@ -8,11 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:39.754099926Z
-modified_at: 2026-10-03T22:10:19.932439560Z
+modified_at: 2026-10-03T22:14:52.169932671Z
 req_type: Bug
 tags:
 - lifecycle
 - messaging
+comments:
+- id: 01a103d5-9809-7af2-9add-0405f40df0e8
+  author: ai:codex:joe
+  content: 'Implementation prepared in the BUG-1797 worktree: both refusal wording copies now explain the In Progress → Done route and merged-PR completion via aida pull; a focused assertion pins both. Verification: cargo test -p aida-core forbidden_attention_transition, cargo test -p aida-core needs_attention_refusal_explains_done_routes, cargo fmt --all -- --check, and git diff --check passed. Commit is blocked: the pre-commit advisor-code gate reports AIDA_SESSION_ROLE=advisor despite the BUG-1797 implementer lease; no bypass was used.'
+  created_at: 2026-10-03T22:14:52.169932671Z
+  modified_at: 2026-10-03T22:14:52.169932671Z
 history:
 - id: 01a103ce-797e-7402-8ce0-e0354fc16c58
   author: joe
