@@ -1637,7 +1637,7 @@ pub(crate) fn handle_queue_command(
                             tag_filter.as_deref(),
                             tag_prefix_filter.as_deref(),
                             role_scope.as_ref(),
-                            *include_terminal,
+                            *include_terminal || *include_completed,
                         )
                     });
                 }
