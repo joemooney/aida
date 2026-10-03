@@ -70,12 +70,12 @@ description: |
   - Do not re-litigate BUG-1740's consumer-side rules; they are merged and
     independently tested.
   - Do not widen into general lease GC or the ~80 accumulated worktrees.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T16:59:08.126367723Z
-modified_at: 2026-10-03T14:25:47.828167049Z
+modified_at: 2026-10-03T16:05:30.450688421Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -98,3 +98,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10283-6eca-7560-8de6-def396620305
+  author: aida-auto-bump
+  timestamp: 2026-10-03T16:05:30.442043396Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10283-6ed2-7241-b43e-31a3ce13c926
+  timestamp: 2026-10-03T16:05:30.450686619Z
+  agent: aida
+  commit_sha: b2bd2da8bd384211af97741fdd2c9ae8631d4e8b
+  summary: Completed via merge b2bd2da8
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T16:05:30.442017582Z
+  completion_sha: b2bd2da8bd384211af97741fdd2c9ae8631d4e8b
