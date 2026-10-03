@@ -7,18 +7,33 @@ description: |-
 
   FOLLOW-UP (non-blocking, may be a filed spec instead of a code change): nothing removes target/worktrees/<name> at session end / worktree removal, and these caches live INSIDE main's target/ where the host's delete-non-main-targets disk discipline cannot see them. Also note the lease still records the PARENT target (session_start ~line 38846) while the shim gets the isolated dir — consumers only check is_some() today, but the stored value is now misleading.
   Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T11:14:33.895924858Z
-modified_at: 2026-10-03T11:14:33.895924858Z
+modified_at: 2026-10-03T11:27:39.113282108Z
 req_type: Task
 tags:
 - carried-from:BUG-1783
 - finding-hash:bf74b89b
 - from-review:BUG-1783
 - kind:carried-forward
+comments:
+- id: 01a10185-0c88-7962-8dd1-8600724d9ff3
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Both halves resolved: cleanup of target/worktrees/<name> at session end is filed as approved TASK-1577 (referenced by BUG-1783); the lease no longer records the parent target — session_start now records the isolated dir (recorded_target_dir = Some(isolated_target), lib.rs ~38765).'
+  created_at: 2026-10-03T11:27:39.113282108Z
+  modified_at: 2026-10-03T11:27:39.113282108Z
+  session_id: 830bc57c-1e7c-4a1a-b596-9e812ffd3f27
+history:
+- id: 01a10185-0ca0-7780-95ce-775ebfab0504
+  author: joe
+  timestamp: 2026-10-03T11:27:39.168025986Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c980a7937637ee228b687375b47549f35b49fbd3
   branch: main
