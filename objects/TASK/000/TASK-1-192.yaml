@@ -7,18 +7,33 @@ description: |-
 
   CORRECTNESS — worktree_path.file_name().unwrap_or_default() degrades to an EMPTY component, so any worktree path without a file_name maps to target/worktrees/ itself; two such worktrees collide again — the exact bug being fixed, one level deeper and silent. Fail loudly or fall back to the parent target with a printed warning; cover the arm in the new unit test.
   Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T11:14:32.842785822Z
-modified_at: 2026-10-03T11:14:32.842785822Z
+modified_at: 2026-10-03T11:27:40.853691177Z
 req_type: Task
 tags:
 - carried-from:BUG-1783
 - finding-hash:15924dfa
 - from-review:BUG-1783
 - kind:carried-forward
+comments:
+- id: 01a10185-136a-74a2-8828-6bc980a7cae1
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Addressed in merged BUG-1783 head bd265fc3: isolate_cargo_target_dir guards Some(name) if !name.is_empty(), warns loudly and falls back to the parent target otherwise; arm covered by test_isolate_cargo_target_dir_falls_back_on_missing_name.'
+  created_at: 2026-10-03T11:27:40.853691177Z
+  modified_at: 2026-10-03T11:27:40.853691177Z
+  session_id: 830bc57c-1e7c-4a1a-b596-9e812ffd3f27
+history:
+- id: 01a10185-1382-7c03-8cdc-5daa7696710e
+  author: joe
+  timestamp: 2026-10-03T11:27:40.930153495Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: c980a7937637ee228b687375b47549f35b49fbd3
   branch: main
