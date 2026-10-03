@@ -3857,7 +3857,7 @@ mod tests {
     /// retry ladder followed by a hard error — and the winner degrades to
     /// the reader protocol: durable request filed, labelled committed
     /// snapshot served, exit success.
-    // trace:BUG-1674 | ai:claude
+    // trace:BUG-1674 trace:BUG-1674.ac93280e | ai:claude
     #[test]
     fn tty_full_rebuild_winner_bounded_behind_live_writer() {
         use super::super::cache_refresh::*;

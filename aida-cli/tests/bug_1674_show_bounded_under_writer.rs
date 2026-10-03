@@ -160,6 +160,7 @@ fn show_bounded_and_labelled(fixture: &Fixture, context: &str) -> String {
 
 /// Acceptance 1, incremental-able shape: stale cache + a live foreign writer
 /// holding the SQLite write lock for at least 20 s.
+// trace:BUG-1674.ac93280e | ai:claude
 #[test]
 fn show_is_bounded_behind_a_live_writer() {
     let fixture = init_fixture();
@@ -175,6 +176,7 @@ fn show_is_bounded_behind_a_live_writer() {
 /// Acceptance 1, full-rebuild shape: the recorded cache head is not an
 /// ancestor of the store head, so no incremental path exists — this is the
 /// shape that used to park in the ~25 s retry ladder and then fail.
+// trace:BUG-1674.ac93280e | ai:claude
 #[test]
 fn show_is_bounded_when_the_stale_cache_needs_a_full_rebuild() {
     let fixture = init_fixture();
@@ -188,6 +190,7 @@ fn show_is_bounded_when_the_stale_cache_needs_a_full_rebuild() {
 /// Acceptance 1, refresh-in-progress shape: a foreign holder owns the
 /// refresh flock (a worker mid-refresh); the reader waits only its bounded
 /// budget and then serves the labelled committed snapshot.
+// trace:BUG-1674.ac93280e | ai:claude
 #[test]
 fn show_is_bounded_while_a_foreign_refresh_holds_the_flock() {
     let fixture = init_fixture();
@@ -203,6 +206,7 @@ fn show_is_bounded_while_a_foreign_refresh_holds_the_flock() {
 /// changed by a foreign commit is shown correctly even while the cache is
 /// stale and the write lock is held — never the cached value without a
 /// label.
+// trace:BUG-1674.ac08b40e | ai:claude
 #[test]
 fn show_serves_the_authoritative_status_behind_a_live_writer() {
     let fixture = init_fixture();
