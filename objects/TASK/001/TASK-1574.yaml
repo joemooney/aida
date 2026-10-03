@@ -1,0 +1,25 @@
+id: 01a0ff17-6658-7132-89db-23087b09073b
+spec_id: TASK-1574
+agreed_id: TASK-1574
+title: Import and triage the seven measured aida CLI defects parked as AIDA-57 in the aida-relay store, each with its re-verification procedure
+description: |-
+  Offered 2026-10-02 by the aida-relay advisor session (cross-session message to session aida-93): AIDA-57 in /home/joe/ai/aida-relay's AIDA store holds seven measured aida CLI defects, parked there because the reporter could not tell which were already known upstream. Each carries a re-verification procedure. Summarized by the reporter as: (1) queue list --batch filter bypasses a fast path; (2) aida show --full drops comments; (3) a needs-attention -> done transition refusal; (4) merge-hold messages that point at each other; (5) pr ship --dry-run does not show --match-head-commit; (6) a lease message that told an integrator to end its own session mid-cascade; (7) one more in the AIDA-57 record itself.
+
+  The intake job: read AIDA-57 from the aida-relay store, and for each defect (a) run its re-verification procedure against current aida main, (b) grep code and search specs before filing as new (two drafts have been wrong for skipping this), (c) file the survivors as bounded bugs with the measured evidence, (d) report back to the aida-relay session which were filed, which were duplicates, and which no longer reproduce.
+
+  Acceptance sketch: every one of the seven has a disposition recorded (filed-as-<ID> / duplicate-of-<ID> / not-reproducible-with-evidence), and the aida-relay session is told the outcome.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T00:08:38.744286061Z
+modified_at: 2026-10-03T00:08:38.744286061Z
+req_type: Task
+filed_at:
+  code_sha: c5ef8bdfb621cadb34eeaa0955081dfc9ee93fb7
+  branch: bug-1767
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 63672f7e-d507-4105-8604-8598b2023338
