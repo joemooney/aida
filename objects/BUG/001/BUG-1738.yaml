@@ -75,12 +75,12 @@ description: |
   Whether other generated-once artifacts share this shape (other git hooks, `.aida/` scaffolding,
   the `.claude/` mirrors). If so, say so in a comment and file separately — do not widen this spec
   into a general staleness framework.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-10-03T06:59:46.860752332Z
+modified_at: 2026-10-03T07:00:05.903750981Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -218,7 +218,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10090-1880-76c3-97e7-2541f535ac5c
+  author: aida-auto-bump
+  timestamp: 2026-10-03T07:00:05.888544090Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10090-188f-7e70-8bc4-3a39f0ee6512
+  timestamp: 2026-10-03T07:00:05.903723949Z
+  agent: product
+  commit_sha: b7eda8b31b6f4cd20447eb30abddb3973ae52762
+  summary: 'Independent re-review: banner-based recognition (not marker), generated_text_matches comparator, report-only heal posture, repo_hooks_dir shared installer/scan path; AC5 corroborated on this repo''s refreshed live hook; all 7 tests executed in CI run 37097158900; mutations re-run in sibling worktree: recognition-by-marker fails exactly the pasted-marker test, exact-comparator fails exactly the CRLF test, 6 controls green each'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T06:59:46.860752332Z
   implemented_by: joe
+  completed_at: 2026-10-03T07:00:05.888499995Z
+  completion_sha: b7eda8b31b6f4cd20447eb30abddb3973ae52762
