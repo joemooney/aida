@@ -14938,6 +14938,7 @@ pub(crate) fn is_default_visible_comment(body: &str) -> bool {
     let trimmed = body.trim_start();
     DEFAULT_VISIBLE_COMMENT_MARKERS.iter().any(|marker| {
         trimmed.len() >= marker.len()
+            && trimmed.is_char_boundary(marker.len())
             && trimmed[..marker.len()].eq_ignore_ascii_case(marker)
             && trimmed[marker.len()..]
                 .chars()
