@@ -33,6 +33,22 @@ assert_refused() {
     fi
 }
 
+assert_refused_py() {
+    local script="$1" expected="$2"; shift 2
+    local output="$tmp/output" rc=0
+    python3 "$script" "$@" >"$output" 2>&1 || rc=$?
+    if [ "$rc" -ne 78 ]; then
+        cat "$output" >&2
+        printf 'expected exit 78 from python %s, got %s\n' "$script" "$rc" >&2
+        exit 1
+    fi
+    if ! grep -Fq 'ERROR[AIDA_VENDOR_LAUNCH_REFUSED]' "$output" || ! grep -Fq "$expected" "$output"; then
+        cat "$output" >&2
+        printf 'missing typed refusal from python %s\n' "$script" >&2
+        exit 1
+    fi
+}
+
 for script in \
     "$ROOT/scripts/ablations/gate-vs-rule.sh" \
     "$ROOT/scripts/ablations/gate-vs-rule-i2.sh" \
@@ -40,6 +56,11 @@ for script in \
     "$ROOT/scripts/ablations/gate-vs-rule-i4.sh"; do
     assert_refused "$script" "disabled because it launches a full-access vendor"
 done
+
+# trace:BUG-1784 | ai:codex
+assert_refused_py "$ROOT/bench/agent-surface/run_bench.py" "disabled because it launches a full-access vendor directly" matrix
+assert_refused_py "$ROOT/bench/agent-surface/run_bench.py" "disabled because it launches a full-access vendor directly" run --condition cli --task foo
+
 
 # Acceptance audit: these are the only shipped shell scripts containing either
 # full-access flag. Every match is one of the four refused targets above.
