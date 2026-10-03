@@ -95,12 +95,12 @@ description: |
   - Do not use `review_verdict::review_actionability`; it reports `NeedsReview`
     as soon as the head moves, which would release a hold on a head move alone —
     BUG-1705 AC3 forbids exactly that.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T17:36:20.106331337Z
-modified_at: 2026-10-03T00:36:43.766372927Z
+modified_at: 2026-10-03T05:04:54.517656925Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -206,6 +206,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10026-a2de-7a51-967c-1e244cd782db
+  author: aida-auto-bump
+  timestamp: 2026-10-03T05:04:54.494763378Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10026-a2f5-7781-98bd-180ab6af6066
+  timestamp: 2026-10-03T05:04:54.517654953Z
+  agent: aida
+  commit_sha: ed26522695f1bfa9b73c42221a2904e47a19cc16
+  summary: Completed via merge ed265226
 filed_at:
   code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
   branch: main
@@ -218,3 +231,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-03T00:36:43.766372927Z
   implemented_by: joe
+  completed_at: 2026-10-03T05:04:54.494687074Z
+  completion_sha: ed26522695f1bfa9b73c42221a2904e47a19cc16
