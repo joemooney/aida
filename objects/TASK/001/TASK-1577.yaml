@@ -15,10 +15,3 @@ relationships:
   target_id: 01a0fefd-6de1-7103-b5b3-33d89c6ab17d
   created_at: 2026-10-03T10:34:26.478985413Z
   created_by: joe
-filed_at:
-  code_sha: 82c976573d1ddac703342b1ccff5a96f03a6f8f6
-  branch: bug-1783
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: e6c1176655
-  vendor: antigravity

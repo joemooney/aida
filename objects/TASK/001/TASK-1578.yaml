@@ -20,10 +20,3 @@ relationships:
   target_id: 01a101f4-7982-7ac2-851d-e85cddfdf1ec
   created_at: 2026-10-03T16:23:52.109883656Z
   created_by: joe
-filed_at:
-  code_sha: d0b630b3987c3e7c929073abbb33e7841e3dce43
-  branch: docs-auto-rebase
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: e1422ae139
-  vendor: antigravity
