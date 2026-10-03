@@ -1,0 +1,33 @@
+id: 01a101f9-4f45-79f3-a0c0-a4132b761554
+spec_id: STORY-1514
+agreed_id: STORY-1514
+title: 'Review PR-2383: [BUG-1713] Fix multibyte char panic in comment marker check'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a101f5`) for branch `bug-1713`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2383>
+  - Branch: `bug-1713` → `main`
+
+  ## Covers
+
+  - BUG-1713
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2383` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T13:34:38.405296091Z
+modified_at: 2026-10-03T13:34:38.405296091Z
+req_type: Story
+filed_at:
+  code_sha: ac1c6c0f82460ed434c77dedcb3a17f214c68fcd
+  branch: bug-1713
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 821f2c6107
+  vendor: antigravity
