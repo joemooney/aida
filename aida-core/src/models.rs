@@ -397,7 +397,9 @@ pub fn forbidden_attention_transition(
     } else {
         Some(
             "a Needs Attention spec can only be triaged to Approved, \
-             In Progress, or Rejected"
+             In Progress, or Rejected; to mark it done, go via In Progress \
+             (aida edit <ID> --status in-progress, then --status done); a merged \
+             PR referencing this spec completes it via aida pull"
                 .to_string(),
         )
     }
@@ -8818,6 +8820,19 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         }
     }
 
+    // trace:BUG-1797 | ai:codex
+    #[test]
+    fn needs_attention_refusal_explains_done_routes() {
+        let message = forbidden_attention_transition(
+            &RequirementStatus::NeedsAttention,
+            &RequirementStatus::Done,
+        )
+        .expect("NeedsAttention → Done must remain forbidden");
+
+        assert!(message.contains("aida edit <ID> --status in-progress, then --status done"));
+        assert!(message.contains("a merged PR referencing this spec completes it via aida pull"));
+    }
+
     /// STORY-332: transitions that do not touch NeedsAttention are never
     /// constrained — the rule must not regress AIDA's free-form status edits.
     #[test]
@@ -8853,7 +8868,9 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
                 ),
                 (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(
                     "a Needs Attention spec can only be triaged to Approved, \
-                     In Progress, or Rejected"
+                     In Progress, or Rejected; to mark it done, go via In Progress \
+                     (aida edit <ID> --status in-progress, then --status done); a merged \
+                     PR referencing this spec completes it via aida pull"
                         .to_string(),
                 ),
                 _ => None,
