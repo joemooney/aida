@@ -1,0 +1,34 @@
+id: 01a1004a-b0bc-7672-8f64-5eb98dee0af9
+spec_id: STORY-1512
+agreed_id: STORY-1512
+title: 'Review PR-2370: [AI:claude] fix(cache): bound the TTY winner''s inline rebuild behind a live writer via the reader protocol (BUG-1674)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a10025`) for branch `bug-1674`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2370>
+  - Branch: `bug-1674` → `main`
+
+  ## Covers
+
+  - BUG-1674
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2370` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T05:44:17.340798662Z
+modified_at: 2026-10-03T05:44:17.340798662Z
+req_type: Story
+filed_at:
+  code_sha: ecfd9affc313ea192e7cb50781041831ac3e2d53
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
