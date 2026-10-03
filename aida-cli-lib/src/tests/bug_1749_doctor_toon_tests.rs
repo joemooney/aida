@@ -65,8 +65,12 @@ fn built_aida_binary() -> std::path::PathBuf {
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();
+    let is_in_checkout = binary.starts_with(checkout);
+    let is_in_target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(|dir| binary.starts_with(std::path::PathBuf::from(dir)))
+        .unwrap_or(false);
     assert!(
-        binary.starts_with(checkout),
+        is_in_checkout || is_in_target_dir,
         "refusing to exercise a binary outside this checkout"
     );
     assert!(binary.is_file(), "build aida-cli before running this test");

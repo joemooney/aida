@@ -48,8 +48,12 @@ fn built_aida_binary() -> std::path::PathBuf {
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("the crate directory sits inside the workspace root");
+    let is_in_checkout = binary.starts_with(checkout);
+    let is_in_target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(|dir| binary.starts_with(std::path::PathBuf::from(dir)))
+        .unwrap_or(false);
     assert!(
-        binary.starts_with(checkout),
+        is_in_checkout || is_in_target_dir,
         "resolved {} outside this checkout at {} \u{2014} the resolver returned a \
          foreign build (AIDA_BIN or AIDA_BUILD_PROFILE); refusing to measure it",
         binary.display(),
