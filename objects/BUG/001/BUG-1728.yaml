@@ -116,13 +116,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:20:24.595788323Z
+modified_at: 2026-10-03T10:20:25.777235736Z
 req_type: Bug
-relationships:
-- rel_type: BlockedBy
-  target_id: 01a0c074-3ed9-7a81-bf28-bd8ac8614a6c
-  created_at: 2026-09-29T15:38:40.420151027Z
-  created_by: joe
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
   author: joe
