@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1784",
+  "publishes": [
+    {
+      "at": "2026-10-03T19:17:35.859169134Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T15:54:19.223022465Z",
+      "spec": "BUG-1784",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T15:54:29.344933738Z",
+      "spec": "BUG-1784",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T17:13:48.406796987Z",
+      "spec": "BUG-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2386,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "977496221a79809744659523c90c866bbf3fe28a"
+      }
+    },
+    {
+      "ts": "2026-10-03T17:13:49.171478197Z",
+      "spec": "BUG-1784",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Fix sound (refusals at the only two launch entry points, flags removed, test wired into CI) but AC2's zero-invocation shim does not cover the python harness; attribution labels wrong.",
+        "recovery_hint": "address the review findings, move BUG-1784 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-03T18:46:58.369697644Z",
+      "spec": "BUG-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2386,
+        "verdict": "APPROVED",
+        "reviewed_sha": "37885818c8"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:07:02.002860550Z",
+      "spec": "BUG-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:07:02.002901973Z",
+      "spec": "BUG-1784",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:17:35.851886421Z",
+      "spec": "BUG-1784",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dcada4dae31800124dc9a0bed9d582d8c4c76b7c",
+        "pr": 2386,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
