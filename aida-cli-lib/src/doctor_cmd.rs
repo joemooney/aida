@@ -2116,7 +2116,7 @@ mod bug_1700_worktree_trust_tests {
         .is_empty());
     }
 
-    // trace:BUG-1700 | ai:claude
+    // trace:BUG-1700 trace:BUG-1777 | ai:claude+codex
     #[test]
     fn untrusted_parent_is_reported_once_and_is_not_auto_healable() {
         let trusted = vec![PathBuf::from("/home/op/other")];
@@ -2130,7 +2130,9 @@ mod bug_1700_worktree_trust_tests {
         assert_eq!(f[0].category, "agent-launch");
         assert_eq!(f[0].id, "worktree-folder-trust");
         assert!(
-            f[0].summary.contains("/home/op/aida-worktrees"),
+            f[0].summary
+                .replace('\\', "/")
+                .contains("/home/op/aida-worktrees"),
             "the finding must name the directory: {}",
             f[0].summary
         );
@@ -2287,7 +2289,7 @@ mod bug_1744_trust_breadth_tests {
     use super::*;
     use std::path::{Path, PathBuf};
 
-    // trace:BUG-1744 | ai:codex
+    // trace:BUG-1744 trace:BUG-1777 | ai:codex
     #[test]
     fn broad_ancestor_with_unset_parent_discloses_the_narrow_remediation() {
         let trusted = vec![PathBuf::from("/home/op")];
@@ -2300,7 +2302,7 @@ mod bug_1744_trust_breadth_tests {
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "worktree-folder-trust-breadth");
         assert_eq!(findings[0].category, "agent-launch");
-        assert!(findings[0].summary.contains("/home/op"));
+        assert!(findings[0].summary.replace('\\', "/").contains("/home/op"));
         assert!(findings[0].summary.contains('5'));
         assert!(findings[0].action.contains("worktree_parent"));
         assert!(!findings[0].safe_heal);

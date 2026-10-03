@@ -318,18 +318,19 @@ mod tests {
 
     #[cfg(not(unix))]
     #[test]
-    fn same_host_bogus_pid_waits_until_ttl_on_non_unix() {
+    fn same_host_live_pid_waits_until_ttl_on_non_unix() {
         // trace:BUG-1184 | ai:codex
+        // trace:BUG-1777 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
-        // Non-Unix cannot probe pids, so a fresh same-host holder is treated
-        // as live even when the pid is bogus.
+        // Non-Unix probes the OS process table, so use this live process to
+        // test the wait path. A bogus PID is correctly reclaimed immediately.
         let h = Holder {
             host: crate::coordination::hostname(),
-            pid: 999_999_999,
+            pid: std::process::id(),
             pr: Some(9),
-            note: "fresh bogus pid".into(),
+            note: "fresh live pid".into(),
             acquired_at: now_secs(),
             ttl_secs: DEFAULT_TTL_SECS,
         };

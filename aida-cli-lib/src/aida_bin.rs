@@ -329,8 +329,12 @@ mod tests {
     use super::*;
 
     // trace:BUG-1725 | ai:claude
+    // trace:BUG-1777 | ai:codex
     fn binary(root: &Path, profile: &str) -> PathBuf {
-        let p = root.join("target").join(profile).join("aida");
+        let p = root
+            .join("target")
+            .join(profile)
+            .join(format!("aida{}", std::env::consts::EXE_SUFFIX));
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         crate::test_exec::write_executable(&p, "#!/bin/sh\nexit 0\n");
         p
@@ -409,11 +413,14 @@ mod tests {
         let override_debug = binary(a.path(), "debug");
         let release_time =
             std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000);
-        let release_file = std::fs::File::open(&over).unwrap();
+        let release_file = std::fs::OpenOptions::new().write(true).open(&over).unwrap();
         release_file
             .set_times(std::fs::FileTimes::new().set_modified(release_time))
             .unwrap();
-        let debug_file = std::fs::File::open(&override_debug).unwrap();
+        let debug_file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&override_debug)
+            .unwrap();
         debug_file
             .set_times(
                 std::fs::FileTimes::new()
@@ -422,7 +429,12 @@ mod tests {
             .unwrap();
         let running = binary(b.path(), "debug");
         let pathdir = tempfile::tempdir().unwrap();
-        crate::test_exec::write_executable(&pathdir.path().join("aida"), "#!/bin/sh\n");
+        crate::test_exec::write_executable(
+            &pathdir
+                .path()
+                .join(format!("aida{}", std::env::consts::EXE_SUFFIX)),
+            "#!/bin/sh\n",
+        );
         let path = std::env::join_paths([pathdir.path()]).unwrap();
         assert_eq!(
             resolve(Some(&over), None, Some(&running), Some(&path))
@@ -459,11 +471,15 @@ mod tests {
         let dbg = binary(d.path(), "debug");
         let rel = binary(d.path(), "release");
         let now = std::time::SystemTime::now();
-        std::fs::File::open(&dbg)
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&dbg)
             .unwrap()
             .set_modified(now)
             .unwrap();
-        std::fs::File::open(&rel)
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&rel)
             .unwrap()
             .set_modified(now - std::time::Duration::from_secs(10))
             .unwrap();

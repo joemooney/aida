@@ -54,17 +54,35 @@ fn doctor_toon_fixture_round_trips_scalars_and_tables() {
 // intentional: TASK-1262's architecture guard exact-allowlists its literal call;
 // do not name the underlying OS lookup here.
 // trace:BUG-1749 | ai:codex
+// trace:BUG-1777 | ai:codex
 fn built_aida_binary() -> std::path::PathBuf {
     let runner = crate::resolve_aida_exe();
     let deps = runner.parent().expect("test runner has a parent directory");
     assert_eq!(deps.file_name().and_then(|name| name.to_str()), Some("deps"), "expected this build's runner under target/<profile>/deps; an ambient AIDA_BIN redirects the resolver");
-    let binary = deps
-        .parent()
-        .expect("deps has a target/<profile> parent")
-        .join("aida");
     let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap();
+    let profile_dir = deps.parent().expect("deps has a target/<profile> parent");
+    let binary_name = format!("aida{}", std::env::consts::EXE_SUFFIX);
+    // The cross-platform workflow prebuilds release artifacts before running
+    // debug test binaries; local `cargo test` builds only the current profile.
+    let mut candidates = vec![
+        checkout.join("target/release").join(&binary_name),
+        profile_dir.join(&binary_name),
+    ];
+    if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
+        let target_dir = std::path::PathBuf::from(target_dir);
+        candidates.insert(0, target_dir.join("release").join(&binary_name));
+        candidates.push(
+            target_dir
+                .join(profile_dir.file_name().unwrap())
+                .join(&binary_name),
+        );
+    }
+    let binary = candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .unwrap_or_else(|| profile_dir.join(&binary_name));
     let is_in_checkout = binary.starts_with(checkout);
     let is_in_target_dir = std::env::var_os("CARGO_TARGET_DIR")
         .map(|dir| binary.starts_with(std::path::PathBuf::from(dir)))
