@@ -1,0 +1,27 @@
+id: 01a10022-0f15-7763-a710-a1e3a6f5e1d9
+spec_id: BUG-1786
+agreed_id: BUG-1786
+title: Interactive claim's PhaseEntered slug comes from the inherited role, and the timeline drops non-WORK_PHASES slugs — biasing STORY-1480 AC5's work-share measurement
+description: |-
+  Found reviewing PR #2367 (STORY-1480, head c6ccdeb77f). lib.rs session_start's interactive-claim emitter sets PhaseEntered.slug from the inherited session role, falling back to 'implementer' only when no role is inherited. history_timeline.rs phase_candidates (line 663 at this head) skips any slug not in WORK_PHASES = [implementer, ci, reviewer, merge, pull, build]. Consequence: a spec claimed interactively by a session whose inherited role is e.g. 'advisor' or 'product' emits PhaseEntered{slug:'advisor'}, the timeline builds NO span from it, and the claim-to-PR-open stretch reads unknown — exactly the stretch STORY-1480's still-open AC5 (<=10% unknown; work share / implementer_passes_avg) is supposed to attribute. The bias lands only on interactively-worked specs, i.e. the population AC5 measures, so the AC5 measurement pass must account for it (or land this fix first).
+
+  Proposed acceptance:
+  1. An interactive claim's phase event always yields a timeline work span: either the emitter maps the claim to a WORK_PHASES slug (the claim is implementer work regardless of the seat's role name), or the classifier learns the role-named slugs deliberately — one of the two, decided explicitly, not both.
+  2. A test covers an interactive claim under a non-implementer inherited role (e.g. advisor): the resulting timeline attributes the claim-to-PhaseDonePr stretch as work, not unknown.
+  3. The AC5 measurement procedure on STORY-1480 notes whether its window predates or spans this fix.
+  References: STORY-1480 (AC5), PR #2367, ADR-64.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T04:59:54.517765581Z
+modified_at: 2026-10-03T04:59:54.517765581Z
+req_type: Bug
+filed_at:
+  code_sha: 11fd8e5a831dc27cf8ae78341550a3e65a77c8d6
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 12540508-66a6-4ecc-8c45-2c357657fc9c
