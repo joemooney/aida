@@ -107573,6 +107573,116 @@ impl RealPhaseDriver {
         }
     }
 
+    /// BUG-1690: phase 1 adopts an already-open PR as the publication to
+    /// shepherd, but nothing ever un-drafted one — so a PR sitting in draft
+    /// state (converted by the STORY-529 ship gate, by an operator, or opened
+    /// as a draft) passed CI and review and then stalled at the phase-4 merge,
+    /// which every forge refuses for a draft. Un-draft the reused PR here, at
+    /// the adoption point, so a retry reaches a mergeable state. Chosen over
+    /// opening a fresh PR because draft-first reuse was an operator-approved
+    /// decision (see the BUG-1690 spec trail).
+    ///
+    /// A spec tagged `review:draft-only` is the deliberate exception: its
+    /// draft IS the STORY-529 human-review hold, and the drain's merge phase
+    /// never reads that tag — the draft state is what keeps the PR unmerged.
+    /// Leave it, and say so.
+    ///
+    /// Best-effort like the retraction: a failed un-draft is reported loudly
+    /// and the drive proceeds — the merge then fails with the forge's own
+    /// draft refusal instead of silently stalling.
+    // trace:BUG-1690 | ai:claude
+    fn undraft_reused_publication(&mut self, pr: &OpenPrInfo) {
+        let forge = self.project_forge();
+        let mut sink = crate::network_retry::NoopSink;
+        let Ok(meta) = forge.change_metadata(pr.number, &mut sink) else {
+            // Nothing claims the PR is a draft; a wrong guess here would
+            // un-draft someone else's deliberate draft. The merge's own
+            // refusal remains the backstop.
+            return;
+        };
+        if meta.state != crate::forge::ChangeState::Open || !meta.is_draft {
+            return;
+        }
+        if self.spec_is_draft_only_tagged() {
+            if !self.json {
+                eprintln!(
+                    "  {} PR-{} stays a draft — {} is tagged `{}`, so the draft is the \
+                     human-review hold, not a stall",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr.number,
+                    self.spec,
+                    pr_ship::DRAFT_ONLY_TAG,
+                );
+            }
+            return;
+        }
+        let change = crate::forge::ChangeRef {
+            id: pr.number,
+            url: pr.url.clone(),
+            branch: pr.head_branch.clone().unwrap_or_default(),
+            base: String::new(),
+            title: Some(pr.title.clone()),
+        };
+        match forge.mark_change_ready(&change) {
+            Ok(()) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{} was a draft — marked it ready so this attempt can merge it",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        pr.number,
+                    );
+                }
+            }
+            Err(e) => {
+                if !self.json {
+                    // The repair hint speaks the resolved forge's own syntax.
+                    let repair = match forge.kind() {
+                        crate::forge::ForgeKind::GitHub => format!("gh pr ready {}", pr.number),
+                        crate::forge::ForgeKind::GitLab => {
+                            format!("glab mr update {} --ready", pr.number)
+                        }
+                        crate::forge::ForgeKind::None => {
+                            format!("mark change {} ready on the forge", pr.number)
+                        }
+                    };
+                    eprintln!(
+                        "  {} PR-{} is a DRAFT and could not be marked ready — the forge \
+                         will refuse the merge until `{repair}` un-drafts it: {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        pr.number,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Whether this drive's spec carries the STORY-529 `review:draft-only`
+    /// tag — the one case a reused draft PR must stay a draft.
+    // trace:BUG-1690 | ai:claude
+    fn spec_is_draft_only_tagged(&self) -> bool {
+        let Some(store) = load_store_for_lookup(&self.project_root) else {
+            return false;
+        };
+        let want = self.spec.to_ascii_uppercase();
+        store.requirements.iter().any(|r| {
+            let matches_spec = r
+                .spec_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+                || r.agreed_id
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case(&want))
+                    .unwrap_or(false);
+            matches_spec && {
+                // The ship gate's own predicate, so the two surfaces cannot
+                // drift on what counts as draft-only-tagged.
+                let tags: Vec<String> = r.tags.iter().cloned().collect();
+                pr_ship::is_draft_only_tagged(&tags)
+            }
+        })
+    }
+
     /// BUG-1714: the publication guards came back inconclusive-only — nothing
     /// objected, nothing verified. If the implementer already opened a PR,
     /// leave it OPEN but unmergeable: stamp a typed merge-hold (plus the
@@ -108249,6 +108359,10 @@ impl RealPhaseDriver {
         match self.detect_phase1_pr(&branch) {
             Phase1PrResolve::Found(pr) => {
                 self.set_pr_number(pr.number as u32);
+                // Same adoption point as the main phase-1 verify: a reused
+                // draft PR must be un-drafted or the merge is refused.
+                // trace:BUG-1690 | ai:claude
+                self.undraft_reused_publication(&pr);
                 if !self.json {
                     eprintln!(
                         "  {} PR-{} found on `{}` — continuing into CI + review",
@@ -110394,6 +110508,14 @@ mod forge_seam_tests {
     }
 }
 
+// The BUG-1690 reused-draft-PR seam tests live in their own file so the
+// `aida criteria` scanner can anchor their AC markers (the convention for
+// every AC-traced driver test).
+// trace:BUG-1690 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1690_undraft_reuse_tests.rs"]
+mod bug_1690_undraft_reuse_tests;
+
 /// BUG-1628: auto-complete phase 1 and ordinary pickup resolve the same
 /// branch + worktree for a custom-prefix requirement. Temp repos only.
 // trace:BUG-1628 | ai:claude
@@ -111483,6 +111605,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         match pr {
             Some(pr) => {
                 self.set_pr_number(pr.number as u32);
+                // A reused PR may be sitting in draft state (a drafted
+                // retraction, the ship gate, an operator) — un-draft it now
+                // or the phase-4 merge is refused. trace:BUG-1690 | ai:claude
+                self.undraft_reused_publication(&pr);
                 // BUG-1527: the PR just resolved may be on a branch the
                 // implementer swapped to mid-phase — prefer the PR's own
                 // head branch (ground truth for what it actually contains)

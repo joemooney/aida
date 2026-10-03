@@ -697,6 +697,10 @@ mod tests {
         fn close_change(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
             unimplemented!()
         }
+        // trace:BUG-1690 | ai:claude
+        fn mark_change_ready(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
+            unimplemented!()
+        }
         fn checkout_change(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
             unimplemented!()
         }
