@@ -3,12 +3,12 @@ spec_id: TASK-1572
 agreed_id: TASK-1572
 title: Unify aida list's row_parked_lens with the epic child-walking lens attribution (effective_needs_attention_lens_with_source)
 description: 'Promised by BUG-1771/PR #2339''s own doc comment on row_parked_lens (git_backend_cmd.rs): the --status shelved/needs-decision filters and the --format json status_lens field deliberately read the ROW''s own parked fields, so an EPIC that is NeedsAttention only via a parked child matches neither lens and carries no lens label — consistent between filter and label, but inconsistent with the child-walking effective_needs_attention_lens_with_source in lib.rs (~:19065). Unify so epics attribute a child''s lens in BOTH the filter and the label, in the same change (filter/label consistency is the invariant to preserve; cross-vendor review of PR #2339 flagged the gap, disposition: documented limit, follow-up here).'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T22:02:24.791016107Z
-modified_at: 2026-10-03T09:01:02.378940283Z
+modified_at: 2026-10-03T09:01:03.348957722Z
 req_type: Task
 tags:
 - list
@@ -20,3 +20,11 @@ comments:
   created_at: 2026-10-03T09:01:02.378940283Z
   modified_at: 2026-10-03T09:01:02.378940283Z
   session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
+history:
+- id: 01a100fe-d5f4-7893-816f-6ec52e03e6ae
+  author: joe
+  timestamp: 2026-10-03T09:01:03.348955436Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
