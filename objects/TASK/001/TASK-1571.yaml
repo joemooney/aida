@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:01:14.949714475Z
-modified_at: 2026-10-02T21:01:50.716754659Z
+modified_at: 2026-10-03T19:46:06.190764845Z
 req_type: Task
 tags:
 - ci
@@ -71,3 +71,9 @@ comments:
   created_at: 2026-10-02T21:01:50.716754659Z
   modified_at: 2026-10-02T21:01:50.716754659Z
   session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
+- id: 01a1034d-64ee-7bb0-8fae-e720b0cbec1f
+  author: joe
+  content: 'Advisor disposition 2026-10-03: REJECTED as overtaken by events, verified against current config rather than recollection. (1) .github/workflows/cross-platform.yml is already nightly (cron 06:00 UTC) + manual dispatch + informational path-filtered PR runs only (TASK-257, TASK-1205) — the Build (windows-latest) leg was never in the required PR path. (2) Branch protection on main requires only merge-hold-gate and Build (ubuntu-latest) (gh api branches/main/protection, checked today) — Windows is non-blocking per ADR-62. (3) The task''s own sunset condition — ''until BUG-1777 is under control'' — has passed: BUG-1777 merged (#2375) and BUG-1728''s closing evidence shows the Windows lib target green modulo the single new BUG-1794 regression (filed, mechanism recorded). Nothing remains to demote.'
+  created_at: 2026-10-03T19:46:06.190764845Z
+  modified_at: 2026-10-03T19:46:06.190764845Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
