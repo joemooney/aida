@@ -23,17 +23,25 @@ description: |
   2. `--batch does-not-exist` returns count 0 in all three formats (test each).
   3. The fast paths may implement filtering their own way, but a shared test pins list-parity: same filter args → same member set across formats.
   4. Mutation-proof one direction per format (remove the filter application → test fails).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:51:48.693477250Z
-modified_at: 2026-10-03T19:51:48.693477250Z
+modified_at: 2026-10-03T22:07:03.588453402Z
 req_type: Bug
 tags:
 - agent-output
 - filters
 - queue
+history:
+- id: 01a103ce-71a4-7bd2-8c8b-2f37d5ba301e
+  author: joe
+  timestamp: 2026-10-03T22:07:03.588448231Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
