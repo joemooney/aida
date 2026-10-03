@@ -7,12 +7,12 @@ description: |-
 
   ## Acceptance
   - docs/git-workflow.md has a section covering the CI invalidation penalty, squash-merge behavior, the no-surprises rule, and the --auto-complete orchestrator exception.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T16:27:38.830876168Z
-modified_at: 2026-10-03T16:27:52.483724887Z
+modified_at: 2026-10-03T16:32:54.461344203Z
 req_type: Task
 history:
 - id: 01a10297-e923-7ac0-ba55-787d9c88e0cb
@@ -22,6 +22,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1029c-84b5-76d0-9f58-b6aac0fe1262
+  author: aida-auto-bump
+  timestamp: 2026-10-03T16:32:54.453288853Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1029c-84bd-7a91-a491-b89510a73e91
+  timestamp: 2026-10-03T16:32:54.461343031Z
+  agent: implementer
+  commit_sha: 8b3849ed609548852b4cbaecbe643304381cab72
+  summary: Completed via merge 8b3849ed
 filed_at:
   code_sha: b2bd2da8bd384211af97741fdd2c9ae8631d4e8b
   branch: main
@@ -29,3 +42,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T16:32:54.453264503Z
+  completion_sha: 8b3849ed609548852b4cbaecbe643304381cab72
