@@ -1957,7 +1957,7 @@ pub(crate) fn premise_stale(
     verdict_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
     status_of: impl Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
+    use crate::review_verdict::{same_reviewed_sha, short_sha};
     let mut why = Vec::new();
     let prose_specs = || crate::pr_ship::extract_spec_ids_from_text(&record.detail);
     if record.reason_kind == HoldReasonKind::Rework {
