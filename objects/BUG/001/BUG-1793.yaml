@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T19:35:10.387707765Z
+modified_at: 2026-10-03T19:47:36.880442949Z
 req_type: Bug
 comments:
 - id: 01a1032c-a35e-7ad2-985f-845b86617eb9
@@ -35,6 +35,11 @@ comments:
   content: 'Implementation note (Codex, 2026-10-03): extended STORY-584''s persisted structural defer with an optional deferred_reason and an operator-held marker. Reasoned holds render as Held; product/advisor/unseated operator roles can set or lift them. Explicit/queue-head pickup and direct session start now return the typed OperatorHoldRefusal before queue synthesis, worktree, or lease side effects. Existing reasonless deferrals remain compatible. TASK-1580 migration guidance is in docs/lifecycle.md.'
   created_at: 2026-10-03T19:35:10.387707765Z
   modified_at: 2026-10-03T19:35:10.387707765Z
+- id: 01a1034e-c730-7440-b44c-2c7b97faa2ff
+  author: joe
+  content: Commit 71ecbbb52c references this requirement
+  created_at: 2026-10-03T19:47:36.880442949Z
+  modified_at: 2026-10-03T19:47:36.880442949Z
 history:
 - id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
   author: joe
