@@ -135,12 +135,12 @@ description: |
      derivation annotation (EPIC-74 / TASK-1565 shape above).
   4. Each new assertion is mutation-proven: reverting the production change turns
      that assertion red, and no other test in the file changes colour.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T10:05:44.820925638Z
-modified_at: 2026-10-03T07:09:36.390102456Z
+modified_at: 2026-10-03T07:09:48.296709705Z
 req_type: Bug
 comments:
 - id: 01a0fc1b-6260-7050-8448-3e53502762f7
@@ -251,7 +251,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10098-fb80-7540-9691-f93d589b20dc
+  author: aida-auto-bump
+  timestamp: 2026-10-03T07:09:48.288693966Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10098-fb88-7d30-b256-c9be11b165a2
+  timestamp: 2026-10-03T07:09:48.296697204Z
+  agent: product
+  commit_sha: 8d3d4761b6b421e69c3e218a1d59f2d7f6071fdc
+  summary: 'Independent close-out: recorded DECISION (options 1+2) implemented as written; prior relay advisor full-diff MERGE-READY verdict confirmed; all 4 witnesses executed in CI run 37080567325; mutations re-run in sibling worktree: dropped-stored fails exactly AC1''s witness (38 green), neutralized next-branch fails exactly the two AC2 witnesses (37 green), tip 39/39'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-02T23:08:46.861035903Z
   implemented_by: joe
+  completed_at: 2026-10-03T07:09:48.288666707Z
+  completion_sha: 8d3d4761b6b421e69c3e218a1d59f2d7f6071fdc
