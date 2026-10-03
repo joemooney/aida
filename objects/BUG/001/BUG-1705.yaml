@@ -58,7 +58,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T05:44:15.964379833Z
-modified_at: 2026-10-02T17:37:21.773017787Z
+modified_at: 2026-10-03T04:58:06.802434240Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -243,6 +243,13 @@ comments:
   created_at: 2026-10-02T17:37:21.773017787Z
   modified_at: 2026-10-02T17:37:21.773017787Z
   session_id: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
+- id: 01a10020-6a52-7dc2-9451-33fac3ef7100
+  author: joe
+  content: |
+    Closing as delivered-by-children (advisor, relay #7, 2026-10-02): BUG-1705 was decomposed into BUG-1773 (visibility: held_prs derived from the verdict corpus, PR #2343, merged) and BUG-1774 (enforcement: merge chokepoint + label mirror armed from the verdict corpus, PR #2360, merged tonight). AC coverage verified on main, not inferred: AC1/AC2 observed live tonight — merge-hold-gate failed closed on PR #2339 from the recorded request-changes verdict with no hand-applied label, and aida awaiting listed #2339/#2364 under held_prs with reason rework; AC3's three cases are pinned by named tests in bug_1774_corpus_merge_gate_tests.rs (head move alone does not lift; approval at the old rejected sha does not lift; move + approval at the new head releases), which ran in tonight's green post-merge main CI; AC4 resolved as verdict-corpus-as-source-of-truth with the label as a mirror (the PR #2360 design); fail-closed behavior covered (unknown head, unreadable artifact, conflicting corpus).
+  created_at: 2026-10-03T04:58:06.802434240Z
+  modified_at: 2026-10-03T04:58:06.802434240Z
+  session_id: 302d7de9-e8d7-4058-b94c-b0cb54d66295
 history:
 - id: 01a0e68a-ff60-7c32-86db-4e7f26ec371b
   author: joe
