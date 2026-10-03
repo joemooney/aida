@@ -812,32 +812,7 @@ pub(crate) fn is_protected_branch_at(worktree: &Path, branch: &str) -> bool {
     false
 }
 
-/// BUG-1680: Static branch name check for backward compatibility.
-// trace:BUG-1680 | ai:antigravity
-pub(crate) fn is_protected_branch(branch: &str) -> bool {
-    is_protected_branch_name(branch)
-}
-
-pub(crate) fn next_command_hint(
-    state: DispatchState,
-    worktree_path: &Path,
-    branch: &str,
-    last_commit_subject: Option<&str>,
-    spec: Option<&str>,
-    manual_enter: bool,
-) -> Option<String> {
-    next_command_hint_with_untracked(
-        state,
-        worktree_path,
-        branch,
-        last_commit_subject,
-        spec,
-        manual_enter,
-        false,
-    )
-}
-
-/// BUG-1680: [`next_command_hint`] with untracked-only distinction and protected-branch guard.
+/// BUG-1680: Hint with untracked-only distinction and protected-branch guard.
 // trace:BUG-1680 | ai:antigravity
 pub(crate) fn next_command_hint_with_untracked(
     state: DispatchState,
@@ -1185,12 +1160,13 @@ mod tests {
     // trace:BUG-752 | ai:claude
     #[test]
     fn unknown_hint_never_contains_the_salvage_commit_command() {
-        let hint = next_command_hint(
+        let hint = next_command_hint_with_untracked(
             DispatchState::Unknown,
             Path::new("/tmp/wt-harness"),
             "worktree-agent-abc",
             None,
             None,
+            false,
             false,
         )
         .expect("Unknown must surface an explanatory hint");
@@ -1264,13 +1240,14 @@ mod tests {
     #[test]
     fn moving_has_no_hint() {
         assert_eq!(
-            next_command_hint(
+            next_command_hint_with_untracked(
                 DispatchState::Moving,
                 Path::new("/tmp/wt"),
                 "story-1",
                 Some("wip"),
                 Some("STORY-1"),
-                false
+                false,
+                false,
             ),
             None
         );
@@ -1278,12 +1255,13 @@ mod tests {
 
     #[test]
     fn salvageable_hint_names_worktree_branch_commit_and_salvage_command() {
-        let hint = next_command_hint(
+        let hint = next_command_hint_with_untracked(
             DispatchState::Salvageable,
             Path::new("/tmp/wt-salvage"),
             "task-1090-x",
             Some("wip: partial edit"),
             Some("TASK-1090"),
+            false,
             false,
         )
         .expect("Salvageable must always produce a hint");
@@ -1301,12 +1279,13 @@ mod tests {
 
     #[test]
     fn salvageable_hint_falls_back_to_generic_rebrief_without_a_resolved_spec() {
-        let hint = next_command_hint(
+        let hint = next_command_hint_with_untracked(
             DispatchState::Salvageable,
             Path::new("/tmp/wt-noscope"),
             "harness-worktree",
             None,
             None,
+            false,
             false,
         )
         .unwrap();
@@ -1319,12 +1298,13 @@ mod tests {
 
     #[test]
     fn stalled_hint_names_worktree_branch_and_resume_command() {
-        let hint = next_command_hint(
+        let hint = next_command_hint_with_untracked(
             DispatchState::Stalled,
             Path::new("/tmp/wt-stalled"),
             "story-42",
             Some("prior commit"),
             Some("STORY-42"),
+            false,
             false,
         )
         .expect("Stalled must always produce a hint");
@@ -1488,13 +1468,14 @@ mod tests {
     // trace:BUG-778 | ai:claude
     #[test]
     fn awaiting_agent_hint_names_the_launch_and_never_redispatches() {
-        let hint = next_command_hint(
+        let hint = next_command_hint_with_untracked(
             DispatchState::AwaitingAgent,
             Path::new("/tmp/wt-entered"),
             "task-1169-launcher",
             None,
             Some("TASK-1169"),
             true,
+            false,
         )
         .expect("AwaitingAgent must surface an explanatory hint");
         assert!(hint.contains("entered by hand"), "{hint}");
@@ -1514,26 +1495,28 @@ mod tests {
     // trace:BUG-778 | ai:claude
     #[test]
     fn hand_entered_hints_withhold_redispatch_at_any_age() {
-        let stalled = next_command_hint(
+        let stalled = next_command_hint_with_untracked(
             DispatchState::Stalled,
             Path::new("/tmp/wt-entered"),
             "task-1169-launcher",
             Some("prior commit"),
             Some("TASK-1169"),
             true,
+            false,
         )
         .expect("Stalled always produces a hint");
         assert!(!stalled.contains("aida queue work"), "{stalled}");
         assert!(stalled.contains("cd /tmp/wt-entered"), "{stalled}");
         assert!(stalled.contains("competing"), "{stalled}");
 
-        let salvageable = next_command_hint(
+        let salvageable = next_command_hint_with_untracked(
             DispatchState::Salvageable,
             Path::new("/tmp/wt-entered"),
             "task-1169-launcher",
             None,
             Some("TASK-1169"),
             true,
+            false,
         )
         .expect("Salvageable always produces a hint");
         assert!(!salvageable.contains("aida queue work"), "{salvageable}");

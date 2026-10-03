@@ -94,12 +94,13 @@ fn bug_1656_dead_pid_with_fresh_dirty_movement_is_moving_not_salvageable() {
         /* dirty_movement_fresh */ true,
     );
     assert_eq!(state, DispatchState::Moving);
-    let hint = crate::dispatch_health_ps::next_command_hint(
+    let hint = crate::dispatch_health_ps::next_command_hint_with_untracked(
         state,
         worktree.path(),
         "claude/task-1",
         None,
         Some("TASK-1"),
+        false,
         false,
     );
     assert!(
