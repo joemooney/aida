@@ -5,6 +5,10 @@
     {
       "at": "2026-10-03T22:30:34.217441745Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-03T22:42:12.645206939Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -86,6 +90,25 @@
         "spec": "STORY-1480",
         "branch": "origin/story-1480",
         "first_seen": "2026-10-03T07:40:36.890908395+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:42:12.637507779Z",
+      "spec": "STORY-1480",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:42:12.637568015Z",
+      "spec": "STORY-1480",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
