@@ -28,12 +28,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:51:48.693477250Z
-modified_at: 2026-10-03T22:19:48.831374344Z
+modified_at: 2026-10-03T22:36:26.091918699Z
 req_type: Bug
 tags:
 - agent-output
 - filters
 - queue
+comments:
+- id: 01a103e9-566b-7431-9a75-48fb6ef13ff8
+  author: ai:codex:joe
+  content: 'Implementation: JSON and TOON queue-list fast paths now apply the requirement-backed scope, active role scope/status, batch, exact-tag, and tag-prefix filters before emitting rows. Added shared predicate coverage for match/empty batch, tag, prefix, and scope. Verification: cargo fmt --all -- --check; cargo test -p aida-cli-lib fast_queue_filter_predicate_applies_batch_tag_prefix_and_scope; cargo test -p aida-cli-lib queue_json_rows_tests.'
+  created_at: 2026-10-03T22:36:26.091918699Z
+  modified_at: 2026-10-03T22:36:26.091918699Z
 history:
 - id: 01a103ce-71a4-7bd2-8c8b-2f37d5ba301e
   author: joe
