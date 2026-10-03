@@ -1,0 +1,36 @@
+id: 01a0ff9f-696f-7ff1-81b9-6732416c4d64
+spec_id: ADR-64
+agreed_id: ADR-64
+title: 'ADR: cross-machine cycle-time — local live event log, per-spec timing record published to the store at terminal state (Option B)'
+description: |
+  CONTEXT
+  `.aida/events.jsonl` is per-clone and gitignored, so phase events recorded on one machine are invisible everywhere else: a spec completed on machine X shows an empty or `unknown`-dominated timeline on machine Y. STORY-1480 needs a cross-machine event record for completed specs without putting event traffic on the drain hot path.
+
+  DECISION (Option B of STORY-1480)
+  The live event log stays local and authoritative for in-flight detail. When a spec reaches a terminal state (Done via `aida done`/queue-done advance, Completed via any completion.rs caller including the merge-trailer auto-bump), the completing clone publishes a per-spec timing record to the store: `timings/<TYPE>/<NNN>/<ID>.json` on the `aida-store` orphan branch, sharded exactly like `objects/`. The record carries schema_version, the publisher node (node_id + hostname from `.aida/node.toml`), published_at, and the spec's local feed events filtered to a lifecycle allowlist (phase, CI, review, merge, shelve/punt/requeue, disposition, completion kinds). MailReceived, ShiftTick, cron and inbox noise are never published. Publishes are union-merges (dedup on ts+kind+payload): auto-bump often completes a spec on a different machine than the one that did the work, so the Done-time publish from the work machine carries the events and later publishes only add. Readers (`aida history --timeline`, `aida metrics cycle-time`) union the local feed with the store record and replay both through the same decoder, so local and cross-machine views cannot drift. Publication is best-effort: a timing-record failure never blocks completion.
+
+  REJECTED ALTERNATIVES
+  A. Store as the live event log (every phase event a store commit): puts a commit on the drain hot path, contends with lease and status writes, inflates store history.
+  C. Separate telemetry orphan branch (`aida-events`, per-node per-day shards): full raw cross-machine history, but extra sync surface and only worth it if in-flight cross-machine visibility is proven needed. Revisit trigger: a concrete need to see another machine's IN-FLIGHT work, not just completed specs.
+
+  WHAT DOES NOT CHANGE
+  `.aida/events.jsonl` format, rotation, and kill switch; objects/ layout (no sibling files in objects shard dirs — the store scanner globs `*.yaml` there); drain emit sites; `aida db sync` mechanics (its `git add -A .` is the backstop that eventually commits any stray record).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T02:37:12.431866097Z
+modified_at: 2026-10-03T02:37:12.431866097Z
+req_type: Decision
+tags:
+- aida:history
+- aida:metrics
+- observability
+filed_at:
+  code_sha: 652988516774b0fcffbadd15f7bbc4083ea0a25c
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: a5729e8f-bc58-4486-8b68-94299f9cd0dc
