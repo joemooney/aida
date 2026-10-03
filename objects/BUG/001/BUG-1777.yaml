@@ -38,12 +38,12 @@ description: |
   1. Build (windows-latest) on the Cross-platform workflow is green on a PR whose base is main.
   2. Any test exempted from Windows carries an explicit cfg + comment naming the Windows behavior it
      cannot have, rather than a silent skip.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:33:17.896248217Z
-modified_at: 2026-10-03T08:32:16.283465400Z
+modified_at: 2026-10-03T18:56:24.892583612Z
 req_type: Bug
 tags:
 - ci
@@ -66,3 +66,22 @@ comments:
   content: 'Follow-up CI result: the updated Windows run completed. All BUG-1777 failures from the original Windows run are gone, and the corrected same-host live-PID merge-lock test passed. The run reported one separate failure from the current main base, `cached_git_backend::tests::failed_hint_write_degrades_to_deferred` (1273 passed, 1 failed): Windows directory read-only attributes do not block creation of child files. PR #2375 is green on Ubuntu; Windows is red on this separate base-suite fixture.'
   created_at: 2026-10-03T08:32:16.283465400Z
   modified_at: 2026-10-03T08:32:16.283465400Z
+history:
+- id: 01a1031f-e71b-7073-b6b0-581de7583249
+  author: aida-auto-bump
+  timestamp: 2026-10-03T18:56:24.859972780Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1031f-e73c-77a1-8328-d1b07aff8294
+  timestamp: 2026-10-03T18:56:24.892562070Z
+  agent: implementer
+  commit_sha: 8480de6bbb2d7b355f523550de77cc74fa9027e1
+  summary: 'AC1 witnessed by its own predicate: Build (windows-latest) PASS on PR #2375 rebased onto current main (run 37142637773, job 111260053077), aida-cli-lib --lib ''test result: ok. 7475 passed; 0 failed; 15 ignored; 0 filtered out'' — baseline was 7146/7. AC2: the one exemption (remote_create /bin/sh mirror-hook seam) carries cfg(unix) + a comment naming the missing Windows behavior and the retained shim coverage; merge_lock''s non-unix test was improved (live pid), not skipped. Fixture vacuousness for the rewritten hint-write test proved both directions locally by the advisor (obstruction removed -> FAILED; restored -> ok). Advisor integrated the final rebase/push; code authored by the codex seat.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T18:56:24.859893767Z
+  completion_sha: 8480de6bbb2d7b355f523550de77cc74fa9027e1
