@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T20:13:58.873984092Z
-modified_at: 2026-09-29T15:38:40.920723640Z
+modified_at: 2026-10-03T10:20:22.724306296Z
 req_type: Decision
 tags:
 - cross-platform
@@ -78,3 +78,8 @@ comments:
   created_at: 2026-09-20T20:16:05.404255834Z
   modified_at: 2026-09-20T20:16:05.404255834Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a10147-7544-74d3-bb5b-d8623566b00b
+  author: ai:codex:joe
+  content: 'Operator direction (2026-10-03): grant a scoped exception for BUG-1728 so its remaining Windows-baseline acceptance can be checked and implemented alongside the related BUG-1777 work. This does not lift ADR-47 general deferral for other Windows/cross-platform work or release policy.'
+  created_at: 2026-10-03T10:20:22.724306296Z
+  modified_at: 2026-10-03T10:20:22.724306296Z
