@@ -71,3 +71,9 @@
   note: Promoted from finding BUG-1781 via `aida findings promote`
   added_at: 2026-10-02T23:41:11.112193380Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0e873-ba47-7cd0-9ed5-ac4edb2ea337
+  position: 40000
+  added_by: joe
+  added_at: 2026-10-03T00:24:11.394097605Z
+  for_role: product
