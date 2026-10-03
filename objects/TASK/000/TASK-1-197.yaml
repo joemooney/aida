@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T19:17:36.151604853Z
-modified_at: 2026-10-03T19:26:02.082963906Z
+modified_at: 2026-10-03T19:26:10.173499336Z
 req_type: Task
 tags:
 - carried-from:BUG-1784
 - finding-hash:14bbdf83
 - from-review:PR-2386
 - kind:carried-forward
+comments:
+- id: 01a1033b-24fd-7af3-b8bc-f88657ed095b
+  author: joe
+  content: 'Advisor scope note on promotion: while adding the PATH-prepended ''claude'' shim around the two assert_refused_py calls, also fold in the two sibling findings from the same review: (1) TASK-1-198''s actionable residue — the three new trace comments on the BUG-1784 change say ai:codex but the author was antigravity; correct them to ai:antigravity (the squash title is immutable post-merge and is NOT in scope). (2) TASK-1-199 — the test''s closing summary says ''five shipped script fixtures'' but the python checks make it seven refusal surfaces; fix the wording. Both live in the files the shim work touches.'
+  created_at: 2026-10-03T19:26:10.173499336Z
+  modified_at: 2026-10-03T19:26:10.173499336Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
 history:
 - id: 01a1033b-0615-7b73-a5f5-eec750f6c488
   author: joe
