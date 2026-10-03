@@ -53,12 +53,12 @@ description: |
   4. If a lens token is combined with a stored status in a comma set
      (`--status shelved,approved`), the command either honours both or refuses with
      a message naming the limitation — it must not silently drop a token.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T14:13:04.482813479Z
-modified_at: 2026-10-03T05:30:22.671175779Z
+modified_at: 2026-10-03T10:07:18.210452323Z
 req_type: Bug
 tags:
 - cli
@@ -116,15 +116,25 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Done
+- id: 01a1013b-7cba-7430-9925-11bdb53b2a8c
+  author: aida-auto-bump
+  timestamp: 2026-10-03T10:07:18.202796390Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1013b-7cc2-7143-9cdb-5b92a28bde88
+  timestamp: 2026-10-03T10:07:18.210448884Z
+  agent: aida
+  commit_sha: 99c881dfd2a40ce5f3bd781f635b30c44631574d
+  summary: Functional fix is correct and well-evidenced (split/widen/narrow with true OR-union semantics, shared LENS_FILTER_TOKENS table, black-box integration tests, both-direction mutation proofs) — but the new --status help text was added to the WRONG command and is false there, while the real surface's help was left silent.
+  punted:
+  - 'punted: Functional fix is correct and well-evidenced (split/widen/narrow with true OR-union semantics, shared LENS_FILTER_TOKENS table, black-box integration tests, both-direction mutation proofs) — but the new --status help text was added to the WRONG command and is false there, while the real surface''s help was left silent.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T05:30:22.671175779Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Functional fix is correct and well-evidenced (split/widen/narrow with true OR-union semantics, shared LENS_FILTER_TOKENS table, black-box integration tests, both-direction mutation proofs) — but the new --status help text was added to the WRONG command and is false there, while the real surface's help was left silent.
-  recovery_hint: address the review findings, move BUG-1771 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T04:06:38.631704282Z
+  completed_at: 2026-10-03T10:07:18.202791907Z
+  completion_sha: 99c881dfd2a40ce5f3bd781f635b30c44631574d
