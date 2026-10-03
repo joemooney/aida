@@ -1,6 +1,6 @@
 use super::{
-    preclaim_collision_check, queue_work_plan_wants_pr_head_branch, PreclaimDecision,
-    QueueWorkEntry, QueueWorkMode, QueueWorkPlan,
+    preclaim_collision_check, queue_work_plan_wants_pr_head_branch, PreclaimBranchState,
+    PreclaimDecision, QueueWorkEntry, QueueWorkMode, QueueWorkPlan,
 };
 
 // trace:BUG-1761 | ai:codex
@@ -14,7 +14,7 @@ fn open_pr_refusal_names_pr_spec_and_both_recovery_actions() {
             "https://github.com/example/aida/pull/2319",
         )),
         "bug-1819",
-        true,
+        PreclaimBranchState::Unmerged,
         false,
     );
     let PreclaimDecision::Refuse(message) = decision else {
@@ -58,7 +58,7 @@ fn force_claim_bypasses_open_pr_refusal() {
             "BUG-1819",
             Some((2319, "title", "https://example.invalid/pr/2319")),
             "bug-1819",
-            true,
+            PreclaimBranchState::Unmerged,
             true,
         ),
         PreclaimDecision::Proceed
@@ -68,7 +68,8 @@ fn force_claim_bypasses_open_pr_refusal() {
 // trace:BUG-1761 | ai:codex
 #[test]
 fn stale_branch_refusal_names_branch_without_suggesting_suffix() {
-    let decision = preclaim_collision_check("BUG-7", None, "bug-7", true, false);
+    let decision =
+        preclaim_collision_check("BUG-7", None, "bug-7", PreclaimBranchState::Unmerged, false);
     let PreclaimDecision::Refuse(message) = decision else {
         panic!("expected refusal");
     };
@@ -84,7 +85,7 @@ fn stale_branch_refusal_names_branch_without_suggesting_suffix() {
 #[test]
 fn unoccupied_branch_proceeds_and_rework_plan_bypasses_pr() {
     assert_eq!(
-        preclaim_collision_check("BUG-7", None, "bug-7", false, false),
+        preclaim_collision_check("BUG-7", None, "bug-7", PreclaimBranchState::Absent, false),
         PreclaimDecision::Proceed
     );
 
@@ -118,7 +119,7 @@ fn unoccupied_branch_proceeds_and_rework_plan_bypasses_pr() {
             "BUG-7",
             Some((2319, "existing PR", "https://example.invalid/pr/2319")),
             "bug-7",
-            true,
+            PreclaimBranchState::Unmerged,
             bypass,
         ),
         PreclaimDecision::Proceed

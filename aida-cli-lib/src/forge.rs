@@ -1287,6 +1287,35 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 
 /// GitHub provider — shells out to `gh`, preserving the exact behavior of the
 /// pre-EPIC-35 call sites.
+/// BUG-1774: the spec keys a merge chokepoint weighs beside `PR-<id>` — the
+/// ids the change's branch and title name. These are the same recovery
+/// surfaces SPEC-410 squash subjects are derived from, so the gate sees the
+/// spec-keyed verdict artifact even when the PR-keyed one was never written.
+// trace:BUG-1774 | ai:claude
+fn corpus_gate_spec_hints(c: &ChangeRef) -> Vec<String> {
+    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
+    if let Some(title) = c.title.as_deref() {
+        for id in crate::pr_ship::extract_spec_ids_from_text(title) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
+}
+
+/// BUG-1774: the live head a provider's merge gate judges the corpus at when
+/// no `match_head` pin constrains the merge. `None` — unreadable — fails the
+/// gate closed once verdict artifacts exist.
+// trace:BUG-1774 | ai:claude
+fn merge_gate_live_head(forge: &dyn Forge, c: &ChangeRef) -> Option<String> {
+    forge
+        .change_status(c)
+        .ok()
+        .map(|s| s.head_sha.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 pub struct GitHubForge {
     project_root: PathBuf,
 }
@@ -1766,6 +1795,22 @@ impl Forge for GitHubForge {
         if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
             return Err(MergeHoldRefusal::new(c.id, &reason).into());
         }
+        // BUG-1774: the corpus half of the chokepoint — a blocking verdict
+        // holds the merge whatever producer wrote the artifact, marker or no
+        // marker. The head is resolved lazily (a PR with no verdict artifacts
+        // pays no forge read): a pinned merge can only land `match_head`, so
+        // that IS the head the corpus is judged at; otherwise the live head.
+        // trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| merge_gate_live_head(self, c))
+            },
+        )?;
         let args: Vec<String> = github_merge_argv(c.id, opts);
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let project_root = self.project_root.clone();
@@ -2318,6 +2363,18 @@ impl Forge for GitLabForge {
         opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
+        // BUG-1774: the corpus half of the merge chokepoint, same contract as
+        // the GitHub provider. trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| merge_gate_live_head(self, c))
+            },
+        )?;
         // BUG-1232: `glab mr merge` rewrites some GitLab 405/409 responses as a
         // false "not enough privileges" error. Gate on GitLab's authoritative
         // detailed_merge_status, then call the REST merge endpoint directly.
@@ -2660,6 +2717,20 @@ impl Forge for PureGitForge {
         } else {
             c.base.clone()
         };
+        // BUG-1774: the corpus half of the merge chokepoint. Pure-git's change
+        // id is 0 ("the branch IS the change"), so the gate reads the
+        // spec-keyed artifacts its branch names; the head is the local branch
+        // tip. trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| rev_parse(&self.project_root, &c.branch))
+            },
+        )?;
         let git = |args: &[&str]| -> std::io::Result<std::process::Output> {
             Command::new("git")
                 .arg("-C")
@@ -3773,6 +3844,17 @@ pub(crate) mod fake {
         pub(crate) open_for_spec: ChangeLookup,
         pub(crate) merged_for_branch: ChangeLookup,
         pub(crate) author: Option<String>,
+        /// Scripted state served by `change_metadata` (default `Open`).
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_state: ChangeState,
+        /// When set, `change_metadata` fails with this message — the
+        /// unreadable-forge path of the retraction ownership probe.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_error: Option<String>,
+        /// When set, `close_change` fails with this message after recording
+        /// the attempt.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) close_error: Option<String>,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
         /// `(change id, body)` for every `comment` call.
@@ -3787,6 +3869,9 @@ pub(crate) mod fake {
                 open_for_spec: ChangeLookup::NoChange,
                 merged_for_branch: ChangeLookup::NoChange,
                 author: Some("codex-bot".into()),
+                metadata_state: ChangeState::Open,
+                metadata_error: None,
+                close_error: None,
                 closed: Arc::new(Mutex::new(Vec::new())),
                 commented: Arc::new(Mutex::new(Vec::new())),
             }
@@ -3835,8 +3920,11 @@ pub(crate) mod fake {
             _: u64,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<ChangeMetadata> {
+            if let Some(msg) = &self.metadata_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
             Ok(ChangeMetadata {
-                state: ChangeState::Open,
+                state: self.metadata_state,
                 title: "fake change".into(),
                 author: self.author.clone(),
                 merged_at: None,
@@ -3894,6 +3982,9 @@ pub(crate) mod fake {
         }
         fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
             self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            if let Some(msg) = &self.close_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
             Ok(())
         }
         fn checkout_change(&self, _: &ChangeRef) -> Result<()> {

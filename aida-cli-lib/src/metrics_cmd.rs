@@ -23,6 +23,13 @@ pub(crate) fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result
         crate::cli::MetricsCommand::AiLift { markdown, json } => {
             handle_metrics_ai_lift(*markdown, *json)
         }
+        // Dispatched with the store path by the git-canonical backend before
+        // this handler; reaching it here means there is no git store to read.
+        // trace:STORY-1479 | ai:claude
+        crate::cli::MetricsCommand::CycleTime { .. } => anyhow::bail!(
+            "`aida metrics cycle-time` requires a git-canonical store. Run `aida init` (or \
+             upgrade from the deprecated centralized backend with `aida db export-git`)."
+        ),
     }
 }
 
