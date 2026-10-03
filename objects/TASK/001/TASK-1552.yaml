@@ -15,10 +15,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:27:08.519589561Z
-modified_at: 2026-10-03T00:29:34.116341461Z
+modified_at: 2026-10-03T00:38:42.803321066Z
 req_type: Task
 tags:
 - preflight from-review:TASK-1529
+comments:
+- id: 01a0ff32-ed73-7412-8242-238b20221e67
+  author: joe
+  content: |-
+    Disposition against current main (2e1f3ef5b4), where the reviewed draft's symbols (NotOurs, AlreadyRetracted, return_spec_to_implementer_after_retraction) never merged — git log -S finds them in no commit; the TASK-1529 implementation landed as RetractionOwnership{Ours,Foreign,Unverified} in retract_publication_with_notice.
+
+    Finding 1 (FIXED): the Foreign and Unverified arms left a guards-refused OPEN PR enforced by stderr prose only — no hold, no marker. Fix: every arm that leaves a refused change open (foreign ownership, unverified ownership, or a failed close call) now returns RetractionOutcome::LeftOpen and the refused-path wrapper stamps a typed Supervision merge-hold + label and explains on the PR (refused_hold_notice), per the BUG-1714 hold-only-tightens doctrine. A resolved-but-no-longer-open change is now classified NoLongerOpen and gets no hold. Fixture tests cover each arm and fail without the fix.
+
+    Finding 2 (DECLINED): the AlreadyRetracted arm and its Done-to-InProgress return exist only in the reviewed draft, not in any merged commit. Current code has no retraction outcome that reads spec status after a close, so there is no stale-Rework-hold / stranded-Done state to fix. If that flow lands later it must carry this finding with it.
+
+    Finding 3 (PARTIALLY FIXED / REST ALREADY COVERED): merged race — already covered on main by refused_preflight_leaves_an_already_merged_change_alone. Unreadable-forge path — now covered (scripted change_metadata failure holds the PR, fails closed on the close). Spec-search-resolved target — now covered (refused_preflight_closes_a_spec_search_resolved_change). The store-less tempdir fixture concern attached to the draft-only Done-to-InProgress return and is declined with finding 2.
+  created_at: 2026-10-03T00:38:42.803321066Z
+  modified_at: 2026-10-03T00:38:42.803321066Z
+  session_id: 88a320c6-eaae-46de-be42-026fd93e1b85
 history:
 - id: 01a0e37a-aaef-71d3-86e2-a7dc7743c47a
   author: joe
