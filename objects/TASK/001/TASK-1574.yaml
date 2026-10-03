@@ -13,8 +13,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-03T19:46:20.621744749Z
+modified_at: 2026-10-03T19:53:05.451943815Z
 req_type: Task
+comments:
+- id: 01a10353-caab-7160-8f2f-e7811c37b429
+  author: joe
+  content: 'Advisor intake complete 2026-10-03 (all seven re-verified against current main 71ecbbb / aida 0.15.0 e1422ae139, each by its own AIDA-57 procedure). PER-ITEM DISPOSITION: (1) queue list --batch bypass: STILL REAL, broader than filed — the toon/agent emitter (queue_cmd.rs:~1641) AND the BUG-616/618 JSON fast path both skip the --batch/--tag/--tag-prefix/scope chain; probed live (--batch does-not-exist returns the full 12-row queue). Filed BUG-1795 (high). The open drain-safety question is ANSWERED BY CODE READ: queue work --batch does NOT share the bypass (resolve_batch_members_with_context enforces the tag at lib.rs:99509 + BUG-1017/BUG-1120 pickup policy) — batch drains are safe. (2) needs-attention→done: transition refusal is design-intent (lifecycle transition_guard; merge auto-bump completes from NeedsAttention per BUG-405); the MESSAGE still names no route — filed BUG-1797 (message-only fix). (3) show --full comments: ROOT-CAUSED — -c/--comments is silently ignored in agent output mode (5,009 bytes vs 168,551 in human mode on BUG-1669; deep-phrase grep 0 vs 1); folded into TASK-1569 as an explicit AC with test. (4) pull silent skip: STILL REAL — fresh no-remote init probed today, Note: lines + exit 0; filed BUG-1796. (5) merge-hold/ship circular hints: STILL REAL (lib.rs:35807) — TASK-1582 item A. (6) ship --dry-run omits --match-head-commit: STILL REAL (merge_args pr_ship.rs:565 vs forge.rs pin) — TASK-1582 item B. (7) end-lease instruction: PARTIALLY addressed (now says ''owns this shell''s worktree'', pr_cmd.rs:2876) but still lacks scope/role — TASK-1582 item C. Report-back comment left on aida-relay AIDA-57.'
+  created_at: 2026-10-03T19:53:05.451943815Z
+  modified_at: 2026-10-03T19:53:05.451943815Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
 history:
 - id: 01a0fffb-e757-73d0-b0f5-64dead4d474a
   author: joe
