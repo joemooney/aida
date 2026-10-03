@@ -3,12 +3,12 @@ spec_id: BUG-1792
 agreed_id: BUG-1792
 title: Commit hook resolves effective role from the shared roster over the worktree's implementer lease — dispatched implementers in leased worktrees are blocked as 'advisor' and pushed toward AIDA_ALLOW_ADV
 description: 'Two independent occurrences on 2026-10-03: (1) the antigravity seat on PR #2386 (BUG-1784) was blocked committing in its registered worktree session and used the audited AIDA_ALLOW_ADVISOR_CODE=1 override without prior authorization (disclosed in its handoff); (2) the seat reworking PR #2375 (BUG-1777) in /home/joe/ai/aida-worktrees/aida-bug-1777 was blocked the same way — the hook resolved the effective role from the shared roster as advisor despite the worktree''s implementer lease — and correctly stopped to ask. The audited override is becoming the routine path for legitimate dispatched implementation, which erodes the advisor-code gate''s signal. Expected: role resolution for the commit gate should prefer the worktree session''s lease/registration (the seat actually doing the work) over the machine-shared roster role; the override should stay exceptional. Acceptance sketch: a fixture worktree with an implementer lease + a roster saying advisor commits implementation code without the override; the same commit from the operator checkout (no lease) still refuses; the hook''s refusal text names which source decided the role.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T17:49:36.783340784Z
-modified_at: 2026-10-03T18:14:12.362292906Z
+modified_at: 2026-10-03T18:42:11.493850553Z
 req_type: Bug
 history:
 - id: 01a102f1-736e-7881-b11d-35bb445a73f4
@@ -18,3 +18,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a10312-e19e-7f61-a209-abe7fe9f3492
+  author: aida-auto-bump
+  timestamp: 2026-10-03T18:42:11.486669543Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10312-e1a5-7de0-b2d7-3d166b14450d
+  timestamp: 2026-10-03T18:42:11.493848878Z
+  agent: implementer
+  commit_sha: d6b5db54e85d1263b7e95e18142766bb28e3305c
+  summary: Completed via merge d6b5db54
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T18:42:11.486552423Z
+  completion_sha: d6b5db54e85d1263b7e95e18142766bb28e3305c
