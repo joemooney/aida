@@ -38760,9 +38760,10 @@ fn session_start(
     // artifacts.
     // trace:BUG-1783 | ai:codex
     let cargo_target_dir = detect_cargo_target_dir(&project_root);
+    let mut recorded_target_dir = cargo_target_dir.clone();
     if let Some(target) = &cargo_target_dir {
-        let wt_name = worktree_path.file_name().unwrap_or_default();
-        let isolated_target = target.join("worktrees").join(wt_name);
+        let isolated_target = isolate_cargo_target_dir(target, &worktree_path);
+        recorded_target_dir = Some(isolated_target.clone());
         write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
         })?;
@@ -38849,7 +38850,7 @@ fn session_start(
         creator_pid_start_time,
         active_pid: None,
         active_pid_start_time: None,
-        cargo_target_dir: cargo_target_dir.clone(),
+        cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
         // Claude Code session storage and present a merged view.
@@ -42757,9 +42758,33 @@ fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::
     Some(target.canonicalize().unwrap_or(target))
 }
 
+/// BUG-1783: Isolate a shared target dir to a worktree-specific path.
+/// If the worktree path lacks a file name component, falls back to the parent
+/// target dir with a warning so we don't silently collapse back into the
+/// same collision hazard one directory deeper.
+/// trace:BUG-1783 | ai:codex
+pub(crate) fn isolate_cargo_target_dir(
+    parent_target: &std::path::Path,
+    worktree_path: &std::path::Path,
+) -> std::path::PathBuf {
+    use colored::Colorize;
+    match worktree_path.file_name() {
+        Some(name) if !name.is_empty() => parent_target.join("worktrees").join(name),
+        _ => {
+            eprintln!(
+                "  {} worktree path {} lacks a valid dir name; falling back to unisolated parent target {}",
+                "warning:".yellow(),
+                worktree_path.display(),
+                parent_target.display()
+            );
+            parent_target.to_path_buf()
+        }
+    }
+}
+
 /// STORY-52: write the worktree-local `.aida/session-env.sh` that the user
 /// sources after `cd`-ing into the session worktree. Sourcing it sets
-/// `CARGO_TARGET_DIR` to the parent's `target/worktrees/<branch>` (BUG-1783) so
+/// `CARGO_TARGET_DIR` to the parent's `target/worktrees/<worktree-dir-name>` (BUG-1783) so
 /// cargo reuses the build cache without colliding with main. The file is written
 /// into the worktree's `.aida/` (created here if it doesn't already exist), which
 /// lives alongside the symlinked runtime subdirs (sessions/, roles/,
