@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:44:26.230904362Z
-modified_at: 2026-10-02T15:43:11.967951195Z
+modified_at: 2026-10-03T07:58:53.838979100Z
 req_type: Bug
 tags:
 - reporting cli defer
@@ -291,6 +291,21 @@ comments:
   created_at: 2026-10-02T15:43:11.967951195Z
   modified_at: 2026-10-02T15:43:11.967951195Z
   session_id: 424a5502-c151-4790-9c94-668cb6da6dd9
+- id: 01a100c5-ed8e-7e82-b449-a9f306d87a1a
+  author: joe
+  content: |
+    ADVISOR REVIEW (relay session, 2026-10-03 00:58 MST): APPROVED at ede6c9f740 (PR #2340, retargeted to main).
+
+    Independent review against main after restacking: the PR was stacked on the pre-rework bug-1771-work tip and its base branch had squash-merged (#2339), so this seat rebased --onto main. Two semantic conflicts with BUG-1767 (merged after the PR was written) were resolved by COMPOSITION, not preference: (1) TOON show — deferral wins the status scalar, and toon_show_status's derived-rollup disclosure is kept on the non-deferred path and inside stored_status for a deferred epic; (2) human Status line + foot reprint — spec_status_badge (deferral override) plus BUG-1767's derived-annotation note. Also kept main's BUG-1771 server-list doc (exact-match; the PR's pre-rework text would have re-advertised lenses the REST filter refuses). Conflict resolution disclosed because the reviewer's hands touched it; the resolution adds no behavior beyond the two merged fixes composing.
+
+    Verification: cargo unit tests (status_display + toon_show_status + bug_1687, 21 passed), integration fixture bug_1687_defer_status_lens (4 passed, drives the shipped binary, every positive assertion paired with a control), make check-ci-fast 17 gates exit 0. Implementer's 4 mutation proofs reviewed from the trail (each witnessed by a different assertion) — not re-run post-rebase; the rebase touched only the two composition sites, both covered by the passing BUG-1767 toon tests and the BUG-1687 fixtures. Confirmed --json and --format json share one branch, so the BUG-1502 audit guard's equality property holds with the new deferred/deferred_until fields.
+
+    THE OWED PUNT-RECORD CALL: accepted as implemented. A punted-then-deferred spec keeps its "Needs Attention — punted:" RECORD block below a Status line reading Deferred. Every status SURFACE (human top + foot, TOON, --json) now answers deferred; the block is body prose recording a still-open-but-postponed fork, fires on attention_reason (cleared on triage-out), and no agent surface parses its header. Relabeling it is not worth a rework round; if the header misleads an agent in practice, that observation is a new bug with evidence.
+
+    Merge pending CI green on ede6c9f740.
+  created_at: 2026-10-03T07:58:53.838979100Z
+  modified_at: 2026-10-03T07:58:53.838979100Z
+  session_id: d3ce83fb-c192-462d-b2fb-070963db0e89
 history:
 - id: 01a0e353-3ff5-7c90-88e4-2cfa5ee01388
   author: joe
