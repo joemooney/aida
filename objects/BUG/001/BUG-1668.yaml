@@ -14,12 +14,12 @@ description: |
   6. The verdict summary names the reason in one line ("only trivial executable checks; escalated").
 
   Note: this description deliberately contains no backtick-quoted commands, so graded review of this bug itself does not parse them as executable criteria.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:42:42.799238808Z
-modified_at: 2026-10-03T07:16:25.574348459Z
+modified_at: 2026-10-03T07:16:37.377366972Z
 req_type: Bug
 comments:
 - id: 01a0df9e-ff69-7022-a2cb-472b529cbb79
@@ -63,7 +63,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1009f-3978-7ba1-879b-a4a0a0a50f5e
+  author: aida-auto-bump
+  timestamp: 2026-10-03T07:16:37.368997278Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1009f-3981-7032-bbdc-6dee96d643dc
+  timestamp: 2026-10-03T07:16:37.377356469Z
+  agent: product
+  commit_sha: 75d2254178cd54b57d6caca86a4cd84951e19188
+  summary: 'Independent re-review: word list matches AC1 exactly, guard ahead of both approve branches, failing-trivial veto unchanged, exact AC6 summary string; all 8 new tests verified executed in CI run 37097153647 (file wired); mutation re-run in sibling worktree: guard disabled fails exactly the 4 escalation witnesses incl. the evaluator-p1 fast-pass witness, 36 controls green; tip 40/40'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T07:16:25.574348459Z
   implemented_by: joe
+  completed_at: 2026-10-03T07:16:37.368972412Z
+  completion_sha: 75d2254178cd54b57d6caca86a4cd84951e19188
