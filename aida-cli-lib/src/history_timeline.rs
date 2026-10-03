@@ -456,6 +456,7 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
     cands.extend(phase_candidates(&events, &mut notes));
     cands.extend(shelve_candidates(&events, &store, &mut notes));
     cands.extend(awaiting_merge_candidates(&events, &mut notes));
+    cands.extend(merge_hold_candidates(&events, &mut notes));
     cands.extend(check_candidates(&input.checks, &mut notes));
     let first_work = cands
         .iter()
@@ -737,11 +738,17 @@ fn phase_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Cand
     out
 }
 
-/// Park spans from a shelve. The store owns when the spec stopped being
-/// parked, so a shelve interval is cut at the first store transition to a
-/// status other than Needs Attention — a later drain restart does not get
-/// to claim the gap between them.
+/// Park spans from a shelve or a filed punt. The store owns when the spec
+/// stopped being parked, so the interval is cut at the first store
+/// transition to a status other than Needs Attention — a later drain
+/// restart does not get to claim the gap between them. STORY-1480: the
+/// store's own Needs Attention interval remains the cross-machine park
+/// record (`store_wait_candidates`); these event spans REFINE it locally
+/// with the precise shelve/punt instant, and `PuntFiled` now starts one
+/// too — a punt parks the spec on a human decision exactly like a shelve,
+/// but only the punting machine has the event.
 // trace:STORY-1478 | ai:claude
+// trace:STORY-1480 | ai:claude
 fn shelve_candidates(
     events: &[DrainRecord],
     store: &[StoreMarker],
@@ -750,7 +757,10 @@ fn shelve_candidates(
     let recs = events;
     let mut out = Vec::new();
     for (i, rec) in recs.iter().enumerate() {
-        if !matches!(rec.ev.kind, EventKind::SpecShelved { .. }) {
+        if !matches!(
+            rec.ev.kind,
+            EventKind::SpecShelved { .. } | EventKind::PuntFiled { .. }
+        ) {
             continue;
         }
         let mut end: Option<(DateTime<Utc>, String)> = None;
@@ -861,6 +871,63 @@ fn awaiting_merge_candidates(events: &[DrainRecord], notes: &mut Vec<String>) ->
         ],
         merge_key: format!("await-merge/{}", merge.origin),
     }]
+}
+
+/// STORY-1480: a supervised merge-hold is a bounded wait — placed by
+/// `MergeHoldChanged { placed: true }`, cleared by the matching
+/// `{ placed: false }` or by the PR merging, whichever comes first. The
+/// span carries the SAME label and class as [`awaiting_merge_candidates`]
+/// (a hold is a refinement of that wait, held open deliberately), so when
+/// both cover an instant they agree instead of reading disputed; when the
+/// work-done boundary is missing — every pre-instrumentation history —
+/// the hold is what still attributes the wait. A hold nothing clears is a
+/// note, never a span run to the window end.
+// trace:STORY-1480 | ai:claude
+fn merge_hold_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Candidate> {
+    let recs = events;
+    let mut out = Vec::new();
+    for (i, rec) in recs.iter().enumerate() {
+        let EventKind::MergeHoldChanged {
+            pr, placed: true, ..
+        } = &rec.ev.kind
+        else {
+            continue;
+        };
+        let end = recs.iter().skip(i + 1).find(|later| {
+            later.ev.ts > rec.ev.ts
+                && match &later.ev.kind {
+                    EventKind::MergeHoldChanged {
+                        pr: p,
+                        placed: false,
+                        ..
+                    } => p == pr,
+                    EventKind::PrMerged { pr: p } => p == pr,
+                    _ => false,
+                }
+        });
+        match end {
+            Some(later) => out.push(Candidate {
+                label: "awaiting merge".to_string(),
+                class: SpanClass::Wait,
+                start: rec.ev.ts,
+                end: later.ev.ts,
+                source: SpanSource::Events,
+                precedence: PREC_DERIVED,
+                evidence: vec![
+                    format!("events:{}", rec.origin),
+                    format!("events:{}", later.origin),
+                ],
+                merge_key: format!("merge-hold/{}/{}", pr, rec.origin),
+            }),
+            None => notes.push(format!(
+                "a merge-hold on PR #{} placed at {} has no recorded release or merge, so \
+                 the held time is unknown rather than run to the end of the window",
+                pr,
+                rfc3339(rec.ev.ts)
+            )),
+        }
+    }
+    out
 }
 
 /// Forge check runs become CI detail. Parallel jobs are unioned by the
@@ -2356,6 +2423,114 @@ mod tests {
             t.totals.work,
             t.totals.unknown
         );
+    }
+
+    /// STORY-1480 Slice C: a filed punt parks the spec exactly like a
+    /// shelve — the wait reads `parked`, cut at the store's exit from
+    /// Needs Attention, instead of unknown.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_punt_filed_attributes_the_park() {
+        let store = vec![
+            filed("2026-09-26T08:00:00Z", "Approved", "d0"),
+            tr("2026-09-26T09:00:00Z", "Approved", "In Progress", "d1"),
+            tr(
+                "2026-09-26T10:00:05Z",
+                "In Progress",
+                "Needs Attention",
+                "d2",
+            ),
+            tr(
+                "2026-09-26T14:00:00Z",
+                "Needs Attention",
+                "In Progress",
+                "d3",
+            ),
+            tr("2026-09-26T15:00:00Z", "In Progress", "Completed", "d4"),
+        ];
+        let events = vec![rec(
+            "2026-09-26T10:00:00Z",
+            "",
+            10,
+            EventKind::PuntFiled {
+                spec: "SPEC-1".into(),
+            },
+        )];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+        let parked = find(&t, "parked").expect("a park span from the punt");
+        assert_eq!(parked.start, at("2026-09-26T10:00:00Z"));
+        assert_eq!(parked.end, at("2026-09-26T14:00:00Z"));
+    }
+
+    /// STORY-1480 Slice C: a supervised merge-hold is a bounded
+    /// awaiting-merge wait — placed → released (or merged) — and a hold
+    /// nothing clears stays a note, never a span run to the window end.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_merge_hold_attributes_the_wait() {
+        let store = vec![
+            filed("2026-09-26T08:00:00Z", "Approved", "e0"),
+            tr("2026-09-26T09:00:00Z", "Approved", "In Progress", "e1"),
+            tr("2026-09-26T13:00:00Z", "In Progress", "Completed", "e2"),
+        ];
+        let events = vec![
+            rec(
+                "2026-09-26T10:00:00Z",
+                "",
+                20,
+                EventKind::MergeHoldChanged {
+                    pr: 42,
+                    placed: true,
+                    reason: Some("advisor review".into()),
+                },
+            ),
+            // A different PR's release must not clear PR-42's hold.
+            rec(
+                "2026-09-26T10:30:00Z",
+                "",
+                21,
+                EventKind::MergeHoldChanged {
+                    pr: 99,
+                    placed: false,
+                    reason: None,
+                },
+            ),
+            rec(
+                "2026-09-26T12:00:00Z",
+                "",
+                22,
+                EventKind::PrMerged { pr: 42 },
+            ),
+            // A second hold with no release or merge after it: note only.
+            rec(
+                "2026-09-26T12:30:00Z",
+                "",
+                23,
+                EventKind::MergeHoldChanged {
+                    pr: 77,
+                    placed: true,
+                    reason: None,
+                },
+            ),
+        ];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+        let wait = find(&t, "awaiting merge").expect("the held wait");
+        assert_eq!(wait.start, at("2026-09-26T10:00:00Z"));
+        assert_eq!(wait.end, at("2026-09-26T12:00:00Z"));
+        assert!(
+            t.coverage_notes
+                .iter()
+                .any(|n| n.contains("merge-hold on PR #77") && n.contains("no recorded release")),
+            "{:?}",
+            t.coverage_notes
+        );
+        // The uncleared hold claimed nothing after 12:30.
+        assert!(t
+            .spans
+            .iter()
+            .all(|s| !(s.activity == "awaiting merge" && s.start >= at("2026-09-26T12:30:00Z"))));
     }
 
     /// An in-phase retry is not a park, repeated phases are numbered, and

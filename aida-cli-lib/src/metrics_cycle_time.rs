@@ -942,9 +942,10 @@ pub(crate) fn run(
     let mut completed_in_window = 0usize;
     let mut included: Vec<SpecCycle> = Vec::new();
     let mut excluded: Vec<(String, String)> = Vec::new();
+    // trace:STORY-1480 | ai:claude
     let mut notes = vec![
         "forge timestamps are not consulted by this aggregate view; CI signals come from the \
-         local drain feed"
+         local drain feed and each spec's published timing record"
             .to_string(),
     ];
     let (feed_by_spec, feed_notes) = drain_events_by_spec(project_root);
