@@ -1,0 +1,23 @@
+id: 01a10297-b3ce-7cc2-b035-f446fd136009
+spec_id: TASK-1579
+agreed_id: TASK-1579
+title: Document why aida pr ship does not auto-rebase
+description: |-
+  Add a section to docs/git-workflow.md explaining why aida pr ship does not auto-rebase stale branches: rebasing invalidates the green CI check (new SHAs), squash-merge rarely needs a rebase, and the no-surprises working-tree rule. Note the autonomous orchestrator exception (STORY-429).
+
+  ## Acceptance
+  - docs/git-workflow.md has a section covering the CI invalidation penalty, squash-merge behavior, the no-surprises rule, and the --auto-complete orchestrator exception.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T16:27:38.830876168Z
+modified_at: 2026-10-03T16:27:38.830876168Z
+req_type: Task
+filed_at:
+  code_sha: b2bd2da8bd384211af97741fdd2c9ae8631d4e8b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
