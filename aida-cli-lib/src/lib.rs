@@ -38948,9 +38948,8 @@ fn session_start(
             &[owns.to_string()],
             &events::EventKind::PhaseEntered {
                 idx: 1,
-                slug: inherited_role
-                    .clone()
-                    .unwrap_or_else(|| "implementer".to_string()),
+                // trace:BUG-1786 | ai:antigravity
+                slug: "implementer".to_string(),
                 vendor: None,
                 seat: None,
                 model: None,
