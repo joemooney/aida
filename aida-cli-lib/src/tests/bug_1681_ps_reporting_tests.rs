@@ -16,6 +16,13 @@
 use super::*;
 use crate::dispatch_health_ps::{DispatchState, WorktreeGitProbe};
 
+/// BUG-1740: a pid outside this process's ancestor chain. These fixtures used
+/// `std::process::id()`, which made the test process its own fan-out — the
+/// very self-corroboration BUG-1740 removed. Only the cwd/presence arm is
+/// exercised with it, so the pid need not exist.
+// trace:BUG-1740 | ai:claude
+const BUG_1740_WORKER_PID: u32 = 424_242;
+
 fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
         id: id.to_string(),
@@ -222,7 +229,9 @@ fn bug_1681_fanout_attribution_needs_a_matching_live_subagent() {
     // A fan-out building something entirely different.
     harness.branch = "claude/bug-9999".into();
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // BUG-1740: a WORKER pid, not the caller — the reporting
+        // session is not evidence of a fan-out. trace:BUG-1740 | ai:claude
+        pid: BUG_1740_WORKER_PID,
         cwd: harness_dir.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,
@@ -251,7 +260,9 @@ fn bug_1681_fanout_attribution_holds_when_the_subagent_names_the_spec() {
     );
     harness.branch = "claude/story-1425".into();
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // BUG-1740: a WORKER pid, not the caller — the reporting
+        // session is not evidence of a fan-out. trace:BUG-1740 | ai:claude
+        pid: BUG_1740_WORKER_PID,
         cwd: harness_dir.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,
@@ -286,7 +297,9 @@ fn bug_1681_possibly_subagent_needs_the_subagent_in_this_worktree() {
         harness,
     ];
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // BUG-1740: a WORKER pid, not the caller — the reporting
+        // session is not evidence of a fan-out. trace:BUG-1740 | ai:claude
+        pid: BUG_1740_WORKER_PID,
         cwd: harness_dir.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,

@@ -305,13 +305,28 @@ fn bug_1656_dead_lease_with_old_dirty_diff_is_still_salvageable_and_abandoned() 
 
 // --- (3) possibly worked by a subagent ------------------------------------------
 
+/// Kill + reap the fixture's worker child even when the test panics — no
+/// zombie, no orphaned sleeper.
+// trace:BUG-1740 | ai:claude
+struct ReapOnDrop(std::process::Child);
+
+impl Drop for ReapOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// BUG-1681 tightened the attribution: the live subagent must be working
-/// THIS spec's worktree, not merely be alive somewhere in the repo. The
-/// fixture is now the real shape — the subagent's harness lease records the
-/// spec's own worktree as its cwd and carries the live parent-harness pid,
+/// THIS spec's worktree, not merely be alive somewhere in the repo. BUG-1740
+/// then excluded self-corroboration: the parent-harness pid this fixture used
+/// to carry is identity evidence rooted in the observer's own pid chain, and
+/// no longer backs a fan-out when the parent itself runs the command. So the
+/// harness lease records the spec's own worktree as its cwd and carries the
+/// pid of a live worker DISTINCT from the caller (a real spawned child),
 /// while the spec lease itself has no live process (the parent process's cwd
 /// is the project root, never the worktree).
-// trace:BUG-1656 trace:BUG-1681 | ai:claude
+// trace:BUG-1656 trace:BUG-1681 trace:BUG-1740 | ai:claude
 #[test]
 fn bug_1656_stale_lease_next_to_live_harness_lease_says_possibly_subagent() {
     let tmp = tempfile::tempdir().unwrap();
@@ -325,7 +340,17 @@ fn bug_1656_stale_lease_next_to_live_harness_lease_says_possibly_subagent() {
         worktree_lease::HARNESS_WORKTREE_SCOPE,
         spec_worktree.clone(),
     );
-    harness.active_pid = Some(std::process::id());
+    // BUG-1740: the lease's identity evidence must be a live pid DISTINCT
+    // from the caller — the observer's own pid chain no longer corroborates.
+    // A real spawned child is alive, and `walk_ancestor_pids` only walks UP,
+    // so a child is never in the caller's chain. trace:BUG-1740 | ai:claude
+    let worker = ReapOnDrop(
+        std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn the fixture's worker child"),
+    );
+    harness.active_pid = Some(worker.0.id());
     let leases = vec![lease("sess-dead3", "BUG-1641", spec_worktree), harness];
     let live = vec![process_probe::LiveSession {
         pid: std::process::id(),
