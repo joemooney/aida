@@ -1,10 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-02T19:44:38.516408094Z
+last_run: 2026-10-03T19:12:05.743776831Z
 last_by:
   seat: advisor
-  session: b60cff1c-3dc3-4a0a-ae64-2c8966f495bd
+  session: 424cc773-b969-4027-95eb-13a904e9c298
   vendor: antigravity
 result: done
-note: 'Disposition: environmental, not a regression; budgets unchanged. Window evidence: 12.1% of 257 ''aida show'' calls over the 1000ms budget concentrated in binary f3cde6e60e (14.9% of 201) during the multi-day build-storm/high-iowait period; current binary fe09d7678e was 1.9% of 54. Quiet-host control just now: 5 consecutive ''aida show'' calls at 90-180ms. The 9772ms ceiling breach reads as one contended-host outlier. Side note: the 09-29 trip record carries audit_error ''malformed typed doctor output: trailing characters at line 30 column 1'' — worth a look if it recurs.'
-due_since: 2026-10-02T23:09:00.552124977Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Root-caused, not a code regression. Today''s trips came from stale installed binaries sha 0bd634c (~/.local/bin/aida built 2026-09-11, ~/.cargo/bin/aida built 2026-09-13) still shadowing PATH for non-dev-activated sessions (role=product, 224 calls today, 5.6-20.5s session start/show — they predate the BUG-1789 role-enter resume-scan fix, PR #2389). Repair: both paths reinstalled from target/release (e1422ae139). The window''s worst call (35488ms, advisor binary d5b1957658, 2026-10-02T23:15Z) was drain-night contention, consistent with yesterday''s environmental disposition. Control on current binary: 5 consecutive ''aida show'' at 90-140ms under live rustc load. Budgets unchanged. 09-29 audit_error ''malformed typed doctor output'' did not recur today.'
