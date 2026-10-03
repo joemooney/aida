@@ -1,0 +1,20 @@
+id: 01a100a8-274f-7302-8ea9-c899d972224a
+spec_id: BUG-1788
+agreed_id: BUG-1788
+title: Rework hold row still prescribes implementer rework after the releasing approval is recorded
+description: 'Observed on PR #2364 / BUG-1716 (2026-10-03 ~00:25): round-1 request-changes armed the marker hold at .aida/merge-holds/PR-2364 (target_head 98f3543b). The round-2 APPROVED verdict was then recorded at the PR''s current head 48433c6b (.aida/review-verdicts/BUG-1716/48433c6b....json), satisfying the marker''s own release_condition (''a fresh APPROVED verdict ... then a human ships it''). Yet `aida awaiting` held_prs still shows: reason rework, detail ''CHANGES REQUESTED for BUG-1716 at 98f3543b0c52'', action ''implementer: address the review findings; the hold lifts after approval''. All three are now wrong-state: rework is complete, the approval exists, and the only pending step is the human merge-hold clear. project_held_pr (aida-cli-lib/src/awaiting_you.rs:1304) projects the marker verbatim without consulting the verdict corpus for a satisfied release condition. Expected: when an approved verdict exists at the PR''s current head, the row should flip to something like ''rework approved at <head>; awaiting human: aida merge-hold clear <pr>'' so a reader does not re-dispatch rework that is already done. Human-only clear (integrity floor) is NOT in question — only the stale prescription. Cost: an advisor session spent real time re-deriving that the hold was already satisfied.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T07:26:22.543926925Z
+modified_at: 2026-10-03T07:26:22.543926925Z
+req_type: Bug
+filed_at:
+  code_sha: 75d2254178cd54b57d6caca86a4cd84951e19188
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 75d2254178
+  vendor: antigravity
+  session: bd3c525f-e97f-4517-972f-afc4737f73f8
