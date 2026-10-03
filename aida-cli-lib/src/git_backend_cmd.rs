@@ -302,6 +302,31 @@ fn toon_show_status(effective_status: &str, stored_status: &str) -> String {
     }
 }
 
+// trace:TASK-1569 | ai:codex
+fn toon_show_comment_lines(comments: &[aida_core::Comment], include_bodies: bool) -> Vec<String> {
+    if comments.is_empty() {
+        return Vec::new();
+    }
+    if !include_bodies {
+        return vec![crate::toon::scalar(
+            "comments",
+            &format!("{} (--comments to print)", comments.len()),
+        )];
+    }
+
+    let mut lines = vec![crate::toon::scalar("comments", &comments.len().to_string())];
+    for (index, comment) in comments.iter().enumerate() {
+        let value = format!(
+            "author: {}\ncreated_at: {}\nbody: {}",
+            comment.author,
+            comment.created_at.to_rfc3339(),
+            comment.content
+        );
+        lines.push(crate::toon::scalar(&format!("comments[{index}]"), &value));
+    }
+    lines
+}
+
 // trace:BUG-1207 | ai:codex
 fn render_list_table<F>(
     reqs: &[aida_core::RequirementSummary],
@@ -967,6 +992,38 @@ mod show_latency_regression_tests {
         assert_eq!(toon_show_status("InProgress", "In Progress"), "in-progress");
         // A custom status outside the lifecycle never grows an annotation.
         assert_eq!(toon_show_status("frobnicated", "Draft"), "frobnicated");
+    }
+
+    // trace:TASK-1569 | ai:codex
+    #[test]
+    fn toon_show_comment_lines_projects_count_and_full_bodies() {
+        use chrono::{TimeZone, Utc};
+        let empty = Vec::new();
+        assert!(toon_show_comment_lines(&empty, false).is_empty());
+
+        let comments = vec![aida_core::Comment {
+            id: uuid::Uuid::nil(),
+            author: "reviewer".into(),
+            content: "distinctive body phrase survives intact".into(),
+            created_at: Utc.timestamp_opt(1_759_500_000, 0).unwrap(),
+            modified_at: Utc.timestamp_opt(1_759_500_000, 0).unwrap(),
+            parent_id: None,
+            replies: Vec::new(),
+            reactions: Vec::new(),
+            session_id: None,
+            relayed_from: None,
+        }];
+        let hint = toon_show_comment_lines(&comments, false).join("\n");
+        assert!(hint.contains("comments: 1 (--comments to print)"), "{hint}");
+
+        let body = toon_show_comment_lines(&comments, true).join("\n");
+        assert!(body.contains("comments: 1"), "{body}");
+        assert!(body.contains("reviewer"), "{body}");
+        assert!(
+            body.contains("distinctive body phrase survives intact"),
+            "{body}"
+        );
+        assert!(!body.contains("--comments to print"), "{body}");
     }
 }
 
@@ -4266,6 +4323,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Show {
             id,
             comments,
+            no_comments,
             tree,
             depth,
             sync,
@@ -4816,6 +4874,7 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
                             lines.push(crate::toon::scalar("filed_at", &p.summary_line()));
                         }
+                        lines.extend(toon_show_comment_lines(&req.comments, *comments));
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -5227,7 +5286,7 @@ pub(crate) fn handle_git_backend_command(
                             );
                         }
                     }
-                    if !req.comments.is_empty() {
+                    if !req.comments.is_empty() && !crate::agent_output_mode() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
                     {
@@ -5359,7 +5418,7 @@ pub(crate) fn handle_git_backend_command(
                     // would have shown. Runs unconditionally (not gated on
                     // `*comments`) and duplicates into the full `-c` comment
                     // list below without harm. trace:STORY-1434 | ai:claude
-                    {
+                    if !*no_comments && (!crate::agent_output_mode() || *comments) {
                         let mut visible_comments: Vec<&aida_core::Comment> = Vec::new();
                         crate::collect_default_visible_comments(
                             &req.comments,
@@ -5394,7 +5453,10 @@ pub(crate) fn handle_git_backend_command(
                             }
                         }
                     }
-                    if *comments && !req.comments.is_empty() {
+                    if !*no_comments
+                        && (*comments || !crate::agent_output_mode())
+                        && !req.comments.is_empty()
+                    {
                         println!("\n{}:", "Comments".green().bold());
                         for c in &req.comments {
                             print_comment(c, 0);
