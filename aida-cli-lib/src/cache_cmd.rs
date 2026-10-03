@@ -197,8 +197,13 @@ fn handle_cache_refresh(
         return Ok(());
     }
 
+    // trace:BUG-1779 | ai:antigravity
     backend.ensure_cache_fresh_with_schema_retry()?;
-    refresh_request::clear(backend.cache().path())?;
+    if let Some(head) = backend.cache().source_head_sha()? {
+        refresh_request::clear_if_target_matches(backend.cache().path(), &head)?;
+    } else {
+        refresh_request::clear(backend.cache().path())?;
+    }
     println!(
         "{}: cache fresh at {}",
         "OK".green(),
@@ -215,6 +220,7 @@ fn handle_cache_refresh(
 /// crash-loop stand-down made visible where it bites.
 // trace:TASK-1527 | ai:claude
 fn print_refresh_status(cache_path: &std::path::Path, store_head: &str) {
+    // trace:BUG-1779 | ai:antigravity
     use aida_core::db::{cache_refresh::RefreshLock, refresh_request};
     let lock_line = match RefreshLock::try_acquire(cache_path) {
         // The probe guard drops at the end of this match: holding it for the
