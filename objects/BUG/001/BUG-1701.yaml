@@ -57,7 +57,8 @@ relationships:
 - rel_type: Parent
   target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
   created_at: 2026-09-28T04:56:29.466947434Z
-- rel_type: !Custom carved-out-to
+- rel_type:
+    custom: carved-out-to
   target_id: 01a0e65f-184c-73d2-9509-83f0d6ff6a6f
   created_at: 2026-09-28T06:42:35.113566392Z
   created_by: joe

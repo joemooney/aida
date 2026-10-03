@@ -117,7 +117,8 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-16T17:18:45.958400479Z
-- rel_type: !Custom implemented-by
+- rel_type:
+    custom: implemented-by
   target_id: 019e338e-53b4-7782-85b0-15aa8c2fe25a
   created_at: 2026-05-17T01:30:30.123104948Z
   created_by: joe
