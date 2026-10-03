@@ -26,12 +26,12 @@ description: |
   - Re-measure: `aida doctor check performance` is quiet on BOTH limbs against a fresh in-lineage 24 h window of this repo's real dogfood traffic, at normal concurrency (not a synthetic quiet run). Paste the output as a comment here.
 
   Related: BUG-1606 (previous fix, done), BUG-1594, ADR-53, STORY-1484, TASK-1526, TASK-1514, SPIKE-90.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-10-03T06:24:00.922899375Z
+modified_at: 2026-10-03T06:24:11.964442045Z
 req_type: Bug
 tags:
 - performance
@@ -335,7 +335,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1006f-3aa8-7130-bc09-79f2e9882bae
+  author: aida-auto-bump
+  timestamp: 2026-10-03T06:24:11.944415536Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1006f-3abc-7f20-bdb9-916787263ca0
+  timestamp: 2026-10-03T06:24:11.964418700Z
+  agent: aida
+  commit_sha: 6cc6146e74e355855634f4fe8f6fa9300df9cb58
+  summary: 'Independent advisor review of PR #2370 (author session f3f9422b, not this seat). Scope-compliant with the 01a10028 scoping note: one production hunk in the TTY single-flight winner''s full-rebuild arm of freshen_for_read, riding pre-existing TASK-1526/1527 machinery (ReadRefreshAttempt one-attempt flag, is_cache_lock_error, file_and_spawn_refresh) — no refresh redesign; file-under-flock invariant preserved. Mutation proof re-run by this reviewer in a sibling worktree (own CARGO_TARGET_DIR, jobs=2, nice): tip green (3/3 incl. tty_full_rebuild_winner_bounded_behind_live_writer); strict pre-fix mutation fails EXACTLY that witness with the predicted ''database is locked'' ladder signature (runtime 22.6s->32s) while remains_strict_before_c and the non-TTY control stay green; restored byte-identical via git checkout. All 4 black-box bug_1674 tests verified executed and passed in CI run 37100738667 on this head. AC3 verified recorded on STORY-1484 (show added to stale-allowed list with TTY-winner exception). TASK-1565 baseline cross-ref added as PR comment (body gap, non-blocking). Observation, non-blocking: file_and_spawn_refresh''s A7 crash-loop fallback can still ride the full ladder behind a live writer — pre-existing slice-C design for all readers, not introduced here.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T05:41:37.840183382Z
   implemented_by: joe
+  completed_at: 2026-10-03T06:24:11.944335620Z
+  completion_sha: 6cc6146e74e355855634f4fe8f6fa9300df9cb58
