@@ -1,0 +1,27 @@
+id: 01a10179-1127-7c01-b4fd-f50b7ab58c15
+spec_id: TASK-1-194
+title: 'FOLLOW-UP (non-blocking, may be a filed spec instead of a code change): nothing…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  FOLLOW-UP (non-blocking, may be a filed spec instead of a code change): nothing removes target/worktrees/<name> at session end / worktree removal, and these caches live INSIDE main's target/ where the host's delete-non-main-targets disk discipline cannot see them. Also note the lease still records the PARENT target (session_start ~line 38846) while the shim gets the isolated dir — consumers only check is_some() today, but the stored value is now misleading.
+  Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T11:14:33.895924858Z
+modified_at: 2026-10-03T11:14:33.895924858Z
+req_type: Task
+tags:
+- carried-from:BUG-1783
+- finding-hash:bf74b89b
+- from-review:BUG-1783
+- kind:carried-forward
+filed_at:
+  code_sha: c980a7937637ee228b687375b47549f35b49fbd3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
