@@ -30,6 +30,8 @@ on:
       - 'aida-cli-lib/src/init_cmd.rs'
       - 'aida-cli-lib/src/**/resolve_aida_exe*'
       - 'aida-cli-lib/src/**/session*.rs'
+      # BUG-1776: temporary PR tripwire while repairing macOS recovery fixtures.
+      - 'aida-cli-lib/src/tests/bug_1629_phase1_recovery_tests.rs'
       - 'aida-core/src/db/git_backend.rs'
       - 'aida-core/templates/hooks/**'
       - '.github/workflows/**'
@@ -240,10 +242,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TASK-1570: macOS is disabled until further notice (operator mandate,
-        # 2026-10-02). Restore by re-adding macos-latest. While disabled, the
-        # BUG-1776 macOS nightly reds cannot fire. trace:TASK-1570 | ai:claude
-        os: [windows-latest]
+        # BUG-1776: temporarily enable macOS to validate the recovery fixture fix.
+        # Remove macos-latest after CI confirms the fix; TASK-1570 is the prior setting.
+        os: [windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v5

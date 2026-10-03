@@ -724,11 +724,15 @@ fn store(root: &std::path::Path, spec: &str, status: aida_core::RequirementStatu
 }
 
 /// Shell that advances `spec` to `Done` in the store, the way a child that
-/// finished its work does, then exits 1 without a lease or a receipt.
+/// finished its work does, then exits 1 without a lease or a receipt. Use awk
+/// plus mv instead of `sed -i`: BSD sed (macOS) requires a backup suffix for
+/// `-i`, while GNU sed accepts the form used by the old fixture.
+// trace:BUG-1776 | ai:codex
 fn finish_then_lose_state(spec: &str) -> String {
     format!(
         r#"obj=$(find .aida-store/objects -name '{spec}.yaml' | head -1)
-sed -i 's/^status: .*/status: Done/' "$obj"
+awk '{{ if ($0 ~ /^status: /) print "status: Done"; else print }}' "$obj" > "$obj.tmp"
+mv "$obj.tmp" "$obj"
 exit 1"#
     )
 }
