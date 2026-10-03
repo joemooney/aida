@@ -85,7 +85,6 @@ def build_claude_argv(condition, prompt, model, run_dir):
         "--model", model,
         "--output-format", "stream-json",
         "--verbose",
-        "--dangerously-skip-permissions",
         "--no-session-persistence",
         "--disable-slash-commands",
         "--strict-mcp-config",
@@ -295,7 +294,6 @@ def grade(task_prompt, grading_hint, raw_jsonl, run_dir):
         "--model", JUDGE_MODEL,
         "--output-format", "text",
         "--max-turns", "1",
-        "--dangerously-skip-permissions",
         "--no-session-persistence",
         "--strict-mcp-config",
     ]
@@ -494,6 +492,9 @@ RESEED_PER_RUN_TASKS = {"chained_followup"}
 
 
 def cmd_matrix(args):
+    # trace:BUG-1784 | ai:antigravity
+    print("ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: bench matrix is disabled because it launches a full-access vendor directly.", file=sys.stderr)
+    sys.exit(78)
     conditions = load_json("conditions.json")
     tasks = load_json("tasks.json")
     cond_ids = args.condition.split(",") if args.condition else list(conditions.keys())
@@ -531,6 +532,9 @@ def cmd_matrix(args):
 
 
 def cmd_run(args):
+    # trace:BUG-1784 | ai:antigravity
+    print("ERROR[AIDA_VENDOR_LAUNCH_REFUSED]: bench run is disabled because it launches a full-access vendor directly.", file=sys.stderr)
+    sys.exit(78)
     conditions = load_json("conditions.json")
     tasks = load_json("tasks.json")
     if args.condition not in conditions:
