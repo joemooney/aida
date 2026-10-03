@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1776",
+  "publishes": [
+    {
+      "at": "2026-10-03T17:33:34.668760570Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T07:40:36.936607824Z",
+      "spec": "BUG-1776",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1776",
+        "branch": "bug-1776",
+        "first_seen": "2026-10-03T07:40:36.936537257+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T17:23:23.473404155Z",
+      "spec": "BUG-1776",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2371,
+        "verdict": "APPROVED",
+        "reviewed_sha": "596b3cc3bf3f"
+      }
+    },
+    {
+      "ts": "2026-10-03T17:33:34.661574236Z",
+      "spec": "BUG-1776",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a2c7bc7240a46e1c33dd37948d8fd98c09e221f1",
+        "pr": 2371,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

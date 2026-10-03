@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1716",
+  "publishes": [
+    {
+      "at": "2026-10-03T17:33:34.655064062Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-28T15:52:37.060210059Z",
+      "spec": "BUG-1716",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-09-28T15:52:37.929379531Z",
+      "spec": "BUG-1716",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-03T01:27:03.382670036Z",
+      "spec": "BUG-1716",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1716",
+        "branch": "bug-1716",
+        "first_seen": "2026-10-03T01:27:03.382636883+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T03:47:44.762403Z",
+      "spec": "BUG-1716",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2364,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "98f3543b0c527eb57d874352eb4f0b0d36c3585d"
+      }
+    },
+    {
+      "ts": "2026-10-03T03:47:45.318634306Z",
+      "spec": "BUG-1716",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "PR #2364 CI red: aida-cli-lib --lib fails — 13 bug_1629_phase1_recovery_tests + bug_1682_process_child panic (bug_1682_global_queue_tests.rs:77); launch-failure reclassification broke phase-1 recovery expectations",
+        "recovery_hint": "address the review findings, move BUG-1716 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:00:37.113862401Z",
+      "spec": "BUG-1716",
+      "seat": "product",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "48433c6b1fa8"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:24:33.817914094Z",
+      "spec": "BUG-1716",
+      "seat": "product",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:24:33.818050823Z",
+      "spec": "BUG-1716",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:24:34.528911891Z",
+      "spec": "BUG-1716",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-03T17:33:34.647472428Z",
+      "spec": "BUG-1716",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "401819b5f1801ae8659cf02e5590dc5b250e5a54",
+        "pr": 2364,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
