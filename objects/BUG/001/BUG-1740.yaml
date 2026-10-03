@@ -108,7 +108,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-02T22:16:57.879527832Z
+modified_at: 2026-10-03T08:40:00.969736215Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -472,6 +472,12 @@ comments:
   created_at: 2026-10-02T22:16:57.879527832Z
   modified_at: 2026-10-02T22:16:57.879527832Z
   session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
+- id: 01a100eb-92c9-7ff0-9a99-575749c54412
+  author: joe
+  content: 'ADVISOR (session #13, 2026-10-03): Rework brief for PR #2342 written and routed — .aida/agent-briefs/claude/BUG-1740-2026-10-03T083926Z.md; spec requeued top-of-queue on the implementer role. Blocker re-verified against the diff at c78c62838a: lease_state_for short-circuits Live on active_pid (lib.rs ~:34084) and creator_pid (~:34071) before the caller-filtered LiveSession list, so a caller-pid-identified harness lease still self-corroborates (verdict 01a0feb1). DESIGN FORK RESOLVED: the PR''s active_pid carve-out (''positive claim by the minter'') is overruled by AC2''s plain text — possibly_subagent must be false when the only live process backing the lease is the caller or its ancestors; AC4 defines the protected TASK-1064 case as a process that is NOT the caller. Cross-session observation still protects a real fan-out; only the orchestrator''s self-report loses the softening. Required: exclude caller-pid-identified leases from fan-out corroboration ONLY (lease_state_for''s other callers unchanged), identity-arm tests that FAIL at c78c62838a, creator_pid arm covered or proven unreachable.'
+  created_at: 2026-10-03T08:40:00.969736215Z
+  modified_at: 2026-10-03T08:40:00.969736215Z
+  session_id: 07536013-6404-4481-ad2b-6d7e5611c18d
 history:
 - id: 01a0f2cd-30b8-7813-ac85-e2b525ad38b2
   author: joe
