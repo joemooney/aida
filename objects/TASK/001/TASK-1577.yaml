@@ -1,0 +1,19 @@
+id: 01a10154-30f7-79a0-ab57-e25867c8ce45
+spec_id: TASK-1577
+agreed_id: TASK-1577
+title: Cleanup target/worktrees/<name> upon session end
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T10:34:17.207943821Z
+modified_at: 2026-10-03T10:34:17.207943821Z
+req_type: Task
+filed_at:
+  code_sha: 82c976573d1ddac703342b1ccff5a96f03a6f8f6
+  branch: bug-1783
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
