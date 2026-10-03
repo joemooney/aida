@@ -10,12 +10,12 @@ description: |-
   2. A test in the BUG-1688 shipped-launch-refusal family pins the refusal (the bench harness is exercised with a recording vendor shim; zero vendor invocations on the refusal path).
   3. No bypass flag string in the file becomes reachable again without an explicit, separately approved mechanism; refusing this route does not claim any protection is deployed and does not close BUG-1669 (AC3/AC4 make refusal-only insufficient there).
   Out of scope: the P-enrolled-host boundary itself, any change to production Rust launch paths, and any claim about BUG-1669.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:37:17.786280177Z
-modified_at: 2026-10-03T17:13:48.421579756Z
+modified_at: 2026-10-03T19:07:01.436272524Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -26,6 +26,12 @@ relationships:
   target_id: 01a0df0b-ae41-7031-bc31-6425ece75175
   created_at: 2026-10-03T00:37:32.922013144Z
   created_by: joe
+comments:
+- id: 01a10329-9dbc-7ca0-bc10-45a89514b4f4
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Fix sound (refusals at the only two launch entry points, flags removed, test wired into CI) but AC2''s zero-invocation shim does not cover the python harness; attribution labels wrong.. No triage reason was given.'
+  created_at: 2026-10-03T19:07:01.436265803Z
+  modified_at: 2026-10-03T19:07:01.436265803Z
 history:
 - id: 01a10279-2e5c-78c1-9352-3179316cbd42
   author: joe
@@ -48,11 +54,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Fix sound (refusals at the only two launch entry points, flags removed, test wired into CI) but AC2's zero-invocation shim does not cover the python harness; attribution labels wrong.
-  recovery_hint: address the review findings, move BUG-1784 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T17:13:48.421579756Z
+- id: 01a10329-9dbc-7ca0-bc10-45934e08150e
+  author: joe
+  timestamp: 2026-10-03T19:07:01.436250814Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
