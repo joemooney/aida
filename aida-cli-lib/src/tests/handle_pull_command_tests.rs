@@ -683,15 +683,11 @@ exec /usr/bin/git "$@"
     if let Ok(old_path) = std::env::var("PATH") {
         new_path = format!("{}:{}", new_path, old_path);
     }
-    std::env::set_var("PATH", new_path);
+
+    // Use AIDA's test_env helper instead of raw env::set_var
+    let _path_guard = crate::test_env::EnvVarGuard::set("PATH", &new_path);
 
     let result = handle_pull_command(&store_path, true, false, true, true, false);
-
-    // Clean up PATH
-    if let Ok(old_path) = std::env::var("PATH") {
-        let cleaned = old_path.split(':').skip(1).collect::<Vec<_>>().join(":");
-        std::env::set_var("PATH", cleaned);
-    }
 
     assert!(
         result.is_ok(),
