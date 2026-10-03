@@ -27,12 +27,12 @@ description: |
 
   ## Groomed decision (proxy, 2026-09-25)
   Option B is chosen: the live event log stays local, and a per-spec timing record (lifecycle kinds only) is published to the store with the completion commit. The implementing PR files the ADR recording B (with A and C as rejected alternatives) before code. Option C is revisited only if in-flight cross-machine visibility is later shown to be needed.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-10-03T03:34:59.380423614Z
+modified_at: 2026-10-03T05:18:56.407656295Z
 req_type: Story
 tags:
 - aida:history
@@ -148,4 +148,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10033-7b8f-76b3-a145-27c33304d219
+  author: aida-auto-bump
+  timestamp: 2026-10-03T05:18:56.399140238Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10033-7b97-7dc2-b824-36178b962d26
+  timestamp: 2026-10-03T05:18:56.407641287Z
+  agent: implementer
+  commit_sha: ecfd9affc313ea192e7cb50781041831ac3e2d53
+  summary: 'Independent non-author review at c6ccdeb77f: ACs 1-4 confirmed — ADR-64 Option B in place; timing_record publishes lifecycle-only events at both terminal doors with union-merge/never-clobber and an exhaustive publish-or-not match; readers merge through the feed decoder in timeline and cycle-time aggregate; db sync ''git add -A .'' carries timings/ (git_backend_cmd.rs:7402); interactive/integrate emitters and punt/merge-hold wait attribution all carry discriminating tests; monitor contract bumped 1.6.0 with fixture registered. AC5 deliberately unmeasured post-merge — spec stays open; merge ships instrumentation only. Notes: merge_records dedup_by can miss a non-adjacent duplicate when distinct events share a timestamp (matches existing feed-merge semantics); non-implementer-role interactive claims emit a slug WORK_PHASES drops — filed as BUG-1786 (references STORY-1480) for the AC5 measurement pass. First Build failure was the BUG-1785 store-refresh shallow-fetch race; rerun green 17m26s. Local 3 lib failures are BUG-1782 environmental.'
+  review_verdict: approved
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T05:18:56.399115580Z
+  completion_sha: ecfd9affc313ea192e7cb50781041831ac3e2d53
