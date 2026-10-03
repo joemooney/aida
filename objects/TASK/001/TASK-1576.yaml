@@ -1,0 +1,20 @@
+id: 01a100ff-ceb7-7c73-8470-f0539317fda0
+spec_id: TASK-1576
+agreed_id: TASK-1576
+title: 'Remove or wire the dead review-story queue code: open_pr_review_story / ReviewStoryQueueDecision (lib.rs) and dispatch_health_ps.rs:817/:821 wrappers'
+description: 'Dead-code warnings on main, observed across relay sessions #13-14 (2026-10-03): aida-cli-lib/src/lib.rs open_pr_review_story / ReviewStoryQueueDecision (~:45846-45916) and aida-cli-lib/src/dispatch_health_ps.rs :817/:821 (is_protected_branch wrapper and adjacent). Verified 2026-10-03: no open PR wires these symbols (checked all 5 open PR branches); the lib.rs symbols are residue of the BUG-1230 -> BUG-1291 -> BUG-1817 review-story lineage whose callers were since refactored away. Acceptance: 1) cargo build --workspace on main emits zero dead_code warnings for these items; 2) for each symbol, either delete it (preferred if git history shows no planned caller) or wire it to its intended caller with a trace comment — decided per symbol, stated in the PR; 3) no #[allow(dead_code)] blanket — an allow is acceptable only with a comment naming the wiring spec that will consume it; 4) warning absence verified in the PR by pasting the build output excerpt.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T09:02:07.031488904Z
+modified_at: 2026-10-03T09:02:07.031488904Z
+req_type: Task
+filed_at:
+  code_sha: b170cc9eeee9e36a187bc5cb40a57c6428bf88cc
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
+  session: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
