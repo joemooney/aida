@@ -12,7 +12,7 @@ description: |
   - Durable refresh request `.aida/cache.refresh-request` (target HEAD, requester) plus a detached `aida cache refresh --worker` process (setsid / DETACHED_PROCESS, log to `.aida/cache-refresh.log`, runtime cap). Not an in-process task. A pending request with a free lock is re-spawned by the next reader or by an `aida schedule` substrate job (`cache refresh --if-requested`). The request is cleared only when the cache head reaches the requested head.
   - Reader protocol: fresh -> serve; stale + try_lock won -> refresh inline; stale + lock held -> bounded wait polling source_head_sha (default 1.5 s, AIDA_CACHE_READ_WAIT_MS; 0 on --notice), then serve last committed state with a stale label.
   - Stale label: stderr `note: showing cached results from <built_at> (store has moved on; refresh in progress). Re-run in a few seconds for current data.`; JSON/TOON/MCP `cache: {stale, cache_head, store_head, built_at, refreshing}`; exit code unchanged.
-  - Stale-allowed commands: list, search, status, queue list, graph/tree, digest, awaiting --notice, statusline, MCP read tools. Always strict: mutations, add's id-collision check, validate/complete/merge/integrate gates, lease/claim, cache rebuild/status.
+  - Stale-allowed commands: list, search, status, queue list, graph/tree, digest, awaiting --notice, statusline, MCP read tools, and show (added by BUG-1674: show already serves its spec body from authoritative YAML; its cache-backed context joins the bounded reader protocol, including the TTY winner, which degrades to a labelled stale read instead of the retry ladder when the write lock is contended). Always strict: mutations, add's id-collision check, validate/complete/merge/integrate gates, lease/claim, cache rebuild/status.
 
   Architecture change: needs a sketch on this spec and advisor signoff before implementation.
 
@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-09-29T12:01:06.939856666Z
+modified_at: 2026-10-03T05:39:31.544400404Z
 req_type: Story
 tags:
 - cache
