@@ -2,6 +2,8 @@ use super::*;
 use std::path::PathBuf;
 
 #[test]
+// trace:BUG-1772.ac3dfbab | ai:antigravity
+// trace:BUG-1772.acec6aa8 | ai:antigravity
 fn bug_1772_harness_worktree_lease_omitted_for_project_root() {
     let td = tempfile::tempdir().unwrap();
     let root = td.path();
@@ -24,6 +26,9 @@ fn bug_1772_harness_worktree_lease_omitted_for_project_root() {
 }
 
 #[test]
+// trace:BUG-1772.ac912d14 | ai:antigravity
+// trace:BUG-1772.ac53764b | ai:antigravity
+// trace:BUG-1772.acec6aa8 | ai:antigravity
 fn bug_1772_prune_stale_reaps_immortal_harness_leases() {
     let td = tempfile::tempdir().unwrap();
     let root = td.path();
