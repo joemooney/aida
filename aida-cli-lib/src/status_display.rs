@@ -408,6 +408,35 @@ pub(crate) fn flow_glyph(
     }
 }
 
+/// The derived-status disclosure for a per-spec `show` status line, or `None`
+/// when the displayed value needs no annotation.
+///
+/// An epic's displayed status is the read-only rollup of its children
+/// (BUG-626), so it can disagree with the STORED field: nine epics stood in the
+/// advisor's close bucket while `aida show` said `status: completed` with
+/// nothing marking the value as derived, and callers concluded the close
+/// actions were already taken. When the displayed and stored values resolve to
+/// different lifecycle states, return the annotation naming both; when they
+/// agree (every non-epic, and an epic whose rollup matches its stored field) or
+/// either is a custom status outside the lifecycle, return `None` so the line
+/// renders exactly as before.
+// trace:BUG-1767 | ai:claude
+pub(crate) fn derived_status_annotation(
+    effective_status: &str,
+    stored_status: &str,
+) -> Option<String> {
+    use aida_core::lifecycle::State;
+    let eff = State::from_status_str(effective_status)?;
+    let stored = State::from_status_str(stored_status)?;
+    if eff == stored {
+        return None;
+    }
+    Some(format!(
+        "derived from child rollup; stored: {}",
+        crate::help_next::state_token(stored)
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
