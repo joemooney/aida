@@ -9,15 +9,30 @@ description: |-
 
   PR: #2364
   Reviewed sha: 48433c6b1fa888ebc4b8d968ffc1c142857569d1
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T17:33:34.867862448Z
-modified_at: 2026-10-03T17:33:34.867862448Z
+modified_at: 2026-10-03T19:11:39.700006254Z
 req_type: Task
 tags:
 - carried-from:BUG-1716
 - finding-hash:f15197ca
 - from-review:PR-2364
 - kind:carried-forward
+comments:
+- id: 01a1032d-dcfa-7460-8aa2-bacda62b5bb1
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Does not reproduce on current main (04043d46ab): bug_1629_phase1_recovery 26 passed/0 failed, bug_1682 lib tests 9 passed/0 failed — the en-masse failures were specific to PR-2364''s reviewed sha and were resolved by the BUG-1769/BUG-1629 recovery-contract work since merged.'
+  created_at: 2026-10-03T19:11:39.700006254Z
+  modified_at: 2026-10-03T19:11:39.700006254Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
+history:
+- id: 01a1032d-dd12-7550-890a-642431432eba
+  author: joe
+  timestamp: 2026-10-03T19:11:39.794226341Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
