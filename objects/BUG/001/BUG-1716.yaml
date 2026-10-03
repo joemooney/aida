@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T14:38:13.575800541Z
-modified_at: 2026-10-03T00:24:50.921791859Z
+modified_at: 2026-10-03T00:55:08.075722808Z
 req_type: Bug
 tags:
 - auto-complete
@@ -79,6 +79,12 @@ comments:
   created_at: 2026-09-28T17:18:19.223869239Z
   modified_at: 2026-09-28T17:18:19.223869239Z
   session_id: 7121c883-8051-4f5d-bccc-4953b9b1748d
+- id: 01a0ff41-f62b-7c42-90c8-350fb34ef2eb
+  author: joe
+  content: 'Implemented on branch bug-1716 (PR #2364). Root cause confirmed: BUG-826''s empty-launch detection keyed on headless_log_len == Some(0), so a vendor that rejected its own argv — which exits before CREATING the log (headless_log_len None) — fell through to the work-failure path: classified NoPr/tool-exit, it burned the STORY-975 transient budget (the incident''s attempt 3/3) and parked the spec NeedsAttention behind its live empty lease, which also blocked the TASK-133 restore (release_empty_launch_lease left implementer_lease set, so the compensation gate read ''lease acquired => work may exist''). Fix: (1) a missing session log now classifies as an empty launch, corroborated by zero commits on this session''s lease branch (real work keeps falling through to BUG-1140 substrate verification); terminal kind LaunchNoOutput, outside the transient-retry cause set. (2) a successfully released empty-launch lease is now forgotten, so the TASK-133 compensation restores the pre-bump status and clears the spurious FailureReason — the spec stays queued, the safe retry stays open. AC2 note: BUG-826''s own bounded 2-retry launch schedule (30s/60s) still runs for a deterministic rejection — distinguishing deterministic from transient launch death would need vendor stderr parsing; the budget that matters (whole-phase transient retries, spec demotion) is no longer spent. The advisor''s second comment''s already-satisfied-implementer gap (a 35s run that errors instead of reporting acceptance-already-met) is NOT covered here — it is a distinct contract between the implementer skill and the orchestrator, not a launch-classification defect. Both legs mutation-proved; tests in bug_1716_never_started_launch_tests.rs + real_phase_driver_wiring_tests.rs.'
+  created_at: 2026-10-03T00:55:08.075722808Z
+  modified_at: 2026-10-03T00:55:08.075722808Z
+  session_id: 01a0ff263a27
 history:
 - id: 01a0e8b7-d37a-7c40-9b1a-8156ee6efd7b
   author: joe
