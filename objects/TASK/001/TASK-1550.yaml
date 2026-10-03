@@ -11,12 +11,12 @@ description: |
   - Provide a cutover manifest and fixture/test matrix for unknown repos, alternate/stale/copied clients, repo-A to repo-B grants/transcripts/artifacts, untrusted host principals, scheduled/watch expiry, and rollback. State any host facts/permissions that need Joe's separate approval and any unresolved feasibility mismatch.
   - Link the independently signed BUG-1669 sketch/advisor amendments M1-M5 and TASK-1549 ADR, without claiming protection is deployed.
   Out of scope: modifying launch code or host services, enrolling projects, installing VMs/broker, moving credentials, disabling existing user jobs, or waiving human/merge gates.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:34:45.887469118Z
-modified_at: 2026-10-03T00:40:51.680991850Z
+modified_at: 2026-10-03T04:34:45.572795768Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -42,3 +42,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1000b-08bc-7940-b2ea-6b81fc9fba8f
+  author: aida-auto-bump
+  timestamp: 2026-10-03T04:34:45.564939504Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1000b-08c4-76f1-80e8-4decd31f362d
+  timestamp: 2026-10-03T04:34:45.572780219Z
+  agent: aida
+  commit_sha: 11fd8e5a831dc27cf8ae78341550a3e65a77c8d6
+  summary: 'Independent advisor review (relay #7, not the author): all four acceptance bullets satisfied. §1 inventories A-G production routes + shipped surfaces (incl. the newly-found run_bench.py bypass, correctly dispositioned via draft BUG-1784) + live host routes H1-H14 with posture and target columns; §2 covers identity/enrollment generations, M2 observation isolation, no-legacy-fallback, missing-project refusal, M1 credential-free routes, and preserves the unmanaged exclusion without stretching it; §3-4 give the migration plan, staged cutover manifest and the required fixture matrix (unknown repos U1-U2, stale/copied clients C1-C4, cross-repo X4-X6, untrusted principal N1-N3, schedule expiry S1-S3, rollback R1); §5 states what returns to Joe and the F-1/F-2/E-1/F-3 feasibility mismatches; ADR-61 + M1-M5 signoff + TASK-1549 linked with explicit no-deployment non-claims. Spot-checked anchors (compete.rs:55/61-69, session.rs:1060, bypass_confirm.rs, dead-API no-callers rg) all verified at HEAD. Docs-only, CI green.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T04:34:45.564914021Z
+  completion_sha: 11fd8e5a831dc27cf8ae78341550a3e65a77c8d6
