@@ -39177,46 +39177,99 @@ fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) ->
     let Some(default_ref) = resolve_default_branch_ref(repo) else {
         return None;
     };
+    branch_unshipped_patch_count_vs(repo, &default_ref, branch)
+}
+
+/// Body of [`branch_unshipped_patch_count_default`] with the default ref
+/// already resolved. BUG-1756: the unshipped-work detector probes dozens of
+/// candidate branches under a wall-clock budget; resolving the default ref
+/// per branch (1–2 git subprocesses each) was pure overhead against that
+/// budget, so the detector resolves once and passes it here.
+// trace:BUG-1756 | ai:claude
+fn branch_unshipped_patch_count_vs(
+    repo: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> Option<u32> {
+    match branch_unshipped_patch_count_probe(repo, default_ref, branch, None) {
+        PatchCountProbe::Counted(n) => Some(n),
+        PatchCountProbe::NoSignal | PatchCountProbe::TimedOut => None,
+    }
+}
+
+/// Outcome of one candidate branch's bounded patch-count probe.
+// trace:BUG-1756 | ai:claude
+enum PatchCountProbe {
+    Counted(u32),
+    /// git failed — the pre-existing "no signal" shape: the candidate is
+    /// dispositioned (skipped) and counts as scanned, exactly as
+    /// [`branch_unshipped_patch_count_default`] returning `None` always has.
+    NoSignal,
+    /// The probe exceeded its per-candidate slice before answering. The
+    /// candidate was NOT classified, so the caller must count it as
+    /// unscanned and the scan as incomplete — never as "nothing to
+    /// report" (PRIN-5).
+    TimedOut,
+}
+
+/// [`branch_unshipped_patch_count_vs`] with an optional per-invocation time
+/// slice. BUG-1756: `git cherry` patch-ids every default-branch commit since
+/// the fork point, so ONE anciently-forked candidate (an old review
+/// snapshot, a long-dead ref) can cost 20–30s — several times the entire
+/// scan budget — and starve every candidate sorted after it. The slice caps
+/// what a single candidate may spend; `None` (every unbounded caller, and
+/// the exhaustive test paths) behaves exactly as before.
+// trace:BUG-1756 | ai:claude
+fn branch_unshipped_patch_count_probe(
+    repo: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+    probe_slice: Option<std::time::Duration>,
+) -> PatchCountProbe {
+    let run = |args: &[&str]| -> Result<std::process::Output, PatchCountProbe> {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C").arg(repo).args(args);
+        match probe_slice {
+            Some(slice) => match command_output_with_timeout_detail(cmd, slice) {
+                BoundedCommandOutput::Completed(out) => Ok(out),
+                BoundedCommandOutput::SpawnFailed => Err(PatchCountProbe::NoSignal),
+                BoundedCommandOutput::TimedOut => Err(PatchCountProbe::TimedOut),
+            },
+            None => cmd.output().map_err(|_| PatchCountProbe::NoSignal),
+        }
+    };
+
     // trace:BUG-853 | ai:codex
     // A squash-merged branch can still be ahead by commit id while its tree is
     // identical to the default branch. Treat that as shipped content.
-    let tree_diff = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        // The branch can come from a registered lease, so keep it from
-        // reading as an option. trace:BUG-1622 | ai:claude
-        .args([
-            "diff",
-            "--quiet",
-            git_arg_guard::END_OF_OPTIONS,
-            &default_ref,
-            branch,
-            "--",
-        ])
-        .status()
-        .ok()?;
-    match tree_diff.code() {
-        Some(0) => return Some(0),
+    // The branch can come from a registered lease, so keep it from
+    // reading as an option. trace:BUG-1622 | ai:claude
+    let tree_diff = match run(&[
+        "diff",
+        "--quiet",
+        git_arg_guard::END_OF_OPTIONS,
+        default_ref,
+        branch,
+        "--",
+    ]) {
+        Ok(out) => out,
+        Err(probe) => return probe,
+    };
+    match tree_diff.status.code() {
+        Some(0) => return PatchCountProbe::Counted(0),
         Some(1) => {}
-        _ => return None,
+        _ => return PatchCountProbe::NoSignal,
     }
 
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        // trace:BUG-1622 | ai:claude
-        .args([
-            "cherry",
-            git_arg_guard::END_OF_OPTIONS,
-            &default_ref,
-            branch,
-        ])
-        .output()
-        .ok()?;
+    // trace:BUG-1622 | ai:claude
+    let out = match run(&["cherry", git_arg_guard::END_OF_OPTIONS, default_ref, branch]) {
+        Ok(out) => out,
+        Err(probe) => return probe,
+    };
     if !out.status.success() {
-        return None;
+        return PatchCountProbe::NoSignal;
     }
-    Some(
+    PatchCountProbe::Counted(
         String::from_utf8_lossy(&out.stdout)
             .lines()
             .filter(|line| line.starts_with("+ "))
@@ -80704,22 +80757,44 @@ fn collect_pr_head_state_snapshot_bounded(
         // branch (it always attempted every one); only a deadline-skipped
         // branch is now excluded from this set.
         snapshot.queried_heads.insert(branch.clone());
-        if let Some(found) = query(&[
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "all",
-            "--limit",
-            "100",
-            "--json",
-            "state,title,headRefName,headRefOid",
-        ]) {
+        if let Some(found) = query_pr_head_history(project_root, branch) {
             snapshot.merge(found);
         }
     }
     Some(snapshot)
+}
+
+/// One `gh pr list --head <branch> --state all` round trip: the full PR
+/// history (open/closed/merged) recorded against this exact head name.
+/// BUG-1756: split out of [`collect_pr_head_state_snapshot_bounded`]'s
+/// per-candidate loop so the unshipped-work detector can issue it lazily —
+/// only for candidates that survive the cheap local git classification —
+/// instead of paying one network round trip per candidate up front.
+// trace:BUG-1756 | ai:claude
+fn query_pr_head_history(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<PrHeadStateSnapshot> {
+    let gh_bin = resolve_gh_binary()?;
+    let mut cmd = std::process::Command::new(&gh_bin);
+    cmd.current_dir(project_root).args([
+        "pr",
+        "list",
+        "--head",
+        branch,
+        "--state",
+        "all",
+        "--limit",
+        "100",
+        "--json",
+        "state,title,headRefName,headRefOid",
+    ]);
+    // trace:BUG-1288 | ai:claude — bounded like every other gh call this
+    // machine-readable pipeline makes; see FORGE_CLI_CALL_TIMEOUT.
+    let out = command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)?;
+    out.status
+        .success()
+        .then(|| parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout)))?
 }
 
 impl PrHeadStateSnapshot {
@@ -81247,6 +81322,46 @@ fn collect_remote_branch_name_set(
     set
 }
 
+/// One `git for-each-ref` over `refs/heads/` AND `refs/remotes/origin`
+/// returning each ref's short name (exactly the display spelling the
+/// unshipped-work candidate list uses: `bug-x` locally, `origin/bug-x` for
+/// remote-tracking refs) paired with its tip-commit time (unix seconds).
+/// BUG-1756: drives the newest-first probe order of the bounded scan.
+// trace:BUG-1756 | ai:claude
+fn collect_candidate_tip_times(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, i64> {
+    let mut map = std::collections::HashMap::new();
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)%09%(committerdate:unix)",
+            "refs/heads/",
+            "refs/remotes/origin",
+        ])
+        .output();
+    let Ok(out) = out else { return map };
+    if !out.status.success() {
+        return map;
+    }
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let mut parts = line.splitn(2, '\t');
+        let Some(name) = parts.next() else { continue };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let ts = parts
+            .next()
+            .and_then(|s| s.trim().parse::<i64>().ok())
+            .unwrap_or(0);
+        map.insert(name.to_string(), ts);
+    }
+    map
+}
+
 // trace:STORY-1043 | ai:codex
 #[derive(Debug, Clone)]
 struct UnshippedBranchCandidate {
@@ -81271,6 +81386,27 @@ struct UnshippedBranchCandidate {
     // alone), labelled as unverified with no ship hint.
     // trace:BUG-1531 | ai:claude
     possible_review_snapshot: bool,
+    // BUG-1756: whether a remote counterpart of this branch exists
+    // (`origin/<name>`; trivially true for a remote-only row). `false` means
+    // the commits exist on exactly one machine — the most strandable
+    // unshipped state — and drives a push-first recovery hint instead of a
+    // bare `aida pr ship`. trace:BUG-1756 | ai:claude
+    pushed: bool,
+}
+
+/// BUG-1756: a candidate that survived the cheap local classification pass
+/// and is waiting for (or has received) its per-head forge evidence. The
+/// review-snapshot NAME detection happens in the local pass; the forge
+/// CONFIRMATION (a network call) happens in the bounded evidence pass, so
+/// `review_shape` carries the parsed shape between the two.
+// trace:BUG-1756 | ai:claude
+struct UnshippedSurvivor {
+    cand: UnshippedBranchCandidate,
+    review_shape: Option<(forge::ForgeKind, u64)>,
+    /// The forge confirmed PR/MR N exists with a head sha equal to this
+    /// branch's tip — the one condition BUG-1531 allows the row to be
+    /// excluded on.
+    confirmed_review_snapshot: bool,
 }
 
 // BUG-1288: a bounded candidate gate for the unshipped-work detector. Kept
@@ -81348,18 +81484,23 @@ fn collect_unshipped_work_items(
 /// unbounded original (every other caller, including tests and
 /// `session_reap`, which need the exhaustive answer regardless of cost).
 ///
-/// Two independent probes can consume wall clock per candidate: the
-/// per-branch `gh pr list --head` network round trip
-/// ([`collect_pr_head_state_snapshot_bounded`]) and the local git
-/// commit/patch-equivalence walk in this function's own loop. Both consult
-/// the same `deadline`, so the combined budget is shared rather than doubled.
-/// Once the deadline passes, remaining candidate branches are simply not
-/// probed — the returned [`awaiting_you::UnshippedScanStatus`] records
-/// `complete: false` plus how many of the total candidates were actually
-/// scanned, so a truncated run is never presented as an exhaustive one
-/// (PRIN-5). What IS returned is unaffected: nothing already found is
-/// dropped, and nothing is hidden by widening or narrowing which branches
-/// count as candidates.
+/// Two independent probes can consume wall clock per candidate: the local
+/// git commit/patch-equivalence walk and the per-branch `gh pr list --head`
+/// network round trip ([`query_pr_head_history`]). Both consult the same
+/// `deadline`, so the combined budget is shared rather than doubled — and
+/// since BUG-1756 the CHEAP local walk runs first for every candidate, with
+/// the network round trips paid only for the candidates that survive it.
+/// (Before that reorder the up-front per-candidate network calls consumed
+/// the whole budget on a working repository, so the bounded scan always
+/// truncated at 0/N and the channel was effectively dead.) Once the deadline
+/// passes, remaining candidate branches are simply not probed — the returned
+/// [`awaiting_you::UnshippedScanStatus`] records `complete: false` plus how
+/// many of the total candidates were actually scanned, so a truncated run is
+/// never presented as an exhaustive one (PRIN-5). A survivor whose evidence
+/// query the deadline skipped counts as UNSCANNED and is dropped rather than
+/// reported on evidence that was never fetched. What IS returned is
+/// unaffected: nothing already found is dropped, and nothing is hidden by
+/// widening or narrowing which branches count as candidates.
 // trace:BUG-1288 | ai:claude
 fn collect_unshipped_work_items_bounded(
     project_root: &std::path::Path,
@@ -81449,24 +81590,38 @@ fn collect_unshipped_work_items_bounded(
                 .map(|b| (format!("origin/{b}"), format!("origin/{b}"), false)),
         )
         .collect();
-    branches.sort_by(|a, b| a.0.cmp(&b.0));
+    // BUG-1756: probe NEWEST tip first (name as the deterministic
+    // tie-break), not alphabetically. The scan is wall-clock-bounded and a
+    // single anciently-forked ref can cost tens of seconds in `git cherry`
+    // (patch-id over every default-branch commit since the fork), so
+    // whatever the budget cannot cover must be the OLD tail — never the
+    // day-old branch a dead drain just stranded, which is the state this
+    // channel exists to report. Tip times come from one batched
+    // `for-each-ref`; a branch missing from it sorts last.
+    // trace:BUG-1756 | ai:claude
+    let tip_times = collect_candidate_tip_times(project_root);
+    branches.sort_by(|a, b| {
+        let ta = tip_times.get(&a.0).copied().unwrap_or(i64::MIN);
+        let tb = tip_times.get(&b.0).copied().unwrap_or(i64::MIN);
+        tb.cmp(&ta).then_with(|| a.0.cmp(&b.0))
+    });
 
     // trace:BUG-1576 | ai:codex
-    let candidate_pr_heads: Vec<String> = branches
-        .iter()
-        .map(|(display, _, _)| {
-            display
-                .strip_prefix("origin/")
-                .unwrap_or(display)
-                .to_string()
-        })
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let pr_head_states = if no_forge {
+    // BUG-1756: the snapshot starts BATCHED-ONLY — one `gh pr list --state
+    // open` call regardless of candidate count. The per-candidate `--head`
+    // history queries that used to run here up front moved into the evidence
+    // pass below and run only for candidates that survive the cheap local
+    // git classification. On a working repository the up-front per-candidate
+    // network round trips consumed the entire wall-clock budget before a
+    // single branch was locally probed, so the bounded scan always truncated
+    // at 0/N and the channel reported nothing at all — which is exactly how
+    // a local-only committed branch (the state that exists on one machine
+    // and nowhere else) stayed invisible. Local evidence is cheap; it goes
+    // first. trace:BUG-1756 | ai:claude
+    let mut pr_head_states = if no_forge {
         None
     } else {
-        collect_pr_head_state_snapshot_bounded(project_root, &candidate_pr_heads, deadline)
+        collect_pr_head_state_snapshot_bounded(project_root, &[], deadline)
     };
 
     // BUG-1288: the total candidate-branch population identified above,
@@ -81477,7 +81632,31 @@ fn collect_unshipped_work_items_bounded(
     let total_candidates = branches.len();
     let mut scanned = 0usize;
     let mut truncated = false;
-    let mut candidates = Vec::new();
+
+    // BUG-1756: the most a single candidate's local diff+cherry probe may
+    // spend when the scan is deadline-bounded. ~10× the loaded-host cost of
+    // a normal candidate, so it only trips on genuine monsters (an
+    // anciently-forked ref whose `git cherry` patch-ids thousands of
+    // default-branch commits). trace:BUG-1756 | ai:claude
+    const UNSHIPPED_PROBE_SLICE: std::time::Duration = std::time::Duration::from_millis(2000);
+
+    // BUG-1756: resolve the patch-count base ref ONCE for the whole scan
+    // instead of once per candidate inside
+    // `branch_unshipped_patch_count_default` — the per-branch resolution was
+    // 1–2 extra git subprocesses per candidate charged against the same
+    // wall-clock budget. Resolution failure keeps the exact pre-existing
+    // behavior: the candidate is skipped. trace:BUG-1756 | ai:claude
+    let patch_count_base = resolve_default_branch_ref(project_root);
+
+    // ── Pass 1: LOCAL classification — git only, no network ──────────────
+    // Everything that can disqualify a candidate without per-branch forge
+    // calls runs first, in the pre-existing predicate order: the batched
+    // open-PR evidence, spec resolution, live leases, terminal status, and
+    // the commit/patch-equivalence probe. Only the survivors — typically
+    // zero to a handful — pay a per-head network query in the evidence pass
+    // below, so the wall-clock budget is spent on work the local evidence
+    // already says matters. trace:BUG-1756 | ai:claude
+    let mut survivors: Vec<UnshippedSurvivor> = Vec::new();
     for (display_branch, refname, has_local) in branches {
         if deadline.is_some_and(|dl| std::time::Instant::now() >= dl) {
             truncated = true;
@@ -81498,36 +81677,13 @@ fn collect_unshipped_work_items_bounded(
         // GitLab mr-N twin) is the one shape `ReviewForge::local_branch_for`
         // creates, per TASK-1312's `parse_review_snapshot_branch` — but the
         // NAME alone is not proof (a real unpushed feature branch can happen
-        // to be named `pr-123`). Only exclude it once the forge CONFIRMS
-        // PR/MR N exists and its head sha equals this branch's tip, reusing
-        // the same forge lookup TASK-1312's `aida pr gc` uses
-        // (`change_metadata`). With no forge (`no_forge`), a lookup failure,
-        // or a head sha that doesn't match, the row is kept and labelled
-        // unverified below rather than hidden on name alone (PRIN-5).
+        // to be named `pr-123`). The NAME detection happens here; the forge
+        // CONFIRMATION (`change_metadata`, a network call) happens in the
+        // bounded evidence pass below. Only a confirmed match (head sha
+        // equals this branch's tip) is excluded; anything less is kept and
+        // labelled unverified rather than hidden on name alone (PRIN-5).
         // trace:BUG-1531 | ai:claude
-        let mut possible_review_snapshot = false;
-        if let Some((kind, n)) = pr_cmd::parse_review_snapshot_branch(&short_branch) {
-            if no_forge {
-                possible_review_snapshot = true;
-            } else {
-                match forge::forge_for_kind(project_root, kind)
-                    .change_metadata(n, &mut network_retry::NoopSink)
-                {
-                    Ok(meta) if !meta.head_sha.is_empty() => {
-                        let tip_matches =
-                            git_output_checked(project_root, &["rev-parse", &refname])
-                                .is_ok_and(|tip| tip.trim() == meta.head_sha);
-                        if tip_matches {
-                            continue;
-                        }
-                        possible_review_snapshot = true;
-                    }
-                    _ => {
-                        possible_review_snapshot = true;
-                    }
-                }
-            }
-        }
+        let review_shape = pr_cmd::parse_review_snapshot_branch(&short_branch);
         let pr_evidence = pr_head_states
             .as_ref()
             .and_then(|s| s.by_branch.get(&short_branch));
@@ -81559,20 +81715,168 @@ fn collect_unshipped_work_items_bounded(
         {
             continue;
         }
-        let commits_ahead = match branch_unshipped_patch_count_default(project_root, &refname) {
-            Some(n) if n > 0 => n,
-            _ => continue,
+        // BUG-1756: one candidate gets at most UNSHIPPED_PROBE_SLICE (and
+        // never more than the remaining budget) for its diff+cherry probe. A
+        // candidate whose probe times out was never classified: it counts as
+        // unscanned and marks the scan incomplete, instead of either eating
+        // the whole budget (starving every candidate after it) or being
+        // silently dispositioned as "nothing". trace:BUG-1756 | ai:claude
+        let probe_slice = deadline.map(|dl| {
+            dl.saturating_duration_since(std::time::Instant::now())
+                .min(UNSHIPPED_PROBE_SLICE)
+        });
+        let probe = match patch_count_base.as_deref() {
+            Some(base) => {
+                branch_unshipped_patch_count_probe(project_root, base, &refname, probe_slice)
+            }
+            None => PatchCountProbe::NoSignal,
         };
+        let commits_ahead = match probe {
+            PatchCountProbe::Counted(n) if n > 0 => n,
+            PatchCountProbe::TimedOut => {
+                scanned -= 1;
+                truncated = true;
+                continue;
+            }
+            PatchCountProbe::Counted(_) | PatchCountProbe::NoSignal => continue,
+        };
+        if !seen.insert(display_branch.clone()) {
+            continue;
+        }
+        let tip_sha = git_output_checked(project_root, &["rev-parse", &refname])
+            .ok()
+            .map(|s| s.trim().to_string());
+        // BUG-1756: a local branch with no `origin/<name>` counterpart exists
+        // on exactly one machine. (A remote-only row is trivially pushed.)
+        // Deliberately the EXISTENCE of the remote ref, not tip equality: a
+        // stale-pushed branch still has a durable copy of most of its work,
+        // and `aida pr ship` pushes the remainder. trace:BUG-1756 | ai:claude
+        let pushed = !has_local || remote.contains(&short_branch);
+        let age = branch_tip_age(project_root, &refname);
+        survivors.push(UnshippedSurvivor {
+            cand: UnshippedBranchCandidate {
+                branch: display_branch,
+                refname,
+                local_branch: short_branch,
+                spec_id,
+                commits_ahead,
+                age,
+                has_local,
+                tip_sha,
+                possible_review_snapshot: false,
+                pushed,
+            },
+            review_shape,
+            confirmed_review_snapshot: false,
+        });
+    }
+
+    // ── Pass 2: bounded per-survivor forge evidence ───────────────────────
+    // BUG-1576's targeted `--head` history lookup and BUG-1531's review-
+    // snapshot confirmation, one survivor at a time, still under the same
+    // deadline. A survivor the budget cannot cover is counted as UNSCANNED
+    // and dropped from the report — truncation stays a lower bound (PRIN-5),
+    // never a row built on evidence that was never fetched.
+    // trace:BUG-1756 | ai:claude
+    // BUG-1756: evidence the LOCAL-ONLY survivors first (stable sort keeps
+    // the newest-first order within each group). A pushed survivor the
+    // budget cannot cover is durable and findable from any machine; a
+    // local-only one is the state this channel exists to report, so
+    // truncation must never be able to hide it behind pushed rows.
+    // trace:BUG-1756 | ai:claude
+    survivors.sort_by_key(|s| s.cand.pushed);
+    let mut evidenced = survivors.len();
+    if no_forge {
+        for survivor in survivors.iter_mut() {
+            if survivor.review_shape.is_some() {
+                survivor.cand.possible_review_snapshot = true;
+            }
+        }
+    } else {
+        for (idx, survivor) in survivors.iter_mut().enumerate() {
+            if deadline.is_some_and(|dl| std::time::Instant::now() >= dl) {
+                truncated = true;
+                evidenced = idx;
+                break;
+            }
+            if let Some(states) = pr_head_states.as_mut() {
+                states
+                    .queried_heads
+                    .insert(survivor.cand.local_branch.clone());
+                if let Some(found) =
+                    query_pr_head_history(project_root, &survivor.cand.local_branch)
+                {
+                    states.merge(found);
+                }
+            }
+            if let Some((kind, n)) = survivor.review_shape {
+                match forge::forge_for_kind(project_root, kind)
+                    .change_metadata(n, &mut network_retry::NoopSink)
+                {
+                    Ok(meta) if !meta.head_sha.is_empty() => {
+                        if survivor.cand.tip_sha.as_deref() == Some(meta.head_sha.as_str()) {
+                            survivor.confirmed_review_snapshot = true;
+                        } else {
+                            survivor.cand.possible_review_snapshot = true;
+                        }
+                    }
+                    _ => {
+                        survivor.cand.possible_review_snapshot = true;
+                    }
+                }
+            }
+        }
+    }
+    if evidenced < survivors.len() {
+        scanned -= survivors.len() - evidenced;
+        survivors.truncate(evidenced);
+    }
+
+    // ── Final classification against the completed evidence ──────────────
+    // The forge-dependent exclusions, in their pre-existing order, applied
+    // once every surviving candidate's history query has been merged — so a
+    // merged head discovered through one survivor can still represent (and
+    // exclude) another survivor of the same spec, exactly as when every
+    // candidate was queried up front. trace:BUG-1756 | ai:claude
+    let mut candidates = Vec::new();
+    for survivor in survivors {
+        let UnshippedSurvivor {
+            cand: c,
+            confirmed_review_snapshot,
+            ..
+        } = survivor;
+        // trace:BUG-1531 | ai:claude — the one exclusion a review-snapshot
+        // NAME may earn: the forge confirmed the PR/MR and its head sha
+        // equals this branch's tip.
+        if confirmed_review_snapshot {
+            continue;
+        }
+        let pr_evidence = pr_head_states
+            .as_ref()
+            .and_then(|s| s.by_branch.get(&c.local_branch));
+        // Re-applied with the full evidence: a per-head history query above
+        // can surface an open PR the batched open-PR snapshot did not.
+        if pr_evidence.is_some_and(|pr| pr.state == "open") {
+            continue;
+        }
+        let spec_key = c.spec_id.to_ascii_uppercase();
+        if pr_head_states
+            .as_ref()
+            .and_then(|s| s.open_heads_by_spec.get(&spec_key))
+            .is_some_and(|heads| heads.len() == 1 && heads[0] != c.local_branch)
+        {
+            continue;
+        }
         if pr_evidence.is_some_and(|pr| {
             if pr.state != "merged" {
                 return false;
             }
-            let tip_matches = pr.head_sha.as_ref().is_some_and(|sha| {
-                git_output_checked(project_root, &["rev-parse", &refname])
-                    .is_ok_and(|tip| tip.trim() == sha)
-            });
+            let tip_matches = pr
+                .head_sha
+                .as_ref()
+                .is_some_and(|sha| c.tip_sha.as_deref() == Some(sha.as_str()));
             tip_matches
-                || doctor_cmd::branch_content_fully_landed(project_root, &default_ref, &refname)
+                || doctor_cmd::branch_content_fully_landed(project_root, &default_ref, &c.refname)
         }) {
             continue;
         }
@@ -81592,24 +81896,18 @@ fn collect_unshipped_work_items_bounded(
                             "merge-base",
                             "--is-ancestor",
                             git_arg_guard::END_OF_OPTIONS,
-                            &refname,
+                            &c.refname,
                             head,
                         ]) // trace:BUG-1622 | ai:claude
                         .status()
                         .is_ok_and(|status| status.success());
                     is_ancestor
-                        || doctor_cmd::branch_content_fully_landed(project_root, head, &refname)
+                        || doctor_cmd::branch_content_fully_landed(project_root, head, &c.refname)
                 })
             });
         if represented_by_merged_head {
             continue;
         }
-        if !seen.insert(display_branch.clone()) {
-            continue;
-        }
-        let tip_sha = git_output_checked(project_root, &["rev-parse", &refname])
-            .ok()
-            .map(|s| s.trim().to_string());
         // BUG-1531 criterion 2 (the safety floor, independent of criterion 1):
         // never suggest shipping a commit that is ALREADY the head of an open
         // PR, even when this branch's own name doesn't match that PR's
@@ -81617,7 +81915,7 @@ fn collect_unshipped_work_items_bounded(
         // …). Matched by sha across every open PR the snapshot knows about,
         // not just the by-name lookup above.
         // trace:BUG-1531 | ai:claude
-        if let (Some(sha), Some(states)) = (tip_sha.as_deref(), pr_head_states.as_ref()) {
+        if let (Some(sha), Some(states)) = (c.tip_sha.as_deref(), pr_head_states.as_ref()) {
             let already_open_elsewhere = states.by_branch.values().any(|evidence| {
                 evidence.state == "open" && evidence.head_sha.as_deref() == Some(sha)
             });
@@ -81625,18 +81923,7 @@ fn collect_unshipped_work_items_bounded(
                 continue;
             }
         }
-        let age = branch_tip_age(project_root, &refname);
-        candidates.push(UnshippedBranchCandidate {
-            branch: display_branch,
-            refname,
-            local_branch: short_branch.clone(),
-            spec_id,
-            commits_ahead,
-            age,
-            has_local,
-            tip_sha,
-            possible_review_snapshot,
-        });
+        candidates.push(c);
     }
 
     candidates.sort_by(|a, b| b.commits_ahead.cmp(&a.commits_ahead));
@@ -81700,6 +81987,15 @@ fn collect_unshipped_work_items_bounded(
                     "possible review snapshot ({}), unverified",
                     c.local_branch
                 )
+            } else if c.has_local && !c.pushed {
+                // BUG-1756 AC3: a branch with NO remote ref must be pushed
+                // before anything can ship it — the hint names the push
+                // first, never a bare `aida pr ship` against a ref the forge
+                // cannot see. trace:BUG-1756 | ai:claude
+                format!(
+                    "git push -u origin {b} && aida pr ship {b}",
+                    b = &c.local_branch
+                )
             } else if c.has_local {
                 format!("aida pr ship {}", c.branch)
             } else {
@@ -81720,6 +82016,7 @@ fn collect_unshipped_work_items_bounded(
                 age,
                 recovery,
                 pr_state,
+                pushed: c.pushed, // trace:BUG-1756 | ai:claude
             }
         })
         .collect();
@@ -82065,7 +82362,14 @@ exit 1
         assert_eq!(local.spec_id, "STORY-1043");
         assert_eq!(local.commits_ahead, 1);
         assert_eq!(local.pr_state, "absent");
-        assert_eq!(local.recovery, "aida pr ship story-1043-unshipped");
+        // BUG-1756: this fixture branch was never pushed (no
+        // refs/remotes/origin counterpart), so it is the local-only state and
+        // its hint must name the push first. trace:BUG-1756 | ai:claude
+        assert!(!local.pushed);
+        assert_eq!(
+            local.recovery,
+            "git push -u origin story-1043-unshipped && aida pr ship story-1043-unshipped"
+        );
 
         let remote = rows
             .iter()
@@ -82073,10 +82377,244 @@ exit 1
             .unwrap();
         assert_eq!(remote.spec_id, "STORY-1047");
         assert_eq!(remote.commits_ahead, 1);
+        assert!(remote.pushed); // trace:BUG-1756 | ai:claude
         assert_ne!(remote.age, "unknown");
         assert_eq!(
             remote.recovery,
             "git switch -c story-1047-remote origin/story-1047-remote && aida pr ship story-1047-remote"
+        );
+    }
+
+    // BUG-1756 AC1 + AC3 + AC4: a LOCAL-ONLY committed branch (ahead of
+    // main, ≥1 commit, no PR, never pushed) is reported as unshipped work,
+    // with its state distinguished from a pushed-no-PR branch — the two need
+    // different next actions (push then open a PR vs open a PR), and the
+    // local-only hint must name the push first: a reader must never be told
+    // to `aida pr ship` a ref the forge cannot see. The pushed branch is the
+    // AC4 control — its classification must stay byte-identical to what the
+    // detector reported before this fix. trace:BUG-1756 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_distinguishes_local_only_from_pushed_no_pr_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "bug-1756-localonly", "BUG-1756");
+        branch_with_commit(root, "bug-1757-pushed", "BUG-1757");
+        // Simulate a pushed branch: the remote-tracking ref exists alongside
+        // the local one (what a real `git push -u origin` leaves behind).
+        git(
+            root,
+            &[
+                "update-ref",
+                "refs/remotes/origin/bug-1757-pushed",
+                "refs/heads/bug-1757-pushed",
+            ],
+        );
+
+        let fake_gh = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+printf '[]'
+"#,
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("BUG-1756", "InProgress"),
+                summary("BUG-1757", "InProgress"),
+            ],
+            false,
+            false,
+        );
+
+        assert_eq!(
+            rows.len(),
+            2,
+            "both unshipped branches must report: {rows:?}"
+        );
+        let local_only = rows
+            .iter()
+            .find(|row| row.branch == "bug-1756-localonly")
+            .expect("the never-pushed branch is the state the detector most needs to name");
+        assert!(!local_only.pushed);
+        assert_eq!(local_only.pr_state, "absent");
+        assert_eq!(
+            local_only.recovery,
+            "git push -u origin bug-1756-localonly && aida pr ship bug-1756-localonly"
+        );
+
+        let pushed = rows
+            .iter()
+            .find(|row| row.branch == "bug-1757-pushed")
+            .expect("a pushed-no-PR branch keeps reporting exactly as before");
+        assert!(pushed.pushed);
+        assert_eq!(pushed.pr_state, "absent");
+        assert_eq!(pushed.recovery, "aida pr ship bug-1757-pushed");
+    }
+
+    // BUG-1756 (the observed incident): the per-candidate `--head` network
+    // round trips used to run UP FRONT for every candidate branch, which on
+    // a working repository consumed the entire wall-clock budget before a
+    // single branch was locally probed — `aida awaiting` reported
+    // `unshipped_work[0]` / `scanned: 0` while a finished local-only commit
+    // sat on exactly one machine. Deterministic operation-count pin (no
+    // wall-clock flakiness, same style as the BUG-1288 gate test): with
+    // three candidates of which only one survives the local classification,
+    // exactly ONE `--head` history query is issued, and it names the
+    // survivor. trace:BUG-1756 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn per_head_history_queries_run_only_for_surviving_candidates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        branch_with_commit(root, "bug-9101-survivor", "BUG-9101");
+        // A candidate the LOCAL pass excludes: live lease on its branch.
+        branch_with_commit(root, "bug-9102-live", "BUG-9102");
+        write_live_lease(root, "BUG-9102", "bug-9102-live");
+        // A candidate the LOCAL pass excludes: no content beyond main.
+        git(root, &["branch", "bug-9103-empty", "main"]);
+
+        let call_log = root.join("gh-calls.log");
+        let fake_gh = executable_fake_gh(
+            root,
+            &format!(
+                r#"#!/usr/bin/env bash
+echo "$@" >> "{}"
+printf '[]'
+"#,
+                call_log.display()
+            ),
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("BUG-9101", "InProgress"),
+                summary("BUG-9102", "InProgress"),
+                summary("BUG-9103", "InProgress"),
+            ],
+            false,
+            false,
+        );
+
+        assert_eq!(rows.len(), 1, "only the survivor reports: {rows:?}");
+        assert_eq!(rows[0].spec_id, "BUG-9101");
+
+        let calls = std::fs::read_to_string(&call_log).unwrap_or_default();
+        let head_queries: Vec<&str> = calls.lines().filter(|l| l.contains("--head")).collect();
+        assert_eq!(
+            head_queries.len(),
+            1,
+            "a per-head network query is paid only for candidates that survive \
+             the local classification, never per candidate up front: {calls}"
+        );
+        assert!(
+            head_queries[0].contains("bug-9101-survivor"),
+            "the one --head query names the survivor: {calls}"
+        );
+    }
+
+    // BUG-1756: a single anciently-forked candidate can cost `git cherry`
+    // tens of seconds — several times the whole scan budget — and before the
+    // per-candidate slice it starved every candidate after it (observed live:
+    // the scan stuck at the same truncation point under 5s, 10s and 15s
+    // budgets because one review-snapshot ref cost ~30s). The monster must
+    // burn at most its slice, count as UNSCANNED (incomplete scan, PRIN-5),
+    // and the normal candidates around it must still classify and report.
+    // trace:BUG-1756 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-git harness is a bash script; git cannot be shimmed via shebang on Windows"
+    )]
+    #[test]
+    fn one_expensive_candidate_cannot_starve_the_scan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "bug-9105-monster", "BUG-9105");
+        branch_with_commit(root, "bug-9106-normal", "BUG-9106");
+
+        // A PATH-shim git that stalls ONLY the monster's `cherry` probe and
+        // execs the real git for everything else.
+        let real_git = std::env::var_os("PATH")
+            .and_then(|paths| {
+                std::env::split_paths(&paths)
+                    .map(|dir| dir.join("git"))
+                    .find(|p| p.is_file())
+            })
+            .expect("git on PATH");
+        let real_git = real_git.display();
+        let shim_dir = root.join("git-shim");
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        crate::test_exec::write_executable(
+            &shim_dir.join("git"),
+            &format!(
+                r#"#!/usr/bin/env bash
+is_cherry=""
+is_monster=""
+for a in "$@"; do
+  [ "$a" = "cherry" ] && is_cherry=1
+  [ "$a" = "bug-9105-monster" ] && is_monster=1
+done
+if [ -n "$is_cherry" ] && [ -n "$is_monster" ]; then
+  sleep 30
+fi
+exec "{real_git}" "$@"
+"#
+            ),
+        );
+        let path = format!(
+            "{}:{}",
+            shim_dir.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", path.as_str())]);
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+        let (rows, scan) = collect_unshipped_work_items_bounded(
+            root,
+            &[
+                summary("BUG-9105", "InProgress"),
+                summary("BUG-9106", "InProgress"),
+            ],
+            true, // no_forge — this pin is about the LOCAL pass
+            false,
+            Some(deadline),
+        );
+
+        assert!(
+            rows.iter().any(|r| r.branch == "bug-9106-normal"),
+            "a normal candidate must still classify and report next to the monster: {rows:?}"
+        );
+        assert!(
+            rows.iter().all(|r| r.branch != "bug-9105-monster"),
+            "the timed-out candidate was never classified and must not be reported: {rows:?}"
+        );
+        assert!(
+            !scan.complete,
+            "a probe-capped candidate means the scan did NOT cover everything"
+        );
+        assert_eq!(
+            scan.scanned,
+            scan.candidates - 1,
+            "exactly the monster counts as unscanned: {scan:?}"
         );
     }
 
@@ -82281,7 +82819,11 @@ exit 1
             .find(|row| row.branch == "story-1531-unshipped")
             .expect("a genuinely unshipped branch must still report");
         assert_eq!(genuine.spec_id, "STORY-1531");
-        assert_eq!(genuine.recovery, "aida pr ship story-1531-unshipped");
+        // BUG-1756: never pushed in this fixture → push-first hint.
+        assert_eq!(
+            genuine.recovery,
+            "git push -u origin story-1531-unshipped && aida pr ship story-1531-unshipped"
+        );
     }
 
     // BUG-1531 PROXY DECISION: with NO forge available (`no_forge = true`),
@@ -83925,8 +84467,22 @@ fn unshipped_work_scan_budget() -> std::time::Duration {
             return std::time::Duration::from_millis(ms);
         }
     }
+    // BUG-1756: raised from BUG-1288's 2000ms. That number was sized when
+    // the scan's dominant cost was one `gh pr list --head` network round
+    // trip per candidate, and it protected poll latency by truncating —
+    // which on a working repository (24 candidates, ~0.5s per gh call)
+    // truncated at 0/N on every single run, leaving the channel effectively
+    // dead. With the per-candidate network calls now lazy (survivors only),
+    // the budget's job is to cover the CHEAP local pass (~0.2s of git per
+    // candidate on this class of host, measured under its normal multi-agent
+    // build load) plus a handful of survivor queries; 10s covers the
+    // observed 26-candidate population at roughly 2× headroom, while still
+    // bounding a pathological repo. The per-turn notice path skips this
+    // channel entirely, so this budget never touches per-turn latency, and
+    // the full `awaiting` report it rides already spends ~30s on its other
+    // forge-backed channels. trace:BUG-1756 | ai:claude
     const PRODUCT_UNSHIPPED_SCAN_BUDGET: std::time::Duration =
-        std::time::Duration::from_millis(2000);
+        std::time::Duration::from_millis(10_000);
     PRODUCT_UNSHIPPED_SCAN_BUDGET
 }
 
