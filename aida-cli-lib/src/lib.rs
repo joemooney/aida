@@ -75149,8 +75149,14 @@ fn specs_with_open_prs(
         let out = std::process::Command::new(&gh)
             .current_dir(project_root)
             .args([
-                "pr", "list", "--state", "open", "--search", &spec_id, "--limit", "1", "--json",
-                "number",
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--search",
+                &spec_id,
+                "--json",
+                "number,title,body",
             ])
             .output_retrying_etxtbsy()
             .ok()?;
@@ -75158,13 +75164,29 @@ fn specs_with_open_prs(
             return None;
         }
         let rows: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-        if let Some(number) = rows
-            .as_array()
-            .and_then(|items| items.first())
-            .and_then(|item| item.get("number"))
-            .and_then(|number| number.as_u64())
-        {
-            open.insert(spec_id, number);
+        let Some(items) = rows.as_array() else {
+            continue;
+        };
+
+        for item in items {
+            let number = item.get("number").and_then(|n| n.as_u64());
+            let title = item.get("title").and_then(|s| s.as_str()).unwrap_or("");
+            let body = item.get("body").and_then(|s| s.as_str()).unwrap_or("");
+
+            // Check for structural references
+            let title_ref = format!("({})", spec_id);
+            let has_structural_ref = title.contains(&title_ref)
+                || body.contains(&format!("Closes {}", spec_id))
+                || body.contains(&format!("Fixes {}", spec_id))
+                || body.contains(&format!("Resolves {}", spec_id))
+                || body.contains(&format!("Implements {}", spec_id));
+
+            if has_structural_ref {
+                if let Some(n) = number {
+                    open.insert(spec_id.clone(), n);
+                    break;
+                }
+            }
         }
     }
     Some(open)
