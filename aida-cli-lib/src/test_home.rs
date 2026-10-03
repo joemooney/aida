@@ -146,25 +146,21 @@ fn passwd_home() -> Option<PathBuf> {
 
 /// Is `pid` still running? "Unknown" counts as alive, so
 /// [`sweep_stale_test_homes`] only removes a directory whose owner is
-/// definitely gone.
+/// definitely gone. An unprobeable pid (0, outside `pid_t`, non-unix) stays
+/// alive here — stricter than the canonical predicate, on purpose — while a
+/// probeable pid delegates to `aida_core::liveness::pid_is_alive` so a
+/// defunct (zombie) owner reads dead (BUG-1741): a zombie holds no open
+/// files, so sweeping its directory is safe.
 // trace:TASK-1513 | ai:claude
+// trace:BUG-1741 | ai:claude
 fn pid_is_alive(pid: u32) -> bool {
     #[cfg(unix)]
     {
-        let Ok(pid) = libc::pid_t::try_from(pid) else {
-            return true;
-        };
-        // Never probe 0 or a negative pid: those address process *groups*.
-        if pid <= 0 {
+        // Never probe 0 or a pid outside `pid_t`: unknown counts as alive.
+        if pid == 0 || libc::pid_t::try_from(pid).is_err() {
             return true;
         }
-        // SAFETY: signal 0 performs the permission check only; nothing is
-        // delivered to the target process.
-        if unsafe { libc::kill(pid, 0) } == 0 {
-            return true;
-        }
-        // `EPERM` means alive but not ours; only `ESRCH` means gone.
-        std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+        aida_core::liveness::pid_is_alive(pid)
     }
     #[cfg(not(unix))]
     {
