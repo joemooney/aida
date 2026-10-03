@@ -76,8 +76,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T03:41:29.241583054Z
-modified_at: 2026-10-03T00:26:55.175965478Z
+modified_at: 2026-10-03T00:30:03.623974337Z
 req_type: Bug
+comments:
+- id: 01a0ff2b-0167-7f73-b61a-ab8c8db5c8c3
+  author: ai:claude:joe
+  content: 'Implementation approach: introduced PreclaimBranchState {Absent, Merged, Unmerged, MergeStateUnknown} in queue_cmd.rs. preclaim_branch_state(branch_exists, merged_probe) invokes the forge probe (detect_merged_pr_for_branch_via_forge → gh pr list --head <branch> --state merged) only when the branch exists; probe failure maps to MergeStateUnknown, never Unmerged. preclaim_collision_check now refuses the branch arm only on Unmerged; PR arm and bypass chain unchanged. Tests: bug_1763_merged_branch_preclaim_tests.rs covers AC1-AC7 incl. a real squash-merged git fixture proving merge-base --is-ancestor reports NO where the forge path allows, probe invocation counting, and a source pin that the preclaim block uses the forge helper and no ancestry.'
+  created_at: 2026-10-03T00:30:03.623974337Z
+  modified_at: 2026-10-03T00:30:03.623974337Z
+  session_id: c982992e-d982-4330-9667-07d5f0d0d972
 history:
 - id: 01a0fab4-85a8-7f40-ba96-4c156f41a412
   author: joe
