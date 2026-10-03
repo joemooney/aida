@@ -1,0 +1,27 @@
+id: 01a10179-0d0a-7c90-bd47-d2aa8a47c94f
+spec_id: TASK-1-192
+title: CORRECTNESS — worktree_path.file_name().unwrap_or_default() degrades to an EMPT…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  CORRECTNESS — worktree_path.file_name().unwrap_or_default() degrades to an EMPTY component, so any worktree path without a file_name maps to target/worktrees/ itself; two such worktrees collide again — the exact bug being fixed, one level deeper and silent. Fail loudly or fall back to the parent target with a printed warning; cover the arm in the new unit test.
+  Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T11:14:32.842785822Z
+modified_at: 2026-10-03T11:14:32.842785822Z
+req_type: Task
+tags:
+- carried-from:BUG-1783
+- finding-hash:15924dfa
+- from-review:BUG-1783
+- kind:carried-forward
+filed_at:
+  code_sha: c980a7937637ee228b687375b47549f35b49fbd3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
