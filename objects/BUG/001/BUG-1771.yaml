@@ -53,12 +53,12 @@ description: |
   4. If a lens token is combined with a stored status in a comma set
      (`--status shelved,approved`), the command either honours both or refuses with
      a message naming the limitation — it must not silently drop a token.
-status: NeedsAttention
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T14:13:04.482813479Z
-modified_at: 2026-10-03T04:06:38.631704282Z
+modified_at: 2026-10-03T05:30:22.671175779Z
 req_type: Bug
 tags:
 - cli
@@ -109,6 +109,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1003d-f463-79f0-8bd4-1c2182621865
+  author: joe
+  timestamp: 2026-10-03T05:30:22.691166661Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Done
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
@@ -117,6 +124,10 @@ filed_at:
   aida_build_sha: f3cde6e60e
   vendor: antigravity
   session: 6b6263ef-7534-4ca6-873c-25ab949a24ae
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-03T05:30:22.671175779Z
+  implemented_by: joe
 failure_reason:
   phase: reviewer
   phase_index: 3
