@@ -1,10 +1,9 @@
 job: hub-drift-guard
-last_run: 2026-10-02T18:05:29.766824272Z
+last_run: 2026-10-03T00:09:21.291407262Z
 last_by:
-  seat: advisor
-  session: cb929434-babe-4bdf-8fc6-b7bb6a2ab78b
-  vendor: antigravity
-result: done
+  seat: substrate
+  vendor: tick
+result: failed:1
 failure_trips:
 - trip_id: hub-drift-guard@2026-09-24T20:00:01.719656572Z
   at: 2026-09-24T20:00:01.719656572Z
