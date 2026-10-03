@@ -1,0 +1,30 @@
+id: 01a1013b-8119-7370-81d8-420a2996bf70
+spec_id: TASK-1-190
+title: cli.rs ~281 edited ServerCommand::List — that is 'aida server list', the remote…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1771, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cli.rs ~281 edited ServerCommand::List — that is 'aida server list', the remote REST client (server_cmd.rs:28 -> client::list_requirements -> aida-server rest.rs:1595), whose server-side filter is an exact match on the Debug-formatted status: no comma sets, no open/closed aliases, and no lenses. The new help text advertises all three on a surface that supports none, and its trace comment reasons about the git-backend path this command never reaches. Meanwhile the REAL 'aida list --status' help (cli.rs:9281, Command::List, the enum with the STATUS shortcut positional) still says only 'comma-separated OR set and open/closed aliases' with no mention of shelved/needs-decision. REWORK: move the lens documentation from ServerCommand::List's status field to Command::List's status field at cli.rs ~9281 (restore ServerCommand::List's previous one-line help, or document its actual exact-match limitation), keep the trace comment with the moved text, re-run the CLI-manual drift guard / check-ci-fast, and confirm 'aida list --help' now names both lens tokens.
+
+  PR: #2339
+  Reviewed sha: 7ffe5767a021f6f4e1ec71e81eac7537172d1577
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T10:07:19.321608726Z
+modified_at: 2026-10-03T10:07:19.321608726Z
+req_type: Task
+tags:
+- carried-from:BUG-1771
+- finding-hash:4ffe7899
+- from-review:PR-2339
+- kind:carried-forward
+filed_at:
+  code_sha: efe2dd35dd99c29e8cbcd39f61ce43925a50e785
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
+  session: 826d8265-c18a-479b-bdbe-b424357115d0
