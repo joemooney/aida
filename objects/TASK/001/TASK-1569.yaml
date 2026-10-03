@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T18:44:51.767326945Z
-modified_at: 2026-10-03T04:18:15.447068360Z
+modified_at: 2026-10-03T19:49:11.509187492Z
 req_type: Task
+comments:
+- id: 01a10350-38d5-7e50-b369-cbab6c1ab587
+  author: joe
+  content: 'Advisor scope addition from TASK-1574 intake (AIDA-57 item 3, re-verified 2026-10-03): the existing -c/--comments flag is SILENTLY IGNORED in agent output mode — ''aida show BUG-1669 --full --comments'' renders 5,009 bytes (no bodies, no count, no hint) while AIDA_OUTPUT_FORMAT=human with the same flags renders 168,551 bytes and ''aida comment list'' renders the full 156KB trail. This is the measured mechanism behind the relay team''s ''show --full drops comments'' false-negative report (a reviewer nearly concluded an accurate quotation was fabricated). Therefore AC3 (''both flags accepted on both surfaces'') must mean --comments in agent mode ACTUALLY PRINTS BODIES, not merely parses. Add an explicit test: agent-mode show --comments contains a phrase from a deep comment.'
+  created_at: 2026-10-03T19:49:11.509187492Z
+  modified_at: 2026-10-03T19:49:11.509187492Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
 history:
 - id: 01a0fffb-ed17-7b53-a079-1dea52a5c571
   author: joe
