@@ -13,12 +13,12 @@ description: |
   1. Either a retry un-drafts the PR it is reusing, or phase 1 stops treating a draft PR as published and opens a fresh one. Pick one deliberately and record why.
   2. A fixture test proves a retry after a draft retraction reaches a mergeable state rather than stalling.
   3. `draft_notice`'s text matches whatever behaviour is chosen.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:26:58.024538426Z
-modified_at: 2026-10-02T23:31:45.464668966Z
+modified_at: 2026-10-03T17:32:16.640166251Z
 req_type: Bug
 tags:
 - preflight forge from-review:TASK-1529
@@ -206,7 +206,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a102d2-df63-7ec3-9ecb-ddd6448ee6d0
+  author: aida-auto-bump
+  timestamp: 2026-10-03T17:32:16.611218350Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a102d2-df80-73b1-9233-bf4d5c868618
+  timestamp: 2026-10-03T17:32:16.640148744Z
+  agent: aida
+  commit_sha: 087a901efcc8ed8e95dc97702bc78b110ef15ed7
+  summary: 'AC1 decision (un-draft the reused PR at adoption) implemented at both primary adoption points with the review:draft-only exception; AC2 pinned by hermetic RecordingForge seam tests (ran green in CI); AC3 notice text updated and asserted. Residual: two secondary adoption paths still uncovered — filed as BUG-1791, non-blocking.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-02T22:56:49.169822463Z
   implemented_by: joe
+  completed_at: 2026-10-03T17:32:16.611142703Z
+  completion_sha: 087a901efcc8ed8e95dc97702bc78b110ef15ed7
