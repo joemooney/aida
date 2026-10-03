@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T15:12:41.984679155Z
-modified_at: 2026-10-03T01:17:17.943322733Z
+modified_at: 2026-10-03T04:03:26.673338616Z
 req_type: Bug
 comments:
 - id: 01a0f8b6-581c-76d0-8132-8bab9cd079b7
@@ -132,6 +132,12 @@ comments:
   created_at: 2026-10-03T01:17:17.943322733Z
   modified_at: 2026-10-03T01:17:17.943322733Z
   session_id: b0887c2e-f6d8-4914-b521-f2c373950dae
+- id: 01a0ffee-5d51-7882-b182-3d66fc48ada7
+  author: joe
+  content: 'Advisor review of PR #2365: APPROVED at 4b9e38763f93 (CI Build green 11m55s; the earlier red was a .aida-store unrelated-histories setup flake, cleared on re-run). One narrow follow-up gap found during review and filed as TASK-1575 (type bug): a pass-1-excluded sibling branch no longer carries its merged-PR evidence for represented_by_merged_head. Merge is operator-paste (advisor recorded the verdict): gh pr merge 2365 --squash && aida pull'
+  created_at: 2026-10-03T04:03:26.673338616Z
+  modified_at: 2026-10-03T04:03:26.673338616Z
+  session_id: 49955093-ec89-46a0-b158-2d0ecdd168ce
 history:
 - id: 01a0f806-7dff-7563-851a-653665aac473
   author: joe
