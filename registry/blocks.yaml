@@ -743,3 +743,11 @@ blocks:
   range_end: 500
   next: 401
   allocated_at: 2026-10-01T20:07:38.222808010Z
+- node_id: '1'
+  owner: joe
+  hostname: imac
+  type_prefix: BUG
+  range_start: 1917
+  range_end: 2016
+  next: 1917
+  allocated_at: 2026-10-03T19:52:46.886893873Z
