@@ -65894,6 +65894,10 @@ mod bug_1701_drain_routing_tests;
 #[path = "tests/bug_1761_preclaim_collision_tests.rs"]
 mod bug_1761_preclaim_collision_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_1763_merged_branch_preclaim_tests.rs"]
+mod bug_1763_merged_branch_preclaim_tests;
+
 fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
     let project_root = find_project_root()?;
     match cmd {
