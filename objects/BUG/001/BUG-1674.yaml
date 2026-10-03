@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-10-03T05:40:10.139761616Z
+modified_at: 2026-10-03T05:40:24.984776003Z
 req_type: Bug
 tags:
 - performance
@@ -308,6 +308,12 @@ comments:
   content: 'Root cause confirmed by reproduction on the fixed-per-BUG-1606 lineage: with a stale cache needing a FULL rebuild (recorded head not an ancestor) and a live foreign writer holding the SQLite cache write lock (BEGIN IMMEDIATE), a TTY (human, interactive-policy) aida show parked in the cache write retry ladder (100+200+...+12800 ms = 25.5 s) and then FAILED with ''database is locked'' — measured 25.57 s. The same shape piped/machine-mode was already bounded by TASK-1526/1527 (1.6 s, stale-labelled, worker requested); the evidence binaries in this spec (7c6faed690, b331809ce7) PREDATE TASK-1526''s merge (4d42531352), which is why the dogfood tail showed up in advisor sessions then. Fix: the interactive single-flight winner in CachedGitBackend::freshen_for_read now makes exactly one bounded rebuild attempt (ReadRefreshAttempt arms zero SQLite retries); on a cache write-lock error it degrades to the STORY-1484 reader protocol — durable refresh request + detached worker + labelled committed snapshot — instead of propagating the ladder error. A free lock keeps the pre-C inline rebuild and its fresh result unchanged. Measured after fix (same TTY full-rebuild fixture, debug binary): 2.16 s, exit 0, stale note printed.'
   created_at: 2026-10-03T05:40:10.139761616Z
   modified_at: 2026-10-03T05:40:10.139761616Z
+  session_id: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
+- id: 01a10047-2518-7851-a920-07ad7c928a28
+  author: joe
+  content: 'Acceptance evidence: (1) aida-cli/tests/bug_1674_show_bounded_under_writer.rs — four black-box tests: show under a live BEGIN IMMEDIATE writer in the incremental shape, the full-rebuild shape, and under a foreign refresh-flock holder, each asserted < 5 s wall-clock, exit 0, spec served, stale: true in TOON and the stale note on stderr; plus the correctness witness: an external YAML status change (Draft→Approved committed to the store) is displayed as approved while the cache is stale and the write lock is held — show''s spec body reads authoritative YAML, so it never shows a contradicting status (and the cache-backed context carries the stale label). (2) Unit test tty_full_rebuild_winner_bounded_behind_live_writer in cached_git_backend.rs pins the interactive winner: one bounded attempt (full_rebuild==1, retry_sleep==None), durable request filed, labelled snapshot served; mutation-proof run with the strict path restored fails with ''database is locked''. (3) tty_full_rebuild_winner_remains_strict_before_c still passes (free lock keeps the inline rebuild). Re-measure note: aida doctor check performance TODAY (pre-merge, 24 h window) still trips both limbs — worst 35488 ms on d5b1957658 at 23:15:36Z, which correlates with a host-wide stall (shift tick 33.9 s and schedule tick 38.9 s ending within 2 s of it; statusline stayed ~100 ms throughout, so the cache write lock was not the blocker) — that sample is IO/CPU starvation, not a lock wait. The ADR-53 re-measure on both limbs needs a fresh 24 h window of traffic on the merged binary; the performance-guard cron re-trips automatically if the tail persists, and the quiet output will be pasted here when that window has run.'
+  created_at: 2026-10-03T05:40:24.984776003Z
+  modified_at: 2026-10-03T05:40:24.984776003Z
   session_id: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
 history:
 - id: 01a10025-c7d7-7a21-8c2c-9a990117cb41
