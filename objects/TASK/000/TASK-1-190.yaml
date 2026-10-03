@@ -1,5 +1,6 @@
 id: 01a1013b-8119-7370-81d8-420a2996bf70
 spec_id: TASK-1-190
+agreed_id: TASK-209
 title: cli.rs ~281 edited ServerCommand::List — that is 'aida server list', the remote…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1771, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
