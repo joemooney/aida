@@ -14,7 +14,11 @@
 //!   AC1 — a harness lease pinned to the project root is never, on its own,
 //!         evidence of a fan-out (asserted for a caller-only backing AND for a
 //!         distinct live worker, because AC1 asks the rule to be stated).
-//!   AC2 — the reporting session is never its own corroboration.
+//!   AC2 — the reporting session is never its own corroboration. This holds
+//!         for BOTH evidence doors: presence (the caller's cwd) and identity
+//!         (a lease whose `active_pid`/`creator_pid` is the caller or one of
+//!         its ancestors — `lease_state_for` short-circuits `Live` on those
+//!         pids before the presence list is ever consulted).
 //!   AC4 — a harness lease backed by a live process that is not the caller
 //!         still reads as a fan-out. TASK-1064's case is real.
 //
@@ -217,6 +221,188 @@ fn bug_1740_an_ancestor_of_the_caller_is_also_the_caller() {
     assert!(
         ps_live_fanout_leases(&leases, &live, chrono::Utc::now(), &chain).is_empty(),
         "the harness hosting this process is still the observer"
+    );
+}
+
+// --- AC2, the IDENTITY door (rework) ---------------------------------------
+//
+// `lease_state_for` short-circuits to `Live` on a live `active_pid` (and on
+// `creator_pid` in its advisory-lock arm) BEFORE the presence list is
+// consulted, so subtracting the caller from the live-session list alone left
+// a second door open: a harness lease whose recorded pid IS the reporting
+// session (BUG-1772's unreaped harness leases keep exactly that pid) still
+// self-corroborated. These tests pin the identity exclusion and its AC4
+// boundary.
+
+/// A sleeping child process: a REAL live pid that is not in this process's
+/// ancestor chain, for exercising the `active_pid`/`creator_pid` arms of
+/// `lease_state_for` (they probe `/proc`, so a made-up pid reads dead).
+/// Killed on drop so an assertion failure cannot leak it.
+struct LiveWorker(std::process::Child);
+
+impl LiveWorker {
+    fn spawn() -> Self {
+        LiveWorker(
+            std::process::Command::new("sleep")
+                .arg("120")
+                .spawn()
+                .expect("spawn sleep"),
+        )
+    }
+    fn pid(&self) -> u32 {
+        self.0.id()
+    }
+}
+
+impl Drop for LiveWorker {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// AC2, identity arm, the direct shape: a harness lease (worktree of its own,
+/// so the root rule is not what rejects it) whose `active_pid` is the caller
+/// itself. `lease_state_for` reads it `Live` from the pid arm without ever
+/// consulting the (caller-subtracted) presence list — it must still not count
+/// as a fan-out. No live sessions at all, so ONLY the identity door could
+/// have corroborated.
+// trace:BUG-1740 | ai:claude
+#[test]
+fn bug_1740_harness_lease_whose_active_pid_is_the_caller_is_not_a_fanout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let wt = root.join(".claude/worktrees/agent-self");
+    std::fs::create_dir_all(&wt).unwrap();
+    let mut l = harness_lease("sess-self-pid", wt);
+    l.parent_project_root = Some(root);
+    l.active_pid = Some(std::process::id());
+    let leases = [l];
+    let caller = process_probe::walk_ancestor_pids(std::process::id());
+
+    assert!(
+        ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &caller).is_empty(),
+        "a lease whose active_pid is the reporting session is the observer testifying for itself"
+    );
+}
+
+/// AC2's "or its ancestors", identity arm: an Agent-tool subagent executes
+/// INSIDE the parent claude process, so a harness lease it minted carries an
+/// `active_pid` that is an ANCESTOR of any `aida` later run from that same
+/// session. That pid stays alive as long as the session does (BUG-1772 makes
+/// the lease persistent), and it must not corroborate a fan-out.
+// trace:BUG-1740 | ai:claude
+#[test]
+fn bug_1740_harness_lease_whose_active_pid_is_an_ancestor_of_the_caller_is_not_a_fanout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let wt = root.join(".claude/worktrees/agent-anc");
+    std::fs::create_dir_all(&wt).unwrap();
+    let chain = process_probe::walk_ancestor_pids(std::process::id());
+    let parent = chain
+        .iter()
+        .copied()
+        .find(|p| *p != std::process::id())
+        .expect("the test process has at least one ancestor");
+    let mut l = harness_lease("sess-anc-pid", wt);
+    l.parent_project_root = Some(root);
+    l.active_pid = Some(parent);
+    let leases = [l];
+
+    assert!(
+        ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &chain).is_empty(),
+        "the long-lived session that minted the lease is still the observer"
+    );
+}
+
+/// AC4 witness (TASK-1064): the SAME lease shape with `active_pid` naming a
+/// live process that is NOT in the caller's chain keeps the fan-out. This is
+/// the lease as seen from any OTHER session — the operator's window, a
+/// monitor seat — and is what the identity exclusion must not delete.
+// trace:BUG-1740 | ai:claude
+#[test]
+fn bug_1740_harness_lease_whose_active_pid_is_a_distinct_live_worker_is_a_fanout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let wt = root.join(".claude/worktrees/agent-worker");
+    std::fs::create_dir_all(&wt).unwrap();
+    let worker = LiveWorker::spawn();
+    let mut l = harness_lease("sess-worker-pid", wt);
+    l.parent_project_root = Some(root);
+    l.active_pid = Some(worker.pid());
+    let leases = [l];
+    let caller = process_probe::walk_ancestor_pids(std::process::id());
+
+    let found = ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &caller);
+    assert_eq!(
+        found.len(),
+        1,
+        "a live active_pid outside the caller's chain is a real worker (AC4)"
+    );
+    assert_eq!(found[0].id, "sess-worker-pid");
+}
+
+/// The `creator_pid` arm, covered identically. `lease_state_for`'s
+/// advisory-lock arm (`review_verb`/`claim_verb` with no worktree of its own)
+/// reads `creator_pid` instead of `active_pid`, and `ps_live_fanout_leases`
+/// admits such a lease: the scope check is on `scope` alone, and
+/// `ps_lease_is_project_root_pinned` returns false for an empty
+/// `worktree_path`, so nothing upstream makes the arm unreachable. A
+/// caller-minted advisory lease must not corroborate; one minted by a
+/// distinct live process still does.
+// trace:BUG-1740 | ai:claude
+#[test]
+fn bug_1740_advisory_harness_lease_creator_pid_mirrors_the_active_pid_rule() {
+    let mut l = harness_lease("sess-advisory", std::path::PathBuf::new());
+    l.claim_verb = true;
+    l.creator_pid = Some(std::process::id());
+    let leases = [l];
+    let caller = process_probe::walk_ancestor_pids(std::process::id());
+
+    assert!(
+        ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &caller).is_empty(),
+        "an advisory lease whose creator_pid is the caller is self-corroboration"
+    );
+
+    // AC4 boundary, same shape: a creator that is a live process outside the
+    // caller's chain stands.
+    let worker = LiveWorker::spawn();
+    let mut other = harness_lease("sess-advisory-other", std::path::PathBuf::new());
+    other.claim_verb = true;
+    other.creator_pid = Some(worker.pid());
+    let leases = [other];
+    assert_eq!(
+        ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &caller).len(),
+        1,
+        "mutation control: only whose pid minted the lease differs"
+    );
+}
+
+/// The mirroring in `ps_lease_identity_is_caller` follows `lease_state_for`'s
+/// arm ORDER, not "any recorded pid": a lease the caller MINTED
+/// (`creator_pid` in the caller's chain) but whose liveness is attested by a
+/// distinct worker's `active_pid` is a genuine fan-out — the orchestrator
+/// mints the lease, the worker holds it. An unconditional creator-pid check
+/// would delete AC4's case; this pins that it doesn't.
+// trace:BUG-1740 | ai:claude
+#[test]
+fn bug_1740_caller_minted_lease_held_by_a_distinct_live_worker_is_a_fanout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let wt = root.join(".claude/worktrees/agent-minted");
+    std::fs::create_dir_all(&wt).unwrap();
+    let worker = LiveWorker::spawn();
+    let mut l = harness_lease("sess-minted", wt);
+    l.parent_project_root = Some(root);
+    l.creator_pid = Some(std::process::id());
+    l.active_pid = Some(worker.pid());
+    let leases = [l];
+    let caller = process_probe::walk_ancestor_pids(std::process::id());
+
+    assert_eq!(
+        ps_live_fanout_leases(&leases, &[], chrono::Utc::now(), &caller).len(),
+        1,
+        "who minted the lease is not who holds it; the deciding pid is the worker's"
     );
 }
 

@@ -67452,6 +67452,35 @@ fn ps_caller_pid_chain() -> Vec<u32> {
     process_probe::walk_ancestor_pids(std::process::id())
 }
 
+/// BUG-1740 (rework): does the IDENTITY evidence this lease would present to
+/// `lease_state_for` — the pid arm that short-circuits `Live` before the
+/// presence list is consulted — name the caller or one of its ancestors?
+///
+/// Mirrors `lease_state_for`'s arm order exactly, so the pid examined here is
+/// the pid that would have decided liveness there:
+///
+///  - the advisory-lock arm (`review_verb`/`claim_verb`, no worktree of its
+///    own) reads `creator_pid`;
+///  - otherwise an explicit `active_pid` wins.
+///
+/// The mirroring matters for AC4: a lease the caller MINTED (`creator_pid` in
+/// the caller's chain) but whose liveness is attested by a distinct worker's
+/// `active_pid` is a genuine fan-out, and an unconditional creator-pid check
+/// would delete it. Only the pid `lease_state_for` would actually consult is
+/// compared against the caller's chain.
+///
+/// This is deliberately NOT inside `lease_state_for`: the exclusion is about
+/// fan-out CORROBORATION (the observer must not testify for itself), not
+/// about lease liveness generally, and every other caller of
+/// `lease_state_for` keeps its behavior.
+// trace:BUG-1740 | ai:claude
+fn ps_lease_identity_is_caller(l: &SessionLease, caller_pids: &[u32]) -> bool {
+    if (l.review_verb || l.claim_verb) && l.worktree_path.as_os_str().is_empty() {
+        return l.creator_pid.is_some_and(|pid| caller_pids.contains(&pid));
+    }
+    l.active_pid.is_some_and(|pid| caller_pids.contains(&pid))
+}
+
 /// TASK-1064: is an advisor Agent-tool fan-out currently running? Detected as a
 /// LIVE lease whose scope is the generic `harness-worktree` fallback — the lease
 /// an Agent-tool subagent (a `general-purpose` fan-out whose branch carries no
@@ -67463,23 +67492,40 @@ fn ps_caller_pid_chain() -> Vec<u32> {
 /// BUG-1740: two leases that used to qualify no longer do.
 ///
 ///  1. A lease pinned to the project root — see [`ps_lease_is_project_root_pinned`].
-///  2. A lease whose only live backing is the caller's own presence. The
-///     `has_live_claude` arm of `lease_state_for` infers a worker from a
-///     claude process whose cwd is inside the lease's worktree — and the
-///     reporting session is such a process. That is a statement about the
-///     observer, not about a fan-out, so `caller_pids` is subtracted from the
-///     live set before liveness is classified.
+///  2. A lease whose only live backing is rooted in the caller's own pid
+///     chain. THE FULL RULE (AC2): neither presence (cwd) nor identity
+///     (`active_pid`/`creator_pid`) evidence rooted in the caller's own pid
+///     chain corroborates a fan-out. The reporting session must never be its
+///     own corroboration, whichever door the evidence comes through:
 ///
-/// SCOPE OF (2), and why it stops where it does (AC2 vs AC4). The subtraction
-/// applies to the cwd/presence arm ONLY — never to an explicit `active_pid`.
-/// An Agent-tool subagent executes INSIDE the parent claude process, so its
-/// harness lease's `active_pid` is legitimately an ancestor of any `aida` the
-/// advisor runs from that same session (this is BUG-1656's fixture shape).
-/// Subtracting the caller chain there would delete TASK-1064's case outright,
-/// which BUG-1740 explicitly forbids. The distinction is that `active_pid` is
-/// a positive claim by the lease's minter that a named process holds it,
-/// whereas presence-in-a-directory is an inference, and the observer's own
-/// presence is not evidence of a worker.
+///     - PRESENCE: the `has_live_claude` arm of `lease_state_for` infers a
+///       worker from a claude process whose cwd is inside the lease's
+///       worktree — and the reporting session is such a process. So
+///       `caller_pids` is subtracted from the live set before liveness is
+///       classified.
+///     - IDENTITY: `lease_state_for` short-circuits `Live` on a live
+///       `active_pid` (and on `creator_pid` in its advisory-lock arm) BEFORE
+///       the presence list is consulted. An Agent-tool subagent executes
+///       INSIDE the parent claude process, so a harness lease whose
+///       `active_pid` is the caller or one of its ancestors says only that
+///       the long-lived session that minted it still exists — not that a
+///       fan-out is running (BUG-1772's unreaped harness leases make exactly
+///       this shape persistent). Such leases are excluded here via
+///       [`ps_lease_identity_is_caller`], which mirrors `lease_state_for`'s
+///       arm order.
+///
+/// WHY THIS DOES NOT DELETE TASK-1064's CASE (AC4). AC4 protects a lease
+/// "backed by a live process that is NOT the caller". A fan-out observed from
+/// any OTHER session (operator window, monitor seat) still corroborates: the
+/// orchestrator's pid is not in that caller's ancestor chain. Only the
+/// orchestrating session's own self-report loses the softening — the price
+/// AC2 explicitly accepts ("`possibly_subagent` must be false when the only
+/// live process backing the harness lease is the process running the command
+/// (or its ancestors)").
+///
+/// The exclusion lives HERE, in the fan-out corroboration path, and not in
+/// `lease_state_for`: liveness for every other caller (`aida ps` display,
+/// drain, the orphan pass's lease display) is unchanged.
 ///
 /// Still pure: `caller_pids` is an input, so every corner is fixture-testable.
 // trace:TASK-1064 | ai:claude
@@ -67504,6 +67550,10 @@ fn ps_live_fanout_leases<'a>(
                 .eq_ignore_ascii_case(worktree_lease::HARNESS_WORKTREE_SCOPE)
                 // trace:BUG-1740 | ai:claude
                 && !ps_lease_is_project_root_pinned(l)
+                // Identity evidence rooted in the caller's own pid chain is
+                // the observer testifying for itself — see the doc comment.
+                // trace:BUG-1740 | ai:claude
+                && !ps_lease_identity_is_caller(l, caller_pids)
                 && matches!(lease_state_for(l, &corroborating, now), LeaseState::Live)
         })
         .collect()
