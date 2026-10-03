@@ -9608,8 +9608,12 @@ pub enum Command {
 
         /// Print comment bodies inline after the description (instead of just
         /// the count). Equivalent to following up with `aida comment list <ID>`.
-        #[clap(long, short = 'c')]
+        #[clap(long, short = 'c', conflicts_with = "no_comments")]
         comments: bool,
+
+        /// Suppress comment bodies (enabled by default for human output).
+        #[clap(long, conflicts_with = "comments")]
+        no_comments: bool,
 
         /// Render an indented hierarchy of <id> and its descendants instead
         /// of the standard detail view. Each row shows status + title.
