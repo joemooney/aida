@@ -38,12 +38,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:12:30.302363871Z
-modified_at: 2026-10-03T07:02:05.668102374Z
+modified_at: 2026-10-03T08:32:17.475170113Z
 req_type: Bug
 tags:
 - cache
 - refresh
 - task-1527-followup
+comments:
+- id: 01a100e4-8043-79d1-a16e-d3084e00d5b2
+  author: joe
+  content: 'Windows CI evidence from 2026-10-03: `failed_hint_write_degrades_to_deferred` fails because setting a directory read-only does not prevent child-file creation on Windows, so the hint write succeeds and refreshing is `requested` instead of `deferred`. Observed in PR #2375 Windows run 37107077548; 1273 tests passed and this was the sole failure.'
+  created_at: 2026-10-03T08:32:17.475170113Z
+  modified_at: 2026-10-03T08:32:17.475170113Z
 history:
 - id: 01a0fe90-afec-72b1-9b2a-d44fd00ef5a5
   author: joe
