@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T22:02:24.791016107Z
-modified_at: 2026-10-02T22:02:24.791016107Z
+modified_at: 2026-10-03T09:01:02.378940283Z
 req_type: Task
 tags:
 - list
 - status-lens
+comments:
+- id: 01a100fe-d22a-7f13-a03f-1512b30c84ef
+  author: joe
+  content: 'Advisor triage 2026-10-03: approving. ACs (sharpening the description''s invariant): AC1 — an EPIC whose only NeedsAttention source is a parked child matches ''aida list --status shelved'' / ''--status needs-decision'' per the child''s lens, AND its label/status_lens field names that same lens with the child attribution, in the same change (filter/label consistency preserved). AC2 — attribution agrees with effective_needs_attention_lens_with_source (lib.rs ~:19065); no second walker — reuse or extract, don''t duplicate. AC3 — a row whose own parked fields are set keeps today''s behavior (no regression for non-epics). AC4 — test fails without the fix (epic-with-parked-child fixture).'
+  created_at: 2026-10-03T09:01:02.378940283Z
+  modified_at: 2026-10-03T09:01:02.378940283Z
+  session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
