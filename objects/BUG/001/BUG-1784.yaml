@@ -1,0 +1,27 @@
+id: 01a0ff31-a15a-76b0-93b3-4e2e1d66010e
+spec_id: BUG-1784
+agreed_id: BUG-1784
+title: bench/agent-surface/run_bench.py hard-codes --dangerously-skip-permissions for bench arms and judge — full-access launch route missed by the BUG-1669 inventory
+description: |-
+  Found during TASK-1550's host-wide launch admission inventory (HEAD ad7ecdb79b). bench/agent-surface/run_bench.py::build_claude_argv (lines 80-88) and ::grade (lines 290-303) subprocess.run 'claude -p ... --dangerously-skip-permissions' with the flag hard-coded, for both benchmark arms and the LLM judge. The file predates the BUG-1669 sketch anchor (SPIKE-73/TASK-1130) and was never in the A-G inventory; BUG-1688's shipped-launch refusals did not touch it. It is an official shipped route with no legitimate unattended caller — the same class as the aida-demo.sh/ablation scripts ADR-61 section 8 says belong in a separate additive refusal spec put to Joe, because gating it costs no unattended work and needs no broker. It may NOT be reclassified as unmanaged (ADR-61 section 5).
+
+  Proposed acceptance:
+  1. Executing run_bench.py's launch paths refuses by default with a typed nonzero error and launches nothing (arms AND judge), matching the BUG-1688 refusal pattern for shipped scripts.
+  2. A test in the BUG-1688 shipped-launch-refusal family pins the refusal (the bench harness is exercised with a recording vendor shim; zero vendor invocations on the refusal path).
+  3. No bypass flag string in the file becomes reachable again without an explicit, separately approved mechanism; refusing this route does not claim any protection is deployed and does not close BUG-1669 (AC3/AC4 make refusal-only insufficient there).
+  Out of scope: the P-enrolled-host boundary itself, any change to production Rust launch paths, and any claim about BUG-1669.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T00:37:17.786280177Z
+modified_at: 2026-10-03T00:37:17.786280177Z
+req_type: Bug
+filed_at:
+  code_sha: ad7ecdb79b7dde72fb1b37165ba4d31a0f56471e
+  branch: task-1550-work
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 12540508-66a6-4ecc-8c45-2c357657fc9c
