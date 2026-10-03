@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a10353-4a7d-7121-a3f6-286fe5e3df09
+  position: 310000
+  added_by: role:implementer
+  note: Reviewer requested actual no-origin pull output coverage; see brief .aida/agent-briefs/codex/BUG-1796-2026-10-03T234244Z.md and verdict .aida/review-verdicts/BUG-1796.json
+  added_at: 2026-10-03T23:42:59.893483308Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a10352-9ed5-71b2-a719-2145090d8ca9
   position: 311000
   added_by: role:implementer
