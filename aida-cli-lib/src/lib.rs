@@ -44746,16 +44746,28 @@ fn headless_launch_log_evidence(
 /// never started) rather than implementer work that failed?
 ///
 /// A zero-byte log is taken at face value, exactly as BUG-826 shipped it. A
-/// MISSING log is weaker evidence — log routing itself could be broken while
-/// a real implementer worked — so it counts only when the session's lease
-/// branch also carries no commits. Any commit means an agent did real work,
-/// and the failure must keep falling through to the substrate verification
-/// (BUG-1140), never into the lease-releasing empty-launch lane.
+/// MISSING log claims only the TASK-204 shape — the child DID claim this
+/// session's lease (`session_lease` is `Some`), so without this lane the
+/// lease discovery below would succeed and the never-started vendor would be
+/// classified as implementer work that failed. Two boundaries keep it narrow:
+///
+/// - `session_lease == None` (no lease for this session) is NOT an empty
+///   launch: the child never even claimed, and the BUG-1629/BUG-1769
+///   lost-child recovery is the authoritative owner of that shape — it reads
+///   the child's own recorded refusal, substrate-verifies a spec that
+///   advanced during the run, and spends exactly one pinned replacement
+///   launch. Swallowing it here is what broke the whole
+///   `bug_1629_phase1_recovery_tests` contract on the first round of this
+///   spec (and BUG-1776 is that same misrouting seen from macOS).
+/// - `session_lease == Some(true)` (the lease branch carries commits) is NOT
+///   an empty launch: log routing could be broken while a real implementer
+///   worked, and the failure must keep falling through to the substrate
+///   verification (BUG-1140), never into the lease-releasing lane.
 // trace:BUG-1716 | ai:claude
-fn empty_launch_decision(evidence: Option<EmptyLaunchLog>, lease_branch_has_commits: bool) -> bool {
+fn empty_launch_decision(evidence: Option<EmptyLaunchLog>, session_lease: Option<bool>) -> bool {
     match evidence {
         Some(EmptyLaunchLog::ZeroBytes) => true,
-        Some(EmptyLaunchLog::Missing) => !lease_branch_has_commits,
+        Some(EmptyLaunchLog::Missing) => session_lease == Some(false),
         None => false,
     }
 }
@@ -49343,25 +49355,25 @@ fn branch_has_unmerged_commits(
         .unwrap_or(false)
 }
 
-/// BUG-1716: does the orchestrated session's own lease branch carry unmerged
-/// commits? The corroboration for the `Missing`-log arm of
-/// [`empty_launch_decision`]: with no lease (the child never claimed one) or
-/// no commits there is no work an empty-launch release could orphan. Keyed to
-/// THIS session's lease via the minted `--session-id`, never a scope-wide
-/// sweep — a sibling attempt's PR branch must not veto classifying this
-/// launch.
+/// BUG-1716: the session-lease evidence feeding the `Missing`-log arm of
+/// [`empty_launch_decision`]. `None` — no lease exists for THIS session (the
+/// child never claimed one), which routes the failure to the BUG-1629/
+/// BUG-1769 lost-child recovery, not the empty-launch lane. `Some(has
+/// commits)` — the child claimed its lease (the TASK-204 shape), and the
+/// bool says whether its branch carries unmerged commits (real work the
+/// empty-launch release must never orphan). Keyed to THIS session's lease
+/// via the minted `--session-id`, never a scope-wide sweep — a sibling
+/// attempt's PR branch must not veto classifying this launch.
 // trace:BUG-1716 | ai:claude
-fn orchestrated_session_has_commits(
+fn orchestrated_session_lease_evidence(
     project_root: &std::path::Path,
     claude_session_id: &str,
-) -> bool {
-    let Some((_, branch, _, _)) = find_orchestrated_lease(project_root, claude_session_id) else {
-        return false;
-    };
-    let Some(default_ref) = detect_default_branch_ref(project_root) else {
-        return false;
-    };
-    branch_has_unmerged_commits(project_root, &default_ref, &branch)
+) -> Option<bool> {
+    let (_, branch, _, _) = find_orchestrated_lease(project_root, claude_session_id)?;
+    let has_commits = detect_default_branch_ref(project_root)
+        .map(|default_ref| branch_has_unmerged_commits(project_root, &default_ref, &branch))
+        .unwrap_or(false);
+    Some(has_commits)
 }
 
 fn restore_phase1_status_on_lease_failure(
@@ -109964,19 +109976,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // launch failure fell through to the work-failure path:
                 // classified as implementer work that failed, it burned the
                 // whole STORY-975 transient budget (attempt 3/3) and parked a
-                // healthy spec NeedsAttention behind the live empty lease. A
-                // missing log is corroborated by "no commits on this session's
-                // lease branch" before it counts as an empty launch; see
-                // `empty_launch_decision`. trace:BUG-1716 | ai:claude
+                // healthy spec NeedsAttention behind the live empty lease.
+                // The missing-log arm claims ONLY the shape where this
+                // session's lease exists and its branch has no commits; a
+                // child that never claimed a lease belongs to the BUG-1629/
+                // BUG-1769 lost-child recovery below, and a branch with
+                // commits falls through to the BUG-1140 substrate
+                // verification. See `empty_launch_decision`.
+                // trace:BUG-1716 | ai:claude
                 let launch_log_evidence = headless_impl
                     .then(|| headless_launch_log_evidence(&self.project_root, &session_uuid))
                     .flatten();
-                let is_empty_launch = headless_impl
-                    && empty_launch_decision(
-                        launch_log_evidence,
-                        matches!(launch_log_evidence, Some(EmptyLaunchLog::Missing))
-                            && orchestrated_session_has_commits(&self.project_root, &session_uuid),
-                    );
+                let session_lease = matches!(launch_log_evidence, Some(EmptyLaunchLog::Missing))
+                    .then(|| orchestrated_session_lease_evidence(&self.project_root, &session_uuid))
+                    .flatten();
+                let is_empty_launch = empty_launch_decision(launch_log_evidence, session_lease);
                 if is_empty_launch {
                     let log_shape = match launch_log_evidence {
                         Some(EmptyLaunchLog::Missing) => {

@@ -47,28 +47,48 @@ fn log_evidence_classifies_missing_zero_byte_and_content() {
     assert_eq!(headless_launch_log_evidence(root, session), None);
 }
 
-/// The empty-launch decision, mutated in both directions: a missing log is an
-/// empty launch ONLY when the session's lease branch carries no commits
-/// (misrouted logging while a real implementer worked must fall through to
-/// the BUG-1140 substrate verification), while a zero-byte log keeps BUG-826's
-/// face-value classification regardless.
+/// The empty-launch decision, mutated in every direction. A missing log is
+/// an empty launch ONLY for the TASK-204 shape: this session's lease exists
+/// (`Some`) and its branch carries no commits. No lease at all routes to the
+/// BUG-1629/BUG-1769 lost-child recovery — the authoritative owner of a
+/// child that never claimed (its replacement launch, child-refusal text and
+/// substrate verification must not be swallowed by this lane; that
+/// swallowing is what failed 13 `bug_1629_phase1_recovery_tests` on round
+/// one). Commits on the lease branch prove an agent worked (misrouted
+/// logging), so the failure falls through to the BUG-1140 substrate
+/// verification. A zero-byte log keeps BUG-826's face-value classification
+/// regardless.
 #[test]
-fn missing_log_is_an_empty_launch_only_without_commits() {
-    assert!(empty_launch_decision(Some(EmptyLaunchLog::Missing), false));
+fn missing_log_is_an_empty_launch_only_with_a_workless_lease() {
+    // The TASK-204 shape: lease claimed, no commits → empty launch.
+    assert!(empty_launch_decision(
+        Some(EmptyLaunchLog::Missing),
+        Some(false)
+    ));
+    // No lease for the session → the BUG-1629 lost-child recovery owns it.
     assert!(
-        !empty_launch_decision(Some(EmptyLaunchLog::Missing), true),
+        !empty_launch_decision(Some(EmptyLaunchLog::Missing), None),
+        "a child that never claimed a lease belongs to the lost-child recovery"
+    );
+    // Commits on the lease branch → real work; substrate verification owns it.
+    assert!(
+        !empty_launch_decision(Some(EmptyLaunchLog::Missing), Some(true)),
         "commits on the lease branch prove an agent worked — not an empty launch"
     );
+    // Zero-byte log: BUG-826's face-value classification, lease-independent.
+    assert!(empty_launch_decision(Some(EmptyLaunchLog::ZeroBytes), None));
     assert!(empty_launch_decision(
         Some(EmptyLaunchLog::ZeroBytes),
-        false
+        Some(false)
     ));
     assert!(
-        empty_launch_decision(Some(EmptyLaunchLog::ZeroBytes), true),
+        empty_launch_decision(Some(EmptyLaunchLog::ZeroBytes), Some(true)),
         "a zero-byte log keeps BUG-826's face-value classification"
     );
-    assert!(!empty_launch_decision(None, false));
-    assert!(!empty_launch_decision(None, true));
+    // A log with content: the vendor ran; never an empty launch.
+    assert!(!empty_launch_decision(None, None));
+    assert!(!empty_launch_decision(None, Some(false)));
+    assert!(!empty_launch_decision(None, Some(true)));
 }
 
 /// AC: a launch failure must not consume the STORY-975 transient retry budget.

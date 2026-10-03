@@ -1327,11 +1327,12 @@ exit 1
     );
 }
 
-/// BUG-1716: the commits corroboration for the missing-log arm, on a real
-/// repo. A lease branch ahead of the default branch means an agent did real
-/// work (`orchestrated_session_has_commits` → true, so the failure falls
-/// through to substrate verification); a branch at the default tip, or no
-/// lease at all, reads as no commits.
+/// BUG-1716: the session-lease evidence for the missing-log arm, on a real
+/// repo. A lease branch ahead of the default branch is real work
+/// (`Some(true)` — the failure falls through to substrate verification); a
+/// branch at the default tip is a claimed-but-workless lease (`Some(false)`
+/// — the TASK-204 empty-launch shape); no lease at all is `None` — the
+/// BUG-1629/BUG-1769 lost-child recovery owns that, never this lane.
 // trace:BUG-1716 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -1352,17 +1353,20 @@ fn session_commits_probe_reads_the_lease_branch() {
     mint_lease(root, "019e5555-ahead", "ahead-branch", Some(ahead_sid));
     mint_lease(root, "019e5555-attip", "at-default-tip", Some(tip_sid));
 
-    assert!(
-        crate::orchestrated_session_has_commits(root, ahead_sid),
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, ahead_sid),
+        Some(true),
         "a lease branch ahead of the default branch is real work"
     );
-    assert!(
-        !crate::orchestrated_session_has_commits(root, tip_sid),
-        "a lease branch at the default tip carries no work"
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, tip_sid),
+        Some(false),
+        "a lease branch at the default tip is a claimed-but-workless lease"
     );
-    assert!(
-        !crate::orchestrated_session_has_commits(root, "no-such-session"),
-        "no lease for the session means no work to protect"
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, "no-such-session"),
+        None,
+        "no lease for the session routes to the lost-child recovery, not this lane"
     );
 }
 
