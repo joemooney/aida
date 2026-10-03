@@ -69,6 +69,7 @@
 "Removed mode-flag spelling guard" = "fast"
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
+"File-time handle portability rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
 "Run clippy" = "full"
 "Glyph-literal lint (block new raw glyphs)" = "fast"

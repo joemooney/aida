@@ -447,6 +447,10 @@ jobs:
       - name: Prose-classification rule fixtures
         run: python3 -m unittest tests/test_prose_classification_rule.py
 
+      # BUG-1728: prove the Windows file-time guard catches its original sites.
+      - name: File-time handle portability rule fixtures
+        run: python3 -m unittest tests/test_file_time_portability_rule.py
+
       # BUG-1689: test fake_gh fixtures must use the ETXTBSY-safe shared writer.
       - name: Executable fixture ratchet
         run: python3 -m unittest tests/test_executable_fixture_ratchet.py
