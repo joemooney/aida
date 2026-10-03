@@ -644,3 +644,57 @@ fn bug1625_followup_filed_in_store_recognises_existing_followups() {
         "docs/plans/other.md"
     ));
 }
+
+#[test]
+fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
+    let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+    let store_path = project_root.join("requirements.yaml");
+    let storage = Storage::new(store_path.clone());
+    storage
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+
+    let spec_id = "STORY-1780".to_string();
+    seed_done_spec_at(&store_path, &spec_id);
+    push_remote_file(&bare, "update.txt", "from remote\n", &spec_id);
+
+    // Mock git in PATH to simulate concurrent fetch breaking `git pull`.
+    // The old code used `git pull --ff-only` which we intercept to simulate the bug.
+    // The new code uses `git fetch` and `git merge`, which pass through the mock
+    // and succeed (since the mock only breaks `pull`).
+    let mock_dir = tempfile::tempdir().unwrap();
+    let mock_git = mock_dir.path().join("git");
+    let mock_script = r#"#!/bin/bash
+if [ "$1" = "-C" ]; then
+    shift 2
+fi
+if [ "$1" = "pull" ]; then
+    echo "fatal: Cannot rebase onto multiple branches." >&2
+    exit 128
+fi
+# Pass through to the real git
+exec /usr/bin/git "$@"
+"#;
+    std::fs::write(&mock_git, mock_script).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&mock_git, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut new_path = mock_dir.path().to_string_lossy().into_owned();
+    if let Ok(old_path) = std::env::var("PATH") {
+        new_path = format!("{}:{}", new_path, old_path);
+    }
+    std::env::set_var("PATH", new_path);
+
+    let result = handle_pull_command(&store_path, true, false, true, true, false);
+
+    // Clean up PATH
+    if let Ok(old_path) = std::env::var("PATH") {
+        let cleaned = old_path.split(':').skip(1).collect::<Vec<_>>().join(":");
+        std::env::set_var("PATH", cleaned);
+    }
+
+    assert!(
+        result.is_ok(),
+        "BUG-1780: code leg should survive concurrent fetch mock"
+    );
+}

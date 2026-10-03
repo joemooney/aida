@@ -73304,10 +73304,20 @@ fn handle_pull_command(
             // Skipped entirely when the index lock is held (handled above) so
             // nothing is stashed and stranded. trace:BUG-691 | ai:claude
             if index_clear {
+                // BUG-1780: don't use `git pull --ff-only` because it uses
+                // FETCH_HEAD (which races with concurrent fetches) and respects
+                // pull.rebase config (which can fail with "Cannot rebase onto
+                // multiple branches"). Do fetch + merge instead.
+                // trace:BUG-1780 | ai:codex
+                let _ = std::process::Command::new("git")
+                    .arg("-C")
+                    .arg(&project_root)
+                    .args(["fetch", "origin", &branch])
+                    .status();
                 let res = std::process::Command::new("git")
                     .arg("-C")
                     .arg(&project_root)
-                    .args(["pull", "--ff-only", "origin", &branch])
+                    .args(["merge", "--ff-only", &format!("origin/{}", branch)])
                     .status();
                 match res {
                     Ok(s) if s.success() => {
@@ -73432,13 +73442,16 @@ fn handle_pull_command(
                         // overwritten, and a diverged branch — because
                         // `git pull --ff-only` itself prints which case
                         // applies right above this line. trace:BUG-254
+                        // BUG-1780: also include concurrent-fetch as the first
+                        // suggestion because we might fail if FETCH_HEAD was modified.
                         eprintln!(
-                            "  {} git pull --ff-only exited with status {} — \
-                         your branch may have diverged from origin/{}, or \
+                            "  {} git merge --ff-only exited with status {} — \
+                         a concurrent fetch may have interrupted it, your \
+                         branch may have diverged from origin/{}, or \
                          the merge would overwrite an untracked file.\n  \
                          To recover:\n    \
-                         - Untracked-file conflict: remove or rename the \
-                         listed files, then re-run `aida pull`.\n    \
+                         - Concurrent fetch or untracked-file: re-run `aida pull` \
+                         (remove/rename any listed untracked files first).\n    \
                          - Diverged branch: `git pull --rebase origin {}` \
                          (resolve conflicts), or `git pull --no-rebase`.\n  \
                          {} auto-bump skipped — code leg did not advance, \
@@ -73451,7 +73464,7 @@ fn handle_pull_command(
                             "Note:".dimmed(),
                         );
                         code_failed = Some(format!(
-                            "git pull --ff-only exited {} on branch {}",
+                            "git merge --ff-only exited {} on branch {}",
                             s, branch
                         ));
                         // BUG-691: if git's autostash stashed the working tree and
