@@ -8679,6 +8679,60 @@ pub(crate) enum PreclaimDecision {
     Refuse(String),
 }
 
+/// BUG-1763: what the pre-claim branch arm knows about the spec's existing
+/// local branch. BUG-1761's branch arm refused on *any* existing branch, but
+/// this repository retains merged spec branches locally (761 of them as of
+/// 2026-10-01 — `gh pr merge --delete-branch` removes only the remote), so
+/// the refusal fired on re-pickup of almost every shipped spec. Only an
+/// **unmerged** branch is a real collision; re-picking up a spec whose work
+/// merged months ago (a follow-on fix, a revert, a rework) is legitimate.
+///
+/// Merged-ness is resolved through the forge (`gh pr list --head <branch>
+/// --state merged`), never via `git merge-base --is-ancestor`: this
+/// repository squash-merges, so an ancestry test reports NO for every
+/// squash-merged branch and would classify all of them as unmerged —
+/// leaving the over-broad refusal in place while appearing to fix it.
+///
+/// `MergeStateUnknown` is deliberately distinct from `Unmerged`: a forge
+/// lookup failure means "cannot tell", not "unmerged", and refusing on it
+/// would let a network blip block every offline pickup — the same trap
+/// BUG-1761 avoided in the PR arm.
+// trace:BUG-1763 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreclaimBranchState {
+    /// No local branch for the spec — the branch arm has nothing to say.
+    Absent,
+    /// Branch exists and the forge confirmed a MERGED PR with it as head.
+    Merged,
+    /// Branch exists and the forge answered cleanly that no merged PR has
+    /// it as head — the one true collision class.
+    Unmerged,
+    /// Branch exists but the forge could not answer (gh missing, failed,
+    /// unreachable). Fail open.
+    MergeStateUnknown,
+}
+
+/// BUG-1763: resolve the branch arm's state, invoking `merged_probe` (the
+/// forge lookup) **only** when the branch actually exists — an ordinary
+/// pickup of a spec with no local branch pays no `gh` call beyond the PR
+/// arm it already paid before this bug.
+// trace:BUG-1763 | ai:claude
+pub(crate) fn preclaim_branch_state(
+    branch_exists: bool,
+    merged_probe: impl FnOnce() -> crate::PrLookup,
+) -> PreclaimBranchState {
+    if !branch_exists {
+        return PreclaimBranchState::Absent;
+    }
+    match merged_probe() {
+        crate::PrLookup::Found(_) => PreclaimBranchState::Merged,
+        crate::PrLookup::NoOpenPr => PreclaimBranchState::Unmerged,
+        crate::PrLookup::GhMissing
+        | crate::PrLookup::GhFailed(_)
+        | crate::PrLookup::GhUnreachable(_) => PreclaimBranchState::MergeStateUnknown,
+    }
+}
+
 /// BUG-1761: the pre-claim collision decision for `aida queue work <SPEC>`.
 ///
 /// The command used to signal "someone is already on this spec" only as a
@@ -8694,15 +8748,21 @@ pub(crate) enum PreclaimDecision {
 /// specific and more actionable collision, so it is reported in preference to
 /// the branch that PR is built on.
 ///
-/// `branch_exists` must be false whenever the forge could not answer. A
-/// lookup failure means "cannot tell", not "no PR", and refusing on it would
-/// let a network blip block every pickup on the machine.
+/// `branch_state` must already encode forge ignorance: a merged-PR lookup
+/// failure arrives as [`PreclaimBranchState::MergeStateUnknown`], never as
+/// `Unmerged`. A lookup failure means "cannot tell", not "no PR", and
+/// refusing on it would let a network blip block every pickup on the machine.
+///
+/// BUG-1763 narrowed the branch arm: only an **unmerged** branch refuses.
+/// A merged local branch is the normal residue of this repo's retention
+/// policy and must not block re-pickup.
 // trace:BUG-1761 | ai:codex
+// trace:BUG-1763 | ai:claude
 pub(crate) fn preclaim_collision_check(
     spec_display: &str,
     open_pr: Option<(u64, &str, &str)>,
     branch: &str,
-    branch_exists: bool,
+    branch_state: PreclaimBranchState,
     bypass: bool,
 ) -> PreclaimDecision {
     if bypass {
@@ -8713,9 +8773,9 @@ pub(crate) fn preclaim_collision_check(
             "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display} --from-pr`, or take it over deliberately with `--force-claim`.",
         ));
     }
-    if branch_exists {
+    if branch_state == PreclaimBranchState::Unmerged {
         return PreclaimDecision::Refuse(format!(
-            "Branch `{branch}` exists, but no open PR was found for it. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
+            "Branch `{branch}` exists, no open PR was found for it, and the forge reports no merged PR with it as head — it looks like unfinished work. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
         ));
     }
     PreclaimDecision::Proceed
@@ -11738,13 +11798,22 @@ pub(crate) fn handle_queue_work(
         let branch = slugify(&plan.scope);
         let branch_exists =
             branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+        // BUG-1763: an existing branch only collides when it is UNMERGED.
+        // Merged-ness comes from the forge (`gh pr list --head <branch>
+        // --state merged`) — never from a git ancestry test, which reports
+        // NO for every squash-merged branch. The probe runs only when the
+        // branch exists, and a probe failure fails open.
+        // trace:BUG-1763 | ai:claude
+        let branch_state = preclaim_branch_state(branch_exists, || {
+            crate::detect_merged_pr_for_branch_via_forge(&project_root, &branch)
+        });
         if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
             &plan.scope,
             open_pr
                 .as_ref()
                 .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
             &branch,
-            branch_exists,
+            branch_state,
             preclaim_bypass,
         ) {
             anyhow::bail!("{}", msg);

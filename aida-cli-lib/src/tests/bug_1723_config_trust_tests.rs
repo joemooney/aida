@@ -207,7 +207,6 @@ const WORKTREE_CLASSES: &[&str] = &["policy", "location", "grandfathered"];
 /// named bug, which is why it lives in the guard and not in the inventory
 /// file.
 const GRANDFATHERED_AUTHORITY: &[(&str, &str)] = &[
-    ("notify.command", "BUG-1775"),
     ("terminal.send_token", "BUG-1775"),
     ("preflight.guards", "BUG-1775"),
     ("behavior.permission_mode", "BUG-1775"),
@@ -548,12 +547,10 @@ fn guard_rejects_a_command_class_and_a_path_key_from_the_worktree() {
 
 #[test]
 fn grandfathering_is_frozen_to_the_guards_own_list() {
-    // The breaches BUG-1775 owns stay readable while that bug is open…
-    assert_eq!(
-        check_worktree_key("notify", "command", "grandfathered"),
-        None,
-        "a frozen grandfather entry must pass until its bug fixes it"
-    );
+    // A fixed command key is now rejected by the same authority-name rule as
+    // every other non-grandfathered worktree key.
+    assert!(check_worktree_key("notify", "command", "policy")
+        .is_some_and(|c| c.contains("authority-shaped")));
     // …but a NEW key cannot ride in on the class name alone.
     assert!(
         check_worktree_key("deploy", "post_merge_hook", "grandfathered")

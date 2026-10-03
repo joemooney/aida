@@ -491,6 +491,7 @@ mod tests {
                 age: "".into(),
                 recovery: "".into(),
                 pr_state: "".into(),
+                pushed: true,
             }],
             unshipped_work_scan: None,
             nightly_red: Some(NightlyRedItem {

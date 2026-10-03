@@ -1412,6 +1412,34 @@ pub(crate) fn handle_git_backend_command(
             );
         }
         Command::Metrics { cmd } => {
+            // STORY-1479: the cycle-time aggregate reads the orphan-branch
+            // store + local drain feed, so it dispatches here with the store
+            // path; the telemetry-log reports below need no store at all.
+            // trace:STORY-1479 | ai:claude
+            if let crate::cli::MetricsCommand::CycleTime {
+                since,
+                until,
+                req_type,
+                tags,
+                slowest,
+                json,
+            } = cmd
+            {
+                let output = history::HistoryOutput::select(
+                    *json || crate::output_format_is_json(),
+                    false,
+                    crate::agent_output_mode(),
+                );
+                return metrics_cycle_time::run(
+                    store_path,
+                    since,
+                    until.as_deref(),
+                    req_type.as_deref(),
+                    tags,
+                    *slowest,
+                    output,
+                );
+            }
             // trace:STORY-477 | ai:claude — reporting layer over the local
             // telemetry logs; no store load required.
             return metrics_cmd::handle_metrics_command(cmd);
