@@ -16,12 +16,12 @@ description: |-
   Remedy directions (advisor to choose): (1) have the guard accept a binary under $CARGO_TARGET_DIR when that env var is set by the session env (it is still OUR build); (2) have these tests build/copy the binary into a temp dir inside the checkout; (3) have them SKIP with a loud note when CARGO_TARGET_DIR points outside, so a worktree suite run is honest rather than red.
 
   Acceptance sketch: from a linked worktree with session-env sourced, the three tests pass (or visibly skip with a named reason), and a genuinely foreign binary (e.g. a copied system aida) still trips the refusal — mutation-proven both directions.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T23:39:58.866513959Z
-modified_at: 2026-10-03T13:07:42.194319532Z
+modified_at: 2026-10-03T13:25:08.999541308Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,3 +52,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a101f0-9eff-77c3-8127-2ebd8050153d
+  author: aida-auto-bump
+  timestamp: 2026-10-03T13:25:08.991796745Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a101f0-9f07-7cc1-80bf-3f37d9b97622
+  timestamp: 2026-10-03T13:25:08.999539984Z
+  agent: implementer
+  commit_sha: 2ec18b6144e682de43a7227cb5b8dd96e2343be7
+  summary: Completed via merge 2ec18b61
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T13:25:08.991769624Z
+  completion_sha: 2ec18b6144e682de43a7227cb5b8dd96e2343be7
