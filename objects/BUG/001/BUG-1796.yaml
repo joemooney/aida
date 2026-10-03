@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-03T23:42:52.570080875Z
+modified_at: 2026-10-03T23:42:59.731320721Z
 req_type: Bug
 tags:
 - pull
@@ -48,6 +48,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1''s pin tests only the formatting helper with fabricated messages; reverting the call sites to Note: leaves the suite green, so the behavior coverage the AC demands does not exist. Triage reason: Reviewer requested actual no-origin pull output coverage; see brief .aida/agent-briefs/codex/BUG-1796-2026-10-03T234244Z.md and verdict .aida/review-verdicts/BUG-1796.json'
   created_at: 2026-10-03T23:42:52.570079604Z
   modified_at: 2026-10-03T23:42:52.570079604Z
+- id: 01a10426-467d-7fe0-b9da-9a24538bf9b7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1796):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b9daecf963fa
+    Recorded: 2026-10-03T22:51:45.719510685+00:00
+    Findings:
+    1. AC1 requires 'a test pins whichever is chosen' (WARNING lines from aida pull when a leg is skipped). The added test bug_1796_skipped_pull_legs_are_labeled_as_warnings (aida-cli-lib/src/tests/handle_pull_command_tests.rs) only asserts pull_skip_warning() formats a string containing 'Warning:', using FABRICATED messages ('skipping code pull') that do not match the real skip strings. Mutation check: revert the three call-site hunks in handle_pull_command (aida-cli-lib/src/lib.rs ~73644/73906/73934) back to Note: while keeping the helpers, and the entire suite stays green - the coverage does not witness the fix. Required: an output-level test that runs aida pull in a no-origin repo (the spec's own repro: git init + aida init, no origin) and asserts BOTH real skip lines carry 'Warning:' ('no `origin` remote - skipping code pull', 'orphan store has no `origin` - skipping store pull'). A shell test wired into ci.yml (ci.yml names shell tests individually - an unwired test file runs nothing) in the style of tests/test_bug_1688_shipped_launch_refusals.sh is the conventional shape; an in-process capture refactor is also acceptable. Evidence for re-review: show the new test red with the call sites reverted to Note: and green on the branch. The doctor side (AC2) and the AC3 byte pins are fine as-is - AC3's helper-level pin is acceptable because the normal-path diff is nil and the headings render through the byte-pinned helpers.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-03T23:42:59.709641361Z
+  modified_at: 2026-10-03T23:42:59.709641361Z
 history:
 - id: 01a103ce-75a5-7c31-accb-2bcbfa1f5f6d
   author: joe
