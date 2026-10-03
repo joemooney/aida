@@ -111,12 +111,12 @@ description: |
   AC6. The baseline in this spec (7146 passed / 7 failed / 12 ignored, run 36585692819) is compared
        against the closing run, and any test that stopped running rather than started passing is
        called out.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T19:37:13.749620151Z
+modified_at: 2026-10-03T19:38:48.464307431Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -218,3 +218,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Planned
+- id: 01a10346-b708-7773-8f3e-307656d3c408
+  author: aida-auto-bump
+  timestamp: 2026-10-03T19:38:48.456727983Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10346-b710-7b61-a65d-59544d9839ed
+  timestamp: 2026-10-03T19:38:48.464298374Z
+  agent: implementer
+  commit_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
+  summary: 'PR #2377 approved at fd693d089b: additive-only guard, mutation-proved both directions (4 pre-fix findings at 868d19b4ad, 0 current); AC dispositions recorded as spec comments; closing-run Windows failure is BUG-1794 (BUG-1792 regression, unrelated — no Rust in this diff); Windows leg non-gating per ADR-62.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T19:38:48.456703175Z
+  completion_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
