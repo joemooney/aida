@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:50:21.014565195Z
+modified_at: 2026-10-03T19:37:11.183159066Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -159,6 +159,38 @@ comments:
   content: 'CI follow-up: run 37117042040 caught that the added workflow fixture step was missing from scripts/ci-gate-tiers.toml. Classified it as fast and verified `task_1555_every_ci_build_gate_is_classified_for_the_local_runner` passes locally. A corrected CI run will validate the workflow.'
   created_at: 2026-10-03T10:50:21.014565195Z
   modified_at: 2026-10-03T10:50:21.014565195Z
+- id: 01a10345-3b0f-7a10-ab96-79cd52708841
+  author: joe
+  content: |-
+    Advisor AC1 + AC6 disposition (merge-time evidence).
+
+    AC1 — SATISFIED by Cross-platform (nightly) run 37107077548 (branch bug-1777, head 44b83a6ec0, job 111157604736). The Windows `-p aida-cli-lib --lib` target line, non-nested (verified as the run's largest passed-count aggregate, 7446 vs next-largest 1273, under `Running unittests src\lib.rs (aida_cli_lib-...)`):
+
+        test result: ok. 7446 passed; 0 failed; 15 ignored; 0 measured; 0 filtered out; finished in 1487.94s
+
+    That job's overall red was `db::cached_git_backend::tests::failed_hint_write_degrades_to_deferred` in a DIFFERENT target (the known BUG-1778 fixture), not the lib target.
+
+    Closing-run qualification: run 37146160923 on this PR's head fd693d089b reports the lib target at 7481 passed; 1 failed; 15 ignored; 0 filtered out. The single failure, `advisor_code_gate::tests::worktree_lease_role_takes_precedence_over_roster_role`, is a test that did not exist at this spec's baseline — added 2026-10-02 by BUG-1792 (#2390) — and PR #2377 touches no Rust. Filed as BUG-1794 with mechanism hypothesis; it is a new main regression outside this spec's seven enumerated failures.
+
+    AC6 — baseline (run 36585692819: 7146 passed / 7 failed / 12 ignored) vs closing (run 37146160923: 7481 / 1 / 15):
+
+    Ignored 12 → 15. The +3 are new tests added since baseline, ignored on Windows alongside their 8 already-ignored story_1043 siblings — additions, not demotions:
+    - story_1043_unshipped_work_tests::detector_distinguishes_local_only_from_pushed_no_pr_branch
+    - story_1043_unshipped_work_tests::one_expensive_candidate_cannot_starve_the_scan
+    - story_1043_unshipped_work_tests::per_head_history_queries_run_only_for_surviving_candidates
+    No test that ran at baseline became ignored (baseline-minus-closing ignored set is empty).
+
+    Stopped running (present in baseline run, absent from closing run) — 8 tests, each accounted:
+    1. remote_create::tests::mirror_hook_forwards_dry_run_spellings_as_preview_only — now `#[cfg(unix)]` (remote_create.rs:3061, BUG-1777/#2375). COMPILED OUT on Windows: this is the Family-C disposition and the one deliberate Windows-coverage drop; the hook exercises `/bin/sh` and cannot run there.
+    2. same_host_bogus_pid_waits_until_ttl_on_non_unix (merge_lock) — removed/renamed by the same BUG-1777 portability pass (#2375).
+    3. db::cached_git_backend::tests::task_1515_read_path_lock_error_falls_back_to_full_rebuild_then_fails — removed by TASK-1526 (#2283).
+    4. implementer_preflight::tests::guard_timeout_is_inconclusive_and_refuses — removed by BUG-1714 (#2350).
+    5. story_696_ps_tests::ps_role_prefers_live_jsonl_role_and_retains_lease_role — removed by the BUG-1681 salvage (#2337).
+    6-8. task_266_tests::{parses_spec_id_from_aida_add_output, returns_none_for_empty_id_value, returns_none_when_no_id_line} — removed by TASK-1564 (#2329).
+    None of the 8 was silently dropped by this PR; 7 were deleted/renamed on main by identified merged PRs, 1 is the called-out cfg(unix) exclusion.
+  created_at: 2026-10-03T19:37:11.183159066Z
+  modified_at: 2026-10-03T19:37:11.183159066Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
