@@ -23,12 +23,12 @@ description: |
   2. `--batch does-not-exist` returns count 0 in all three formats (test each).
   3. The fast paths may implement filtering their own way, but a shared test pins list-parity: same filter args → same member set across formats.
   4. Mutation-proof one direction per format (remove the filter application → test fails).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:51:48.693477250Z
-modified_at: 2026-10-03T23:08:41.299852766Z
+modified_at: 2026-10-03T23:42:31.636332250Z
 req_type: Bug
 tags:
 - agent-output
@@ -45,6 +45,11 @@ comments:
   content: 'Acceptance coverage follow-up: the human formatter now uses the same requirement-backed predicate as JSON and TOON. Added member-set parity coverage and a call-site guard for all three output paths.'
   created_at: 2026-10-03T22:41:30.112872657Z
   modified_at: 2026-10-03T22:41:30.112872657Z
+- id: 01a10425-d8d4-7c11-aa7a-31ec8fd2f678
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Shared-predicate consolidation is sound, but AC2/AC4 are not satisfied at output level and the JSON fast path diverges from the agent path on --include-completed. Triage reason: Address advisor review at PR-2398: add actual output-level three-format tests plus behavior-based mutation proof, and align JSON include-completed handling.'
+  created_at: 2026-10-03T23:42:31.636330762Z
+  modified_at: 2026-10-03T23:42:31.636330762Z
 history:
 - id: 01a103ce-71a4-7bd2-8c8b-2f37d5ba301e
   author: joe
@@ -74,6 +79,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a10425-d8d4-7c11-aa7a-31d3659a5e74
+  author: joe
+  timestamp: 2026-10-03T23:42:31.636324943Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
@@ -82,11 +94,3 @@ filed_at:
   aida_build_sha: e1422ae139
   vendor: antigravity
   session: 424cc773-b969-4027-95eb-13a904e9c298
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Shared-predicate consolidation is sound, but AC2/AC4 are not satisfied at output level and the JSON fast path diverges from the agent path on --include-completed
-  recovery_hint: address the review findings, move BUG-1795 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T23:08:41.299852766Z
