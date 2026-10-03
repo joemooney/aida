@@ -4031,29 +4031,30 @@ mod tests {
         assert!(request.last_error().is_none());
     }
 
-    // trace:BUG-1778 | ai:antigravity
+    // trace:BUG-1778 trace:BUG-1777 | ai:codex
     #[test]
     fn failed_hint_write_degrades_to_deferred() {
         use super::super::cache_refresh::*;
+        use super::super::refresh_request;
         use super::super::refresh_worker;
         let dir = tempdir().unwrap();
-        let (backend, store, _path) = task_1515_backend(dir.path());
+        let (backend, store, path) = task_1515_backend(dir.path());
         task_1515_external_retitle(&store, "gen1");
         backend.cache().set_source_head_sha("").unwrap();
         refresh_worker::SPAWN_LOG.with(|log| *log.borrow_mut() = Some(Vec::new()));
 
-        let aida_dir = dir.path().join(".aida");
-        let mut perms = std::fs::metadata(&aida_dir).unwrap().permissions();
-        perms.set_readonly(true);
-        std::fs::set_permissions(&aida_dir, perms.clone()).unwrap();
+        // A directory at the request-file path makes the atomic rename fail
+        // consistently on Unix and Windows; readonly directory permissions
+        // do not prevent writes on Windows.
+        let request_path = refresh_request::refresh_request_path(&path);
+        std::fs::create_dir(&request_path).unwrap();
 
         let scope = CacheReadScope::new();
         scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
 
         let result = backend.list_summaries(&ListFilter::default());
 
-        perms.set_readonly(false);
-        let _ = std::fs::set_permissions(&aida_dir, perms);
+        std::fs::remove_dir(&request_path).unwrap();
 
         assert!(result.is_ok(), "read must not fail when hint write fails");
         assert_eq!(scope.metadata()["refreshing"], "deferred");

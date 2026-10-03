@@ -56,7 +56,11 @@ fn built_aida_binary() -> std::path::PathBuf {
     if let Some(target_dir) = std::env::var_os("CARGO_TARGET_DIR") {
         let target_dir = std::path::PathBuf::from(target_dir);
         candidates.insert(0, target_dir.join("release").join(&binary_name));
-        candidates.push(target_dir.join(profile_dir.file_name().unwrap()).join(&binary_name));
+        candidates.push(
+            target_dir
+                .join(profile_dir.file_name().unwrap())
+                .join(&binary_name),
+        );
     }
     let binary = candidates
         .into_iter()
