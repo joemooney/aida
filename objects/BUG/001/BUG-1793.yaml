@@ -2,92 +2,27 @@ id: 01a10325-e6a6-7da0-beab-6067afb0368a
 spec_id: BUG-1793
 agreed_id: BUG-1793
 title: 'No first-class deferred/on-hold state: an operator hold recorded only in decisions/comments does not bind pickup, so a deferred-but-approved spec reads as drain-ready'
-description: |-
-  Observed 2026-10-03 on BUG-1669: all original blockers Completed, operator hold existed only as decision records (01a0e125/01a0e10c) and comments — aida session start happily took a lease and moved the spec In Progress; the agy seat discovered the hold only by READING the spec, then had to back out (session 01a1027a, worktrees/branches cleaned). The status vocabulary (draft/approved/planned/in-progress/done/completed/rejected/superseded + punt's NeedsAttention) has no state for 'approved but operator-held with a revisit trigger', and  is documented as 'blessed, ready to plan/queue' — a misstatement for a held spec, so count: 30 of 42 open
-  specs[30]{id,title,status,type,modified_at}:
-    TASK-1580,"DECISION GATE: operator authorization of a protected-launch installer/backend package (BUG-1669 revisit trigger)",draft,task,"2026-10-03T19:02:40.452728083+00:00"
-    BUG-1669,"Headless commands that hard-code full-access bypass can be started by any agent without dispatch authority (compete, intake assess, burndown run)",approved,bug,"2026-10-03T19:02:39.977996108+00:00"
-    TASK-214,"Build step also failed: ring v0.17.14 build script 'failed to find tool lib.exe…",draft,task,"2026-10-03T17:33:35.348167358+00:00"
-    TASK-375,"cargo test -p aida-cli-lib --lib: bug_1629_phase1_recovery_tests fail en masse …",draft,task,"2026-10-03T17:33:34.867862448+00:00"
-    BUG-1784,bench/agent-surface/run_bench.py hard-codes --dangerously-skip-permissions for bench arms and judge — full-access launch route missed by the BUG-1669 inventory,needs-attention,bug,"2026-10-03T17:13:48.421579756+00:00"
-    TASK-1578,"Role-enter picker: stop parsing an in-project session log once its resolved role is rejected (BUG-1789 follow-up)",draft,task,"2026-10-03T16:23:52.109890836+00:00"
-    BUG-1728,"Windows nightly, first honest measurement since 2026-09-23: 7 test failures in aida-cli-lib --lib (7146 pass), three of four families are repeats of already-completed classes",in-progress,bug,"2026-10-03T10:50:21.014565195+00:00"
-    TASK-1577,Cleanup target/worktrees/<name> upon session end,approved,task,"2026-10-03T10:34:26.478990557+00:00"
-    TASK-1576,"Remove or wire the dead review-story queue code: open_pr_review_story / ReviewStoryQueueDecision (lib.rs) and dispatch_health_ps.rs:817/:821 wrappers",approved,task,"2026-10-03T09:19:54.121800763+00:00"
-    TASK-1572,Unify aida list's row_parked_lens with the epic child-walking lens attribution (effective_needs_attention_lens_with_source),approved,task,"2026-10-03T09:01:03.348957722+00:00"
-    STORY-1484,"Single-flight cache refresh: flock-guarded, double-checked, with a durable refresh request and a detached worker; readers get a bounded wait and then a labelled stale read",approved,story,"2026-10-03T05:39:34.416501924+00:00"
-    STORY-1480,Close cycle-time instrumentation gaps and publish per-spec timing records across machines,in-progress,story,"2026-10-03T05:20:18.256697898+00:00"
-    TASK-1569,"aida show: print comment bodies by default on a human TTY, keep count + hint in agent output",approved,task,"2026-10-03T04:18:15.447068360+00:00"
-    TASK-1574,"Import and triage the seven measured aida CLI defects parked as AIDA-57 in the aida-relay store, each with its re-verification procedure",approved,task,"2026-10-03T04:18:13.975999644+00:00"
-    TASK-1566,"Sweep the 275 store objects whose tags list holds a whitespace blob, so the 442 tag words trapped inside them become visible to tag-keyed filters again",approved,task,"2026-10-03T04:17:11.910138424+00:00"
-    TASK-1575,"Unshipped-work detector: a pass-1-excluded sibling branch no longer carries its merged-PR evidence, so a stale ancestor branch of the merged head over-reports until the next merge to main",approved,bug,"2026-10-03T04:17:10.605149249+00:00"
-    TASK-1573,"Two individually-green PRs merged 53s apart left main red for 16 minutes — decide the merge-race defense (require up-to-date branches, a merge queue, or re-run-at-merge) for CI-gated PRs",draft,task,"2026-10-03T00:08:23.250863450+00:00"
-    TASK-1571,Demote the Build (windows-latest) CI leg to a non-blocking nightly until BUG-1777 is under control,approved,task,"2026-10-02T21:01:50.716754659+00:00"
-    TASK-1565,Performance guard trips on a 0.2-point proportion margin and one 9449 ms call measured under fleet contention — decide whether to recalibrate the budget or make the measurement contention-aware,draft,task,"2026-10-02T19:47:03.548711586+00:00"
-    TASK-1551,"Cheaper compile profile for agent iteration, without slowing the binary the performance budget measures",approved,task,"2026-10-02T18:33:52.342166192+00:00"
-    STORY-1486,"Scaffolded agent launch profile: writable vs read-only roots, seat-based Git-write policy, and approval-prompt exemptions (permission half split from TASK-1499)",draft,story,"2026-10-02T10:47:15.085897884+00:00"
-    STORY-1425,"aida reconstitute measures absolute recall against the captured set, so it cannot report the one thing the objective claims: the delta over not using AIDA",approved,story,"2026-10-02T03:48:57.925616835+00:00"
-    TASK-1560,"Route durable session lessons to vendor-neutral homes, not the Claude-only memory pack",approved,task,"2026-09-30T13:13:51.941064703+00:00"
-    STORY-1483,"Lane sync with main, drift warning, and aida lane land (one reviewed lane→main PR)",approved,story,"2026-09-29T06:28:25.428007975+00:00"
-    STORY-1482,Lane-targeted PRs and Done-in-lane status (no Completed until the lane lands),approved,story,"2026-09-29T06:28:24.403199005+00:00"
-    STORY-1481,"Lane record + seat, and main-line exclusion of laned epics' specs (aida lane open/list/close)",approved,story,"2026-09-29T06:28:22.860238697+00:00"
-    EPIC-74,"Feature lanes: epic-bound side work that cannot reach main until deliberately landed",draft,epic,"2026-09-29T06:28:11.269268693+00:00"
-    TASK-1537,Baseline build timings for aida-cli-lib (STORY-1488 T1),approved,task,"2026-09-28T15:53:41.611368652+00:00"
-    CR-7,"Cross-harness seat wake: idle agent seats resume on addressed work via held Stop hooks, with no model-side polling",approved,changerequest,"2026-09-27T21:00:45.568580496+00:00"
-    TASK-1511,"Night shift: headless cold-boot of seat jobs (split from TASK-1492)",approved,task,"2026-09-27T20:59:33.868650159+00:00"
-  note: agent default cap — `aida list --all` or `--limit N` to widen
-  note: open lens excludes archived and deferred specs — `aida list --all` for every spec
-  note: 3026 closed hidden (open lens) — `aida list --all` or `--status closed`
-  note: 33 accepted decisions hidden (terminal) — `aida list --type decision`
-  next[1]{cmd,to}:
-    aida show <id>,detail
-  cache:
-    stale: false presents it as actionable. Workaround used: a DECISION-GATE task (TASK-1580, kept Draft) wired as blocked-by, which pickup DOES enforce ('refused until all blockers are Completed'). That works but is a convention, not a feature: nothing stops a gate task being approved by an agent, nothing renders held specs distinctly in list, and punt cannot express it (requires In Progress, lands in NeedsAttention which nags the awaiting view). Substrate-as-bouncer principle: the hold should be enforced by the substrate, not depend on agents reading prose. Acceptance sketch: (1) a hold/defer verb (or status) settable on an Approved spec with a required reason + optional revisit trigger text; (2) pickup/queue/drain refuse a held spec with a typed refusal naming the hold; (3) count: 30 of 42 open
-  specs[30]{id,title,status,type,modified_at}:
-    TASK-1580,"DECISION GATE: operator authorization of a protected-launch installer/backend package (BUG-1669 revisit trigger)",draft,task,"2026-10-03T19:02:40.452728083+00:00"
-    BUG-1669,"Headless commands that hard-code full-access bypass can be started by any agent without dispatch authority (compete, intake assess, burndown run)",approved,bug,"2026-10-03T19:02:39.977996108+00:00"
-    TASK-214,"Build step also failed: ring v0.17.14 build script 'failed to find tool lib.exe…",draft,task,"2026-10-03T17:33:35.348167358+00:00"
-    TASK-375,"cargo test -p aida-cli-lib --lib: bug_1629_phase1_recovery_tests fail en masse …",draft,task,"2026-10-03T17:33:34.867862448+00:00"
-    BUG-1784,bench/agent-surface/run_bench.py hard-codes --dangerously-skip-permissions for bench arms and judge — full-access launch route missed by the BUG-1669 inventory,needs-attention,bug,"2026-10-03T17:13:48.421579756+00:00"
-    TASK-1578,"Role-enter picker: stop parsing an in-project session log once its resolved role is rejected (BUG-1789 follow-up)",draft,task,"2026-10-03T16:23:52.109890836+00:00"
-    BUG-1728,"Windows nightly, first honest measurement since 2026-09-23: 7 test failures in aida-cli-lib --lib (7146 pass), three of four families are repeats of already-completed classes",in-progress,bug,"2026-10-03T10:50:21.014565195+00:00"
-    TASK-1577,Cleanup target/worktrees/<name> upon session end,approved,task,"2026-10-03T10:34:26.478990557+00:00"
-    TASK-1576,"Remove or wire the dead review-story queue code: open_pr_review_story / ReviewStoryQueueDecision (lib.rs) and dispatch_health_ps.rs:817/:821 wrappers",approved,task,"2026-10-03T09:19:54.121800763+00:00"
-    TASK-1572,Unify aida list's row_parked_lens with the epic child-walking lens attribution (effective_needs_attention_lens_with_source),approved,task,"2026-10-03T09:01:03.348957722+00:00"
-    STORY-1484,"Single-flight cache refresh: flock-guarded, double-checked, with a durable refresh request and a detached worker; readers get a bounded wait and then a labelled stale read",approved,story,"2026-10-03T05:39:34.416501924+00:00"
-    STORY-1480,Close cycle-time instrumentation gaps and publish per-spec timing records across machines,in-progress,story,"2026-10-03T05:20:18.256697898+00:00"
-    TASK-1569,"aida show: print comment bodies by default on a human TTY, keep count + hint in agent output",approved,task,"2026-10-03T04:18:15.447068360+00:00"
-    TASK-1574,"Import and triage the seven measured aida CLI defects parked as AIDA-57 in the aida-relay store, each with its re-verification procedure",approved,task,"2026-10-03T04:18:13.975999644+00:00"
-    TASK-1566,"Sweep the 275 store objects whose tags list holds a whitespace blob, so the 442 tag words trapped inside them become visible to tag-keyed filters again",approved,task,"2026-10-03T04:17:11.910138424+00:00"
-    TASK-1575,"Unshipped-work detector: a pass-1-excluded sibling branch no longer carries its merged-PR evidence, so a stale ancestor branch of the merged head over-reports until the next merge to main",approved,bug,"2026-10-03T04:17:10.605149249+00:00"
-    TASK-1573,"Two individually-green PRs merged 53s apart left main red for 16 minutes — decide the merge-race defense (require up-to-date branches, a merge queue, or re-run-at-merge) for CI-gated PRs",draft,task,"2026-10-03T00:08:23.250863450+00:00"
-    TASK-1571,Demote the Build (windows-latest) CI leg to a non-blocking nightly until BUG-1777 is under control,approved,task,"2026-10-02T21:01:50.716754659+00:00"
-    TASK-1565,Performance guard trips on a 0.2-point proportion margin and one 9449 ms call measured under fleet contention — decide whether to recalibrate the budget or make the measurement contention-aware,draft,task,"2026-10-02T19:47:03.548711586+00:00"
-    TASK-1551,"Cheaper compile profile for agent iteration, without slowing the binary the performance budget measures",approved,task,"2026-10-02T18:33:52.342166192+00:00"
-    STORY-1486,"Scaffolded agent launch profile: writable vs read-only roots, seat-based Git-write policy, and approval-prompt exemptions (permission half split from TASK-1499)",draft,story,"2026-10-02T10:47:15.085897884+00:00"
-    STORY-1425,"aida reconstitute measures absolute recall against the captured set, so it cannot report the one thing the objective claims: the delta over not using AIDA",approved,story,"2026-10-02T03:48:57.925616835+00:00"
-    TASK-1560,"Route durable session lessons to vendor-neutral homes, not the Claude-only memory pack",approved,task,"2026-09-30T13:13:51.941064703+00:00"
-    STORY-1483,"Lane sync with main, drift warning, and aida lane land (one reviewed lane→main PR)",approved,story,"2026-09-29T06:28:25.428007975+00:00"
-    STORY-1482,Lane-targeted PRs and Done-in-lane status (no Completed until the lane lands),approved,story,"2026-09-29T06:28:24.403199005+00:00"
-    STORY-1481,"Lane record + seat, and main-line exclusion of laned epics' specs (aida lane open/list/close)",approved,story,"2026-09-29T06:28:22.860238697+00:00"
-    EPIC-74,"Feature lanes: epic-bound side work that cannot reach main until deliberately landed",draft,epic,"2026-09-29T06:28:11.269268693+00:00"
-    TASK-1537,Baseline build timings for aida-cli-lib (STORY-1488 T1),approved,task,"2026-09-28T15:53:41.611368652+00:00"
-    CR-7,"Cross-harness seat wake: idle agent seats resume on addressed work via held Stop hooks, with no model-side polling",approved,changerequest,"2026-09-27T21:00:45.568580496+00:00"
-    TASK-1511,"Night shift: headless cold-boot of seat jobs (split from TASK-1492)",approved,task,"2026-09-27T20:59:33.868650159+00:00"
-  note: agent default cap — `aida list --all` or `--limit N` to widen
-  note: open lens excludes archived and deferred specs — `aida list --all` for every spec
-  note: 3026 closed hidden (open lens) — `aida list --all` or `--status closed`
-  note: 33 accepted decisions hidden (terminal) — `aida list --type decision`
-  next[1]{cmd,to}:
-    aida show <id>,detail
-  cache:
-    stale: false renders held distinctly and excludes it from ready-lenses; (4) only an operator (or explicitly authorized seat) can lift the hold; (5) migration note for the TASK-1580-style convention.
+description: |
+  Observed 2026-10-03 on BUG-1669: all original blockers Completed, operator hold existed only as decision records (01a0e125/01a0e10c) and comments — `aida session start` happily took a lease and moved the spec In Progress; the agy seat discovered the hold only by READING the spec, then had to back out (session 01a1027a, worktrees/branches cleaned).
+
+  The status vocabulary (draft/approved/planned/in-progress/done/completed/rejected/superseded + punt's NeedsAttention) has no state for "approved but operator-held with a revisit trigger", and `approved` is documented as "blessed, ready to plan/queue" — a misstatement for a held spec, so `aida list` presents it as actionable.
+
+  Workaround used: a DECISION-GATE task (TASK-1580, kept Draft) wired as blocked-by, which pickup DOES enforce ("refused until all blockers are Completed"). That works but is a convention, not a feature: nothing stops a gate task being approved by an agent, nothing renders held specs distinctly in list, and punt cannot express it (requires In Progress, lands in NeedsAttention which nags the awaiting view).
+
+  Substrate-as-bouncer principle: the hold should be enforced by the substrate, not depend on agents reading prose.
+
+  Acceptance sketch:
+  1. A hold/defer verb (or status) settable on an Approved spec with a required reason + optional revisit-trigger text.
+  2. pickup/queue/drain refuse a held spec with a typed refusal naming the hold.
+  3. `aida list` renders held distinctly and excludes it from ready-lenses.
+  4. Only an operator (or explicitly authorized seat) can lift the hold.
+  5. Migration note for the TASK-1580-style convention.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T19:02:57.958700833Z
+modified_at: 2026-10-03T19:03:38.159185634Z
 req_type: Bug
 filed_at:
   code_sha: 04043d46aba01fb21af1876d34f80b923060037f
