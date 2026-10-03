@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-10-03T18:57:18.030655027Z
+modified_at: 2026-10-03T18:58:15.844434200Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -758,6 +758,18 @@ comments:
   content: 'DEFERRAL DECISION (operator + advisor, 2026-10-03): BUG-1669 stays Approved and HELD. Option 2 (refuse-only stopgap) declined — it would halt all legitimate unattended launches (drain/burndown/compete/intake); AC3/AC4 already encode that refusal-only cannot close this bug. Option 3 (broker + per-run VM package) declined for now — weeks of privileged infrastructure, unrealistic on current hardware, and the observed failure modes are cost/CI/disk, not privilege abuse. REVISIT TRIGGER: re-evaluate the broker/VM package when ANY of: (a) a second human works this repo, (b) seats run on hosts the operator does not control, (c) the product serves external users. The optional advisory-grade slice (dispatch-authority check + admission log at the launch chokepoint, shipped WITHOUT the BUG-1669 trailer) remains available on request. Abandoned Option-H partial edits archived by the advisor before discard.'
   created_at: 2026-10-03T18:57:18.030655027Z
   modified_at: 2026-10-03T18:57:18.030655027Z
+  session_id: 81be7622-d357-4a9c-904d-8d88acc536d7
+- id: 01a10321-98a4-7982-8bb0-76674fb93bca
+  author: joe
+  content: |-
+    DEFERRAL SUPPLEMENT — context a future implementer needs (advisor, 2026-10-03):
+    - WHY HELD: operator decisions 01a0e125 and 01a0e10c keep this spec held even with all three blockers Completed (TASK-1549 = P-enrolled-host protected-launch ADR recorded; SPIKE-91 = broker/worker boundary + disposable-proof plan specified; TASK-1550 = host-wide launch-admission inventory). The hold lifts only on the operator's authorization of a concrete installer/backend/credential package.
+    - GOVERNING ARTIFACTS: ADR-61 — section 5 (these routes may NOT be reclassified as unmanaged) and section 8 (no-legitimate-unattended-caller scripts go in separate additive refusal specs — BUG-1688/BUG-1784 are that lane, not this one). Start any future design from SPIKE-91's output, sketch-first with advisor signoff (architecture spec).
+    - AFFECTED ROUTES (from TASK-1550 inventory): compete_cmd builds 'claude -p --permission-mode bypassPermissions' argv unconditionally; intake assess and burndown run share the class.
+    - TRIED AND ABANDONED (do not repeat): Option H — make every full-access launch refuse — started by agy session e7973dab on 2026-10-03, stopped before commit because AC3/AC4 rule refusal-only out. The partial edits were DISCARDED (not archived durably; the approach is ruled out). Recoverable only from that session transcript if ever wanted.
+    - STATE RESTORED: session 01a1027a ended, worktrees removed, branches bug-1669/bug-1669-2 deleted (zero unique commits), spec returned to Approved.
+  created_at: 2026-10-03T18:58:15.844434200Z
+  modified_at: 2026-10-03T18:58:15.844434200Z
   session_id: 81be7622-d357-4a9c-904d-8d88acc536d7
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
