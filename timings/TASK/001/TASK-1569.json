@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1569",
+  "publishes": [
+    {
+      "at": "2026-10-03T22:02:08.627529850Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T04:18:16.304775577Z",
+      "spec": "TASK-1569",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T20:00:22.102457330Z",
+      "spec": "TASK-1569",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T20:23:29.083410767Z",
+      "spec": "TASK-1569",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "d34c31526f"
+      }
+    },
+    {
+      "ts": "2026-10-03T20:48:59.875608006Z",
+      "spec": "TASK-1569",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1569",
+        "branch": "task-1569",
+        "first_seen": "2026-10-03T20:48:59.875548701+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:02:08.620311695Z",
+      "spec": "TASK-1569",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "455237770605fc383bdb37085f9f10b4a0df992f",
+        "pr": 2395,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
