@@ -688,7 +688,7 @@ exec /usr/bin/git "$@"
         project_root.display()
     );
     std::fs::write(&mock_git, mock_script).unwrap();
-    crate::test_exec::mark_executable(&mock_git).unwrap();
+    crate::test_exec::mark_executable(&mock_git);
 
     let mut new_path = mock_dir.path().to_string_lossy().into_owned();
     if let Ok(old_path) = std::env::var("PATH") {
