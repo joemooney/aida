@@ -21,12 +21,12 @@ description: |
   1. `aida pull` in a repo with no origin exits non-zero OR prints a WARNING-level line per skipped leg; a test pins whichever is chosen.
   2. `aida doctor` (or an existing check category) surfaces orphan-store-ahead-of-remote with the count; test with a store N commits ahead of a configured remote.
   3. Normal two-remote pull output unchanged (byte-identical test).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-03T23:42:59.731320721Z
+modified_at: 2026-10-03T23:44:07.151915803Z
 req_type: Bug
 tags:
 - pull
@@ -96,6 +96,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a10427-4def-7a01-9588-39af3f19799b
+  author: aida-session-start
+  timestamp: 2026-10-03T23:44:07.151915218Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
