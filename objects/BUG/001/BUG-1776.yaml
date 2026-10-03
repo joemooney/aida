@@ -42,12 +42,12 @@ description: |
   immediate work. Also observed while triaging: the SCHEDULED nightly run on main has
   been `cancelled` four days running (2026-09-29..10-02), so the nightly tracking-issue
   automation never fires; the only completed cross-platform runs are PR-triggered.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:08:45.792442925Z
-modified_at: 2026-10-02T20:20:38.985237908Z
+modified_at: 2026-10-03T06:31:30.548433664Z
 req_type: Bug
 tags:
 - cross-platform
@@ -68,11 +68,3 @@ comments:
   created_at: 2026-10-02T20:20:38.985237908Z
   modified_at: 2026-10-02T20:20:38.985237908Z
   session_id: 36d8236a-e4eb-4af0-8043-25d75751b21d
-filed_at:
-  code_sha: 2779659ec636e12e5076c52efedf61147fbcd850
-  branch: main
-  dirty: true
-  aida_version: 0.15.0
-  aida_build_sha: fe09d7678e
-  vendor: antigravity
-  session: 54f4de70-b131-41b6-b8b6-9904154b654a
