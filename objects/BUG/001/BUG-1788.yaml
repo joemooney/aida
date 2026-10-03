@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T07:26:22.543926925Z
-modified_at: 2026-10-03T11:53:31.426042445Z
+modified_at: 2026-10-03T12:06:59.256396699Z
 req_type: Bug
 comments:
 - id: 01a100fd-3221-7750-8acd-5a8f7fcc0988
@@ -40,6 +40,8 @@ processing_record:
   commit_sha: 821f2c6107fb32a97d1b212b3da324b4e737eee5
   summary: 'Independent advisor review (non-author; implementer antigravity). Diff verified: single production caller updated; verdicts_for_sha reads the per-spec archive dirs that recording actually writes; filter requires a live (!is_closed) approving verdict at the PR''s CURRENT head, so a post-approval push correctly falls back to the rework prescription. Two-direction unit test covers the helper. Acceptance re-run by this reviewer on the live fixture: branch binary (sha c44ebd1ac3, strings-verified) flips the real PR-2364 row to ''rework approved at 48433c6b1fa8; awaiting human: aida merge-hold clear 2364''; session-start output from the pre-fix installed binary showed the stale implementer prescription on the same state — both directions witnessed. Non-blocking note: the detail field still shows the round-1 ''CHANGES REQUESTED at 98f3543b'' text; factual history, reads coherently next to the new action. Merge-ready once CI Build is green at this head; merging seat must be a different session.'
   review_verdict: approved
+archived: true
+archived_at: 2026-10-03T12:06:59.256396699Z
 implementation_info:
   implemented: false
   completed_at: 2026-10-03T11:53:31.420858917Z
