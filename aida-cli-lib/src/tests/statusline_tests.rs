@@ -5606,6 +5606,49 @@ fn test_isolate_cargo_target_dir_falls_back_on_missing_name() {
     assert_eq!(isolated, std::path::PathBuf::from("dummy-parent/target"));
 }
 
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_cargo_target_guard_accepts_matching_worktree() {
+    let worktree = std::path::Path::new("checkouts/aida-task-1577");
+    let target = std::path::Path::new("checkouts/parent/target/worktrees/aida-task-1577");
+    assert!(crate::is_session_cargo_target_dir(target, worktree));
+}
+
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_cargo_target_guard_rejects_parent_and_other_worktree() {
+    let worktree = std::path::Path::new("checkouts/aida-task-1577");
+    assert!(!crate::is_session_cargo_target_dir(
+        std::path::Path::new("checkouts/parent/target"),
+        worktree
+    ));
+    assert!(!crate::is_session_cargo_target_dir(
+        std::path::Path::new("checkouts/parent/target/worktrees/other"),
+        worktree
+    ));
+}
+
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_end_removes_isolated_target_and_preserves_parent_target() {
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = tmp.path().join("aida-task-1577");
+    let parent = tmp.path().join("target");
+    let isolated = parent.join("worktrees/aida-task-1577");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::create_dir_all(&isolated).unwrap();
+    std::fs::write(parent.join("parent-marker"), "keep").unwrap();
+    std::fs::write(isolated.join("build-marker"), "remove").unwrap();
+
+    crate::remove_session_cargo_target_dir(&isolated, &worktree);
+
+    assert!(!isolated.exists());
+    assert_eq!(
+        std::fs::read(parent.join("parent-marker")).unwrap(),
+        b"keep"
+    );
+}
+
 /// TASK-63: parse_session_env handles the shape we write today.
 /// Cover the round-trip with render_session_env_file (the source of
 /// truth for what we produce) so a future change to the shim format
