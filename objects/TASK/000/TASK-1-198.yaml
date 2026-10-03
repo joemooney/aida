@@ -8,18 +8,33 @@ description: |-
 
   PR: #2386
   Reviewed sha: 37885818c8937a0435f6b1d57d55fe17f2c0ee9a
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T19:17:36.900704015Z
-modified_at: 2026-10-03T19:17:36.900704015Z
+modified_at: 2026-10-03T19:26:16.461971179Z
 req_type: Task
 tags:
 - carried-from:BUG-1784
 - finding-hash:3d91652d
 - from-review:PR-2386
 - kind:carried-forward
+comments:
+- id: 01a1033b-3d96-7221-9ed8-cae28ec506b1
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Squash already landed; the PR-title half is immutable/OBE. The actionable residue (three ai:codex trace comments that should say ai:antigravity) is folded into promoted TASK-1-197''s scope — see the advisor scope comment there.'
+  created_at: 2026-10-03T19:26:16.461971179Z
+  modified_at: 2026-10-03T19:26:16.461971179Z
+  session_id: 424cc773-b969-4027-95eb-13a904e9c298
+history:
+- id: 01a1033b-3dad-7bd3-84ff-acfd8cb4bc88
+  author: joe
+  timestamp: 2026-10-03T19:26:16.493570630Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
   branch: main
