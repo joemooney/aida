@@ -1,0 +1,36 @@
+id: 01a10353-5523-7211-8fac-14def28cf501
+spec_id: TASK-1582
+agreed_id: TASK-1582
+title: 'pr ship / merge-hold flow messages mislead the operator: circular clear-vs-ship hints, dry-run omits the head pin, end-lease instruction lacks scope/role'
+description: |
+  From TASK-1574 intake (AIDA-57 items 5, 6, 7 — measured in aida-relay 2026-10-01; all three re-verified against current source 2026-10-03). Three message defects in the same ship/merge-hold flow, one task:
+
+  ITEM A — merge-hold list and pr ship point at each other (relay item 5, confirmed at lib.rs:35807):
+  `aida merge-hold list` prints "release condition MET: APPROVED for ... — a human may now `aida pr ship {pr}`", but `aida pr ship` then refuses, demanding `aida merge-hold clear {pr}` first. An operator following either message in good faith loops. (The operator hit the adjacent version of this live today on PR #2386.) FIX: when a hold is armed, merge-hold list must name the CLEAR step as the next action (clear → ship), not ship.
+
+  ITEM B — pr ship --dry-run's merge step is not the literal command (relay item 6; merge_args at pr_ship.rs:565 vs forge.rs): the dry-run plan prints `3. gh pr merge <N> --squash`, but the real merge is pinned via MergeOptions.match_head → `--match-head-commit <approved-head>` (TASK-1448/1458 approval gate; forge.rs pushes the flag). The whole point of a dry-run is knowing what will run. FIX: print the pin in the plan (e.g. `gh pr merge <N> --squash --match-head-commit <sha|approved head>`) or state the plan is abbreviated and why.
+
+  ITEM C — pr ship step 5's end-lease instruction names only the lease id (relay item 7, confirmed at pr_cmd.rs:2876): "lease {id} owns this shell's worktree — exit this shell, then run `aida session end {id}`". In the relay incident this told an INTEGRATOR MID-CASCADE to end its own coordination session; it declined only because it checked `aida session leases` first. FIX: the message must name the lease's SCOPE, WORKTREE PATH, and ROLE so an agent can tell its own session from a stale implementer lease (e.g. "lease {id} (scope {spec}, role {role}, worktree {path})"). A refusal must speak the caller's situation.
+
+  ACCEPTANCE:
+  1. With a hold armed, merge-hold list's next-action line names `aida merge-hold clear` first; a test pins the wording order.
+  2. pr ship --dry-run's merge step shows the head pin (or an explicit abbreviation note); test compares plan text against merge_args output shape.
+  3. Step 5's skip/instruct messages include scope, role, and worktree path; test pins the fields.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:52:35.363046278Z
+modified_at: 2026-10-03T19:52:35.363046278Z
+req_type: Task
+tags:
+- messaging
+- pr-ship
+filed_at:
+  code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
