@@ -5576,6 +5576,36 @@ fn write_session_env_file_creates_aida_dir_if_needed() {
     assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
 }
 
+/// BUG-1783: isolate_cargo_target_dir correctly appends the worktree name.
+// trace:BUG-1783 | ai:codex
+#[test]
+fn test_isolate_cargo_target_dir_appends_worktree_name() {
+    let parent = std::path::Path::new("dummy-parent/target");
+    let worktree1 = std::path::Path::new("dummy/some-worktree");
+    let worktree2 = std::path::Path::new("dummy/other-worktree");
+    let isolated1 = crate::isolate_cargo_target_dir(parent, worktree1);
+    let isolated2 = crate::isolate_cargo_target_dir(parent, worktree2);
+    assert_eq!(
+        isolated1,
+        std::path::PathBuf::from("dummy-parent/target/worktrees/some-worktree")
+    );
+    assert_eq!(
+        isolated2,
+        std::path::PathBuf::from("dummy-parent/target/worktrees/other-worktree")
+    );
+    assert_ne!(isolated1, isolated2);
+}
+
+/// BUG-1783: isolate_cargo_target_dir falls back to parent if no file name.
+// trace:BUG-1783 | ai:codex
+#[test]
+fn test_isolate_cargo_target_dir_falls_back_on_missing_name() {
+    let parent = std::path::Path::new("dummy-parent/target");
+    let worktree = std::path::Path::new("/");
+    let isolated = crate::isolate_cargo_target_dir(parent, worktree);
+    assert_eq!(isolated, std::path::PathBuf::from("dummy-parent/target"));
+}
+
 /// TASK-63: parse_session_env handles the shape we write today.
 /// Cover the round-trip with render_session_env_file (the source of
 /// truth for what we produce) so a future change to the shim format
