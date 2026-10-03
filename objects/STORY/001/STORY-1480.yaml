@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-10-02T03:48:52.809859040Z
+modified_at: 2026-10-03T02:29:07.097935306Z
 req_type: Story
 tags:
 - aida:history
@@ -57,6 +57,41 @@ comments:
   created_at: 2026-09-27T14:37:22.531783630Z
   modified_at: 2026-09-27T14:37:22.531783630Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a0ff98-0199-7ca2-aa6f-4a6e68ae5a2b
+  author: joe
+  content: |-
+    SKETCH (advisor seat, 2026-10-02) — needs-sketch disposition. Option B stands (groomed 2026-09-25). Grounded in a code survey of main @ 6529885167.
+
+    1. PUBLISHED TIMING RECORD (cross-machine leg, acceptance 2)
+    - Path: .aida-store/timings/<TYPE>/<NNN>/<ID>.json, sharded exactly like object_path. NOT under objects/: list_objects/count_objects load every *.yaml in a shard dir as a requirement, so no sibling files there at all.
+    - Content: schema_version 1; spec id; publisher node (node_id + hostname from .aida/node.toml — Event carries no node field today); published_at; events[] = the local feed's spec-bearing entries filtered to a lifecycle allowlist (RunStarted, PhaseEntered, CiTerminal, PhaseDonePr, PrMerged, ReviewVerdictRecorded, SpecShelved, PuntFiled, SpecRequeued, SpecRetried, SpecReDriven, ReclassifiedNeedsHuman, AdvisorEscalated, MergeHoldChanged, GateHeld, DispositionChanged, ExecutionModeChanged, SpecCompleted, UnshippedWorkDetected, RunCompleted). Excluded: MailReceived, ShiftTick, CronJobFired/Failed, UnreadMail. Raw events, not digested spans: the reader replays them through the SAME decoder as the local feed, so per-spec, aggregate, and cross-machine views cannot drift (the STORY-1478/1479 shared-decoder principle).
+    - Write seam: completion.rs is the single terminal seam (transition_to_completed / _atomically / emit_spec_completed). Write/merge the record BEFORE persist and include its path in the completion commit (auto_commit_paths takes a path list; the auto-bump arm writes inside its update_atomically closure). db sync's `git add -A .` is the backstop for any stray file.
+    - Merge-not-overwrite, publish at Done too: auto-bump frequently completes on a different machine than the one that did the work (pull on Y flips Done->Completed for work done on X, and Y's feed has nothing). So ALSO publish at Done (aida done, queue-done advance), and make every publish a union-merge (dedup ts+kind+payload) with any existing record. Idempotent; the work machine's Done-time publish carries the events, the completing machine's merge adds whatever it has.
+    - Read seam: history_timeline::collect_drain_events and metrics_cycle_time's per-spec feed bucketing union the local feed with the spec's store record (plain file read in the store worktree, no git child process). Existing dedup absorbs overlap. Acceptance 2 falls out: aida pull syncs the orphan branch -> record present -> timeline builds on machine Y.
+
+    2. INTERACTIVE + INTEGRATE EMITTERS (acceptance 3)
+    - Reuse existing kinds with empty run_uuid (already legal outside drains): queue work claim -> PhaseEntered{implementer, attempt 1}; pr publish/ready -> PhaseDonePr{pr} (today drain-only); pr ship already emits PrMerged and should emit CiTerminal from its CI wait; review record already emits ReviewVerdictRecorded; completion already emits SpecCompleted.
+    - Integrate batches already go through queue work --auto-complete -> RealPhaseDriver emits normally. The real gap is the adopt-unshipped arm (TASK-1507 showed only UnshippedWorkDetected -> SpecCompleted): emit PhaseEntered{implementer} and PhaseDonePr around adoption.
+    - New kind, exactly one: PlanRecorded{verified} emitted by plan pinning/import (planning phase). Compile/build span reuses PhaseEntered{slug "build"} (already in WORK_PHASES) from the build step integrate/ship runs. EventKind has serde(other) Unknown, so old binaries skip new kinds safely; never rename existing tags.
+    - Tests: fixture test per new emit site asserting kind+spec reach the feed, plus timeline tests proving the spans materialize (and that TASK-1507-shaped histories stop reading unknown).
+
+    3. PARKED ATTRIBUTION (acceptance 4)
+    - Store status markers (NeedsAttention in/out) already sync cross-machine and already feed the timeline: make the parked classifier prefer them for park boundaries, with SpecShelved/PuntFiled/GateHeld/MergeHoldChanged refining locally. No new waiting-since file: the store transition IS the durable marker; held gates clear on MergeHoldChanged{placed=false}/PrMerged.
+
+    4. ORDER OF WORK (one branch; one PR unless size forces a split)
+    - ADR filed first (Option B chosen; A and C recorded as rejected) per the groomed decision.
+    - Slice A: record publish at Done/Completed + read transports + cross-machine fixture test.
+    - Slice B: interactive/integrate emits + tests.
+    - Slice C: parked-classifier preference + the acceptance-5 re-measurement (<=10% unknown). Baseline from the STORY-1479 live run: 7d window, 214 completed, work share 0.09%, implementer_passes_avg 0.088 — i.e. today's completed specs carry almost no phase evidence; the comparison must be re-run on specs completed THROUGH the new paths, not retroactively.
+
+    RISKS PINNED
+    - Never a *.yaml sibling under objects/ (store scanner globs).
+    - Record publish is best-effort on the completion path (emit() philosophy): a timing-record failure must never block completion; the commit-inclusion is fail-quiet.
+    - No new time-bound CLI flag in this story; if a resurface adds one, it must be registered in time_bound_flags_tests.rs (clap-walking registry, full suite only).
+    - metrics_cycle_time/markers_from_touches live only on branch story-1479 (PR #2366, green, unmerged): Slice A's read-transport change touches that module, so this story BUILDS ON story-1479 (branch off it or rebase after its merge) rather than conflicting with it.
+  created_at: 2026-10-03T02:29:07.097935306Z
+  modified_at: 2026-10-03T02:29:07.097935306Z
+  session_id: a5729e8f-bc58-4486-8b68-94299f9cd0dc
 history:
 - id: 01a0e346-3f80-7321-99e7-c3edaf383f34
   author: aida-session-start
