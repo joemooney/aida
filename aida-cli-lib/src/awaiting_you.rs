@@ -1304,12 +1304,19 @@ pub(crate) struct HeldPrItem {
 pub(crate) fn project_held_pr(
     record: &crate::merge_hold::MergeHoldRecord,
     title: &str,
+    approved_at_head: Option<&str>,
 ) -> HeldPrItem {
     use crate::merge_hold::HoldReasonKind;
     let pr = record.pr;
     let action = match record.reason_kind {
         HoldReasonKind::Rework => {
-            "implementer: address the review findings; the hold lifts after approval".to_string()
+            if let Some(head) = approved_at_head {
+                let short = crate::review_verdict::short_sha(head);
+                format!("rework approved at {short}; awaiting human: aida merge-hold clear {pr}")
+            } else {
+                "implementer: address the review findings; the hold lifts after approval"
+                    .to_string()
+            }
         }
         HoldReasonKind::Decision => {
             format!("human decision needed; once decided, `aida merge-hold clear {pr}`")
@@ -3100,7 +3107,7 @@ mod tests {
             "STORY-1397 is marked guided — merge requires review",
             None,
         );
-        let item = project_held_pr(&record, "route typed recusals");
+        let item = project_held_pr(&record, "route typed recusals", None);
         assert_eq!(item.reason_kind, "supervision");
         assert!(item.action.contains("aida merge-hold clear 2103"));
         let report = AwaitingReport {
@@ -3126,11 +3133,39 @@ mod tests {
     #[test]
     fn each_non_recusal_hold_kind_names_its_own_action() {
         use crate::merge_hold::HoldReasonKind;
-        let action =
-            |kind| project_held_pr(&crate::merge_hold::typed_hold(7, kind, "d", None), "t").action;
+        let action = |kind| {
+            project_held_pr(
+                &crate::merge_hold::typed_hold(7, kind, "d", None),
+                "t",
+                None,
+            )
+            .action
+        };
         assert!(action(HoldReasonKind::Rework).contains("implementer"));
         assert!(action(HoldReasonKind::Decision).contains("human decision"));
         assert!(action(HoldReasonKind::Unknown).contains("unreadable"));
+    }
+
+    // trace:BUG-1788 | ai:antigravity
+    #[test]
+    fn rework_hold_with_approval_flips_action() {
+        use crate::merge_hold::HoldReasonKind;
+        let action_unapproved = project_held_pr(
+            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            "t",
+            None,
+        )
+        .action;
+        assert!(action_unapproved.contains("implementer"));
+
+        let action_approved = project_held_pr(
+            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            "t",
+            Some("48433c6b00000000000000000000000000000000"),
+        )
+        .action;
+        assert!(action_approved.contains("rework approved at 48433c6"));
+        assert!(action_approved.contains("awaiting human: aida merge-hold clear"));
     }
 
     #[test]
