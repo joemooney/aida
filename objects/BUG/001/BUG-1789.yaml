@@ -26,12 +26,12 @@ description: |
   **Workarounds available today:** `aida role enter <role> --no-resume`, or `[role] resume_prompt = false` in `.aida/config.toml`, or AIDA_HEADLESS=1.
 
   **Acceptance sketch:** with a fixture of ≥1500 synthetic session logs including multi-MB single-line codex rollouts, interactive `role enter` completes the resume-picker scan reading a bounded number of bytes (assert via rchar or an injected counter, e.g. <50 MB), and still resolves role/title/cwd for the picker rows correctly.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T13:29:21.538417538Z
-modified_at: 2026-10-03T15:53:55.972085400Z
+modified_at: 2026-10-03T18:47:21.302328961Z
 req_type: Bug
 history:
 - id: 01a10278-b61d-7ed2-8d1e-d00a076f9cd9
@@ -48,3 +48,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10317-9bce-7613-af22-ca3cf32229e8
+  author: aida-auto-bump
+  timestamp: 2026-10-03T18:47:21.294735608Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10317-9bd6-7030-872f-8ce34d53f4be
+  timestamp: 2026-10-03T18:47:21.302320121Z
+  agent: implementer
+  commit_sha: f7005aab9e72b5efbd4ab0feead09ab2cc5bd3c4
+  summary: 'Byte-bounded scan delivers the spec''s acceptance exactly: hard 45MiB budget (file opened only while a full 2MiB per-file cap fits), newest-first early stop at limit, foreign logs cost only their head (documented trade-off for sessions that cd into the project), lossy decode protects cap-split lines, and moving registry enrichment before the filter fixes a latent match gap. Tests include the 1500x3MiB fixture (<50MB read, matches at head/middle/tail with role/title/cwd intact) and the worst-case budget trip; ran green in CI''s ubuntu Build. id-prefix resume deliberately keeps no byte budget (parity with prior behavior).'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T18:47:21.294709089Z
+  completion_sha: f7005aab9e72b5efbd4ab0feead09ab2cc5bd3c4
