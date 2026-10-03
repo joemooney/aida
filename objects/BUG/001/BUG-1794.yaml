@@ -1,0 +1,40 @@
+id: 01a10343-1814-7812-bbf9-53783abf21de
+spec_id: BUG-1794
+agreed_id: BUG-1794
+title: 'Windows: advisor_code_gate worktree-lease test fails — active_lease_for_cwd misses the lease, roster role wins'
+description: |
+  First seen on PR #2377's cross-platform leg (run 37146160923, job 111270435787), 2026-10-03. The test added by BUG-1792 (#2390, d6b5db54e8) fails ONLY on windows-latest:
+
+      thread '...' panicked at aida-cli-lib\src\advisor_code_gate.rs:415:9
+      assertion `left == right` failed
+        left: ("advisor", "shared team roster")
+       right: ("implementer", "worktree session lease")
+
+      test result: FAILED. 7481 passed; 1 failed; 15 ignored; 0 measured; 0 filtered out
+
+  PR #2377 touches no Rust (scripts/CI/python only), so this is a main regression from BUG-1792's change, not the PR's. The 7481-passed baseline context lives on BUG-1728 (AC6 accounting).
+
+  MECHANISM (hypothesis, verify first): `effective_role_for_commit_with_fallback` (advisor_code_gate.rs:325) delegates to `crate::active_lease_for_cwd(root, cwd)`; the fixture writes the lease's worktree_path via `Path::display()` (plain `C:\Users\...` spelling) while the cwd-side comparison on Windows likely canonicalizes (yielding an extended `\\?\C:\...` spelling) or compares with different separators/case, so the lease never matches and the roster fallback wins. Same spelling-mismatch class BUG-1777 fixed in `worktree_gitdir_matches` by normalizing before comparing.
+
+  NOTE: if the hypothesis holds, the defect may be PRODUCT (a real Windows user's commit gate would ignore worktree leases), not test-only — triage that first, per the BUG-1728 Family-D lesson: do not assume fixture-only, and do not close by cfg-gating the test.
+
+  Per ADR-47/ADR-62 this is deferred Windows work; recorded so the next cross-platform pass starts from the mechanism instead of re-running a 30-minute job.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:34:51.156926148Z
+modified_at: 2026-10-03T19:34:51.156926148Z
+req_type: Bug
+tags:
+- cross-platform
+- regression
+- windows
+filed_at:
+  code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
