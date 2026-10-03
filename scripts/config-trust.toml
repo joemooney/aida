@@ -101,7 +101,10 @@ sites = 2
 
 [readers."aida-cli-lib/src/implementer_preflight.rs"]
 channels = ["worktree"]
-sites = 1
+# 2 sites since BUG-1714 (#2350): configured_guard_names ([preflight] guards,
+# grandfathered under BUG-1775) and configured_budgets ([preflight]
+# guard_timeout_secs / build_timeout_secs, positive-integer policy values).
+sites = 2
 
 [readers."aida-cli-lib/src/init_cmd.rs"]
 channels = ["worktree", "write", "probe", "prose"]
@@ -139,10 +142,6 @@ channels = ["other-file"]
 sites = 1
 
 [readers."aida-cli-lib/src/network_retry.rs"]
-channels = ["worktree"]
-sites = 1
-
-[readers."aida-cli-lib/src/notify.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -537,7 +536,6 @@ provider = "policy" # gh / glab / none
 "*" = "policy" # <provider> = "<base url>", display-only
 
 [keys.worktree.notify]
-command = "grandfathered"
 min_interval = "policy"
 quiet_hours = "policy"
 
@@ -546,6 +544,8 @@ quiet_hours = "policy"
 
 [keys.worktree.preflight]
 guards = "grandfathered"
+guard_timeout_secs = "policy"
+build_timeout_secs = "policy"
 
 [keys.worktree.behavior]
 permission_mode = "grandfathered"
@@ -593,6 +593,9 @@ kind = "policy"
 
 [keys.trusted."pr-rebase"]
 smoke_check = "command"
+
+[keys.trusted.notify]
+command = "command"
 
 [keys.trusted.pr_rebase]
 smoke_check = "command" # accepted alternate section spelling

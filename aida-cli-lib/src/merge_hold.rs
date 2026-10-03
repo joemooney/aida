@@ -2460,6 +2460,289 @@ fn sync_label_command(
     }
 }
 
+// ── BUG-1774: the corpus-derived half of the merge chokepoint ───────────────
+//
+// A refusing verdict used to hold a PR only when it was recorded through
+// `handle_review_record_at`, the one producer that stamps the marker + label.
+// Every other producer of a verdict artifact (`adopt_direct_write`, the drain's
+// `stamp_pr_review_verdict`, a hand-written file) armed nothing. Enforcement
+// state is therefore DERIVED from the verdict corpus here, at the chokepoint
+// every AIDA merge funnels through, rather than stamped once per writer. The
+// marker and the label stay as mirrors (ADR-37's server half is a GitHub
+// required check that can read a label but not the local corpus), and they are
+// refreshed from the SAME predicate the gate refuses on, so they cannot
+// disagree with the corpus.
+// trace:BUG-1774 | ai:claude
+
+/// What the verdict corpus says about merging a PR at its current head.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CorpusMergeGate {
+    /// No live verdict evidence, or the corpus cleanly approves the head.
+    Clear,
+    /// The merge is refused. `arm` carries the definite blocking verdict AT
+    /// the evaluated head when there is one — the only evidence the mirrors
+    /// (marker + label) are armed from. A fail-closed refusal with no definite
+    /// at-head blocker (unknown head, stale verdicts, conflicting corpus)
+    /// refuses without arming: mirroring uncertainty as state would put the
+    /// label on every PR whose head cannot be read.
+    Refuse {
+        message: String,
+        arm: Option<CorpusArm>,
+    },
+}
+
+/// The definite at-head blocking verdict backing a refusal (AC4: whatever
+/// refreshes the mirror does so from the gate's own predicate result).
+// trace:BUG-1774 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CorpusArm {
+    pub key: String,
+    pub sha: String,
+    pub verdict_raw: String,
+    pub recorded_by: Option<String>,
+}
+
+/// The gate's release syntax, spoken in every refusal (a refusal must name the
+/// repair the caller can actually run).
+fn corpus_release_hint(pr: u64, key: &str) -> String {
+    format!(
+        "The hold lifts only when the findings are addressed on a NEW head and a fresh \
+         APPROVED verdict is recorded at it — `aida review record {key} --verdict approved \
+         --sha <new-head> --pr {pr}` after reviewing it — then merge again."
+    )
+}
+
+/// Pure decision over the gathered verdict bodies. This is the fail-closed
+/// MERGE form, not BUG-1773's fail-open view form (`corpus_hold_at_head`):
+/// once live verdict evidence exists, only a clean APPROVED reconciliation at
+/// the current head lets the merge proceed. An unknown head, a verdict left at
+/// an older head, an approval recorded at the OLD rejected sha, and a corpus
+/// that cannot be reconciled all refuse (parent AC2/AC3).
+///
+/// A verdict closed by a merge is the original verdict PLUS a record that the
+/// branch moved on (BUG-1529) — history, not evidence about this head — so it
+/// is excluded before the corpus is judged, exactly as the view excludes it.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn corpus_merge_gate(
+    pr: u64,
+    bodies: &[(String, String)],
+    head: Option<&str>,
+) -> CorpusMergeGate {
+    use crate::review_verdict as rv;
+    let live: Vec<&(String, String)> = bodies
+        .iter()
+        .filter(|(_, body)| rv::parse_recorded_verdict(body).is_none_or(|v| !v.is_closed()))
+        .collect();
+    if live.is_empty() {
+        return CorpusMergeGate::Clear;
+    }
+    let first_key = live[0].0.clone();
+    let head = head.map(str::trim).filter(|h| !h.is_empty());
+    let Some(head) = head else {
+        // AC2: an artifact on file + an unreadable head = the gate cannot show
+        // the recorded verdict does not cover the commit about to land.
+        return CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr} has a recorded review verdict ({first_key}) but its current head could \
+                 not be read, so the merge fails closed. {}",
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        };
+    };
+    match rv::reconcile_artifacts_for_sha(live.iter().map(|(_, b)| b.as_str()), head) {
+        Ok(Some(kind)) if kind.approves() => CorpusMergeGate::Clear,
+        Ok(Some(kind)) => {
+            // A blocker recorded against this exact head — the definite case
+            // the mirrors are armed from, whatever producer wrote the file.
+            let blocking = live.iter().find_map(|(key, body)| {
+                rv::parse_recorded_verdict(body)
+                    .filter(|v| {
+                        v.kind.blocks_done()
+                            && v.reviewed_sha
+                                .as_deref()
+                                .is_some_and(|s| rv::same_reviewed_sha(s, head))
+                    })
+                    .map(|v| (key.clone(), v))
+            });
+            let (key, raw, recorded_by) = match blocking {
+                Some((key, v)) => (key, v.raw.clone(), v.recorded_by.clone()),
+                None => (
+                    first_key.clone(),
+                    kind.canonical().unwrap_or("request-changes").to_string(),
+                    None,
+                ),
+            };
+            let message = format!(
+                "PR-{pr} has an outstanding {raw} verdict for {key} at its current head {} — \
+                 the verdict corpus holds the merge regardless of which producer wrote the \
+                 artifact. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &key)
+            );
+            CorpusMergeGate::Refuse {
+                message,
+                arm: Some(CorpusArm {
+                    key,
+                    sha: head.to_string(),
+                    verdict_raw: raw,
+                    recorded_by,
+                }),
+            }
+        }
+        // Verdict evidence exists but nothing cleanly approves this head: a
+        // refusal left at an older sha (a head move alone does not lift the
+        // hold) or an approval recorded at the OLD rejected sha (parent AC3).
+        Ok(None) => CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
+                 head {} — a head move alone does not lift a recorded refusal, and an approval \
+                 at an older commit is not evidence this head was reviewed. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        },
+        Err(message) => CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr}'s verdict corpus cannot be reconciled at its current head {}: {message} \
+                 — a human must resolve the conflicting recordings before this merges. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        },
+    }
+}
+
+/// Gather the `(key, body)` pairs the gate judges: the PR-keyed record plus
+/// each spec hint, under each root (a worktree and the main clone can both
+/// hold `.aida/review-verdicts/`); a file reachable under two roots is read
+/// once. `Err` = an artifact exists but could not be read — AC2 fails closed.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn corpus_gate_bodies(
+    roots: &[&Path],
+    pr: u64,
+    spec_hints: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let mut keys: Vec<String> = Vec::new();
+    if pr > 0 {
+        keys.push(format!("PR-{pr}"));
+    }
+    for id in spec_hints {
+        let id = id.trim().to_ascii_uppercase();
+        if !id.is_empty() && !keys.contains(&id) {
+            keys.push(id);
+        }
+    }
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let mut out = Vec::new();
+    for root in roots {
+        for key in &keys {
+            let path = crate::review_verdict::verdict_path(root, key);
+            if std::fs::symlink_metadata(&path).is_err() {
+                continue;
+            }
+            let canon = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if seen.contains(&canon) {
+                continue;
+            }
+            seen.push(canon);
+            match std::fs::read_to_string(&path) {
+                Ok(body) => out.push((key.clone(), body)),
+                Err(e) => {
+                    return Err(format!(
+                        "verdict artifact {} exists but could not be read ({e})",
+                        path.display()
+                    ))
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The chokepoint entry every `Forge::merge_change` implementation calls.
+/// `head` is resolved lazily — a PR with no verdict artifacts pays no forge
+/// read. On a definite at-head refusal the mirrors are refreshed best-effort
+/// from the gate's own `CorpusArm` (never from a second predicate), and the
+/// refusal stands whether or not the mirrors landed.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn enforce_corpus_gate_before_merge(
+    project_root: &Path,
+    pr: u64,
+    spec_hints: &[String],
+    head: impl FnOnce() -> Option<String>,
+) -> anyhow::Result<()> {
+    let main_root = crate::main_worktree_root_from(project_root);
+    let mut roots: Vec<&Path> = vec![project_root];
+    if main_root != project_root {
+        roots.push(main_root.as_path());
+    }
+    let bodies = match corpus_gate_bodies(&roots, pr, spec_hints) {
+        Ok(bodies) => bodies,
+        Err(why) => anyhow::bail!(
+            "PR-{pr} was not merged: {why} — the merge fails closed on an unreadable verdict \
+             artifact. Restore or repair the file, then merge again."
+        ),
+    };
+    if bodies.is_empty() {
+        return Ok(());
+    }
+    let head = head();
+    match corpus_merge_gate(pr, &bodies, head.as_deref()) {
+        CorpusMergeGate::Clear => Ok(()),
+        CorpusMergeGate::Refuse { message, arm } => {
+            if let Some(arm) = arm.filter(|_| pr > 0) {
+                arm_corpus_mirrors(project_root, pr, &arm);
+            }
+            anyhow::bail!(message)
+        }
+    }
+}
+
+/// Refresh the marker + label mirrors from the gate's definite at-head
+/// refusal. Best-effort: a mirror failure is reported, never escalated — the
+/// chokepoint refusal already stands. `write_typed_hold` composes with any
+/// existing marker, so this programmatic Rework write cannot displace a
+/// stricter hold (a Recusal stays primary — BUG-1691).
+// trace:BUG-1774 | ai:claude
+fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
+    let reason = format!(
+        "{} for {} at {}",
+        arm.verdict_raw,
+        arm.key,
+        crate::review_verdict::short_sha(&arm.sha)
+    );
+    let mut hold = typed_hold(pr, HoldReasonKind::Rework, &reason, Some(arm.sha.clone()));
+    hold.verdict_ref = Some(VerdictRef::new(
+        &arm.key,
+        Some(pr),
+        Some(arm.sha.clone()),
+        arm.recorded_by.clone(),
+    ));
+    if !arm.key.starts_with("PR-") {
+        hold.spec = Some(arm.key.clone());
+    }
+    hold.release_condition = Some(format!(
+        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head; then a human ships it",
+        arm.key
+    ));
+    if let Err(err) = write_typed_hold(project_root, &hold) {
+        eprintln!(
+            "  warning: could not mirror the corpus refusal into PR-{pr}'s merge-hold marker \
+             ({err}) — the chokepoint refusal stands on the verdict corpus alone"
+        );
+        return;
+    }
+    if let Err(err) = sync_label(project_root, pr, true) {
+        eprintln!(
+            "  warning: merge-hold label not applied on PR-{pr}: {err} — the local merge \
+             chokepoint remains armed; run `aida merge-hold list --fix`"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

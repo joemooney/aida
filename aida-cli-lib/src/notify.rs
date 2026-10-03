@@ -363,8 +363,11 @@ fn notify_status(project_root: &Path) -> Result<()> {
 
 impl NotifyConfig {
     fn load(project_root: &Path) -> Result<Option<Self>> {
-        let path = project_root.join(".aida").join("config.toml");
-        let Ok(body) = std::fs::read_to_string(&path) else {
+        // notify.command is executed via `sh -c`, so only the reviewed
+        // default-branch config may authorize it. Missing trusted config is
+        // fail-closed: notifications stay disabled.
+        // trace:BUG-1775 | ai:codex
+        let Some(body) = crate::trusted_config::read_trusted_config_toml(project_root) else {
             return Ok(None);
         };
         Self::from_toml(&body)
@@ -956,6 +959,85 @@ fn parse_time_minutes(raw: &str) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
+
+    struct Repo {
+        dir: tempfile::TempDir,
+    }
+
+    impl Repo {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let repo = Self { dir };
+            repo.git(&["init", "-q", "-b", "main"]);
+            repo.git(&["config", "user.email", "t@t.t"]);
+            repo.git(&["config", "user.name", "t"]);
+            repo
+        }
+
+        fn path(&self) -> &Path {
+            self.dir.path()
+        }
+
+        fn git(&self, args: &[&str]) {
+            let ok = Command::new("git")
+                .arg("-C")
+                .arg(self.path())
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success();
+            assert!(ok, "git {args:?} failed");
+        }
+
+        fn write_config(&self, body: &str) {
+            let aida = self.path().join(".aida");
+            std::fs::create_dir_all(&aida).unwrap();
+            std::fs::write(aida.join("config.toml"), body).unwrap();
+        }
+
+        fn pin_main(&self) {
+            let output = Command::new("git")
+                .arg("-C")
+                .arg(self.path())
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .unwrap();
+            let sha = String::from_utf8(output.stdout).unwrap();
+            self.git(&["update-ref", "refs/remotes/origin/main", sha.trim()]);
+        }
+    }
+
+    #[test]
+    fn load_uses_only_trusted_default_branch_notify_command() {
+        let repo = Repo::new();
+        repo.write_config("[unrelated]\nvalue = true\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted config without notify"]);
+        repo.pin_main();
+
+        repo.git(&["checkout", "-q", "-b", "evil"]);
+        repo.write_config("[notify]\ncommand = \"echo pwned\"\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "evil notify command"]);
+        assert_eq!(NotifyConfig::load(repo.path()).unwrap(), None);
+
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write_config("[notify]\ncommand = \"echo trusted\"\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted notify command"]);
+        repo.pin_main();
+        repo.git(&["checkout", "-q", "-b", "different"]);
+        repo.write_config("[notify]\ncommand = \"echo pwned\"\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "different worktree command"]);
+
+        assert_eq!(
+            NotifyConfig::load(repo.path()).unwrap().unwrap().command,
+            "echo trusted"
+        );
+    }
 
     fn event(spec: Option<&str>, kind: EventKind) -> String {
         serde_json::to_string(&Event::new(spec.map(ToOwned::to_owned), "run-123", kind)).unwrap()
@@ -1372,20 +1454,22 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn notify_send_direct_reports_the_real_delivery() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
+        let repo = Repo::new();
+        let root = repo.path();
+        repo.write_config("[unrelated]\nvalue = true\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "initial config"]);
+        repo.pin_main();
         assert_eq!(
             send_direct(root, "mail-latency", "t", "m")
                 .unwrap()
                 .delivery(),
             DirectDelivery::NotConfigured
         );
-        std::fs::create_dir_all(root.join(".aida")).unwrap();
-        std::fs::write(
-            root.join(".aida").join("config.toml"),
-            "[notify]\ncommand = \"cat >/dev/null\"\nmin_interval = \"30m\"\n",
-        )
-        .unwrap();
+        repo.write_config("[notify]\ncommand = \"cat >/dev/null\"\nmin_interval = \"30m\"\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted notify config"]);
+        repo.pin_main();
         assert_eq!(
             send_direct(root, "mail-latency", "t", "m")
                 .unwrap()
@@ -1410,6 +1494,9 @@ mod tests {
             "[notify]\ncommand = \"sleep 5\"\nmin_interval = \"0s\"\n",
         )
         .unwrap();
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-q", "-m", "trusted slow notify config"]);
+        repo.pin_main();
         let started = std::time::Instant::now();
         assert!(send_direct_bounded(
             root,

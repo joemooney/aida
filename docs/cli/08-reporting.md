@@ -283,18 +283,20 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 
 **One line** — agent-lift metrics: the *framed proof* that autonomous drains lift load.
 
-**Mental model.** `metrics` reads the same telemetry substrate as `aida usage drains`, but its job is **presentation, not inspection**. The one subcommand, `agent-lift`, computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage drains` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone.
+**Mental model.** `metrics` reads the same telemetry substrate as `aida usage drains`, but its job is **presentation, not inspection**. `agent-lift` computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage drains` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone. `cycle-time` answers a different question — *where does completed work's calendar time actually go?* It rebuilds each requirement completed in the window the way `aida history <ID> --timeline` does (store transitions + the local drain feed, no forge calls) and aggregates: per-activity count/p50/p90/total, the overall work-vs-wait-vs-unknown split, rework signals (CI failure rate, reviewer bounce rate, average implementer passes, shelves with total shelved time), and the slowest items with their dominant span. Items with no usable local data are excluded and counted, with the reason, rather than silently skewing the shares. <!-- trace:STORY-1479 | ai:claude -->
 
 **Reach for it when** — you need to *demonstrate* that the autonomy machinery is working: a case study, a release-notes paragraph, a "look what the drains did this month" writeup.
 
 **Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida drain status` and the phase logs, the diagnostic side. `metrics` summarizes the win; drain inspection dissects the failure.
 
 **Key options (rationale only).**
-- `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
-- `--since <window>` — bound the reporting period (the case-study window); any [time bound](#time-bounds), default `30d`.
+- `--markdown` (`agent-lift`) — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
+- `--since <window>` — bound the reporting period; any [time bound](#time-bounds). Default `30d` for `agent-lift`, `7d` for `cycle-time` (which also takes `--until` to close the window).
+- `--type <type>` / `--tags <a,b>` (`cycle-time`) — narrow the aggregate to one requirement type, or to requirements carrying every listed tag — "how long do bugs sit?" vs "how did the observability batch flow?".
+- `--slowest <n>` (`cycle-time`) — how many of the slowest items to list with their dominant span.
 - `--json` — the computed signals for machine consumers.
 
-**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands; you want `aida metrics agent-lift`. It and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*. Pick by whether you're proving or debugging.
+**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands. `agent-lift` and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*; pick by whether you're proving or debugging. `cycle-time`'s work/wait split only reflects what this machine's drain feed witnessed: a requirement completed on another machine is excluded ("no drain events on this machine"), and time no source explains stays visibly `unknown` rather than being folded into a neighbouring bucket.
 
 **Chains with** — the case-study/release-notes companion to `digest` (narrative) and `usage` (diagnostic).
 

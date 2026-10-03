@@ -93,6 +93,10 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         (concat!("aida usage", " --unused"), Shared(lookback)),
         ("aida usage unused <duration>", Shared(lookback)),
         ("aida metrics agent-lift --since", Shared(lookback)),
+        // trace:STORY-1479 | ai:claude — cycle-time resolves both bounds
+        // through parse_history_bound, the same route `aida history` takes.
+        ("aida metrics cycle-time --since", Shared(history_since)),
+        ("aida metrics cycle-time --until", Shared(history_until)),
         ("aida tail --since", Shared(tail)),
         ("aida drain tail --since", Shared(tail)),
         ("aida headless tail --since", Shared(tail)),
