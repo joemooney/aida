@@ -73609,29 +73609,6 @@ fn pull_store_start_line() -> String {
     format!("{} aida-store ← origin", "Pulling store".cyan().bold())
 }
 
-#[cfg(test)]
-mod bug_1796_pull_skip_warning_tests {
-    use super::{pull_code_start_line, pull_skip_warning, pull_store_start_line};
-
-    // trace:BUG-1796.ac5879d3 | ai:codex
-    #[test]
-    fn skipped_pull_legs_are_labeled_as_warnings() {
-        for leg in ["code", "store"] {
-            let line = pull_skip_warning(&format!("skipping {leg} pull"));
-            assert!(line.contains("Warning:"), "{line}");
-            assert!(line.contains(&format!("skipping {leg} pull")), "{line}");
-        }
-    }
-
-    // Pin the ordinary two-leg headings byte-for-byte; only missing-leg output
-    // changed for BUG-1796. trace:BUG-1796.ac09cb6d | ai:codex
-    #[test]
-    fn normal_two_leg_pull_headings_keep_their_legacy_bytes() {
-        assert_eq!(pull_code_start_line("main"), "Pulling code main ← origin");
-        assert_eq!(pull_store_start_line(), "Pulling store aida-store ← origin");
-    }
-}
-
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,

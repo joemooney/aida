@@ -4822,7 +4822,6 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     findings
 }
 
-// trace:BUG-1796.ac18732d | ai:codex
 #[cfg(test)]
 mod bug_1796_orphan_store_doctor_tests {
     use super::*;
@@ -4844,6 +4843,7 @@ mod bug_1796_orphan_store_doctor_tests {
 
     #[test]
     fn doctor_reports_orphan_store_ahead_commit_count() {
+        // trace:BUG-1796.ac18732d | ai:codex
         let temp = tempfile::tempdir().unwrap();
         let remote = temp.path().join("remote.git");
         let seed = temp.path().join("seed");
