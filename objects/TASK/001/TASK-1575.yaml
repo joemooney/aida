@@ -1,0 +1,76 @@
+id: 01a0ffed-c39d-7f72-8937-ade7e1cde10e
+spec_id: TASK-1575
+agreed_id: TASK-1575
+title: 'Unshipped-work detector: a pass-1-excluded sibling branch no longer carries its merged-PR evidence, so a stale ancestor branch of the merged head over-reports until the next merge to main'
+description: |
+  FOUND DURING the advisor review of PR #2365 (BUG-1756, approved): the lazy-evidence reorder
+  narrowed the per-head forge evidence universe from "every candidate branch" to "survivors of the
+  local pass only". One exclusion predicate — `represented_by_merged_head` — depends on merged-PR
+  evidence that can live on a DIFFERENT branch of the same spec, and that carrier branch can itself
+  be excluded in pass 1 before its evidence is ever fetched.
+
+  ## Scenario (deterministic, by construction)
+
+  Spec S is non-terminal (multi-slice in-progress, or the completion trailer was missed). Two refs:
+
+  - `bug-s-2`: the branch whose PR MERGED (squash). Immediately after the merge, and until anything
+    else lands on main, its tree is identical to main's tip tree → pass 1's `git diff --quiet`
+    returns 0 → `PatchCountProbe::Counted(0)` → excluded locally. Its `gh pr list --head bug-s-2`
+    history query (which would return the merged PR) is never issued.
+  - `bug-s`: a stale ancestor of `bug-s-2`'s merged head (the abandoned pre-rework branch; the `-2`
+    suffix pattern is documented in this repo's own discipline). Its lone commit's patch-id differs
+    from the combined squash commit → `git cherry` counts it ahead → it SURVIVES pass 1. Its own
+    `--head bug-s` query returns nothing (it never had a PR). With no merged head recorded for spec
+    S, `represented_by_merged_head` cannot fire, and `bug-s` is reported as unshipped work with an
+    `aida pr ship bug-s` hint — the BUG-1187-family noise, reintroduced for this one shape.
+
+  Before PR #2365, the UNBOUNDED path (`collect_unshipped_work_items`, used by session_reap and the
+  fixtures) queried every candidate head up front, so `bug-s-2`'s merged PR represented and excluded
+  `bug-s`. (The BOUNDED production path reported nothing at all — the dead channel #2365 fixes — so
+  on `aida awaiting` this is a new noise row only relative to a channel that printed nothing.)
+
+  ## Why the window is narrow but real
+
+  The carrier is only pass-1-excluded while its tree is identical to main (no subsequent merges).
+  On this repository that window is minutes-to-hours; on a single-maintainer AIDA-user repository it
+  can be days. The row self-heals at the next merge to main (the carrier then survives pass 1 via
+  cherry's squash-blindness, gets queried, and represents the ancestor again) — which also makes the
+  false positive intermittent and confusing rather than stable.
+
+  ## Suggested fix shape (not binding)
+
+  During pass 1, when a candidate is excluded by `Counted(0)` (tree-identical / fully
+  patch-equivalent), remember `(spec_key, short_branch)` as a potential shipped-evidence carrier. In
+  pass 2, for each spec that has at least one survivor, also issue the `--head` history query for
+  that spec's recorded carrier branches (bounded by the same deadline, after the survivors' own
+  queries). This keeps the lazy-evidence win — carriers are only queried when a same-spec survivor
+  actually needs representing — and restores the full evidence universe for exactly the predicate
+  that needs it.
+
+  ## Acceptance criteria
+
+  1. A fixture with a non-terminal spec, a squash-merged branch whose tree equals main's tip (fake
+     gh returns its merged PR with matching head sha), and a never-PR'd stale ancestor branch of
+     that merged head: the ancestor is EXCLUDED (represented by the merged head), through BOTH
+     `collect_unshipped_work_items` and the bounded path with a generous deadline.
+  2. Mutation proof: with the carrier-query addition reverted, the same fixture reports the ancestor
+     as unshipped (red), proving the fixture witnesses this gap and not something else.
+  3. The lazy-evidence operation-count pin from PR #2365
+     (`per_head_history_queries_run_only_for_surviving_candidates`) stays green: no return to
+     querying every candidate up front. A spec with NO survivors must trigger NO carrier queries.
+  4. The starvation and truncation-honesty fixtures from BUG-1288/BUG-1756 stay green.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T04:02:47.325576068Z
+modified_at: 2026-10-03T04:02:47.325576068Z
+req_type: Task
+filed_at:
+  code_sha: 652988516774b0fcffbadd15f7bbc4083ea0a25c
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 49955093-ec89-46a0-b158-2d0ecdd168ce
