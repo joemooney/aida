@@ -103,12 +103,12 @@ description: |
 
   - Recovering BUG-1693's and BUG-1688's stranded WIP is queue hygiene and needs its own seat.
   - `pid_is_alive` treating a zombie as alive — separate spec.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:45:29.430268238Z
-modified_at: 2026-10-03T08:40:00.969736215Z
+modified_at: 2026-10-03T10:06:11.458389286Z
 req_type: Bug
 comments:
 - id: 01a0f2cb-f7d4-7011-b372-4acc7e090825
@@ -493,3 +493,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1013a-7822-7fb1-aa77-697a5c5495d8
+  author: joe
+  timestamp: 2026-10-03T10:06:11.490964150Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-03T10:06:11.458389286Z
+  implemented_by: joe
