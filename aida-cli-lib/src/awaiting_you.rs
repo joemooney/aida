@@ -1495,6 +1495,15 @@ pub(crate) struct UnshippedWorkItem {
     pub age: String,
     pub recovery: String,
     pub pr_state: String,
+    /// BUG-1756: whether this branch has a remote counterpart (`origin/<name>`
+    /// exists, or the row itself is a remote-only ref). `false` is the single
+    /// most strandable state work can be in — the commits exist on exactly one
+    /// machine — so the render and the recovery hint must distinguish it from
+    /// a pushed-but-no-PR branch (push first vs just open a PR); TASK-1305
+    /// already established that collapsing distinct unshipped states into one
+    /// rendering is a defect.
+    // trace:BUG-1756 | ai:claude
+    pub pushed: bool,
 }
 
 /// BUG-1288: honesty flag for the `unshipped_work` scan itself, distinct from
@@ -2374,9 +2383,17 @@ impl AwaitingReport {
             } else {
                 ""
             };
+            // BUG-1756: a never-pushed branch exists on exactly one machine;
+            // say so instead of rendering it identically to a pushed branch
+            // that merely lacks a PR. trace:BUG-1756 | ai:claude
+            let push_note = if item.pushed {
+                ""
+            } else {
+                ", local-only (never pushed — this machine holds the only copy)"
+            };
             writeln!(
                 w,
-                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {}{} — `{}`",
                 scope_note,
                 item.spec_id.bold(),
                 item.branch,
@@ -2384,6 +2401,7 @@ impl AwaitingReport {
                 if item.commits_ahead == 1 { "" } else { "s" },
                 item.age,
                 item.pr_state,
+                push_note,
                 unshipped_work_recovery_hint(item).cyan(),
             )?;
             budget -= 1;
@@ -2602,6 +2620,10 @@ impl AwaitingReport {
                 "commits_ahead": i.commits_ahead,
                 "age": i.age,
                 "pr_state": i.pr_state,
+                // trace:BUG-1756 | ai:claude — false = local-only: the one
+                // machine-durable copy; consumers must not collapse it into
+                // the pushed-no-PR state.
+                "pushed": i.pushed,
                 "recovery": i.recovery,
             })).collect::<Vec<_>>(),
             // BUG-1288: `null` means the scan never ran (the `--notice` fast
@@ -4054,6 +4076,7 @@ mod tests {
                 age: "3h".to_string(),
                 recovery: "aida pr ship story-1043".to_string(),
                 pr_state: "absent".to_string(),
+                pushed: true,
             }],
             ..Default::default()
         };
@@ -4072,6 +4095,47 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+        // trace:BUG-1756 | ai:claude — the push axis reaches consumers.
+        assert_eq!(json["unshipped_work"][0]["pushed"], true);
+        assert!(
+            !s.contains("local-only"),
+            "a pushed branch must not carry the local-only marker:\n{s}"
+        );
+    }
+
+    // BUG-1756 AC1: a never-pushed branch renders DISTINGUISHED from a
+    // pushed-no-PR branch — TASK-1305 established that collapsing distinct
+    // unshipped states into one rendering is a defect; this is the same
+    // principle on the push axis. trace:BUG-1756 | ai:claude
+    #[test]
+    fn local_only_unshipped_work_renders_distinct_from_pushed() {
+        let r = AwaitingReport {
+            unshipped_work: vec![UnshippedWorkItem {
+                spec_id: "BUG-1756".to_string(),
+                branch: "bug-1756-local".to_string(),
+                commits_ahead: 1,
+                age: "26h".to_string(),
+                recovery: "git push -u origin bug-1756-local && aida pr ship bug-1756-local"
+                    .to_string(),
+                pr_state: "absent".to_string(),
+                pushed: false,
+            }],
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("local-only (never pushed — this machine holds the only copy)"),
+            "the local-only state must be named, not collapsed into pushed-no-PR:\n{s}"
+        );
+        assert!(
+            s.contains("git push -u origin bug-1756-local && aida pr ship bug-1756-local"),
+            "the hint names the push first:\n{s}"
+        );
+
+        let json = r.to_json();
+        assert_eq!(json["unshipped_work"][0]["pushed"], false);
     }
 
     // BUG-1288: a truncated scan with ZERO items found must not render as a
@@ -4123,6 +4187,7 @@ mod tests {
                 age: "3h".to_string(),
                 recovery: "aida pr ship story-1043".to_string(),
                 pr_state: "absent".to_string(),
+                pushed: true,
             }],
             unshipped_work_scan: Some(UnshippedScanStatus {
                 complete: true,
@@ -4270,6 +4335,7 @@ mod tests {
             age: "2h".to_string(),
             recovery: "aida pr ship story-2001-no-pr".to_string(),
             pr_state: "absent".to_string(),
+            pushed: true,
         };
         let open_pr = UnshippedWorkItem {
             spec_id: "STORY-2002".to_string(),
@@ -4281,6 +4347,7 @@ mod tests {
             // for an already-open PR.
             recovery: "aida pr ship story-2002-open-pr".to_string(),
             pr_state: "open".to_string(),
+            pushed: true,
         };
 
         let r = AwaitingReport {
@@ -4970,6 +5037,7 @@ mod tests {
                     age: "2h".into(),
                     recovery: "aida rebase".into(),
                     pr_state: "none".into(),
+                    pushed: true,
                 })
             }),
             ("rework_ready", |r| {
@@ -5452,6 +5520,7 @@ mod tests {
             age: "1h".to_string(),
             recovery: "aida pr ship story-1".to_string(),
             pr_state: "absent".to_string(),
+            pushed: true,
         };
         let scoped = AwaitingReport {
             unshipped_work: vec![item.clone()],

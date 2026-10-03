@@ -133,6 +133,25 @@ pub(crate) fn retraction_notice(detail: &str) -> String {
     )
 }
 
+/// The comment posted on a change the publication guards REFUSED but that
+/// could not be closed (foreign or unverified ownership, or the close call
+/// itself failed) and is held unmergeable instead.
+///
+/// TASK-1552 finding 1: without this, the common rework-round case — the
+/// previous round's PR still open on the branch — left a guards-refused
+/// change enforced by stderr prose only. The hold tightens regardless of who
+/// opened the PR (the BUG-1714 doctrine): the work on the branch failed its
+/// guards and must not merge unreviewed.
+// trace:TASK-1552 | ai:claude
+pub(crate) fn refused_hold_notice(detail: &str) -> String {
+    format!(
+        "The publication guards refused this change before it was reviewed, and it could \
+         not be closed automatically.\n\n{detail}\n\nThis PR stays open under a merge-hold \
+         so it cannot merge unreviewed. Fix the guard failure, or let the drain retry; \
+         after a review, a human releases the hold with `aida merge-hold clear`."
+    )
+}
+
 /// The build-failure clause `build_worktree_binary` stamps into every reason
 /// it touches — "(build timed out after Ns)", "(build failed: …)",
 /// "(build could not start: …)". Guards whose reasons carry the SAME clause
@@ -1335,6 +1354,36 @@ mod tests {
         assert!(
             note.contains("reopen"),
             "the notice must name the way forward: {note}"
+        );
+    }
+
+    /// TASK-1552 finding 1: the held-not-closed notice must say the guards
+    /// REFUSED (unlike the inconclusive hold, a guard did object), that the
+    /// PR stays open but unmergeable, and how the hold is released.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_hold_notice_says_refused_held_and_how_to_release() {
+        let detail = "guard `Check formatting` failed:\nsrc/x.rs needs rustfmt";
+        let note = refused_hold_notice(detail);
+        assert!(
+            note.contains(detail),
+            "the guard output is the whole reason for the hold: {note}"
+        );
+        assert!(
+            note.contains("refused"),
+            "a guard objected; the notice must say so plainly: {note}"
+        );
+        assert!(
+            note.contains("merge-hold"),
+            "the reader must learn the PR is unmergeable, not just criticized: {note}"
+        );
+        assert!(
+            note.contains("aida merge-hold clear"),
+            "the notice must name the release lever: {note}"
+        );
+        assert!(
+            !note.contains("Closed automatically"),
+            "the PR stayed open; the notice must not claim a closure: {note}"
         );
     }
 }
