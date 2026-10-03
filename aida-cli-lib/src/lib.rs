@@ -73596,6 +73596,25 @@ mod bug_1500_store_pull_hint_tests {
     }
 }
 
+// trace:BUG-1796 | ai:codex
+fn pull_skip_warning(message: &str) -> String {
+    format!("{} {message}", "Warning:".yellow().bold())
+}
+
+#[cfg(test)]
+mod bug_1796_pull_skip_warning_tests {
+    use super::pull_skip_warning;
+
+    #[test]
+    fn skipped_pull_legs_are_labeled_as_warnings() {
+        for leg in ["code", "store"] {
+            let line = pull_skip_warning(&format!("skipping {leg} pull"));
+            assert!(line.contains("Warning:"), "{line}");
+            assert!(line.contains(&format!("skipping {leg} pull")), "{line}");
+        }
+    }
+}
+
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -73631,8 +73650,8 @@ fn handle_pull_command(
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
             println!(
-                "  {} no `origin` remote — skipping code pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no `origin` remote — skipping code pull")
             );
         } else {
             let branch =
@@ -73893,8 +73912,8 @@ fn handle_pull_command(
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
             println!(
-                "  {} no orphan worktree — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no orphan worktree — skipping store pull")
             );
             // BUG-1625: no store leg to wait for (legacy / not-yet-attached
             // store) — the local store IS the canonical one. trace:BUG-1625
@@ -73921,8 +73940,8 @@ fn handle_pull_command(
         }
         if !git_ops::has_remote(store_path, "origin") {
             println!(
-                "  {} orphan store has no `origin` — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("orphan store has no `origin` — skipping store pull")
             );
             // BUG-1625: nothing remote to pull first. trace:BUG-1625
             if let Some(scan_pre) = deferred_reconcile.take() {
