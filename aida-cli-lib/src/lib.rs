@@ -38078,6 +38078,23 @@ fn session_start(
         anyhow::bail!(msg)
     }
 
+    // BUG-1793: an operator-held spec must refuse before creating a lease or
+    // acquiring cross-clone coordination state. trace:BUG-1793 | ai:codex
+    if let Some(req) = Storage::new(project_root.join(".aida-store"))
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(owns).cloned())
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(owns);
+            return Err(defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
+
     // Check the lease dir exists; create if not.
     let leases = leases_dir(&project_root);
     std::fs::create_dir_all(&leases)?;
@@ -82647,6 +82664,7 @@ mod story_1043_unshipped_work_tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             in_degree: 0,
             out_degree: 0,
             heft: 0,

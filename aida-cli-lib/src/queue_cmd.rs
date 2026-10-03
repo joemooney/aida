@@ -8969,6 +8969,15 @@ pub(crate) fn resolve_queue_work_plan(
 
     if let Some(arg_str) = arg {
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
+            // A deferred spec is an explicit operator hold. Refuse before
+            // queue synthesis or other pickup side effects. trace:BUG-1793
+            if req.deferred && req.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    req.spec_id.as_deref().unwrap_or(arg_str),
+                    req.deferred_reason.as_deref(),
+                    req.deferred_until.as_deref(),
+                ));
+            }
             // trace:BUG-1106 | ai:codex
             // A phase child is assigned by the live orchestrator, not by its
             // temporary phase role. If the reviewer phase is asked to pick up
@@ -10697,6 +10706,25 @@ pub(crate) fn handle_queue_work(
             None => return Err(e),
         },
     };
+
+    // Recheck the resolved anchor, including no-argument queue-head pickup.
+    // This runs before launch resolution, calibration, worktree creation, or
+    // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
+    if let Some(req) = storage
+        .load()?
+        .requirements
+        .into_iter()
+        .find(|r| spec_matches(r, &plan.anchor_display))
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+            return Err(crate::defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
 
     // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
     // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only

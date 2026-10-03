@@ -4306,6 +4306,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_until: Option<String>,
 
+    /// Operator's reason for parking this requirement. Unlike the revisit
+    /// trigger, this explains why the hold exists and is retained with the
+    /// deferred state. Legacy deferred rows deserialize without a reason.
+    // trace:BUG-1793 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_reason: Option<String>,
+
     // trace:TASK-1148 | ai:claude
     /// Narrative risk notes — the residual risk / blast-radius call an
     /// implementer recorded that is NOT derivable from git, status, or trace
@@ -4534,6 +4541,10 @@ pub struct RequirementSummaryDto {
     pub deferred_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_until: Option<String>,
+    /// Why the requirement is parked, when the defer is an operator hold.
+    // trace:BUG-1793 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_reason: Option<String>,
 }
 
 impl From<&Requirement> for RequirementSummaryDto {
@@ -4563,6 +4574,7 @@ impl From<&Requirement> for RequirementSummaryDto {
             deferred: r.deferred,
             deferred_at: r.deferred_at,
             deferred_until: r.deferred_until.clone(),
+            deferred_reason: r.deferred_reason.clone(),
         }
     }
 }
@@ -4607,6 +4619,7 @@ impl Requirement {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             // trace:TASK-1148 | ai:claude
             risk_notes: None,
             test_coverage_notes: None,

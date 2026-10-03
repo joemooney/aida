@@ -15,6 +15,47 @@ use aida_core::DatabaseBackend;
 use crate::not_found;
 use crate::record_role_activity;
 
+#[derive(Debug)]
+pub(crate) struct OperatorHoldRefusal {
+    pub(crate) spec_id: String,
+    pub(crate) reason: String,
+    pub(crate) trigger: String,
+}
+
+impl std::fmt::Display for OperatorHoldRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} is held ({}; revisit: {}). Run `aida undefer {}` when cleared.",
+            self.spec_id, self.reason, self.trigger, self.spec_id
+        )
+    }
+}
+
+impl std::error::Error for OperatorHoldRefusal {}
+
+pub(crate) fn hold_refusal(
+    spec_id: &str,
+    reason: Option<&str>,
+    trigger: Option<&str>,
+) -> anyhow::Error {
+    OperatorHoldRefusal {
+        spec_id: spec_id.to_string(),
+        reason: reason.unwrap_or("reason not recorded").to_string(),
+        trigger: trigger.unwrap_or("no revisit trigger recorded").to_string(),
+    }
+    .into()
+}
+
+fn hold_authorized() -> bool {
+    match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(role) => matches!(role.as_str(), "product" | "advisor" | "operator"),
+        // An unseated interactive operator remains the authority. Build seats
+        // must not set or clear an operator hold.
+        Err(_) => true,
+    }
+}
+
 /// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /
 /// conditional work, hidden from the default open-work view. Mirrors
 /// `archive_single` but sets the parallel defer view-flag and records the
@@ -26,13 +67,23 @@ use crate::record_role_activity;
 pub(crate) fn defer_single(
     id: &str,
     until: Option<&str>,
+    reason: Option<&str>,
     backend: &aida_core::CachedGitBackend,
     store_path: &std::path::Path,
 ) -> Result<()> {
+    if reason.is_some() && !hold_authorized() {
+        anyhow::bail!("only the product, advisor, or operator seat may set an operator hold");
+    }
+    if reason.is_some_and(|reason| reason.trim().is_empty()) {
+        anyhow::bail!("--reason must contain a non-empty reason for the operator hold");
+    }
     let mut req = backend
         .get_requirement_unambiguous(id)? // trace:BUG-1535 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    if req.deferred_reason.is_some() && !hold_authorized() {
+        anyhow::bail!("only the product, advisor, or operator seat may lift this hold");
+    }
 
     // Re-deferring an already-deferred spec is allowed — it lets the operator
     // update the revisit trigger via `--until` without an undefer round-trip.
@@ -51,6 +102,10 @@ pub(crate) fn defer_single(
     // keeps the existing condition.
     if let Some(cond) = until {
         req.deferred_until = Some(cond.to_string());
+    }
+    if let Some(reason) = reason.map(str::trim).filter(|reason| !reason.is_empty()) {
+        req.deferred_reason = Some(reason.to_string());
+        req.tags.insert("operator-held".to_string());
     }
     req.modified_at = now;
     backend.update_requirement(&req)?;
@@ -85,6 +140,13 @@ pub(crate) fn defer_single(
         Some(cond) => println!("  {} {cond}", "Revisit when:".dimmed()),
         None => println!(
             "  {} no revisit trigger recorded — add one with `aida defer {display_id} --until \"<condition>\"`",
+            "Note:".dimmed()
+        ),
+    }
+    match req.deferred_reason.as_deref() {
+        Some(reason) => println!("  {} {reason}", "Hold reason:".dimmed()),
+        None => println!(
+            "  {} record one with `aida defer {display_id} --reason \"<reason>\"`",
             "Note:".dimmed()
         ),
     }
@@ -139,6 +201,9 @@ pub(crate) fn handle_undefer_command(
         .get_requirement_unambiguous(id)? // trace:BUG-1535 | ai:claude
         .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
     let display_id = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+    if req.deferred_reason.is_some() && !hold_authorized() {
+        anyhow::bail!("only the product, advisor, or operator seat may lift this hold");
+    }
     // Honor-both migration: a spec deferred only via a legacy `deferred:*` tag
     // has no flag to clear — name that so the operator knows to edit the tag.
     let tag_deferred = req.tags.iter().any(|t| t.starts_with("deferred:"));
@@ -158,6 +223,8 @@ pub(crate) fn handle_undefer_command(
     req.deferred = false;
     req.deferred_at = None;
     req.deferred_until = None;
+    req.deferred_reason = None;
+    req.tags.remove("operator-held");
     req.modified_at = now;
     backend.update_requirement(&req)?;
     record_role_activity(&display_id, "undefer");

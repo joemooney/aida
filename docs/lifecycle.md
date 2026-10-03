@@ -177,6 +177,22 @@ fails, the spec is **Parked**, and **the failing gate is your "what to do
 next."** Ask `aida why <SPEC>` — it names the bucket and the reason — or read the
 "To empty this queue" footer on `aida queue list`.
 
+<!-- trace:BUG-1793 | ai:codex -->
+
+The structural defer flag is also an enforced hold. `aida defer <SPEC>
+--reason "…" [--until "…"]` records why the operator parked the spec and,
+optionally, the condition for revisiting it. Explicit pickup, queue-head pickup,
+drain, and direct `aida session start` refuse held specs before taking a lease;
+the refusal names the reason and revisit trigger. Product, advisor, and
+unseated operator sessions may set or lift a reasoned hold; build seats may not
+lift one. Use `aida undefer <SPEC>` after the hold is cleared.
+
+For the earlier TASK-1580-style convention, finish or reject the Draft
+DECISION-GATE task, then apply `aida defer <held-spec> --reason "…" --until
+"…"`. Remove its temporary `BlockedBy` edge only after verifying the hold is
+visible in `aida list --deferred`; the structural hold now supplies the pickup
+fence.
+
 ### The queue is not the drain-list
 
 This is the key reframe. **Your queue holds work in many states at once** —
