@@ -644,3 +644,64 @@ fn bug1625_followup_filed_in_store_recognises_existing_followups() {
         "docs/plans/other.md"
     ));
 }
+
+#[test]
+fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
+    let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+    let store_path = project_root.join("requirements.yaml");
+    let storage = Storage::new(store_path.clone());
+    storage
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+
+    let spec_id = "STORY-1780".to_string();
+    seed_done_spec_at(&store_path, &spec_id);
+    push_remote_file(&bare, "update.txt", "from remote\n", &spec_id);
+
+    // Mock git in PATH to simulate concurrent fetch breaking `git pull`.
+    // The old code used `git pull --ff-only` which we intercept to simulate the bug.
+    // The new code uses `git fetch` and `git merge`, which pass through the mock
+    // and succeed (since the mock only breaks `pull`).
+    let mock_dir = std::env::temp_dir().join(format!("aida_mock_{}", std::process::id()));
+    std::fs::create_dir_all(&mock_dir).unwrap();
+    let mock_git = mock_dir.join("git");
+    let mock_script = format!(
+        r#"#!/bin/bash
+# Only fail if operating on our specific project root
+is_our_repo=0
+for arg in "$@"; do
+    if [[ "$arg" == "{}"* ]]; then
+        is_our_repo=1
+    fi
+done
+
+if [ "$is_our_repo" -eq 1 ]; then
+    for arg in "$@"; do
+        if [ "$arg" = "pull" ]; then
+            echo "fatal: Cannot rebase onto multiple branches." >&2
+            exit 128
+        fi
+    done
+fi
+
+exec /usr/bin/git "$@"
+"#,
+        project_root.display()
+    );
+    crate::test_exec::write_executable(&mock_git, mock_script);
+
+    let mut new_path = mock_dir.to_string_lossy().into_owned();
+    if let Ok(old_path) = std::env::var("PATH") {
+        new_path = format!("{}:{}", new_path, old_path);
+    }
+
+    // Use AIDA's test_env helper instead of raw env::set_var
+    let _path_guard = crate::test_env::EnvVarGuard::set("PATH", &new_path);
+
+    let result = handle_pull_command(&store_path, true, false, true, true, false);
+
+    assert!(
+        result.is_ok(),
+        "BUG-1780: code leg should survive concurrent fetch mock"
+    );
+}
