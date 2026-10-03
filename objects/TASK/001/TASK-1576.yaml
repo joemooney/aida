@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T09:02:07.031488904Z
-modified_at: 2026-10-03T09:02:07.031488904Z
+modified_at: 2026-10-03T09:19:53.146183135Z
 req_type: Task
+comments:
+- id: 01a10110-133a-7153-b867-39c03e281c68
+  author: joe
+  content: 'Advisor second-look (verified by rg on main, 2026-10-03): all three named symbols confirmed production-dead or test-only — open_pr_review_story (zero callers anywhere), ReviewStoryQueueDecision + review_story_queue_decision (consumed only by bug_1230_auto_queue_review_tests.rs), is_protected_branch wrapper at dispatch_health_ps.rs:817 (consumed only by bug_1680_salvage_main_tests.rs). GUARDRAILS for the implementer, binding alongside the filed ACs: (1) open_pr_review_story_using is LIVE — it is the BUG-1291 shelve-handoff path (handoff_open_pr_after_shelve, lib.rs ~:113606/:113619). The description''s ''residue of the lineage'' framing does NOT extend to the _using sibling; do not delete it. (2) Deleting review_story_queue_decision deletes bug_1230_auto_queue_review_tests.rs with it — that is a behavioral pin. The PR must state where BUG-1230''s auto-queue decision semantics are enforced today (likely inside try_auto_queue_pr_review) and point to or add coverage there, or wire the fn back in; silent retirement of the pin is not acceptance. (3) Same shape for is_protected_branch: bug_1680 tests should be retargeted at the live symbol (is_protected_branch_name / is_protected_branch_at) rather than kept green against a dead wrapper. Approved with these as additional acceptance criteria.'
+  created_at: 2026-10-03T09:19:53.146183135Z
+  modified_at: 2026-10-03T09:19:53.146183135Z
+  session_id: e2ccacbd-b65b-4e93-bc80-27dc274aba6f
 filed_at:
   code_sha: b170cc9eeee9e36a187bc5cb40a57c6428bf88cc
   branch: main
