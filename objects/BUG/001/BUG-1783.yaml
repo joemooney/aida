@@ -13,12 +13,12 @@ description: |-
   Remedy directions (advisor to choose): per-worktree target dir with sccache carrying the sharing load (sccache already dedups compiles across target dirs); or keep the shared dir but have session-env set CARGO_TARGET_DIR to a per-branch subdirectory; or document + doctor-check the staleness hazard with a canary (build, then strings-probe a session nonce).
 
   Acceptance sketch: from two checkouts of the same commit, editing a source in the worktree and building there yields an artifact containing the edit on the FIRST build, with no manual touch or RUSTC_WRAPPER override; a doctor probe or test witnesses this.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T23:40:16.737141463Z
-modified_at: 2026-10-03T10:34:27.101654813Z
+modified_at: 2026-10-03T11:14:31.326319483Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -60,11 +60,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fix direction is right (spec remedy (b): per-worktree CARGO_TARGET_DIR subdir) but it ships with no test/doctor witness, a silent-collision edge, and a doc/code mismatch'
-  recovery_hint: address the review findings, move BUG-1783 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T10:29:00.655997515Z
+- id: 01a10179-06fe-7740-aaa3-012a472494be
+  author: aida-auto-bump
+  timestamp: 2026-10-03T11:14:31.294293561Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a10179-071e-7ce2-ac61-7f7484d3164e
+  timestamp: 2026-10-03T11:14:31.326291553Z
+  agent: implementer
+  commit_sha: c980a7937637ee228b687375b47549f35b49fbd3
+  summary: 'Rework at db9aae41 addresses all four findings: helper extracted+tested (incl. empty-component fallback arm), doc fixed, lease records isolated dir, cleanup follow-up filed as TASK-1577. Merge once CI green at this head.'
+  punted:
+  - 'punted: Fix direction is right (spec remedy (b): per-worktree CARGO_TARGET_DIR subdir) but it ships with no test/doctor witness, a silent-collision edge, and a doc/code mismatch'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T11:14:31.294212928Z
+  completion_sha: c980a7937637ee228b687375b47549f35b49fbd3
