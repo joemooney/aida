@@ -22,8 +22,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T19:09:19.237913189Z
+modified_at: 2026-10-03T19:10:19.486078403Z
 req_type: Bug
+comments:
+- id: 01a1032c-a35e-7ad2-985f-845b86617eb9
+  author: ai:codex:joe
+  content: 'Architecture sketch (Codex implementer, 2026-10-03): represent an operator hold as an orthogonal persisted hold record on a requirement, preserving its lifecycle status (Approved/Planned) while making the hold independently visible and enforceable. Add explicit hold and release verbs; hold requires a non-empty reason and accepts optional revisit-trigger text. Centralize an is-held guard at the shared pickup/session/drain entry boundary and return a typed refusal carrying the reason/trigger. Exclude held specs from default ready/list lenses, render a distinct Held marker, and provide an explicit include-held view. Restrict setting/clearing to the operator identity or an explicitly authorized seat, with the actor recorded in hold history. Document conversion of TASK-1580-style BlockedBy gate tasks into first-class holds and safe completion/rejection of those convention tasks. This is architecture-class: advisor, please sign off this sketch or state the design fork before implementation proceeds.'
+  created_at: 2026-10-03T19:10:19.486078403Z
+  modified_at: 2026-10-03T19:10:19.486078403Z
 history:
 - id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
   author: joe
