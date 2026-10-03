@@ -3,10 +3,10 @@ spec_id: BUG-1791
 agreed_id: BUG-1791
 title: 'Un-draft-at-adoption (BUG-1690) misses two secondary PR-adoption paths: the BUG-1145 phase-1-failure recovery and the resumed-implementer lookup still stall on a reused draft PR'
 description: 'Found during the advisor review of PR #2357 (BUG-1690, approved). The fix calls undraft_reused_publication at the two primary phase-1 adoption points (lib.rs:108041, lib.rs:111287), but two other paths adopt a pre-existing open PR and continue into CI/review/merge without it: (1) recover_phase1_failure_with_open_pr (lib.rs:111403, BUG-1145''s in-process --from-pr counterpart) re-enters at the CI gate on the found PR''s branch — a drafted retraction that also fails phase 1 lands exactly here and still stalls at the phase-4 merge with no un-draft; (2) resume_implementer (lib.rs:113379) adopts the post-resume PR at lib.rs:113535 and returns PrOpened without the check. Line numbers are against origin/bug-1690 at 2fa3aabf. Acceptance: both paths run the same undraft_reused_publication (including the review:draft-only exception), each pinned by a RecordingForge seam test in the bug_1690_undraft_reuse_tests family proving mark_change_ready fires for a scripted draft and does not for ready/draft-only.'
-status: Draft
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T17:20:04.059620689Z
-modified_at: 2026-10-03T17:20:04.059620689Z
+modified_at: 2026-10-03T18:04:56.600798693Z
 req_type: Bug
