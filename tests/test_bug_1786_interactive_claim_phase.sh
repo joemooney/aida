@@ -25,9 +25,9 @@ git config user.name "Test"
 
 # Setup initial requirement
 mkdir -p .aida
-"$AIDA" init
-"$AIDA" add --title "test spec" --type bug --status approved
-SPEC=$("$AIDA" list --format json | jq -r '.[0].id')
+printf '\n\n\n\n\n' | "$AIDA" init --force
+ADD_OUT=$("$AIDA" add --title "test spec" --type bug --status approved 2>&1)
+SPEC=$(echo "$ADD_OUT" | grep -oE 'BUG-[0-9]+' | head -1)
 git add .
 git commit -m "init" >/dev/null
 
@@ -36,7 +36,7 @@ export AIDA_SESSION_ROLE=advisor
 export AIDA_SESSION_ID=test1234
 
 # Run session start to claim interactive
-"$AIDA" session start --owns "$SPEC" --role advisor --base main --no-context >/dev/null 2>&1 || true
+"$AIDA" session start --owns "$SPEC" --role advisor --base main
 
 # Assert the PhaseEntered event has slug: implementer
 EVENTS=$(cat .aida/events.jsonl)
