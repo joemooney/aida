@@ -517,7 +517,16 @@ pub(crate) enum FailureKind {
     /// BUG-826: the headless vendor process exited non-zero after creating a
     /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
     /// the implementer attempted the work and failed.
-    // trace:BUG-826 | ai:codex
+    ///
+    /// BUG-1716 widens it to the never-started sibling: a vendor that rejects
+    /// its own launch (an argv/usage error) exits non-zero WITHOUT creating
+    /// the log at all, corroborated by no commits on the session's lease
+    /// branch. Either shape means no agent ever worked, so this kind spends
+    /// no STORY-975 transient retry (`cause_slug` "environmental" is not in
+    /// `is_transient_retry_cause`), the empty lease is released, and the
+    /// TASK-133 compensation returns the spec to its pre-bump status instead
+    /// of leaving it parked `NeedsAttention`.
+    // trace:BUG-826 trace:BUG-1716 | ai:claude
     LaunchNoOutput,
     /// BUG-1063: a headless phase ended its turn while waiting for a future
     /// notification / monitor / watcher callback. Under headless vendor exec
