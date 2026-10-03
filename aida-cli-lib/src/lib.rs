@@ -82273,6 +82273,13 @@ fn collect_unshipped_work_items_bounded(
                 }
             }
         }
+        // Apply pass-2 truncation before carrier filtering. `evidenced` is a
+        // prefix length; filtering first could shift a never-evidenced row
+        // into that prefix and report it without forge evidence. trace:TASK-1575 | ai:codex
+        if evidenced < survivors.len() {
+            scanned -= survivors.len() - evidenced;
+            survivors.truncate(evidenced);
+        }
         // Query excluded same-spec carriers only after survivor queries. This
         // preserves lazy evidence while restoring merged-head representation
         // proof for the ancestor branch case. If the deadline prevents a
@@ -82301,6 +82308,7 @@ fn collect_unshipped_work_items_bounded(
                     incomplete_carrier_specs.insert(spec_key);
                 }
             } else {
+                truncated = true;
                 incomplete_carrier_specs.insert(spec_key);
             }
         }
@@ -82313,11 +82321,6 @@ fn collect_unshipped_work_items_bounded(
             scanned = scanned.saturating_sub(removed);
         }
     }
-    if evidenced < survivors.len() {
-        scanned -= survivors.len() - evidenced;
-        survivors.truncate(evidenced);
-    }
-
     // ── Final classification against the completed evidence ──────────────
     // The forge-dependent exclusions, in their pre-existing order, applied
     // once every surviving candidate's history query has been merged — so a
@@ -83093,6 +83096,141 @@ fi
         assert!(
             calls.contains("--head task-1575-merged --state all"),
             "carrier history queried: {calls}"
+        );
+    }
+
+    // When pass 2 truncates after an evidenced local-only survivor, an
+    // incomplete carrier must not filter that survivor and shift a later,
+    // never-evidenced pushed survivor into the count-based kept prefix.
+    // trace:TASK-1575 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn incomplete_carrier_cannot_promote_never_evidenced_survivor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        git(root, &["checkout", "-b", "task-1575"]);
+        commit_file(
+            root,
+            "ancestor.txt",
+            "ancestor\n",
+            "fix: ancestor (TASK-1575)",
+        );
+        git(root, &["checkout", "-b", "task-1575-carrier"]);
+        commit_file(root, "carrier.txt", "carrier\n", "fix: carrier (TASK-1575)");
+        let carrier = git_output_checked(root, &["rev-parse", "HEAD"]).unwrap();
+        git(root, &["checkout", "main"]);
+        std::fs::write(root.join("ancestor.txt"), "ancestor\n").unwrap();
+        std::fs::write(root.join("carrier.txt"), "carrier\n").unwrap();
+        git(root, &["add", "ancestor.txt", "carrier.txt"]);
+        git(root, &["commit", "-m", "fix: squash (TASK-1575)"]);
+        assert_eq!(
+            git_output_checked(root, &["rev-parse", "main^{tree}"]).unwrap(),
+            git_output_checked(root, &["rev-parse", "task-1575-carrier^{tree}"]).unwrap()
+        );
+        branch_with_commit(root, "task-1582-pushed", "TASK-1582");
+        let pushed = git_output_checked(root, &["rev-parse", "task-1582-pushed"]).unwrap();
+        git(
+            root,
+            &[
+                "update-ref",
+                "refs/remotes/origin/task-1582-pushed",
+                pushed.trim(),
+            ],
+        );
+
+        let calls = root.join("gh-calls");
+        let fake = executable_fake_gh(
+            root,
+            &format!(
+                r#"#!/usr/bin/env bash
+printf '%s\\n' "$*" >> '{}'
+if [[ "$*" == *"--state open"* ]]; then printf '[]'; exit 0; fi
+if [[ "$*" == *"--head task-1575"* ]]; then sleep 2.5; fi
+printf '[]'
+"#,
+                calls.display()
+            ),
+        );
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let (rows, scan) = collect_unshipped_work_items_bounded(
+            root,
+            &[
+                summary("TASK-1575", "InProgress"),
+                summary("TASK-1582", "InProgress"),
+            ],
+            false,
+            false,
+            Some(deadline),
+        );
+
+        assert!(
+            !scan.complete,
+            "deadline and incomplete carrier evidence must be reported: {scan:?}"
+        );
+        assert!(
+            rows.iter().all(|row| row.branch != "task-1582-pushed"),
+            "the later survivor never received --head evidence and must not be reported: {rows:?}"
+        );
+        assert_eq!(carrier.trim().len(), 40);
+        let calls = std::fs::read_to_string(calls).unwrap();
+        assert!(
+            calls.contains("--head task-1575 --state all"),
+            "first survivor queried: {calls}"
+        );
+        assert!(
+            !calls.contains("--head task-1582-pushed"),
+            "later survivor skipped: {calls}"
+        );
+    }
+
+    // Failure of the batched forge snapshot also makes carrier evidence
+    // incomplete; dropping same-spec survivors must mark the scan incomplete.
+    // trace:TASK-1575 | ai:codex
+    #[cfg_attr(windows, ignore = "fake-gh harness requires a Unix shebang")]
+    #[test]
+    fn missing_forge_snapshot_marks_carrier_scan_incomplete() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        git(root, &["checkout", "-b", "task-1575"]);
+        commit_file(
+            root,
+            "ancestor.txt",
+            "ancestor\n",
+            "fix: ancestor (TASK-1575)",
+        );
+        git(root, &["checkout", "-b", "task-1575-carrier"]);
+        commit_file(root, "carrier.txt", "carrier\n", "fix: carrier (TASK-1575)");
+        git(root, &["checkout", "main"]);
+        std::fs::write(root.join("ancestor.txt"), "ancestor\n").unwrap();
+        std::fs::write(root.join("carrier.txt"), "carrier\n").unwrap();
+        git(root, &["add", "ancestor.txt", "carrier.txt"]);
+        git(root, &["commit", "-m", "fix: squash (TASK-1575)"]);
+
+        let fake = executable_fake_gh(
+            root,
+            "#!/usr/bin/env bash\nif [[ \"$*\" == *\"--state open\"* ]]; then exit 1; fi\nprintf '[]'\n",
+        );
+        let _env =
+            crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", fake.to_str().unwrap())]);
+        let (rows, scan) = collect_unshipped_work_items_bounded(
+            root,
+            &[summary("TASK-1575", "InProgress")],
+            false,
+            false,
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(30)),
+        );
+
+        assert!(
+            rows.is_empty(),
+            "missing representation evidence suppresses the spec: {rows:?}"
+        );
+        assert!(
+            !scan.complete,
+            "a missing forge snapshot must make the scan honestly incomplete: {scan:?}"
         );
     }
 
