@@ -49444,6 +49444,13 @@ mod story_696_ps_tests;
 #[path = "tests/bug_1773_corpus_held_prs_tests.rs"]
 mod bug_1773_corpus_held_prs_tests;
 
+// The merge chokepoint and the marker/label mirrors derived from the same
+// verdict corpus, so a refusal from any producer holds the PR.
+// trace:BUG-1774 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1774_corpus_merge_gate_tests.rs"]
+mod bug_1774_corpus_merge_gate_tests;
+
 // `aida ps` flags a live seat whose mail identity would fall back to the
 // shell user. trace:TASK-1451 | ai:claude
 #[cfg(test)]
