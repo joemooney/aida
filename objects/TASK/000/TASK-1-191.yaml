@@ -1,0 +1,27 @@
+id: 01a10179-0aec-75c0-b38d-6857e1a2ee28
+spec_id: TASK-1-191
+title: 'BLOCKING — no witness: the spec''s acceptance sketch requires ''a doctor probe or…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  BLOCKING — no witness: the spec's acceptance sketch requires 'a doctor probe or test witnesses this' and the PR body itself flags the bug-protocol test requirement as MISSING. Extract the path composition in session_start (target.join("worktrees").join(wt_name)) into a pure helper and unit-test it: two distinct worktree names yield distinct dirs, and the shim body (render_session_env_file already has a test seam) contains target/worktrees/<name>. Prove the test fails without the fix by reverting the session_start hunk.
+  Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T11:14:32.300269078Z
+modified_at: 2026-10-03T11:14:32.300269078Z
+req_type: Task
+tags:
+- carried-from:BUG-1783
+- finding-hash:55c6a4d3
+- from-review:BUG-1783
+- kind:carried-forward
+filed_at:
+  code_sha: c980a7937637ee228b687375b47549f35b49fbd3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
