@@ -59,12 +59,12 @@ description: |
      (`per_head_history_queries_run_only_for_surviving_candidates`) stays green: no return to
      querying every candidate up front. A spec with NO survivors must trigger NO carrier queries.
   4. The starvation and truncation-honesty fixtures from BUG-1288/BUG-1756 stay green.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:02:47.325576068Z
-modified_at: 2026-10-03T04:17:10.605149249Z
+modified_at: 2026-10-03T22:09:20.321127539Z
 req_type: Bug
 history:
 - id: 01a0fffa-efcd-7443-907a-499e5ae89031
@@ -74,3 +74,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a103d0-87c1-74e1-8851-c4818cc8db00
+  author: aida-session-start
+  timestamp: 2026-10-03T22:09:20.321127148Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
