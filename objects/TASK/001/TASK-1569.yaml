@@ -3,12 +3,12 @@ spec_id: TASK-1569
 agreed_id: TASK-1569
 title: 'aida show: print comment bodies by default on a human TTY, keep count + hint in agent output'
 description: 'Operator question 2026-10-02: should --comments flip to --no-comments with comments default-on? PRODUCT RECOMMENDATION: split by surface instead of a global flip. Human TTY: comments ON by default (decisions live in the comment trail: signoffs, amendments; the operator just had to re-ask with -c), add --no-comments to suppress. Agent output mode (non-TTY / AIDA_AGENT_OUTPUT): keep bodies OPT-IN via --comments, keep the count plus a one-line ''comments: N (--comments to print)'' hint, because agent sessions call show constantly and a signoff trail like STORY-1484''s is ~8k tokens — default-on would regress the token-efficient-CLI direction (SPIKE-73). Follows the agent_output_mode() gating invariant (human emoji path untouched). Acceptance: (1) TTY show prints bodies with no flag, --no-comments suppresses; (2) agent-mode show is byte-identical to today except the hint line; (3) both flags accepted on both surfaces; (4) format-json audit regenerated if the JSON shape gains a comments field.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T18:44:51.767326945Z
-modified_at: 2026-10-03T19:49:11.509187492Z
+modified_at: 2026-10-03T20:00:20.634051552Z
 req_type: Task
 comments:
 - id: 01a10350-38d5-7e50-b369-cbab6c1ab587
@@ -25,3 +25,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1035a-6e9a-77e2-a5f5-baa4ee606cdd
+  author: aida-session-start
+  timestamp: 2026-10-03T20:00:20.634051004Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
