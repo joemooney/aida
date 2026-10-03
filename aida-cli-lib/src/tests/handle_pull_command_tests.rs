@@ -662,8 +662,9 @@ fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
     // The old code used `git pull --ff-only` which we intercept to simulate the bug.
     // The new code uses `git fetch` and `git merge`, which pass through the mock
     // and succeed (since the mock only breaks `pull`).
-    let mock_dir = tempfile::tempdir().unwrap();
-    let mock_git = mock_dir.path().join("git");
+    let mock_dir = std::env::temp_dir().join(format!("aida_mock_{}", std::process::id()));
+    std::fs::create_dir_all(&mock_dir).unwrap();
+    let mock_git = mock_dir.join("git");
     let mock_script = format!(
         r#"#!/bin/bash
 # Only fail if operating on our specific project root
@@ -690,7 +691,7 @@ exec /usr/bin/git "$@"
     std::fs::write(&mock_git, mock_script).unwrap();
     crate::test_exec::mark_executable(&mock_git);
 
-    let mut new_path = mock_dir.path().to_string_lossy().into_owned();
+    let mut new_path = mock_dir.to_string_lossy().into_owned();
     if let Ok(old_path) = std::env::var("PATH") {
         new_path = format!("{}:{}", new_path, old_path);
     }
