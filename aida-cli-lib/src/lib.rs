@@ -44883,6 +44883,69 @@ fn headless_log_is_zero_bytes(project_root: &std::path::Path, session_id: &str) 
     headless_log_len(project_root, session_id) == Some(0)
 }
 
+/// BUG-1716: the two log shapes that witness a headless vendor which emitted
+/// nothing. `ZeroBytes` is BUG-826's original signature — the vendor started,
+/// created its JSONL log, and died before writing a single stream event.
+/// `Missing` is its never-started sibling: the vendor rejected its own launch
+/// (an argv/usage error, e.g. the duplicated bypass flag that killed the
+/// TASK-204 drive in 2.7s) and exited before even creating the log file. The
+/// zero-byte check alone let the `Missing` shape fall through to the
+/// work-failure path, where it was classified `NoPr`/`tool-exit`, burned the
+/// whole STORY-975 transient budget, and parked a healthy spec
+/// `NeedsAttention` behind the live empty lease.
+// trace:BUG-1716 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmptyLaunchLog {
+    /// No session log file exists at all.
+    Missing,
+    /// A session log file exists and is zero bytes.
+    ZeroBytes,
+}
+
+/// BUG-1716: classify the session log's evidence about the launch. `None`
+/// means the log has content — the vendor demonstrably ran.
+// trace:BUG-1716 | ai:claude
+fn headless_launch_log_evidence(
+    project_root: &std::path::Path,
+    session_id: &str,
+) -> Option<EmptyLaunchLog> {
+    match headless_log_len(project_root, session_id) {
+        None => Some(EmptyLaunchLog::Missing),
+        Some(0) => Some(EmptyLaunchLog::ZeroBytes),
+        Some(_) => None,
+    }
+}
+
+/// BUG-1716: is a non-zero headless vendor exit an *empty launch* (the agent
+/// never started) rather than implementer work that failed?
+///
+/// A zero-byte log is taken at face value, exactly as BUG-826 shipped it. A
+/// MISSING log claims only the TASK-204 shape — the child DID claim this
+/// session's lease (`session_lease` is `Some`), so without this lane the
+/// lease discovery below would succeed and the never-started vendor would be
+/// classified as implementer work that failed. Two boundaries keep it narrow:
+///
+/// - `session_lease == None` (no lease for this session) is NOT an empty
+///   launch: the child never even claimed, and the BUG-1629/BUG-1769
+///   lost-child recovery is the authoritative owner of that shape — it reads
+///   the child's own recorded refusal, substrate-verifies a spec that
+///   advanced during the run, and spends exactly one pinned replacement
+///   launch. Swallowing it here is what broke the whole
+///   `bug_1629_phase1_recovery_tests` contract on the first round of this
+///   spec (and BUG-1776 is that same misrouting seen from macOS).
+/// - `session_lease == Some(true)` (the lease branch carries commits) is NOT
+///   an empty launch: log routing could be broken while a real implementer
+///   worked, and the failure must keep falling through to the substrate
+///   verification (BUG-1140), never into the lease-releasing lane.
+// trace:BUG-1716 | ai:claude
+fn empty_launch_decision(evidence: Option<EmptyLaunchLog>, session_lease: Option<bool>) -> bool {
+    match evidence {
+        Some(EmptyLaunchLog::ZeroBytes) => true,
+        Some(EmptyLaunchLog::Missing) => session_lease == Some(false),
+        None => false,
+    }
+}
+
 /// BUG-826: bounded launch-retry schedule for empty-log vendor death. Kept
 /// separate from the generic transient-work retry: this retry happens before
 /// phase 1 returns a failure and before the spec is parked.
@@ -49485,31 +49548,65 @@ fn probe_child_side_work_for_spec(
     let has_worktree = matching.iter().any(|l| l.worktree_path.exists());
 
     let has_unmerged_commits = match detect_default_branch_ref(project_root) {
-        Some(default_ref) => matching.iter().any(|l| {
-            if l.branch.is_empty() || l.branch == default_ref {
-                return false;
-            }
-            let range = format!("{default_ref}..{}", l.branch);
-            std::process::Command::new("git")
-                .arg("-C")
-                .arg(project_root)
-                .args(["rev-list", "--count", &range])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .and_then(|o| {
-                    String::from_utf8_lossy(&o.stdout)
-                        .trim()
-                        .parse::<u64>()
-                        .ok()
-                })
-                .map(|n| n > 0)
-                .unwrap_or(false)
-        }),
+        Some(default_ref) => matching
+            .iter()
+            .any(|l| branch_has_unmerged_commits(project_root, &default_ref, &l.branch)),
         None => false,
     };
 
     (has_lease, has_worktree, has_unmerged_commits)
+}
+
+/// BUG-479 (extracted for BUG-1716): does `branch` carry commits not yet on
+/// `default_ref` (`git rev-list --count <default>..<branch>` > 0)?
+/// Conservative: an empty/default branch name or a git probe that can't run
+/// reads as `false`.
+// trace:BUG-479 trace:BUG-1716 | ai:claude
+fn branch_has_unmerged_commits(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    branch: &str,
+) -> bool {
+    if branch.is_empty() || branch == default_ref {
+        return false;
+    }
+    let range = format!("{default_ref}..{branch}");
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .parse::<u64>()
+                .ok()
+        })
+        .map(|n| n > 0)
+        .unwrap_or(false)
+}
+
+/// BUG-1716: the session-lease evidence feeding the `Missing`-log arm of
+/// [`empty_launch_decision`]. `None` — no lease exists for THIS session (the
+/// child never claimed one), which routes the failure to the BUG-1629/
+/// BUG-1769 lost-child recovery, not the empty-launch lane. `Some(has
+/// commits)` — the child claimed its lease (the TASK-204 shape), and the
+/// bool says whether its branch carries unmerged commits (real work the
+/// empty-launch release must never orphan). Keyed to THIS session's lease
+/// via the minted `--session-id`, never a scope-wide sweep — a sibling
+/// attempt's PR branch must not veto classifying this launch.
+// trace:BUG-1716 | ai:claude
+fn orchestrated_session_lease_evidence(
+    project_root: &std::path::Path,
+    claude_session_id: &str,
+) -> Option<bool> {
+    let (_, branch, _, _) = find_orchestrated_lease(project_root, claude_session_id)?;
+    let has_commits = detect_default_branch_ref(project_root)
+        .map(|default_ref| branch_has_unmerged_commits(project_root, &default_ref, &branch))
+        .unwrap_or(false);
+    Some(has_commits)
 }
 
 fn restore_phase1_status_on_lease_failure(
@@ -105096,6 +105193,13 @@ mod read_verdict_file_tests;
 #[path = "tests/real_phase_driver_wiring_tests.rs"]
 mod real_phase_driver_wiring_tests;
 
+/// BUG-1716: the never-started launch classification — missing-log evidence,
+/// the commits corroboration, and the no-transient-retry contract.
+// trace:BUG-1716 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1716_never_started_launch_tests.rs"]
+mod bug_1716_never_started_launch_tests;
+
 /// Read a spec's current status straight from the git-canonical store —
 /// ground truth for the BUG-241 reconcile step. A spec the implementer (or a
 /// human) marked Completed needed no further work, even when the phase
@@ -108513,12 +108617,25 @@ impl RealPhaseDriver {
                     e.reason,
                 );
             }
-        } else if !self.json {
-            eprintln!(
-                "  {} released empty-log launch lease {}",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                &lease_id[..lease_id.len().min(8)],
-            );
+        } else {
+            // BUG-1716: the lease is gone — forget it. Leaving the field set
+            // made the TASK-133 compensation gate read "lease acquired ⇒ work
+            // may exist" and skip the pre-bump status restore, stranding the
+            // never-started spec NeedsAttention (blocked from the safe retry
+            // as `needs-triage`) — the exact demotion this empty-launch lane
+            // exists to prevent. On a failed auto-release the fields stay set
+            // on purpose: a real lease survives on disk, and the BUG-479
+            // probe should keep refusing the restore for it.
+            // trace:BUG-1716 | ai:claude
+            self.implementer_lease = None;
+            self.implementer_worktree = None;
+            if !self.json {
+                eprintln!(
+                    "  {} released empty-log launch lease {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    &lease_id[..lease_id.len().min(8)],
+                );
+            }
         }
     }
 
@@ -111135,7 +111252,35 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         };
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
-                if headless_impl && headless_log_is_zero_bytes(&self.project_root, &session_uuid) {
+                // BUG-1716: BUG-826's zero-byte check alone missed the
+                // never-started sibling — a vendor that rejects its own argv
+                // exits non-zero WITHOUT ever creating the session log, so the
+                // launch failure fell through to the work-failure path:
+                // classified as implementer work that failed, it burned the
+                // whole STORY-975 transient budget (attempt 3/3) and parked a
+                // healthy spec NeedsAttention behind the live empty lease.
+                // The missing-log arm claims ONLY the shape where this
+                // session's lease exists and its branch has no commits; a
+                // child that never claimed a lease belongs to the BUG-1629/
+                // BUG-1769 lost-child recovery below, and a branch with
+                // commits falls through to the BUG-1140 substrate
+                // verification. See `empty_launch_decision`.
+                // trace:BUG-1716 | ai:claude
+                let launch_log_evidence = headless_impl
+                    .then(|| headless_launch_log_evidence(&self.project_root, &session_uuid))
+                    .flatten();
+                let session_lease = matches!(launch_log_evidence, Some(EmptyLaunchLog::Missing))
+                    .then(|| orchestrated_session_lease_evidence(&self.project_root, &session_uuid))
+                    .flatten();
+                let is_empty_launch = empty_launch_decision(launch_log_evidence, session_lease);
+                if is_empty_launch {
+                    let log_shape = match launch_log_evidence {
+                        Some(EmptyLaunchLog::Missing) => {
+                            "no session log was ever created; the agent never started - \
+                             a launcher/argv rejection, not a work failure"
+                        }
+                        _ => "zero-byte session log",
+                    };
                     self.release_empty_launch_lease(&session_uuid);
                     if let Some(delay) =
                         phase1_empty_launch_retry_delay(self.empty_launch_retries_used)
@@ -111143,7 +111288,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         self.empty_launch_retries_used += 1;
                         if !self.json {
                             eprintln!(
-                                "  {} headless vendor exited {} with a zero-byte log - \
+                                "  {} headless vendor exited {} ({log_shape}) - \
                                  retrying phase 1 in {}s (attempt {}/2)",
                                 crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
                                 status
@@ -111160,8 +111305,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     return Err(auto_complete::PhaseFailure::of(
                         auto_complete::FailureKind::LaunchNoOutput,
                         format!(
-                            "the headless vendor exited {} before emitting any output - \
-                             retried phase 1 twice and released the empty session lease",
+                            "the headless vendor exited {} before emitting any output \
+                             ({log_shape}) - retried phase 1 twice and released the empty \
+                             session lease",
                             status
                                 .code()
                                 .map(|c| c.to_string())

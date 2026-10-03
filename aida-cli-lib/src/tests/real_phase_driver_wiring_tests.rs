@@ -1189,6 +1189,185 @@ exit 1
         list_leases(root).is_empty(),
         "released empty launch must not leave a scope-blocking lease"
     );
+    // BUG-1716: the parent must FORGET the released lease. Leaving the field
+    // set made the TASK-133 compensation read "lease acquired ⇒ work may
+    // exist" and skip the pre-bump status restore, stranding the never-started
+    // spec NeedsAttention. trace:BUG-1716 | ai:claude
+    assert!(
+        d.implementer_lease.is_none(),
+        "a successfully released empty-launch lease must clear implementer_lease \
+         so the TASK-133 compensation can restore the spec's pre-bump status"
+    );
+    assert!(d.implementer_worktree.is_none());
+}
+
+/// BUG-1716 (control): when the auto-release FAILS, the lease fields must stay
+/// set — a real lease survives on disk and the BUG-479 restore probe should
+/// keep refusing the status restore for it.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn failed_empty_launch_release_keeps_the_lease_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let session_id = "cccccccc-3333-7000-8000-000000000000";
+    mint_lease(root, "019e4444-stuck", "bug-1716-branch", Some(session_id));
+
+    let mut d = driver(root, "BUG-1716");
+    let stub = root.join("aida-session-end-fails-stub");
+    crate::test_exec::write_executable(&stub, "#!/usr/bin/env bash\nexit 1\n");
+    d.aida_exe = stub;
+    d.release_empty_launch_lease(session_id);
+    assert_eq!(
+        d.implementer_lease.as_deref(),
+        Some("019e4444-stuck"),
+        "a failed auto-release leaves a real lease on disk; the field must say so"
+    );
+}
+
+/// BUG-1716: a vendor that rejects its own launch (an argv/usage error) exits
+/// non-zero WITHOUT ever creating the session log. That must take the same
+/// empty-launch lane as BUG-826's zero-byte log — bounded launch retries, the
+/// empty lease released, a terminal `LaunchNoOutput` — and must NOT fall
+/// through to the work-failure path that classified the TASK-204 incident as
+/// `tool-exit`, burned the STORY-975 transient budget (attempt 3/3), and
+/// parked the spec NeedsAttention. The stub mimics the real child: it claims
+/// a lease, then dies before any log exists.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn headless_implementer_missing_log_launch_is_classified_never_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let stub = root.join("aida-stub");
+    crate::test_exec::write_executable(
+        &stub,
+        r#"#!/usr/bin/env bash
+set -eu
+if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
+  lease="${3:-}"
+  rm -f ".aida/sessions/${lease}.toml" ".aida/sessions/${lease}.manifest.toml"
+  exit 0
+fi
+spec=""
+sid=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "work" ]; then
+    spec="$arg"
+    prev=""
+    continue
+  fi
+  if [ "$prev" = "--session-id" ]; then
+    sid="$arg"
+    prev=""
+    continue
+  fi
+  prev="$arg"
+done
+lease="lease-${sid//-/}"
+worktree="$PWD/worktrees/$lease"
+mkdir -p .aida/sessions "$worktree"
+cat > ".aida/sessions/${lease}.toml" <<EOF
+id = "$lease"
+scope = "$spec"
+slug = "bug-1716"
+owner = "test"
+worktree_path = "$worktree"
+branch = "bug-1716-stub"
+started_at = "2026-09-03T00:00:00Z"
+hostname = "test"
+EOF
+cat > ".aida/sessions/${lease}.manifest.toml" <<EOF
+session_id = "$lease"
+planned_at = "2026-09-03T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+printf '%s\n' "$sid" >> .aida/attempts
+exit 1
+"#,
+    );
+
+    let mut d = driver(root, "BUG-1716");
+    d.aida_exe = stub;
+    d.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    d.drain_tuning.no_progress = std::time::Duration::ZERO;
+    d.drain_tuning.ceiling = std::time::Duration::ZERO;
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(
+        err.kind,
+        crate::auto_complete::FailureKind::LaunchNoOutput,
+        "a never-created session log is a launch failure, not implementer work \
+         that failed: {}",
+        err.reason
+    );
+    assert!(
+        err.reason.contains("never started"),
+        "the failure must say the agent never started: {}",
+        err.reason
+    );
+    let attempts = std::fs::read_to_string(root.join(".aida/attempts")).unwrap();
+    assert_eq!(
+        attempts.lines().count(),
+        3,
+        "the empty-launch schedule retries twice before failing"
+    );
+    assert!(
+        list_leases(root).is_empty(),
+        "the never-started launch must leave no surviving lease"
+    );
+    assert!(
+        d.implementer_lease.is_none(),
+        "the TASK-133 compensation gate must see no acquired lease, so the spec \
+         is restored to its pre-bump status instead of staying NeedsAttention"
+    );
+}
+
+/// BUG-1716: the session-lease evidence for the missing-log arm, on a real
+/// repo. A lease branch ahead of the default branch is real work
+/// (`Some(true)` — the failure falls through to substrate verification); a
+/// branch at the default tip is a claimed-but-workless lease (`Some(false)`
+/// — the TASK-204 empty-launch shape); no lease at all is `None` — the
+/// BUG-1629/BUG-1769 lost-child recovery owns that, never this lane.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn session_commits_probe_reads_the_lease_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "aida@example.invalid"]);
+    git(root, &["config", "user.name", "AIDA Test"]);
+    write_commit(root, "base.txt", "base\n", "chore: base");
+    git(root, &["branch", "at-default-tip"]);
+    git(root, &["checkout", "-q", "-b", "ahead-branch"]);
+    write_commit(root, "work.txt", "work\n", "feat: work");
+    git(root, &["checkout", "-q", "main"]);
+
+    let ahead_sid = "dddddddd-4444-7000-8000-000000000001";
+    let tip_sid = "dddddddd-4444-7000-8000-000000000002";
+    mint_lease(root, "019e5555-ahead", "ahead-branch", Some(ahead_sid));
+    mint_lease(root, "019e5555-attip", "at-default-tip", Some(tip_sid));
+
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, ahead_sid),
+        Some(true),
+        "a lease branch ahead of the default branch is real work"
+    );
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, tip_sid),
+        Some(false),
+        "a lease branch at the default tip is a claimed-but-workless lease"
+    );
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, "no-such-session"),
+        None,
+        "no lease for the session routes to the lost-child recovery, not this lane"
+    );
 }
 
 /// Build a repo whose `origin` carries BOTH a default branch and a pushed
