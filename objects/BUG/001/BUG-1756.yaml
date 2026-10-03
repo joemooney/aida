@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T15:12:41.984679155Z
-modified_at: 2026-10-03T00:31:14.299562640Z
+modified_at: 2026-10-03T01:17:17.943322733Z
 req_type: Bug
 comments:
 - id: 01a0f8b6-581c-76d0-8132-8bab9cd079b7
@@ -116,6 +116,22 @@ comments:
   created_at: 2026-10-01T18:24:54.812532600Z
   modified_at: 2026-10-01T18:24:54.812532600Z
   session_id: f30df840-cbe8-450a-bc3c-59a41927a710
+- id: 01a0ff56-40f7-79d1-8507-0b514df2a75a
+  author: joe
+  content: |
+    Implementation note (corrected root cause): the detector has NO "pushed" precondition by construction — local-only branches were always eligible (STORY-1043's own fixture pins a never-pushed branch reporting). The observed `unshipped_work[0]` had two real mechanisms, both fixed here:
+
+    1. The bounded scan spent its entire 2s budget on one `gh pr list --head` network round trip per candidate BEFORE any local probing, so on this host every run truncated at scanned 0/24 and the channel was effectively dead.
+    2. A single anciently-forked candidate (the pr-1756 review snapshot) costs ~30s in `git cherry` patch-id walks — several times any sane budget.
+
+    Fix: batched-open-only snapshot up front; local git classification first (newest tip first); per-head forge queries lazily for survivors only (local-only survivors evidenced first); a 2s per-candidate probe slice that maps a monster to "unscanned" instead of letting it starve the tail; default-ref resolved once per scan; budget 2s→10s (the per-turn notice path never pays it).
+
+    The ACs' local-only axis is also in: `UnshippedWorkItem.pushed`, distinguished rendering ("local-only (never pushed — this machine holds the only copy)"), and a push-first recovery hint.
+
+    Verified on this repository: scan went from `{complete:false, scanned:0/24, items:[]}` to `{complete:false, scanned:25/26}` with the one genuine unshipped row (TASK-724, pushed, no PR) reported and only the 30s monster honestly unscanned.
+  created_at: 2026-10-03T01:17:17.943322733Z
+  modified_at: 2026-10-03T01:17:17.943322733Z
+  session_id: b0887c2e-f6d8-4914-b521-f2c373950dae
 history:
 - id: 01a0f806-7dff-7563-851a-653665aac473
   author: joe
