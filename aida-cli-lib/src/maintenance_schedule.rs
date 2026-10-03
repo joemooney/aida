@@ -2748,6 +2748,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: true,
             },
         ),
+        // TASK-1527: retire an orphaned cache refresh request. A silent no-op
+        // without a pending request; when one pends it refreshes the cache
+        // inline, which can take seconds — timer-tick territory, not a
+        // per-prompt hook's.
+        // trace:TASK-1527 | ai:claude
+        (
+            &["cache refresh --if-requested"],
+            ScheduledCommand {
+                display: "cache refresh --if-requested",
+                args: &["cache", "refresh", "--if-requested"],
+                hook_allowed: false,
+            },
+        ),
         (
             &["session reap"],
             ScheduledCommand {

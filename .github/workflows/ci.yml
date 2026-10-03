@@ -115,9 +115,11 @@ jobs:
         continue-on-error: true
         run: |
           start=$(date +%s)
-          rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin
+          # TASK-1570: the aarch64-apple-darwin leg is disabled until further
+          # notice (operator mandate, 2026-10-02). Restore by re-adding the
+          # target to the two lines below. trace:TASK-1570 | ai:claude
+          rustup target add x86_64-pc-windows-msvc
           cargo check --workspace --tests --target x86_64-pc-windows-msvc
-          cargo check --workspace --tests --target aarch64-apple-darwin
           elapsed=$(( $(date +%s) - start ))
           echo "::notice::Cross-target cargo check completed in ${elapsed}s"
 
@@ -258,6 +260,13 @@ jobs:
       - name: Run pre-commit provenance move-detection test
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_move.sh
+
+      # BUG-1762: the agent-skill-hook installer behind the build prerequisite
+      # must install idempotently, never clobber a foreign hook, and skip
+      # (quietly in --best-effort mode) from linked worktrees and non-repos.
+      - name: Run agent-skill-hook installer fixtures
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_install_agent_skill_hooks.sh
 
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
@@ -506,10 +515,13 @@ jobs:
             artifact: aida-windows-x86_64
             cli_binary: aida.exe
             gui_binary: aida-desktop.exe
-          - os: macos-latest
-            artifact: aida-macos-x86_64
-            cli_binary: aida
-            gui_binary: aida-desktop
+          # TASK-1570: macOS release artifacts are disabled until further
+          # notice (operator mandate, 2026-10-02). Restore by uncommenting.
+          # trace:TASK-1570 | ai:claude
+          # - os: macos-latest
+          #   artifact: aida-macos-x86_64
+          #   cli_binary: aida
+          #   gui_binary: aida-desktop
 
     steps:
       - uses: actions/checkout@v5

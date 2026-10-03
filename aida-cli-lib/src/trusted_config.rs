@@ -27,7 +27,14 @@
 //! an unmerged commit, whereas the remote default branch only moves through a
 //! reviewed merge.
 //!
-//! trace:TASK-969 | ai:claude
+//! BUG-1723 (2026-10-02) ratified this split as the standing doctrine for the
+//! whole config surface: branch-local reads are POLICY-ONLY; anything that
+//! selects an executable, a shell command, or a credential reads through this
+//! module or from outside the worktree. The enumerated classification lives
+//! in `scripts/config-trust.toml`, enforced by
+//! `tests/bug_1723_config_trust_tests.rs`.
+//!
+//! trace:TASK-969 trace:BUG-1723 | ai:claude
 
 use std::path::Path;
 use std::process::Command;

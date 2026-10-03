@@ -554,6 +554,8 @@ const SCHEMA_VERSION: &str = "15";
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
+// trace:TASK-1527 | ai:claude
+const META_KEY_LAST_FULL_REBUILD_MS: &str = "last_full_rebuild_ms";
 const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 6400, 12800];
 
 // BUG-681: a SHORT bounded retry ladder used only on advisory, skippable read
@@ -1490,6 +1492,15 @@ impl Cache {
         self.get_meta(META_KEY_BUILT_AT)
     }
 
+    /// Duration of the last full rebuild, if one has run on this cache file.
+    /// Sizes the detached refresh worker's runtime cap (TASK-1527).
+    // trace:TASK-1527 | ai:claude
+    pub fn last_full_rebuild_ms(&self) -> Result<Option<u64>> {
+        Ok(self
+            .get_meta(META_KEY_LAST_FULL_REBUILD_MS)?
+            .and_then(|s| s.parse().ok()))
+    }
+
     /// Cache is stale when the recorded source HEAD SHA differs from the
     /// store's actual current HEAD. Missing recorded SHA also = stale.
     pub fn is_stale(&self, current_head_sha: &str) -> Result<bool> {
@@ -1552,6 +1563,10 @@ impl Cache {
         force_drop: bool,
         refresh_store: Option<&Path>,
     ) -> Result<usize> {
+        // The detached refresh worker's runtime cap is sized from the last
+        // full rebuild, so each rebuild records its own duration (TASK-1527).
+        // trace:TASK-1527 | ai:claude
+        let rebuild_started = std::time::Instant::now();
         // STORY-632: degree/heft is a pure function of the WHOLE relationship
         // graph, so compute it once over the full store before the row inserts.
         // trace:STORY-632 | ai:claude
@@ -1670,6 +1685,12 @@ impl Cache {
                     // TASK-1515: stamp freshness in the SAME transaction as the rows.
                     set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
                     set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+                    // trace:TASK-1527 | ai:claude
+                    set_meta_on(
+                        &tx,
+                        META_KEY_LAST_FULL_REBUILD_MS,
+                        &rebuild_started.elapsed().as_millis().to_string(),
+                    )?;
                     // TASK-1478: a full rebuild just regenerated EVERY row via THIS
                     // binary's own `insert_one`, so the projected data now IS exactly
                     // this binary's schema — unlike `Cache::open`'s steady-state path

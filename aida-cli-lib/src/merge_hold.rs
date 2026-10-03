@@ -4135,6 +4135,15 @@ mod tests {
             awaiting.contains("awaiting_you::project_held_pr"),
             "every non-recusal held PR must be projected, not dropped"
         );
+        // BUG-1773: a refusal recorded outside `aida review record` arms no
+        // marker, so the corpus arm is the only thing that surfaces it. It is
+        // part of the same read-only contract as the forbidden list above —
+        // it derives the hold and writes neither marker nor label.
+        // trace:BUG-1773 | ai:claude
+        assert!(
+            awaiting.contains("awaiting_you::corpus_held_prs"),
+            "a refusal with no hold marker must still reach `held_prs`"
+        );
         let handler = lib_source
             .split("fn handle_merge_hold(")
             .nth(1)

@@ -691,6 +691,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1527 (amendment A7): the detached-refresh health report. Silent
+    // when no request is pending or a fresh request is simply in flight;
+    // reports a crash-looped worker (readers are falling back to strict
+    // inline reads) and a request old enough that the schedule tick should
+    // have retired it. Reads one sidecar file — cheap, but kept in the
+    // opt-in append path with its neighbours.
+    // trace:TASK-1527 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "cache-refresh")? {
+        findings.extend(scan_cache_refresh(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-1462: the runaway-seat watchdog. Reads the trailing day of this
     // project's session transcripts (incrementally, via a per-file watermark)
     // and trips on per-session wake/token/repeated-prompt/idle anomalies and
@@ -2245,6 +2257,69 @@ mod bug_1744_trust_breadth_tests {
 /// check with no drain-sizing inputs). Silent (empty) when the filesystem
 /// can't be resolved rather than risk a false positive.
 // trace:STORY-1367 | ai:claude
+/// How long a pending refresh request may sit before doctor calls it stuck:
+/// two 15-minute tick cadences plus slack, so a single missed tick stays
+/// silent and a dead tick does not.
+// trace:TASK-1527 | ai:claude
+const CACHE_REFRESH_REQUEST_STUCK_MINS: i64 = 35;
+
+/// STORY-1484 slice C: surface a crash-looped detached refresh worker and a
+/// refresh request nothing is retiring (amendment A7's "`cache status` and
+/// doctor show the failure").
+// trace:TASK-1527 | ai:claude
+fn scan_cache_refresh(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let cache = aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
+    let Some(request) = aida_core::db::refresh_request::load(&cache) else {
+        return Vec::new();
+    };
+    let now = chrono::Utc::now();
+    let mut findings = Vec::new();
+    if request.spawning_suppressed(now) {
+        let failures = request
+            .attempts
+            .iter()
+            .filter(|a| a.error.is_some())
+            .count();
+        findings.push(DoctorFinding {
+            category: "cache-refresh".to_string(),
+            id: "cache-refresh-crash-loop".to_string(),
+            summary: format!(
+                "the detached cache refresh worker failed {failures} time(s); spawning is \
+                 suppressed and readers fall back to strict inline refresh{}",
+                request
+                    .last_error()
+                    .map(|e| format!(" (last error: {e})"))
+                    .unwrap_or_default()
+            ),
+            action: format!(
+                "inspect {} and run `aida cache refresh` to refresh inline and clear the loop",
+                aida_core::db::refresh_request::refresh_log_path(&cache).display()
+            ),
+            safe_heal: false,
+        });
+        return findings;
+    }
+    let age_mins = chrono::DateTime::parse_from_rfc3339(&request.requested_at)
+        .map(|at| (now - at.with_timezone(&chrono::Utc)).num_minutes())
+        .unwrap_or(i64::MAX);
+    if age_mins >= CACHE_REFRESH_REQUEST_STUCK_MINS {
+        findings.push(DoctorFinding {
+            category: "cache-refresh".to_string(),
+            id: "cache-refresh-request-stuck".to_string(),
+            summary: format!(
+                "a cache refresh request for {} has been pending for {age_mins} minute(s); \
+                 the `cache-refresh-tick` schedule job should have retired it",
+                request.target_head
+            ),
+            action: "run `aida cache refresh`, and check the tick is registered with \
+                     `aida schedule list`"
+                .to_string(),
+            safe_heal: false,
+        });
+    }
+    findings
+}
+
 fn scan_disk_headroom(project_root: &std::path::Path, min_free_gib: u64) -> Vec<DoctorFinding> {
     disk_headroom_findings(disk_free_bytes(project_root), min_free_gib)
 }
@@ -3260,6 +3335,43 @@ mod story_1367_disk_headroom_tests {
             disk_headroom_min_free_gib(Some(&zero)),
             DEFAULT_DISK_HEADROOM_MIN_FREE_GIB
         );
+    }
+
+    /// TASK-1527: the cache-refresh scan is silent with no request and with a
+    /// fresh one, reports the crash loop once suppression engages, and
+    /// reports a request nothing has retired within two tick cadences.
+    // trace:TASK-1527 | ai:claude
+    #[test]
+    fn scan_cache_refresh_reports_crash_loops_and_stuck_requests_only() {
+        use aida_core::db::refresh_request;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        // No request: silent.
+        assert!(scan_cache_refresh(root).is_empty());
+        // A fresh pending request is normal operation: silent.
+        refresh_request::file_request(&cache, "abc123").unwrap();
+        assert!(scan_cache_refresh(root).is_empty());
+        // Three failures inside the window: the crash-loop finding, alone.
+        for n in 0..3 {
+            refresh_request::record_failed_attempt(&cache, &format!("exit {n}")).unwrap();
+        }
+        let findings = scan_cache_refresh(root);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "cache-refresh-crash-loop");
+        assert!(findings[0].summary.contains("exit 2"));
+        // An old request with no failures: the stuck finding.
+        refresh_request::clear(&cache).unwrap();
+        let mut request = refresh_request::file_request(&cache, "abc123").unwrap();
+        request.requested_at = (chrono::Utc::now()
+            - chrono::Duration::minutes(CACHE_REFRESH_REQUEST_STUCK_MINS + 1))
+        .to_rfc3339();
+        let body = serde_json::to_string(&request).unwrap();
+        std::fs::write(refresh_request::refresh_request_path(&cache), body).unwrap();
+        let findings = scan_cache_refresh(root);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "cache-refresh-request-stuck");
     }
 
     #[test]

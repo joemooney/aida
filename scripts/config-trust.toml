@@ -1,0 +1,608 @@
+# Trust classification of every `.aida/config.toml` access in the workspace.
+# BUG-1723 doctrine: the file is tracked and committable, so a value read from
+# the BRANCH-LOCAL copy may only tune POLICY. It may not select an executable,
+# a shell command, or a credential — those come from the running binary, from
+# outside the worktree (~/.aida/), or from the trusted default-branch copy via
+# aida-cli-lib/src/trusted_config.rs.
+#
+# Enforced by aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs, which
+# scans the workspace sources at test time:
+#   - [readers."<file>"]: every source file whose NON-TEST code contains a
+#     quoted `config.toml` path, with its exact site count and the channels
+#     those sites serve (worktree / trusted / home / write / probe /
+#     other-file / prose). Reads and writes that go through a shared
+#     path-builder helper (e.g. `config_path_for_project`) are counted at the
+#     helper's literal, not at each caller.
+#   - [keys.worktree.<section>]: every key parsed from the branch-local copy,
+#     classified `policy`, `location` (frozen data-location exceptions), or
+#     `grandfathered` (pre-existing authority breaches frozen in the guard's
+#     GRANDFATHERED_AUTHORITY list against BUG-1775 — fix the key, delete the
+#     row there and here). `"*"` marks a section with dynamic key names
+#     (roles, vendors, glyph symbols, …).
+#   - [keys.trusted.<section>]: keys read from the default-branch copy; the
+#     only place `command`-class values may come from.
+#   - `_top` names keys at the TOML root, outside any section.
+#
+# If the guard sent you here after you added a config read: classify the new
+# section/key, and ask of it the one BUG-1723 question — could this value make
+# AIDA launch, open, or authenticate something? If yes, it does not belong in
+# the branch-local file; use trusted_config or ~/.aida instead.
+# trace:BUG-1723 | ai:claude
+
+[readers."aida-cli-lib/src/advisor.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/agent_registry.rs"]
+channels = ["worktree"]
+sites = 2
+
+[readers."aida-cli-lib/src/autoprogress.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-cli-lib/src/bypass_confirm.rs"]
+channels = ["home"]
+sites = 1
+
+[readers."aida-cli-lib/src/ci_gate.rs"]
+channels = ["worktree"]
+sites = 1
+
+# The config editor/display surface: builds paths for every scope it shows,
+# names them in prose, and routes edits through the registered writers.
+[readers."aida-cli-lib/src/config_cmd.rs"]
+channels = ["worktree", "home", "write", "other-file", "prose"]
+sites = 33
+
+[readers."aida-cli-lib/src/dispatch_routing_config.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/doctor_cmd.rs"]
+channels = ["worktree", "write"]
+sites = 1
+
+[readers."aida-cli-lib/src/field_study.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/findings.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/first_run.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/forge.rs"]
+channels = ["worktree", "write"]
+sites = 2
+
+[readers."aida-cli-lib/src/glyph_config.rs"]
+channels = ["worktree", "home", "write"]
+sites = 2
+
+[readers."aida-cli-lib/src/glyphs.rs"]
+channels = ["worktree", "home"]
+sites = 6
+
+[readers."aida-cli-lib/src/graded_review.rs"]
+channels = ["prose"]
+sites = 1
+
+[readers."aida-cli-lib/src/harvest.rs"]
+channels = ["worktree"]
+sites = 2
+
+[readers."aida-cli-lib/src/history_layout.rs"]
+channels = ["worktree", "home", "write"]
+sites = 2
+
+[readers."aida-cli-lib/src/implementer_preflight.rs"]
+channels = ["worktree"]
+# 2 sites since BUG-1714 (#2350): configured_guard_names ([preflight] guards,
+# grandfathered under BUG-1775) and configured_budgets ([preflight]
+# guard_timeout_secs / build_timeout_secs, positive-integer policy values).
+sites = 2
+
+[readers."aida-cli-lib/src/init_cmd.rs"]
+channels = ["worktree", "write", "probe", "prose"]
+sites = 11
+
+[readers."aida-cli-lib/src/intake.rs"]
+channels = ["worktree"]
+sites = 1
+
+# The shared `config_path_for_project` helper plus the per-feature readers
+# that never grew their own module. The worktree keys they parse are all
+# enumerated under [keys.worktree.*] below.
+[readers."aida-cli-lib/src/lib.rs"]
+channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
+sites = 47
+
+[readers."aida-cli-lib/src/locking_gate.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/maintenance_schedule.rs"]
+channels = ["worktree", "prose"]
+sites = 3
+
+[readers."aida-cli-lib/src/mass_change.rs"]
+channels = ["worktree", "write"]
+sites = 1
+
+[readers."aida-cli-lib/src/mcp.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/mcp_translate.rs"]
+channels = ["other-file"]
+sites = 1
+
+[readers."aida-cli-lib/src/network_retry.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/orchestrator.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/project_capabilities.rs"]
+channels = ["write", "probe"]
+sites = 2
+
+[readers."aida-cli-lib/src/queue_cmd.rs"]
+channels = ["worktree", "prose"]
+sites = 2
+
+[readers."aida-cli-lib/src/role_cmd.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/scaffold_refresh.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/seats.rs"]
+channels = ["worktree", "home"]
+sites = 2
+
+[readers."aida-cli-lib/src/shift.rs"]
+channels = ["write"]
+sites = 1
+
+[readers."aida-cli-lib/src/supervise_cmd.rs"]
+channels = ["worktree", "prose"]
+sites = 2
+
+[readers."aida-cli-lib/src/terminal_cmd.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/trusted_config.rs"]
+channels = ["trusted"]
+sites = 1
+
+[readers."aida-cli-lib/src/usage.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-cli-lib/src/workflow_hints.rs"]
+channels = ["worktree", "write"]
+sites = 2
+
+[readers."aida-core/src/agents_config.rs"]
+channels = ["worktree"]
+sites = 4
+
+[readers."aida-core/src/git_ops.rs"]
+channels = ["home"]
+sites = 1
+
+[readers."aida-core/src/scaffolding/mod.rs"]
+channels = ["other-file"]
+sites = 1
+
+[readers."aida-core/src/store_locate.rs"]
+channels = ["worktree"]
+sites = 1
+
+[readers."aida-core/src/workspace.rs"]
+channels = ["write"]
+sites = 1
+
+[readers."aida-tui/src/config.rs"]
+channels = ["worktree", "probe"]
+sites = 2
+
+[readers."aida-tui/src/dashboard.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-tui/src/launcher.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-tui/src/lib.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-tui/src/redesign/mail.rs"]
+channels = ["probe"]
+sites = 1
+
+[readers."aida-tui/src/redesign/store.rs"]
+channels = ["worktree"]
+sites = 1
+
+# ---------------------------------------------------------------------------
+# Keys parsed from the BRANCH-LOCAL copy. Policy only; `grandfathered` rows
+# are the pre-existing breaches BUG-1775 owns, frozen in the guard.
+# ---------------------------------------------------------------------------
+
+[keys.worktree._top]
+store_path = "location"
+mode = "policy"            # distributed-mode detection line scan
+use_agreed_blocks = "policy"
+
+[keys.worktree.deployment]
+store_path = "location"
+
+[keys.worktree.agent_registry]
+busy_threshold_secs = "policy"
+work_grace_secs = "policy"
+singleton_roles = "policy"
+
+[keys.worktree.terminal]
+title = "policy"
+send_token = "grandfathered"
+
+[keys.worktree."dispatch.routing"]
+"*" = "policy" # role -> vendor list; vendors parse through the closed Vendor enum
+
+[keys.worktree.locking]
+posture = "policy"
+
+[keys.worktree.role]
+resume_prompt = "policy"
+restore_prompt = "policy"
+
+[keys.worktree.agent]
+resume_prompt = "policy"
+
+[keys.worktree.orchestrator]
+auto_release_dormant_leases = "policy"
+stale_lease_threshold_minutes = "policy"
+transient_error_patterns = "policy"
+retry_max_attempts = "policy"
+retry_base_delay_ms = "policy"
+headless_vendor = "policy" # closed vendor list
+
+[keys.worktree.intake]
+disposition_bias = "policy"
+on_apply = "policy"
+do_not_approve_classes = "policy"
+
+[keys.worktree.advisor]
+fork_mode = "policy"
+allow_mtime_fallback = "policy"
+keep_fork_jsonls = "policy"
+max_source_size_mb = "policy"
+calibration_mode = "policy"
+
+[keys.worktree.autopilot]
+approve = "policy"
+reject = "policy"
+dedupe = "policy"
+tag = "policy"
+queue = "policy"
+park = "policy"
+route = "policy"
+comment = "policy"
+ask = "policy"
+
+[keys.worktree.mailbox]
+unread_warn_after = "policy"
+allow_retract = "policy"
+allow_delete = "policy"
+act_on_mail = "policy"
+autosync = "policy"
+
+[keys.worktree.statusline]
+role_mismatch_warning = "policy"
+base_freshness_check = "policy"
+threshold_warn = "policy"
+
+[keys.worktree.worktree_pool]
+enabled = "policy"
+max_trees = "policy"
+lease_ttl_secs = "policy"
+worktree_parent = "grandfathered"
+
+[keys.worktree.worktree]
+init_submodules = "policy"
+
+[keys.worktree.id_format]
+policy = "policy"
+counter_scope = "policy"
+
+[keys.worktree.review]
+mode = "policy"
+mass_change_mode = "policy"
+mass_change_started_at = "policy"
+mass_change_started_by = "policy"
+mass_change_expires_at = "policy"
+# run_acceptance_commands / acceptance_command_allow are PRESENCE-probed here
+# for a display note only; their values are policy'd from ~/.aida/config.toml.
+run_acceptance_commands = "policy"
+acceptance_command_allow = "policy"
+
+[keys.worktree.block_allocation]
+auto_claim = "policy"
+auto_claim_threshold = "policy"
+auto_claim_size = "policy"
+"*" = "policy" # per-type [block_allocation.<type>] overrides of the same keys
+
+[keys.worktree.ultraplan]
+mode = "policy"
+suggest_threshold = "policy"
+
+[keys.worktree."store.sync"]
+auto_push = "policy"
+periodic_threshold = "policy"
+periodic_interval = "policy"
+mirror_remotes = "policy" # each entry must already be a configured git remote
+
+[keys.worktree."store.allocation"]
+retry_max = "policy"
+
+[keys.worktree.archive]
+auto_after_days = "policy"
+
+[keys.worktree.list]
+show_hidden_hints = "policy"
+
+[keys.worktree.focus]
+out_of_scope = "policy"
+
+[keys.worktree.zen]
+auto_exit = "policy"
+review_brief_agent = "policy"
+
+[keys.worktree.tui]
+prefix_key = "policy"
+max_tabs = "policy"
+mode = "policy"
+theme = "policy"
+vendor = "policy" # closed vendor list
+ctrl_d_palette = "policy"
+
+[keys.worktree."pipeline.gate"]
+"*" = "policy" # [pipeline.gate.<name>] kind / role / applies_to / on_fail
+
+[keys.worktree.drain]
+gh_verify_retries = "policy"
+no_progress_minutes = "policy"
+phase_ceiling_minutes = "policy"
+spinning_after = "policy"
+runaway_rate = "policy"
+low_entropy_bits = "policy"
+progress_activity = "policy"
+ci_auto_fix = "policy"
+retry_transient = "policy"
+retry_escalate_model = "policy"
+pipeline_depth = "policy"
+ci_idle = "policy"
+ci_absolute = "policy"
+require_head = "policy"
+red_run = "policy" # runs the spec's own tests with the fixed runner
+quiet_warn_minutes = "policy"
+
+[keys.worktree.presence]
+away_ttl = "policy"
+active_within = "policy"
+stale_after = "policy"
+consumers = "policy"
+away_drain = "policy"
+escalation = "policy"
+home_offer = "policy"
+
+[keys.worktree.session]
+enforcement = "policy"
+
+[keys.worktree.harvest]
+gate = "policy"
+docs_only_mode = "policy"
+min_confidence = "policy"
+skip_conventional = "policy"
+deny_keywords = "policy"
+allow_keywords = "policy"
+
+[keys.worktree.team]
+protected_tags = "policy"
+protected_role = "policy"
+strict = "policy"
+
+[keys.worktree."team.permissions"]
+"*" = "policy"
+
+[keys.worktree.protocol]
+enforce = "policy"
+
+[keys.worktree.ci]
+# Process authority (a branch can mark failing checks non-blocking), but not
+# code execution; kept policy per the BUG-1723 decision's split.
+informational_workflows = "policy"
+informational_checks = "policy"
+
+[keys.worktree.capture]
+criterion_test_floor_pct = "policy"
+
+[keys.worktree.performance]
+tolerated_over_budget_pct = "policy"
+window_hours = "policy"
+
+[keys.worktree."performance.budgets"]
+"*" = "policy"
+
+[keys.worktree."doctor.disk_headroom"]
+min_free_gib = "policy"
+
+[keys.worktree.watchdog]
+"*" = "policy"
+
+[keys.worktree.shift]
+# [shift] enabled / redrive from this file are deliberately ignored; only the
+# local layer can turn the night shift on.
+wave_size = "policy"
+max_failures = "policy"
+daily_token_budget = "policy"
+budget_stop_pct = "policy"
+max_waves_per_day = "policy"
+wave_token_budget = "policy"
+max_runtime = "policy"
+wave_unit = "policy"
+wave_memory_high = "policy"
+wave_memory_max = "policy"
+wave_cpu_weight = "policy"
+wave_io_weight = "policy"
+wave_tasks_max = "policy"
+load_per_cpu = "policy"
+batch = "policy"
+max_redrives_per_tick = "policy"
+mail_latency = "policy"
+
+[keys.worktree.integrate]
+strategy = "policy"
+
+[keys.worktree.findings]
+promote_threshold = "policy"
+
+[keys.worktree.telemetry]
+enabled = "policy"
+
+[keys.worktree.field_study]
+enabled = "policy"
+
+[keys.worktree.hints]
+first_run = "policy"
+workflow_hints = "policy"
+
+[keys.worktree.scaffold]
+agents_md_block = "policy"
+footprint = "policy"
+
+[keys.worktree.oversight]
+objective = "policy"
+
+[keys.worktree.status]
+absence_days = "policy"
+
+[keys.worktree.mcp]
+profile = "policy" # fixed profile list
+
+[keys.worktree.glyphs]
+"*" = "policy" # display strings per glyph symbol
+
+[keys.worktree.ui]
+theme = "policy"
+glyphs = "policy"
+
+[keys.worktree.seats]
+to-groom = "policy"
+decompose = "policy"
+ready-to-close = "policy"
+triage = "policy"
+
+[keys.worktree."history.templates"]
+"*" = "policy"
+
+[keys.worktree.burndown]
+verbose = "policy"
+order = "policy"
+bg_wait_ceiling_ms = "policy"
+
+[keys.worktree.agents]
+vendor = "policy" # closed vendor list
+enabled = "policy"
+"*" = "policy" # [agents.<vendor>] model / tiers / seats.<seat>.{model,effort}
+
+[keys.worktree.forge]
+provider = "policy" # gh / glab / none
+
+[keys.worktree.external_refs]
+"*" = "policy" # <provider> = "<base url>", display-only
+
+[keys.worktree.notify]
+min_interval = "policy"
+quiet_hours = "policy"
+
+[keys.worktree."notify.rules"]
+"*" = "policy" # idle_with_work / shelve / escalation toggles
+
+[keys.worktree.preflight]
+guards = "grandfathered"
+guard_timeout_secs = "policy"
+build_timeout_secs = "policy"
+
+[keys.worktree.behavior]
+permission_mode = "grandfathered"
+
+[keys.worktree.contained]
+enable = "grandfathered"
+os_wrap = "grandfathered"
+read_allowlist = "grandfathered"
+allowed_hosts = "grandfathered"
+managed_domains_only = "grandfathered"
+
+[keys.worktree.schedule]
+min_gap = "policy"
+
+[keys.worktree."schedule.jobs"]
+command = "grandfathered" # allowlisted to fixed aida subcommands, still a launch channel
+prompt = "grandfathered"  # free text delivered to an agent seat
+name = "policy"
+every = "policy"
+interval = "policy"
+on = "policy"
+when = "policy"
+quiet_hours = "policy"
+enabled = "policy"
+seats = "policy"
+kind = "policy"
+
+[keys.worktree."schedule.tasks"]
+command = "grandfathered"
+prompt = "grandfathered"
+name = "policy"
+every = "policy"
+interval = "policy"
+on = "policy"
+when = "policy"
+quiet_hours = "policy"
+enabled = "policy"
+seats = "policy"
+kind = "policy"
+
+# ---------------------------------------------------------------------------
+# Keys read from the TRUSTED default-branch copy (git show origin/<default>),
+# fail-closed. The only channel command-class values may use.
+# ---------------------------------------------------------------------------
+
+[keys.trusted."pr-rebase"]
+smoke_check = "command"
+
+[keys.trusted.notify]
+command = "command"
+
+[keys.trusted.pr_rebase]
+smoke_check = "command" # accepted alternate section spelling
+
+[keys.trusted.agents]
+confirm_bypass = "policy" # can only tighten; malformed means "on"
+
+[keys.trusted.review]
+run_acceptance_commands = "policy" # presence probed for a display note
+acceptance_command_allow = "policy"

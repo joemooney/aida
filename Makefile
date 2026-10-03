@@ -7,7 +7,8 @@
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
-        sync-templates check-templates sync-agent-skills check-agent-skills install-agent-skill-hooks \
+        sync-templates check-templates sync-agent-skills check-agent-skills \
+        install-agent-skill-hooks ensure-agent-skill-hooks \
         check-ci check-ci-fast check-ci-audit check-ci-list \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
@@ -95,7 +96,7 @@ help: ## Show this help message
 # BUILD TARGETS
 #==============================================================================
 
-build: ## Build all packages (debug mode)
+build: ensure-agent-skill-hooks ## Build all packages (debug mode)
 	cargo build --workspace
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
@@ -113,7 +114,7 @@ build-release: ## Build all packages (release mode, optimized)
 # sccache rejects incremental compilation, including when configured globally
 # through Cargo's build.rustc-wrapper. Disable the wrapper for this target.
 # trace:BUG-1684 | ai:codex
-build-fast: ## Build all packages (release + incremental — for iteration, NOT shipping)
+build-fast: ensure-agent-skill-hooks ## Build all packages (release + incremental — for iteration, NOT shipping)
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
 		aida dev build-guard release $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
@@ -427,17 +428,19 @@ check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 
 # trace:BUG-1760 | ai:codex
 install-agent-skill-hooks: ## Install main-checkout symlink hooks that refresh .agents/skills
-	@root=$$(git rev-parse --show-toplevel) || exit 1; \
-	git_dir=$$(git rev-parse --absolute-git-dir) || exit 1; \
-	common_dir=$$(git rev-parse --path-format=absolute --git-common-dir) || exit 1; \
-	if [ "$$git_dir" != "$$common_dir" ]; then \
-		echo "Refusing to install portable-pack hooks from a linked worktree" >&2; exit 1; \
-	fi; \
-	hooks="$$common_dir/hooks"; mkdir -p "$$hooks"; \
-	for name in post-merge post-checkout post-rewrite; do \
-		ln -sfn "$$root/aida-core/templates/hooks/aida-sync-agent-skills.sh" "$$hooks/$$name"; \
-		echo "  Linked: $$hooks/$$name"; \
-	done
+	@bash scripts/install-agent-skill-hooks.sh
+
+# The installer's activation path (BUG-1762): a prerequisite on build /
+# build-fast, because those are the targets every AIDA developer already runs
+# (CLAUDE.md's "Develop AIDA itself"), so the hooks appear without anyone
+# knowing the installer target's name. Chosen over an `aida dev activate` step
+# (the first activate of a setup runs the previously installed, older binary,
+# which would lack the step) and over a CLAUDE.md instruction (a doc line is
+# not a mechanism). --best-effort keeps it quiet and non-fatal: builds run
+# constantly from linked worktrees, where installation must skip, never fail.
+# trace:BUG-1762 | ai:claude
+ensure-agent-skill-hooks:
+	@bash scripts/install-agent-skill-hooks.sh --best-effort
 
 # CI's Build job runs ~36 gates; the check set documented in CLAUDE.md names
 # five of them. Every gate an agent cannot run locally costs a full CI cycle

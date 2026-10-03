@@ -240,7 +240,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # TASK-1570: macOS is disabled until further notice (operator mandate,
+        # 2026-10-02). Restore by re-adding macos-latest. While disabled, the
+        # BUG-1776 macOS nightly reds cannot fire. trace:TASK-1570 | ai:claude
+        os: [windows-latest]
 
     steps:
       - uses: actions/checkout@v5

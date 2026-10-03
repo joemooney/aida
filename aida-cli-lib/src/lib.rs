@@ -1052,6 +1052,10 @@ mod task_1555_ci_gate_tiers_tests;
 #[cfg(test)]
 #[path = "tests/task_1562_worktree_reclaim_tests.rs"]
 mod task_1562_worktree_reclaim_tests;
+// trace:BUG-1723 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1723_config_trust_tests.rs"]
+mod bug_1723_config_trust_tests;
 
 /// The whole CLI: sigpipe setup, telemetry wrapping, error rendering,
 /// dispatch. The `aida` binary is a stub that calls this — keeping the
@@ -25159,6 +25163,11 @@ static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     (
         &["merge-hold", "merge-hold-integrity"],
         "merge-hold-integrity",
+    ),
+    // trace:TASK-1527 | ai:claude
+    (
+        &["cache-refresh", "refresh-worker", "cache-worker"],
+        "cache-refresh",
     ),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
@@ -49375,6 +49384,12 @@ mod task_957_claim_tests;
 #[cfg(test)]
 #[path = "tests/story_696_ps_tests.rs"]
 mod story_696_ps_tests;
+
+// `held_prs` derived from the verdict corpus, so a refusal recorded outside
+// `aida review record` is still surfaced. trace:BUG-1773 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1773_corpus_held_prs_tests.rs"]
+mod bug_1773_corpus_held_prs_tests;
 
 // `aida ps` flags a live seat whose mail identity would fall back to the
 // shell user. trace:TASK-1451 | ai:claude
@@ -83317,7 +83332,7 @@ fn collect_awaiting_report_inner(
     // OPEN PRs: shown with their reason and whose action it is. Needs the PR
     // snapshot to tell an open PR from a stale marker, so the notice path
     // (no snapshot) skips it exactly as it skips `mergeable_prs`.
-    let held_prs: Vec<awaiting_you::HeldPrItem> = match &open_prs {
+    let mut held_prs: Vec<awaiting_you::HeldPrItem> = match &open_prs {
         None => Vec::new(),
         Some(all_prs) => hold_records
             .iter()
@@ -83389,6 +83404,50 @@ fn collect_awaiting_report_inner(
         backend.list_summaries(&aida_core::ListFilter::default())
     }
     .unwrap_or_default();
+    // BUG-1773: a rework hold DERIVED from the verdict corpus, for an open PR
+    // with no marker of its own. Only `handle_review_record_at` writes a
+    // `.aida/merge-holds/PR-<n>` marker, so a refusal recorded by any other
+    // producer (the reviewer skill's direct write, `stamp_pr_review_verdict`,
+    // a hand-edited file) was invisible here — BUG-1705 measured exactly that
+    // on PR #2242, which sat CLEAN and unlisted with `request-changes` at its
+    // exact head. The predicate is the POSITIVE form (an outstanding refusal AT
+    // the current head), not `local_verdict_blocks_merge`, which is the
+    // fail-closed merge test and would list every PR carrying a stale verdict.
+    //
+    // STORY-1397's contract is preserved: this reads the corpus and writes
+    // nothing — no marker, no label. Arming the gate is BUG-1774.
+    // trace:BUG-1773 | ai:claude
+    if let Some(all_prs) = open_prs.as_ref() {
+        let mut status_by_spec = std::collections::HashMap::new();
+        insert_summary_statuses(&mut status_by_spec, &summaries);
+        let candidates: Vec<awaiting_you::CorpusHoldCandidate> = all_prs
+            .iter()
+            .map(|pr| {
+                let spec = worktree_lease::spec_id_from_branch(&pr.head_branch);
+                let mut keys = vec![format!("PR-{}", pr.number)];
+                keys.extend(spec.clone());
+                let bodies = keys
+                    .iter()
+                    .map(|key| review_verdict::verdict_path(project_root, key))
+                    .filter_map(|path| std::fs::read_to_string(path).ok())
+                    .collect();
+                let spec_completed = spec.as_deref().is_some_and(|id| {
+                    status_by_spec
+                        .get(&id.to_ascii_uppercase())
+                        .is_some_and(|status| status == "completed")
+                });
+                awaiting_you::CorpusHoldCandidate {
+                    pr: pr.number,
+                    title: pr.title.clone(),
+                    head_sha: pr.head_sha.clone(),
+                    bodies,
+                    spec_completed,
+                    has_marker_hold: held_numbers.contains(&pr.number),
+                }
+            })
+            .collect();
+        held_prs.extend(awaiting_you::corpus_held_prs(&candidates));
+    }
     // BUG-472: the findings breadcrumb must mirror `aida findings list` — DRAFT
     // specs carrying a from-* tag only. Building it from the unfiltered
     // `summaries` also counts completed/rejected specs that still carry their
@@ -106432,6 +106491,14 @@ impl RealPhaseDriver {
     /// `run_implementer` so a test can drive it with an injected forge.
     // trace:TASK-1529 trace:TASK-1421 | ai:codex
     fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
+        let note = implementer_preflight::retraction_notice(detail);
+        self.retract_publication_with_notice(branch, &note);
+    }
+
+    /// Returns whether the change was actually closed; `false` covers every
+    /// arm that deliberately leaves it open (foreign or unverified ownership,
+    /// no PR found, or a failed close call).
+    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) -> bool {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
             // A same-branch PR may have been opened by an operator while the
             // implementer was running. Branch presence alone does not prove
@@ -106466,7 +106533,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return;
+                    return false;
                 }
                 RetractionOwnership::Unverified => {
                     if !self.json {
@@ -106477,7 +106544,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return;
+                    return false;
                 }
             }
             let change = crate::forge::ChangeRef {
@@ -106487,8 +106554,7 @@ impl RealPhaseDriver {
                 base: String::new(),
                 title: Some(pr.title.clone()),
             };
-            let note = implementer_preflight::retraction_notice(detail);
-            match forge.close_change(&change, &note) {
+            match forge.close_change(&change, note) {
                 Ok(()) => {
                     if !self.json {
                         eprintln!(
@@ -106498,6 +106564,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
+                    true
                 }
                 Err(e) => {
                     if !self.json {
@@ -106508,7 +106575,124 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
+                    false
                 }
+            }
+        } else {
+            false
+        }
+    }
+
+    /// BUG-1714: the publication guards came back inconclusive-only — nothing
+    /// objected, nothing verified. If the implementer already opened a PR,
+    /// leave it OPEN but unmergeable: stamp a typed merge-hold (plus the
+    /// label) and say on the PR why it is held and that the guards will be
+    /// retried. No ownership check, deliberately: a hold only ever TIGHTENS —
+    /// whoever opened the PR, the work on this branch is unverified and must
+    /// not merge unreviewed — and it is released through the ordinary
+    /// `aida merge-hold clear` path. Best-effort like the retraction: every
+    /// miss is reported and the phase still fails.
+    // trace:BUG-1714 | ai:claude
+    fn hold_inconclusive_publication(&mut self, branch: &str, detail: &str) {
+        let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) else {
+            return;
+        };
+        let number = pr.number;
+        let hold = crate::merge_hold::typed_hold(
+            number,
+            crate::merge_hold::HoldReasonKind::Supervision,
+            format!(
+                "publication guards could not complete (inconclusive); the change is \
+                 unverified and must not merge unreviewed:\n{detail}"
+            ),
+            None,
+        )
+        .with_spec(&self.spec);
+        let marker_result = crate::merge_hold::write_typed_hold(&self.project_root, &hold);
+        let label_result = crate::merge_hold::sync_label(&self.project_root, number, true);
+        match &marker_result {
+            Ok(()) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} left open under a merge-hold — the publication \
+                         guards could not complete and will be retried",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    );
+                }
+            }
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} is OPEN and UNVERIFIED but the merge-hold marker \
+                         could not be written — hold it by hand (`aida merge-hold add \
+                         {number}`): {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    );
+                }
+            }
+        }
+        if let Err(err) = &label_result {
+            if !self.json {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{number}: {err} — Layer 2 is off \
+                     for this PR until `aida merge-hold list --fix` re-syncs it",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+        }
+        let change = crate::forge::ChangeRef {
+            id: number,
+            url: pr.url.clone(),
+            branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+            base: String::new(),
+            title: Some(pr.title.clone()),
+        };
+        if let (Err(marker_error), Err(label_error)) = (&marker_result, &label_result) {
+            let notice = format!(
+                "Publication guards could not complete, and the merge-hold could not be applied.\n\n\
+                 Merge-hold marker error: {marker_error}\n\
+                 Merge-hold label error: {label_error}\n\n\
+                 This PR was closed only because it could not be made unmergeable. The branch is \
+                 preserved, and the guards will be retried on the next publication attempt.\n\n{detail}"
+            );
+            if !self.json {
+                eprintln!(
+                    "  {} both merge-hold layers failed for PR-{number}; closing it because it could not be made unmergeable",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            if !self.retract_publication_with_notice(branch, &notice) {
+                // The PR could be neither held nor closed. The last honest
+                // lever is a comment: put the warning ON the PR so whoever
+                // can merge it sees that the work is unverified.
+                let warning = format!(
+                    "Publication guards could not complete, and the merge-hold could not \
+                     be applied.\n\n\
+                     Merge-hold marker error: {marker_error}\n\
+                     Merge-hold label error: {label_error}\n\n\
+                     This PR could be neither held nor closed: it is OPEN and UNVERIFIED \
+                     and must not merge unreviewed. The guards will be retried on the \
+                     next publication attempt.\n\n{detail}"
+                );
+                if let Err(e) = self.project_forge().comment(&change, &warning) {
+                    if !self.json {
+                        eprintln!(
+                            "  {} PR-{number} is OPEN, UNVERIFIED, and carries no hold \
+                             layer — could not even warn on it: {e}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        );
+                    }
+                }
+            }
+            return;
+        }
+        let note = implementer_preflight::inconclusive_hold_notice(detail);
+        if let Err(e) = self.project_forge().comment(&change, &note) {
+            if !self.json {
+                eprintln!(
+                    "  {} could not explain the hold on PR-{number}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
             }
         }
     }
@@ -108889,6 +109073,150 @@ mod forge_seam_tests {
         );
     }
 
+    /// BUG-1714 AC1: an inconclusive-only preflight outcome leaves the PR
+    /// OPEN, stamps a merge-hold marker so it cannot merge unreviewed, and
+    /// explains on the PR — without the word "refused" — that the guards
+    /// could not complete and will be retried.
+    // trace:BUG-1714 | ai:claude
+    #[test]
+    fn inconclusive_preflight_holds_the_open_change_instead_of_closing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(42, "claude/bug-1714"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        let detail = implementer_preflight::inconclusive_detail(&[(
+            "Run clippy".into(),
+            "timed out after 900s; binary: /t/aida (build timed out after 900s)".into(),
+        )]);
+        driver.hold_inconclusive_publication("claude/bug-1714", &detail);
+
+        assert!(
+            forge.closed().is_empty(),
+            "an inconclusive outcome must never close the PR: {:?}",
+            forge.closed()
+        );
+        let record = crate::merge_hold::read_hold_record(tmp.path(), 42)
+            .expect("the PR must be left unmergeable by a typed merge-hold marker");
+        assert!(
+            record.detail.contains("could not complete"),
+            "the hold explains itself: {}",
+            record.detail
+        );
+        let commented = forge.commented();
+        assert_eq!(commented.len(), 1, "the hold is explained on the PR");
+        assert_eq!(commented[0].0, 42);
+        assert!(
+            !commented[0].1.to_ascii_lowercase().contains("refus"),
+            "nothing refused an unverified change: {}",
+            commented[0].1
+        );
+        assert!(commented[0].1.contains("retried"), "{}", commented[0].1);
+    }
+
+    #[test]
+    fn inconclusive_preflight_closes_when_both_hold_layers_fail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(45, "claude/bug-1714"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        // Occupy the hold directory path with a file, forcing the marker write
+        // to fail. Label sync only fails when a forge is declared but the repo
+        // cannot be pinned (a pure-git root short-circuits to Ok): a git repo
+        // with a github provider and no origin remote is unpinnable.
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        let detail = "guard `Run clippy` could not complete: timed out";
+        driver.hold_inconclusive_publication("claude/bug-1714", detail);
+
+        let closed = forge.closed();
+        assert_eq!(
+            closed.len(),
+            1,
+            "double failure must retract the PR: {closed:?}"
+        );
+        assert_eq!(closed[0].0, 45);
+        let notice = &closed[0].1;
+        assert!(notice.contains("guards could not complete"), "{notice}");
+        assert!(
+            notice.contains("merge-hold could not be applied"),
+            "{notice}"
+        );
+        assert!(notice.contains("Merge-hold marker error:"), "{notice}");
+        assert!(notice.contains("Merge-hold label error:"), "{notice}");
+        assert!(
+            notice.contains("closed only because it could not be made unmergeable"),
+            "{notice}"
+        );
+        assert!(notice.contains("branch is preserved"), "{notice}");
+        assert!(notice.contains("guards will be retried"), "{notice}");
+        // The close must never reuse the refused-path notice: the guards did
+        // not refuse this change, they could not complete. (The embedded
+        // label error may legitimately say "refusing to call `gh`".)
+        assert!(!notice.contains("guards refused"), "{notice}");
+        assert!(!notice.contains("Closed automatically:"), "{notice}");
+    }
+
+    #[test]
+    fn inconclusive_preflight_warns_on_the_pr_when_it_can_neither_hold_nor_close() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(46, "claude/bug-1714"));
+        // A foreign author forbids the close; with both hold layers down the
+        // last lever is a warning comment on the PR itself.
+        forge.author = Some("operator".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "-q"])
+            .output()
+            .unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida/merge-holds"), "occupied").unwrap();
+        let detail = "guard `Run clippy` could not complete: timed out";
+        driver.hold_inconclusive_publication("claude/bug-1714", detail);
+
+        assert!(
+            forge.closed().is_empty(),
+            "a foreign PR must not be closed: {:?}",
+            forge.closed()
+        );
+        let commented = forge.commented();
+        assert_eq!(
+            commented.len(),
+            1,
+            "an uncloseable unheld PR must carry a warning comment: {commented:?}"
+        );
+        assert_eq!(commented[0].0, 46);
+        let warning = &commented[0].1;
+        assert!(warning.contains("Merge-hold marker error:"), "{warning}");
+        assert!(warning.contains("Merge-hold label error:"), "{warning}");
+        assert!(warning.contains("neither held nor closed"), "{warning}");
+        assert!(warning.contains("OPEN and UNVERIFIED"), "{warning}");
+        assert!(warning.contains("guards will be retried"), "{warning}");
+        // The PR stayed open, so the comment must not claim it was closed.
+        assert!(!warning.contains("was closed"), "{warning}");
+    }
+
     #[test]
     fn refused_preflight_fails_closed_when_pr_author_is_unknown() {
         let tmp = tempfile::tempdir().unwrap();
@@ -109836,32 +110164,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     }
                 }
             }
-            if let implementer_preflight::PreflightDecision::Refuse { failed } =
-                implementer_preflight::decide(&results)
-            {
-                let detail = failed
-                    .into_iter()
-                    .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                // TASK-1289: the guards refused — but the implementer may have
-                // ALREADY opened the PR, because `/aida-pr` runs inside the
-                // implementer phase, before the orchestrator regains control.
-                // A refusal that leaves that PR open is advisory, not a gate:
-                // the work the guards rejected sits published and mergeable by
-                // anyone who never reads this log line, and the only thing
-                // standing between it and `main` is prose in a skill file.
-                // Retract it here, so "the guards refused" and "nothing is
-                // published" are the same state.
-                //
-                // Best-effort by design: a retraction that fails is reported
-                // loudly and the phase still fails. The branch is untouched
-                // either way, so no work is lost.
-                // trace:TASK-1289 | ai:claude
-                self.retract_refused_publication(&branch, &detail);
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "implementer preflight refused to open the PR:\n{detail}"
-                )));
+            match implementer_preflight::decide(&results) {
+                implementer_preflight::PreflightDecision::Refuse { failed } => {
+                    let detail = failed
+                        .into_iter()
+                        .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
+                        .collect::<Vec<_>>()
+                        .join("\n\n");
+                    // TASK-1289: the guards refused — but the implementer may have
+                    // ALREADY opened the PR, because `/aida-pr` runs inside the
+                    // implementer phase, before the orchestrator regains control.
+                    // A refusal that leaves that PR open is advisory, not a gate:
+                    // the work the guards rejected sits published and mergeable by
+                    // anyone who never reads this log line, and the only thing
+                    // standing between it and `main` is prose in a skill file.
+                    // Retract it here, so "the guards refused" and "nothing is
+                    // published" are the same state.
+                    //
+                    // Best-effort by design: a retraction that fails is reported
+                    // loudly and the phase still fails. The branch is untouched
+                    // either way, so no work is lost.
+                    // trace:TASK-1289 | ai:claude
+                    self.retract_refused_publication(&branch, &detail);
+                    return Err(auto_complete::PhaseFailure::new(format!(
+                        "implementer preflight refused to open the PR:\n{detail}"
+                    )));
+                }
+                // BUG-1714: nothing objected, and nothing verified — an
+                // infrastructure outcome, not a code verdict. Closing here
+                // discarded reviewable work whose CI was green (#2255), and
+                // told the reader the guards "refused" a change no guard ever
+                // looked at. Hold the PR open and unmergeable instead; the
+                // phase still fails, so nothing downstream treats the work as
+                // verified, and the guards run again on the next attempt.
+                // trace:BUG-1714 | ai:claude
+                implementer_preflight::PreflightDecision::Hold { inconclusive } => {
+                    let detail = implementer_preflight::inconclusive_detail(&inconclusive);
+                    self.hold_inconclusive_publication(&branch, &detail);
+                    return Err(auto_complete::PhaseFailure::new(format!(
+                        "implementer preflight could not complete — no guard objected, none \
+                         verified; any open PR is held unmergeable and the guards will be \
+                         retried:\n{detail}"
+                    )));
+                }
+                implementer_preflight::PreflightDecision::Open => {}
             }
         }
 
