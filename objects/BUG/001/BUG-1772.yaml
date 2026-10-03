@@ -75,8 +75,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T16:59:08.126367723Z
-modified_at: 2026-10-03T14:03:16.450606172Z
+modified_at: 2026-10-03T14:25:47.828167049Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a10227-e991-7f73-b32f-f8b40810ae9b
+  created_at: 2026-10-03T14:25:47.828165075Z
+  created_by: joe
 history:
 - id: 01a0fdaf-4927-70d1-926e-32ded524c501
   author: joe
