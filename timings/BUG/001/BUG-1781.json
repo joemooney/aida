@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1781",
+  "publishes": [
+    {
+      "at": "2026-10-03T13:33:58.920619014Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T13:06:07.839817826Z",
+      "spec": "BUG-1781",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2380
+      }
+    },
+    {
+      "ts": "2026-10-03T13:33:50.516667113Z",
+      "spec": "BUG-1781",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2380
+      }
+    },
+    {
+      "ts": "2026-10-03T13:33:58.912802326Z",
+      "spec": "BUG-1781",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7f8be3c392828212204f3791028c6ae29b16a24a",
+        "pr": 2380,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
