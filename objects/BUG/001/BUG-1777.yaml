@@ -43,7 +43,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:33:17.896248217Z
-modified_at: 2026-10-03T07:42:55.847762677Z
+modified_at: 2026-10-03T08:32:16.283465400Z
 req_type: Bug
 tags:
 - ci
@@ -61,3 +61,8 @@ comments:
   content: 'Implementation PR #2375: addressed Windows path, executable suffix, file time, and shell assumptions in the affected tests. The Windows full suite exposed one stale merge-lock test assumption after BUG-1741; updated it to use a live process ID in commit 44b83a6ec0. Initial Windows suite had all BUG-1777 failures resolved but that test failed; updated Windows CI is running. PR https://github.com/joemooney/aida/pull/2375.'
   created_at: 2026-10-03T07:42:55.847762677Z
   modified_at: 2026-10-03T07:42:55.847762677Z
+- id: 01a100e4-7b9b-77d2-baa4-c3481f2069be
+  author: joe
+  content: 'Follow-up CI result: the updated Windows run completed. All BUG-1777 failures from the original Windows run are gone, and the corrected same-host live-PID merge-lock test passed. The run reported one separate failure from the current main base, `cached_git_backend::tests::failed_hint_write_degrades_to_deferred` (1273 passed, 1 failed): Windows directory read-only attributes do not block creation of child files. PR #2375 is green on Ubuntu; Windows is red on this separate base-suite fixture.'
+  created_at: 2026-10-03T08:32:16.283465400Z
+  modified_at: 2026-10-03T08:32:16.283465400Z
