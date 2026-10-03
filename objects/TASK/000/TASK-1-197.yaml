@@ -1,5 +1,6 @@
 id: 01a10333-4d17-7182-bc6e-1024eb8f6404
 spec_id: TASK-1-197
+agreed_id: TASK-774
 title: 'AC2: the recording-shim proof never intercepts run_bench.py — AIDA_ABLATION_CLA…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1784, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
