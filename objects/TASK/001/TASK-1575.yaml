@@ -64,8 +64,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:02:47.325576068Z
-modified_at: 2026-10-03T22:09:20.321127539Z
+modified_at: 2026-10-03T22:22:11.604264097Z
 req_type: Bug
+comments:
+- id: 01a103dc-4c94-7410-8b5c-e1c11f62f84b
+  author: joe
+  content: 'Implementation on branch task-1575: pass-1 Counted(0) branches are retained as same-spec merged-evidence carriers; pass 2 queries them only for specs with survivors and marks the bounded scan incomplete when required carrier evidence cannot be fetched. Added a fixture proving both detector paths suppress the stale ancestor; mutation run with carrier queries disabled failed as expected. Targeted tests: carrier fixture, lazy per-head operation-count pin, starvation fixture, and truncation-honesty fixture passed; cargo fmt and git diff --check passed.'
+  created_at: 2026-10-03T22:22:11.604264097Z
+  modified_at: 2026-10-03T22:22:11.604264097Z
 history:
 - id: 01a0fffa-efcd-7443-907a-499e5ae89031
   author: joe
