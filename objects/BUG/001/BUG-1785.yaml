@@ -1,0 +1,29 @@
+id: 01a10020-aad5-7611-a03f-c1e9881494d6
+spec_id: BUG-1785
+agreed_id: BUG-1785
+title: 'CI store-refresh steps race the scheduler tick: shallow re-fetch of aida-store mid-job makes ''merge --ff-only'' fail with ''refusing to merge unrelated histories'''
+description: |-
+  Observed on PR #2367 Build run 37097433112 (job 111130120193, 2026-10-03 04:55 UTC): the 'Validate commit SPEC-ID references (trace gate)' step failed with 'fatal: refusing to merge unrelated histories' (exit 128) at 'git -C .aida-store merge --ff-only origin/aida-store', before any branch code ran.
+
+  Mechanism: ci.yml has two independent store-refresh steps (~lines 299 and 348), each doing 'git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store' then ff-only merge into the .aida-store worktree. actions/checkout uses the default shallow depth, and fetches in a shallow repo stay shallow. The first step attaches .aida-store at shallow tip T1; schedule ticks commit to aida-store every 10-15 minutes (cron/systemd 'schedule: tick' commits); when a tick lands between the two steps (#2367's Build reached the trace gate 13 minutes in), the second fetch returns a shallow T2 with no visible connection to T1, and ff-only merge reports unrelated histories. Timing-dependent: any PR whose Build straddles a tick can fail; a plain rerun passes. Likely explains part of today's transient unowned-failing-PR cluster (e.g. #2358's earlier fail then 17m20s pass).
+
+  Proposed acceptance:
+  1. The second (and any later) store-refresh step cannot fail when origin/aida-store advances mid-job: either fetch with enough history to connect the tips (e.g. --unshallow/--depth increase for the aida-store ref, or fetch into a ref and 'git -C .aida-store reset --hard' / worktree re-add instead of ff-merge), or refresh once and reuse.
+  2. A regression test or workflow assertion covers the advanced-mid-job case (simulate: attach at T1, advance the remote ref, run the step body; it must succeed and end attached at T2).
+  3. The fix changes no store content semantics: .aida-store ends at origin/aida-store's current tip, detached/attached exactly as today's success path leaves it.
+  Evidence: run 37097433112 job 111130120193 log tail; ci.yml lines 290-360 at ad7ecdb79b.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T04:58:23.317193259Z
+modified_at: 2026-10-03T04:58:23.317193259Z
+req_type: Bug
+filed_at:
+  code_sha: 11fd8e5a831dc27cf8ae78341550a3e65a77c8d6
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: d5b1957658
+  vendor: antigravity
+  session: 12540508-66a6-4ecc-8c45-2c357657fc9c
