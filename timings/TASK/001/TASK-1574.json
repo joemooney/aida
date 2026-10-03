@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1574",
+  "publishes": [
+    {
+      "at": "2026-10-03T19:54:43.274467111Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T04:18:14.917142844Z",
+      "spec": "TASK-1574",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:46:21.277255309Z",
+      "spec": "TASK-1574",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    }
+  ]
+}
