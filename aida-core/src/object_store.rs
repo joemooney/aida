@@ -85,6 +85,23 @@ pub fn relative_object_path(spec_id: &str) -> Result<String> {
     ))
 }
 
+/// The repo-relative path for a spec's published timing record
+/// (STORY-1480, ADR-64 Option B): `timings/<TYPE>/<shard>/<ID>.json`,
+/// sharded exactly like `objects/`. Deliberately NOT under `objects/` and
+/// NOT `.yaml`: `list_objects`/`count_objects` load every `*.yaml` in an
+/// objects shard dir as a requirement, so a sibling file there would be
+/// parsed as a spec.
+// trace:STORY-1480 | ai:claude
+pub fn relative_timing_record_path(spec_id: &str) -> Result<String> {
+    let spec_id = canonical_spec_id(spec_id);
+    let (type_prefix, seq) = parse_spec_id(&spec_id)?;
+    let shard = format!("{:03}", shard_number(seq));
+    Ok(format!(
+        "timings/{}/{}/{}.json",
+        type_prefix, shard, spec_id
+    ))
+}
+
 /// Whether a user-typed string is shaped like a spec_id at all
 /// (`TYPE-SEQ` or `TYPE-NODE-SEQ`, e.g. `STORY-1` / `FR-7-042`).
 ///
@@ -624,6 +641,20 @@ mod tests {
         assert_eq!(shard_number(2000), 1);
         assert_eq!(shard_number(2001), 2);
         assert_eq!(shard_number(100_000), 99);
+    }
+
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn test_relative_timing_record_path_mirrors_object_sharding() {
+        assert_eq!(
+            relative_timing_record_path("story-1480").unwrap(),
+            "timings/STORY/001/STORY-1480.json"
+        );
+        assert_eq!(
+            relative_timing_record_path("FR-042").unwrap(),
+            "timings/FR/000/FR-042.json"
+        );
+        assert!(relative_timing_record_path("not a spec").is_err());
     }
 
     #[test]

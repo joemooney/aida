@@ -880,7 +880,7 @@ pub const EVENTS_DISABLE_ENV: &str = "AIDA_EVENTS_DISABLE";
 /// `false`, `no`, `off` (any case) all mean "not disabled", so an accidentally
 /// exported empty var can't silently blind a real drain's supervision stream.
 // trace:BUG-770 | ai:claude
-fn events_disabled() -> bool {
+pub(crate) fn events_disabled() -> bool {
     std::env::var(EVENTS_DISABLE_ENV)
         .map(|v| is_truthy(&v))
         .unwrap_or(false)

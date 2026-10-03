@@ -194,6 +194,8 @@ mod history_timeline;
 mod human_audit;
 mod human_cmd;
 mod metrics_cycle_time;
+// trace:STORY-1480 | ai:claude — per-spec timing records published to the store.
+mod timing_record;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;

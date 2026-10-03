@@ -1003,10 +1003,18 @@ pub(crate) fn run(
         }
         completed_in_window += 1;
 
-        let events: Vec<crate::history_timeline::DrainRecord> = feed_by_spec
+        let local: Vec<crate::history_timeline::DrainRecord> = feed_by_spec
             .get(&spec_id.to_ascii_uppercase())
             .cloned()
             .unwrap_or_default();
+        // STORY-1480: a spec completed on another machine has no local feed
+        // entries; its published timing record on the store branch carries
+        // them, replayed through the same decoder as the local feed.
+        // trace:STORY-1480 | ai:claude
+        let (published, pub_notes) =
+            crate::history_timeline::collect_published_events(store_path, spec_id);
+        spec_notes.extend(pub_notes);
+        let (events, _) = crate::history_timeline::merge_records(local, published);
         if events.is_empty() {
             excluded.push((
                 spec_id.to_string(),

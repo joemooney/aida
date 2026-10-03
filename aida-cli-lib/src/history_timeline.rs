@@ -1593,6 +1593,48 @@ pub(crate) fn collect_drain_events(
     (out, notes)
 }
 
+/// The spec's published timing record (STORY-1480 / ADR-64) as feed-shaped
+/// records, so cross-machine evidence replays through exactly the decoder
+/// the local feed uses. Origins name the record so a rendered boundary is
+/// attributable to "published at completion" rather than this clone's feed.
+// trace:STORY-1480 | ai:claude
+pub(crate) fn collect_published_events(
+    store_path: &Path,
+    spec_id: &str,
+) -> (Vec<DrainRecord>, Vec<String>) {
+    let (events, notes) = crate::timing_record::load_published(store_path, spec_id);
+    let recs = events
+        .into_iter()
+        .enumerate()
+        .map(|(i, ev)| DrainRecord {
+            ev,
+            origin: format!("timing-record:{}", i + 1),
+        })
+        .collect();
+    (recs, notes)
+}
+
+/// Union the local feed with published-record events, in feed order, exact
+/// duplicates collapsed (the same semantics `collect_drain_events` applies
+/// across the live feed and its archive — local origins sort first, so the
+/// local line wins a tie). Returns how many published events survived
+/// beyond the local feed.
+// trace:STORY-1480 | ai:claude
+pub(crate) fn merge_records(
+    mut local: Vec<DrainRecord>,
+    published: Vec<DrainRecord>,
+) -> (Vec<DrainRecord>, usize) {
+    if published.is_empty() {
+        return (local, 0);
+    }
+    let before = local.len();
+    local.extend(published);
+    local.sort_by(|a, b| a.ev.ts.cmp(&b.ev.ts).then_with(|| a.origin.cmp(&b.origin)));
+    local.dedup_by(|a, b| a.ev == b.ev);
+    let contributed = local.len().saturating_sub(before);
+    (local, contributed)
+}
+
 /// PR numbers this spec is actually credited with, from its own drain
 /// events. A PR is never matched by title or branch guesswork.
 // trace:STORY-1478 | ai:claude
@@ -1755,8 +1797,20 @@ pub(crate) fn run(
 ) -> Result<()> {
     let project_root = store_path.parent().unwrap_or(store_path).to_path_buf();
     let (store, mut notes) = collect_store_markers(store_path, spec_id)?;
-    let (events, ev_notes) = collect_drain_events(&project_root, spec_id);
+    let (local_events, ev_notes) = collect_drain_events(&project_root, spec_id);
     notes.extend(ev_notes);
+    // STORY-1480: work done on another machine reaches this view through the
+    // published timing record on the store branch, not the local feed.
+    // trace:STORY-1480 | ai:claude
+    let (published, pub_notes) = collect_published_events(store_path, spec_id);
+    notes.extend(pub_notes);
+    let (events, published_contributed) = merge_records(local_events, published);
+    if published_contributed > 0 {
+        notes.push(format!(
+            "the store's published timing record contributed {published_contributed} event(s) \
+             beyond the local feed (work recorded on another clone)"
+        ));
+    }
 
     let mut checks: Vec<ForgeCheck> = Vec::new();
     if forge_enabled {
@@ -2604,6 +2658,61 @@ mod tests {
             before_archive,
             std::fs::read(crate::events::events_archive_path(root)).expect("read")
         );
+    }
+
+    /// A spec completed on machine X shows its boundaries on machine Y: the
+    /// record X published to the store supplies the events Y's feed never
+    /// saw, through the same decoder, and the union never doubles a line
+    /// on X itself.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_published_record_supplies_cross_machine_events() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = dir.path().join("store");
+        std::fs::create_dir_all(store.join("objects")).expect("mkdir");
+
+        // Machine X: a feed with two lifecycle lines, published at done.
+        let mx = dir.path().join("mx");
+        std::fs::create_dir_all(mx.join(".aida")).expect("mkdir");
+        std::fs::write(
+            crate::events::events_path(&mx),
+            concat!(
+                r#"{"ts":"2026-09-20T00:00:00Z","spec":"SPEC-9","run_uuid":"r1","kind":{"event":"RunStarted"}}"#,
+                "\n",
+                r#"{"ts":"2026-09-20T01:00:00Z","spec":"SPEC-9","run_uuid":"r1","kind":{"event":"PrMerged","pr":7}}"#,
+                "\n"
+            ),
+        )
+        .expect("write feed");
+        crate::timing_record::publish_to_store(&store, &mx, "SPEC-9", "queue-done")
+            .expect("published");
+
+        // Machine Y: no feed at all — everything comes from the record.
+        let my = dir.path().join("my");
+        std::fs::create_dir_all(&my).expect("mkdir");
+        let (local, _) = collect_drain_events(&my, "SPEC-9");
+        assert!(local.is_empty());
+        let (published, notes) = collect_published_events(&store, "SPEC-9");
+        assert!(
+            notes.is_empty(),
+            "readable record carries no note: {notes:?}"
+        );
+        let (merged, contributed) = merge_records(local, published);
+        assert_eq!(contributed, 2);
+        assert_eq!(merged.len(), 2);
+        assert!(matches!(merged[1].ev.kind, EventKind::PrMerged { pr: 7 }));
+        assert!(merged
+            .iter()
+            .all(|r| r.origin.starts_with("timing-record:")));
+
+        // Machine X itself: the union must not double a boundary, and the
+        // local line wins the tie so origins keep naming the feed.
+        let (local_x, _) = collect_drain_events(&mx, "SPEC-9");
+        let (published_x, _) = collect_published_events(&store, "SPEC-9");
+        let (merged_x, contributed_x) = merge_records(local_x, published_x);
+        assert_eq!(merged_x.len(), 2);
+        assert_eq!(contributed_x, 0, "nothing beyond the local feed");
+        assert!(merged_x.iter().all(|r| r.origin.starts_with("events")));
     }
 
     /// The three surfaces carry one model: the same classes, bounds and
