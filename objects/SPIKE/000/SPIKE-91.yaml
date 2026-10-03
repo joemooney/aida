@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:42.192429110Z
-modified_at: 2026-10-03T05:05:10.442896479Z
+modified_at: 2026-10-03T05:07:10.267564118Z
 req_type: Spike
 relationships:
 - rel_type: References
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-09-27T14:59:27.786749399Z
   modified_at: 2026-09-27T14:59:27.786749399Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a10028-b53b-7151-8ade-956dc1e9abad
+  author: joe
+  content: |
+    ADVISOR POINTER (relay #7, 2026-10-02): TASK-1550's host-wide launch admission inventory merged tonight (PR #2362) — docs/plans/2026-10-02-task-1550-host-wide-launch-admission-inventory-and-cutover.md. It is a direct input to this spike: H14 carries the host virtualization facts (/dev/kvm, vmx on 6 cores, 70 GiB) for backend qualification; §5.2 states feasibility rows F-1 (dev loop runs agent-built binaries by design) and F-2 (single-login workstation — no second principal exists today, and ADR-61 requires the approval endpoint under a distinct principal, which THIS spike owns the mechanism for); E-1 records that the contained Codex posture can write ~/.aida, the strongest live argument for the registry living outside agent-writable paths. Reminder: BUG-1669 itself stays implementation-held (01a0e125); this spike's package is what makes lifting that hold proposable, it does not lift it.
+  created_at: 2026-10-03T05:07:10.267564118Z
+  modified_at: 2026-10-03T05:07:10.267564118Z
+  session_id: 302d7de9-e8d7-4058-b94c-b0cb54d66295
 history:
 - id: 01a10026-e12a-79d2-9ecc-7cbcb86c101a
   author: aida-session-start
