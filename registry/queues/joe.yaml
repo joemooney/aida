@@ -77,3 +77,9 @@
   added_by: joe
   added_at: 2026-10-03T00:24:11.394097605Z
   for_role: product
+- user_id: joe
+  requirement_id: 01a0fab3-e719-7ea3-b403-4893ecda7019
+  position: 41000
+  added_by: joe
+  added_at: 2026-10-03T00:26:30.241419429Z
+  for_role: product
