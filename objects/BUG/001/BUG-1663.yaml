@@ -3,12 +3,12 @@ spec_id: BUG-1663
 agreed_id: BUG-1663
 title: Cache incremental refresh can keep a deleted or reverted spec's row marked fresh when the file changes during a rebuild load and a later commit reverts it
 description: 'From TASK-1515''s round-3 strict review (finding 3; pre-existing on main with a wider window). A full rebuild stamps the HEAD captured before the load. If a file changes during the load and a later commit reverts or deletes it, the next incremental diff from the older stamp sees no net change, so the stale row stays marked fresh; a deleted spec can reappear until a full rebuild. Fix options: stamp the rebuild with the HEAD captured AFTER the load and verify the tree didn''t change mid-load (re-check HEAD or the index mtime and retry), or record per-row source blob ids and validate on the incremental. Acceptance: a test that changes then reverts a file across a rebuild load, then asserts the next refresh converges (no ghost row).'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-10-03T05:30:33.252573625Z
+modified_at: 2026-10-03T05:48:02.391716557Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -190,8 +190,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1004e-1fcd-75b0-99bd-aa9a3e647706
+  author: aida-auto-bump
+  timestamp: 2026-10-03T05:48:02.381911676Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1004e-1fd7-7c33-adff-70b430e65507
+  timestamp: 2026-10-03T05:48:02.391697531Z
+  agent: aida
+  commit_sha: 5aa07b0d983d2e1a9a0862c2e88eddecde631e26
+  summary: 'Advisor review of PR-2369: stable-head load fix matches the spec''s first fix option; all three load-then-stamp sites routed through the helper; exhaustion stamps the safe-direction (final pre-load) HEAD. Mutation proof independently re-run in a sibling worktree: both tests fail against the no-retry/pre-load-stamp mutation on the right assertions (ghost row survives; bound unexercised) and pass at tip.'
+  review_verdict: approved
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T05:29:41.083061709Z
   implemented_by: joe
+  completed_at: 2026-10-03T05:48:02.381881283Z
+  completion_sha: 5aa07b0d983d2e1a9a0862c2e88eddecde631e26
