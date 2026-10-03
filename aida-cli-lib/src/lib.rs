@@ -42904,6 +42904,44 @@ fn parse_session_env(body: &str) -> Vec<(String, String)> {
     out
 }
 
+// trace:TASK-1577 | ai:codex
+fn is_session_cargo_target_dir(
+    target_dir: &std::path::Path,
+    worktree_path: &std::path::Path,
+) -> bool {
+    let Some(worktree_name) = worktree_path.file_name() else {
+        return false;
+    };
+    let mut components = target_dir.components().rev();
+    matches!(components.next(), Some(std::path::Component::Normal(name)) if name == worktree_name)
+        && matches!(components.next(), Some(std::path::Component::Normal(name)) if name == "worktrees")
+}
+
+// trace:TASK-1577 | ai:codex
+fn session_cargo_target_dir(worktree_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let body = std::fs::read_to_string(worktree_path.join(".aida/session-env.sh")).ok()?;
+    parse_session_env(&body)
+        .into_iter()
+        .find(|(name, _)| name == "CARGO_TARGET_DIR")
+        .map(|(_, value)| std::path::PathBuf::from(value))
+}
+
+// trace:TASK-1577 | ai:codex
+fn remove_session_cargo_target_dir(target_dir: &std::path::Path, worktree_path: &std::path::Path) {
+    use colored::Colorize;
+    if !is_session_cargo_target_dir(target_dir, worktree_path) || !target_dir.exists() {
+        return;
+    }
+    if let Err(error) = std::fs::remove_dir_all(target_dir) {
+        eprintln!(
+            "  {} could not remove session cargo target {}: {}",
+            "warning:".yellow(),
+            target_dir.display(),
+            error
+        );
+    }
+}
+
 /// TASK-63: apply parsed env pairs to the current process so the
 /// subsequent `exec claude` inherits them. Returns the names that were
 /// applied so the caller can echo them to the user. Calls
@@ -43435,6 +43473,13 @@ fn session_end(
     // worktree, blocking the end of a lease that only needs its record
     // deleted. trace:BUG-734 | ai:claude
     let has_worktree = !target.worktree_path.as_os_str().is_empty();
+    // Capture before `git worktree remove` deletes the shim. The pure guard
+    // prevents malformed or legacy fallback values from targeting parent `target/`.
+    // trace:TASK-1577 | ai:codex
+    let session_target_dir = has_worktree
+        .then(|| session_cargo_target_dir(&target.worktree_path))
+        .flatten()
+        .filter(|path| is_session_cargo_target_dir(path, &target.worktree_path));
 
     // BUG-61: detect live `claude` processes whose cwd is under the
     // worktree we're about to remove. If we don't, `git worktree remove`
@@ -43494,6 +43539,9 @@ fn session_end(
             target.worktree_path.display(),
             target.branch
         );
+        if let Some(path) = session_target_dir.as_ref().filter(|path| path.is_dir()) {
+            eprintln!("  - remove session cargo target dir {}", path.display());
+        }
     } else {
         eprintln!("  - no worktree attached — nothing on disk to remove");
     }
@@ -43855,6 +43903,9 @@ fn session_end(
                     "{} worktree removed",
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
+                if let Some(path) = &session_target_dir {
+                    remove_session_cargo_target_dir(path, &target.worktree_path);
+                }
             }
             Ok(o) => {
                 let _ = std::io::stderr().write_all(&o.stdout);
