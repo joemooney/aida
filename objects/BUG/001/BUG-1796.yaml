@@ -1,0 +1,41 @@
+id: 01a10353-4a7d-7121-a3f6-286fe5e3df09
+spec_id: BUG-1796
+agreed_id: BUG-1796
+title: 'aida pull exits 0 and prints Note: when it skips a pull leg — silent-skip reads as success to drains'
+description: |
+  From TASK-1574 intake (AIDA-57 item 4, measured in aida-relay; re-verified here 2026-10-03 on aida 0.15.0 e1422ae139 with a fresh `git init` + `aida init` repo, no origin):
+
+      $ aida pull
+        Note: no `origin` remote — skipping code pull
+        Note: orphan store has no `origin` — skipping store pull
+      $ echo $?
+      0
+
+  A skipped closure step that reports success is indistinguishable from "nothing to do" — an automated drain reads it as the latter. In the relay project this silently left the store 317 commits ahead of a remote the branch could not name, while `git push` on the code leg kept "working", and merged specs sat at Done because merge-detection/auto-bump never ran.
+
+  ASK (the reporter's, verified still unaddressed):
+  1. When a leg is skipped, print a WARNING (not `Note:`) naming the skipped leg, or exit non-zero — either is acceptable; silent 0 is not.
+  2. `aida doctor` should report store-ahead-of-remote with the commit count ("317 commits unpushed" was the single most useful number nobody was shown).
+
+  ACCEPTANCE:
+  1. `aida pull` in a repo with no origin exits non-zero OR prints a WARNING-level line per skipped leg; a test pins whichever is chosen.
+  2. `aida doctor` (or an existing check category) surfaces orphan-store-ahead-of-remote with the count; test with a store N commits ahead of a configured remote.
+  3. Normal two-remote pull output unchanged (byte-identical test).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:52:32.637321704Z
+modified_at: 2026-10-03T19:52:32.637321704Z
+req_type: Bug
+tags:
+- pull
+- reporting
+filed_at:
+  code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
