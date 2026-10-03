@@ -12,8 +12,8 @@
 
 use super::*;
 use crate::dispatch_health_ps::{
-    is_protected_branch, is_protected_branch_at, next_command_hint_with_untracked,
-    parse_porcelain_z_bytes, probe_untracked_only, DispatchState,
+    is_protected_branch_at, next_command_hint_with_untracked, parse_porcelain_z_bytes,
+    probe_untracked_only, DispatchState,
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -97,11 +97,6 @@ fn test_protected_and_default_branch_gives_inspect_only_hint() {
     ];
 
     for branch in protected_branches {
-        assert!(
-            is_protected_branch(branch),
-            "expected {branch} to be protected"
-        );
-
         let wt = Path::new("/home/joe/ai/aida");
         let hint = next_command_hint_with_untracked(
             DispatchState::Salvageable,
@@ -127,16 +122,6 @@ fn test_protected_and_default_branch_gives_inspect_only_hint() {
             "hint must not recommend add -A on protected branch {branch}: {hint}"
         );
     }
-
-    // Ensure feature/foo/main is NOT treated as a protected branch
-    assert!(
-        !is_protected_branch("feature/foo/main"),
-        "feature/foo/main must NOT be treated as protected"
-    );
-    assert!(
-        !is_protected_branch("feature/main"),
-        "feature/main must NOT be treated as protected"
-    );
 }
 
 /// 2. Ordinary feature branch retains salvage hint with git add -A and git commit.
@@ -145,11 +130,6 @@ fn test_feature_branch_retains_salvage_hint() {
     let feature_branches = &["task-123", "bug-1680", "feature/foo/main", "feature/main"];
 
     for branch in feature_branches {
-        assert!(
-            !is_protected_branch(branch),
-            "expected {branch} NOT to be protected"
-        );
-
         let wt = Path::new("/home/joe/ai/aida-feature");
         let hint = next_command_hint_with_untracked(
             DispatchState::Salvageable,

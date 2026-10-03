@@ -39801,9 +39801,6 @@ pub(crate) fn reviewer_row_actionability(
 #[path = "tests/bug_1186_reviewer_seat_tests.rs"]
 mod bug_1186_reviewer_seat_tests;
 #[cfg(test)]
-#[path = "tests/bug_1230_auto_queue_review_tests.rs"]
-mod bug_1230_auto_queue_review_tests;
-#[cfg(test)]
 #[path = "tests/bug_1508_reviewer_row_tests.rs"]
 mod bug_1508_reviewer_row_tests;
 #[cfg(test)]
@@ -45968,19 +45965,6 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
     })
 }
 
-/// Detect whether an OPEN `Review PR-<n>:` story already exists in the local
-/// store, so calling `aida session end` twice on the same branch doesn't
-/// create duplicate queue entries. trace:STORY-66 | ai:claude
-///
-/// BUG-1186: a review story consumed by an earlier round (Done / Completed /
-/// Rejected / Superseded) does NOT count — a rework re-drive needs a fresh,
-/// pickable review story, or `queue work PR-N` finds nothing to review and
-/// falls through to the backing spec as an implementer pickup.
-// trace:BUG-1186 | ai:claude
-fn open_pr_review_story(project_root: &std::path::Path, pr_number: u64) -> Option<String> {
-    open_pr_review_story_using(project_root, pr_number, &aida_exe_path())
-}
-
 fn open_pr_review_story_using(
     project_root: &std::path::Path,
     pr_number: u64,
@@ -46037,31 +46021,6 @@ fn open_review_story_id(list_json: &str, pr_number: u64) -> Option<String> {
         .then(|| row.get("spec_id")?.as_str().map(str::to_owned))
         .flatten()
     })
-}
-
-// trace:BUG-1230 | ai:codex
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum ReviewStoryQueueDecision {
-    Create,
-    Requeue(String),
-    Skip(String),
-}
-
-fn review_story_queue_decision(
-    open_story: Option<String>,
-    queued_story_ids: &[String],
-) -> ReviewStoryQueueDecision {
-    match open_story {
-        None => ReviewStoryQueueDecision::Create,
-        Some(id)
-            if queued_story_ids
-                .iter()
-                .any(|queued| queued.eq_ignore_ascii_case(&id)) =>
-        {
-            ReviewStoryQueueDecision::Skip(id)
-        }
-        Some(id) => ReviewStoryQueueDecision::Requeue(id),
-    }
 }
 
 fn reviewer_queue_story_ids(project_root: &std::path::Path) -> Option<Vec<String>> {

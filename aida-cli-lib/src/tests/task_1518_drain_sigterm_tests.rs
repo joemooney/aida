@@ -682,12 +682,13 @@ fn task_1518_interruption_only_reframes_the_dead_clean_stalled_arm() {
         apply_interruption(S::AwaitingAgent, Some(false), true),
         S::AwaitingAgent
     );
-    let hint = crate::dispatch_health_ps::next_command_hint(
+    let hint = crate::dispatch_health_ps::next_command_hint_with_untracked(
         S::Stopped,
         Path::new("/wt/x"),
         "claude/x",
         None,
         Some("TASK-9"),
+        false,
         false,
     )
     .unwrap();
