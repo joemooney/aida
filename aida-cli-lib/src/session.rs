@@ -3304,13 +3304,13 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     // current project root or a sibling `<root>-<slug>` worktree. When we can't
     // resolve a project root (not in a project), keep the old global behaviour.
     // trace:BUG-447 | ai:claude
-    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
-        .filter(|m| {
+    let mut out: Vec<SessionMeta> =
+        collect_global_project_sessions(150, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
             m.spec
                 .as_deref()
                 .map(|s| s.eq_ignore_ascii_case(want))
                 .unwrap_or(false)
-        })
+        })?
         .collect();
     out.sort_by_key(|m| m.age_seconds);
     Ok(out)
@@ -3319,21 +3319,36 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
 /// STORY-821: recent Claude conversations whose detected AIDA role matches
 /// `role`, newest first, scoped to the current project/worktree family. This is
 /// the role-enter view over the same session metadata used by `session resume`.
+/// BUG-1789: bounded — stops once `limit` matches are found, and never reads
+/// more than `SESSION_SCAN_BYTE_BUDGET` in total.
 // trace:STORY-821 | ai:codex
+// trace:BUG-1789 | ai:antigravity
 pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> {
     let want = canonical_session_role(role);
-    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
-        .filter(|m| m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str()))
+    let mut out: Vec<SessionMeta> =
+        collect_global_project_sessions(limit, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
+            m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str())
+        })?
         .collect();
     out.sort_by_key(|m| m.age_seconds);
-    out.truncate(limit);
     fill_branches(&mut out);
     normalize_specs(&mut out);
     fill_recent_focus(&mut out);
     Ok(out)
 }
 
-fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = SessionMeta>> {
+/// Newest-first, project-scoped session rows that pass `filter_fn`; see
+/// [`select_recent_sessions`] for the bounds. `byte_budget: None` means only
+/// the file-count bound applies (used by exact id-prefix resume lookups).
+// trace:BUG-1789 | ai:antigravity
+fn collect_global_project_sessions<F>(
+    limit: usize,
+    byte_budget: Option<u64>,
+    mut filter_fn: F,
+) -> Result<impl Iterator<Item = SessionMeta>>
+where
+    F: FnMut(&SessionMeta) -> bool,
+{
     let home = crate::home_dir().context("HOME not set; cannot locate sessions")?;
     let projects = home.join(".claude").join("projects");
     let mut entries: Vec<SessionLogEntry> = Vec::new();
@@ -3366,30 +3381,123 @@ fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = 
     entries.extend(codex_entries()?);
     entries.extend(antigravity_entries()?);
     entries.sort_by(|a, b| b.mtime.cmp(&a.mtime));
-    entries.truncate(session_scan_limit(limit));
 
     let now = SystemTime::now();
     let project_root = crate::find_main_worktree_root().ok();
-    let sessions: Vec<SessionMeta> = entries
-        .into_iter()
-        .filter_map(move |entry| {
-            parse_session_meta_for_agent(&entry.path, entry.mtime, now, entry.agent).ok()
-        })
-        .filter(move |m| match &project_root {
+    let agents = load_agent_views_for_enrich();
+    let (sessions, _stats) = select_recent_sessions(
+        entries,
+        limit,
+        byte_budget,
+        now,
+        project_root.as_deref(),
+        &agents,
+        &mut filter_fn,
+    );
+    Ok(sessions.into_iter())
+}
+
+/// BUG-1789: what a bounded session scan actually consumed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct SessionScanStats {
+    files_opened: usize,
+    bytes_read: u64,
+}
+
+/// BUG-1789: walk `entries` (already sorted newest-first) and stop as soon as
+/// any bound trips: `limit` rows survived the project-scope + caller filters,
+/// `session_scan_limit(limit.max(150))` files were opened, or `byte_budget` bytes were
+/// read. Each file read is capped at `SESSION_META_MAX_BYTES`, and a file is
+/// only opened while a full cap still fits, so `bytes_read <= byte_budget` is
+/// a hard guarantee. Registry
+/// enrichment runs per row *before* the filter so registry-only roles/specs
+/// still match. Returns the selected rows (newest first) plus scan stats.
+// trace:BUG-1789 | ai:antigravity
+fn select_recent_sessions<F>(
+    entries: Vec<SessionLogEntry>,
+    limit: usize,
+    byte_budget: Option<u64>,
+    now: SystemTime,
+    project_root: Option<&Path>,
+    agents: &[crate::agent_registry::AgentRegistryView],
+    filter_fn: &mut F,
+) -> (Vec<SessionMeta>, SessionScanStats)
+where
+    F: FnMut(&SessionMeta) -> bool,
+{
+    // Keep the historical >=1500-file window (`session_scan_limit(150)`);
+    // the byte budget, not the file count, is the real I/O bound.
+    let max_open = session_scan_limit(limit.max(150));
+    let mut stats = SessionScanStats::default();
+    let mut sessions = Vec::new();
+    for entry in entries {
+        if sessions.len() >= limit
+            || stats.files_opened >= max_open
+            || byte_budget.is_some_and(|b| stats.bytes_read + SESSION_META_MAX_BYTES > b)
+        {
+            break;
+        }
+        stats.files_opened += 1;
+        let in_scope = |cwd: &str| {
+            project_root
+                .map(|root| session_cwd_in_project(cwd, root))
+                .unwrap_or(true)
+        };
+        let scope: Option<&dyn Fn(&str) -> bool> = project_root.map(|_| &in_scope as _);
+        let Ok((mut m, n)) =
+            parse_session_meta_counted(&entry.path, entry.mtime, now, entry.agent, scope)
+        else {
+            continue;
+        };
+        stats.bytes_read += n;
+        let in_project = match project_root {
             Some(root) => m
                 .last_cwd
                 .as_deref()
                 .map(|cwd| session_cwd_in_project(cwd, root))
                 .unwrap_or(false),
             None => true,
-        })
-        .collect();
-    let mut sessions = sessions;
-    enrich_from_agent_registry(&mut sessions);
+        };
+        if !in_project {
+            continue;
+        }
+        enrich_one_from_agent_views(&mut m, agents);
+        if filter_fn(&m) {
+            sessions.push(m);
+        }
+    }
     sessions.sort_by_key(|m| m.age_seconds);
-    sessions.truncate(limit);
-    Ok(sessions.into_iter())
+    (sessions, stats)
 }
+
+/// BUG-1789: `Read` adapter counting bytes actually pulled from the file
+/// (including `BufReader` read-ahead) — the injected counter for the scan
+/// budget.
+struct CountingRead<R> {
+    inner: R,
+    count: std::rc::Rc<std::cell::Cell<u64>>,
+}
+
+impl<R: std::io::Read> std::io::Read for CountingRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.count.set(self.count.get() + n as u64);
+        Ok(n)
+    }
+}
+
+/// BUG-1789: per-file read cap for `parse_session_meta_for_agent`. Sized from
+/// measured logs: the first AIDA role marker sits at p50 ~100 KB, p99 ~1.4 MB
+/// (max seen ~2.8 MB) — a 256 KB cap would have hidden ~1 in 5 sessions.
+const SESSION_META_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+/// BUG-1789: a scoped parse gives up after this many bytes with no cwd seen.
+const SESSION_META_NO_CWD_PROBE_BYTES: u64 = 64 * 1024;
+
+/// BUG-1789: total read budget for interactive scans (role-enter picker,
+/// scope resume lookup). A hard ceiling (~47 MB) so a cold scan stays under
+/// 50 MB even on a contended disk.
+const SESSION_SCAN_BYTE_BUDGET: u64 = 45 * 1024 * 1024;
 
 fn session_scan_limit(limit: usize) -> usize {
     limit.saturating_mul(10).max(150)
@@ -3400,31 +3508,42 @@ fn session_scan_limit(limit: usize) -> usize {
 /// correlates.
 // trace:STORY-822 | ai:codex
 fn enrich_from_agent_registry(sessions: &mut [SessionMeta]) {
+    let agents = load_agent_views_for_enrich();
+    for session in sessions {
+        enrich_one_from_agent_views(session, &agents);
+    }
+}
+
+fn load_agent_views_for_enrich() -> Vec<crate::agent_registry::AgentRegistryView> {
     let Ok(project_root) = crate::find_main_worktree_root() else {
-        return;
+        return Vec::new();
     };
     let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
-    let agents = crate::agent_registry::list_agent_views(&project_root, &ctx);
-    for session in sessions {
-        let Some(view) = agents.iter().find(|agent| {
-            agent
-                .native_session_id
-                .as_deref()
-                .map(|id| id == session.id)
-                .unwrap_or(false)
-        }) else {
-            continue;
-        };
-        session.agent = view.agent_type.clone();
-        if session.role.is_none() {
-            session.role = view.role.clone();
-        }
-        if session.spec.is_none() {
-            session.spec = view.current_spec.clone();
-        }
-        if session.terminal.is_none() {
-            session.terminal = view.terminal.clone();
-        }
+    crate::agent_registry::list_agent_views(&project_root, &ctx)
+}
+
+fn enrich_one_from_agent_views(
+    session: &mut SessionMeta,
+    agents: &[crate::agent_registry::AgentRegistryView],
+) {
+    let Some(view) = agents.iter().find(|agent| {
+        agent
+            .native_session_id
+            .as_deref()
+            .map(|id| id == session.id)
+            .unwrap_or(false)
+    }) else {
+        return;
+    };
+    session.agent = view.agent_type.clone();
+    if session.role.is_none() {
+        session.role = view.role.clone();
+    }
+    if session.spec.is_none() {
+        session.spec = view.current_spec.clone();
+    }
+    if session.terminal.is_none() {
+        session.terminal = view.terminal.clone();
     }
 }
 
@@ -3544,6 +3663,25 @@ fn parse_session_meta_for_agent(
     now: SystemTime,
     agent: &'static str,
 ) -> Result<SessionMeta> {
+    parse_session_meta_counted(path, mtime, now, agent, None).map(|(meta, _)| meta)
+}
+
+/// Same as [`parse_session_meta_for_agent`], also returning the number of
+/// bytes actually read from the file (BUG-1789 scan budget accounting).
+///
+/// `in_scope`: when given, the parse stops as soon as the FIRST recorded cwd
+/// is out of scope, so a foreign-project log costs only its head (Codex puts
+/// cwd in line-1 `session_meta`; Claude events carry it from the first event)
+/// instead of a full per-file cap. Trade-off: a session launched outside the
+/// project that later moved into it is no longer matched.
+// trace:BUG-1789 | ai:antigravity
+fn parse_session_meta_counted(
+    path: &Path,
+    mtime: SystemTime,
+    now: SystemTime,
+    agent: &'static str,
+    in_scope: Option<&dyn Fn(&str) -> bool>,
+) -> Result<(SessionMeta, u64)> {
     use std::io::{BufRead, BufReader};
     let mut file_name = path
         .file_stem()
@@ -3563,7 +3701,17 @@ fn parse_session_meta_for_agent(
     // stay sub-millisecond per file even on multi-MB session logs.
     const MAX_LINES: usize = 400;
     let file = std::fs::File::open(path)?;
-    let reader = BufReader::new(file);
+    // BUG-1789: the line cap is no byte bound — a Codex rollout event is one
+    // multi-MB line — so also cap the bytes read per file. Every marker this
+    // parser needs lives near the head of the log.
+    // trace:BUG-1789 | ai:antigravity
+    let counter = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    let counted = CountingRead {
+        inner: file,
+        count: counter.clone(),
+    };
+    let reader = BufReader::new(std::io::Read::take(counted, SESSION_META_MAX_BYTES));
+    let mut scope_checked = in_scope.is_none();
     let mut role: Option<String> = None;
     let mut title: Option<String> = None;
     let mut spec: Option<String> = None;
@@ -3585,11 +3733,17 @@ fn parse_session_meta_for_agent(
     // MAX_LINES is `unknown` (None), never a late match found by scanning
     // further into a transcript that may still be growing.
     // trace:BUG-1593 | ai:claude
-    for (i, line) in reader.lines().enumerate() {
+    for (i, line) in reader.split(b'\n').enumerate() {
         if i >= MAX_LINES {
             break;
         }
+        // Lossy decode: the byte cap can split a multibyte char on the last
+        // line, which must not discard the whole (often first) line.
+        // Lines with invalid UTF-8 (previously skipped by `lines()`) are now
+        // parsed with U+FFFD replacements.
         let Ok(line) = line else { continue };
+        let line = String::from_utf8_lossy(&line);
+        let line = line.strip_suffix('\r').unwrap_or(&line);
 
         // STORY-59: capture the most recent cwd we see in the parse
         // window. Each event in Claude Code's .jsonl carries `"cwd":"..."`
@@ -3621,6 +3775,20 @@ fn parse_session_meta_for_agent(
                         }
                     }
                 }
+            }
+        }
+
+        // BUG-1789: bail on a foreign-project log once its first cwd is known.
+        // A scoped parse that has seen no cwd in its first 64 KiB would be
+        // dropped by the caller anyway (no cwd => out of scope), so stop.
+        if !scope_checked {
+            if let (Some(cwd), Some(f)) = (last_cwd.as_deref(), in_scope) {
+                scope_checked = true;
+                if !f(cwd) {
+                    break;
+                }
+            } else if counter.get() > SESSION_META_NO_CWD_PROBE_BYTES {
+                break;
             }
         }
 
@@ -3737,7 +3905,7 @@ fn parse_session_meta_for_agent(
     // the tier-2 bare `Role: ` match, if any.
     let role = role.or(tier2_role);
 
-    Ok(SessionMeta {
+    let meta = SessionMeta {
         agent: agent.to_string(),
         id: file_name,
         age_seconds,
@@ -3751,7 +3919,8 @@ fn parse_session_meta_for_agent(
         recent_focus: None,
         path: Some(path.to_path_buf()),
         process: Default::default(),
-    })
+    };
+    Ok((meta, counter.get()))
 }
 
 fn codex_id_from_rollout_stem(stem: &str) -> Option<String> {
@@ -4120,7 +4289,8 @@ fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
 fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
     // Allow a generous walk — user might have written down the id from a
     // weeks-old session; collect everything and filter.
-    let all: Vec<SessionMeta> = collect_global_project_sessions(usize::MAX)?.collect();
+    let all: Vec<SessionMeta> =
+        collect_global_project_sessions(usize::MAX, None, |_| true)?.collect();
     let matches: Vec<&SessionMeta> = all.iter().filter(|s| s.id.starts_with(prefix)).collect();
     match matches.len() {
         0 => anyhow::bail!("no session matches id prefix `{}`", prefix),
@@ -4854,6 +5024,210 @@ mod tests {
             Some("/home/joe/ai/aida-story-822")
         );
         assert!(meta.started_at.is_some());
+    }
+
+    /// BUG-1789: write a Codex rollout whose head is `head` followed by one
+    /// unterminated line padded (sparsely) to `total` bytes — the shape of a
+    /// real multi-MB single-line rollout event, without the disk cost.
+    fn write_bug1789_rollout(path: &Path, head: &str, total: u64) {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path).unwrap();
+        f.write_all(head.as_bytes()).unwrap();
+        f.write_all(b"{\"type\":\"response_item\",\"payload\":\"")
+            .unwrap();
+        f.set_len(total).unwrap();
+    }
+
+    fn bug1789_session_meta_line(id: &str, cwd: &Path) -> String {
+        format!(
+            "{{\"timestamp\":\"2026-09-03T15:39:39.268Z\",\"type\":\"session_meta\",\"payload\":{{\"session_id\":\"{id}\",\"timestamp\":\"2026-09-03T15:39:39.093Z\",\"cwd\":\"{}\"}}}}\n",
+            cwd.display()
+        )
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_parse_reads_at_most_the_per_file_byte_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-09-03T08-39-39-01a067ec-facc-71a0-9a69-1476568e1f1e.jsonl");
+        let head = format!(
+            "{}{{\"message\":\"- Role: implementer\"}}\n",
+            bug1789_session_meta_line("01a067ec-facc-71a0-9a69-1476568e1f1e", Path::new("/w/p"))
+        );
+        write_bug1789_rollout(&path, &head, 8 * 1024 * 1024);
+        let now = SystemTime::now();
+        let (meta, bytes) = parse_session_meta_counted(&path, now, now, "codex", None).unwrap();
+        assert!(
+            bytes <= SESSION_META_MAX_BYTES,
+            "read {bytes} bytes, cap is {SESSION_META_MAX_BYTES}"
+        );
+        assert_eq!(meta.id, "01a067ec-facc-71a0-9a69-1476568e1f1e");
+        assert_eq!(meta.last_cwd.as_deref(), Some("/w/p"));
+        assert_eq!(meta.role.as_deref(), Some("implementer"));
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_first_line_truncated_by_cap_still_yields_cwd_and_id() {
+        // A session_meta line larger than the cap is cut mid-line (and here
+        // mid-multibyte-char): serde fails, so cwd/timestamp must come from
+        // the substring scan and the id from the rollout filename.
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-09-03T08-39-39-01a067ec-facc-71a0-9a69-1476568e1f1e.jsonl");
+        let mut line = String::from(
+            r#"{"timestamp":"2026-09-03T15:39:39.268Z","type":"session_meta","payload":{"cwd":"/w/p","instructions":""#,
+        );
+        while (line.len() as u64) < SESSION_META_MAX_BYTES + 1024 {
+            line.push('é');
+        }
+        line.push_str("\"}}\n");
+        std::fs::write(&path, line).unwrap();
+        let now = SystemTime::now();
+        let meta = parse_session_meta_for_agent(&path, now, now, "codex").unwrap();
+        assert_eq!(meta.id, "01a067ec-facc-71a0-9a69-1476568e1f1e");
+        assert_eq!(meta.last_cwd.as_deref(), Some("/w/p"));
+        assert!(meta.started_at.is_some());
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_role_scan_over_1500_multi_mb_rollouts_is_byte_bounded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        let foreign = tmp.path().join("other-project");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now() - std::time::Duration::from_secs(100_000);
+        let mut entries = Vec::new();
+        for i in 0..1500u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            // Three in-project advisor sessions (newest, behind 39 foreign
+            // multi-MB rollouts, and the very oldest); the rest are foreign
+            // projects. Foreign logs must cost only their head, so the scan
+            // reaches all three without blowing the byte budget.
+            let head = if [0, 40, 1499].contains(&i) {
+                format!(
+                    "{}{{\"message\":\"AIDA_SESSION_ROLE=advisor\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"title {i}\"}}\n",
+                    bug1789_session_meta_line(&id, &project)
+                )
+            } else {
+                bug1789_session_meta_line(&id, &foreign)
+            };
+            write_bug1789_rollout(&path, &head, 3 * 1024 * 1024);
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let want = canonical_session_role("advisor");
+        let mut filter =
+            |m: &SessionMeta| m.role.as_deref().map(canonical_session_role) == Some(want.clone());
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            Some(SESSION_SCAN_BYTE_BUDGET),
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut filter,
+        );
+        assert!(stats.bytes_read <= SESSION_SCAN_BYTE_BUDGET);
+        assert!(
+            stats.bytes_read < 50_000_000,
+            "scan read {} bytes over {} files",
+            stats.bytes_read,
+            stats.files_opened
+        );
+        assert_eq!(stats.files_opened, 1500);
+        assert_eq!(rows.len(), 3);
+        for (i, row) in [0, 40, 1499].iter().zip(rows.iter()) {
+            assert_eq!(row.role.as_deref(), Some("advisor"));
+            assert_eq!(row.title.as_deref(), Some(format!("title {i}").as_str()));
+            assert_eq!(row.last_cwd.as_deref(), Some(project.to_str().unwrap()));
+        }
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_in_project_non_matching_rollouts_trip_the_byte_budget() {
+        // Worst case: every log is in-project (so each costs a full per-file
+        // cap) but none matches the role. The budget must stop the scan.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now();
+        let mut entries = Vec::new();
+        for i in 0..200u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            let head = format!(
+                "{}{{\"message\":\"AIDA_SESSION_ROLE=implementer\"}}\n",
+                bug1789_session_meta_line(&id, &project)
+            );
+            write_bug1789_rollout(&path, &head, 3 * 1024 * 1024);
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            Some(SESSION_SCAN_BYTE_BUDGET),
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut |m: &SessionMeta| m.role.as_deref() == Some("advisor"),
+        );
+        assert!(rows.is_empty());
+        assert!(stats.bytes_read <= SESSION_SCAN_BYTE_BUDGET);
+        assert_eq!(
+            stats.files_opened as u64,
+            SESSION_SCAN_BYTE_BUDGET / SESSION_META_MAX_BYTES
+        );
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_scan_stops_once_limit_matches_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now();
+        let mut entries = Vec::new();
+        for i in 0..50u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            std::fs::write(&path, bug1789_session_meta_line(&id, &project)).unwrap();
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            None,
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut |_: &SessionMeta| true,
+        );
+        assert_eq!(rows.len(), 8);
+        assert_eq!(stats.files_opened, 8);
     }
 
     // trace:STORY-822 | ai:codex
