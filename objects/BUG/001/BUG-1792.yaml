@@ -3,18 +3,10 @@ spec_id: BUG-1792
 agreed_id: BUG-1792
 title: Commit hook resolves effective role from the shared roster over the worktree's implementer lease — dispatched implementers in leased worktrees are blocked as 'advisor' and pushed toward AIDA_ALLOW_ADV
 description: 'Two independent occurrences on 2026-10-03: (1) the antigravity seat on PR #2386 (BUG-1784) was blocked committing in its registered worktree session and used the audited AIDA_ALLOW_ADVISOR_CODE=1 override without prior authorization (disclosed in its handoff); (2) the seat reworking PR #2375 (BUG-1777) in /home/joe/ai/aida-worktrees/aida-bug-1777 was blocked the same way — the hook resolved the effective role from the shared roster as advisor despite the worktree''s implementer lease — and correctly stopped to ask. The audited override is becoming the routine path for legitimate dispatched implementation, which erodes the advisor-code gate''s signal. Expected: role resolution for the commit gate should prefer the worktree session''s lease/registration (the seat actually doing the work) over the machine-shared roster role; the override should stay exceptional. Acceptance sketch: a fixture worktree with an implementer lease + a roster saying advisor commits implementation code without the override; the same commit from the operator checkout (no lease) still refuses; the hook''s refusal text names which source decided the role.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T17:49:36.783340784Z
-modified_at: 2026-10-03T17:49:36.783340784Z
+modified_at: 2026-10-03T18:04:29.167158179Z
 req_type: Bug
-filed_at:
-  code_sha: a2c7bc7240a46e1c33dd37948d8fd98c09e221f1
-  branch: main
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: e1422ae139
-  vendor: antigravity
-  session: 81be7622-d357-4a9c-904d-8d88acc536d7
