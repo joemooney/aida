@@ -35,12 +35,12 @@ description: |-
   ## Recurse-fix
 
   Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T14:38:13.575800541Z
-modified_at: 2026-10-03T06:24:35.053198147Z
+modified_at: 2026-10-03T17:33:33.445418590Z
 req_type: Bug
 tags:
 - auto-complete
@@ -145,8 +145,26 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a102d4-0b65-70c2-9f09-f0ce03817b0f
+  author: aida-auto-bump
+  timestamp: 2026-10-03T17:33:33.413249181Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a102d4-0b85-7660-892a-c6cbd10bf877
+  timestamp: 2026-10-03T17:33:33.445405389Z
+  agent: aida
+  commit_sha: 401819b5f1801ae8659cf02e5590dc5b250e5a54
+  summary: 'Round-2 re-review (independent seat; author aida-6b and round-1 advisor lineage excluded): finding 1 fixed — the Missing-log empty-launch arm is scoped to a claimed-but-workless session lease (orchestrated_session_lease_evidence tri-state: None routes to BUG-1629/BUG-1769 lost-child recovery, Some(true) falls through to BUG-1140 substrate verification, zero-byte keeps BUG-826 face value). Zero bug_1629 assertion changes (diff-verified). Mutation proof re-run by this reviewer in the rework worktree: round-1 semantics fail both named witnesses, bug_1629_lost_lease… reproducing the exact round-1 signature (LaunchNoOutput vs LaunchRefused at line 155); restored 33/33 green on bug_1716+bug_1629 filters, worktree left byte-identical. Finding 2 moot: Build SUCCESS on this head via statusCheckRollup (ring lib.exe did not recur; bug_1682 passed). merge-hold-gate red is the expected aida:merge-hold — clear is Joe-only; NO merge performed by this seat.'
+  punted:
+  - 'punted: PR #2364 CI red: aida-cli-lib --lib fails — 13 bug_1629_phase1_recovery_tests + bug_1682_process_child panic (bug_1682_global_queue_tests.rs:77); launch-failure reclassification broke phase-1 recovery expectations'
+  review_verdict: approved
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T00:55:16.026614268Z
   implemented_by: joe
+  completed_at: 2026-10-03T17:33:33.413174861Z
+  completion_sha: 401819b5f1801ae8659cf02e5590dc5b250e5a54
