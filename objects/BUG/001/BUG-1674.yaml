@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-10-03T05:36:49.741897190Z
+modified_at: 2026-10-03T05:40:10.139761616Z
 req_type: Bug
 tags:
 - performance
@@ -303,6 +303,12 @@ comments:
   created_at: 2026-10-03T05:36:49.741897190Z
   modified_at: 2026-10-03T05:36:49.741897190Z
   session_id: 302d7de9-e8d7-4058-b94c-b0cb54d66295
+- id: 01a10046-eb1b-7c20-b1ae-aaad7f37f707
+  author: joe
+  content: 'Root cause confirmed by reproduction on the fixed-per-BUG-1606 lineage: with a stale cache needing a FULL rebuild (recorded head not an ancestor) and a live foreign writer holding the SQLite cache write lock (BEGIN IMMEDIATE), a TTY (human, interactive-policy) aida show parked in the cache write retry ladder (100+200+...+12800 ms = 25.5 s) and then FAILED with ''database is locked'' — measured 25.57 s. The same shape piped/machine-mode was already bounded by TASK-1526/1527 (1.6 s, stale-labelled, worker requested); the evidence binaries in this spec (7c6faed690, b331809ce7) PREDATE TASK-1526''s merge (4d42531352), which is why the dogfood tail showed up in advisor sessions then. Fix: the interactive single-flight winner in CachedGitBackend::freshen_for_read now makes exactly one bounded rebuild attempt (ReadRefreshAttempt arms zero SQLite retries); on a cache write-lock error it degrades to the STORY-1484 reader protocol — durable refresh request + detached worker + labelled committed snapshot — instead of propagating the ladder error. A free lock keeps the pre-C inline rebuild and its fresh result unchanged. Measured after fix (same TTY full-rebuild fixture, debug binary): 2.16 s, exit 0, stale note printed.'
+  created_at: 2026-10-03T05:40:10.139761616Z
+  modified_at: 2026-10-03T05:40:10.139761616Z
+  session_id: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
 history:
 - id: 01a10025-c7d7-7a21-8c2c-9a990117cb41
   author: aida-session-start
