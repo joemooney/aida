@@ -3,12 +3,12 @@ spec_id: BUG-1788
 agreed_id: BUG-1788
 title: Rework hold row still prescribes implementer rework after the releasing approval is recorded
 description: 'Observed on PR #2364 / BUG-1716 (2026-10-03 ~00:25): round-1 request-changes armed the marker hold at .aida/merge-holds/PR-2364 (target_head 98f3543b). The round-2 APPROVED verdict was then recorded at the PR''s current head 48433c6b (.aida/review-verdicts/BUG-1716/48433c6b....json), satisfying the marker''s own release_condition (''a fresh APPROVED verdict ... then a human ships it''). Yet `aida awaiting` held_prs still shows: reason rework, detail ''CHANGES REQUESTED for BUG-1716 at 98f3543b0c52'', action ''implementer: address the review findings; the hold lifts after approval''. All three are now wrong-state: rework is complete, the approval exists, and the only pending step is the human merge-hold clear. project_held_pr (aida-cli-lib/src/awaiting_you.rs:1304) projects the marker verbatim without consulting the verdict corpus for a satisfied release condition. Expected: when an approved verdict exists at the PR''s current head, the row should flip to something like ''rework approved at <head>; awaiting human: aida merge-hold clear <pr>'' so a reader does not re-dispatch rework that is already done. Human-only clear (integrity floor) is NOT in question — only the stale prescription. Cost: an advisor session spent real time re-deriving that the hold was already satisfied.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T07:26:22.543926925Z
-modified_at: 2026-10-03T08:59:16.766064612Z
+modified_at: 2026-10-03T11:53:31.426042445Z
 req_type: Bug
 comments:
 - id: 01a100fd-3221-7750-8acd-5a8f7fcc0988
@@ -25,3 +25,22 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1019c-bc1c-7a23-80ee-06c55274fe9e
+  author: aida-auto-bump
+  timestamp: 2026-10-03T11:53:31.420932155Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1019c-bc21-7cd0-9dac-6bd6e3235b4d
+  timestamp: 2026-10-03T11:53:31.426003228Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/advisor/BUG-1788-2026-10-03T100704Z.md
+  commit_sha: 821f2c6107fb32a97d1b212b3da324b4e737eee5
+  summary: 'Independent advisor review (non-author; implementer antigravity). Diff verified: single production caller updated; verdicts_for_sha reads the per-spec archive dirs that recording actually writes; filter requires a live (!is_closed) approving verdict at the PR''s CURRENT head, so a post-approval push correctly falls back to the rework prescription. Two-direction unit test covers the helper. Acceptance re-run by this reviewer on the live fixture: branch binary (sha c44ebd1ac3, strings-verified) flips the real PR-2364 row to ''rework approved at 48433c6b1fa8; awaiting human: aida merge-hold clear 2364''; session-start output from the pre-fix installed binary showed the stale implementer prescription on the same state — both directions witnessed. Non-blocking note: the detail field still shows the round-1 ''CHANGES REQUESTED at 98f3543b'' text; factual history, reads coherently next to the new action. Merge-ready once CI Build is green at this head; merging seat must be a different session.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T11:53:31.420858917Z
+  completion_sha: 821f2c6107fb32a97d1b212b3da324b4e737eee5
