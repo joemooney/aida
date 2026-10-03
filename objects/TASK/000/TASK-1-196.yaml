@@ -1,0 +1,30 @@
+id: 01a102d4-12f4-78e2-9436-e595821f0794
+spec_id: TASK-1-196
+title: 'Build step also failed: ring v0.17.14 build script ''failed to find tool lib.exe…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1716, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Build step also failed: ring v0.17.14 build script 'failed to find tool lib.exe' on ubuntu (exit 101 at 00:55Z) — looks infra/cache-flaky; confirm it clears on re-run before treating as PR-caused.
+
+  PR: #2364
+  Reviewed sha: 48433c6b1fa888ebc4b8d968ffc1c142857569d1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T17:33:35.348167358Z
+modified_at: 2026-10-03T17:33:35.348167358Z
+req_type: Task
+tags:
+- carried-from:BUG-1716
+- finding-hash:53f6fca9
+- from-review:PR-2364
+- kind:carried-forward
+filed_at:
+  code_sha: a2c7bc7240a46e1c33dd37948d8fd98c09e221f1
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 81be7622-d357-4a9c-904d-8d88acc536d7
