@@ -5580,18 +5580,18 @@ fn write_session_env_file_creates_aida_dir_if_needed() {
 // trace:BUG-1783 | ai:codex
 #[test]
 fn test_isolate_cargo_target_dir_appends_worktree_name() {
-    let parent = std::path::Path::new("/tmp/parent/target");
-    let worktree1 = std::path::Path::new("/tmp/some-worktree");
-    let worktree2 = std::path::Path::new("/tmp/other-worktree");
+    let parent = std::path::Path::new("dummy-parent/target");
+    let worktree1 = std::path::Path::new("dummy/some-worktree");
+    let worktree2 = std::path::Path::new("dummy/other-worktree");
     let isolated1 = crate::isolate_cargo_target_dir(parent, worktree1);
     let isolated2 = crate::isolate_cargo_target_dir(parent, worktree2);
     assert_eq!(
         isolated1,
-        std::path::PathBuf::from("/tmp/parent/target/worktrees/some-worktree")
+        std::path::PathBuf::from("dummy-parent/target/worktrees/some-worktree")
     );
     assert_eq!(
         isolated2,
-        std::path::PathBuf::from("/tmp/parent/target/worktrees/other-worktree")
+        std::path::PathBuf::from("dummy-parent/target/worktrees/other-worktree")
     );
     assert_ne!(isolated1, isolated2);
 }
@@ -5600,10 +5600,10 @@ fn test_isolate_cargo_target_dir_appends_worktree_name() {
 // trace:BUG-1783 | ai:codex
 #[test]
 fn test_isolate_cargo_target_dir_falls_back_on_missing_name() {
-    let parent = std::path::Path::new("/tmp/parent/target");
+    let parent = std::path::Path::new("dummy-parent/target");
     let worktree = std::path::Path::new("/");
     let isolated = crate::isolate_cargo_target_dir(parent, worktree);
-    assert_eq!(isolated, std::path::PathBuf::from("/tmp/parent/target"));
+    assert_eq!(isolated, std::path::PathBuf::from("dummy-parent/target"));
 }
 
 /// TASK-63: parse_session_env handles the shape we write today.
