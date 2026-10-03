@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1738",
+  "publishes": [
+    {
+      "at": "2026-10-03T06:59:47.209736675Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-30T13:41:17.404984148Z",
+      "spec": "BUG-1738",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-02T14:21:02.196622917Z",
+      "spec": "BUG-1738",
+      "seat": "reviewer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Planned"
+      }
+    },
+    {
+      "ts": "2026-10-02T22:21:57.538370798Z",
+      "spec": "BUG-1738",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Planned",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T01:27:03.382714115Z",
+      "spec": "BUG-1738",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1738",
+        "branch": "bug-1738",
+        "first_seen": "2026-10-03T01:27:03.382693834+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:54:28.823764489Z",
+      "spec": "BUG-1738",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "a74f2d1445a7aaef2aa464fb8a251485e021f60a"
+      }
+    }
+  ]
+}
