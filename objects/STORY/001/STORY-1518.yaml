@@ -1,0 +1,33 @@
+id: 01a103ea-9c33-7050-b396-4869df40d16d
+spec_id: STORY-1518
+agreed_id: STORY-1518
+title: 'Review PR-2397: [AI:codex] fix(pull): report skipped legs and orphan store backlog (BUG-1796)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a103da`) for branch `bug-1796`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2397>
+  - Branch: `bug-1796` → `main`
+
+  ## Covers
+
+  - BUG-1796
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2397` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T22:37:49.491976817Z
+modified_at: 2026-10-03T22:37:49.491976817Z
+req_type: Story
+filed_at:
+  code_sha: e3ba5965a1121838dc97a7bba690fcbcf1b2d6e7
+  branch: bug-1796
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
