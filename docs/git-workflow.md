@@ -217,3 +217,15 @@ Each gap got its own response — see the lifecycle table above.
 - [EPIC-23](../) — Session orchestration & autonomy (parent for TASK-97/98/99/100/101)
 - `.claude/AIDA.md` (scaffolded into every AIDA-using project) — the recovery recipe for end users, without AIDA-internal cross-references
 - `feedback_fetch_before_commit.md` (agent memory) — the agent-side discipline counterpart
+
+## Why `aida pr ship` Does Not Auto-Rebase
+
+When `aida pr ship` detects that a branch is out of date with `main`, it does not automatically rebase it by default. If the divergence causes merge conflicts, the GitHub squash-merge fails, and AIDA prompts you to rebase manually using `aida pr rebase`.
+
+This design is intentional and avoids three major pitfalls:
+
+1. **The CI "Stale Green" Penalty:** CI pipelines (like GitHub Actions) run against specific commit SHAs. A rebase rewrites local git history, creating brand new commits with new SHAs. If AIDA automatically rebased your branch and force-pushed it, GitHub would instantly discard your existing passing CI check and trigger a new 15-20 minute CI run against the new commit. For a manual human command like `aida pr ship`, blocking your terminal for an extra 20 minutes before merging is an unacceptable penalty.
+2. **Squash Merges rarely need it:** `aida pr ship` uses GitHub's squash-merge functionality, which squashes all your changes into a single new commit at the tip of `main`. Unless there is a direct file conflict, GitHub can cleanly squash-merge an out-of-date branch without any local rebasing required.
+3. **The "No Surprises" Rule:** AIDA intentionally avoids modifying your working tree under the hood. (This is the same reason `aida pull` defaults to `--ff-only`). If a rebase is required, AIDA stops and gives you control to inspect the overlap and manually issue the `aida pr rebase`.
+
+**The Autonomous Exception:** The *only* exception to this rule is the autonomous orchestrator (e.g., running `aida queue work PR-N --auto-complete` for an overnight drain). Because the orchestrator runs asynchronously in the background, it has all the time in the world to wait out a 20-minute CI penalty. When it detects a stale base, it *will* attempt to auto-rebase cleanly in the background (STORY-429) to keep the queue moving while you sleep, parking the spec until the new CI run finishes.
