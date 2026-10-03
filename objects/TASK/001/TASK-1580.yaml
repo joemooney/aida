@@ -1,0 +1,20 @@
+id: 01a10325-7d4a-7c60-8fa7-3bd59b33ff1b
+spec_id: TASK-1580
+agreed_id: TASK-1580
+title: 'DECISION GATE: operator authorization of a protected-launch installer/backend package (BUG-1669 revisit trigger)'
+description: 'This spec exists as the machine-readable hold for BUG-1669 (deferral decision 2026-10-03, recorded in BUG-1669''s comments alongside hold decisions 01a0e125/01a0e10c). It stays DRAFT until the operator authorizes a concrete installer/backend/credential package for the protected broker/worker boundary (SPIKE-91, ADR-61). Do NOT approve or implement this spec on agent initiative — approval IS the operator''s authorization act. Revisit triggers (any one): (a) a second human works this repo; (b) seats run on hosts the operator does not control; (c) the product serves external users. When triggered: operator approves this spec with the chosen package named, then BUG-1669 unblocks and starts sketch-first.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:02:30.986259622Z
+modified_at: 2026-10-03T19:02:30.986259622Z
+req_type: Task
+filed_at:
+  code_sha: 04043d46aba01fb21af1876d34f80b923060037f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 81be7622-d357-4a9c-904d-8d88acc536d7
