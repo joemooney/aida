@@ -33284,6 +33284,20 @@ fn session_harness_worktree_register(
     }
 
     let project_root = find_main_worktree_root()?;
+
+    // BUG-1772 AC1: A SubagentStart whose cwd is the project root has no
+    // dedicated worktree of its own. A "worktree lease" here would track nothing
+    // and would erroneously absorb the liveness of any agent process in the root.
+    // So we do not write a lease at all.
+    // trace:BUG-1772 | ai:antigravity
+    let cwd_canonical = cwd.canonicalize().unwrap_or_else(|_| cwd.clone());
+    let root_canonical = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.clone());
+    if cwd_canonical == root_canonical {
+        return Ok(());
+    }
+
     let id = worktree_lease::lease_id_from_agent_id(&spec.agent_id);
     let owner = aida_core::git_ops::git_config_get("user.email")
         .ok()
@@ -48451,6 +48465,10 @@ fn leases_json_rows(
 #[path = "tests/task345_leases_json_tests.rs"]
 mod task345_leases_json_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_1772_harness_worktree_lease_tests.rs"]
+mod bug_1772_harness_worktree_lease_tests;
+
 /// BUG-1764 clause 4: `aida session leases --prune-stale` — release every
 /// CROSS-CLONE claim the staleness predicate reports dead.
 ///
@@ -48480,23 +48498,57 @@ fn session_leases_prune_stale(yes: bool) -> Result<()> {
         .collect();
     let (_live, stale) =
         coordination::partition_claims(foreign, chrono::Utc::now(), &coordination::hostname());
-    if stale.is_empty() {
-        println!("No stale cross-clone leases to release.");
+
+    // BUG-1772 AC2: `aida session leases --prune-stale` also learns to reap
+    // immortal pid-less harness-worktree leases.
+    // trace:BUG-1772 | ai:antigravity
+    let local_leases = list_leases(&project_root);
+    let mut stale_local_harness_leases = vec![];
+    let harness_threshold = chrono::Utc::now() - chrono::Duration::hours(24);
+    for lease in local_leases {
+        if lease.scope == worktree_lease::HARNESS_WORKTREE_SCOPE
+            && lease.active_pid.is_none()
+            && lease.creator_pid.is_none()
+            && lease.started_at < harness_threshold
+        {
+            stale_local_harness_leases.push(lease);
+        }
+    }
+
+    if stale.is_empty() && stale_local_harness_leases.is_empty() {
+        println!("No stale leases to release.");
         return Ok(());
     }
-    println!(
-        "{} stale cross-clone lease{} to release:",
-        stale.len(),
-        if stale.len() == 1 { "" } else { "s" }
-    );
-    for (c, reason) in &stale {
+    if !stale.is_empty() {
         println!(
-            "  {} {} {}",
-            truncate(&c.scope, 20).yellow(),
-            format!("({})", c.host).dimmed(),
-            reason.dimmed()
+            "{} stale cross-clone lease{} to release:",
+            stale.len(),
+            if stale.len() == 1 { "" } else { "s" }
         );
+        for (c, reason) in &stale {
+            println!(
+                "  {} {} {}",
+                truncate(&c.scope, 20).yellow(),
+                format!("({})", c.host).dimmed(),
+                reason.dimmed()
+            );
+        }
     }
+    if !stale_local_harness_leases.is_empty() {
+        println!(
+            "{} stale pid-less local harness-worktree lease{} to release:",
+            stale_local_harness_leases.len(),
+            if stale_local_harness_leases.len() == 1 {
+                ""
+            } else {
+                "s"
+            }
+        );
+        for l in &stale_local_harness_leases {
+            println!("  {} {}", l.id.yellow(), "age > 24h".dimmed());
+        }
+    }
+
     // Same posture as `aida session end`: a non-terminal stdin must not be
     // able to release a peer's claims without saying so explicitly.
     if !yes {
@@ -48506,10 +48558,8 @@ fn session_leases_prune_stale(yes: bool) -> Result<()> {
                  claim is a cross-clone mutation)"
             );
         }
-        if !confirm(&format!(
-            "Release {} stale lease claim(s) on the shared store? [y/N] ",
-            stale.len()
-        )) {
+        let total = stale.len() + stale_local_harness_leases.len();
+        if !confirm(&format!("Release {} stale lease(s)? [y/N] ", total)) {
             println!("Aborted.");
             return Ok(());
         }
@@ -48524,28 +48574,51 @@ fn session_leases_prune_stale(yes: bool) -> Result<()> {
         ) {
             Ok(true) => {
                 released += 1;
-                println!("  {} released {} — {}", "✓".green(), c.scope, reason);
+                println!(
+                    "  {} released cross-clone {} — {}",
+                    "✓".green(),
+                    c.scope,
+                    reason
+                );
             }
             // Refreshed, reclaimed, or already gone between the listing and the
             // delete — the verdict no longer describes the record on disk.
             Ok(false) => println!(
-                "  {} skipped {} — changed on the store since it was listed",
+                "  {} skipped cross-clone {} — changed on the store since it was listed",
                 "·".dimmed(),
                 c.scope
             ),
             Err(e) => eprintln!(
-                "  {} could not release {}: {e}",
+                "  {} could not release cross-clone {}: {e}",
                 "Warning:".yellow().bold(),
                 c.scope
             ),
         }
     }
+    let mut local_released = 0usize;
+    for l in &stale_local_harness_leases {
+        let p = lease_path(&project_root, &l.id);
+        if p.exists() {
+            if let Err(e) = std::fs::remove_file(&p) {
+                eprintln!(
+                    "  {} could not remove {}: {e}",
+                    "Warning:".yellow().bold(),
+                    l.id
+                );
+            } else {
+                local_released += 1;
+                println!("  {} released local harness lease {}", "✓".green(), l.id);
+            }
+        }
+    }
+
     println!();
     println!(
-        "Released {} of {} stale cross-clone lease claim{}.",
+        "Released {} of {} stale cross-clone lease claim(s), and {} of {} stale local harness lease(s).",
         released,
         stale.len(),
-        if stale.len() == 1 { "" } else { "s" }
+        local_released,
+        stale_local_harness_leases.len()
     );
     Ok(())
 }
