@@ -8,5 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T05:48:28.770432153Z
-modified_at: 2026-10-03T05:48:28.770432153Z
+modified_at: 2026-10-03T07:30:25.877171667Z
 req_type: Bug
+comments:
+- id: 01a100ab-ddd5-7da0-96b2-b6bd9e862aab
+  author: joe
+  content: 'Resolved by PR #2338 ([AI:codex] chore: remove unused imports to clear tech debt warnings), squash-merged to main at 0e82c72a8b40 on 2026-10-03. Its cache.rs hunk deletes exactly this dead assignment (cache.rs:1332); the error arm still yields EmptyMigration::NowHasRows and the post-match reassignment computes migration_pending = (outcome == NowHasRows) = true, so behavior is identical and the unused_assignments warning is gone. Warning witnessed live on main pre-merge via cargo check; independent advisor verdict APPROVED at eae58b79c454 recorded against this spec (verdict_ref ties it to PR 2338). Closing as completed — the defect was real and the fix shipped, just via a chore PR without this spec''s trailer.'
+  created_at: 2026-10-03T07:30:25.877171667Z
+  modified_at: 2026-10-03T07:30:25.877171667Z
+  session_id: bd3c525f-e97f-4517-972f-afc4737f73f8
