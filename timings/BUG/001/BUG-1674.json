@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1674",
+  "publishes": [
+    {
+      "at": "2026-10-03T06:24:01.091682222Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T06:23:42.048091589Z",
+      "spec": "BUG-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "2c7d6954093b0782f0f8fccaf2adc8e3bc4de790"
+      }
+    }
+  ]
+}
