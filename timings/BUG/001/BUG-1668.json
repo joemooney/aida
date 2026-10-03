@@ -5,6 +5,10 @@
     {
       "at": "2026-10-03T07:16:26.918959795Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-03T07:16:39.158103409Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -46,6 +50,16 @@
         "event": "ReviewVerdictRecorded",
         "verdict": "APPROVED",
         "reviewed_sha": "a3d6ac7250923b7a7be5c8ea4d0ffdc665b31409"
+      }
+    },
+    {
+      "ts": "2026-10-03T07:16:39.150515896Z",
+      "spec": "BUG-1668",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "75d2254178cd54b57d6caca86a4cd84951e19188",
+        "pr": 2355,
+        "closed_by": "auto-bump"
       }
     }
   ]
