@@ -84138,10 +84138,15 @@ fn collect_awaiting_report_inner(
             .iter()
             .filter(|record| record.reason_kind != merge_hold::HoldReasonKind::Recusal)
             .filter_map(|record| {
-                all_prs
-                    .iter()
-                    .find(|pr| pr.number == record.pr)
-                    .map(|pr| awaiting_you::project_held_pr(record, &pr.title))
+                all_prs.iter().find(|pr| pr.number == record.pr).map(|pr| {
+                    // trace:BUG-1788 | ai:antigravity
+                    let approved_at_head = pr.head_sha.as_deref().filter(|head| {
+                        crate::review_verdict::verdicts_for_sha(project_root, head)
+                            .into_iter()
+                            .any(|v| !v.is_closed() && v.kind.approves())
+                    });
+                    awaiting_you::project_held_pr(record, &pr.title, approved_at_head)
+                })
             })
             .collect(),
     };
