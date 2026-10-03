@@ -22,10 +22,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T13:07:11.273121873Z
-modified_at: 2026-10-03T13:25:10.450530607Z
+modified_at: 2026-10-03T19:06:40.609375851Z
 req_type: Story
 relationships:
-- rel_type: !Custom implements
+- rel_type:
+    custom: implements
   target_id: 01a0fefd-2812-75b2-a43d-0b68b3e9b4a9
   created_at: 2026-10-03T13:07:37.539961551Z
   created_by: joe
@@ -43,6 +44,8 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+archived: true
+archived_at: 2026-10-03T19:06:40.609375851Z
 implementation_info:
   implemented: false
   completed_at: 2026-10-03T13:25:10.450515296Z
