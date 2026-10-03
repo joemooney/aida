@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1783",
+  "publishes": [
+    {
+      "at": "2026-10-03T11:14:32.057154806Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T04:18:10.666013988Z",
+      "spec": "BUG-1783",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:03:27.829863150Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T10:13:12.397389567Z",
+      "spec": "BUG-1783",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1783",
+        "branch": "bug-1783",
+        "first_seen": "2026-10-03T10:13:12.397339811+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:16:49.471933480Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2376
+      }
+    },
+    {
+      "ts": "2026-10-03T10:29:00.638076248Z",
+      "spec": "BUG-1783",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2376,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "82c976573d1ddac703342b1ccff5a96f03a6f8f6"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:29:01.177185578Z",
+      "spec": "BUG-1783",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Fix direction is right (spec remedy (b): per-worktree CARGO_TARGET_DIR subdir) but it ships with no test/doctor witness, a silent-collision edge, and a doc/code mismatch",
+        "recovery_hint": "address the review findings, move BUG-1783 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:46:59.206753437Z",
+      "spec": "BUG-1783",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "db9aae41e5c51035df06f7e57da4121f351d1708"
+      }
+    },
+    {
+      "ts": "2026-10-03T10:54:45.996025353Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T10:55:57.551484058Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T11:06:17.699527350Z",
+      "spec": "BUG-1783",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "bd265fc3d829a4188881e19bee2997d8cd97ac46"
+      }
+    },
+    {
+      "ts": "2026-10-03T11:14:06.508906937Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-03T11:14:22.590940653Z",
+      "spec": "BUG-1783",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2376
+      }
+    },
+    {
+      "ts": "2026-10-03T11:14:32.049511746Z",
+      "spec": "BUG-1783",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c980a7937637ee228b687375b47549f35b49fbd3",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
