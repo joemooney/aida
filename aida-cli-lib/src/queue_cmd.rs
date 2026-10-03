@@ -1417,19 +1417,14 @@ pub(crate) fn queue_list_matches_requested_filters(
     role_scope: Option<&(Vec<String>, Option<String>)>,
     include_terminal: bool,
 ) -> bool {
-    let Some(req) = store
+    let req = store
         .requirements
         .iter()
-        .find(|r| r.id == entry.requirement_id)
-    else {
-        return scope_filter.is_none()
-            && batch_filter.is_none()
-            && tag_filter.is_none()
-            && tag_prefix_filter.is_none()
-            && role_scope.is_none();
-    };
-    if req.archived || (!include_terminal && is_terminal_status(&req.status)) {
-        return false;
+        .find(|r| r.id == entry.requirement_id);
+    if let Some(req) = req {
+        if req.archived || (!include_terminal && is_terminal_status(&req.status)) {
+            return false;
+        }
     }
     if let Some(raw) = scope_filter {
         let wants: Vec<&str> = raw
@@ -1446,7 +1441,8 @@ pub(crate) fn queue_list_matches_requested_filters(
                 .for_scope
                 .as_deref()
                 .is_some_and(|fs| wants.iter().any(|w| w.eq_ignore_ascii_case(fs)));
-            let derived = derive_parent_epic_label(req, store)
+            let derived = req
+                .and_then(|req| derive_parent_epic_label(req, store))
                 .is_some_and(|label| wants.iter().any(|w| w.eq_ignore_ascii_case(&label)));
             if !explicit && !derived {
                 return false;
@@ -1454,27 +1450,38 @@ pub(crate) fn queue_list_matches_requested_filters(
         }
     }
     if let Some((tags, status)) = role_scope {
-        if status.as_deref().is_some_and(|want| {
-            !format!("{}", req.status).eq_ignore_ascii_case(want)
-                && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
-        }) {
-            return false;
-        }
-        if tags.iter().any(|tag| !req.tags.iter().any(|t| t == tag)) {
+        if let Some(req) = req {
+            if status.as_deref().is_some_and(|want| {
+                !format!("{}", req.status).eq_ignore_ascii_case(want)
+                    && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+            }) {
+                return false;
+            }
+            if tags.iter().any(|tag| !req.tags.iter().any(|t| t == tag)) {
+                return false;
+            }
+        } else if !tags.is_empty() || status.is_some() {
             return false;
         }
     }
     if let Some(name) = batch_filter {
+        let Some(req) = req else { return false };
         let want = format!("batch:{}", normalize_batch_name(name));
         if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
             return false;
         }
     }
-    if tag_filter.is_some_and(|want| !tag_matches_exact(&req.tags, want)) {
-        return false;
+    if let Some(want) = tag_filter {
+        let Some(req) = req else { return false };
+        if !tag_matches_exact(&req.tags, want) {
+            return false;
+        }
     }
-    if tag_prefix_filter.is_some_and(|prefix| !tag_matches_prefix(&req.tags, prefix)) {
-        return false;
+    if let Some(prefix) = tag_prefix_filter {
+        let Some(req) = req else { return false };
+        if !tag_matches_prefix(&req.tags, prefix) {
+            return false;
+        }
     }
     true
 }
@@ -1975,29 +1982,6 @@ pub(crate) fn handle_queue_command(
             // trace:TASK-46 | ai:claude
             let mut hidden_terminal_count: usize = 0;
 
-            // TASK-52: parse --scope <CSV>. `none` (case-insensitive) is
-            // a sentinel meaning "entries with no for_scope set". Any
-            // other token (or comma-separated list) matches against
-            // explicit `for_scope` AND the auto-derived parent EPIC
-            // label from TASK-44 (so the displayed chip and the filter
-            // agree). trace:TASK-52 | ai:claude
-            #[derive(Debug, Clone)]
-            enum ScopeFilterKind {
-                Match(Vec<String>),
-                NoScope,
-            }
-            let scope_filter_parsed: Option<ScopeFilterKind> = scope_filter.as_deref().map(|raw| {
-                let parts: Vec<String> = raw
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                if parts.iter().any(|p| p.eq_ignore_ascii_case("none")) {
-                    ScopeFilterKind::NoScope
-                } else {
-                    ScopeFilterKind::Match(parts)
-                }
-            });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| {
@@ -2039,94 +2023,16 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or(true)
                 })
                 .filter(|e| {
-                    // TASK-52: --scope filter. Matches explicit
-                    // for_scope first, then the auto-derived parent
-                    // EPIC label so the displayed chip and the filter
-                    // agree. trace:TASK-52 | ai:claude
-                    let Some(ref kind) = scope_filter_parsed else {
-                        return true;
-                    };
-                    match kind {
-                        ScopeFilterKind::NoScope => e.for_scope.is_none(),
-                        ScopeFilterKind::Match(wants) => {
-                            if let Some(ref fs) = e.for_scope {
-                                if wants.iter().any(|w| w.eq_ignore_ascii_case(fs)) {
-                                    return true;
-                                }
-                            }
-                            // Fall through to derived parent-EPIC label.
-                            let Some(req) =
-                                store.requirements.iter().find(|r| r.id == e.requirement_id)
-                            else {
-                                return false;
-                            };
-                            if let Some(derived) = derive_parent_epic_label(req, &store) {
-                                wants.iter().any(|w| w.eq_ignore_ascii_case(&derived))
-                            } else {
-                                false
-                            }
-                        }
-                    }
-                })
-                .filter(|e| {
-                    let Some((scope_tags, scope_status)) = &scope else {
-                        return true;
-                    };
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    if let Some(want) = scope_status {
-                        if !format!("{}", req.status).eq_ignore_ascii_case(want)
-                            && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
-                        {
-                            return false;
-                        }
-                    }
-                    for tag in scope_tags {
-                        if !req.tags.iter().any(|t| t == tag) {
-                            return false;
-                        }
-                    }
-                    true
-                })
-                .filter(|e| {
-                    // TASK-229: --batch NAME filter. Match entries whose
-                    // requirement carries the `batch:NAME` tag.
-                    // Case-insensitive match. trace:TASK-229 | ai:claude
-                    let Some(name) = batch_filter.as_deref() else {
-                        return true;
-                    };
-                    let want = format!("batch:{}", name);
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return false;
-                    };
-                    req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want))
-                })
-                .filter(|e| {
-                    // TASK-238: --tag exact-match filter (case-insensitive).
-                    let Some(want) = tag_filter.as_deref() else {
-                        return true;
-                    };
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == e.requirement_id)
-                        .map(|req| tag_matches_exact(&req.tags, want))
-                        .unwrap_or(false)
-                })
-                .filter(|e| {
-                    // TASK-238: --tag-prefix filter (case-insensitive).
-                    let Some(prefix) = tag_prefix_filter.as_deref() else {
-                        return true;
-                    };
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == e.requirement_id)
-                        .map(|req| tag_matches_prefix(&req.tags, prefix))
-                        .unwrap_or(false)
+                    queue_list_matches_requested_filters(
+                        e,
+                        &store,
+                        scope_filter.as_deref(),
+                        batch_filter.as_deref(),
+                        tag_filter.as_deref(),
+                        tag_prefix_filter.as_deref(),
+                        scope.as_ref(),
+                        *include_terminal,
+                    )
                 })
                 .collect();
 
