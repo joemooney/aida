@@ -317,10 +317,11 @@ proto: ## Regenerate protobuf code
 	@cd aida-cli && cargo build --features remote
 	@echo "Protobuf code regenerated"
 
-proto-check: ## Check if proto files are up to date
-	@echo "Checking proto files..."
-	@diff -q proto/aida.proto aida-server/src/generated/aida.rs > /dev/null 2>&1 || \
-		echo "Warning: Proto files may be out of sync. Run 'make proto'"
+proto-check: ## Check the committed protobuf mirrors match what proto/ generates
+# Was `diff -q proto/aida.proto aida-server/src/generated/aida.rs`, which
+# compared a .proto against a .rs — a predicate that can never match, reported
+# only as a warning, and so could never fail. trace:TASK-1567 | ai:claude
+	@bash scripts/check-generated-proto.sh
 
 #==============================================================================
 # DEVELOPMENT HELPERS
