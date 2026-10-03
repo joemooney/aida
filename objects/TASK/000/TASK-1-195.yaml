@@ -1,5 +1,6 @@
 id: 01a102d4-1113-7383-a837-bd2d71263f0f
 spec_id: TASK-1-195
+agreed_id: TASK-375
 title: 'cargo test -p aida-cli-lib --lib: bug_1629_phase1_recovery_tests fail en masse …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1716, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
