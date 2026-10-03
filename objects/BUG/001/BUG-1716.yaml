@@ -35,12 +35,12 @@ description: |-
   ## Recurse-fix
 
   Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-28T14:38:13.575800541Z
-modified_at: 2026-10-03T03:47:44.778848454Z
+modified_at: 2026-10-03T06:24:33.296624529Z
 req_type: Bug
 tags:
 - auto-complete
@@ -91,6 +91,11 @@ comments:
   created_at: 2026-10-03T00:55:08.075722808Z
   modified_at: 2026-10-03T00:55:08.075722808Z
   session_id: 01a0ff263a27
+- id: 01a1006f-8e10-76f1-8daf-bf140c644c22
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR #2364 CI red: aida-cli-lib --lib fails — 13 bug_1629_phase1_recovery_tests + bug_1682_process_child panic (bug_1682_global_queue_tests.rs:77); launch-failure reclassification broke phase-1 recovery expectations. No triage reason was given.'
+  created_at: 2026-10-03T06:24:33.296622030Z
+  modified_at: 2026-10-03T06:24:33.296622030Z
 history:
 - id: 01a0e8b7-d37a-7c40-9b1a-8156ee6efd7b
   author: joe
@@ -120,16 +125,15 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1006f-8e10-76f1-8daf-bf092d338a47
+  author: joe
+  timestamp: 2026-10-03T06:24:33.296615967Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T00:55:16.026614268Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PR #2364 CI red: aida-cli-lib --lib fails — 13 bug_1629_phase1_recovery_tests + bug_1682_process_child panic (bug_1682_global_queue_tests.rs:77); launch-failure reclassification broke phase-1 recovery expectations'
-  recovery_hint: address the review findings, move BUG-1716 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T03:47:44.778848454Z
