@@ -110733,6 +110733,21 @@ mod bug_1628_pickup_resolver_tests {
 #[path = "tests/bug_1629_phase1_recovery_tests.rs"]
 mod bug_1629_phase1_recovery_tests;
 
+impl RealPhaseDriver {
+    /// Finish adopting the PR found after an implementer resumes. Keep this
+    /// transition independently testable: a resumed session may reuse a
+    /// draft PR just like phase 1 does.
+    // trace:BUG-1791 | ai:codex
+    fn adopt_resumed_pr(&mut self, pr: OpenPrInfo) -> auto_complete::ImplementerOutcome {
+        self.undraft_reused_publication(&pr);
+        self.set_pr_number(pr.number as u32);
+        if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
+            self.branch = Some(head);
+        }
+        auto_complete::ImplementerOutcome::PrOpened
+    }
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -111883,6 +111898,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             Ok(crate::forge::ChangeLookup::Found(pr)) => pr,
             _ => return None,
         };
+        // BUG-1791: phase-1 failure recovery adopts an existing publication
+        // just like the primary phase-1 lookup. Clear a reused draft before
+        // phase 2 can shepherd it toward merge (unless it is draft-only).
+        // trace:BUG-1791 | ai:codex
+        let adopted_pr = OpenPrInfo {
+            number: pr.id,
+            title: pr.title.clone().unwrap_or_default(),
+            url: pr.url.clone(),
+            head_branch: (!pr.branch.is_empty()).then_some(pr.branch.clone()),
+        };
+        self.undraft_reused_publication(&adopted_pr);
         self.set_pr_number(pr.id as u32);
         if !pr.branch.is_empty() {
             self.branch = Some(pr.branch.clone());
@@ -114001,13 +114027,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
             };
         match pr {
-            Some(pr) => {
-                self.set_pr_number(pr.number as u32);
-                if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
-                    self.branch = Some(head);
-                }
-                Ok(ImplementerOutcome::PrOpened)
-            }
+            Some(pr) => Ok(self.adopt_resumed_pr(pr)),
             None => Err(PhaseFailure::of(
                 FailureKind::NoPr,
                 "the resumed implementer session exited but opened no PR — \
