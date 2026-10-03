@@ -10271,7 +10271,8 @@ pub enum Command {
     /// default open-work view but not filed away the way archive is.
     ///
     /// Defer is a view-level flag distinct from status (it does not touch the
-    /// lifecycle state machine). Use `--until` to record the revisit trigger —
+    /// lifecycle state machine). Use `--reason` to record why this is an
+    /// operator hold and `--until` to record the revisit trigger —
     /// the free-text condition that brings the spec back (e.g.
     /// `--until "when a slice verb ships"`). That trigger is the one thing
     /// distinguishing deferred (prospective, primed) from archived
@@ -10290,6 +10291,11 @@ pub enum Command {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
         until: Option<String>,
+
+        /// Why the work is being held. Required for a durable operator hold;
+        /// legacy deferrals may omit it.
+        #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
+        reason: Option<String>,
     },
 
     /// Inverse of `aida defer` — clears the deferred flag (and its revisit
