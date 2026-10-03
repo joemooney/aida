@@ -75,12 +75,12 @@ description: |
   Whether other generated-once artifacts share this shape (other git hooks, `.aida/` scaffolding,
   the `.claude/` mirrors). If so, say so in a comment and file separately — do not widen this spec
   into a general staleness framework.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T13:13:17.626476738Z
-modified_at: 2026-10-02T23:14:18.685468332Z
+modified_at: 2026-10-03T06:59:46.860752332Z
 req_type: Bug
 comments:
 - id: 01a0f28c-4bca-79c0-95fa-c46369742bd0
@@ -211,3 +211,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1008f-ce45-7491-ba70-755b4dfe144c
+  author: joe
+  timestamp: 2026-10-03T06:59:46.885758616Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-03T06:59:46.860752332Z
+  implemented_by: joe
