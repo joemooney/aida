@@ -71,12 +71,12 @@ description: |
   `resolve_session_branch` stays unchanged — `aida session start` uses it directly, where STORY-65's
   documented suffixing is correct. No change to the retention policy for merged local branches; that is
   a separate question and deleting 761 branches is not this spec's business.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T03:41:29.241583054Z
-modified_at: 2026-10-03T00:38:57.784400214Z
+modified_at: 2026-10-03T04:20:46.041631147Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -127,6 +127,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a0fffe-394e-7a01-9d78-c06c289b777b
+  author: aida-auto-bump
+  timestamp: 2026-10-03T04:20:46.030833635Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0fffe-3959-79c2-84a4-4b25f2cc5ffa
+  timestamp: 2026-10-03T04:20:46.041615653Z
+  agent: aida
+  commit_sha: 976c008cb11ecf596aeb88f20f6a9c08fa8c3456
+  summary: 'PR #2361 approved: branch arm narrowed to unmerged-only, merged-ness via forge (--state merged, head-keyed), fail-open on probe failure, lazy probe, bypass chain intact; AC1-8 witnessed by tests, CI Build green'
+  review_verdict: approved
 filed_at:
   code_sha: 9a9993bcee35f415eafeabb439b88bfa028be810
   branch: main
@@ -139,3 +153,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-03T00:38:57.784400214Z
   implemented_by: joe
+  completed_at: 2026-10-03T04:20:46.030758230Z
+  completion_sha: 976c008cb11ecf596aeb88f20f6a9c08fa8c3456
