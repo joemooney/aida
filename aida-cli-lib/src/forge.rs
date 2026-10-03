@@ -3773,6 +3773,17 @@ pub(crate) mod fake {
         pub(crate) open_for_spec: ChangeLookup,
         pub(crate) merged_for_branch: ChangeLookup,
         pub(crate) author: Option<String>,
+        /// Scripted state served by `change_metadata` (default `Open`).
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_state: ChangeState,
+        /// When set, `change_metadata` fails with this message — the
+        /// unreadable-forge path of the retraction ownership probe.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_error: Option<String>,
+        /// When set, `close_change` fails with this message after recording
+        /// the attempt.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) close_error: Option<String>,
         /// `(change id, reason)` for every `close_change` call.
         pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
         /// `(change id, body)` for every `comment` call.
@@ -3787,6 +3798,9 @@ pub(crate) mod fake {
                 open_for_spec: ChangeLookup::NoChange,
                 merged_for_branch: ChangeLookup::NoChange,
                 author: Some("codex-bot".into()),
+                metadata_state: ChangeState::Open,
+                metadata_error: None,
+                close_error: None,
                 closed: Arc::new(Mutex::new(Vec::new())),
                 commented: Arc::new(Mutex::new(Vec::new())),
             }
@@ -3835,8 +3849,11 @@ pub(crate) mod fake {
             _: u64,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<ChangeMetadata> {
+            if let Some(msg) = &self.metadata_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
             Ok(ChangeMetadata {
-                state: ChangeState::Open,
+                state: self.metadata_state,
                 title: "fake change".into(),
                 author: self.author.clone(),
                 merged_at: None,
@@ -3894,6 +3911,9 @@ pub(crate) mod fake {
         }
         fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
             self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            if let Some(msg) = &self.close_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
             Ok(())
         }
         fn checkout_change(&self, _: &ChangeRef) -> Result<()> {

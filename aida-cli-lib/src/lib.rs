@@ -106285,10 +106285,32 @@ struct ResumeEntry {
 enum RetractionOwnership {
     /// Open, and its author is this forge identity.
     Ours,
-    /// Resolved, and not ours to close.
+    /// Open, and confirmed somebody else's.
     Foreign,
-    /// The probe itself failed, or the forge withheld the author.
+    /// The probe itself failed, or the forge withheld the author — the
+    /// change may still be ours and may still be open.
     Unverified,
+    /// Resolved as closed or merged: nothing to retract, nothing to hold.
+    /// The AlreadyMerged path owns the merged case.
+    // trace:TASK-1552 | ai:claude
+    NoLongerOpen,
+}
+
+/// What `retract_publication_with_notice` left behind on the forge.
+///
+/// TASK-1552 finding 1: the refused-preflight caller must know not merely
+/// whether the close happened, but whether a guards-failing change is STILL
+/// OPEN — that is the case that needs a merge-hold, or the refusal is
+/// enforced by stderr prose only.
+// trace:TASK-1552 | ai:claude
+enum RetractionOutcome {
+    /// The open change was closed; nothing is published.
+    Closed,
+    /// A guards-failing change remains open (or could not be confirmed
+    /// closed): foreign or unverified ownership, or the close call failed.
+    LeftOpen(crate::forge::ChangeRef),
+    /// Nothing to act on: no change found, or it is no longer open.
+    Nothing,
 }
 
 /// Validate the phase-1 change binding before phase 2 uses its source branch.
@@ -106492,13 +106514,22 @@ impl RealPhaseDriver {
     // trace:TASK-1529 trace:TASK-1421 | ai:codex
     fn retract_refused_publication(&mut self, branch: &str, detail: &str) {
         let note = implementer_preflight::retraction_notice(detail);
-        self.retract_publication_with_notice(branch, &note);
+        // TASK-1552 finding 1: a refused change this identity could not
+        // close stays OPEN on the forge — under the branch-keyed ownership
+        // rule that is the COMMON rework-round case, not an edge case. Hold
+        // it unmergeable instead of trusting stderr prose.
+        // trace:TASK-1552 | ai:claude
+        if let RetractionOutcome::LeftOpen(change) =
+            self.retract_publication_with_notice(branch, &note)
+        {
+            self.hold_refused_publication(&change, detail);
+        }
     }
 
-    /// Returns whether the change was actually closed; `false` covers every
-    /// arm that deliberately leaves it open (foreign or unverified ownership,
-    /// no PR found, or a failed close call).
-    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) -> bool {
+    /// Says what the retraction left behind; every arm that deliberately
+    /// leaves an open change on the forge (foreign or unverified ownership,
+    /// or a failed close call) reports it as [`RetractionOutcome::LeftOpen`].
+    fn retract_publication_with_notice(&mut self, branch: &str, note: &str) -> RetractionOutcome {
         if let Phase1PrResolve::Found(pr) = self.detect_phase1_pr(branch) {
             // A same-branch PR may have been opened by an operator while the
             // implementer was running. Branch presence alone does not prove
@@ -106520,8 +106551,15 @@ impl RealPhaseDriver {
                 }
                 // A change that is no longer open needs no retraction, and the
                 // AlreadyMerged path owns the merged case.
-                (Ok(_), Ok(_)) => RetractionOwnership::Foreign,
+                (Ok(_), Ok(_)) => RetractionOwnership::NoLongerOpen,
                 _ => RetractionOwnership::Unverified,
+            };
+            let change = crate::forge::ChangeRef {
+                id: pr.number,
+                url: pr.url.clone(),
+                branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
+                base: String::new(),
+                title: Some(pr.title.clone()),
             };
             match ownership {
                 RetractionOwnership::Ours => {}
@@ -106533,7 +106571,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return false;
+                    return RetractionOutcome::LeftOpen(change);
                 }
                 RetractionOwnership::Unverified => {
                     if !self.json {
@@ -106544,16 +106582,13 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    return false;
+                    return RetractionOutcome::LeftOpen(change);
+                }
+                // trace:TASK-1552 | ai:claude
+                RetractionOwnership::NoLongerOpen => {
+                    return RetractionOutcome::Nothing;
                 }
             }
-            let change = crate::forge::ChangeRef {
-                id: pr.number,
-                url: pr.url.clone(),
-                branch: pr.head_branch.clone().unwrap_or_else(|| branch.to_string()),
-                base: String::new(),
-                title: Some(pr.title.clone()),
-            };
             match forge.close_change(&change, note) {
                 Ok(()) => {
                     if !self.json {
@@ -106564,7 +106599,7 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    true
+                    RetractionOutcome::Closed
                 }
                 Err(e) => {
                     if !self.json {
@@ -106575,11 +106610,73 @@ impl RealPhaseDriver {
                             pr.number,
                         );
                     }
-                    false
+                    RetractionOutcome::LeftOpen(change)
                 }
             }
         } else {
-            false
+            RetractionOutcome::Nothing
+        }
+    }
+
+    /// TASK-1552 finding 1: a guards-REFUSED change that could not be closed
+    /// (foreign or unverified ownership, or the close call itself failed)
+    /// must not stay quietly mergeable. Stamp the typed merge-hold and its
+    /// label — no ownership check, deliberately: a hold only ever TIGHTENS
+    /// (the BUG-1714 doctrine) — and explain on the PR why it is held. It is
+    /// released through the ordinary `aida merge-hold clear` path.
+    /// Best-effort like the retraction: every miss is reported and the
+    /// phase still fails.
+    // trace:TASK-1552 | ai:claude
+    fn hold_refused_publication(&mut self, change: &crate::forge::ChangeRef, detail: &str) {
+        let number = change.id;
+        let hold = crate::merge_hold::typed_hold(
+            number,
+            crate::merge_hold::HoldReasonKind::Supervision,
+            format!(
+                "publication guards refused this change and it could not be closed; \
+                 it must not merge unreviewed:\n{detail}"
+            ),
+            None,
+        )
+        .with_spec(&self.spec);
+        match crate::merge_hold::write_typed_hold(&self.project_root, &hold) {
+            Ok(()) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} held unmergeable — its publication guards refused \
+                         it and it could not be closed",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    );
+                }
+            }
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} PR-{number} is OPEN, its publication guards REFUSED it, and \
+                         the merge-hold marker could not be written — hold it by hand \
+                         (`aida merge-hold add {number}`): {e}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    );
+                }
+            }
+        }
+        if let Err(err) = crate::merge_hold::sync_label(&self.project_root, number, true) {
+            if !self.json {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{number}: {err} — Layer 2 is off \
+                     for this PR until `aida merge-hold list --fix` re-syncs it",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+        }
+        let note = implementer_preflight::refused_hold_notice(detail);
+        if let Err(e) = self.project_forge().comment(change, &note) {
+            if !self.json {
+                eprintln!(
+                    "  {} the hold could not be explained on PR-{number}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
         }
     }
 
@@ -106661,7 +106758,10 @@ impl RealPhaseDriver {
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
             }
-            if !self.retract_publication_with_notice(branch, &notice) {
+            if !matches!(
+                self.retract_publication_with_notice(branch, &notice),
+                RetractionOutcome::Closed
+            ) {
                 // The PR could be neither held nor closed. The last honest
                 // lever is a comment: put the warning ON the PR so whoever
                 // can merge it sees that the work is unverified.
@@ -109231,6 +109331,173 @@ mod forge_seam_tests {
             forge.closed().is_empty(),
             "unknown ownership must fail closed"
         );
+    }
+
+    /// TASK-1552 finding 1: a refused change this identity did not open is
+    /// left open — but it must be left UNMERGEABLE, not merely talked about
+    /// on stderr. Under the branch-keyed ownership rule this is the common
+    /// rework-round shape: round 1's PR is still open when round 2 refuses.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_holds_a_foreign_open_change_unmergeable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(47, "claude/task-1552"));
+        forge.author = Some("operator".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1552", "guard `fmt` failed:\ndrift");
+
+        assert!(
+            forge.closed().is_empty(),
+            "a foreign PR must not be closed: {:?}",
+            forge.closed()
+        );
+        let record = crate::merge_hold::read_hold_record(tmp.path(), 47)
+            .expect("the unclosable refused PR must carry a typed merge-hold marker");
+        assert!(
+            record.detail.contains("refused"),
+            "the hold says a guard objected: {}",
+            record.detail
+        );
+        assert!(
+            record.detail.contains("guard `fmt` failed"),
+            "the hold carries the guard output: {}",
+            record.detail
+        );
+        let commented = forge.commented();
+        assert_eq!(commented.len(), 1, "the hold is explained on the PR");
+        assert_eq!(commented[0].0, 47);
+        assert!(
+            commented[0].1.contains("aida merge-hold clear"),
+            "the PR comment names the release lever: {}",
+            commented[0].1
+        );
+    }
+
+    /// TASK-1552 finding 1, unverified arm: when the author cannot be
+    /// confirmed the change may still be ours and still carries failing
+    /// guards — it gets the same hold.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_holds_an_author_unknown_change_unmergeable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(48, "claude/task-1552"));
+        forge.author = None;
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1552", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "unknown ownership must fail closed"
+        );
+        assert!(
+            crate::merge_hold::read_hold_record(tmp.path(), 48).is_some(),
+            "an author-unknown refused PR must be held unmergeable"
+        );
+    }
+
+    /// TASK-1552 finding 3: the unreadable-forge path. The ownership probe
+    /// itself fails — the PR's state is unknowable, so the close is refused
+    /// AND the hold is stamped (it only tightens).
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_holds_when_the_ownership_probe_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(49, "claude/task-1552"));
+        forge.metadata_error = Some("change_metadata unavailable".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1552", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "an unverifiable PR must not be closed: {:?}",
+            forge.closed()
+        );
+        assert!(
+            crate::merge_hold::read_hold_record(tmp.path(), 49).is_some(),
+            "an unverifiable refused PR must be held unmergeable"
+        );
+    }
+
+    /// TASK-1552: a change that resolved but is no longer open needs no
+    /// retraction and no hold — holding a closed PR would strand a stale
+    /// marker on a number that may be reused by the forge UI as noise.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_leaves_a_no_longer_open_change_unheld() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(50, "claude/task-1552"));
+        forge.metadata_state = crate::forge::ChangeState::Closed;
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1552", "guard `fmt` failed");
+
+        assert!(
+            forge.closed().is_empty(),
+            "a no-longer-open change must be left alone: {:?}",
+            forge.closed()
+        );
+        assert!(
+            crate::merge_hold::read_hold_record(tmp.path(), 50).is_none(),
+            "a no-longer-open change must not be held"
+        );
+        assert!(
+            forge.commented().is_empty(),
+            "nothing to explain on a change that is already resolved: {:?}",
+            forge.commented()
+        );
+    }
+
+    /// TASK-1552 finding 1: even OUR OWN refused PR whose close call fails
+    /// stays open and guards-failing — it gets the hold too.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_holds_when_the_close_call_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_branch = ChangeLookup::Found(change(51, "claude/task-1552"));
+        forge.close_error = Some("close rejected by the forge".into());
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1552", "guard `fmt` failed");
+
+        assert_eq!(
+            forge.closed().len(),
+            1,
+            "the close must have been attempted"
+        );
+        assert!(
+            crate::merge_hold::read_hold_record(tmp.path(), 51).is_some(),
+            "a refused PR whose close failed must be held unmergeable"
+        );
+    }
+
+    /// TASK-1552 finding 3: a retraction whose PR was resolved through the
+    /// spec-id search (the branch-keyed lookup missed) closes that PR like
+    /// any other — the ownership probe and close run on the recovered number.
+    // trace:TASK-1552 | ai:claude
+    #[test]
+    fn refused_preflight_closes_a_spec_search_resolved_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut forge = RecordingForge::new();
+        forge.open_for_spec = ChangeLookup::Found(change(52, "claude/task-1421-swapped"));
+        let mut driver = driver_with(tmp.path(), &forge);
+
+        driver.retract_refused_publication("claude/task-1421", "guard `fmt` failed");
+
+        let closed = forge.closed();
+        assert_eq!(
+            closed.len(),
+            1,
+            "the spec-search-recovered PR must be retracted: {closed:?}"
+        );
+        assert_eq!(closed[0].0, 52);
     }
 }
 
