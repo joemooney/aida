@@ -1,4 +1,12 @@
 - user_id: role:implementer
+  requirement_id: 01a0f2c7-18d6-7692-ab7a-47b0c7ff39f9
+  position: 312000
+  added_by: role:implementer
+  note: 'Rework of PR #2342 per REQUEST_CHANGES verdict 01a0feb1; rework brief at .aida/agent-briefs/claude/BUG-1740-2026-10-03T083926Z.md — the brief is the advisor hand-off'
+  added_at: 2026-10-03T08:39:41.623439334Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
   requirement_id: 01a0dd1b-e0ba-76b0-bdc8-68a087fa9ac5
   position: 313000
   added_by: role:implementer
