@@ -79,10 +79,27 @@ pub fn load(cache_path: &Path) -> Option<RefreshRequest> {
     serde_json::from_str(&body).ok()
 }
 
+// trace:BUG-1779 | ai:antigravity
+struct RequestLock(#[allow(dead_code)] std::fs::File);
+
+impl RequestLock {
+    fn acquire(cache_path: &Path) -> std::io::Result<Self> {
+        let path = cache_sidecar_path(cache_path, "refresh-request.lock");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path)?;
+        fs2::FileExt::lock_exclusive(&file)?;
+        Ok(Self(file))
+    }
+}
+
 /// File (or re-target) the request for `target_head`, preserving the recorded
 /// attempt history so backoff survives re-filing by later readers.
 // trace:TASK-1527 | ai:claude
 pub fn file_request(cache_path: &Path, target_head: &str) -> std::io::Result<RefreshRequest> {
+    let _guard = RequestLock::acquire(cache_path)?;
     let mut request = load(cache_path).unwrap_or_default();
     request.target_head = target_head.to_string();
     request.requested_at = chrono::Utc::now().to_rfc3339();
@@ -103,6 +120,7 @@ pub fn file_request(cache_path: &Path, target_head: &str) -> std::io::Result<Ref
 /// failure history without a pending request would suppress nothing.
 // trace:TASK-1527 | ai:claude
 pub fn record_failed_attempt(cache_path: &Path, error: &str) -> std::io::Result<()> {
+    let _guard = RequestLock::acquire(cache_path)?;
     let Some(mut request) = load(cache_path) else {
         return Ok(());
     };
@@ -123,10 +141,25 @@ pub fn record_failed_attempt(cache_path: &Path, error: &str) -> std::io::Result<
 /// re-check that, so it stays testable without a store.
 // trace:TASK-1527 | ai:claude
 pub fn clear(cache_path: &Path) -> std::io::Result<()> {
+    let _guard = RequestLock::acquire(cache_path)?;
     match std::fs::remove_file(refresh_request_path(cache_path)) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
         _ => Ok(()),
     }
+}
+
+pub fn clear_if_target_matches(cache_path: &Path, expected_head: &str) -> std::io::Result<()> {
+    let _guard = RequestLock::acquire(cache_path)?;
+    let Some(request) = load(cache_path) else {
+        return Ok(());
+    };
+    if request.target_head == expected_head {
+        match std::fs::remove_file(refresh_request_path(cache_path)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+            _ => (),
+        }
+    }
+    Ok(())
 }
 
 impl RefreshRequest {
@@ -277,5 +310,28 @@ mod tests {
             Some("failure 5"),
             "the OLDEST attempts are the ones dropped"
         );
+    }
+
+    #[test]
+    fn concurrent_record_failed_attempt_is_serialized() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = cache_path(&dir);
+        file_request(&cache, "abc").unwrap();
+        let mut threads = vec![];
+        for i in 0..10 {
+            let path = cache.clone();
+            threads.push(std::thread::spawn(move || {
+                for j in 0..10 {
+                    record_failed_attempt(&path, &format!("error {i}-{j}")).unwrap();
+                }
+            }));
+        }
+        for t in threads {
+            t.join().unwrap();
+        }
+        let request = load(&cache).unwrap();
+        // MAX_RECORDED_ATTEMPTS is 10, so it should retain exactly 10 valid entries
+        // without corruption or panics.
+        assert_eq!(request.attempts.len(), 10);
     }
 }
