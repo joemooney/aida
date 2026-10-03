@@ -3,12 +3,12 @@ spec_id: BUG-1663
 agreed_id: BUG-1663
 title: Cache incremental refresh can keep a deleted or reverted spec's row marked fresh when the file changes during a rebuild load and a later commit reverts it
 description: 'From TASK-1515''s round-3 strict review (finding 3; pre-existing on main with a wider window). A full rebuild stamps the HEAD captured before the load. If a file changes during the load and a later commit reverts or deletes it, the next incremental diff from the older stamp sees no net change, so the stale row stays marked fresh; a deleted spec can reappear until a full rebuild. Fix options: stamp the rebuild with the HEAD captured AFTER the load and verify the tree didn''t change mid-load (re-check HEAD or the index mtime and retry), or record per-row source blob ids and validate on the incremental. Acceptance: a test that changes then reverts a file across a rebuild load, then asserts the next refresh converges (no ghost row).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T16:50:34.548951365Z
-modified_at: 2026-09-27T04:10:04.331626603Z
+modified_at: 2026-10-03T05:03:59.662177590Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -165,4 +165,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a10025-ccae-7973-b22d-22310d13267e
+  author: aida-session-start
+  timestamp: 2026-10-03T05:03:59.662177073Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
