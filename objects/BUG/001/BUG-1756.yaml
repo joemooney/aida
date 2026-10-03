@@ -66,12 +66,12 @@ description: |
   while reconciling `aida human` / `aida awaiting` entries by hand, which is itself the signal: the
   reconciliation only caught it because a human-shaped pass went looking at worktrees the detector
   never mentions.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-01T15:12:41.984679155Z
-modified_at: 2026-10-03T04:03:26.673338616Z
+modified_at: 2026-10-03T04:20:21.347352530Z
 req_type: Bug
 comments:
 - id: 01a0f8b6-581c-76d0-8132-8bab9cd079b7
@@ -160,6 +160,20 @@ history:
   - field_name: status
     old_value: Planned
     new_value: InProgress
+- id: 01a0fffd-d8cd-7c33-95bb-91fa9e4f4bff
+  author: aida-auto-bump
+  timestamp: 2026-10-03T04:20:21.325239026Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0fffd-d8e3-7fd1-86cb-c8877a99abe5
+  timestamp: 2026-10-03T04:20:21.347314839Z
+  agent: implementer
+  commit_sha: 74a77020d8be414971d36f597ff420d4925082b5
+  summary: 'APPROVED PR #2365: local-first lazy evidence resurrects the dead bounded scan (0/24 -> 25/26 live), per-candidate 2s probe slice defuses monster cherry walks, pushed axis + push-first hint satisfy AC1/AC3, AC4 both-direction mutation proofs and the AC2 fixture family (124 tests) verified; CI Build green 11m55s. One narrow follow-up gap filed separately: merged-PR evidence from a pass-1-excluded sibling head no longer represents a stale ancestor branch of the same spec.'
+  review_verdict: approved
 filed_at:
   code_sha: b785274c7b94fee87eb3326cb8fc6e327255980e
   branch: main
@@ -168,3 +182,7 @@ filed_at:
   aida_build_sha: b785274c7b
   vendor: antigravity
   session: fd19dcdc-a23c-4c77-9546-8b74d9beaefb
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T04:20:21.325164664Z
+  completion_sha: 74a77020d8be414971d36f597ff420d4925082b5
