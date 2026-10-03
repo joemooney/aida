@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1780",
+  "publishes": [
+    {
+      "at": "2026-10-03T08:31:05.437536006Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-02T21:55:01.962819409Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T06:39:15.534294299Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T06:45:04.958542357Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2373
+      }
+    },
+    {
+      "ts": "2026-10-03T06:52:06.978364127Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T06:54:10.351251459Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T07:04:20.562520853Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T07:40:36.891054719Z",
+      "spec": "BUG-1780",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1780",
+        "branch": "bug-1780",
+        "first_seen": "2026-10-03T07:40:36.891028985+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T07:46:42.724399491Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T07:51:24.990478851Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T08:11:02.596434791Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T08:11:08.733285874Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-03T08:30:31.321574310Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-03T08:30:47.795798259Z",
+      "spec": "BUG-1780",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2373
+      }
+    },
+    {
+      "ts": "2026-10-03T08:31:05.429984110Z",
+      "spec": "BUG-1780",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b170cc9eeee9e36a187bc5cb40a57c6428bf88cc",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
