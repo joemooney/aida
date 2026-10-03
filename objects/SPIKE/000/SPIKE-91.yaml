@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T04:33:42.192429110Z
-modified_at: 2026-10-03T05:07:10.267564118Z
+modified_at: 2026-10-03T05:13:42.321204838Z
 req_type: Spike
 relationships:
 - rel_type: References
@@ -48,6 +48,12 @@ comments:
   created_at: 2026-10-03T05:07:10.267564118Z
   modified_at: 2026-10-03T05:07:10.267564118Z
   session_id: 302d7de9-e8d7-4058-b94c-b0cb54d66295
+- id: 01a1002e-b0b1-7e42-9410-4356e009419c
+  author: joe
+  content: 'Boundary package delivered: docs/plans/2026-10-02-spike-91-protected-broker-worker-boundary-package.md. Backend comparison Firecracker+jailer vs QEMU-microvm (recommendation: A primary with a kernel-support precondition, B named fallback; selection stays Joe''s). Host quals from read-only probes only, per the 01a0e360 budget: bare metal, KVM+vmx, nested=Y, cgroup v2, kernel 7.0.0-30 (OUTSIDE Firecracker''s historically supported list - flagged, not resolved), qemu 8.2.2 installed, firecracker absent, 93GiB disk free, oomd incident honoured in a 2-worker/8GiB-cap runtime budget. The three named O3 vendor verdicts (condition 2 of 01a0e360): V-CLAUDE yes (ANTHROPIC_AUTH_TOKEN/ANTHROPIC_BASE_URL/apiKeyHelper/CLAUDE_CONFIG_DIR, vendor docs fetched); V-CODEX yes with an API-platform billing consequence (CODEX_HOME, cli_auth_credentials_store=ephemeral, model_providers base_url/env_key; vendor pages redirect-blocked this session, re-verify flagged as package row 8); V-AGY qualified yes for model traffic (GEMINI_API_KEY + modelProvider=gemini + GOOGLE_GEMINI_BASE_URL, vendor docs fetched; account-session features unsupported). M3 encoding frozen-before-code field list, M2 observation scoping, M4 attest-before-Running supervision, BUG-1679 identity-admission contract (O7) specified in-package. 9 decision rows return to Joe; nothing granted, installed, selected or measured. No builds, no VMs, no installs were run.'
+  created_at: 2026-10-03T05:13:42.321204838Z
+  modified_at: 2026-10-03T05:13:42.321204838Z
+  session_id: b7a0b6d8-0d0a-4dca-b895-f9e23e3146f5
 history:
 - id: 01a10026-e12a-79d2-9ecc-7cbcb86c101a
   author: aida-session-start
