@@ -14936,8 +14936,10 @@ const DEFAULT_VISIBLE_COMMENT_MARKERS: &[&str] = &["CARVE-OUT", "CORRECTION", "P
 // trace:STORY-1434 | ai:claude
 pub(crate) fn is_default_visible_comment(body: &str) -> bool {
     let trimmed = body.trim_start();
+    // trace:BUG-1713 | ai:antigravity
     DEFAULT_VISIBLE_COMMENT_MARKERS.iter().any(|marker| {
         trimmed.len() >= marker.len()
+            && trimmed.is_char_boundary(marker.len())
             && trimmed[..marker.len()].eq_ignore_ascii_case(marker)
             && trimmed[marker.len()..]
                 .chars()

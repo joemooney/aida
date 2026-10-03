@@ -103,6 +103,16 @@ fn does_not_false_positive_on_a_word_that_merely_starts_with_a_marker() {
 }
 
 #[test]
+// trace:BUG-1713 | ai:antigravity
+fn does_not_panic_on_multibyte_boundary_overlap() {
+    // "APPROVED " is 9 bytes. "—" is 3 bytes. Byte index 10 (the length of "CORRECTION")
+    // lands in the middle of "—". This must return false, not panic.
+    assert!(!is_default_visible_comment(
+        "APPROVED — this is a REAL orchestrator bug"
+    ));
+}
+
+#[test]
 fn collects_markers_from_top_level_and_nested_replies() {
     let mut reply = Comment::new("bob".into(), "CORRECTION: actually it's F3 alone.".into());
     reply.parent_id = Some(uuid::Uuid::now_v7());
