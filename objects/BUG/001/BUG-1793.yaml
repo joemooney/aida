@@ -17,13 +17,21 @@ description: |
   3. `aida list` renders held distinctly and excludes it from ready-lenses.
   4. Only an operator (or explicitly authorized seat) can lift the hold.
   5. Migration note for the TASK-1580-style convention.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T19:03:38.159185634Z
+modified_at: 2026-10-03T19:08:11.818177512Z
 req_type: Bug
+history:
+- id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
+  author: joe
+  timestamp: 2026-10-03T19:08:11.818172025Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 04043d46aba01fb21af1876d34f80b923060037f
   branch: main
