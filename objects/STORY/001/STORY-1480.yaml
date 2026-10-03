@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T00:47:18.546002720Z
-modified_at: 2026-10-03T05:19:58.952663019Z
+modified_at: 2026-10-03T05:20:18.256697898Z
 req_type: Story
 tags:
 - aida:history
@@ -126,6 +126,12 @@ comments:
   created_at: 2026-10-03T03:34:59.380423614Z
   modified_at: 2026-10-03T03:34:59.380423614Z
   session_id: cb79afe6-1a86-4a40-9f0a-fbb0a431ca36
+- id: 01a10034-bb50-7660-8f2c-d7f81637bd7b
+  author: joe
+  content: 'Reviewer note (PR #2367 merged at c6ccdeb77f): the merge-trailer auto-bump flipped this spec to Completed on aida pull; reverted to In Progress deliberately (--force, per the author seat''s recorded instruction that the merge ships instrumentation only). ACs 1-4 are shipped and approved (see the recorded APPROVED verdict against c6ccdeb77f). AC5 (<=10% unknown-time on the drained-spec comparison) is a post-merge measurement needing interactive completions to accumulate (7d baseline at review time: work share 0.09%, implementer_passes_avg 0.088); the spec stays open until that measurement runs. The AC5 pass must account for BUG-1786 (non-implementer-role interactive claims emit a PhaseEntered slug WORK_PHASES drops, biasing work-share downward) or land that fix first.'
+  created_at: 2026-10-03T05:20:18.256697898Z
+  modified_at: 2026-10-03T05:20:18.256697898Z
+  session_id: 12540508-66a6-4ecc-8c45-2c357657fc9c
 history:
 - id: 01a0e346-3f80-7321-99e7-c3edaf383f34
   author: aida-session-start
