@@ -145,10 +145,6 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-[readers."aida-cli-lib/src/notify.rs"]
-channels = ["worktree"]
-sites = 1
-
 [readers."aida-cli-lib/src/orchestrator.rs"]
 channels = ["worktree"]
 sites = 1
@@ -540,7 +536,6 @@ provider = "policy" # gh / glab / none
 "*" = "policy" # <provider> = "<base url>", display-only
 
 [keys.worktree.notify]
-command = "grandfathered"
 min_interval = "policy"
 quiet_hours = "policy"
 
@@ -598,6 +593,9 @@ kind = "policy"
 
 [keys.trusted."pr-rebase"]
 smoke_check = "command"
+
+[keys.trusted.notify]
+command = "command"
 
 [keys.trusted.pr_rebase]
 smoke_check = "command" # accepted alternate section spelling
