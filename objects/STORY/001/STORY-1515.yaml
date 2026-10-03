@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2385` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T14:25:32.561083553Z
-modified_at: 2026-10-03T14:25:44.850958079Z
+modified_at: 2026-10-03T16:05:30.441837647Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,20 @@ relationships:
   target_id: 01a0fd8e-2bde-7b01-af5e-0aa34a6a0ac3
   created_at: 2026-10-03T14:25:44.850956485Z
   created_by: joe
+comments:
+- id: 01a10283-7106-7be3-852c-742a735c3d3f
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2385 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-03T16:05:31.014460053Z
+  modified_at: 2026-10-03T16:05:31.014460053Z
+history:
+- id: 01a10283-7106-7be3-852c-743b4b980901
+  author: aida-auto-bump
+  timestamp: 2026-10-03T16:05:31.014465779Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 06eafa35656f738dc70f78fc712b7adc3a8f257c
   branch: main
@@ -37,3 +51,6 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 821f2c6107
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T16:05:31.014458952Z
