@@ -1404,6 +1404,81 @@ pub(crate) fn queue_list_json_requested(json_flag: bool, format: Option<OutputFo
     json_flag || matches!(format, Some(OutputFormat::Json))
 }
 
+// Apply the queue-list filters whose source of truth is the requirement store
+// before the cache-fast JSON and TOON emitters project rows. Keep these rules
+// aligned with the human path below. trace:BUG-1795 | ai:codex
+pub(crate) fn queue_list_matches_requested_filters(
+    entry: &aida_core::QueueEntry,
+    store: &aida_core::RequirementsStore,
+    scope_filter: Option<&str>,
+    batch_filter: Option<&str>,
+    tag_filter: Option<&str>,
+    tag_prefix_filter: Option<&str>,
+    role_scope: Option<&(Vec<String>, Option<String>)>,
+    include_terminal: bool,
+) -> bool {
+    let Some(req) = store
+        .requirements
+        .iter()
+        .find(|r| r.id == entry.requirement_id)
+    else {
+        return scope_filter.is_none()
+            && batch_filter.is_none()
+            && tag_filter.is_none()
+            && tag_prefix_filter.is_none()
+            && role_scope.is_none();
+    };
+    if req.archived || (!include_terminal && is_terminal_status(&req.status)) {
+        return false;
+    }
+    if let Some(raw) = scope_filter {
+        let wants: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if wants.iter().any(|w| w.eq_ignore_ascii_case("none")) {
+            if entry.for_scope.is_some() {
+                return false;
+            }
+        } else {
+            let explicit = entry
+                .for_scope
+                .as_deref()
+                .is_some_and(|fs| wants.iter().any(|w| w.eq_ignore_ascii_case(fs)));
+            let derived = derive_parent_epic_label(req, store)
+                .is_some_and(|label| wants.iter().any(|w| w.eq_ignore_ascii_case(&label)));
+            if !explicit && !derived {
+                return false;
+            }
+        }
+    }
+    if let Some((tags, status)) = role_scope {
+        if status.as_deref().is_some_and(|want| {
+            !format!("{}", req.status).eq_ignore_ascii_case(want)
+                && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+        }) {
+            return false;
+        }
+        if tags.iter().any(|tag| !req.tags.iter().any(|t| t == tag)) {
+            return false;
+        }
+    }
+    if let Some(name) = batch_filter {
+        let want = format!("batch:{}", normalize_batch_name(name));
+        if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
+            return false;
+        }
+    }
+    if tag_filter.is_some_and(|want| !tag_matches_exact(&req.tags, want)) {
+        return false;
+    }
+    if tag_prefix_filter.is_some_and(|prefix| !tag_matches_prefix(&req.tags, prefix)) {
+        return false;
+    }
+    true
+}
+
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
 /// than the legacy full YAML load.
@@ -1520,7 +1595,7 @@ pub(crate) fn handle_queue_command(
             // paint. `RequirementSummary` carries id/spec_id/agreed_id/title/
             // status, everything the JSON shape needs. trace:BUG-618 | ai:claude
             if queue_list_json_requested(*json, output_format_override()) {
-                let raw = if *global {
+                let mut raw = if *global {
                     Vec::new()
                 } else {
                     queue_role_fallback::queue_list_with_role_fallback(
@@ -1530,6 +1605,35 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                let filter_store = if scope_filter.is_some()
+                    || batch_filter.is_some()
+                    || tag_filter.is_some()
+                    || tag_prefix_filter.is_some()
+                    || (!*all && !*no_scope && active_role_scope().is_some())
+                {
+                    Some(storage.load()?)
+                } else {
+                    None
+                };
+                if let Some(full_store) = &filter_store {
+                    let role_scope = if *all || *no_scope {
+                        None
+                    } else {
+                        active_role_scope()
+                    };
+                    raw.retain(|entry| {
+                        queue_list_matches_requested_filters(
+                            entry,
+                            full_store,
+                            scope_filter.as_deref(),
+                            batch_filter.as_deref(),
+                            tag_filter.as_deref(),
+                            tag_prefix_filter.as_deref(),
+                            role_scope.as_ref(),
+                            *include_terminal,
+                        )
+                    });
+                }
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let mut rows = queue_json_rows(&raw, &summaries);
@@ -1598,7 +1702,7 @@ pub(crate) fn handle_queue_command(
             // header, instead of the human grouped/Done-awaiting-merge view. The
             // human TTY path drops through unchanged. trace:TASK-964
             if agent_output_mode() {
-                let raw = if *global {
+                let mut raw = if *global {
                     Vec::new()
                 } else {
                     queue_role_fallback::queue_list_with_role_fallback(
@@ -1608,6 +1712,35 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                let filter_store = if scope_filter.is_some()
+                    || batch_filter.is_some()
+                    || tag_filter.is_some()
+                    || tag_prefix_filter.is_some()
+                    || (!*all && !*no_scope && active_role_scope().is_some())
+                {
+                    Some(storage.load()?)
+                } else {
+                    None
+                };
+                if let Some(full_store) = &filter_store {
+                    let role_scope = if *all || *no_scope {
+                        None
+                    } else {
+                        active_role_scope()
+                    };
+                    raw.retain(|entry| {
+                        queue_list_matches_requested_filters(
+                            entry,
+                            full_store,
+                            scope_filter.as_deref(),
+                            batch_filter.as_deref(),
+                            tag_filter.as_deref(),
+                            tag_prefix_filter.as_deref(),
+                            role_scope.as_ref(),
+                            *include_terminal || *include_completed,
+                        )
+                    });
+                }
                 // BUG-1513: `queue_list_with_role_fallback` deliberately passes
                 // the CALLER'S OWN entries through unfiltered (it widens the
                 // caller's own queue with peers' role-routed additions, per
