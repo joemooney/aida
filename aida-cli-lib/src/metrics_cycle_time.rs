@@ -864,7 +864,7 @@ pub(crate) fn run(
         .iter()
         .filter(|r| r.status == aida_core::RequirementStatus::Completed)
         .filter(|r| r.spec_id.is_some())
-        .filter(|r| wanted_type.as_ref().map_or(true, |t| &r.req_type == t))
+        .filter(|r| wanted_type.as_ref().is_none_or(|t| &r.req_type == t))
         .filter(|r| {
             tags.iter().all(|want| {
                 r.tags
@@ -963,7 +963,7 @@ pub(crate) fn run(
             DateTime::parse_from_rfc3339(&c.iso_timestamp)
                 .map(|t| {
                     let t = t.with_timezone(&Utc);
-                    t >= prefilter_since && prefilter_until.map_or(true, |u| t <= u)
+                    t >= prefilter_since && prefilter_until.is_none_or(|u| t <= u)
                 })
                 .unwrap_or(false)
         });
