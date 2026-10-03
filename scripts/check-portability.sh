@@ -413,3 +413,12 @@ if new_findings:
     )
     sys.exit(1)
 PY
+
+# BUG-1728: catch Windows-incompatible timestamp updates through a
+# read-only `File::open` handle, including tests that the general rule scan
+# cannot identify by a single source-line pattern.
+if [[ "$PRINT_FINDINGS" == "1" ]]; then
+  python3 "$ROOT/scripts/check_file_time_portability.py" "$ROOT" --print-findings
+else
+  python3 "$ROOT/scripts/check_file_time_portability.py" "$ROOT"
+fi
