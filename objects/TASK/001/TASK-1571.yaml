@@ -53,12 +53,12 @@ description: |
     corroborated on PR #2348 job 110994767531, 15 aida-cli-lib + 1 aida-core
     failures).
   - TASK-1570 / PR #2352: the macOS disable this mirrors.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:01:14.949714475Z
-modified_at: 2026-10-03T19:46:06.190764845Z
+modified_at: 2026-10-03T19:46:07.279759597Z
 req_type: Task
 tags:
 - ci
@@ -77,3 +77,11 @@ comments:
   created_at: 2026-10-03T19:46:06.190764845Z
   modified_at: 2026-10-03T19:46:06.190764845Z
   session_id: 424cc773-b969-4027-95eb-13a904e9c298
+history:
+- id: 01a1034d-692f-7ea3-a1f1-613f4e9d582f
+  author: joe
+  timestamp: 2026-10-03T19:46:07.279756337Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
