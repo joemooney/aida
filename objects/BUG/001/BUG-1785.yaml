@@ -12,12 +12,12 @@ description: |-
   2. A regression test or workflow assertion covers the advanced-mid-job case (simulate: attach at T1, advance the remote ref, run the step body; it must succeed and end attached at T2).
   3. The fix changes no store content semantics: .aida-store ends at origin/aida-store's current tip, detached/attached exactly as today's success path leaves it.
   Evidence: run 37097433112 job 111130120193 log tail; ci.yml lines 290-360 at ad7ecdb79b.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:58:23.317193259Z
-modified_at: 2026-10-03T10:01:49.065358245Z
+modified_at: 2026-10-03T14:08:16.163209323Z
 req_type: Bug
 comments:
 - id: 01a100fe-0f61-75d3-9cad-f29e1b6ea016
@@ -41,3 +41,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10218-191b-7c62-966a-1b6941459a7e
+  author: aida-auto-bump
+  timestamp: 2026-10-03T14:08:16.155603294Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10218-1923-73b1-8f54-16080357fbab
+  timestamp: 2026-10-03T14:08:16.163208234Z
+  agent: implementer
+  commit_sha: 06eafa35656f738dc70f78fc712b7adc3a8f257c
+  summary: Completed via merge 06eafa35
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T14:08:16.155575315Z
+  completion_sha: 06eafa35656f738dc70f78fc712b7adc3a8f257c
