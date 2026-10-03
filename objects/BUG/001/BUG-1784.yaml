@@ -10,12 +10,12 @@ description: |-
   2. A test in the BUG-1688 shipped-launch-refusal family pins the refusal (the bench harness is exercised with a recording vendor shim; zero vendor invocations on the refusal path).
   3. No bypass flag string in the file becomes reachable again without an explicit, separately approved mechanism; refusing this route does not claim any protection is deployed and does not close BUG-1669 (AC3/AC4 make refusal-only insufficient there).
   Out of scope: the P-enrolled-host boundary itself, any change to production Rust launch paths, and any claim about BUG-1669.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:37:17.786280177Z
-modified_at: 2026-10-03T19:07:01.436272524Z
+modified_at: 2026-10-03T19:17:35.143417265Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -61,3 +61,23 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a10333-4907-7fb2-a53c-57657656cbdf
+  author: aida-auto-bump
+  timestamp: 2026-10-03T19:17:35.111937852Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10333-4927-73c1-8db9-5f3442d59cb0
+  timestamp: 2026-10-03T19:17:35.143401085Z
+  agent: implementer
+  commit_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
+  summary: 'Round-2 re-review: all three findings addressed at 37885818c8 — PATH-prepended claude shim (writing AIDA_VENDOR_CALL_LOG) now puts the python refusal paths under the existing empty-call-log assert; trace comments and PR title corrected to antigravity; summary prose says seven surfaces. Build green at tip including the refusal fixture. merge-hold red is the expected supervised hold — clearance is the operator''s.'
+  punted:
+  - 'punted: Fix sound (refusals at the only two launch entry points, flags removed, test wired into CI) but AC2''s zero-invocation shim does not cover the python harness; attribution labels wrong.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T19:17:35.111864416Z
+  completion_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
