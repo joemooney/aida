@@ -17,12 +17,12 @@ description: |
   3. `aida list` renders held distinctly and excludes it from ready-lenses.
   4. Only an operator (or explicitly authorized seat) can lift the hold.
   5. Migration note for the TASK-1580-style convention.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T19:50:01.659214395Z
+modified_at: 2026-10-03T22:10:15.228076438Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,7 +61,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a103d1-5e3c-78d3-adea-b91fee5b713e
+  author: aida-orchestrator
+  timestamp: 2026-10-03T22:10:15.228119444Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:49:19.704322600Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized()'
+  recovery_hint: address the review findings, move BUG-1793 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-03T22:10:15.228076438Z
