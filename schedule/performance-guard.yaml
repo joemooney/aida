@@ -1,5 +1,5 @@
 job: performance-guard
-last_run: 2026-10-03T17:19:44.207747284Z
+last_run: 2026-10-03T19:07:45.186227470Z
 last_by:
   seat: substrate
   vendor: tick
@@ -9,3 +9,19 @@ failure_trips:
   at: 2026-09-29T09:42:49.813546761Z
   status: 1
   audit_error: 'malformed typed doctor output: trailing characters at line 30 column 1'
+- trip_id: performance-guard@2026-10-03T19:07:45.186227470Z
+  at: 2026-10-03T19:07:45.186227470Z
+  status: 1
+  performance:
+  - command: show
+    budget_ms: 1000
+    over_budget: 59
+    denominator: 410
+    proportion_millipercent: 14390
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 35488
+    excluded_samples: 35
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
