@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a10352-9ed5-71b2-a719-2145090d8ca9
+  position: 311000
+  added_by: role:implementer
+  note: 'Address advisor review at PR-2398: add actual output-level three-format tests plus behavior-based mutation proof, and align JSON include-completed handling.'
+  added_at: 2026-10-03T23:42:32.533834087Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0f2c7-18d6-7692-ab7a-47b0c7ff39f9
   position: 312000
   added_by: role:implementer
