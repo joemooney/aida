@@ -8,7 +8,8 @@
 //! `gh`/`glab`, no network.
 // trace:BUG-1690 | ai:claude
 
-use super::{Phase1PrResolve, RealPhaseDriver, Storage};
+use super::{OpenPrInfo, Phase1PrResolve, RealPhaseDriver, Storage};
+use crate::auto_complete::PhaseDriver as _;
 use crate::forge::fake::RecordingForge;
 use crate::forge::{ChangeLookup, ChangeRef};
 
@@ -132,4 +133,99 @@ fn draft_only_tagged_spec_keeps_its_draft() {
         "a review:draft-only draft is the human-review hold and must stay a draft: {:?}",
         forge.readied()
     );
+}
+
+fn tag_draft_only(root: &std::path::Path, spec: &str) {
+    let mut req = aida_core::Requirement::new("draft-only reuse".to_string(), String::new());
+    req.spec_id = Some(spec.to_string());
+    req.tags.insert(crate::pr_ship::DRAFT_ONLY_TAG.to_string());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    Storage::new(root.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
+}
+
+fn open_pr(id: u64, branch: &str) -> OpenPrInfo {
+    OpenPrInfo {
+        number: id,
+        title: "reused publication".into(),
+        url: format!("https://example.invalid/pull/{id}"),
+        head_branch: Some(branch.into()),
+    }
+}
+
+#[test]
+fn phase1_failure_recovery_marks_reused_draft_ready() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut forge = RecordingForge::new();
+    forge.open_for_spec = ChangeLookup::Found(change(51, "claude/recovery"));
+    forge.is_draft = true;
+    let mut driver = driver_with(tmp.path(), "BUG-1791", &forge);
+    let failure = crate::auto_complete::PhaseFailure::of(
+        crate::auto_complete::FailureKind::NoPr,
+        "scripted phase-1 failure",
+    );
+
+    assert!(matches!(
+        driver.recover_phase1_failure_with_open_pr(&failure),
+        Some(crate::auto_complete::Phase::Ci)
+    ));
+    assert_eq!(forge.readied(), vec![51]);
+}
+
+#[test]
+fn phase1_failure_recovery_leaves_ready_and_draft_only_prs_unchanged() {
+    for draft_only in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        if draft_only {
+            tag_draft_only(tmp.path(), "BUG-1791");
+        }
+        let mut forge = RecordingForge::new();
+        forge.open_for_spec = ChangeLookup::Found(change(52, "claude/recovery"));
+        forge.is_draft = draft_only;
+        let mut driver = driver_with(tmp.path(), "BUG-1791", &forge);
+        let failure = crate::auto_complete::PhaseFailure::of(
+            crate::auto_complete::FailureKind::NoPr,
+            "scripted phase-1 failure",
+        );
+
+        assert!(driver
+            .recover_phase1_failure_with_open_pr(&failure)
+            .is_some());
+        assert!(forge.readied().is_empty());
+    }
+}
+
+#[test]
+fn resumed_implementer_adoption_marks_reused_draft_ready() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut forge = RecordingForge::new();
+    forge.is_draft = true;
+    let mut driver = driver_with(tmp.path(), "BUG-1791", &forge);
+
+    assert!(matches!(
+        driver.adopt_resumed_pr(open_pr(53, "claude/resumed")),
+        crate::auto_complete::ImplementerOutcome::PrOpened
+    ));
+    assert_eq!(forge.readied(), vec![53]);
+}
+
+#[test]
+fn resumed_implementer_adoption_leaves_ready_and_draft_only_prs_unchanged() {
+    for draft_only in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        if draft_only {
+            tag_draft_only(tmp.path(), "BUG-1791");
+        }
+        let mut forge = RecordingForge::new();
+        forge.is_draft = draft_only;
+        let mut driver = driver_with(tmp.path(), "BUG-1791", &forge);
+
+        assert!(matches!(
+            driver.adopt_resumed_pr(open_pr(54, "claude/resumed")),
+            crate::auto_complete::ImplementerOutcome::PrOpened
+        ));
+        assert!(forge.readied().is_empty());
+    }
 }
