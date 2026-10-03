@@ -1,0 +1,57 @@
+id: 01a1034a-c916-7b00-a8d4-625a628853b4
+spec_id: TASK-1581
+agreed_id: TASK-1581
+title: 'Dead-code sweep: the 16 never-used warnings beyond TASK-1576''s four named symbols'
+description: |
+  While qualifying TASK-1576 (which names 4 dead symbols) the advisor re-ran the survey on main at 71ecbbb: `cargo build -p aida-cli-lib` emits 22 `is never used` warnings, not 4 (the filed-list-undercounts pattern). TASK-1576 stays scoped to its named symbols; this task owns the remaining 16:
+
+  - lib.rs:44882 headless_log_is_zero_bytes
+  - queue_cmd.rs:10156 derive_queue_work_prompt
+  - supervisor.rs:513 supervisor_requeue
+  - events.rs:779 latest_terminal_for_spec
+  - events.rs:793 supervisor_redrive_state
+  - merge_lock.rs:158 method release
+  - remote_create.rs:1530 method pushed
+  - review_verdict.rs:936 findings_surviving_round
+  - session.rs:1028 spawn_claude_session
+  - session.rs:1336 spawn_codex_session
+  - session.rs:1884 agy_headless_args
+  - session.rs:1925 codex_headless_args
+  - session.rs:1955 claude_headless_args
+  - session.rs:2955 advisor_tier_program_and_args
+  - session_reap.rs:400 spec_trailer_landed_on
+  - session_reap.rs:916 reap_one_with_missing_worktree_hook
+  - workflow_hints.rs:390 branch_belongs_to_spec
+
+  CAUTION before treating any as deletable: the session.rs spawn_*/
+  *_headless_args cluster looks like the night-shift / headless cold-boot
+  surface that TASK-1511 (approved, queued) intends to wire — deleting it may
+  be churn against planned work. Triage per symbol like TASK-1576's AC2:
+  delete (preferred when git history shows no planned caller), wire, or
+  #[allow(dead_code)] ONLY with a comment naming the consuming spec (e.g.
+  `// allow: consumed by TASK-1511 wiring`). Re-run the survey before
+  starting — the list moves.
+
+  Acceptance:
+  1. cargo build -p aida-cli-lib on main emits zero `is never used` warnings (whole-crate, not just this list).
+  2. Per-symbol disposition stated in the PR (delete / wire / allow-with-spec).
+  3. No blanket #[allow(dead_code)].
+  4. Warning absence shown by pasting the build output excerpt in the PR.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-03T19:43:15.222522057Z
+modified_at: 2026-10-03T19:43:15.222522057Z
+req_type: Task
+tags:
+- dead-code
+- hygiene
+filed_at:
+  code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
