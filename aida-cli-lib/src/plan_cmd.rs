@@ -584,6 +584,13 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                             real_id,
                             rel.display()
                         );
+                        // STORY-1480: promotion pins the plan — record the
+                        // planning-phase marker. trace:STORY-1480 | ai:claude
+                        crate::events::emit_interactive_lifecycle(
+                            &project_root,
+                            &[real_id.clone()],
+                            &crate::events::EventKind::PlanRecorded { verified: false },
+                        );
                         promoted += 1;
                     } else {
                         eprintln!(
@@ -998,6 +1005,13 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     if errors > 0 {
         std::process::exit(1);
     }
+    // STORY-1480: a PASS verdict is the verified planning record for every
+    // spec the plan's `Specs:` header names. trace:STORY-1480 | ai:claude
+    crate::events::emit_interactive_lifecycle(
+        &find_main_worktree_root().unwrap_or(root),
+        &parse_plan_specs(&content),
+        &crate::events::EventKind::PlanRecorded { verified: true },
+    );
     Ok(())
 }
 

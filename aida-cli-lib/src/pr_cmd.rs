@@ -2227,6 +2227,16 @@ pub(crate) fn pr_ship_handler(
                 Err(_) => {} // no per-check rows on this forge — keep the coarse verdict
             }
         }
+        // STORY-1480: the ship's CI wait reached a terminal verdict — emit
+        // the same CiTerminal the drain's CI phase emits (empty run_uuid;
+        // specs credited from the branch name), covering interactive ships.
+        // Emitted after the BUG-1180 refinement so a hold/matrix pseudo-red
+        // records as the green it really was. trace:STORY-1480 | ai:claude
+        crate::events::emit_interactive_lifecycle(
+            &main_worktree,
+            &pr_ship::extract_spec_ids_from_text(&ship_branch),
+            &crate::events::EventKind::CiTerminal { green: !ci_failed },
+        );
         if ci_failed {
             let detail = match &ci_result {
                 Err(e) => format!("{e:#}"),
@@ -3233,6 +3243,18 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
             change.url
         );
     }
+    // STORY-1480: a PR opened interactively records the same PhaseDonePr the
+    // drain's implementer phase records, so the timeline's work-done boundary
+    // exists for interactively-shipped specs too. Specs credited from the
+    // head commit's trailers; the feed lives at the MAIN worktree root.
+    // trace:STORY-1480 | ai:claude
+    crate::events::emit_interactive_lifecycle(
+        &main_worktree_root_from(project_root),
+        &extract_spec_ids_from_commit(&commit_msg),
+        &crate::events::EventKind::PhaseDonePr {
+            pr: change.id as u32,
+        },
+    );
     Ok(change.id)
 }
 
@@ -3396,7 +3418,40 @@ pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) ->
         draft: false,
     };
     match crate::forge::forge_for_open_change(probe_repo).open_change(req) {
-        Ok(_) => true,
+        Ok(change) => {
+            // STORY-1480: adopting unshipped work IS the integrate-side
+            // implementer hand-off — before this, such a spec's history
+            // read UnshippedWorkDetected → SpecCompleted with everything
+            // between unknown. Record the adoption pair: the phase entry
+            // (work existed; the adopter is picking it up) and the PR-open
+            // boundary, both with empty run_uuid like every interactive
+            // emit. trace:STORY-1480 | ai:claude
+            let root = main_worktree_root_from(probe_repo);
+            let specs = extract_spec_ids_from_commit(&commit_msg);
+            crate::events::emit_interactive_lifecycle(
+                &root,
+                &specs,
+                &crate::events::EventKind::PhaseEntered {
+                    idx: 1,
+                    slug: "implementer".to_string(),
+                    vendor: None,
+                    seat: None,
+                    model: None,
+                    effort: None,
+                    attempt: 1,
+                },
+            );
+            if change.id != 0 {
+                crate::events::emit_interactive_lifecycle(
+                    &root,
+                    &specs,
+                    &crate::events::EventKind::PhaseDonePr {
+                        pr: change.id as u32,
+                    },
+                );
+            }
+            true
+        }
         Err(e) => {
             eprintln!(
                 "{} auto-open failed: {e:#}",
@@ -4581,6 +4636,26 @@ mod pr_ship_environment_tests {
         assert!(args.contains("pr create"), "{args}");
         assert!(args.contains("--base main"), "{args}");
         assert!(args.contains("--head bug-896"), "{args}");
+
+        // STORY-1480: the adoption recorded its lifecycle pair — the
+        // implementer entry and the PR-open boundary — credited to the spec
+        // the head commit's trailer names, with no run uuid (no drain).
+        // trace:STORY-1480 | ai:claude
+        let feed = crate::events::read_all(&repo);
+        let adoption: Vec<_> = feed
+            .iter()
+            .filter(|e| e.spec.as_deref() == Some("BUG-896"))
+            .collect();
+        assert_eq!(adoption.len(), 2, "{adoption:?}");
+        assert!(matches!(
+            adoption[0].kind,
+            crate::events::EventKind::PhaseEntered { ref slug, attempt: 1, .. } if slug == "implementer"
+        ));
+        assert!(matches!(
+            adoption[1].kind,
+            crate::events::EventKind::PhaseDonePr { pr: 896 }
+        ));
+        assert!(adoption.iter().all(|e| e.run_uuid.is_empty()));
     }
 
     #[test]

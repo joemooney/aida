@@ -64,6 +64,18 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.6.0` — the new `PlanRecorded` event kind records a plan pinned for a
+  spec (`aida plan promote`, `aida import-plan`) or verified (`aida plan
+  verify` PASS), with one field, `verified`. It is not actionable (absorbed
+  by `aida watch`). An `aida watch` older than `1.6.0` reads it as `Unknown`,
+  which is actionable. The interactive surfaces also now emit EXISTING kinds
+  outside a drain, always with an empty `run_uuid`: the `aida queue work`
+  claim emits `PhaseEntered`, PR creation (`aida pr ship` / the recover
+  adoption) emits `PhaseDonePr`, and the ship's CI wait emits `CiTerminal`.
+  Counts per kind therefore rise at `1.6.0` without any drain behavior
+  change; a consumer separating drain activity from interactive activity
+  should split on `run_uuid` being empty. Additive only.
+  // trace:STORY-1480 | ai:claude
 - `1.5.0` — the new `SpecRequeued` event kind records a spec leaving
   NeedsAttention and going back into flight (`via`, optional `actor`, `from`,
   `to`, plus `cleared_tags`/`kept_tags` when present). Dropping a parked

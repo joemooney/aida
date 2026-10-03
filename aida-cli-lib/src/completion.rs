@@ -205,4 +205,10 @@ pub(crate) fn emit_spec_completed(
             },
         ),
     );
+    // STORY-1480 / ADR-64: every into-Completed path funnels through here,
+    // so this one call publishes the spec's lifecycle events to the store
+    // for cross-machine timelines. Best-effort, after the emit above so the
+    // SpecCompleted line itself is part of what gets published.
+    // trace:STORY-1480 | ai:claude
+    let _ = crate::timing_record::publish(project_root, spec_id, closed_by);
 }

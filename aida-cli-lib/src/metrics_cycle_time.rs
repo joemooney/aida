@@ -942,9 +942,10 @@ pub(crate) fn run(
     let mut completed_in_window = 0usize;
     let mut included: Vec<SpecCycle> = Vec::new();
     let mut excluded: Vec<(String, String)> = Vec::new();
+    // trace:STORY-1480 | ai:claude
     let mut notes = vec![
         "forge timestamps are not consulted by this aggregate view; CI signals come from the \
-         local drain feed"
+         local drain feed and each spec's published timing record"
             .to_string(),
     ];
     let (feed_by_spec, feed_notes) = drain_events_by_spec(project_root);
@@ -1003,10 +1004,18 @@ pub(crate) fn run(
         }
         completed_in_window += 1;
 
-        let events: Vec<crate::history_timeline::DrainRecord> = feed_by_spec
+        let local: Vec<crate::history_timeline::DrainRecord> = feed_by_spec
             .get(&spec_id.to_ascii_uppercase())
             .cloned()
             .unwrap_or_default();
+        // STORY-1480: a spec completed on another machine has no local feed
+        // entries; its published timing record on the store branch carries
+        // them, replayed through the same decoder as the local feed.
+        // trace:STORY-1480 | ai:claude
+        let (published, pub_notes) =
+            crate::history_timeline::collect_published_events(store_path, spec_id);
+        spec_notes.extend(pub_notes);
+        let (events, _) = crate::history_timeline::merge_records(local, published);
         if events.is_empty() {
             excluded.push((
                 spec_id.to_string(),

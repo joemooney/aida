@@ -456,6 +456,19 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         redrive_held: Option<String>,
     },
+    /// STORY-1480: a plan was recorded for the spec — pinned into
+    /// `docs/plans/` (promote/import) or verified (`aida plan verify` PASS).
+    /// The planning-phase marker the cycle-time timeline was missing: before
+    /// this, planning left no lifecycle event at all, so the stretch between
+    /// filing and the implementer claim always read unknown.
+    /// **Not actionable**: like [`SpecRequeued`](Self::SpecRequeued), it
+    /// records an act a seat already took, not a new decision point.
+    // trace:STORY-1480 | ai:claude
+    PlanRecorded {
+        /// `true` when the plan passed `aida plan verify` (refs checked);
+        /// `false` for a pin/import that recorded the plan without verifying.
+        verified: bool,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -519,6 +532,8 @@ impl EventKind {
             // STORY-1429: a requeue is a triage act already taken, recorded
             // for the trail, not a new decision point.
             | EventKind::SpecRequeued { .. }
+            // STORY-1480: a recorded plan is likewise an act already taken.
+            | EventKind::PlanRecorded { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
@@ -605,6 +620,7 @@ impl EventKind {
             EventKind::MailReceived { .. } => "MailReceived",
             EventKind::GateHeld { .. } => "GateHeld",
             EventKind::ShiftTick { .. } => "ShiftTick",
+            EventKind::PlanRecorded { .. } => "PlanRecorded",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -642,6 +658,7 @@ impl EventKind {
             "GateHeld",
             "ShiftTick",
             "SpecRequeued",
+            "PlanRecorded",
         ]
     }
 }
@@ -880,7 +897,7 @@ pub const EVENTS_DISABLE_ENV: &str = "AIDA_EVENTS_DISABLE";
 /// `false`, `no`, `off` (any case) all mean "not disabled", so an accidentally
 /// exported empty var can't silently blind a real drain's supervision stream.
 // trace:BUG-770 | ai:claude
-fn events_disabled() -> bool {
+pub(crate) fn events_disabled() -> bool {
     std::env::var(EVENTS_DISABLE_ENV)
         .map(|v| is_truthy(&v))
         .unwrap_or(false)
@@ -1121,6 +1138,26 @@ pub fn gate_held_event(
     );
     ev.seat = seat;
     ev
+}
+
+/// STORY-1480: emit one lifecycle event per credited spec from an
+/// interactive (non-drain) surface — empty `run_uuid`, seat stamped from
+/// `AIDA_SESSION_ROLE`. An empty `specs` still emits once with `spec: None`
+/// so the act is never silently dropped (the `emit_ship_pr_merged`
+/// precedent, BUG-1423). Best-effort like every [`emit`].
+// trace:STORY-1480 | ai:claude
+pub(crate) fn emit_interactive_lifecycle(project_root: &Path, specs: &[String], kind: &EventKind) {
+    let seat = active_seat();
+    let targets: Vec<Option<String>> = if specs.is_empty() {
+        vec![None]
+    } else {
+        specs.iter().cloned().map(Some).collect()
+    };
+    for spec in targets {
+        let mut ev = Event::new(spec, "", kind.clone());
+        ev.seat = seat.clone();
+        emit(project_root, &ev);
+    }
 }
 
 /// STORY-1436: record that a gate refused or held. Cheap (one appended line)
@@ -2470,5 +2507,49 @@ mod tests {
         assert_eq!(DEFAULT_EVENTS_MAX_BYTES, 5 * 1024 * 1024);
         // The env parse tolerates surrounding whitespace.
         assert_eq!("  42  ".trim().parse::<u64>().unwrap(), 42);
+    }
+
+    /// STORY-1480: `PlanRecorded` is a recorded act, not a decision point —
+    /// silent like `SpecRequeued` — and it round-trips with its tag listed
+    /// among the known names so `[schedule] on = [...]` can match it.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn plan_recorded_is_silent_named_and_roundtrips() {
+        let kind = EventKind::PlanRecorded { verified: true };
+        assert!(!kind.is_actionable());
+        assert!(!kind.is_terminal());
+        assert_eq!(kind.name(), "PlanRecorded");
+        assert!(EventKind::known_names().contains(&"PlanRecorded"));
+        let line =
+            serde_json::to_string(&Event::new(Some("TASK-9".into()), "", kind.clone())).unwrap();
+        let back: Event = serde_json::from_str(&line).unwrap();
+        assert_eq!(back.kind, kind);
+    }
+
+    /// STORY-1480: the interactive-surface emitter fans one event out per
+    /// credited spec with an empty run_uuid, and an empty spec list still
+    /// records the act once with `spec: None` (the ship-merge precedent).
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn emit_interactive_lifecycle_fans_out_per_spec_and_never_drops() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        emit_interactive_lifecycle(
+            root,
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &EventKind::PhaseDonePr { pr: 7 },
+        );
+        emit_interactive_lifecycle(root, &[], &EventKind::CiTerminal { green: true });
+        let all = read_all(root);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert!(all.iter().all(|e| e.run_uuid.is_empty()));
+        assert_eq!(all[0].spec.as_deref(), Some("TASK-1"));
+        assert_eq!(all[1].spec.as_deref(), Some("TASK-2"));
+        assert!(
+            matches!(all[0].kind, EventKind::PhaseDonePr { pr: 7 })
+                && matches!(all[1].kind, EventKind::PhaseDonePr { pr: 7 })
+        );
+        assert_eq!(all[2].spec, None, "empty spec list still records the act");
+        assert!(matches!(all[2].kind, EventKind::CiTerminal { green: true }));
     }
 }

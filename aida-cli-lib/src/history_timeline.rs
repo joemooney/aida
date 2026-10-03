@@ -456,6 +456,7 @@ pub(crate) fn build_timeline(input: TimelineInput) -> Result<Timeline> {
     cands.extend(phase_candidates(&events, &mut notes));
     cands.extend(shelve_candidates(&events, &store, &mut notes));
     cands.extend(awaiting_merge_candidates(&events, &mut notes));
+    cands.extend(merge_hold_candidates(&events, &mut notes));
     cands.extend(check_candidates(&input.checks, &mut notes));
     let first_work = cands
         .iter()
@@ -681,6 +682,11 @@ fn phase_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Cand
                 EventKind::PhaseEntered { .. } => same_run,
                 EventKind::CiTerminal { .. } => same_run && slug_l == "ci",
                 EventKind::PrMerged { .. } => same_run && slug_l == "merge",
+                // STORY-1480: the PR opening ends implementer work. In a
+                // drain the next phase entry closes it anyway; this is what
+                // closes the INTERACTIVE claim (both ends empty-run), whose
+                // next lifecycle record is `aida pr`'s PhaseDonePr.
+                EventKind::PhaseDonePr { .. } => same_run && slug_l == "implementer",
                 // A park ends work whoever recorded it; the shelve path does
                 // not always carry the run UUID.
                 EventKind::SpecShelved { .. } => same_run || later.ev.run_uuid.is_empty(),
@@ -732,11 +738,17 @@ fn phase_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Cand
     out
 }
 
-/// Park spans from a shelve. The store owns when the spec stopped being
-/// parked, so a shelve interval is cut at the first store transition to a
-/// status other than Needs Attention — a later drain restart does not get
-/// to claim the gap between them.
+/// Park spans from a shelve or a filed punt. The store owns when the spec
+/// stopped being parked, so the interval is cut at the first store
+/// transition to a status other than Needs Attention — a later drain
+/// restart does not get to claim the gap between them. STORY-1480: the
+/// store's own Needs Attention interval remains the cross-machine park
+/// record (`store_wait_candidates`); these event spans REFINE it locally
+/// with the precise shelve/punt instant, and `PuntFiled` now starts one
+/// too — a punt parks the spec on a human decision exactly like a shelve,
+/// but only the punting machine has the event.
 // trace:STORY-1478 | ai:claude
+// trace:STORY-1480 | ai:claude
 fn shelve_candidates(
     events: &[DrainRecord],
     store: &[StoreMarker],
@@ -745,7 +757,10 @@ fn shelve_candidates(
     let recs = events;
     let mut out = Vec::new();
     for (i, rec) in recs.iter().enumerate() {
-        if !matches!(rec.ev.kind, EventKind::SpecShelved { .. }) {
+        if !matches!(
+            rec.ev.kind,
+            EventKind::SpecShelved { .. } | EventKind::PuntFiled { .. }
+        ) {
             continue;
         }
         let mut end: Option<(DateTime<Utc>, String)> = None;
@@ -856,6 +871,63 @@ fn awaiting_merge_candidates(events: &[DrainRecord], notes: &mut Vec<String>) ->
         ],
         merge_key: format!("await-merge/{}", merge.origin),
     }]
+}
+
+/// STORY-1480: a supervised merge-hold is a bounded wait — placed by
+/// `MergeHoldChanged { placed: true }`, cleared by the matching
+/// `{ placed: false }` or by the PR merging, whichever comes first. The
+/// span carries the SAME label and class as [`awaiting_merge_candidates`]
+/// (a hold is a refinement of that wait, held open deliberately), so when
+/// both cover an instant they agree instead of reading disputed; when the
+/// work-done boundary is missing — every pre-instrumentation history —
+/// the hold is what still attributes the wait. A hold nothing clears is a
+/// note, never a span run to the window end.
+// trace:STORY-1480 | ai:claude
+fn merge_hold_candidates(events: &[DrainRecord], notes: &mut Vec<String>) -> Vec<Candidate> {
+    let recs = events;
+    let mut out = Vec::new();
+    for (i, rec) in recs.iter().enumerate() {
+        let EventKind::MergeHoldChanged {
+            pr, placed: true, ..
+        } = &rec.ev.kind
+        else {
+            continue;
+        };
+        let end = recs.iter().skip(i + 1).find(|later| {
+            later.ev.ts > rec.ev.ts
+                && match &later.ev.kind {
+                    EventKind::MergeHoldChanged {
+                        pr: p,
+                        placed: false,
+                        ..
+                    } => p == pr,
+                    EventKind::PrMerged { pr: p } => p == pr,
+                    _ => false,
+                }
+        });
+        match end {
+            Some(later) => out.push(Candidate {
+                label: "awaiting merge".to_string(),
+                class: SpanClass::Wait,
+                start: rec.ev.ts,
+                end: later.ev.ts,
+                source: SpanSource::Events,
+                precedence: PREC_DERIVED,
+                evidence: vec![
+                    format!("events:{}", rec.origin),
+                    format!("events:{}", later.origin),
+                ],
+                merge_key: format!("merge-hold/{}/{}", pr, rec.origin),
+            }),
+            None => notes.push(format!(
+                "a merge-hold on PR #{} placed at {} has no recorded release or merge, so \
+                 the held time is unknown rather than run to the end of the window",
+                pr,
+                rfc3339(rec.ev.ts)
+            )),
+        }
+    }
+    out
 }
 
 /// Forge check runs become CI detail. Parallel jobs are unioned by the
@@ -1593,6 +1665,48 @@ pub(crate) fn collect_drain_events(
     (out, notes)
 }
 
+/// The spec's published timing record (STORY-1480 / ADR-64) as feed-shaped
+/// records, so cross-machine evidence replays through exactly the decoder
+/// the local feed uses. Origins name the record so a rendered boundary is
+/// attributable to "published at completion" rather than this clone's feed.
+// trace:STORY-1480 | ai:claude
+pub(crate) fn collect_published_events(
+    store_path: &Path,
+    spec_id: &str,
+) -> (Vec<DrainRecord>, Vec<String>) {
+    let (events, notes) = crate::timing_record::load_published(store_path, spec_id);
+    let recs = events
+        .into_iter()
+        .enumerate()
+        .map(|(i, ev)| DrainRecord {
+            ev,
+            origin: format!("timing-record:{}", i + 1),
+        })
+        .collect();
+    (recs, notes)
+}
+
+/// Union the local feed with published-record events, in feed order, exact
+/// duplicates collapsed (the same semantics `collect_drain_events` applies
+/// across the live feed and its archive — local origins sort first, so the
+/// local line wins a tie). Returns how many published events survived
+/// beyond the local feed.
+// trace:STORY-1480 | ai:claude
+pub(crate) fn merge_records(
+    mut local: Vec<DrainRecord>,
+    published: Vec<DrainRecord>,
+) -> (Vec<DrainRecord>, usize) {
+    if published.is_empty() {
+        return (local, 0);
+    }
+    let before = local.len();
+    local.extend(published);
+    local.sort_by(|a, b| a.ev.ts.cmp(&b.ev.ts).then_with(|| a.origin.cmp(&b.origin)));
+    local.dedup_by(|a, b| a.ev == b.ev);
+    let contributed = local.len().saturating_sub(before);
+    (local, contributed)
+}
+
 /// PR numbers this spec is actually credited with, from its own drain
 /// events. A PR is never matched by title or branch guesswork.
 // trace:STORY-1478 | ai:claude
@@ -1755,8 +1869,20 @@ pub(crate) fn run(
 ) -> Result<()> {
     let project_root = store_path.parent().unwrap_or(store_path).to_path_buf();
     let (store, mut notes) = collect_store_markers(store_path, spec_id)?;
-    let (events, ev_notes) = collect_drain_events(&project_root, spec_id);
+    let (local_events, ev_notes) = collect_drain_events(&project_root, spec_id);
     notes.extend(ev_notes);
+    // STORY-1480: work done on another machine reaches this view through the
+    // published timing record on the store branch, not the local feed.
+    // trace:STORY-1480 | ai:claude
+    let (published, pub_notes) = collect_published_events(store_path, spec_id);
+    notes.extend(pub_notes);
+    let (events, published_contributed) = merge_records(local_events, published);
+    if published_contributed > 0 {
+        notes.push(format!(
+            "the store's published timing record contributed {published_contributed} event(s) \
+             beyond the local feed (work recorded on another clone)"
+        ));
+    }
 
     let mut checks: Vec<ForgeCheck> = Vec::new();
     if forge_enabled {
@@ -2208,6 +2334,205 @@ mod tests {
             .any(|s| s.start == at("2026-09-25T23:50:00Z")));
     }
 
+    /// STORY-1480 Slice B: the SAME no-drain shape as TASK-1507, but worked
+    /// after the interactive emitters exist — the queue-work claim records
+    /// `PhaseEntered{implementer}` (empty run), `aida pr`'s creation records
+    /// `PhaseDonePr`, the ship's CI wait records `CiTerminal`, and the merge
+    /// records `PrMerged`. The implementer span and the awaiting-merge wait
+    /// now materialize instead of the whole working day reading unknown.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_interactive_path_claims_work_instead_of_unknown() {
+        let store = vec![
+            filed("2026-09-25T08:15:03Z", "Approved", "bbb00000"),
+            tr(
+                "2026-09-25T10:52:03Z",
+                "Approved",
+                "In Progress",
+                "bbb11111",
+            ),
+            tr(
+                "2026-09-25T23:48:38Z",
+                "In Progress",
+                "Completed",
+                "bbb22222",
+            ),
+        ];
+        let events = vec![
+            // The claim (session_start's Approved → InProgress bump).
+            rec("2026-09-25T10:52:03Z", "", 7100, phase(1, "implementer", 1)),
+            rec(
+                "2026-09-25T13:19:11Z",
+                "",
+                7140,
+                EventKind::UnshippedWorkDetected {
+                    spec: "TASK-1507".into(),
+                    branch: "task-1507".into(),
+                    first_seen: "2026-09-25T13:19:11Z".into(),
+                },
+            ),
+            // `aida pr` opened the PR: the work-done boundary.
+            rec(
+                "2026-09-25T23:20:00Z",
+                "",
+                7180,
+                EventKind::PhaseDonePr { pr: 2190 },
+            ),
+            // The ship's CI wait reached green.
+            rec(
+                "2026-09-25T23:40:30Z",
+                "",
+                7190,
+                EventKind::CiTerminal { green: true },
+            ),
+            rec(
+                "2026-09-25T23:45:00Z",
+                "",
+                7200,
+                EventKind::PrMerged { pr: 2190 },
+            ),
+            rec(
+                "2026-09-25T23:48:40Z",
+                "",
+                7203,
+                EventKind::SpecCompleted {
+                    commit: "bbb22222".into(),
+                    pr: Some(2190),
+                    closed_by: "reconcile-status".into(),
+                },
+            ),
+        ];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+
+        // The claim → PR-open stretch is implementer WORK now.
+        let imp = find(&t, "implementer").expect("an implementer span");
+        assert_eq!(imp.class, SpanClass::Work);
+        assert_eq!(imp.start, at("2026-09-25T10:52:03Z"));
+        assert_eq!(imp.end, at("2026-09-25T23:20:00Z"));
+
+        // PR open → merge is an awaiting-merge wait.
+        let wait = find(&t, "awaiting merge").expect("an awaiting-merge span");
+        assert_eq!(wait.start, at("2026-09-25T23:20:00Z"));
+        assert_eq!(wait.end, at("2026-09-25T23:45:00Z"));
+
+        // The shape that used to be >50% unknown is now mostly attributed.
+        assert!(
+            t.totals.work > t.totals.unknown,
+            "work {} should exceed unknown {} once the interactive path is instrumented",
+            t.totals.work,
+            t.totals.unknown
+        );
+    }
+
+    /// STORY-1480 Slice C: a filed punt parks the spec exactly like a
+    /// shelve — the wait reads `parked`, cut at the store's exit from
+    /// Needs Attention, instead of unknown.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_punt_filed_attributes_the_park() {
+        let store = vec![
+            filed("2026-09-26T08:00:00Z", "Approved", "d0"),
+            tr("2026-09-26T09:00:00Z", "Approved", "In Progress", "d1"),
+            tr(
+                "2026-09-26T10:00:05Z",
+                "In Progress",
+                "Needs Attention",
+                "d2",
+            ),
+            tr(
+                "2026-09-26T14:00:00Z",
+                "Needs Attention",
+                "In Progress",
+                "d3",
+            ),
+            tr("2026-09-26T15:00:00Z", "In Progress", "Completed", "d4"),
+        ];
+        let events = vec![rec(
+            "2026-09-26T10:00:00Z",
+            "",
+            10,
+            EventKind::PuntFiled {
+                spec: "SPEC-1".into(),
+            },
+        )];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+        let parked = find(&t, "parked").expect("a park span from the punt");
+        assert_eq!(parked.start, at("2026-09-26T10:00:00Z"));
+        assert_eq!(parked.end, at("2026-09-26T14:00:00Z"));
+    }
+
+    /// STORY-1480 Slice C: a supervised merge-hold is a bounded
+    /// awaiting-merge wait — placed → released (or merged) — and a hold
+    /// nothing clears stays a note, never a span run to the window end.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_merge_hold_attributes_the_wait() {
+        let store = vec![
+            filed("2026-09-26T08:00:00Z", "Approved", "e0"),
+            tr("2026-09-26T09:00:00Z", "Approved", "In Progress", "e1"),
+            tr("2026-09-26T13:00:00Z", "In Progress", "Completed", "e2"),
+        ];
+        let events = vec![
+            rec(
+                "2026-09-26T10:00:00Z",
+                "",
+                20,
+                EventKind::MergeHoldChanged {
+                    pr: 42,
+                    placed: true,
+                    reason: Some("advisor review".into()),
+                },
+            ),
+            // A different PR's release must not clear PR-42's hold.
+            rec(
+                "2026-09-26T10:30:00Z",
+                "",
+                21,
+                EventKind::MergeHoldChanged {
+                    pr: 99,
+                    placed: false,
+                    reason: None,
+                },
+            ),
+            rec(
+                "2026-09-26T12:00:00Z",
+                "",
+                22,
+                EventKind::PrMerged { pr: 42 },
+            ),
+            // A second hold with no release or merge after it: note only.
+            rec(
+                "2026-09-26T12:30:00Z",
+                "",
+                23,
+                EventKind::MergeHoldChanged {
+                    pr: 77,
+                    placed: true,
+                    reason: None,
+                },
+            ),
+        ];
+        let t = build_timeline(input(store, events)).expect("timeline");
+        assert_partition(&t);
+        let wait = find(&t, "awaiting merge").expect("the held wait");
+        assert_eq!(wait.start, at("2026-09-26T10:00:00Z"));
+        assert_eq!(wait.end, at("2026-09-26T12:00:00Z"));
+        assert!(
+            t.coverage_notes
+                .iter()
+                .any(|n| n.contains("merge-hold on PR #77") && n.contains("no recorded release")),
+            "{:?}",
+            t.coverage_notes
+        );
+        // The uncleared hold claimed nothing after 12:30.
+        assert!(t
+            .spans
+            .iter()
+            .all(|s| !(s.activity == "awaiting merge" && s.start >= at("2026-09-26T12:30:00Z"))));
+    }
+
     /// An in-phase retry is not a park, repeated phases are numbered, and
     /// `awaiting merge` needs a real work-done record.
     // trace:STORY-1478 | ai:claude
@@ -2604,6 +2929,61 @@ mod tests {
             before_archive,
             std::fs::read(crate::events::events_archive_path(root)).expect("read")
         );
+    }
+
+    /// A spec completed on machine X shows its boundaries on machine Y: the
+    /// record X published to the store supplies the events Y's feed never
+    /// saw, through the same decoder, and the union never doubles a line
+    /// on X itself.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn story_1480_published_record_supplies_cross_machine_events() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = dir.path().join("store");
+        std::fs::create_dir_all(store.join("objects")).expect("mkdir");
+
+        // Machine X: a feed with two lifecycle lines, published at done.
+        let mx = dir.path().join("mx");
+        std::fs::create_dir_all(mx.join(".aida")).expect("mkdir");
+        std::fs::write(
+            crate::events::events_path(&mx),
+            concat!(
+                r#"{"ts":"2026-09-20T00:00:00Z","spec":"SPEC-9","run_uuid":"r1","kind":{"event":"RunStarted"}}"#,
+                "\n",
+                r#"{"ts":"2026-09-20T01:00:00Z","spec":"SPEC-9","run_uuid":"r1","kind":{"event":"PrMerged","pr":7}}"#,
+                "\n"
+            ),
+        )
+        .expect("write feed");
+        crate::timing_record::publish_to_store(&store, &mx, "SPEC-9", "queue-done")
+            .expect("published");
+
+        // Machine Y: no feed at all — everything comes from the record.
+        let my = dir.path().join("my");
+        std::fs::create_dir_all(&my).expect("mkdir");
+        let (local, _) = collect_drain_events(&my, "SPEC-9");
+        assert!(local.is_empty());
+        let (published, notes) = collect_published_events(&store, "SPEC-9");
+        assert!(
+            notes.is_empty(),
+            "readable record carries no note: {notes:?}"
+        );
+        let (merged, contributed) = merge_records(local, published);
+        assert_eq!(contributed, 2);
+        assert_eq!(merged.len(), 2);
+        assert!(matches!(merged[1].ev.kind, EventKind::PrMerged { pr: 7 }));
+        assert!(merged
+            .iter()
+            .all(|r| r.origin.starts_with("timing-record:")));
+
+        // Machine X itself: the union must not double a boundary, and the
+        // local line wins the tie so origins keep naming the feed.
+        let (local_x, _) = collect_drain_events(&mx, "SPEC-9");
+        let (published_x, _) = collect_published_events(&store, "SPEC-9");
+        let (merged_x, contributed_x) = merge_records(local_x, published_x);
+        assert_eq!(merged_x.len(), 2);
+        assert_eq!(contributed_x, 0, "nothing beyond the local feed");
+        assert!(merged_x.iter().all(|r| r.origin.starts_with("events")));
     }
 
     /// The three surfaces carry one model: the same classes, bounds and

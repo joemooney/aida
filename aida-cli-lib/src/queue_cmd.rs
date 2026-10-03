@@ -5390,6 +5390,14 @@ pub(crate) fn handle_queue_command(
                     info.source_tool.get_or_insert_with(|| tool.clone());
                 }
             })?;
+            // STORY-1480 / ADR-64: Done is the WORK machine's terminal
+            // state (Completed often lands later via auto-bump on another
+            // clone), so this is the publish that actually carries the
+            // phase evidence. Best-effort; never blocks the flip.
+            // trace:STORY-1480 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                let _ = crate::timing_record::publish(&project_root, &display_id, "queue-done");
+            }
             let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
                 .ok()
                 .filter(|s| !s.trim().is_empty())

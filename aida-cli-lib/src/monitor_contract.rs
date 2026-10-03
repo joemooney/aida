@@ -6,7 +6,9 @@ use serde_json::{json, Value};
 use std::io::Write;
 
 pub const NAME: &str = "aida-monitor";
-pub const VERSION: &str = "1.5.0";
+// 1.6.0: additive `PlanRecorded` event kind + interactive lifecycle emits
+// (STORY-1480). trace:STORY-1480 | ai:claude
+pub const VERSION: &str = "1.6.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
