@@ -39,12 +39,12 @@ description: |
      record_failed_attempt RMWs → count 1 instead of 2) and passes after.
   3. The unlocked `clear` either takes the lock and re-checks the request's
      target head, or is shown harmless by test.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T21:12:55.060797697Z
-modified_at: 2026-10-02T21:41:35.380154538Z
+modified_at: 2026-10-03T06:39:03.933681867Z
 req_type: Bug
 tags:
 - cache
@@ -58,3 +58,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1007c-d6fd-76e2-8418-ed3e8c554739
+  author: aida-session-start
+  timestamp: 2026-10-03T06:39:03.933681096Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
