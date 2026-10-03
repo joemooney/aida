@@ -10,12 +10,12 @@ description: |-
   2. A test covers an interactive claim under a non-implementer inherited role (e.g. advisor): the resulting timeline attributes the claim-to-PhaseDonePr stretch as work, not unknown.
   3. The AC5 measurement procedure on STORY-1480 notes whether its window predates or spans this fix.
   References: STORY-1480 (AC5), PR #2367, ADR-64.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:59:54.517765581Z
-modified_at: 2026-10-03T10:06:55.725794583Z
+modified_at: 2026-10-03T12:54:28.367896980Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -49,3 +49,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a101d4-88f4-7623-8667-4f7836c65317
+  author: aida-auto-bump
+  timestamp: 2026-10-03T12:54:28.340642066Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a101d4-890f-75e0-a44d-a42ad396a22c
+  timestamp: 2026-10-03T12:54:28.367894937Z
+  agent: aida
+  commit_sha: 9bcad5cb0f21f603fa5f5177ef36829ca9a08fd1
+  summary: Completed via merge 9bcad5cb
+  punted:
+  - 'punted: session end observed 2 commits ahead on branch `bug-1786` with no open PR; work may need manual push/PR recovery'
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T12:54:28.340567236Z
+  completion_sha: 9bcad5cb0f21f603fa5f5177ef36829ca9a08fd1
