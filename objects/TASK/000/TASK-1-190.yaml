@@ -8,15 +8,30 @@ description: |-
 
   PR: #2339
   Reviewed sha: 7ffe5767a021f6f4e1ec71e81eac7537172d1577
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T10:07:19.321608726Z
-modified_at: 2026-10-03T10:07:19.321608726Z
+modified_at: 2026-10-03T11:07:27.322221352Z
 req_type: Task
 tags:
 - carried-from:BUG-1771
 - finding-hash:4ffe7899
 - from-review:PR-2339
 - kind:carried-forward
+comments:
+- id: 01a10172-8ee2-7493-9cf9-272a95e7fd43
+  author: joe
+  content: 'Dismissed by joe 2026-10-03: Verified on main: the rework it prescribes is already shipped — ServerCommand::List (cli.rs ~284) documents the exact-match limitation with the BUG-1771 trace, and Command::List --status (cli.rs ~9335) documents comma sets, open/closed aliases, and the shelved/needs-decision/deferred tokens. Finding is moot.'
+  created_at: 2026-10-03T11:07:27.322221352Z
+  modified_at: 2026-10-03T11:07:27.322221352Z
+  session_id: 886938db-53d8-47d5-9dd6-836bbd136fd6
+history:
+- id: 01a10172-8efb-7351-99f7-9a717dd39fdd
+  author: joe
+  timestamp: 2026-10-03T11:07:27.355861954Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
