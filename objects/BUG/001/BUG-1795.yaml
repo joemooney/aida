@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:51:48.693477250Z
-modified_at: 2026-10-03T23:43:16.871203631Z
+modified_at: 2026-10-03T23:56:55.613093732Z
 req_type: Bug
 tags:
 - agent-output
@@ -50,6 +50,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Shared-predicate consolidation is sound, but AC2/AC4 are not satisfied at output level and the JSON fast path diverges from the agent path on --include-completed. Triage reason: Address advisor review at PR-2398: add actual output-level three-format tests plus behavior-based mutation proof, and align JSON include-completed handling.'
   created_at: 2026-10-03T23:42:31.636330762Z
   modified_at: 2026-10-03T23:42:31.636330762Z
+- id: 01a10433-07bd-7e51-8f62-c23f53da5a3c
+  author: joe
+  content: 'Rework for PR #2398 pushed at e1c1b2abce. Added real CLI-output coverage for human, JSON, and TOON empty --batch results; each emitter mutation was confirmed to fail its test. Added filtered JSON/TOON --include-completed parity coverage, fixed JSON terminal inclusion to match TOON, and removed the source-call-count/simulated-parity assertions. Verification: cargo fmt --all -- --check; cargo test -p aida-cli --test bug_1795_queue_list_filter_outputs (4 passed); cargo test -p aida-cli-lib queue_json_rows_tests (10 passed); git diff --check.'
+  created_at: 2026-10-03T23:56:55.613093732Z
+  modified_at: 2026-10-03T23:56:55.613093732Z
 history:
 - id: 01a103ce-71a4-7bd2-8c8b-2f37d5ba301e
   author: joe
