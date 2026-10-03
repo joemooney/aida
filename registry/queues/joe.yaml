@@ -25,12 +25,6 @@
   added_at: 2026-10-02T16:27:18.404854463Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a0fdb0-6bfa-73a3-a1dc-1ded7ed222a6
-  position: 33000
-  added_by: joe
-  added_at: 2026-10-02T18:19:49.479833860Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 01a0f2cc-eb2e-7523-a19d-3e000807018d
   position: 34000
   added_by: joe
@@ -65,20 +59,6 @@
   note: Promoted from finding BUG-1781 via `aida findings promote`
   added_at: 2026-10-02T23:41:11.112193380Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0e37a-26e7-7381-8578-945cc0eec78a
-  position: 42000
-  added_by: joe
-  added_at: 2026-10-03T00:28:56.804095780Z
-  for_role: advisor
-- user_id: joe
-  requirement_id: 01a0ff32-cbcc-7663-bfa0-548a8425574c
-  position: 43000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-03T00:39:50.325758776Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0ff34-b62d-7d90-8111-363980c2e458
   position: 44000
