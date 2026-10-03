@@ -42,12 +42,12 @@ description: |
   immediate work. Also observed while triaging: the SCHEDULED nightly run on main has
   been `cancelled` four days running (2026-09-29..10-02), so the nightly tracking-issue
   automation never fires; the only completed cross-platform runs are PR-triggered.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:08:45.792442925Z
-modified_at: 2026-10-03T07:42:54.605135664Z
+modified_at: 2026-10-03T17:33:33.724131379Z
 req_type: Bug
 tags:
 - cross-platform
@@ -73,3 +73,22 @@ comments:
   content: 'Implementation PR #2371: portable awk-based fixture update. Verified the recovery tests and the full macOS suite on 2026-10-03. The Cross-platform workflow macOS enablement was temporary and has been restored. Commit 404a373e82; PR https://github.com/joemooney/aida/pull/2371.'
   created_at: 2026-10-03T07:42:54.605135664Z
   modified_at: 2026-10-03T07:42:54.605135664Z
+history:
+- id: 01a102d4-0c94-7130-9095-47deadf4dfcb
+  author: aida-auto-bump
+  timestamp: 2026-10-03T17:33:33.716750067Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a102d4-0c9c-7473-acb4-c84c2fcefc11
+  timestamp: 2026-10-03T17:33:33.724128398Z
+  agent: implementer
+  commit_sha: a2c7bc7240a46e1c33dd37948d8fd98c09e221f1
+  summary: 'Root cause correctly narrowed from the spec''s suspected path-canonicalization to BSD sed -i (no backup suffix) silently failing the fixture''s store advance; portable awk+mv replacement validated on the actual macos-latest runner (job 111153100835: all three bug_1769_advance tests ok), temporary matrix leg restored (net diff is the one test file), CI green at head.'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T17:33:33.716746310Z
+  completion_sha: a2c7bc7240a46e1c33dd37948d8fd98c09e221f1
