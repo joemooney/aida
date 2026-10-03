@@ -1,0 +1,27 @@
+id: 01a10179-0f22-7c40-93c0-3755af7bda88
+spec_id: TASK-1-193
+title: DOC/CODE MISMATCH — write_session_env_file's doc comment now says target/worktr…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1783, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  DOC/CODE MISMATCH — write_session_env_file's doc comment now says target/worktrees/<branch> but the code keys by worktree DIRECTORY name; in this repo those differ routinely (dir aida-bug-1740 vs branch bug-1740). Keep the dir-name key (it is the unique on-disk token) and correct the comment to <worktree-dir-name>.
+  Reviewed sha: bd265fc3d829a4188881e19bee2997d8cd97ac46
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T11:14:33.378986503Z
+modified_at: 2026-10-03T11:14:33.378986503Z
+req_type: Task
+tags:
+- carried-from:BUG-1783
+- finding-hash:c5de31ec
+- from-review:BUG-1783
+- kind:carried-forward
+filed_at:
+  code_sha: c980a7937637ee228b687375b47549f35b49fbd3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e6c1176655
+  vendor: antigravity
