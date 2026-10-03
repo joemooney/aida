@@ -1,0 +1,30 @@
+id: 01a10333-51c8-7c00-9a00-8d538c726cd7
+spec_id: TASK-1-199
+title: 'Cosmetic, fix-if-touching: the test''s closing summary still says ''five shipped …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1784, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic, fix-if-touching: the test's closing summary still says 'five shipped script fixtures' though the python checks make it seven refusal surfaces.
+
+  PR: #2386
+  Reviewed sha: 37885818c8937a0435f6b1d57d55fe17f2c0ee9a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-03T19:17:37.352252169Z
+modified_at: 2026-10-03T19:17:37.352252169Z
+req_type: Task
+tags:
+- carried-from:BUG-1784
+- finding-hash:21706b88
+- from-review:PR-2386
+- kind:carried-forward
+filed_at:
+  code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: antigravity
+  session: 424cc773-b969-4027-95eb-13a904e9c298
