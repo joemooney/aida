@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:25:10.363279376Z
+modified_at: 2026-10-03T10:25:11.442157860Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -139,6 +139,11 @@ comments:
   content: 'AC3 triage: failure 4 is a test assertion issue, not production path formatting. `worktree_trust_findings` builds its summary with `parent.display()`, which uses platform-native separators; on Windows the same path correctly renders with backslashes. BUG-1777 changed the test assertion to normalize separators. The Windows run 37107077548 confirms `untrusted_parent_is_reported_once_and_is_not_auto_healable ... ok`.'
   created_at: 2026-10-03T10:25:10.363279376Z
   modified_at: 2026-10-03T10:25:10.363279376Z
+- id: 01a1014b-dd12-7a60-9a03-84e1a27db977
+  author: ai:codex:joe
+  content: 'AC4 root causes from BUG-1777: failure 6 came from Git for Windows and canonicalized paths spelling the same `.git` registration differently (slashes, case, extended `\\?\\` prefix); `worktree_gitdir_matches` now normalizes these before comparing. Failure 7 used a test fixture without `.exe`, so Windows could not resolve the running-executable candidate; the fixture now uses `EXE_SUFFIX`. Both tests pass on run 37107077548. The POSIX `/bin/sh` test is explicitly Unix-only and therefore is excluded on Windows.'
+  created_at: 2026-10-03T10:25:11.442157860Z
+  modified_at: 2026-10-03T10:25:11.442157860Z
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
