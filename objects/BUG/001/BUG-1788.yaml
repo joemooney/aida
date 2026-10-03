@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T07:26:22.543926925Z
-modified_at: 2026-10-03T07:26:22.543926925Z
+modified_at: 2026-10-03T08:59:15.873768730Z
 req_type: Bug
+comments:
+- id: 01a100fd-3221-7750-8acd-5a8f7fcc0988
+  author: joe
+  content: 'Advisor triage 2026-10-03 (fresh eyes): all four filed claims VERIFIED against the substrate, not plausibility (AGY cross-validation gate). (1) marker .aida/merge-holds/PR-2364 holds reason_kind=rework at target_head 98f3543b; (2) verdict file 48433c6b...json exists with verdict=approved, and gh confirms 48433c6b IS PR #2364''s current head (PR OPEN); (3) aida awaiting held_prs still prints ''implementer: address the review findings; the hold lifts after approval''; (4) project_held_pr (aida-cli-lib/src/awaiting_you.rs:1303) maps HoldReasonKind::Rework to a static action string without consulting the verdict corpus — while project_corpus_held_pr (BUG-1773) right below it already reads crate::review_verdict::CorpusHold, so the fix has a natural home. ACCEPTANCE (advisor-proposed): AC1 — when a marker-backed rework hold''s spec has an APPROVED verdict recorded at the PR''s CURRENT head, the held_prs row''s action flips to name the human clear (e.g. ''rework approved at <head12>; awaiting human: aida merge-hold clear <pr>'') and detail/reason stop prescribing implementer rework. AC2 — an approved verdict at a STALE (non-current-head) sha does NOT flip the row (rework prescription stands). AC3 — human-only clear unchanged: no code path clears or weakens the marker (integrity floor). AC4 — test fails without the fix (mutation proof) using a fixture marker + verdict corpus pair mirroring PR-2364''s shape. Non-goal: touching merge-hold clear semantics.'
+  created_at: 2026-10-03T08:59:15.873768730Z
+  modified_at: 2026-10-03T08:59:15.873768730Z
+  session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
 filed_at:
   code_sha: 75d2254178cd54b57d6caca86a4cd84951e19188
   branch: main
