@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-03T19:17:36.151604853Z
-modified_at: 2026-10-03T22:28:05.428621813Z
+modified_at: 2026-10-03T22:28:21.276210113Z
 req_type: Task
 tags:
 - carried-from:BUG-1784
@@ -28,6 +28,21 @@ comments:
   created_at: 2026-10-03T19:26:10.173499336Z
   modified_at: 2026-10-03T19:26:10.173499336Z
   session_id: 424cc773-b969-4027-95eb-13a904e9c298
+- id: 01a103e1-f09c-7b01-97ae-041e79fb7891
+  author: joe
+  content: |-
+    Advisor disposition: ALREADY SHIPPED — closed as completed, no new work needed.
+
+    Evidence (verified in-session 2026-10-03, advisor seat):
+    - The carried-forward finding describes the FIRST commit of PR #2386; the PR's second commit ("test(bench): record Python vendor launch attempts") added exactly the prescribed fix before merge. The reviewed sha in this spec (37885818) and current main both contain the PATH-prepended claude shim around the two assert_refused_py calls (tests/test_bug_1688_shipped_launch_refusals.sh:60-71).
+    - Residue (1) from the scope comment: all three trace comments already read "ai:antigravity" on main (tests/test_bug_1688_shipped_launch_refusals.sh:60, bench/agent-surface/run_bench.py:495,535).
+    - Residue (2): the closing summary already reads "all seven refusal surfaces refused" (tests/...:103).
+    - Non-vacuity proven by mutation in a detached worktree: deleting the cmd_run refusal guard makes the test fail (rc 1, "expected exit 78"); additionally, with the guard removed, a real "run --condition cli --task status_snapshot" launches claude via PATH and the shim writes 3 entries to AIDA_VENDOR_CALL_LOG, so the [ -s $calls ] backstop genuinely witnesses the python path. Mutation worktree removed after proof.
+
+    Process note: this is a stale auto-drafted finding — the carry-forward was filed against an intermediate commit state and the auto-resolver did not notice the fix had landed in the same PR (auto-resolver gap class).
+  created_at: 2026-10-03T22:28:21.276210113Z
+  modified_at: 2026-10-03T22:28:21.276210113Z
+  session_id: cfca8ab5-1095-4c8e-84e9-efb0fe97ac1e
 history:
 - id: 01a1033b-0615-7b73-a5f5-eec750f6c488
   author: joe
