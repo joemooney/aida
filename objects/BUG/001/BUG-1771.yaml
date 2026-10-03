@@ -53,12 +53,12 @@ description: |
   4. If a lens token is combined with a stored status in a comma set
      (`--status shelved,approved`), the command either honours both or refuses with
      a message naming the limitation — it must not silently drop a token.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T14:13:04.482813479Z
-modified_at: 2026-10-02T22:16:58.702944740Z
+modified_at: 2026-10-03T04:06:38.631704282Z
 req_type: Bug
 tags:
 - cli
@@ -102,6 +102,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a0fff1-4b27-7610-b6b6-7092fe69b6f6
+  author: aida-orchestrator
+  timestamp: 2026-10-03T04:06:38.631732176Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 30638a79ea62f2f23655d5434b316d609e2621df
   branch: main
@@ -110,3 +117,11 @@ filed_at:
   aida_build_sha: f3cde6e60e
   vendor: antigravity
   session: 6b6263ef-7534-4ca6-873c-25ab949a24ae
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Functional fix is correct and well-evidenced (split/widen/narrow with true OR-union semantics, shared LENS_FILTER_TOKENS table, black-box integration tests, both-direction mutation proofs) — but the new --status help text was added to the WRONG command and is false there, while the real surface's help was left silent.
+  recovery_hint: address the review findings, move BUG-1771 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-03T04:06:38.631704282Z
