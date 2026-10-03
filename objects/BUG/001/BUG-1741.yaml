@@ -76,12 +76,12 @@ description: |
   - Do not reap the zombie as the fix. The defect is the predicate, not this particular corpse.
   - Do not re-absorb BUG-1740. Its cause is a self-satisfying fan-out guard and is independent of
     this; fixing one will not move the other's output.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T14:51:50.958131359Z
-modified_at: 2026-10-03T06:41:20.536675372Z
+modified_at: 2026-10-03T06:42:24.168244430Z
 req_type: Bug
 comments:
 - id: 01a0f2e8-8927-74f2-947e-d6075481c22d
@@ -266,7 +266,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1007f-e516-7680-b379-2ef27b7d0b59
+  author: aida-auto-bump
+  timestamp: 2026-10-03T06:42:24.150777586Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1007f-e528-7cd1-90b3-9e22adea737f
+  timestamp: 2026-10-03T06:42:24.168226490Z
+  agent: product
+  commit_sha: 868d19b4ad0a5ac554990be3540344b07b9b8b79
+  summary: 'Independent re-review: spec-compliant (last-) stat parse, degrade-open non-Linux, all 6 helper sites routed/justified; survey grep found no missed production site (extras are tests/group-probes/signal delivery); mutation proof re-run in sibling worktree: bare kill(pid,0) fails exactly the zombie witness + AC6 identity witness, 5 controls green; 3 new tests verified executed in CI run 37097155396 on head 7d5ce83d'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T06:41:20.536675372Z
   implemented_by: joe
+  completed_at: 2026-10-03T06:42:24.150746378Z
+  completion_sha: 868d19b4ad0a5ac554990be3540344b07b9b8b79
