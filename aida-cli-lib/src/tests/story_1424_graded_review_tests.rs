@@ -58,7 +58,9 @@ Some overview of the feature.
 #[cfg(unix)]
 #[test]
 fn test_graded_review_pure_executable_pass() {
-    let desc = "## Acceptance\n- [ ] `true`\n- [ ] `echo hello`\n";
+    // One command must be non-trivial: an all-trivial set escalates instead
+    // of auto-approving. trace:BUG-1668 | ai:claude
+    let desc = "## Acceptance\n- [ ] `true`\n- [ ] `git --version`\n";
     let cwd = Path::new(".");
     let verdict = execute_graded_review(
         "TASK-100",

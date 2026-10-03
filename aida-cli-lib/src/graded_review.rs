@@ -405,6 +405,31 @@ fn not_run_summary_suffix(policy: &AcceptanceCommandPolicy, not_run_count: usize
     s
 }
 
+/// First words of commands that exit 0 without verifying anything about the
+/// change under review. A spec whose only executable criteria start with one
+/// of these would otherwise approve any PR at Rung 2 — `true`, `echo ok`,
+/// `test -n x`, `cat README.md` and friends succeed regardless of the diff.
+/// Such criteria still run (when permitted) and are recorded, but they are
+/// not evidence: they never count toward auto-approve on their own.
+// trace:BUG-1668 | ai:claude
+pub const TRIVIAL_COMMAND_WORDS: &[&str] = &[
+    "true", ":", "echo", "printf", "test", "[", "cat", "ls", "exit", "sleep", "pwd",
+];
+
+/// True when `command`'s first whitespace-split word is in
+/// [`TRIVIAL_COMMAND_WORDS`]. An empty command is trivial too.
+// trace:BUG-1668 | ai:claude
+pub fn is_trivial_command(command: &str) -> bool {
+    match command.split_whitespace().next() {
+        Some(first) => TRIVIAL_COMMAND_WORDS.contains(&first),
+        None => true,
+    }
+}
+
+/// Summary line used when every passed executable check is trivial.
+// trace:BUG-1668 | ai:claude
+pub const TRIVIAL_ONLY_SUMMARY: &str = "only trivial executable checks; escalated";
+
 /// Execute deterministic acceptance checks and evaluate residual prose criteria.
 ///
 /// `policy` decides which spec-authored commands may be spawned at all; a
@@ -432,6 +457,9 @@ pub fn execute_graded_review(
     let mut machine_passed_count = 0;
     let mut machine_failed_count = 0;
     let mut not_run_count = 0;
+    // Passed checks that are actual evidence (see TRIVIAL_COMMAND_WORDS).
+    // trace:BUG-1668 | ai:claude
+    let mut nontrivial_passed_count = 0;
 
     let mut residual_prose = Vec::new();
 
@@ -478,6 +506,9 @@ pub fn execute_graded_review(
 
                         if out.status.success() {
                             machine_passed_count += 1;
+                            if !is_trivial_command(command) {
+                                nontrivial_passed_count += 1;
+                            }
                             results.push(CriterionResult {
                                 criterion: crit.clone(),
                                 status: CriterionStatus::Passed,
@@ -618,6 +649,33 @@ pub fn execute_graded_review(
                 // Always empty here: the refused-command branch above returns
                 // first, so this path has nothing left to check by hand.
                 not_run_summary_suffix(policy, not_run_count)
+            ),
+        });
+    }
+
+    // Trivial-only guard: every executable check passed but none of them is
+    // evidence (`true`, `echo …`, …) and there is no prose the evaluator or
+    // the seat could settle instead. Sits ahead of BOTH approve branches so
+    // neither Rung 2 nor the evaluator fast-pass can turn it into "approved"
+    // (same placement as the STORY-1476 NotRun guard above). A failing
+    // trivial command already vetoed above, unchanged.
+    // trace:BUG-1668 | ai:claude
+    if prose_count == 0 && machine_verified_count > 0 && nontrivial_passed_count == 0 {
+        return Ok(GradedReviewVerdict {
+            spec_id: spec_id.to_string(),
+            reviewed_sha: reviewed_sha.to_string(),
+            overall_verdict: "escalated".to_string(),
+            verdict_kind: format!("{:?}", VerdictKind::Unknown),
+            machine_verified_count,
+            machine_passed_count,
+            prose_count: 0,
+            residual_prose_count: 0,
+            escalated_to_seat: true,
+            not_run_count,
+            results,
+            summary: format!(
+                "Passed {} machine check(s); {}.",
+                machine_passed_count, TRIVIAL_ONLY_SUMMARY
             ),
         });
     }
@@ -857,12 +915,23 @@ pub fn generate_graded_reviewer_prompt(
                 "\nThe following criteria were MACHINE-VERIFIED at commit {} and are already SETTLED (do not re-evaluate):\n",
                 &verdict.reviewed_sha[..std::cmp::min(10, verdict.reviewed_sha.len())]
             ));
+            let mut all_passed_trivial = true;
             for r in &verdict.results {
                 if r.status == CriterionStatus::Passed {
                     if let CriterionKind::Executable { command, .. } = &r.criterion {
                         prompt.push_str(&format!("  - [PASSED (exit 0)] `{}`\n", command));
+                        if !is_trivial_command(command) {
+                            all_passed_trivial = false;
+                        }
                     }
                 }
+            }
+            // trace:BUG-1668 | ai:claude
+            if all_passed_trivial {
+                prompt.push_str(
+                    "  (Every passed check above is trivial and verifies nothing about the \
+                     change; review the PR on its merits.)\n",
+                );
             }
         }
 

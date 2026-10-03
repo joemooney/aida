@@ -334,7 +334,9 @@ fn story_1476_star_allows_metachars() {
 
     assert!(checkout.path().join("ok").exists());
     assert_eq!(verdict.results[0].status, CriterionStatus::Passed);
-    assert_eq!(verdict.overall_verdict, "approved");
+    // First word `true` classifies the whole command as trivial, so the
+    // passed check is not approval evidence. trace:BUG-1668 | ai:claude
+    assert_eq!(verdict.overall_verdict, "escalated");
 }
 
 /// A3: quotes and control characters are refused too (the checker's split
