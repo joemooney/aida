@@ -664,17 +664,29 @@ fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
     // and succeed (since the mock only breaks `pull`).
     let mock_dir = tempfile::tempdir().unwrap();
     let mock_git = mock_dir.path().join("git");
-    let mock_script = r#"#!/bin/bash
-if [ "$1" = "-C" ]; then
-    shift 2
+    let mock_script = format!(
+        r#"#!/bin/bash
+# Only fail if operating on our specific project root
+is_our_repo=0
+for arg in "$@"; do
+    if [[ "$arg" == "{}"* ]]; then
+        is_our_repo=1
+    fi
+done
+
+if [ "$is_our_repo" -eq 1 ]; then
+    for arg in "$@"; do
+        if [ "$arg" = "pull" ]; then
+            echo "fatal: Cannot rebase onto multiple branches." >&2
+            exit 128
+        fi
+    done
 fi
-if [ "$1" = "pull" ]; then
-    echo "fatal: Cannot rebase onto multiple branches." >&2
-    exit 128
-fi
-# Pass through to the real git
+
 exec /usr/bin/git "$@"
-"#;
+"#,
+        project_root.display()
+    );
     std::fs::write(&mock_git, mock_script).unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&mock_git, std::fs::Permissions::from_mode(0o755)).unwrap();
