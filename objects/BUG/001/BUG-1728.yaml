@@ -116,7 +116,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-29T15:38:11.514364962Z
-modified_at: 2026-10-03T10:21:22.699237579Z
+modified_at: 2026-10-03T10:25:10.363279376Z
 req_type: Bug
 comments:
 - id: 01a0fcfd-dac0-7a11-8ef2-9f918f5dc816
@@ -134,6 +134,11 @@ comments:
   content: 'Overlap review with BUG-1777: the latest Windows run on PR #2375 reports the three aida_bin failures, doctor path assertion, session-reap case, and test_home path scan passing; the POSIX mirror-hook test is not built on Windows. The Windows aida-cli-lib result is 7446 passed, 0 failed, 15 ignored (job 111157604736), versus this spec baseline 7146 passed, 7 failed, 12 ignored. BUG-1777 covers most named failures, but BUG-1728 remains distinct: AC2 repository-wide file-time guard, AC3 triage record, AC5 mutation proofs, and AC6 baseline accounting are not yet complete. Operator directed a scoped exception to ADR-47 for this spec only.'
   created_at: 2026-10-03T10:20:24.595788323Z
   modified_at: 2026-10-03T10:20:24.595788323Z
+- id: 01a1014b-d8db-7b70-a949-c331c38a53bc
+  author: ai:codex:joe
+  content: 'AC3 triage: failure 4 is a test assertion issue, not production path formatting. `worktree_trust_findings` builds its summary with `parent.display()`, which uses platform-native separators; on Windows the same path correctly renders with backslashes. BUG-1777 changed the test assertion to normalize separators. The Windows run 37107077548 confirms `untrusted_parent_is_reported_once_and_is_not_auto_healable ... ok`.'
+  created_at: 2026-10-03T10:25:10.363279376Z
+  modified_at: 2026-10-03T10:25:10.363279376Z
 history:
 - id: 01a0edd1-925c-7ce1-94fc-91c99890cba1
   author: joe
