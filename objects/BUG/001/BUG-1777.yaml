@@ -38,12 +38,12 @@ description: |
   1. Build (windows-latest) on the Cross-platform workflow is green on a PR whose base is main.
   2. Any test exempted from Windows carries an explicit cfg + comment naming the Windows behavior it
      cannot have, rather than a silent skip.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T19:33:17.896248217Z
-modified_at: 2026-10-02T21:01:51.670996534Z
+modified_at: 2026-10-03T06:31:31.871259710Z
 req_type: Bug
 tags:
 - ci
@@ -56,11 +56,3 @@ comments:
   created_at: 2026-10-02T21:01:51.670996534Z
   modified_at: 2026-10-02T21:01:51.670996534Z
   session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
-filed_at:
-  code_sha: 67f1098ab582a793e9c165c641574dedcb7e3640
-  branch: bug-1723-work
-  dirty: false
-  aida_version: 0.15.0
-  aida_build_sha: fe09d7678e
-  vendor: antigravity
-  session: d5ee562a-7ce2-403d-8384-8ef61700260f
