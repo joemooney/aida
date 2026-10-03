@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:20:32.787349526Z
-modified_at: 2026-10-03T05:03:58.423476294Z
+modified_at: 2026-10-03T05:06:57.782850951Z
 req_type: Bug
 tags:
 - performance
@@ -288,6 +288,13 @@ comments:
   created_at: 2026-09-29T09:43:28.579342108Z
   modified_at: 2026-09-29T09:43:28.579342108Z
   session_id: 97b5b35c-fb4e-4bb8-bbbe-a5526f5d21b9
+- id: 01a10028-8476-7111-aa07-85cc7b6dc7aa
+  author: joe
+  content: |
+    ADVISOR SCOPING NOTE (relay #7, 2026-10-02, before implementation starts): this spec shares its subsystem with approved-and-queued work — STORY-1484 (single-flight flock-guarded cache refresh, bounded reader wait, labelled stale read), TASK-1514 (read-tolerant path for read commands), and BUG-1778/BUG-1779 (refinements on that design). Do NOT independently redesign the refresh path here. Scope this fix to the narrow defect: the STRICT stale-cache refresh on the `aida show` path waiting UNBOUNDED behind a concurrent writer — i.e. a bounded wait + honest stale-read fallback on that call path, consistent with (not duplicating) STORY-1484's design. If during implementation you conclude the only correct fix IS STORY-1484 itself, stop and say so on this spec rather than shipping a parallel rewrite; the advisor will re-sequence. Related measurement context: TASK-1565 (performance-guard calibration) references this spec — a fix here changes that guard's baseline, note it in the PR.
+  created_at: 2026-10-03T05:06:57.782850951Z
+  modified_at: 2026-10-03T05:06:57.782850951Z
+  session_id: 302d7de9-e8d7-4058-b94c-b0cb54d66295
 history:
 - id: 01a10025-c7d7-7a21-8c2c-9a990117cb41
   author: aida-session-start
