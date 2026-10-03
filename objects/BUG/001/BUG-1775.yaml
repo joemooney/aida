@@ -72,12 +72,12 @@ description: |
      worktree copy no longer feeds it).
   3. A regression test per fixed key proves the branch-local value is ignored (the
      trusted_config::tests::reads_default_branch_copy_not_worktree_copy pattern).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T18:30:23.822947124Z
-modified_at: 2026-10-02T22:16:56.986377420Z
+modified_at: 2026-10-03T00:29:13.129261618Z
 req_type: Bug
 tags:
 - config-trust
@@ -98,6 +98,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a0ff2a-3a3c-7ee1-bdf5-f754381ac395
+  author: aida-auto-bump
+  timestamp: 2026-10-03T00:29:12.636278860Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0ff2a-3c29-7f32-ab6d-617f6ca950dd
+  timestamp: 2026-10-03T00:29:13.129220147Z
+  agent: aida
+  commit_sha: 2e1f3ef5b40b380b68b2f98adf3d96a4b5dba0f0
+  summary: 'Slice 1: [notify] command via sh -c now fail-closed trusted-config only; grandfather entry removed so the BUG-1723 guard enforces it; regression test mutation-proven both directions; advisor verified the codex implementation.'
+  review_verdict: approved
 filed_at:
   code_sha: fe09d7678ede9bc0b2c093fa8a5d2c79a1ae3c4e
   branch: bug-1723-work
@@ -106,3 +120,7 @@ filed_at:
   aida_build_sha: fe09d7678e
   vendor: antigravity
   session: d5ee562a-7ce2-403d-8384-8ef61700260f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-03T00:29:12.636204798Z
+  completion_sha: 2e1f3ef5b40b380b68b2f98adf3d96a4b5dba0f0
