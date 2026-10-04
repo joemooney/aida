@@ -15,8 +15,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T19:49:55.911469462Z
-modified_at: 2026-10-04T19:51:09.457500824Z
+modified_at: 2026-10-04T19:51:19.949851059Z
 req_type: Bug
+comments:
+- id: 01a10878-8a8d-7444-8162-c28f8c45702c
+  author: joe
+  content: |
+    Advisor routing note: implement option (a) from the description — the carry-forward sweep skips findings whose round predates the approving round. Options (b)/(c) change the `review record` CLI contract and would need a product decision first; do not take them without escalating. Acceptance sketch in the description stands; include a regression test reproducing the TASK-1-204 phantom (request-changes with finding at sha A, approve at sha B with no --finding, sweep files nothing).
+  created_at: 2026-10-04T19:51:19.949851059Z
+  modified_at: 2026-10-04T19:51:19.949851059Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 history:
 - id: 01a10878-6191-716e-a344-a98f041a2ec8
   author: joe
