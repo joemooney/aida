@@ -8,10 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T23:57:13.255685702Z
-modified_at: 2026-09-01T05:43:50.928121779Z
+modified_at: 2026-10-04T04:47:07.452850542Z
 req_type: Bug
 tags:
-- codex prompt-parity papercut
+- codex
+- papercut
+- prompt-parity
 relationships:
 - rel_type:
     custom: implemented-by
