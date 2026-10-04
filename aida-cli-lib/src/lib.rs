@@ -34244,10 +34244,15 @@ fn lease_covers_cwd(lease: &SessionLease, canon_cwd: &std::path::Path) -> bool {
 
 /// Normalize Windows spellings used by `Path::display()` and `canonicalize()`
 /// before comparing a recorded lease path with the current worktree path.
+/// The casing fold is Unicode-aware (`str::to_lowercase`, not
+/// `to_ascii_lowercase`) because NTFS path matching is case-insensitive for
+/// non-ASCII names too — a lease recorded under `Åsa` must match a cwd
+/// canonicalized as `åsa`.
 // trace:BUG-1794 | ai:codex
+// trace:BUG-1794 | ai:claude
 #[cfg(windows)]
 fn windows_path_key(path: &str) -> String {
-    let path = path.replace('\\', "/").to_ascii_lowercase();
+    let path = path.replace('\\', "/").to_lowercase();
     let path = path
         .strip_prefix("//?/unc/")
         .map(|unc| format!("//{unc}"))

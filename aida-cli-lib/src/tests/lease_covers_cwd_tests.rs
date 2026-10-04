@@ -97,6 +97,45 @@ fn windows_path_key_unifies_lease_and_canonical_cwd_spellings() {
     );
 }
 
+/// BUG-1794 rework: Windows path matching is case-insensitive for Unicode
+/// names too, so the key fold must be Unicode-aware — a lease recorded with
+/// an `Åsa` component must produce the same key as a cwd spelled `åsa`.
+// trace:BUG-1794 | ai:claude
+#[cfg(windows)]
+#[test]
+fn windows_path_key_folds_unicode_casing() {
+    assert_eq!(
+        windows_path_key(r"C:\Users\Åsa\worker"),
+        windows_path_key(r"\\?\c:\users\åsa\worker\"),
+    );
+    assert_eq!(
+        windows_path_key(r"\\server\share\ÅSA"),
+        windows_path_key(r"\\?\UNC\server\share\åsa\"),
+    );
+}
+
+/// BUG-1794 rework: a lease recorded with `Åsa` covers a canonical cwd
+/// spelled `åsa` (and its descendants), while the segment-boundary check
+/// still rejects the sibling-prefix worktree `åsa-2`.
+// trace:BUG-1794 | ai:claude
+#[cfg(windows)]
+#[test]
+fn unicode_case_variant_lease_covers_cwd_without_matching_sibling_prefix() {
+    let lease = lease_with_worktree(PathBuf::from(r"C:\Users\Tester\Åsa"));
+    assert!(lease_covers_cwd(
+        &lease,
+        Path::new(r"\\?\C:\Users\Tester\åsa"),
+    ));
+    assert!(lease_covers_cwd(
+        &lease,
+        Path::new(r"\\?\C:\Users\Tester\åsa\src"),
+    ));
+    assert!(!lease_covers_cwd(
+        &lease,
+        Path::new(r"\\?\C:\Users\Tester\åsa-2"),
+    ));
+}
+
 #[cfg(windows)]
 #[test]
 fn extended_windows_cwd_matches_descendant_without_matching_sibling_prefix() {
