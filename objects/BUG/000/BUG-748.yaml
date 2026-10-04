@@ -14,11 +14,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T22:36:48.476861460Z
-modified_at: 2026-07-18T23:39:58.547198218Z
+modified_at: 2026-10-04T04:46:27.442762538Z
 req_type: Bug
 tags:
-- aida:queue auto-complete drain-lock from-dogfood batch:papercuts-0718
+- aida:queue
+- auto-complete
 - batch:papercuts-0718
+- drain-lock
+- from-dogfood
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T23:39:58.547198218Z
