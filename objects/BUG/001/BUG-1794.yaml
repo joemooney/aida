@@ -19,12 +19,12 @@ description: |
   NOTE: if the hypothesis holds, the defect may be PRODUCT (a real Windows user's commit gate would ignore worktree leases), not test-only — triage that first, per the BUG-1728 Family-D lesson: do not assume fixture-only, and do not close by cfg-gating the test.
 
   Per ADR-47/ADR-62 this is deferred Windows work; recorded so the next cross-platform pass starts from the mechanism instead of re-running a 30-minute job.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T00:52:00.299568353Z
+modified_at: 2026-10-04T03:14:57.899642214Z
 req_type: Bug
 tags:
 - cross-platform
@@ -45,6 +45,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a104e8-56eb-71b1-b74a-3b97bbcbe4dd
+  author: joe
+  timestamp: 2026-10-04T03:14:57.899637381Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
   branch: main
