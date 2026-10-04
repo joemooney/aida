@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:47.560507247Z
-modified_at: 2026-09-17T18:22:56.881075277Z
+modified_at: 2026-10-04T04:51:43.346294852Z
 req_type: Story
 tags:
-- forge gitlab ci-watch review slice-3 parent:EPIC-68 aida:forge
+- aida:forge
+- ci-watch
+- forge
+- gitlab
+- parent:EPIC-68
+- review
+- slice-3
 relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
