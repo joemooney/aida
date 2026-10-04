@@ -332,7 +332,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:37:31.950516501Z
-modified_at: 2026-10-04T04:45:53.327317210Z
+modified_at: 2026-10-04T04:45:54.318680018Z
 req_type: Task
 tags:
 - doctor
@@ -347,6 +347,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0cdb7-7688-7c10-a855-0fb622dc0686
   created_at: 2026-09-23T10:02:30.254148757Z
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-10-04T04:45:54.318680018Z
 comments:
 - id: 01a0c281-ff05-7891-b9b5-812a98fe28b2
   author: joe
