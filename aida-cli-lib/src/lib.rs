@@ -5262,6 +5262,10 @@ fn run() -> Result<()> {
         if s == "pr" || s == "mr" {
             return pr_list_handler(*json);
         }
+        // trace:TASK-1590 | ai:antigravity
+        if s == "review" {
+            return handle_review_list(*json);
+        }
     }
 
     // STORY-720: `aida ship` dispatches before storage init for the same
@@ -93913,6 +93917,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        ReviewCommand::List { json } => handle_review_list(*json),
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
@@ -96052,6 +96057,106 @@ fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// trace:TASK-1590 | ai:antigravity
+fn handle_review_list(json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let verdicts = review_verdict::list_active_verdicts(&project_root);
+
+    if verdicts.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            println!(
+                "{} No active review verdicts found.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            );
+        }
+        return Ok(());
+    }
+
+    let branch = current_branch_at(&project_root);
+    let mut entries: Vec<(String, String, String, String, String, colored::Color)> = Vec::new();
+    let mut json_out = Vec::new();
+
+    let mut max_spec = 7;
+    let mut max_verdict = 7;
+    let mut max_action = 13;
+    let mut max_sha = 3;
+
+    for (spec, v) in verdicts {
+        let relation =
+            verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
+        let actionability = review_verdict::review_actionability(Some(&v), relation);
+        let spec_upper = spec.to_ascii_uppercase();
+        let verdict_str = format!("{:?}", v.kind);
+        let action_str = actionability.as_str().to_string();
+        let sha_str =
+            review_verdict::short_sha(v.reviewed_sha.as_deref().unwrap_or("")).to_string();
+
+        max_spec = max_spec.max(spec_upper.len());
+        max_verdict = max_verdict.max(verdict_str.len());
+        max_action = max_action.max(action_str.len());
+        max_sha = max_sha.max(sha_str.len());
+
+        let color = match actionability {
+            review_verdict::ReviewActionability::Resolved => colored::Color::Green,
+            review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
+            review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
+        };
+
+        if json {
+            json_out.push(serde_json::json!({
+                "spec_id": spec_upper,
+                "verdict": verdict_str,
+                "actionability": action_str,
+                "sha": sha_str,
+            }));
+        } else {
+            entries.push((
+                spec_upper,
+                verdict_str,
+                action_str,
+                sha_str,
+                String::new(),
+                color,
+            ));
+        }
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&json_out)?);
+        return Ok(());
+    }
+
+    println!(
+        "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+        "Spec ID".bold(),
+        "Verdict".bold(),
+        "Actionability".bold(),
+        "SHA".bold(),
+        spec_w = max_spec,
+        verdict_w = max_verdict,
+        action_w = max_action,
+        sha_w = max_sha,
+    );
+
+    for (spec, verdict, action, sha, _ignored, color) in entries {
+        println!(
+            "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+            spec,
+            verdict,
+            action.color(color),
+            sha,
+            spec_w = max_spec,
+            verdict_w = max_verdict,
+            action_w = max_action,
+            sha_w = max_sha,
+        );
+    }
+
+    Ok(())
 }
 
 /// trace:STORY-67 | ai:claude
