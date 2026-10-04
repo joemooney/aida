@@ -2630,7 +2630,7 @@ mod tests {
     // trace:TASK-1582.ac6f4c6f | ai:antigravity
     #[test]
     fn task_1582_step5_messages_name_scope_role_and_worktree() {
-        let wt = std::path::Path::new("/tmp/aida-worktrees/aida-task-9");
+        let wt = std::path::Path::new("/dummy/aida-worktrees/aida-task-9");
         let (line, detail) =
             step5_inside_worktree_messages("01abc", "TASK-9", Some("integrator"), wt, "task-9");
         for text in [&line, &detail] {
@@ -2638,7 +2638,7 @@ mod tests {
             assert!(text.contains("scope TASK-9"), "{text}");
             assert!(text.contains("role integrator"), "{text}");
             assert!(
-                text.contains("worktree /tmp/aida-worktrees/aida-task-9"),
+                text.contains("worktree /dummy/aida-worktrees/aida-task-9"),
                 "{text}"
             );
             assert!(text.contains("`aida session end 01abc`"), "{text}");
@@ -2648,7 +2648,7 @@ mod tests {
         let ending = describe_lease_for_step5("01abc", "TASK-9", None, wt);
         assert_eq!(
             ending,
-            "lease 01abc (scope TASK-9, role unrecorded, worktree /tmp/aida-worktrees/aida-task-9)"
+            "lease 01abc (scope TASK-9, role unrecorded, worktree /dummy/aida-worktrees/aida-task-9)"
         );
     }
 
