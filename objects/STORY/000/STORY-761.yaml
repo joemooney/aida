@@ -17,10 +17,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:16.575646258Z
-modified_at: 2026-07-07T05:50:31.085911705Z
+modified_at: 2026-10-04T04:50:41.034816529Z
 req_type: Story
 tags:
-- codex-first-class migration:claude-to-codex
+- codex-first-class
+- migration:claude-to-codex
 relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
