@@ -429,6 +429,7 @@ sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regul
 	@cargo run -q -p aida-core --example agent_skill_pack -- sync
 
 # trace:TASK-1520 | ai:codex
+# trace:TASK-1584 | ai:antigravity
 check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 	@echo "Checking .aida/discipline/ mirror..."
 	@errors=0; \
@@ -448,6 +449,8 @@ check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 		echo ""; \
 		echo "Run 'make sync-templates' to fix issues"; \
 		exit 1; \
+	else \
+		echo "  OK: .aida/discipline mirror is current"; \
 	fi
 	@echo "Checking .agents/skills/aida-* for drift..."
 	@cargo run -q -p aida-core --example agent_skill_pack -- check
