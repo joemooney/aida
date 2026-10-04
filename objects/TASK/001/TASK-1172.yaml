@@ -8,10 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:08:15.784325728Z
-modified_at: 2026-07-22T07:14:04.549572363Z
+modified_at: 2026-10-04T04:45:43.317951521Z
 req_type: Task
 tags:
-- aida:burndown ordering dx from-operator
+- aida:burndown
+- dx
+- from-operator
+- ordering
 comments:
 - id: 019f887b-71f8-78f0-9d63-5b6f9c6dc7c8
   author: joe
