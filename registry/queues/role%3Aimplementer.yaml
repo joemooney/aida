@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a10343-1814-7812-bbf9-53783abf21de
+  position: 308000
+  added_by: role:implementer
+  note: 'Rework brief from review verdict .aida/review-verdicts/BUG-1794.json (CHANGES REQUESTED at 2f910f1a): windows_path_key in aida-cli-lib uses to_ascii_lowercase(), so a lease path with a Unicode component (Åsa) fails to match canonical cwd spelling åsa even though Windows path matching is case-insensitive there. Required: Unicode-aware casing normalization in windows_path_key plus a Windows-gated Unicode case-variant regression test. Evidence of fix: that test red-before/green-after, existing drive/UNC and sibling-prefix tests still green.'
+  added_at: 2026-10-04T15:44:15.154881568Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a10325-e6a6-7da0-beab-6067afb0368a
   position: 309000
   added_by: role:implementer
