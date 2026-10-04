@@ -70,7 +70,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:51:52.124497966Z
-modified_at: 2026-10-04T04:49:07.821520650Z
+modified_at: 2026-10-04T04:49:16.874293205Z
 req_type: Bug
 tags:
 - forge-safety
@@ -85,6 +85,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0cec0-7c7f-7841-8bd2-dc77477ea578
   created_at: 2026-09-23T14:51:59.172954400Z
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-10-04T04:49:16.874293205Z
 comments:
 - id: 01a0ceac-a4d3-77c2-b469-0540490403e0
   author: joe
