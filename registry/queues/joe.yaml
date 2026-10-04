@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a10325-e6a6-7da0-beab-6067afb0368a
-  position: 28000
-  added_by: joe
-  note: 'Needs advisor rework gate: current PR-2393 verdict requests changes with compile, acceptance, authorization, cache, drain, and test gaps; approve/requeue only after writing a criterion-linked implementer brief.'
-  added_at: 2026-10-04T00:59:45.114283765Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a10350-e89c-7271-bcb4-95ddb0068054
   position: 29000
   added_by: joe
