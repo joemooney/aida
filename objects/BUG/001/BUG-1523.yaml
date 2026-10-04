@@ -32,13 +32,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:18.216626306Z
-modified_at: 2026-10-04T04:49:28.579712538Z
+modified_at: 2026-10-04T04:49:29.982885257Z
 req_type: Bug
 tags:
 - lifecycle
 - parent:BUG-1470
 - severity:operational
 - substrate-truth
+relationships:
+- rel_type: Child
+  target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
+  created_at: 2026-10-04T04:49:29.982885257Z
 comments:
 - id: 01a0cdc1-57b7-76a2-8eec-36e82e4d397f
   author: joe
