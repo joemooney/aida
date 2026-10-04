@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:24:01.372086761Z
-modified_at: 2026-10-04T20:53:04.900812362Z
+modified_at: 2026-10-04T20:53:07.244803409Z
 req_type: Task
 tags:
 - adopt-adapt
@@ -40,6 +40,13 @@ comments:
     4. Ship via normal PR + review; delete the stale remote branch after the replacement merges so the unshipped-work detector stops flagging it.
   created_at: 2026-10-04T20:17:07.585544363Z
   modified_at: 2026-10-04T20:17:07.585544363Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+- id: 01a108b1-1c2c-752c-aad1-9fb937976181
+  author: joe
+  content: |
+    Operator decision (Joe, 2026-10-04): not wanted — rejected and dequeued, overriding the earlier same-day salvage disposition. The July implementation remains on origin/task-724-import-dry-run-preview until that branch is deleted; if the import-preview idea ever returns, parent TASK-0416 is the place to revive it.
+  created_at: 2026-10-04T20:53:07.244803409Z
+  modified_at: 2026-10-04T20:53:07.244803409Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 history:
 - id: 01a108b1-1304-713d-80ab-aba8086a4293
