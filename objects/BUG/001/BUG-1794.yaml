@@ -24,12 +24,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T03:19:09.183780831Z
+modified_at: 2026-10-04T03:19:29.435249089Z
 req_type: Bug
 tags:
 - cross-platform
 - regression
 - windows
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a104ec-62aa-7a12-81c1-8465735aa9c3
+  created_at: 2026-10-04T03:19:29.435246033Z
+  created_by: joe
 comments:
 - id: 01a104ea-fda6-7f82-9484-929150f3d920
   author: ai:codex:joe
