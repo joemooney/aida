@@ -5077,7 +5077,7 @@ fn heal_doctor_stale_remote_branch(
 }
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 // trace:BUG-1719 | ai:codex
 pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
@@ -5092,6 +5092,38 @@ fn agent_worktree_keep_action(actionable: bool) -> String {
         "operator decision: review and keep, open a PR, or remove by hand".to_string()
     } else {
         "no action required — kept because batched content is undecidable".to_string()
+    }
+}
+
+// BUG-1800: Cache per-worktree verdicts keyed by branch tip SHA so expensive
+// content verification probes only run once per un-updated undecidable tree.
+// trace:BUG-1800 | ai:antigravity
+fn worktree_verdicts_cache_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida/cache/worktree-verdicts.json")
+}
+
+fn load_worktree_verdicts(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, AgentWorktreeVerdict> {
+    let path = worktree_verdicts_cache_path(project_root);
+    if let Ok(data) = std::fs::read_to_string(path) {
+        if let Ok(parsed) = serde_json::from_str(&data) {
+            return parsed;
+        }
+    }
+    std::collections::HashMap::new()
+}
+
+fn save_worktree_verdicts(
+    project_root: &std::path::Path,
+    verdicts: &std::collections::HashMap<String, AgentWorktreeVerdict>,
+) {
+    let path = worktree_verdicts_cache_path(project_root);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(data) = serde_json::to_string_pretty(verdicts) {
+        let _ = std::fs::write(path, data);
     }
 }
 
@@ -5575,7 +5607,6 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
 // trace:BUG-1719 | ai:codex
-#[cfg(test)]
 pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     scan_merged_agent_worktrees_with_count(project_root).findings
 }
@@ -5620,6 +5651,8 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         .unwrap_or_else(|_| project_root.to_path_buf());
 
     let leases = list_leases(project_root);
+    let mut verdicts_cache = load_worktree_verdicts(project_root);
+    let mut cache_modified = false;
 
     let mut findings = Vec::new();
     let mut reclaimable_count = 0;
@@ -5772,32 +5805,70 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
             false
         };
 
-        let merge_signal = pr_merged || spec_trailer_on_main;
+        let tip_sha_opt = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", branch])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
-        // Only pay for the content probe when it could actually change the
-        // verdict: a confirmed merged PR or spec landing trailer with a
-        // positive (ancestry-only) commit count is exactly the case ancestry
-        // can never clear on its own. `branch_content_fully_landed` proves
-        // patch-id equivalence; `branch_paths_match_default` proves per-path
-        // equivalence when batched squashes combine multiple specs into one commit.
-        // trace:TASK-1534 | ai:antigravity
-        let content_fully_landed = if merge_signal && unique_unmerged_commits > 0 {
-            branch_content_fully_landed(project_root, &default_ref, branch)
-                || branch_paths_match_default(project_root, &default_ref, branch)
+        let cached_verdict = if !dirty {
+            if let Some(ref sha) = tip_sha_opt {
+                verdicts_cache.get(sha).cloned()
+            } else {
+                None
+            }
         } else {
-            false
+            None
         };
 
-        let facts = AgentWorktreeFacts {
-            dirty,
-            ancestor_of_main,
-            pr_merged,
-            unique_unmerged_commits,
-            content_fully_landed,
-            spec_trailer_on_main,
+        let verdict = if let Some(v) = cached_verdict {
+            v
+        } else {
+            let merge_signal = pr_merged || spec_trailer_on_main;
+
+            // Only pay for the content probe when it could actually change the
+            // verdict: a confirmed merged PR or spec landing trailer with a
+            // positive (ancestry-only) commit count is exactly the case ancestry
+            // can never clear on its own. `branch_content_fully_landed` proves
+            // patch-id equivalence; `branch_paths_match_default` proves per-path
+            // equivalence when batched squashes combine multiple specs into one commit.
+            // trace:TASK-1534 | ai:antigravity
+            let content_fully_landed = if merge_signal && unique_unmerged_commits > 0 {
+                branch_content_fully_landed(project_root, &default_ref, branch)
+                    || branch_paths_match_default(project_root, &default_ref, branch)
+            } else {
+                false
+            };
+
+            let facts = AgentWorktreeFacts {
+                dirty,
+                ancestor_of_main,
+                pr_merged,
+                unique_unmerged_commits,
+                content_fully_landed,
+                spec_trailer_on_main,
+            };
+
+            let calculated_verdict = classify_agent_worktree(&facts);
+            // Cache if it's undecidable (which means we did the expensive work and it didn't land)
+            if !dirty {
+                if let AgentWorktreeVerdict::Keep {
+                    actionable: false, ..
+                } = &calculated_verdict
+                {
+                    if let Some(ref sha) = tip_sha_opt {
+                        verdicts_cache.insert(sha.clone(), calculated_verdict.clone());
+                        cache_modified = true;
+                    }
+                }
+            }
+            calculated_verdict
         };
 
-        match classify_agent_worktree(&facts) {
+        match verdict {
             AgentWorktreeVerdict::Removable(reason) => {
                 reclaimable_count += 1;
                 findings.push(DoctorFinding {
@@ -5836,6 +5907,9 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         }
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
+    if cache_modified {
+        save_worktree_verdicts(project_root, &verdicts_cache);
+    }
     AgentWorktreeScan {
         findings,
         reclaimable_count,

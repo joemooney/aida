@@ -65972,6 +65972,9 @@ fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
         WorktreeCommand::Gc { yes, force, json } => {
             doctor_cmd::run_merged_agent_worktree_gc(*yes, *force, *json)
         }
+        WorktreeCommand::Dismiss { path, category } => {
+            worktree_dismiss::handle_dismiss(path.as_deref(), category.as_deref())
+        }
         // STORY-714 warm-pool surface.
         WorktreeCommand::Reclaim {
             apply,
@@ -116356,7 +116359,12 @@ mod bug_1650_store_resolver_tests;
 #[cfg(test)]
 #[path = "tests/bug_1670_stale_cache_callers_tests.rs"]
 mod bug_1670_stale_cache_callers_tests;
-
 #[cfg(test)]
 #[path = "tests/bug_1799_carry_forward_tests.rs"]
 mod bug_1799_carry_forward_tests;
+
+pub mod worktree_dismiss;
+
+#[cfg(test)]
+#[path = "tests/bug_1800_worktree_undecidable_cache_tests.rs"]
+mod bug_1800_worktree_undecidable_cache_tests;

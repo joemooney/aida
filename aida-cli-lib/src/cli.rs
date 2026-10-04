@@ -3012,6 +3012,20 @@ pub enum WorktreeCommand {
         json: bool,
     },
 
+    /// Disposition a worktree whose content is undecidable (e.g. batched
+    /// integration). Archives the branch tip under refs/archive/, removes the
+    /// worktree and branch, and ledgers the operator decision.
+    // trace:BUG-1800 | ai:antigravity
+    Dismiss {
+        /// Path to the specific worktree to dismiss.
+        #[clap(value_name = "PATH")]
+        path: Option<String>,
+
+        /// Dismiss all worktrees in this category (e.g., `batched-undecidable`).
+        #[clap(long)]
+        category: Option<String>,
+    },
+
     /// Reclaim disk by deleting stale `target/` build caches inside this
     /// repository's worktrees. A `target/` is a cache, never a source of truth
     /// — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports
