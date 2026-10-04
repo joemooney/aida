@@ -19,10 +19,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:19:07.663375401Z
-modified_at: 2026-07-13T06:50:26.956077726Z
+modified_at: 2026-10-04T04:50:34.992338053Z
 req_type: Story
 tags:
 - aida:human aida:skill advisor coordination
+relationships:
+- rel_type: Parent
+  target_id: 019f5a32-10ff-7731-9372-6962ffa3ef1c
+  created_at: 2026-10-04T04:50:34.992338053Z
 comments:
 - id: 019f5a23-b50c-7c02-9afe-042fb2415b09
   author: joe
