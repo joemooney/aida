@@ -8,10 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-15T03:00:21.665093957Z
-modified_at: 2026-07-16T05:05:15.265697061Z
+modified_at: 2026-10-04T04:45:38.980063489Z
 req_type: Task
 tags:
-- aida:release from-decision:EPIC-25 supervised
+- aida:release
+- from-decision:EPIC-25
+- supervised
 comments:
 - id: 019f6944-5951-7b30-9f40-deef37e2c247
   author: joe
