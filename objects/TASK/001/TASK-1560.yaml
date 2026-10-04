@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-10-04T01:53:43.866921832Z
+modified_at: 2026-10-04T02:40:28.372309981Z
 req_type: Task
 comments:
 - id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
@@ -567,6 +567,11 @@ comments:
     | user_permission_posture | genuinely one-agent | Claude memory pack |
   created_at: 2026-10-04T01:10:29.243718919Z
   modified_at: 2026-10-04T01:10:29.243718919Z
+- id: 01a104c8-c2d4-7871-bbf3-6346b0baef47
+  author: joe
+  content: "# Post-Merge Code Review for TASK-1560\n\nI have reviewed the recent commits on `main` for TASK-1560. Here is a summary of my findings:\n\n## 1. Makefile Modifications\n- **Template Syncing:** The new logic correctly copies `.aida/discipline/` docs from `aida-core/templates/.aida/discipline/` during `make sync-templates`.\n- **Drift Verification:** `make check-agent-skills` checks for byte-for-byte parity, which perfectly enforces the single source of truth.\n- **Minor Feedback:** The `errors=0; \\` block in `check-agent-skills` lacks an `@` prefix, meaning `make` prints the entire 15-line `for` loop to standard output before running it. Adding `@errors=0; \\` would make the build output cleaner. Additionally, if the `aida-core/templates/.aida/discipline/` directory were ever empty of `.md` files, the unexpanded glob `*.md` would cause a false positive \"MISSING\" error.\n\n## 2. Discipline Docs & Templates\n- **New Files Added:** Several extensive discipline documents were added to the `templates` and mirrored (e.g., `git-sync-and-review.md`, `workflow-patterns.md`, `implementer-discipline.md`). They are successfully duplicated and correctly formatted.\n- **`autonomous-burndown.md` Updates:** The addition of the \"substrate learning loop calibration\" and \"unbounded goal loops\" sections are highly valuable. The emphasis on recording predictions at the decision point to calibrate heuristics later is well articulated.\n- **`substrate-as-bouncer.md` Updates:** The removal of client-side trailer validation and the addition of the \"Worktree-Scope Guard\" accurately reflects the principle of \"Detect, Don't Prevent\". \n\nOverall, the architectural goal of routing durable lessons to universal masters has been achieved effectively and safely."
+  created_at: 2026-10-04T02:40:28.372309981Z
+  modified_at: 2026-10-04T02:40:28.372309981Z
 history:
 - id: 01a0f273-3645-73c0-82b9-0b588a27b8c0
   author: joe
