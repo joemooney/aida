@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T03:20:43.684621725Z
+modified_at: 2026-10-04T03:47:55.985740291Z
 req_type: Bug
 tags:
 - cross-platform
@@ -42,6 +42,16 @@ comments:
   content: 'Implemented in PR #2410 (https://github.com/joemooney/aida/pull/2410), commit 2f910f1a31. Normalizes Windows drive/UNC canonical path spellings before lease matching. The advisor-code-gate regression writes the ordinary spelling and checks that the implementer lease beats the advisor roster; Windows coverage also checks descendants and rejects sibling-prefix paths. Verification: cargo fmt --all -- --check, the advisor role-precedence test, five lease-coverage tests, and make check-ci-fast (19 fast gates) passed. Windows cross-compilation was unavailable locally because x86_64-w64-mingw32-gcc is missing; Windows CI remains required.'
   created_at: 2026-10-04T03:17:51.654854208Z
   modified_at: 2026-10-04T03:20:43.684621562Z
+- id: 01a10506-85d1-7d23-ad25-18a4c57ed5f4
+  author: joe
+  content: |
+    Advisor merge-readiness disposition: NOT READY for integration at head `2f910f1a31da6f0a094f09fb87a3c371469db110`.
+
+    Evidence is otherwise positive: STORY-1520's exact-head review comment records BUG-1794 PASS at this SHA; the AIDA verdict file is `approved` at the same SHA; required `Build (ubuntu-latest)` and `merge-hold-gate` are successful; the PR has no merge-hold label and GitHub reports `MERGEABLE` / `CLEAN`. Main is two commits ahead, but the two intervening main commits touch Makefile, `git_backend_cmd.rs`, and `bug_1771_status_lens_filters.rs`, with no overlap against this PR's three files.
+
+    The remaining blocker is GitHub branch protection: `required_approving_review_count` is 1, GitHub has zero submitted reviews, and `reviewDecision` is empty. The PR author is `joemooney`; GitHub refused the approval review from that same account. The passing AIDA verdict/comment does not satisfy the configured GitHub approval requirement. Do not route to integrator yet. Required next action: obtain one approving GitHub review from an account other than the PR author, then recheck exact head and required checks before integration. No hold was cleared and no merge was attempted.
+  created_at: 2026-10-04T03:47:55.985740291Z
+  modified_at: 2026-10-04T03:47:55.985740291Z
 history:
 - id: 01a103ce-85a1-7103-8cde-abcab96e80cf
   author: joe
