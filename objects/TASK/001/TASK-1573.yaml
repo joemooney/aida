@@ -8,12 +8,12 @@ description: |-
   Any committed-inventory guard (config-trust sites, allowlists, ratchets — the repo has many) is structurally exposed to this race: the PR that changes the counted thing and the PR that records the count can both be green against stale previews. Candidate defenses, one to be chosen deliberately: (1) GitHub 'require branches to be up to date before merging' on main — simplest, serializes merges at the cost of re-run churn; (2) a merge queue, which batches and re-tests the union; (3) keep optimistic merges but auto-re-run the head-of-main CI after every merge and alert on red within a minute instead of on the next PR's inherited failure.
 
   Acceptance sketch: with the chosen defense active, replaying this incident's shape (two PRs, each green alone, red combined) cannot leave main red silently — either the second merge is blocked until re-validated, or a main-is-red alert fires from the merge itself.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:23.250863450Z
-modified_at: 2026-10-04T03:11:35.351577717Z
+modified_at: 2026-10-04T03:20:25.756019569Z
 req_type: Task
 history:
 - id: 01a104e5-3fb7-7322-88bb-7d819bcc65b4
@@ -23,3 +23,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a104ed-579c-7a50-9d58-5ac3e238fd43
+  author: aida-session-start
+  timestamp: 2026-10-04T03:20:25.756018922Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
