@@ -32,10 +32,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-10-04T02:43:19.389661908Z
+modified_at: 2026-10-04T04:43:46.906888103Z
 req_type: Task
 tags:
-- build throughput profile from:operator
+- build
+- from:operator
+- profile
+- throughput
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0dfca-faa9-7f31-9cd7-762219b9db72
