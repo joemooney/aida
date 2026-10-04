@@ -19,12 +19,12 @@ description: |
   NOTE: if the hypothesis holds, the defect may be PRODUCT (a real Windows user's commit gate would ignore worktree leases), not test-only — triage that first, per the BUG-1728 Family-D lesson: do not assume fixture-only, and do not close by cfg-gating the test.
 
   Per ADR-47/ADR-62 this is deferred Windows work; recorded so the next cross-platform pass starts from the mechanism instead of re-running a 30-minute job.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T15:44:15.000560098Z
+modified_at: 2026-10-04T19:46:55.185927788Z
 req_type: Bug
 tags:
 - cross-platform
@@ -105,6 +105,22 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a10874-804a-7528-bedc-0f26b571a4eb
+  author: aida-auto-bump
+  timestamp: 2026-10-04T19:46:55.178220760Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a10874-8051-72ef-b4ef-8bb37bdaed14
+  timestamp: 2026-10-04T19:46:55.185919558Z
+  agent: implementer
+  commit_sha: 72ec58311c2c215070318d063161eafed5800851
+  summary: Head moved only by update-branch merge of main (stale ci.yml/web.yml guard); branch content vs main patch-id identical (5feec5b9) to the approved rework head 77afe9c7 — Unicode casefold fix plus Windows-gated regression tests. Fresh CI runs against the new workflow definitions.
+  punted:
+  - 'punted: Core Windows spelling normalization is covered, but its casing fold is ASCII-only and does not preserve Windows case-insensitive matching for Unicode path components.'
+  review_verdict: approved
 filed_at:
   code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
   branch: main
@@ -122,4 +138,6 @@ implementation_info:
     make check-ci-fast (19 fast gates passed)
   implemented_at: 2026-10-04T03:19:08.248442398Z
   implemented_by: joe
+  completed_at: 2026-10-04T19:46:55.178196307Z
+  completion_sha: 72ec58311c2c215070318d063161eafed5800851
 interface_changes: {}
