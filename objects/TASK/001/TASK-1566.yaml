@@ -87,12 +87,12 @@ description: |
 
   Do this AFTER BUG-1770 merges. Repairing first would leave the writer armed and
   the population would start growing again from the next `--tags "a b"`.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T12:30:35.936668372Z
-modified_at: 2026-10-03T04:17:11.910138424Z
+modified_at: 2026-10-04T04:37:03.302758793Z
 req_type: Task
 tags:
 - data-repair
@@ -114,3 +114,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a10533-7ec6-72c2-a393-135b301014a9
+  author: joe
+  timestamp: 2026-10-04T04:37:03.302753421Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
