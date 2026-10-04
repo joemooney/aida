@@ -1,5 +1,6 @@
 id: 01a104ce-d1ca-7763-bc17-fc5e2156b478
 spec_id: TASK-1-201
+agreed_id: TASK-1068
 title: In the carrier loop, the 'else' branch taken when pr_head_states is None (forge…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1575, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
