@@ -5,6 +5,10 @@
     {
       "at": "2026-10-04T04:30:46.700212118Z",
       "closed_by": "edit"
+    },
+    {
+      "at": "2026-10-04T15:17:50.404396812Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -45,6 +49,67 @@
     },
     {
       "ts": "2026-10-04T04:30:46.691368135Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:36:23.600000456Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T06:22:58.879042974Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T09:10:02.630058139Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1587",
+        "branch": "task-1587-sort-by-id",
+        "first_seen": "2026-10-04T09:10:02.630005129+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:17:00.653540225Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T15:17:07.343172945Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2413
+      }
+    },
+    {
+      "ts": "2026-10-04T15:17:50.346987986Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:17:50.347039358Z",
       "spec": "TASK-1587",
       "kind": {
         "event": "SpecCompleted",
