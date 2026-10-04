@@ -346,21 +346,26 @@ fn epic_inherits_child_lens() {
     let p = parked_fixture(&fixture);
 
     // Create an epic and add it as parent to the shelved task
-    let epic_id = spec_id_from(&ok(
+    let out = ok(
         "aida add epic",
         aida(
             &fixture,
             &[
                 "add",
                 "--title",
-                "TASK-1572 epic test",
+                "epic test",
                 "--type",
                 "epic",
                 "--status",
                 "approved",
             ],
         ),
-    ));
+    );
+    let epic_id = out
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+        .find(|t| t.starts_with("EPIC-") && t[5..].chars().all(|c| c.is_ascii_digit()))
+        .unwrap()
+        .to_string();
     ok(
         "aida rel add",
         aida(

@@ -2229,7 +2229,10 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
-            let store = backend.load_metadata_only()?;
+            use aida_core::db::DatabaseBackend;
+            let store = backend
+                .load()
+                .unwrap_or_else(|_| backend.load_metadata_only().unwrap());
 
             // BUG-1771: narrow the widened query back down to the requested
             // parked lens(es). Runs before every downstream lens so the rows the
