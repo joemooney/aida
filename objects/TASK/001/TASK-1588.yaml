@@ -1,0 +1,37 @@
+id: 01a104f7-8772-7472-b36e-62333a0bc367
+spec_id: TASK-1588
+agreed_id: TASK-1588
+title: Implement ADR-65 weekly Windows validation on main
+description: |
+  ## Goal
+  Implement ADR-65's approved single-main platform validation policy. Keep Ubuntu PR checks as the fast blocking lane while Windows remains a lower-priority, non-blocking weekly signal.
+
+  ## Acceptance
+  1. `.github/workflows/cross-platform.yml` schedules the Windows validation every Sunday at 06:00 UTC against the latest `main` tip; the scheduled matrix contains Windows only, with macOS still disabled.
+  2. Manual dispatch cannot run an arbitrary branch while appearing to validate `main`: reject a non-`main` ref with a visible failure before the Windows matrix. A workflow regression test covers both a main dispatch and a non-main refusal.
+  3. Existing selected-path Windows PR runs remain informational. Branch protection still requires Ubuntu Build and `merge-hold-gate` only; this task adds no blocking Windows check and no platform branches or scheduled merge-back.
+  4. Red scheduled runs continue to create/update the existing cross-platform tracking issue, with its title/body and docs updated from nightly wording to weekly wording. Successful scheduled recovery closes the issue.
+  5. `.aida/config.toml` registers an enabled Product seat reminder every 24 hours. Its prompt directs Product to inspect the latest scheduled Windows result and tracking issue, record the issue number or no-issue result, and complete the job with `aida schedule done`. It never queues implementation or changes Linux-first ordering.
+  6. The 24-hour fresh-green release check remains unchanged: when its latest green platform run is stale, it dispatches a fresh run on `main` and waits for green before release work.
+  7. Documentation explains that weekly Windows validation reduces platform-run frequency but does not shorten Linux PR CI. No permanent platform branches are introduced.
+
+  ## Verification
+  Add or update deterministic workflow-contract tests for the weekly cron, Windows-only scheduled matrix, main-only manual guard, informational PR path, and issue lifecycle. Verify the Product reminder appears in `aida schedule due --seat product` after its interval is due. Run the Linux CI fast gates and the existing release freshness checks.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T03:31:33.362601099Z
+modified_at: 2026-10-04T03:31:33.362601099Z
+req_type: Task
+tags:
+- ci
+- cross-platform
+- throughput
+filed_at:
+  code_sha: 593327e874cd2411aefe2db5b775eb05d3978519
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: codex
