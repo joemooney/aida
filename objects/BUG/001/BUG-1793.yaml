@@ -18,12 +18,12 @@ description: |
   3. Deferred specs are hidden from the default `aida list` view and excluded from ready/pickup lenses. `aida list --deferred` and `aida show <ID>` display the Deferred/Held marker, the underlying lifecycle status, reason, and revisit trigger when present.
   4. Only an operator or explicitly authorized seat can lift a hold. Lifting it clears the defer marker and preserves the underlying lifecycle status.
   5. Document migration from the TASK-1580-style convention.
-status: Done
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-04T07:15:59.522501592Z
+modified_at: 2026-10-04T14:53:20.808390943Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -118,6 +118,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10767-ba28-75c0-aa30-ef1596a345f6
+  author: joe
+  timestamp: 2026-10-04T14:53:20.808386378Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: InProgress
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:49:19.704322600Z
