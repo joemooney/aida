@@ -75,6 +75,8 @@
 //! trace:STORY-684 | ai:claude
 
 use std::path::Path;
+#[cfg(windows)]
+use std::path::PathBuf;
 use std::process::Command;
 
 /// Env var: explicit, auditable opt-out of the advisor code-commit gate for the
@@ -385,11 +387,27 @@ mod tests {
         let root = dir.path();
         let worktree = root.join("worker");
         std::fs::create_dir_all(&worktree).unwrap();
+        // Windows `canonicalize()` returns an extended-length path such as
+        // `\\?\C:\...`, while older lease files can retain the ordinary
+        // spelling. Keep that mismatch in this behavior-level regression.
+        #[cfg(windows)]
+        let lease_worktree = {
+            let canonical = worktree.canonicalize().unwrap();
+            let text = canonical.to_string_lossy();
+            let ordinary = text
+                .strip_prefix(r"\\?\UNC\")
+                .map(|unc| format!(r"\\{unc}"))
+                .or_else(|| text.strip_prefix(r"\\?\").map(str::to_string))
+                .unwrap_or_else(|| text.into_owned());
+            PathBuf::from(ordinary)
+        };
+        #[cfg(not(windows))]
+        let lease_worktree = worktree.clone();
         let sessions = root.join(".aida/sessions");
         std::fs::create_dir_all(&sessions).unwrap();
         std::fs::write(
             sessions.join("lease-1.toml"),
-            format!("id='lease-1'\nscope='BUG-1'\nslug='bug-1'\nowner='test'\nworktree_path='{}'\nbranch='bug-1'\nstarted_at='2026-01-01T00:00:00Z'\nhostname='test'\nrole='implementer'\n", worktree.display()),
+            format!("id='lease-1'\nscope='BUG-1'\nslug='bug-1'\nowner='test'\nworktree_path='{}'\nbranch='bug-1'\nstarted_at='2026-01-01T00:00:00Z'\nhostname='test'\nrole='implementer'\n", lease_worktree.display()),
         ).unwrap();
         let user = crate::current_user_id(None);
         let store = root.join(".aida-store");

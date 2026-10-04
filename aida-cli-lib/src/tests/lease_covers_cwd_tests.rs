@@ -82,3 +82,31 @@ fn empty_worktree_lease_matches_no_cwd() {
     assert!(!lease_covers_cwd(&lease, Path::new("/tmp")));
     assert!(!lease_covers_cwd(&lease, Path::new("/")));
 }
+
+// trace:BUG-1794 | ai:codex
+#[cfg(windows)]
+#[test]
+fn windows_path_key_unifies_lease_and_canonical_cwd_spellings() {
+    assert_eq!(
+        windows_path_key(r"C:\Users\Tester\worker"),
+        windows_path_key(r"\\?\c:\users\tester\worker\"),
+    );
+    assert_eq!(
+        windows_path_key(r"\\server\share\worker"),
+        windows_path_key(r"\\?\UNC\SERVER\SHARE\worker\"),
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn extended_windows_cwd_matches_descendant_without_matching_sibling_prefix() {
+    let lease = lease_with_worktree(PathBuf::from(r"C:\Users\Tester\worker"));
+    assert!(lease_covers_cwd(
+        &lease,
+        Path::new(r"\\?\C:\Users\Tester\worker\src"),
+    ));
+    assert!(!lease_covers_cwd(
+        &lease,
+        Path::new(r"\\?\C:\Users\Tester\worker-copy"),
+    ));
+}
