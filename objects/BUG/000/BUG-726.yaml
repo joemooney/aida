@@ -11,10 +11,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-14T04:38:53.508768738Z
-modified_at: 2026-07-15T02:00:46.416929973Z
+modified_at: 2026-10-04T04:46:37.928075970Z
 req_type: Bug
 tags:
-- aida:questions papercut ux severity:cosmetic from-operator-confusion
+- aida:questions
+- from-operator-confusion
+- papercut
+- severity:cosmetic
+- ux
 comments:
 - id: 019f5ef6-ace3-78c0-8535-d4c3849c874d
   author: joe
