@@ -16,11 +16,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T19:42:54.019981075Z
-modified_at: 2026-07-18T20:15:09.904451777Z
+modified_at: 2026-10-04T04:46:57.269213079Z
 req_type: Bug
 tags:
+- aida:agent
 - batch:papercuts-0718
-- codex aida:agent launcher from-dogfood
+- codex
+- from-dogfood
+- launcher
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T20:15:09.904451777Z
