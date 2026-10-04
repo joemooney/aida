@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-04T02:28:54.664319044Z
+modified_at: 2026-10-04T02:28:55.351758123Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized(). Triage reason: Advisor converted the current-head PR-2393 request-changes verdict into the linked implementer brief; the branch has compile, authorization, drain, projection, and acceptance-test blockers.'
   created_at: 2026-10-04T02:28:54.664317771Z
   modified_at: 2026-10-04T02:28:54.664317771Z
+- id: 01a104be-2f9e-7860-b7ba-2261f96df836
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1793):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 78f4ad49cecb
+    Recorded: 2026-10-03T22:10:15.177194765+00:00
+    Findings:
+    1. BLOCKER: test/lib literals set deferred_reason on aida_core::RequirementSummary but the struct (aida-core/src/db/cache.rs:44) never gained the field; add field + cache insert/read/expected-columns/schema (cache.rs:2388,2805,2885) + populate site, then fix every literal incl. the new mcp.rs summary literal which omits it
+    2. MAJOR (AC4): hold_authorized() in defer_cmd.rs is env-only AND default-open when AIDA_SESSION_ROLE is unset — contradicts the documented default-to-implementer read side (lib.rs:22937) and bypasses the roster-backed has_advisor_authority() (lib.rs:53036, STORY-646) built to survive a forgotten env; delegate to that gate (or a product/advisor/operator variant of advisor_authority_from)
+    3. MAJOR (AC2): drain silently skips held specs (queue_cmd.rs:12845) instead of surfacing the typed OperatorHoldRefusal; explicit pickup/session-start paths are covered, drain is not
+    4. MAJOR (AC3): JSON/toon list emitters carry tags but not the hold reason because the cache projection lacks deferred_reason; machine surfaces must carry reason once the cache column exists
+    5. MINOR: schema.rs:664 description contains literal patch artifact '; +             pickup'
+    6. REBASE: branch is 3 commits behind origin/main with overlap in cli.rs, git_backend_cmd.rs, lib.rs (session-start refusal must reconcile with main's session-start changes); rebase before rework CI
+    7. TESTS: no witness for drain refusal, ready-lens exclusion, JSON reason output, cache round-trip of reason, empty-reason validation, schema JSON consistency, export/import legacy deserialize
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-04T02:28:55.326548923Z
+  modified_at: 2026-10-04T02:28:55.326548923Z
 history:
 - id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
   author: joe
