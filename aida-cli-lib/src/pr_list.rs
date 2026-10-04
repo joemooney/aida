@@ -191,6 +191,7 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
         title: String,
         merge_status: String,
         updated_at: String,
+        head_pipeline: Option<serde_json::Value>,
     }
 
     let mrs: Vec<GlabMr> = serde_json::from_slice(&out.stdout)?;
@@ -200,6 +201,18 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
         let specs = extract_specs(&mr.title, &mr.source_branch);
         let rebase_needed = mr.merge_status != "can_be_merged";
 
+        let mut ci_status = "None".to_string();
+        if let Some(pipeline) = &mr.head_pipeline {
+            if let Some(status) = pipeline.get("status").and_then(|s| s.as_str()) {
+                ci_status = match status {
+                    "success" => "Passing".to_string(),
+                    "failed" => "Failing".to_string(),
+                    "running" | "pending" | "created" => "Pending".to_string(),
+                    _ => "Unknown".to_string(),
+                };
+            }
+        }
+
         for spec in specs {
             entries.push(PrListEntry {
                 spec_id: spec,
@@ -208,7 +221,7 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
                 branch: mr.source_branch.clone(),
                 title: mr.title.clone(),
                 status: "Open".to_string(), // Could fetch approvals but that's N+1 calls
-                ci: "Unknown".to_string(),
+                ci: ci_status.clone(),
                 rebase_needed,
                 updated_at: parse_and_format_date(&mr.updated_at),
             });
