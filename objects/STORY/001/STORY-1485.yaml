@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-04T06:04:35.738922580Z
+modified_at: 2026-10-04T21:38:22.859494201Z
 req_type: Story
 tags:
 - needs-sketch
@@ -53,6 +53,12 @@ comments:
     Items 1-4 are implementation choices that the author can concretize and resubmit; they need no new operator approval. Item 5 must reuse an independently accepted STORY-1473 authority contract or obtain the operator decision for any new trusted kill configuration. A fail-closed interim adapter that disables kill until authority exists is acceptable scaffolding, and I can sign off such explicitly bounded scaffolding; it does not satisfy the authorized-hard-takeover acceptance and must not be represented as completion of STORY-1485. The full story remains gated on its existing operator acceptance. No acceptance criteria were relaxed, no implementation or merge was performed.
   created_at: 2026-10-04T06:04:35.738922580Z
   modified_at: 2026-10-04T06:04:35.738922580Z
+- id: 01a108da-8c0b-7843-8ec9-44610f6a3552
+  author: ai:codex:joe
+  content: 'SKETCH REWORK READY FOR INDEPENDENT ADVISOR REREVIEW — branch story-1485, commit faa07e4acb (pushed), docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md. Recovered clean existing branch/worktree after aida ps confirmed stale lease; ended only old STORY-1485 lease and reclaimed under session 01a108d76d87. Finding 1: named claim/status/release/takeover/ack interfaces and bounded occupancy config; explicit CLI, loop, child spawn, auto-enqueue/routing and MCP inventory, with persisted caller lineage/demotion fencing despite omitted seat/env changes. Finding 2: generation-bound reservations pin ownership through commitment; transfer waits for reconciliation, request UUID/deadline recovery and compare-and-swap release/transfer; no lock spans peer waits or harness termination, event outbox projects auditable history. Finding 3: mailbox is notification only; ack/release validate authoritative grant session, process binding, request UUID and generation under lock. Finding 4: explicit Alive/Dead/Unknown evidence; no boolean-helper proof of death; exact background Claude mapping and identity-bound termination, ambiguity refuses. Finding 5: STORY-1473 is shipped via PR #2418/b602a5d9ca; reuse ADR-66/current_grant, TTY direct issuance, child delegation and roster ceiling. Hard stop uses direct human TTY with validated direct grant and target-specific confirmation; MCP/headless/managed agents/config-only kill refused. No new trusted-kill config; disabled adapters are scaffolding and do not complete hard-takeover acceptance. Only sketch changed; no production implementation, tests, PR, merge or pr ship. STORY-1485 remains In Progress and needs-sketch until independent advisor signoff.'
+  created_at: 2026-10-04T21:38:22.859494201Z
+  modified_at: 2026-10-04T21:38:22.859494201Z
+  session_id: 01a108d76d87
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
