@@ -18,6 +18,7 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         comment_url: None,
         review_comment: None,
         findings: Vec::new(),
+        inherited_findings: false,
         surviving_findings: Vec::new(),
         recorded_by: None,
         closed_by_merge: None,

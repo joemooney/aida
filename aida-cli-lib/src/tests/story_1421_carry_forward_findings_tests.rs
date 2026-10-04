@@ -7,6 +7,7 @@ fn approved_verdict(findings: &[&str]) -> RecordedVerdict {
         kind: VerdictKind::Approved,
         raw: "approved".to_string(),
         findings: findings.iter().map(|s| s.to_string()).collect(),
+        inherited_findings: false,
         ..Default::default()
     }
 }
@@ -62,6 +63,7 @@ fn request_changes_verdict_never_emits_findings() {
         kind: VerdictKind::RequestChanges,
         raw: "request-changes".to_string(),
         findings: vec!["blocking defect".to_string()],
+        inherited_findings: false,
         ..Default::default()
     };
     let to_file = findings_needing_a_successor(&verdict, &HashSet::new());
