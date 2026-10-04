@@ -8,10 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:33:44.833934071Z
-modified_at: 2026-09-14T05:46:55.328981676Z
+modified_at: 2026-10-04T04:50:14.797981270Z
 req_type: Bug
 tags:
-- auto-complete drain reliability worktree BUG-1145-residual
+- BUG-1145-residual
+- auto-complete
+- drain
+- reliability
+- worktree
 history:
 - id: 01a09e74-45da-72b3-a92a-44e726806471
   author: aida-auto-bump
