@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-04T04:56:04.040894894Z
+modified_at: 2026-10-04T04:57:01.720998760Z
 req_type: Story
 tags:
 - needs-sketch
@@ -31,6 +31,11 @@ comments:
   created_at: 2026-09-27T14:15:31.850853581Z
   modified_at: 2026-09-27T14:15:31.850853581Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a10545-c819-7eb2-8e0f-9fa740953858
+  author: ai:codex:joe
+  content: 'SKETCH proposed: docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md on branch story-1485. Proposes orchestrator-only default; main-worktree shared atomic occupancy record with permanent flock and generation fencing; identity-aware liveness; competing live claims refused, handoff reads warned, non-holder writes/dispatch refused; graceful request/ack takeover with 120s bounded grace; hard stop only with human-at-TTY or explicit operator config, process identity rechecked; dirty worktrees reported and takeover events exposed through history. Independent advisor signoff is still required before implementation. Session 01a10544e508 created the isolated worktree and moved Approved to In Progress.'
+  created_at: 2026-10-04T04:57:01.720998760Z
+  modified_at: 2026-10-04T04:57:01.720998760Z
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
