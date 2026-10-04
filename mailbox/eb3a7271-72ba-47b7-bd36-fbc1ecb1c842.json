@@ -1,0 +1,17 @@
+{
+  "id": "eb3a7271-72ba-47b7-bd36-fbc1ecb1c842",
+  "thread_id": "eb3a7271-72ba-47b7-bd36-fbc1ecb1c842",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "errors"
+  },
+  "timestamp": 1791081637775,
+  "body": "You were mentioned on TASK-1560 by joe: # Post-Merge Code Review for TASK-1560 I have reviewed the recent commits on `ma…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "92ac33f6-cca1-43dc-b6fb-f3601735c31f",
+  "thread_id": "92ac33f6-cca1-43dc-b6fb-f3601735c31f",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791081448533,
+  "body": "Review of PR-2397 finished — verdict: RequestChanges.\n\nCovered specs: BUG-1796 — PARTIAL; acceptance items 1 and 2 covered, acceptance item 3 lacks byte-identical full-output coverage for a normal two-remote pull.\nFlagged findings: BUG-1796, `aida-cli-lib/src/tests/handle_pull_command_tests.rs` — the new test compares only two heading helper strings; please require a full-path test that captures normal two-remote `aida pull` output and pins the complete bytes.\nLeftover questions: none.\nPR: https://github.com/joemooney/aida/pull/2397\n",
+  "subject": "PR-2397 fresh review: request changes at 6e2eb3f0d72e",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
