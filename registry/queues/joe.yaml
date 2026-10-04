@@ -43,3 +43,11 @@
   note: advisor-cleared at filing
   added_at: 2026-10-04T03:01:42.408170059Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a104ec-62aa-7a12-81c1-8465735aa9c3
+  position: 40000
+  added_by: joe
+  note: auto-queued by `aida pr` (01a10467); covers 4 specs
+  added_at: 2026-10-04T03:19:33.193212321Z
+  for_role: reviewer
+  added_by_machine: imac
