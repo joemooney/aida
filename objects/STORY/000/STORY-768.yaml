@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T06:37:38.431434431Z
-modified_at: 2026-10-04T04:50:34.055710988Z
+modified_at: 2026-10-04T04:50:34.992338053Z
 req_type: Story
 tags:
 - advisor
@@ -32,6 +32,10 @@ tags:
 - aida:human
 - coordination
 - parent:STORY-767
+relationships:
+- rel_type: Child
+  target_id: 019f5a21-1e0f-7b40-b50e-48bef87b618e
+  created_at: 2026-10-04T04:50:34.992338053Z
 comments:
 - id: 019f5a3f-11b1-7c90-bc57-ca32b223eac6
   author: joe
