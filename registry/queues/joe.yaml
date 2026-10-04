@@ -46,3 +46,11 @@
   added_at: 2026-10-04T00:55:22.851976770Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0ffed-c39d-7f72-8937-ade7e1cde10e
+  position: 36000
+  added_by: joe
+  note: 'Needs advisor disposition: PR-2396 latest verdict approves current head 8f448c, but TASK-1575 remains Needs Attention and STORY-1517 remains Draft; reconcile the hold before integration.'
+  added_at: 2026-10-04T00:59:45.627658530Z
+  for_role: advisor
+  added_by_machine: imac
