@@ -14,12 +14,12 @@ description: |-
   - No refusal message suggests an env-var role override.
   - MCP resolves its seat the same way the CLI does.
   - The drain token cannot be replayed by another same-user process to impersonate the drain. At minimum this is documented, with a follow-up.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-10-04T16:57:35.962012931Z
+modified_at: 2026-10-04T20:48:13.191669175Z
 req_type: Story
 tags:
 - authority
@@ -109,8 +109,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a108ac-9f7f-7576-98a6-cca94dfbeb17
+  author: aida-reconcile
+  timestamp: 2026-10-04T20:48:13.184011688Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a108ac-9f87-7708-a254-d40329edd2e0
+  timestamp: 2026-10-04T20:48:13.191661845Z
+  agent: implementer
+  commit_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
+  summary: 'Independent reviewer approved the full PR against all six ADR-66 acceptance items at 5cc9c028 (no production gate weakened, fixtures not a backdoor, label-only role add safe, CLI/MCP resolve via one grant validator). Deltas since, each advisor-verified: round-2 write_grant single-resolution + UUID-validated handle (tightening) and test-infra; round-3 test-files only (tests/lib/seat_grant.sh + 3 gate scripts, diff-verified); merges of main (incl. BUG-1794 fix). CI fully green at this head on ubuntu AND windows. Non-blocking findings + 4 design confirmations tracked in TASK-1594.'
+  review_verdict: approved
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-10-04T15:07:52.520301384Z
   implemented_by: joe
+  completed_at: 2026-10-04T20:48:13.183984317Z
+  completion_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
