@@ -210,23 +210,44 @@ pub(crate) fn our_clone_path(store_root: &Path) -> String {
 // caveat is surfaced in `aida team set-role` --help, its output, and the docs.
 // trace:STORY-646 | ai:claude
 
+// trace:STORY-1473 | ai:codex
 /// The shared per-user role roster — `registry/team.toml` on the `aida-store`
-/// branch. Maps a `user_id` (the person, per `current_user_id`) to a role
-/// string. An absent file / absent user = unranked → falls back to
-/// `AIDA_SESSION_ROLE` / the current default (backward-compatible).
+/// branch. Maps each person to allowed seats. Legacy scalar values are read as
+/// singleton sets; writes always use arrays.
 ///
 /// ```toml
 /// [members]
-/// alice = "advisor"
-/// bob   = "implementer"
+/// alice = ["advisor", "reviewer"]
+/// bob   = "implementer" # legacy singleton
 /// ```
-/// trace:STORY-646 | ai:claude
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(transparent)]
+struct SeatList(Vec<String>);
+
+impl<'de> serde::Deserialize<'de> for SeatList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum Input {
+            Legacy(String),
+            Many(Vec<String>),
+        }
+        Ok(Self(match Input::deserialize(deserializer)? {
+            Input::Legacy(role) => vec![role],
+            Input::Many(roles) => roles,
+        }))
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TeamRoster {
-    /// user_id -> role string. `BTreeMap` keeps the file deterministically
+    /// user_id -> allowed seats. `BTreeMap` keeps the file deterministically
     /// sorted so a CAS round-trip is stable across writers.
     #[serde(default)]
-    pub members: BTreeMap<String, String>,
+    members: BTreeMap<String, SeatList>,
 }
 
 impl TeamRoster {
@@ -250,17 +271,37 @@ impl TeamRoster {
         toml::from_str(&content).unwrap_or_default()
     }
 
-    /// The roster role for `user_id`, if one is recorded.
+    /// The allowed seats for `user_id`, if one is recorded.
+    pub(crate) fn seats_for(&self, user_id: &str) -> Option<&[String]> {
+        self.members.get(user_id).map(|seats| seats.0.as_slice())
+    }
+
+    pub(crate) fn entries(&self) -> Vec<(String, Vec<String>)> {
+        self.members
+            .iter()
+            .map(|(user, seats)| (user.clone(), seats.0.clone()))
+            .collect()
+    }
+
+    /// Compatibility accessor for old display-only callers.
     pub(crate) fn role_for(&self, user_id: &str) -> Option<&str> {
-        self.members.get(user_id).map(String::as_str)
+        self.seats_for(user_id)
+            .and_then(|seats| seats.first().map(String::as_str))
     }
 
     /// Set (or replace) a user's role and serialize to TOML. The CAS write now
     /// lives in `aida_core::team::set_role_cas`; this remains for the round-trip
     /// unit test below. trace:STORY-650 | ai:claude
     #[cfg(test)]
-    fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
-        self.members.insert(user_id.to_string(), role.to_string());
+    pub(crate) fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
+        self.members
+            .insert(user_id.to_string(), SeatList(vec![role.to_string()]));
+        self
+    }
+
+    fn with_seats(mut self, user_id: &str, roles: &[String]) -> Self {
+        self.members
+            .insert(user_id.to_string(), SeatList(roles.to_vec()));
         self
     }
 }
@@ -293,6 +334,9 @@ pub(crate) fn resolve_effective_role(
 /// trace:STORY-646 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RoleSource {
+    // trace:STORY-1473 | ai:codex
+    /// From a validated, session-bound grant.
+    Grant,
     /// From `registry/team.toml` (the durable team role).
     Roster,
     /// From the `AIDA_SESSION_ROLE` env var (per-shell, self-declared).
@@ -301,15 +345,26 @@ pub(crate) enum RoleSource {
     Default,
 }
 
+pub(crate) fn allowed_seats_for_user(store_root: &Path, user_id: &str) -> Vec<String> {
+    TeamRoster::load(store_root)
+        .seats_for(user_id)
+        .unwrap_or_default()
+        .iter()
+        .map(|role| super::canonical_role_name(role))
+        .collect()
+}
+
 /// Resolve the effective role for `user_id` against the store at `store_root`,
 /// reading `AIDA_SESSION_ROLE` from the process env. Best-effort: an
 /// unreachable / unreadable store yields an empty roster, so resolution falls
 /// straight through to the env / default (never blocks). trace:STORY-646
 pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (String, RoleSource) {
-    let roster = TeamRoster::load(store_root);
-    let roster_role = roster.role_for(user_id).map(str::to_string);
-    let env_role = std::env::var("AIDA_SESSION_ROLE").ok();
-    resolve_effective_role(roster_role.as_deref(), env_role.as_deref())
+    let _ = user_id;
+    store_root
+        .parent()
+        .and_then(crate::seat_authority::current_seat)
+        .map(|seat| (seat, RoleSource::Grant))
+        .unwrap_or_else(|| ("implementer".to_string(), RoleSource::Default))
 }
 
 /// Write `user_id = role` into `registry/team.toml` on the store with a
@@ -334,10 +389,28 @@ pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result
         .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
 }
 
+pub(crate) fn allow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> anyhow::Result<()> {
+    aida_core::team::allow_seat_cas(store_root, user_id, seat)
+        .map_err(|e| anyhow::anyhow!("allowing team seat failed: {}", e))
+}
+
+pub(crate) fn disallow_seat_cas(
+    store_root: &Path,
+    user_id: &str,
+    seat: &str,
+) -> anyhow::Result<bool> {
+    aida_core::team::disallow_seat_cas(store_root, user_id, seat)
+        .map_err(|e| anyhow::anyhow!("removing team seat failed: {}", e))
+}
+
 /// A roster member row joined with the role recorded for its user_id, for the
 /// extended `aida team` view. trace:STORY-646 | ai:claude
 pub(crate) fn roles_by_user(store_root: &Path) -> BTreeMap<String, String> {
-    TeamRoster::load(store_root).members
+    TeamRoster::load(store_root)
+        .members
+        .into_iter()
+        .map(|(user, roles)| (user, roles.0.join(", ")))
+        .collect()
 }
 
 #[cfg(test)]
@@ -468,7 +541,10 @@ mod tests {
         assert_eq!(parsed.role_for("carol"), None);
         // `[members]` section is the on-disk shape the design doc specifies.
         assert!(toml_str.contains("[members]"), "got: {toml_str}");
-        assert!(toml_str.contains("alice = \"advisor\""), "got: {toml_str}");
+        assert!(
+            toml_str.contains("alice = [\"advisor\"]"),
+            "got: {toml_str}"
+        );
     }
 
     #[test]

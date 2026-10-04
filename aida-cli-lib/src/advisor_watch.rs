@@ -239,6 +239,7 @@ fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Re
         project_root,
         &tee,
         false,
+        "advisor",
     )?;
     if !status.success() {
         eprintln!(

@@ -2256,6 +2256,12 @@ pub enum RoleCommand {
         // trace:STORY-994 | ai:codex
         #[clap(long)]
         no_title: bool,
+
+        /// Explicitly allow this session to issue child grants for this seat.
+        /// May be repeated; omitted means this session cannot delegate seats.
+        // trace:STORY-1473 | ai:codex
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -4065,6 +4071,14 @@ pub enum TeamCommand {
         #[clap(long)]
         role: String,
     },
+
+    /// Add one seat to a user's allowed-seat set. Requires a human at a TTY.
+    // trace:STORY-1473 | ai:codex
+    AllowSeat { user: String, seat: String },
+
+    /// Remove one seat from a user's allowed-seat set. Requires a human at a TTY.
+    // trace:STORY-1473 | ai:codex
+    DisallowSeat { user: String, seat: String },
 
     /// Show YOUR effective role: the roster role for your user id if present,
     /// else `AIDA_SESSION_ROLE`, else the default. Says where it came from.

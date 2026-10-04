@@ -3060,9 +3060,11 @@ fn known_mail_recipients(project_root: &Path) -> BTreeSet<String> {
         }
     };
     let roster = crate::team::TeamRoster::load(&project_root.join(".aida-store"));
-    for (user, role) in &roster.members {
-        add(user);
-        add(&crate::canonical_role_name(role));
+    for (user, seats) in roster.entries() {
+        add(&user);
+        for seat in seats {
+            add(&crate::canonical_role_name(&seat));
+        }
     }
     for lease in crate::list_leases(project_root) {
         add(&lease.owner);

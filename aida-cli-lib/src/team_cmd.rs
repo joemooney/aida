@@ -204,6 +204,7 @@ pub(crate) fn handle_team_set_role(
     user: &str,
     role: &str,
 ) -> Result<()> {
+    crate::seat_authority::require_direct_tty()?;
     let canonical = canonical_role_name(role.trim());
     if canonical.is_empty() {
         anyhow::bail!("a role name is required (e.g. --role advisor)");
@@ -242,6 +243,7 @@ pub(crate) fn handle_team_set_role(
 /// user isn't present.
 // trace:STORY-654 | ai:claude
 pub(crate) fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -> Result<()> {
+    crate::seat_authority::require_direct_tty()?;
     let removed = team::unset_role_cas(store_path, user)?;
     if removed {
         println!(
@@ -255,6 +257,53 @@ pub(crate) fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -
     Ok(())
 }
 
+pub(crate) fn handle_team_allow_seat(
+    store_path: &std::path::Path,
+    user: &str,
+    seat: &str,
+) -> Result<()> {
+    crate::seat_authority::require_direct_tty()?;
+    let canonical = canonical_role_name(seat.trim());
+    let known = known_role_names();
+    if canonical.is_empty() || !known.contains(&canonical) {
+        anyhow::bail!(
+            "unknown seat `{seat}`. Known seats: {}",
+            known.iter().cloned().collect::<Vec<_>>().join(", ")
+        );
+    }
+    team::allow_seat_cas(store_path, user, &canonical)?;
+    println!(
+        "{} allowed seat {} for {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        canonical.cyan(),
+        user.bold()
+    );
+    println!("{}", aida_core::team::ROLE_GUARDRAIL_CAVEAT.dimmed());
+    Ok(())
+}
+
+pub(crate) fn handle_team_disallow_seat(
+    store_path: &std::path::Path,
+    user: &str,
+    seat: &str,
+) -> Result<()> {
+    crate::seat_authority::require_direct_tty()?;
+    let canonical = canonical_role_name(seat.trim());
+    let removed = team::disallow_seat_cas(store_path, user, &canonical)?;
+    if removed {
+        println!(
+            "{} removed seat {} from {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            canonical.cyan(),
+            user.bold()
+        );
+    } else {
+        println!("No `{canonical}` seat for {user} — nothing to remove.");
+    }
+    println!("{}", aida_core::team::ROLE_GUARDRAIL_CAVEAT.dimmed());
+    Ok(())
+}
+
 /// `aida team my-role` (STORY-646): show the caller's effective role and where
 /// it resolved from (roster / env / default).
 // trace:STORY-646 | ai:claude
@@ -262,6 +311,7 @@ pub(crate) fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> R
     let user = current_user_id(None);
     let (role, source) = team::effective_role_for_user(store_path, &user);
     let source_str = match source {
+        team::RoleSource::Grant => "validated session grant",
         team::RoleSource::Roster => "roster",
         team::RoleSource::Env => "env (AIDA_SESSION_ROLE)",
         team::RoleSource::Default => "default",
@@ -271,6 +321,7 @@ pub(crate) fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> R
             "user": user,
             "role": role,
             "source": match source {
+                team::RoleSource::Grant => "grant",
                 team::RoleSource::Roster => "roster",
                 team::RoleSource::Env => "env",
                 team::RoleSource::Default => "default",

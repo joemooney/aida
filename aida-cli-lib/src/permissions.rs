@@ -282,16 +282,13 @@ pub(crate) fn gated_effective_role_for_user(
     user_id: &str,
     config: &TeamPermissions,
 ) -> (String, RoleSource) {
-    let env_role = std::env::var("AIDA_SESSION_ROLE").ok();
-    match store_root {
-        Some(root) if root.join("objects").is_dir() => {
-            let roster = team::TeamRoster::load(root);
-            let roster_role = roster.role_for(user_id).map(str::to_string);
-            gated_effective_role(roster_role.as_deref(), env_role.as_deref(), config.strict)
-        }
-        // Store unreachable → degraded; fall back to non-strict slice-1
-        // resolution rather than default-deny everyone. trace:STORY-647
-        _ => team::resolve_effective_role(None, env_role.as_deref()),
+    let _ = (user_id, config);
+    let seat = store_root
+        .and_then(|store| store.parent())
+        .and_then(crate::seat_authority::current_seat);
+    match seat {
+        Some(role) => (role, RoleSource::Grant),
+        None => ("implementer".to_string(), RoleSource::Default),
     }
 }
 
@@ -313,14 +310,13 @@ pub(crate) fn refusal_message(
         GatedOp::MergeGate => "running the merge gate",
         GatedOp::Integrate => "integrating ready PRs",
     };
-    let role_clause = if source == RoleSource::Roster {
+    let role_clause = if source == RoleSource::Grant {
         format!("your team role is `{have_role}`")
     } else {
         format!("your role is `{have_role}`")
     };
     format!(
-        "{op_label} needs the `{need}` role — {role_clause}. Ask an advisor, fix it with \
-         `aida team set-role`, or re-run with `--force` (a guardrail, not security — the \
+        "{op_label} needs the `{need}` role — {role_clause}. Enter that role at a human TTY with `aida role enter {need}`, ask an advisor, or re-run with `--force` (a guardrail, not security — the \
          bypass is recorded in history)."
     )
 }

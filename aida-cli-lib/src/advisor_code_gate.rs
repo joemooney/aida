@@ -341,6 +341,7 @@ fn effective_role_for_commit_with_fallback(
 
 fn role_with_source(role: String, source: crate::team::RoleSource) -> (String, &'static str) {
     let source = match source {
+        crate::team::RoleSource::Grant => "validated session grant",
         crate::team::RoleSource::Roster => "shared team roster",
         crate::team::RoleSource::Env => "AIDA_SESSION_ROLE environment",
         crate::team::RoleSource::Default => "default role",
@@ -395,11 +396,7 @@ mod tests {
         let store = root.join(".aida-store");
         let registry = store.join("registry");
         std::fs::create_dir_all(&registry).unwrap();
-        let roster = crate::team::TeamRoster {
-            members: [(user.clone(), "advisor".to_string())]
-                .into_iter()
-                .collect(),
-        };
+        let roster = crate::team::TeamRoster::default().with_role_set(&user, "advisor");
         std::fs::write(
             registry.join("team.toml"),
             toml::to_string(&roster).unwrap(),

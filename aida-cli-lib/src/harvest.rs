@@ -804,14 +804,15 @@ fn run_harvest_agent(
         ));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("harvest-{}", display.to_ascii_lowercase()));
-    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-    let status =
-        crate::session::spawn_vendor_headless(vendor, prompt, run_id, &log_path, &tee, false);
-    match previous_role {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
+    let status = crate::session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        prompt,
+        run_id,
+        &log_path,
+        &tee,
+        false,
+    );
     let status = status?;
     if !status.success() {
         anyhow::bail!(
@@ -1201,14 +1202,15 @@ pub(crate) fn handle_harvest_command(
             ));
         let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
             .with_label(format!("harvest-{}", display.to_ascii_lowercase()));
-        let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
-        std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-        let status =
-            crate::session::spawn_vendor_headless(vendor, &prompt, &run_id, &log_path, &tee, false);
-        match previous_role {
-            Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-            None => std::env::remove_var("AIDA_SESSION_ROLE"),
-        }
+        let status = crate::session::spawn_vendor_headless_with_seat(
+            vendor,
+            aida_core::agents_config::AgentSeat::Advisor,
+            &prompt,
+            &run_id,
+            &log_path,
+            &tee,
+            false,
+        );
         let status = status?;
         if !status.success() {
             anyhow::bail!(

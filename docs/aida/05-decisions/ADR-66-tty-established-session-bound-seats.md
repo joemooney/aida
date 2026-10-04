@@ -43,6 +43,9 @@ The linked sketch's roster representation, grant validation and lifetime,
 recursive delegation defaults, and CLI/MCP issuance inventory received
 independent advisor signoff on 2026-10-03. It records legacy
 scalar-to-singleton roster reads, TTY-selected empty-by-default delegation,
-revocable opaque grant handles, MCP startup capture, and the initial
+revocable opaque grant handles with a 24-hour maximum lifetime, MCP startup capture, and the initial
 launcher/authorization inventory. Implementation proceeds under STORY-1473's
 guided execution mode; this Draft ADR alone does not change the decision.
+
+Implementation detail: grants expire after 24 hours at most. Child grants share
+their parent's expiry and become invalid when the parent is revoked.

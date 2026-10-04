@@ -1465,7 +1465,7 @@ pub(crate) fn mcp_authority_status_lines(agents: &[AgentRegistryView]) -> Vec<St
             let server_role = agent.role.as_deref().unwrap_or("(none)");
             let advisor = crate::advisor_authority_from(server_role, false, false);
             format!(
-                "  MCP authority: {} server#{} role={} (advisor authority: {}); relaunch: AIDA_SESSION_ROLE=advisor aida mcp-serve",
+                "  MCP authority: {} server#{} seat={} (advisor authority: {}); recovery: enter advisor at a TTY, then restart MCP",
                 agent.agent_type,
                 agent.pid,
                 server_role,
@@ -3175,7 +3175,7 @@ mod tests {
         assert!(line.contains("role=implementer"), "{line}");
         assert!(line.contains("advisor authority: no"), "{line}");
         assert!(
-            line.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            line.contains("enter advisor at a TTY, then restart MCP"),
             "{line}"
         );
     }
