@@ -1,0 +1,19 @@
+id: 01a104d7-779d-7d11-a51d-db2591bfca5f
+spec_id: BUG-1798
+agreed_id: BUG-1798
+title: Fix performance regression and unwrap in row_parked_lens
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T02:56:32.157292863Z
+modified_at: 2026-10-04T02:56:32.157292863Z
+req_type: Bug
+filed_at:
+  code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: antigravity
