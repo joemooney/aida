@@ -1,0 +1,33 @@
+id: 01a10468-7291-7082-b1e4-5f3d84df7891
+spec_id: STORY-1519
+agreed_id: STORY-1519
+title: 'Review PR-2399: [AI:codex] fix(lifecycle): name the routes to done in the needs-attention refusal (BUG-1797)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a103cf`) for branch `bug-1797`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2399>
+  - Branch: `bug-1797` → `main`
+
+  ## Covers
+
+  - BUG-1797
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2399` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T00:55:16.369262898Z
+modified_at: 2026-10-04T00:55:16.369262898Z
+req_type: Story
+filed_at:
+  code_sha: 34c6c70fb3f2f75a0abf01b5afc44ac8ec2ef71a
+  branch: bug-1797
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
