@@ -14,12 +14,12 @@ description: |-
   - No refusal message suggests an env-var role override.
   - MCP resolves its seat the same way the CLI does.
   - The drain token cannot be replayed by another same-user process to impersonate the drain. At minimum this is documented, with a follow-up.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-10-04T15:06:31.105663453Z
+modified_at: 2026-10-04T15:07:52.520301384Z
 req_type: Story
 tags:
 - authority
@@ -95,4 +95,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10775-075d-7fc1-9f5b-c206e5839b7b
+  author: joe
+  timestamp: 2026-10-04T15:07:52.541876861Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: guided
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-04T15:07:52.520301384Z
+  implemented_by: joe
