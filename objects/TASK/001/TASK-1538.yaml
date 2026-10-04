@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-04T18:48:20.927677111Z
+modified_at: 2026-10-04T18:58:15.842332863Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -22,6 +22,32 @@ relationships:
   target_id: 01a0dfcb-874b-78a2-996e-09bcc1423085
   created_at: 2026-09-26T22:17:43.797096417Z
   created_by: joe
+comments:
+- id: 01a10847-f4a2-7386-9da2-e27e3299a620
+  author: joe
+  content: |-
+    REVIEWER VERDICT: REJECT (reviewer seat, session b3f706b1, 2026-10-04). Scope per signoff amendment 8: V1-V10 as amended + retargets 1a-1n. Branch task-1538 @ 5a8fcc0106.
+
+    FATAL
+    1. Does not build: cargo check -p aida-cli fails E0603 — main_entry is private (moved into chunk_01 behind 'pub(crate) mod'; no pub re-export). V3-V6 moot.
+    2. Signed-off module map not implemented: 44 line-count chunks (chunk_01..chunk_44, cut every ~2,500 lines by scripts/split-lib/move.py) instead of the 45 named cohesive domain modules (kernel.rs, phase_driver.rs, ...). Defeats both story goals: merge safety (arbitrary, unstable boundaries) and slice-2 crate layering (domains scattered across chunks). This is non-conformance with the signoff, not design relitigation.
+    3. Amendment 1n not done: zero 'pub use' shims; the 6 public items (is_terminal_status_str, validate_status_input, validate_priority_input, parse_pr_arg, resolve_pr_to_spec, AGENT_ROLES) fell out of the published API.
+    4. Retargets 1a-1m: NONE done. merge_hold.rs include_str!("lib.rs") x3 now scans a 550-line stub; bug_1186_reviewer_seat_tests.rs:87 ditto; adr9_one_engine_guardrail.rs allowlist still src/lib.rs (production engine call moved -> test fails); check-trace-headers.py:98 still lib.rs:run_do_drive; portability-allowlist.txt:186-187 still keyed to lib.rs and check-portability-growth.py gained no move-credit (CI refuses) and no test.
+    5. run() moved to chunk_02 — signoff Q3 explicitly kept run() in lib.rs for slice 1 (residual lib.rs is 550 lines vs planned ~4-5k).
+
+    MAJOR
+    6. One commit instead of commit A (visibility, V1 token-identity, builds alone) + per-module move commits; V1 unverifiable, per-module color-moved review impossible.
+    7. V2 multiset check fails: 1,261 residual line diffs after normalizing pub(crate) (signature re-wraps) — not provably pure moves.
+    8. V9 missing: no scripts/split-lib/relocate-hunks.sh, no rebase note, no dry-run on in-flight branches.
+    9. Window/sequencing: branch cut from b13d34f2fc (behind origin/main 62e3374e51); no declared quiet window; blocker TASK-1537 baseline never run so V10 impossible — yet this spec was flipped to completed.
+    10. Chunk files have no //! header and no trace:STORY-1488 comment; manifest is a bare path list (no content anchors, no test-module ownership per amendment 3).
+
+    PASSED (for the record): #[path] test-decl count preserved (270/270) and decls resolve as flat siblings; size caps met (max chunk 5,088 <= 6k; lib.rs <= 5k); test_env/test_home stayed in lib.rs.
+
+    RECOMMENDATION: discard branch task-1538; status of this spec should revert from completed (operator call). Slice 1 must be redone from the content-anchored manifest per the signoff — the chunker output is not salvageable toward the named module map.
+  created_at: 2026-10-04T18:58:15.842332863Z
+  modified_at: 2026-10-04T18:58:15.842332863Z
+  session_id: b3f706b1-659d-4f62-aad2-f8ae1a8cd387
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
