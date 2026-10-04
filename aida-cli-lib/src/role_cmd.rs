@@ -1257,6 +1257,36 @@ mod tests {
         assert!(no_title);
     }
 
+    // trace:TASK-1592 | ai:antigravity
+    #[test]
+    fn parses_role_enter_delegate_seat() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "role",
+            "enter",
+            "advisor",
+            "--delegate-seat",
+            "implementer",
+            "--delegate-seat",
+            "reviewer",
+        ])
+        .expect("parse role enter");
+        let Command::Role(RoleCommand::Enter {
+            name,
+            delegate_seats,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected role enter command");
+        };
+
+        assert_eq!(name.as_deref(), Some("advisor"));
+        assert_eq!(
+            delegate_seats,
+            vec!["implementer".to_string(), "reviewer".to_string()]
+        );
+    }
+
     // trace:STORY-994 | ai:codex
     #[test]
     fn role_enter_launch_title_honors_per_invocation_opt_out() {
