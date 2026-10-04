@@ -15,6 +15,12 @@ deletion without clearance. The same-user/admin-token limit and protected-broker
 boundary are documented in [reporting](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:BUG-1693 | ai:codex -->
 
+Reasoned `aida defer --reason` holds are enforced by pickup and direct session
+start; only product/advisor or the unseated operator can lift them. Legacy
+deferrals without a reason retain their existing view behavior. See
+[lifecycle](docs/lifecycle.md#status-vs-workable--pickability-and-the-queue).
+<!-- trace:BUG-1793 | ai:codex -->
+
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
 keep git and the spec store coherent, and leave durable traces for the

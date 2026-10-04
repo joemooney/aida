@@ -161,8 +161,7 @@ fn tiers_from_file(path: &Path, vendor: &str) -> Option<AgentModelTiers> {
 ///      worktree can actually see; without it the project knob silently missed
 ///      worktrees and phases fell back to claude);
 ///   3. global `~/.aida/agents.toml` — the machine-wide default.
-///
-/// Absent everywhere is `None` (callers keep their built-in default).
+///      Absent everywhere is `None` (callers keep their built-in default).
 // trace:BUG-704 | ai:claude
 pub fn resolve_default_vendor_from(
     global_agents_toml: Option<&Path>,

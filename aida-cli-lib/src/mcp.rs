@@ -6459,6 +6459,7 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 deferred: r.deferred,
                 deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
                 deferred_until: r.deferred_until.clone(),
+                deferred_reason: r.deferred_reason.clone(),
                 in_degree: d.in_degree,
                 out_degree: d.out_degree,
                 heft: d.heft,

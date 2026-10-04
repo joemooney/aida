@@ -2859,6 +2859,7 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "mode",
     // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
     "origin",
+    "deferred_reason",
 ];
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
@@ -2957,6 +2958,7 @@ fn toon_list_cell(
         "mode" => r.execution_mode.clone().unwrap_or_default(),
         // trace:STORY-634 | ai:claude — empty cell = single-repo.
         "origin" => r.origin.clone().unwrap_or_default(),
+        "deferred_reason" => r.deferred_reason.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -5263,6 +5265,10 @@ fn run() -> Result<()> {
     {
         if s == "pr" || s == "mr" {
             return pr_list_handler(*json);
+        }
+        // trace:TASK-1590 | ai:antigravity
+        if s == "review" {
+            return handle_review_list(*json);
         }
     }
 
@@ -38129,6 +38135,23 @@ fn session_start(
         anyhow::bail!(msg)
     }
 
+    // BUG-1793: an operator-held spec must refuse before creating a lease or
+    // acquiring cross-clone coordination state. trace:BUG-1793 | ai:codex
+    if let Some(req) = Storage::new(project_root.join(".aida-store"))
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(owns).cloned())
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(owns);
+            return Err(defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
+
     // Check the lease dir exists; create if not.
     let leases = leases_dir(&project_root);
     std::fs::create_dir_all(&leases)?;
@@ -53026,6 +53049,10 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || orchestrated
 }
 
+pub(crate) fn hold_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+    matches!(role, "product" | "advisor" | "operator") || is_tty || orchestrated
+}
+
 /// Dispatch authority permits routing already-disposed work without granting
 /// the advisor's power to dispose it. Product, advisor, and integrator seats
 /// may dispatch; a corroborated live orchestrator may continue its own routing.
@@ -53089,6 +53116,26 @@ fn has_advisor_authority() -> bool {
     advisor_authority_from(
         &effective_role_with_roster().0,
         authority_stdin_is_terminal(), // trace:BUG-1618 | ai:claude
+        orchestrated,
+    )
+}
+
+// trace:BUG-1793 | ai:antigravity
+pub(crate) fn has_hold_authority() -> bool {
+    if current_role_instance_is_companion() {
+        return false;
+    }
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    hold_authority_from(
+        &effective_role_with_roster().0,
+        authority_stdin_is_terminal(),
         orchestrated,
     )
 }
@@ -82760,6 +82807,7 @@ mod story_1043_unshipped_work_tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             in_degree: 0,
             out_degree: 0,
             heft: 0,
@@ -93940,6 +93988,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        ReviewCommand::List { json } => handle_review_list(*json),
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
@@ -96079,6 +96128,106 @@ fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// trace:TASK-1590 | ai:antigravity
+fn handle_review_list(json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let verdicts = review_verdict::list_active_verdicts(&project_root);
+
+    if verdicts.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            println!(
+                "{} No active review verdicts found.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            );
+        }
+        return Ok(());
+    }
+
+    let branch = current_branch_at(&project_root);
+    let mut entries: Vec<(String, String, String, String, String, colored::Color)> = Vec::new();
+    let mut json_out = Vec::new();
+
+    let mut max_spec = 7;
+    let mut max_verdict = 7;
+    let mut max_action = 13;
+    let mut max_sha = 3;
+
+    for (spec, v) in verdicts {
+        let relation =
+            verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
+        let actionability = review_verdict::review_actionability(Some(&v), relation);
+        let spec_upper = spec.to_ascii_uppercase();
+        let verdict_str = format!("{:?}", v.kind);
+        let action_str = actionability.as_str().to_string();
+        let sha_str =
+            review_verdict::short_sha(v.reviewed_sha.as_deref().unwrap_or("")).to_string();
+
+        max_spec = max_spec.max(spec_upper.len());
+        max_verdict = max_verdict.max(verdict_str.len());
+        max_action = max_action.max(action_str.len());
+        max_sha = max_sha.max(sha_str.len());
+
+        let color = match actionability {
+            review_verdict::ReviewActionability::Resolved => colored::Color::Green,
+            review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
+            review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
+        };
+
+        if json {
+            json_out.push(serde_json::json!({
+                "spec_id": spec_upper,
+                "verdict": verdict_str,
+                "actionability": action_str,
+                "sha": sha_str,
+            }));
+        } else {
+            entries.push((
+                spec_upper,
+                verdict_str,
+                action_str,
+                sha_str,
+                String::new(),
+                color,
+            ));
+        }
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&json_out)?);
+        return Ok(());
+    }
+
+    println!(
+        "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+        "Spec ID".bold(),
+        "Verdict".bold(),
+        "Actionability".bold(),
+        "SHA".bold(),
+        spec_w = max_spec,
+        verdict_w = max_verdict,
+        action_w = max_action,
+        sha_w = max_sha,
+    );
+
+    for (spec, verdict, action, sha, _ignored, color) in entries {
+        println!(
+            "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+            spec,
+            verdict,
+            action.color(color),
+            sha,
+            spec_w = max_spec,
+            verdict_w = max_verdict,
+            action_w = max_action,
+            sha_w = max_sha,
+        );
+    }
+
+    Ok(())
 }
 
 /// trace:STORY-67 | ai:claude
@@ -102002,7 +102151,7 @@ fn resolve_next_n_head(
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
-            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
+            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role).unwrap();
             let (role_skipped, blocked_skipped) = match &pick {
                 Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
                 None => (

@@ -429,6 +429,8 @@ fn role_scope_default_non_pr_is_implementer() {
 fn auto_complete_head_skips_entries_routed_to_other_roles() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-943".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("reviewer".to_string()),
@@ -438,6 +440,8 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-944".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -449,6 +453,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("implementer drain should find the implementer-routed item");
     assert_eq!(pick.spec, "TASK-944");
     assert_eq!(
@@ -462,6 +467,8 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
 fn auto_complete_head_skips_deferred_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1205".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -471,6 +478,8 @@ fn auto_complete_head_skips_deferred_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1208".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -482,6 +491,7 @@ fn auto_complete_head_skips_deferred_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("drain should skip deferred rows and pick the next drivable item");
     assert_eq!(pick.spec, "TASK-1208");
     assert_eq!(pick.deferred_skipped, vec!["TASK-1205".to_string()]);
@@ -494,6 +504,8 @@ fn auto_complete_head_skips_deferred_candidates() {
 fn auto_complete_head_skips_release_tagged_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-1125".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -505,6 +517,8 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1126".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -516,6 +530,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("headless drain should skip release tasks and pick normal drainable work");
 
     assert_eq!(pick.spec, "TASK-1126");
@@ -531,6 +546,8 @@ fn auto_complete_head_skips_release_tagged_candidates() {
 fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-1120".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -540,6 +557,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1121".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -549,6 +568,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1122".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -558,6 +579,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1123".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -569,6 +592,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("drain should skip interactive/blocking modes and pick drainable work");
 
     assert_eq!(pick.spec, "TASK-1123");
@@ -583,6 +607,25 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     assert!(pick.status_skipped.is_empty());
     assert!(pick.role_skipped.is_empty());
     assert!(pick.deferred_skipped.is_empty());
+}
+
+// trace:BUG-1793 | ai:antigravity
+#[test]
+fn auto_complete_head_refuses_held_candidates() {
+    let candidates = vec![AutoCompleteHeadCandidate {
+        deferred_until: None,
+        id: "STORY-1".to_string(),
+        status: RequirementStatus::Approved,
+        for_role: Some("implementer".to_string()),
+        deferred: true,
+        deferred_reason: Some("wait for infra".to_string()),
+        execution_mode: Some(aida_core::ExecutionMode::Drain),
+        tags: Default::default(),
+        blocked: None,
+    }];
+
+    let err = pick_auto_complete_head_for_role(&candidates, "implementer").unwrap_err();
+    assert!(err.to_string().contains("wait for infra"));
 }
 
 /// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH

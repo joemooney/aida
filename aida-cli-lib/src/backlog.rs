@@ -1424,6 +1424,7 @@ mod tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             // trace:TASK-1148 | ai:claude
             risk_notes: None,
             test_coverage_notes: None,
