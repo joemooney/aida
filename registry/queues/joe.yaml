@@ -40,7 +40,17 @@
   requirement_id: 01a108a7-ed32-75ea-9c33-d28b5e085cc5
   position: 43000
   added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-04T20:51:50.312238509Z
+  note: |-
+    BUG-1291 recovery: PR #2420 handed off after shelving in phase 3 (reviewer): PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+    Overlapping files:
+      aida-cli-lib/src/lib.rs
+
+    Recover with:
+      aida pr rebase 2420              # clean rebase + force-push-with-lease
+      aida pr rebase 2420 --interactive  # if conflicts need manual resolve
+
+    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 3/3)
+  added_at: 2026-10-04T20:51:55.949076440Z
   for_role: reviewer
   added_by_machine: imac
