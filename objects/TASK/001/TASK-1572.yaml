@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T22:02:24.791016107Z
-modified_at: 2026-10-04T01:37:35.074598659Z
+modified_at: 2026-10-04T02:39:56.403594901Z
 req_type: Task
 tags:
 - list
@@ -20,6 +20,11 @@ comments:
   created_at: 2026-10-03T09:01:02.378940283Z
   modified_at: 2026-10-03T09:01:02.378940283Z
   session_id: 7e588b4b-93c2-467c-9ca0-ae9a7bdf1bc2
+- id: 01a104c8-45f3-7572-a33a-d958bc6dd985
+  author: joe
+  content: "**Code Review for TASK-1572 (Commit 4f89f045)**\n\nI have completed a post-merge code review based on the `aida-code-review` skill criteria. The following issues were found that need follow-up:\n\n**1. CRITICAL: Performance Regression in `aida list`**\n- **Location:** `aida-cli-lib/src/git_backend_cmd.rs` (lines 2229-2234)\n- **Issue:** Unconditional full store loading in the hot path. `backend.load()` is now called for *every* invocation of `aida list`, loading all requirements into memory regardless of filters. This bypasses the performance benefits of `backend.list_summaries(&filter)`. \n- **Impact:** Significant slowdown for all `list` operations in large repositories.\n- **Recommendation:** `row_parked_lens` should not require the fully loaded `RequirementsStore` to be passed in, or the loading should happen lazily/on-demand (as it used to do via `backend.get_requirement`) instead of upfront for the entire list command.\n\n**2. CRITICAL: Error Handling Quality (Panic Path)**\n- **Location:** `aida-cli-lib/src/git_backend_cmd.rs` (line 2233)\n- **Issue:** `let store = backend.load().unwrap_or_else(|_| backend.load_metadata_only().unwrap());` uses an unhandled panic path.\n- **Impact:** If `cache.db` or the git tree is malformed, this will panic and crash the CLI for users instead of properly bubbling an error via `?`.\n- **Recommendation:** Bubble the error properly using `?` or provide proper context via `anyhow::Context`.\n\n**3. IMPORTANT: Test Robustness**\n- **Location:** `aida-cli/tests/bug_1771_status_lens_filters.rs` (lines 354-358)\n- **Issue:** Parsing the epic ID relies on exact string splitting of `aida add epic` stdout, ending with a bare `.unwrap()`. \n- **Impact:** Very brittle test. If the `aida add` output format changes slightly, the test will panic obscurely.\n- **Recommendation:** Use `--format json` to parse the created ID cleanly, or use a more robust regex that maps to a meaningful assert rather than a panic."
+  created_at: 2026-10-04T02:39:56.403594901Z
+  modified_at: 2026-10-04T02:39:56.403594901Z
 history:
 - id: 01a100fe-d5f4-7893-816f-6ec52e03e6ae
   author: joe
