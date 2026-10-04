@@ -19,12 +19,12 @@ description: |
   NOTE: if the hypothesis holds, the defect may be PRODUCT (a real Windows user's commit gate would ignore worktree leases), not test-only — triage that first, per the BUG-1728 Family-D lesson: do not assume fixture-only, and do not close by cfg-gating the test.
 
   Per ADR-47/ADR-62 this is deferred Windows work; recorded so the next cross-platform pass starts from the mechanism instead of re-running a 30-minute job.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T05:43:04.221295913Z
+modified_at: 2026-10-04T15:44:14.418228444Z
 req_type: Bug
 tags:
 - cross-platform
@@ -52,6 +52,11 @@ comments:
     The remaining blocker is GitHub branch protection: `required_approving_review_count` is 1, GitHub has zero submitted reviews, and `reviewDecision` is empty. The PR author is `joemooney`; GitHub refused the approval review from that same account. The passing AIDA verdict/comment does not satisfy the configured GitHub approval requirement. Do not route to integrator yet. Required next action: obtain one approving GitHub review from an account other than the PR author, then recheck exact head and required checks before integration. No hold was cleared and no merge was attempted.
   created_at: 2026-10-04T03:47:55.985740291Z
   modified_at: 2026-10-04T03:47:55.985740291Z
+- id: 01a10796-5252-78a1-b11f-dccd9e1e246c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core Windows spelling normalization is covered, but its casing fold is ASCII-only and does not preserve Windows case-insensitive matching for Unicode path components.. Triage reason: Rework brief from review verdict .aida/review-verdicts/BUG-1794.json (CHANGES REQUESTED at 2f910f1a): windows_path_key in aida-cli-lib uses to_ascii_lowercase(), so a lease path with a Unicode component (Åsa) fails to match canonical cwd spelling åsa even though Windows path matching is case-insensitive there. Required: Unicode-aware casing normalization in windows_path_key plus a Windows-gated Unicode case-variant regression test. Evidence of fix: that test red-before/green-after, existing drive/UNC and sibling-prefix tests still green.'
+  created_at: 2026-10-04T15:44:14.418227009Z
+  modified_at: 2026-10-04T15:44:14.418227009Z
 history:
 - id: 01a103ce-85a1-7103-8cde-abcab96e80cf
   author: joe
@@ -81,6 +86,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a10796-5252-78a1-b11f-dcb3222fa5ec
+  author: joe
+  timestamp: 2026-10-04T15:44:14.418215955Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
   branch: main
@@ -98,12 +110,4 @@ implementation_info:
     make check-ci-fast (19 fast gates passed)
   implemented_at: 2026-10-04T03:19:08.248442398Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core Windows spelling normalization is covered, but its casing fold is ASCII-only and does not preserve Windows case-insensitive matching for Unicode path components.
-  recovery_hint: address the review findings, move BUG-1794 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-04T05:43:04.221295913Z
 interface_changes: {}
