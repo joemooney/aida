@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1575",
+  "publishes": [
+    {
+      "at": "2026-10-04T02:47:03.845072029Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T04:17:11.531484089Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:09:21.866571552Z",
+      "spec": "TASK-1575",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T22:31:13.459446101Z",
+      "spec": "TASK-1575",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1575",
+        "branch": "task-1575",
+        "first_seen": "2026-10-03T22:31:13.459332160+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:48:30.155525346Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2396,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dc237ef5b214eaf85203c65fd062b44153d07c08"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:48:30.716653365Z",
+      "spec": "TASK-1575",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Carrier retain breaks the count-based evidenced truncation: a truncated pass-2 can report a never-evidenced survivor (PRIN-5); snapshot-None suppression is silent",
+        "recovery_hint": "address the review findings, move TASK-1575 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:03:00.317091623Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2396,
+        "verdict": "APPROVED",
+        "reviewed_sha": "8f448c153e0265c94be912f73f0fe7c34e480608"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:29:20.056179213Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:29:20.056224785Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:29:22.217262293Z",
+      "spec": "TASK-1575",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:47:03.836759257Z",
+      "spec": "TASK-1575",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "585f46e32a5b94c9066ae72fee687afd8b4bd815",
+        "pr": 2396,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
