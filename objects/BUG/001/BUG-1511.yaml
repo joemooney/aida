@@ -31,10 +31,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T02:04:29.972266635Z
-modified_at: 2026-09-21T23:32:52.988149161Z
+modified_at: 2026-10-04T04:48:43.116843771Z
 req_type: Bug
 tags:
-- batch:night-0920 public-repo hygiene drain-safe from:session-0920
+- batch:night-0920
+- drain-safe
+- from:session-0920
+- hygiene
+- public-repo
 comments:
 - id: 01a0c633-bff0-7b03-94ef-aa01c11b10f6
   author: joe
