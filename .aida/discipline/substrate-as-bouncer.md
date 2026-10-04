@@ -15,66 +15,157 @@ disposition authority. Queue presence is routing evidence, not approval, so an
 autonomous drain skips a queued Draft until the advisor disposes it into
 Approved or Planned. <!-- trace:STORY-1353 | ai:codex -->
 
-Rules in prompt text are useful, but AIDA's reliability improvements come
-from programmatic gates that intercept unsafe lifecycle states.
+**Last updated**: 2026-05-22  
+**Principle Trace**: `feedback_substrate_as_bouncer_not_rules` | `TASK-481` | `TASK-480`
 
-## Headless text-question gate (BUG-354 / BUG-374)
+In high-velocity development environments, relying on passive developer guidelines (such as rule lists in a README or a text-only memory file) is fragile. Humans in a hurry and developer-agents alike routinely bypass, ignore, or overlook these passive rules, leading to common friction traps. 
 
-In `--no-human=both`, a headless implementer must not ask a plain-text
-confirmation question and exit with no PR. A final message like "A or B?
-Please confirm" has no human recipient inside the subprocess, so it is a
-design-fork punt.
+The AIDA philosophy solves this by shifting from **passive rules** to **active bouncers** built directly into the workspace *substrate*.
 
-The orchestrator now inspects the terminal headless JSONL `result` event
-when phase 1 exits cleanly with no PR. If the final answer contains
-decision-fork question wording such as "which path", "should I", or
-"confirm and I'll proceed?", it files a design-fork punt instead of
-returning a generic phase-1 `NoPr` failure. The existing STORY-306 advisor
-tier then resolves or escalates the fork.
+---
+
+## The Core Principle
+
+A **bouncer** is a hard, mechanical gate embedded directly in the development lifecycle (such as Git hooks, compilers, pre-commit scripts, or IDE rules). 
+
+Instead of asking you (or an agent) to remember a rule:
+1. **The substrate physicalizes the boundary**: It actively intercepts the action (e.g. committing).
+2. **It fails fast and hard**: It refuses to complete the action if the boundary is violated.
+3. **It educates immediately**: It prints a highly informative error explaining *why* it refused the action and points to the exact discipline or solution.
+
+By turning rules into bouncers, we automate discipline. Bouncers protect the codebase from structural rot without relying on human willpower or prompt adherence.
+
+---
+
+## The Pre-Commit Gitignored Bouncer Hook
+
+The first line of defense is the pre-commit bouncer (`.git/hooks/pre-commit`), which protects projects from intermediate build product contamination.
+
+### The Problem it Solves
+A common friction trap occurs when developer-agents (such as Claude Code) attempt to solve errors by directly editing compiled build artifacts, generated types, or cached databases (which are gitignored) instead of modifying the true source files. This produces non-reproducible local fixes that break upon the next clean build.
+
+### The Hook's Behavior
+Upon running `git commit`, the pre-commit bouncer:
+1. Scans all staged files using `git status --porcelain`.
+2. Runs `git check-ignore --no-index` on each to detect gitignored paths.
+3. If any staged file is gitignored, the commit is **actively refused** with a structured error:
+   ```
+   Refusing commit: target/debug/build/... is gitignored. Editing intermediate
+   build products produces non-reproducible fixes. Modify the
+   source (or pass --allow-intermediate to override). See:
+   docs/aida/discipline/substrate-as-bouncer.md
+   ```
+
+### The Deliberate Escape Hatch
+Bouncers must always remain helpful, not obstructive. If a developer has a legitimate, emergency reason to commit a gitignored file, they can deliberately bypass the bouncer using either:
+- The `--allow-intermediate` flag: `git commit --allow-intermediate`
+- The environment variable: `AIDA_ALLOW_INTERMEDIATE=1 git commit`
+
+### The .aida-store Exemption
+The bouncer automatically exempts the orphan `.aida-store` branch and its worktree, since it deliberately stores project requirement state in gitignored paths.
+
+---
+
+## The Pre-Commit cargo fmt Bouncer Hook (TASK-503)
+
+To prevent code formatting drift from breaking the CI builds (e.g., `Check formatting` failing), AIDA integrates an auto-formatting bouncer directly into the pre-commit hook.
+
+### The Hook's Behavior
+Upon running `git commit`, the pre-commit bouncer:
+1. Detects staged Rust files (`.rs`) using `git diff --cached`.
+2. If any Rust files are staged, it runs a fast check: `cargo fmt --all -- --check`.
+3. If formatting drift is detected, it automatically runs `cargo fmt --all` to fix the drift, re-stages the formatted files using `git add`, and prints:
+   ```
+   pre-commit: cargo fmt --all detected drift, applying…
+   pre-commit: drift fixed and re-staged
+   ```
+
+### The Deliberate Escape Hatch
+To bypass this (or any pre-commit hook) in emergency situations, you can use the standard Git flag:
+- `git commit --no-verify` (or `-n`)
+
+---
+
+## Sibling: The Reviewer-Phase Gate (TASK-480)
+
+Local pre-commit hooks are powerful but can be bypassed (e.g., using `git commit --no-verify`). To guarantee enforcement at scale, AIDA implements a multi-layered bouncer strategy.
+
+The sibling gate (**TASK-480**) operates at the **Reviewer phase**:
+- During `aida pr ship` or CI/CD execution, a reviewer-phase bouncer scans the commit range of the incoming branch.
+- If any commit in the range touched a gitignored file without explicit bouncer bypass metadata, the reviewer **refuses to approve the PR**.
+- This ensures that local shortcuts never reach the main branch.
+
+---
+
+## Headless Text-Question Gate (BUG-354 / BUG-374)
+
+Headless implementers must not ask a plain-text confirmation question and
+exit with no PR. In `--no-human=both` there is no operator waiting inside
+the subprocess, so "A or B? Please confirm" is equivalent to a design-fork
+punt.
+
+The orchestrator treats this as substrate, not etiquette:
+
+1. It inspects the terminal headless JSONL `result` event when phase 1 exits
+   cleanly with no PR.
+2. If the final answer contains decision-fork question wording such as
+   "which path", "should I", or "confirm and I'll proceed?", it files a
+   design-fork punt instead of returning a generic `NoPr` phase failure.
+3. The existing STORY-306 advisor tier then resolves or escalates the fork.
 
 The `/aida-pickup` instructions still tell agents to punt explicitly; this
 gate is the bouncer for the recurring ceiling-pattern case where prompt
 discipline fails.
 
-## Client-side trailer spec-ID validation (STORY-469 Guard 1)
+---
 
-`aida pr ship` and `aida queue done` validate the `(SPEC-ID)` trailers on the
-commits the current branch adds over the default branch *before* the work
-ships / the spec flips to Done. Every trailer id must resolve to a **live
-(non-rejected) spec** in the substrate; a hallucinated, typo'd, or
-since-rejected id is refused (exit 1) with the offending sha + id + reason.
+## Detect, Don't Prevent: The Worktree-Scope Guard
 
-This is the client-side twin of the server-side `aida trace gate` (STORY-498,
-which runs in CI). Same pure validator (`validate_trailer_references`) and store
-resolver (`resolve_spec_in_store`) — only the call site differs. Catching the
-dead reference here keeps it out of shared git history entirely, instead of
-failing CI after the commit is already pushed.
+Not every invariant *can* be a bouncer, and pretending otherwise ships a gate
+that lies.
 
-**Applies when:** committing with a `(SPEC-ID)` trailer and then running
-`aida pr ship` or `aida queue done`. Plan commits (`docs(plans): …`) and
-commits with no trailer are exempt (nothing to validate).
+An agent working in a **scoped session** — its own git worktree, taken via
+`aida worktree enter`, `aida session start`, or an orchestrator fan-out — can
+still write files into the shared main checkout: a stale `cd`, an absolute path
+copied out of an earlier session, a tool run from the wrong working directory.
+Where a harness writes bytes is a filesystem and agent-harness concern; a
+requirements tool has no seam to stop it.
 
-**Bypass:** `aida pr ship --no-trailer-check`, or `aida queue done --force`.
-A store-less checkout (no requirement graph reachable) cannot corroborate, so
-the guard soft-warns and proceeds rather than blocking a legitimate ship.
+So the pre-commit hook does the next best thing — it makes the mistake
+**visible** at the one moment the work becomes durable. When a worktree-scoped
+session commits, the guard compares every staged path against the session's
+worktree and warns, naming the strays:
 
-## Local-vs-substrate divergence at status time (STORY-469 Guard 3)
+```
+⚠ worktree scope: this commit touches 3 path(s) OUTSIDE your session worktree.
+  session worktree: /home/u/work/wt-epic-12
+  committing from:  /home/u/work/main
+    - aida-cli/src/main.rs
+    …
+  Warn-only — the commit is proceeding.
+```
 
-`aida status --cleanup` (and the inline cleanup summary on plain `aida status`)
-surfaces a **"Claimed Done but substrate disagrees"** category: a spec whose
-status is Done/Completed but whose local reality contradicts the claim. Two
-signals fire:
+Three properties keep it honest:
 
-1. an active lease covers the spec **and** its worktree has uncommitted
-   modifications (work still on disk despite the Done claim), or
-2. no commit references the spec **and** no PR exists (the "I shipped" claim has
-   no substrate evidence at all).
+- **Warn-only, structurally.** The gate always exits 0 and the hook invokes it
+  with `|| true`. A hard block here would be wrong twice: the check is heuristic
+  (a session may legitimately commit elsewhere), and blocking would push agents
+  to `--no-verify`, which also skips every *real* gate above it in the same hook.
+- **Silent when correct.** A commit made inside the session worktree prints
+  nothing, so the warning stays a signal rather than background noise.
+- **Invisible to everyone else.** No session, or a session with no worktree
+  behind it, and the guard is a no-op — non-scoped work sees no behaviour change.
 
-This catches an agent's verbal "I shipped" that doesn't match substrate state —
-the operator sees the divergence at status time instead of trusting the claim.
-Detection is a pure function (`detect_claimed_done_divergence`) fed
-filesystem-derived facts, so it stays testable in isolation.
+The habit to take from this: when you cannot gate an invariant, **still put a
+detector at the boundary where violating it becomes permanent**. A loud, precise
+warning at commit time beats a rule in a document nobody re-reads.
 
-**Bypass:** none needed — it is a read-only surface. Resolve by committing +
-shipping the work, or reopening the spec
-(`aida edit <SPEC> --status in-progress`).
+---
+
+## Summary of Bouncer Habits
+
+When writing code or designing workflows under AIDA:
+- **Do not write a rule when you can write a bouncer**.
+- **When you cannot write a bouncer, write a detector** at the boundary where the mistake becomes permanent — and keep it warn-only so it never trains anyone to bypass the real gates.
+- **Make bouncers loud and informative**: They must explain the rationale and point to the discipline document.
+- **Provide explicit escape hatches**: Keep control with the human developer while keeping the defaults safe.

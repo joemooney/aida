@@ -376,3 +376,610 @@ aida import templates.json --parent FOLDER-002 --on-conflict skip
 ```
 
 Conflict strategies: `skip`, `rename`, `replace`.
+
+
+## Migrated Lessons
+
+### feedback_dogfood_config_assertions_read_at_runtime
+
+When a test asserts a fact about **this repository's own** `.aida/config.toml` (a job stays
+registered, a route stays bound), read the file at runtime:
+
+```rust
+let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+    .parent().expect("aida-cli-lib has a workspace parent");
+let cfg = load_config(repo_root).unwrap().unwrap();
+```
+
+That is STORY-1423's documented idiom (`this_repo_keeps_the_performance_guard_pair_registered_and_enabled`,
+~maintenance_schedule.rs:5209). Codex reached for `include_str!("../../.aida/config.toml")` instead
+on BUG-1746 and I sent it back.
+
+**Why:** `include_str!` is compile-time, so it makes the crate's test target fail to *compile*
+without a repo-root file that is not part of the crate — a vendored `aida-cli-lib` stops building.
+It also bypasses `load_config`, the loader the product actually uses, and it makes the one
+mutation proof that matters impossible: unbinding a route in the real config cannot fail a test
+holding a compiled-in copy. Two idioms for one job is also how the duplicate worktree-placement
+rule TASK-1561 removed came to exist.
+
+**How to apply:** grep for `include_str!` of any path outside the crate in a review. A template
+under `aida-core/` is fine (workspace crate); repo-root operator state is not. Demand the mutation
+proof that distinguishes them — edit the real config, expect the test to fail.
+
+Related: [[feedback_prove_a_test_fails_without_the_fix]],
+[[feedback_verify_acceptance_matches_primary_caller]],
+[[feedback_source_scanning_guards_need_the_full_suite]].
+
+### feedback_source_scanning_guards_need_the_full_suite
+
+AIDA's test suite contains **architecture guards that scan the repository's own source text**,
+not just behaviour — e.g. `story_1418_completion_seam_tests::no_direct_completed_write_outside_the_seam`
+counts occurrences of `RequirementStatus::Completed;` and `set_status_from_str("completed")` per
+file against an allowlist, and `every_file_that_stamps_completed_through_the_seam_also_emits`.
+They live under a test name that shares NO substring with the code you changed.
+
+On 2026-09-28 (BUG-1721) a codex implementer ran `cargo test -p aida-cli-lib --lib closure` and
+`--lib auto_bump`, both green, and self-reported success. The full `--lib` suite then failed on the
+seam guard: its fix mutated a store clone with `set_status_from_str("Completed")` to model
+in-pass completions. The behaviour was right; it violated the "only `crate::completion` reaches
+Completed" architecture. The fix was redesigned around a resolved-id set threaded into
+`pickability::unresolved_closure_blockers_treating_resolved`, which also removed the store clone.
+
+**Why:** a filtered test run is selected by NAME. A guard that indicts your diff by *scanning it*
+is named after the invariant it protects, not after your subsystem, so no plausible filter reaches
+it. The temptation when a guard fires is to widen its allowlist — that blinds it permanently.
+
+**How to apply:** the integration seat runs the FULL `cargo test -p aida-cli-lib --lib` before any
+commit, even when the implementer reported green — this is exactly the "full suite ONCE at
+integration" half of [[feedback_dont_brief_full_workspace_suite_per_agent]]. When a source-scanning
+guard fires, redesign to satisfy it honestly; never add your file to its allowlist, and never route
+around the literal it greps for. See also [[feedback_prove_a_test_fails_without_the_fix]].
+
+### project_aida_hub_is_first_user_dogfood_vehicle
+
+`~/ai/aida-hub` (private repo `joemooney/aida-hub`, started 2026-08-23) is a project
+catalogue — scans `~/ai` + `~` strays + remote GitHub repos, serves a Leptos 0.8 + axum
+dashboard on port **8092**. Stack chosen to match `gld`/`aida-chat` so no new framework
+enters the rotation.
+
+**Why it matters to AIDA:** it is the first project bootstrapped from *nothing* with a
+current `aida` build in a long time, so it doubles as the **first-user experience probe**.
+Bootstrapping it surfaced four traps in one sitting, filed as STORY-780 (fold project
+bootstrap into `aida init` — NOT `aida new`, that verb is reserved for higher-value uses)
+and BUG-789 (`aida init` pushes the store branch but silently strands its own scaffold
+commit on main).
+
+**How to apply:** when touching AIDA's onboarding, scaffolding, or `init` surface, walk it
+in aida-hub or a fresh throwaway rather than reasoning from the aida repo — the aida repo
+is long-initialized and hides every first-run defect. File friction found there against
+AIDA, not against aida-hub. See [[feedback-scripting-friction-is-a-missing-surface-signal]]
+and [[feedback-self-test-via-dogfood-merge]].
+
+### project_axi_incorporation_and_mcp_reweighting
+
+2026-06-28 review of the **AXI ecosystem** (kunchenguid: axi/no-mistakes/gnhf/firstmate/treehouse/tasks-axi/gh-axi/lavish-axi) produced a positioning doc (`docs/positioning/vs-axi.md`), a competitive note (`docs/competitive-analysis/2026-06-28-axi-ecosystem.md`), and **EPIC-56** (the lessons backlog). A solo run shipped **14 lessons**: TOON agent-output renderer (TASK-964, measured 21-84% token cut, agent-mode-gated — emoji human path untouched), content-first/list-cap (TASK-970), structured-errors-on-stdout (TASK-972), lifecycle-aware next-step help (TASK-974), SessionStart-hook fix (TASK-971); reliability scar-closers patch-id force-push guard (BUG-640), worktree-tangle gate (TASK-965), config-trust-boundary RCE fix (TASK-969), process-group reaping (TASK-298); drain caps/exit-summary/idle-CI (TASK-966/967/968); the benchmark harness (SPIKE-73, `bench/agent-surface/`) + findings-list clarity (BUG-641).
+
+**The load-bearing finding (SPIKE-73):** on AIDA's own surfaces, **MCP costs ~2x the tokens/dollars of the CLI for identical (or worse) success.** This challenges the README calling MCP "the highest-leverage surface." Direction: **token-efficient CLI (`AIDA_AGENT_OUTPUT`/TOON) as the PRIMARY agent surface, MCP as the typed/structural option.**
+
+**RESOLVED (2026-06-29 full 72-cell matrix, 4 conditions × 6 tasks × 3 runs):** the ToolSearch-variant re-run that was the open caveat is DONE and CONFIRMS the result is STRUCTURAL, not just the upfront-schema tax. Per-condition: **cli 100% / $0.0358 / 3.1 turns; mcp 89% / $0.0709 (~2x) ; mcp-toolsearch 100% / $0.0636 (~1.8x) / 4.8 turns / 3.8 tools; toon 100% / $0.0360.** On-demand schema loading (mcp-toolsearch) does NOT rescue MCP — still ~1.8x CLI AND costs MORE turns/tools (the schema-load round-trips eat the input-token savings). So MCP is expensive structurally, not merely from loading 69 schemas upfront. TOON ≈ CLI here because the tasks are small-output reads (TOON's win needs the large list/show outputs — measured 21-84% there separately). Report: `~/ai/aida-spike73-bench/bench/agent-surface/results/report.md`. **The MCP-README-reframe is now evidence-backed.**
+
+**Agent-output mode invariant:** all AXI interface changes gate on `agent_output_mode()` (non-TTY OR `AIDA_AGENT_OUTPUT`); the human TTY emoji path stays byte-identical (operator likes emoji — [[user_likes_emoji]]).
+
+**PARKED for operator (architecture/keystone, never shipped unattended):** TASK-975 (CI-auto-fix loop), STORY-712 (event-driven zero-token supervision — firstmate's biggest lever), STORY-713 (single-liaison dispatcher), SPIKE-74 (agent-agnostic drain backend), STORY-714 (worktree warm-pool BUILD — design doc landed, Slice-1 awaiting sign-off; dissolves TASK-0396 + BUG-553). STORY-715 (tmux ambient meter) deferred behind EPIC-53. Open operator decisions: warm-pool Slice-1 sign-off, MCP README re-frame, the ToolSearch benchmark re-run.
+
+### project_bugs_before_marketing_phase
+
+Operator's stated priority phase (2026-05-29): **clear out all known bugs → achieve stability → THEN begin to consider marketing.**
+
+**Why:** recording a public demo / autonomy-keystone narrative now (e.g. TASK-403) would showcase the very bugs being cleared. The `aida --asciinema` cast-capture tooling already exists, so demo recording is NOT blocked on tooling — it's gated on the system being stable enough to be worth showing. Marketing before stability is premature and counterproductive.
+
+**How to apply:**
+- **Prioritize bug-clearing work** (findings → BUG/TASK fixes, the open `aida findings list` backlog, reliability fixes) over net-new features, demos, and visibility/marketing tasks.
+- **Defer or reject `marketing` / `demo` / `visibility` / `wedge`-tagged work** until the bug backlog is cleared. TASK-403 (record overnight keystone drain) was rejected on these grounds — revive/re-file once bugs are cleared and the keystone runs clean.
+- When proposing "do more," lean toward **bugs and stability**, not features or marketing. The orchestrator-reliability majors (TASK-136 drain stall, TASK-137 reviewer anchoring, TASK-133 phase-1 lease ordering) and correctness bugs (TASK-132 list multi-filter OR-not-AND) are on-phase; new compose SPIKEs and demos are off-phase for now.
+- This is a *phase*, not permanent — when the operator says stability is reached, marketing re-enters scope (the `--asciinema` tooling is ready for it).
+
+Connects to [[feedback_capture_vs_slop_in_article_flow]] (ship selectively) and [[feedback_pushback_on_overengineering]] (scope discipline). Reinforces that the current bar for "do more" is *fix what's broken*, not *add or promote*.
+
+### project_burst_usage_robustness_over_speed
+
+The operator (2026-09-11) works in **burst-file-then-quiet** cycles, with long gaps of no filing. So the backlog is NOT continuously growing — it SITS STUCK. The pain is that draining/closing open items is unreliable: a single tooling hiccup parks a spec (NeedsAttention) and it sits for DAYS because nothing re-drives it and the operator isn't watching.
+
+**Why:** I mis-framed this once as "intake 3.6x merge rate → filing too fast." That ratio is real over a burst window but MEANINGLESS for this usage — the operator isn't sustaining that intake. The binding constraint is drain robustness, not throughput. Correcting this stops a future session from chasing speed (self-hosted runner, backpressure) when the real problem is that the automation can't run unattended.
+
+**How to apply:** For "the drain is slow / stuck," reach for RELIABILITY first (does it self-recover a transient park? does it need a human to relaunch?), not speed. Speed levers (STORY-1049 self-hosted runner = opt-in toggle only; STORY-1050 backpressure = deferred, wrong usage pattern) are secondary. The reliability effort is [[project-epic62-unattended-drain-reliability]]. See also [[feedback-substrate-first-never-rely-on-agent-awake]].
+
+### project_champion_product_not_probe
+
+**Operator, 2026-08-29:** *"forget about the research angle and get into the mindset of making this
+a champion product… I want a relentless push forward."*
+
+This **supersedes** [[project_aida_is_a_probe_not_the_objective]]. The probe framing (AIDA as
+existence-proof, "the honest answer may be don't build this") is retired as the governing register.
+Build, position and prioritise AIDA as a product intended to win.
+
+**What changes:**
+- Prioritise by *user value and adoption*, not by what the research question would find interesting.
+- Product-defensibility claims are back on the table — but [[feedback_precise_claim_not_overclaim_in_positioning]]
+  still holds. Champion ≠ overclaim; a product that oversells is a worse product.
+- Refresh the market analysis on a real cadence, not as a one-off
+  ([[feedback_competitive_analysis_is_living_doc]]).
+- Bias to shipping. Fewer spikes, more slices that a user can feel.
+
+**What does NOT change:**
+- The public-repo confidentiality rule ([[feedback_public_repo_scrub_employer_content]]) — still
+  absolute. Frame vendor-mandate context generically; never tie it to the operator's employer.
+  *(Violated once on 2026-08-29 when EPIC-60/TASK-1182 named it; scrubbed forward, but the orphan
+  store's git history still carries the original text.)*
+- Truthfulness over advocacy in findings. Report what is, then argue for the product.
+
+**Live market signal to build on:** vendor-standardization mandates are real — organisations are
+picking one coding-agent vendor and prohibiting others. That makes cross-vendor durability
+(AIDA's actual niche) a *purchase reason*, not just a research finding. See [[project_forge_plumbed_not_wired]]
+and the Codex parity epic.
+
+### project_forge_plumbed_not_wired
+
+EPIC-35 forge-provider routing status (updated 2026-06-05, keyboard session with operator):
+
+- **Plumbed (slice 1):** `Forge` trait, `ForgeKind`, config + origin auto-detection, `GitHubForge` (real gh), `PureGitForge` (real, squash-commit-fixed), forge-aware hint/error TEXT (STORY-508). `GitLabForge` open_change real; change_status/ci_status/change_for_branch are stubs.
+- **WIRED so far — the MERGE op (STORY-516 slice-1b, first op of SPIKE-49 order):**
+  - **TASK-668** routed the `aida pr ship` step-3 merge through `forge_for(root).merge_change()`. GitHubForge::merge_change reuses the SPEC-410-pinned `pr_ship::merge_args` (argv byte-identical) + network_retry wrapper.
+  - **TASK-669** routed the orchestrator auto-complete phase-4 merge. Blocker was the orchestrator's DualSink (stderr + drain-state, BUG-286) — resolved by adding `sink: &mut dyn network_retry::RetrySink` to `Forge::merge_change` (RetrySink/RetryEvent are now `pub`). gh-missing keeps a non-shelvable MissingTool pre-check; failed merge → shelvable `Failed` PhaseFailure (EPIC-28 classification preserved).
+  - **Unified contract:** all three providers' `merge_change` now return `Err(stderr)` on failure (was `Ok{merged:false}`).
+  - **Validated the strongest way:** PR-536 (TASK-668) and PR-537 (TASK-669) were each merged via `aida pr ship` (the routed `merge_change`) — i.e. the routing merged its own PRs on real GitHub PRs.
+- **WIRED — the VIEW op (PR-538, 2026-06-05):** `Forge::change_for_branch` enriched from `Option<ChangeRef>` to a 5-state `ChangeLookup` (Found/NoChange/CliMissing/CliFailed/Unreachable) preserving the BUG-257 transient-vs-definitive distinction; `ChangeRef` gained `title: Option<String>`. GitHubForge delegates to the proven `detect_open_pr_for_branch` + a pure tested `change_lookup_from_pr_lookup` mapping (no classification reimpl). All 10 `detect_open_pr_for_branch` callers migrated to the forge-routed `change_lookup_for_branch` helper — **including the two BUG-444/BUG-257 phase-1 sites** (`detect_phase1_pr`, resumed-implementer), contract preserved exactly. Dogfood-validated (PR-538 merged via `aida pr ship`, exercising step-1 resolution through the new path). 1614 tests green. NOTE: PR-538 trailered STORY-516 directly (a child-TASK slip vs the merge op's TASK-668/669) — STORY-516 stayed Approved, not mis-bumped, but watch a future `aida pull` and reopen with --force if it auto-completes.
+- **WIRED — the CI POINT-PROBE (TASK-672, PR-539, 2026-06-05):** new forge-owned `CiProbeResult` (NoSignal/NoChecks/InProgress/Green/Failed) mirroring `CiProbe`; `Forge::ci_probe_for_branch` delegates to the proven `probe_ci_state_for_branch` + pure tested `ci_probe_result_from_ci_probe`. crate helper `ci_probe_via_forge(branch)` converts back to CiProbe so the 6 call sites (incl. orchestrator CI phase) are a pure name-swap; project_root resolved internally (only selects provider; gh runs in CWD via delegate). Dogfood-validated. 1615 tests green.
+- **STILL NOT wired:** the CI **WATCH** ops — `gh pr checks --watch` (pr ship step 2 + orchestrator CI watch) + `gh run watch` (`--watch-ci`) + `gh run view` (forge models a point query, not a blocking watch/stream — needs a watch method or keep-loop-route-per-poll); `gh pr create`; `gh pr list` (`detect_open_pr_for_spec` spec-search + `detect_merged_pr_for_branch` --state merged); `gh pr comment`; `gh pr checkout`. STORY-516 stays **open**.
+
+**Pattern that works (proven 3×):** forge-owned result type mirroring the rich main.rs type (ChangeLookup←PrLookup, CiProbeResult←CiProbe) + GitHubForge DELEGATES to the existing battle-tested helper + pure tested mapping fn + crate helper that callers swap to. Zero classification reimpl → contracts preserved. **TRAILER A CHILD TASK, never (STORY-516) directly** — the umbrella has now been auto-mis-bumped to Completed TWICE by direct-umbrella trailers (PR-483 historically, PR-538 on 2026-06-05); reopen with `aida edit STORY-516 --status approved --force` if it happens again.
+
+**How to continue:** merge ✅ → view ✅ → ci-probe ✅ → ci-watch[pr-ship] ✅ → create ✅ (TASK-675) → comment ✅ (TASK-676, delegated-review trigger→forge.comment) → checkout ✅ (no live `gh pr checkout` sites — only hint text + git checkout in tests) → **remaining = STORY-521 (only 2 ops left)**: (1) **list** — `detect_open_pr_for_spec` (gh pr list --search) + `detect_merged_pr_for_branch` (gh pr list --state merged), both return PrLookup → reuse the change_lookup pattern; ~9 callers across main.rs; and (2) **orchestrator ci-watch** — `watch_ci_for_context`/`gh run watch` streaming + the non-streaming poll-wait + headless variants + `gh run view` (the one genuinely complex op; needs a forge watch/stream method beyond the pr-ship `gh pr checks --watch` already done). Each: own PR, child-TASK trailer parented to STORY-521, dogfood via `aida pr ship`, reliability-critical → keyboard.
+
+**Tracking note:** STORY-516 is stuck Completed (its own PR-538 commit permanently trailers `(STORY-516)`, so every `aida pull` re-bumps it — reopening is futile until that commit ages out of the scan window). The durable open tracker for the remainder is **STORY-521** (child of EPIC-35, referenced by no commit). When filing the remaining-op child TASKs, parent them to STORY-521, not STORY-516. Keep GitHub argv byte-identical; for any op with a retry/sink or typed-failure contract (like the orchestrator merge had), preserve it. Reliability-critical → keyboard, watched, per [[feedback_reliability_fixes_use_keyboard_not_drain]]; dogfood each by shipping its own PR through the routed path. After routing: STORY-509 (GitLab glab impls), STORY-510 (GitLab CI), STORY-511 (e2e drain + linkage + docs).
+
+History: STORY-516 was once mis-bumped Completed by PR-483's trailer (only prep landed) — reopened 2026-06-05. Classic [[feedback_commit_trailer_completes_the_spec]] violation; child TASKs (668/669) carry the real routing trailers, umbrella stays open.
+
+### project_main_branch_protection_requires_only_merge_hold_gate
+
+History: until 2026-09-17 `required_status_checks.contexts` was `["merge-hold-gate"]` only — `Build (ubuntu-latest)` (PR CI) was NOT required, so any required-only CI semantics (`gh pr checks --required`) would have treated a red Linux build as ignorable. On 2026-09-17 the operator agreed and I added it: contexts are now `["merge-hold-gate", "Build (ubuntu-latest)"]`, `strict = false` (verified by read-back via `gh api repos/joemooney/aida/branches/main/protection/required_status_checks`).
+
+TASK-1205's informational Windows/macOS matrix jobs are also named `Build (windows-latest)` / `Build (macos-latest)` but live in the `Cross-platform` workflow — BUG-1180 (ADR-39) classifies red checks with the `[ci] informational_workflows` allow-list (default `["Cross-platform*"]`) so they never block.
+
+**How to apply:**
+- Merge automation may key on the required set now, but still keep the informational allow-list — the matrix jobs are not required and must stay ignorable.
+- `gh pr checks --json name,bucket,workflow` is the reliable per-check surface; `bucket` ∈ pass|fail|pending|skipping|cancel; gh exits non-zero on fail/pending but still prints JSON.
+- GitLab mirror analog (TASK-1254): project `ai/aida` has "Pipelines must succeed" on and the `aida-merge-hold-gate` job included from the scaffolded template; see [[reference_gitlab_mirror_runner_setup]].
+
+Related: [[feedback_verify_ci_green_before_merge]], [[feedback_ci_surface_beyond_cargo_test]].
+
+### project_repositioning_parked_behind_stabilization
+
+The AIDA repositioning effort (ADR-4 + EPIC-39 + 9 child slices + SPIKE-58/59) is **fully planned, red-teamed, and PARKED** as of 2026-06-12. Operator: *"I am going to try to stabilize aida before any pivot to bd/gt."* This extends [[project_bugs_before_marketing_phase]] (2026-05-29: bugs → stability → then outward moves).
+
+**State on park:**
+- Branch `repositioning` (worktree `~/ai/aida-repositioning`, pushed, 7 commits): the plan (`docs/plans/2026-06-12-repositioning-governance-layer.md`, §13 = red-team amendments), the rescope + ERRATUM, all evidence.
+- ADR-4 = **PROPOSED, not accepted** — the SPIKE-58 hands-on bd/gt gate was deferred, not resolved. The canonical wedge (operator's words, on ADR-4): *AIDA governs at the FRONT (programmatic pre-work approval gate + code↔spec bind); bd/GT govern at the back/side (reactive escalation + merge gates), no pre-work gate, no spec↔code binding.* Anchored on Yegge's verified "Beads is an execution tool" quote.
+- All 11 family specs carry `deferred:stabilization-first` (parking tag — the burndown pickability gate excludes them; intake/groom passes must not queue them).
+
+**Reopen trigger:** operator declares stabilization done. **On reopen, first action:** re-verify the competitor snapshots (Beads moves fast — stars/releases/features were stale within days twice during planning); then resume at SPIKE-58 (hands-on gate) → WS1 copy lock.
+
+**Why a memory:** cross-session state not derivable from any single artifact — prevents a future advisor/intake pass from grooming the parked family or treating ADR-4 as accepted.
+
+### project_scaffold_upgrade_corrupts_dev_repo
+
+**FIXED (BUG-718, merged ad432cdf0 on 2026-07-11):** `scaffolding::symlink_target()` now guards all three write paths (`apply_with_options`, the `scaffold apply` loop, `run_scaffold_upgrade`) — a symlinked scaffold file is skipped + reported ("NOT written"), never written through. The in-repo build is safe. **Caveat:** any pre-fix binary still corrupts — the released `aida` on PATH (0.9.1) does NOT have the guard, so run the in-repo build (`aida dev activate` / `./target/*/aida`) when scaffolding in this repo until a release ships with the fix.
+
+Mechanism (why it happened): in the AIDA dev repo, `.claude/skills/*`, `.claude/commands/*`, `.claude/hooks/*`, `.claude/settings.json` are per-file **symlinks into `aida-core/templates/`** (the master copies this repo dogfoods). Pre-fix, `aida scaffold upgrade` / `apply` classified those as *template category = overwrite-on-drift*, followed the symlink, and wrote the embedded template **through the symlink into the source master** — silently corrupting `aida-core/templates/`.
+
+**Incident 2026-07-11:** a loop agent (or stray process) ran a scaffold upgrade in the MAIN worktree. It gutted `aida-pre-commit.sh` 275→68 lines, deleted 476 lines of `docs/agents/`, regenerated every command/skill master into output-format ("AIDA Generated: v2.0.0" headers on the *masters*), and created `.claude/AIDA.md` + `.codex/`. It also broke the scaffolding tests (the gutted hook stopped rejecting `///` trace markers) — which masqueraded as a mysterious test regression.
+
+**Recognize it:** many tracked files modified at one uniform mtime; "AIDA Generated" checksum headers appearing on the *master* templates in `aida-core/templates/` (masters should have `--- description: --- ` frontmatter, not the generated header); new untracked `.claude/AIDA.md` / `.codex/` / `.claude/skills/local/`.
+
+**Recover:** every change is content *loss* vs HEAD, so `git checkout -- aida-core/templates/ .mcp.json CLAUDE.md docs/agents/ …` restores the good versions (fully recoverable), then remove the errant untracked strays.
+
+Also see BUG-719 (a stale binary's embedded templates resurrect deliberately-deleted scaffold files — that's how the removed `aida-recover` skill reappeared). Related: [[feedback_fan_committing_agents_with_worktree_isolation]] — the same isolation-violation footprint (an agent acting in the main worktree). Fix tracked in BUG-718.
+
+### project_single_drain_lock_per_repo
+
+AIDA enforces **one drain per repo** via a GLOBAL lock at `.aida/drain.lock` (`aida-cli/src/drain_lock.rs`, BUG-538). Any drain entry point (`aida zen`, `aida queue work --auto-complete`, `aida burndown run`) acquires it; a second one while the first is live is **refused** with "a drain is already running (pid …)". Per-scope/per-worktree parallel drains are *explicitly out of scope* in the code — even `--solo` drives (own worktree/branch/PR) share the one global lock.
+
+**So concurrent `aida zen --solo` invocations do NOT run in parallel** — despite `aida zen --help` saying "fire several for INDEPENDENT specs in parallel and walk away." That help text overclaims (filed BUG-682). The real parallelism mechanism is the **burndown fan-out**: ONE orchestrator holds the single lock and fans out N worktree-isolated implementer subagents (`aida burndown` / `aida queue work --batch --auto-complete`). To run multiple specs concurrently, queue them + run one burndown — do not launch multiple zen drives.
+
+Do NOT `AIDA_DRAIN_FORCE=1` past a LIVE drain — that bypass is only for a dead/stale lock; forcing past a live one causes the double-drive (two integrators racing git ops on main) the lock exists to prevent.
+
+**Why:** I told the operator to fire 3 `aida zen --solo` drives in parallel based on the help text; the global lock refused the 2nd and 3rd (they silently never started). Trusted the doc over the code — see [[feedback_verify_lore_against_code_not_docs]]. The BUG-538 "revisit if real demand for concurrent non-overlapping drains appears" trigger has now fired → STORY-746 (deferred).
+
+### reference_build_slots_sccache_mold
+
+Installed 2026-09-26 at Joe's request to raise throughput.
+
+- `~/.local/bin/cargo` (ahead of ~/.cargo/bin on PATH) gates build/test/check/clippy/run/bench/doc/install on `AIDA_CARGO_SLOTS` (default 2) flock slots under `$XDG_RUNTIME_DIR/cargo-slots-<uid>/`; defaults CARGO_BUILD_JOBS=3; nested cargo passes through (AIDA_CARGO_SLOT_HELD); bypass with AIDA_CARGO_NO_SLOT=1. Prints "cargo: waiting for a build slot" while queued.
+- `~/.cargo/config.toml`: rustc-wrapper = sccache; linker clang + `-fuse-ld=mold`. `sccache --show-stats` for hit rate.
+- Consequence: the orchestrator no longer needs to count cargo processes by hand — dispatch freely; builds queue. Tell agents to use long timeouts (3600s) because of queueing.
+- Supersedes the manual "at most 2-3 cargo processes" rule in [[feedback_cap_parallel_cargo_builds]] (the cap is now enforced).
+- Product follow-up: AIDA-owned build slots (substrate-as-bouncer).
+
+**Fable weekly cap (2026-09-26):** `claude-fable-5-1` hit a weekly usage limit at 17:26 Sat (reset 07:00 Sun) and killed two subagents mid-run (uncommitted work left in worktrees). Use Fable for the highest-value strict reviews only; have implementers commit WIP before long test chains.
+
+### reference_codegraph_local_setup_and_1mib_cap
+
+Set up 2026-10-02 at the operator's request (he vouched for codegraph+aida coexistence, SPIKE-84).
+
+- Index: `.codegraph/codegraph.db` in /home/joe/ai/aida (gitignored). Rebuild: `codegraph index .`
+- Freshness: systemd user timer `codegraph-sync-aida.timer` runs `codegraph sync --quiet` every 15 min (`systemctl --user list-timers | grep codegraph`). A git post-merge hook was rejected because the repo's post-merge is a symlink that `make install-agent-skill-hooks` clobbers.
+- Surface: CLI only (`codegraph callers/callees/impact/query`), never MCP — the SPIKE-73 benchmark made CLI the primary agent surface ([[project_axi_incorporation_and_mcp_reweighting]]).
+
+**The trap:** codegraph v1.6.0 hardcodes `MAX_FILE_SIZE = 1 MiB` (non-configurable const in `~/.codegraph/versions/v1.6.0/lib/dist/extraction/index.js`). `aida-cli-lib/src/lib.rs` is 114k lines / 4.7 MB, so it indexes with **0 symbols**: `callers`/`impact` silently omit every caller in lib.rs, and symbols defined there (e.g. `agent_output_mode`) don't resolve at all — the query fuzzy-matches similarly-named test fns instead, which looks like a real answer. Treat "no callers" as unverified until `rg` agrees. Documented in CLAUDE.md's read-on-demand table (TASK-1568, PR #2344).
+
+Also: `codegraph init/index` can exit 0 while printing `Failed: database is locked` — verify with `codegraph status` (it reports a truncated index explicitly), never the exit code.
+
+### reference_codex_exec_dispatch_recipe
+
+Joe authorized codex for the reviewer and implementer seats on 2026-09-27. It is the main lever
+against the seat-cost problem in [[feedback_serial_not_fanout_on_this_host]]: a codex review costs
+the orchestrator a few hundred tokens instead of ~100k, and it is genuine cross-vendor independence
+on the reviewer seat.
+
+**The recipe:**
+
+```bash
+codex exec -C <worktree> --sandbox workspace-write \
+  -o <verdict-file> "$(cat <brief-file>)" \
+  < /dev/null > <run-log> 2>&1
+```
+
+Run it as a background Bash job. `-o` writes ONLY codex's final message, so its transcript never
+enters the orchestrator's context — read the `-o` file, never the run log or the task output file.
+
+**`< /dev/null` is mandatory and non-obvious.** Without it a backgrounded `codex exec` prints
+`Reading additional input from stdin...` and **hangs forever** — stdin is an open pipe that never
+reaches EOF, so it never processes the prompt. The run log sits at 39 bytes and the verdict file
+stays empty. On 2026-09-27 two dispatches (a BUG-1677 rework and a review) hung ~25 minutes this
+way while I believed they were working; an earlier call happened to get a closed stdin and ran
+fine, which masked the bug. **Check that the `-o` file is non-empty before trusting a "completed"
+job**, and if a codex job finishes suspiciously fast or slow, read the run log's size first.
+
+**Other things learned:**
+- `codex review` exists for review-shaped runs; `aida agent new codex` spawns with project-correct
+  cwd/env and registry tracking.
+- Under `--sandbox workspace-write` the `aida` CLI may fail to enable WAL mode on its cache, so
+  codex cannot run `aida show`. Tell it to read the canonical spec object from `.aida-store`
+  directly. Its configured profile already grants write access to `~/.cargo` and `~/.rustup`, so
+  cargo builds work.
+- A codex verdict is only as good as what it ran. It will say plainly whether it ran tests — a
+  static-reading review is still valuable but is NOT test-backed evidence. Verify any blocker it
+  reports yourself before acting; on BUG-1677 its blocker was precise and correct.
+- Codex does not read the aida mailbox — see [[feedback_no_mail_storm_to_codex]].
+
+**Brief LENGTH decides whether you get a verdict at all (2026-09-27).** A ~50-line review brief that
+invited the agent to "inspect" and judge several risk areas produced a 626-line run log of the agent
+reading docs and then **NO final message and an empty `-o` file** (exit 0, so the job looked fine).
+Re-dispatching the same review as a tight brief — naming the exact commands to run, forbidding repo
+exploration ("do not read CLAUDE.md/AGENTS.md/docs"), capping the answer ("under 300 words"), and
+giving an exact reply template — returned a clean verdict every time, on three separate reviews.
+Budget the agent's attention, not just its sandbox: say what to read, what NOT to read, and the shape
+of the answer. `--sandbox read-only` is enough for a review and avoids the cargo-slot problem
+entirely.
+
+**It is worth it: cross-vendor review caught real bugs in my own code three times in one session** —
+a lexical `Path::starts_with` that made a doctor check cry wolf on an already-trusted directory, a
+`?` that turned a fail-open guard into a fleet-wide launch abort, and a wrong-type TOML read that
+silently defaulted `[agents] mcp` to `off` against its own documented contract. None were visible
+from my own reading of the diff. See [[feedback_proxy_reviewer_with_independence_rule]].
+
+**Do NOT add `nohup` or a trailing `&` inside a `run_in_background` Bash call (2026-09-28).** Run
+`codex exec` in the FOREGROUND of the backgrounded tool call. With `nohup ... &` the wrapper shell
+exits instantly, the harness reports **"completed (exit code 0)" in under a minute**, and the codex
+keeps running **untracked**. On BUG-1720 that false completion made me conclude the run had died —
+`git diff` was empty because codex was still in its reading phase — so I re-dispatched, and had **two
+codex processes editing the same worktree and writing the same `-o` path** for nine minutes. Both had
+to be killed and the worktree reset; ~20 minutes lost.
+
+Diagnostics that would have caught it sooner: a "completed" dispatch whose `-o` file is absent but
+whose **run log keeps growing** is alive, not dead — `ls -l` the log twice. `ps -eo pid,lstart,etime,args
+| grep '[c]odex exec'` shows every live dispatch with its start time; use it before re-dispatching
+anything. And note that grep will also match **this session's own `claude -p` relay process**, because
+the handoff text quotes the recipe — see the pgrep-matches-own-commandline note in the handoff.
+
+A worktree two concurrent agents scribbled in cannot produce trustworthy evidence, even if the final
+diff looks plausible: each agent's test runs were made against a state the other was mutating. Kill
+both, `git checkout --` the touched files, dispatch once. Same family as "do not diff a worktree while
+the dispatched agent is alive."
+
+### reference_codex_needs_add_dir_for_cargo_slots
+
+`codex exec --sandbox workspace-write` cannot take the machine-wide cargo build
+slot, so it cannot run `cargo test`/`cargo build` through `~/.local/bin/cargo`
+at all. The wrapper's slot dir is `${XDG_RUNTIME_DIR:-/tmp}/cargo-slots-$(id -u)`
+= **`/run/user/1000/cargo-slots-1000`**, which is outside the sandbox's writable
+roots, so `flock` fails and the wrapper emits repeated lock errors instead of
+queueing. Observed 2026-09-27 on both the STORY-1478 and TASK-1517 seats: the
+build succeeded (it only needs the workspace) but every targeted test run died
+on the slot gate.
+
+Fix: add the slot dir as a writable root. The flag is **`--add-dir`**:
+
+```bash
+codex exec -C <worktree> --sandbox workspace-write \
+  --add-dir /run/user/1000/cargo-slots-1000 \
+  -o <verdict-file> "$(cat <brief>)" < /dev/null > <runlog> 2>&1 &
+```
+
+**Why this matters beyond convenience:** this is the real reason a codex seat
+once "bypassed the slot lock with `AIDA_CARGO_NO_SLOT=1`". That was not defiance
+of the brief — it was the only way it could run cargo at all. Briefing harder
+against the bypass (as [[feedback_cap_parallel_cargo_builds]] and the
+build-slot rules push toward) makes it *worse*: the seat then either loops
+retrying a lock it can never take, or reports tests it never ran. Either way the
+result is unverified work that looks finished.
+
+**How to apply:** always pass `--add-dir /run/user/1000/cargo-slots-1000` to any
+codex seat expected to build or test. If a codex seat reports "could not acquire
+its required slot" or "lock paths were read-only", that is this bug, not a
+resource shortage — do not wait it out. And treat any codex test numbers as
+unverified until the seat had that writable root: re-run the targeted tests from
+an unsandboxed session before opening a PR. Related:
+[[reference_codex_exec_dispatch_recipe]], [[reference_build_slots_sccache_mold]].
+
+### reference_gh_job_logs_servable_mid_run
+
+`gh run view <run> --job <id> --log-failed` gates on the **run** and refuses with *"run is still in progress; logs will be available when it is complete."* The jobs endpoint gates on the **job**:
+
+```
+export XDG_CACHE_HOME=<writable dir>     # gh writes a cache zip; a read-only
+                                         # HOME fails with what looks like a
+                                         # permissions error, not a cache error
+gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs
+```
+
+That returns the full log of a **finished** job while sibling matrix legs are still running.
+
+**The boundary, both sides pinned:** it gates on the **job's** completion, not the run's. A job still in progress returns **HTTP 404** — which means "this job has not finished", not "you cannot see this". So the win is that you never wait on sibling legs (macOS finishing after Windows); it is not that you can read a job mid-flight. Get `<job_id>` from `gh api repos/<o>/<r>/commits/<sha>/check-runs` or from the `detailsUrl` on a check.
+
+**Why it matters:** this makes "identify a red before acting on it" free. A rule with an *imaginary* cost gets broken by someone reasonable — a matrix leg failing while macOS still runs looked like it forced a choice between waiting and merging, and it never did. The refusal was a property of the command chosen, not of the CI provider.
+
+It is also another instance of asking a surface that doesn't own the concept: `gh run view` owns runs, not jobs. Same family as [[feedback_null_grep_for_invented_terms_is_not_absence]] and [[feedback_check_ignore_names_the_winner]].
+
+Related: [[feedback_verify_ci_green_before_merge]], [[feedback_gh_run_rerun_is_not_fresh_ci]], [[feedback_read_the_verdict_not_just_the_check_rollup]].
+
+### reference_git_push_dry_run_still_pushes_the_mirror
+
+In `~/ai/aida` the git push wrapper mirrors refs to the `gitlab` hub, and **that step does not honour
+`--dry-run`**. The origin half of the dry run behaves correctly (nothing is pushed); the mirror half
+performs a real push.
+
+Observed 2026-09-27:
+
+```
+$ git push --dry-run origin main
+  mirrored 1 ref(s) → gitlab: main@4cf02628aeec     <-- actually pushed
+To https://github.com/joemooney/aida.git
+   2a55e91082..4cf02628ae  main -> main             <-- correctly only a preview
+```
+
+`git ls-remote gitlab main` then returned `4cf02628ae`. The real push to origin was afterwards
+**rejected** by branch protection, so the dry run left gitlab holding a commit origin does not have —
+it CREATED a mirror divergence while being used to avoid creating one. Filed as **BUG-1706**.
+
+**How to apply:**
+- Do not reach for `git push --dry-run` here to test whether a push is safe. It is not read-only.
+- To learn whether protected `main` will accept something, just attempt the real push — GitHub
+  rejects cleanly with `GH006: Protected branch update failed` and changes nothing.
+- After any accidental dry run, check `git ls-remote gitlab <branch>` before assuming nothing moved.
+- Repairing a mirror that got ahead needs a force-push to a shared branch, which AIDA's guidance and
+  the git guardrail both refuse — so the cleanup is genuinely expensive. Avoid the trigger.
+
+Related: [[feedback_serial_not_fanout_on_this_host]] for why mirror noise costs real time.
+
+### reference_gitlab_mirror_runner_setup
+
+Facts established 2026-09-18 while validating the GitLab drain (TASK-1254):
+
+- **Project**: `ai/aida`, id 2, on `gitlab.joemooney.com` (root account via `glab auth`). Remotes in the dev repo: `gitlab` / `all` (all = gitlab fetch, gitlab+github push). GitLab-origin checkout for drain tests: `/home/joe/ai/aida-gitlab-mirror` (remote `github` added; local uncommitted config: `[review] mode = "delegated"`, `[store.sync] mirror_remotes = ["github"]`, node id 9). The older `aida-gitlab-clone` / `aida-gitlab-test` dirs point at the throwaway `joe/aida-gitlab-test` project.
+- **Runner**: `imac-docker` (id 1, instance runner, untagged OK) runs on THIS machine as a root systemd service reading `/etc/gitlab-runner/config.toml`. `gitlab-runner register` run as joe writes `~/.gitlab-runner/config.toml` instead — the service then has no `[[runners]]` block and never polls (contacted_at frozen at registration). Fix = copy the block into the service config; it hot-reloads (`concurrent` too). `sudo -n` is passwordless here.
+- **Docker is podman**: `/var/run/docker.sock -> /run/podman/podman.sock`, no `docker` group exists; the docker executor works because the service runs as root. `[runners.cache]` with empty Type logs a harmless "Could not create cache adapter" ERROR; the `/cache` volume still persists the job cache.
+- **glab quirks**: `glab api --hostname H …` works; `glab mr …` has no `--hostname` — use `GITLAB_HOST=gitlab.joemooney.com glab mr create -R ai/aida …`. No `--jq`; pipe to python. `POST projects/2/pipelines/N/cancel` returns 403 with this token.
+- **Pipeline**: `.gitlab-ci.yml` stages verify/test/release; `verify` is a cold cargo build+test on `rust:latest` (cache keyed on Cargo.lock since TASK-1254, was per-branch); gate job `aida-merge-hold-gate` included from `aida-core/templates/gitlab-ci-merge-hold-gate.yml` (self-contained alpine, `needs: []`). "Pipelines must succeed" is ON for the project. A push to mirror `main` triggers a branch pipeline that competes with MR pipelines for runner slots.
+- **Store on two hubs**: mirror `aida-store` was 1921 commits behind until fast-forwarded 2026-09-18; a write from the mirror checkout fans out to github via its local `mirror_remotes`, and the dev repo fans out to gitlab — keep both in sync or `aida remote status` shows drift.
+
+Related: [[project_main_branch_protection_requires_only_merge_hold_gate]], [[feedback_anchor_pgrep_patterns_monitor_shells_self_match]].
+
+### reference_is_ancestor_lies_after_squash_merge
+
+This repo merges with `gh pr merge --squash`, so a merged branch's tip is **never** an ancestor of
+`main`. `git merge-base --is-ancestor bug-1752 main` returned NO for bug-1752, bug-1754 and bug-1755
+— all three of which were merged that same hour (#2311, #2312, #2313).
+
+The predicate that works:
+
+```bash
+gh pr list --head "$b" --state all --json number,state,mergedAt \
+  -q '.[]|"#\(.number) \(.state) merged=\(.mergedAt)"'
+```
+
+**How to apply:** never decide "is this branch safe to reclaim / is this work shipped" from
+`--is-ancestor` or from `git branch --merged` here. Ask the PR. This also matters for BUG-1756's
+unshipped-work detector: a squash-merged branch and a genuinely-unshipped branch look identical to an
+ancestry test, which is a plausible source of the OVER-reporting that family has been fixed for four
+times. Related: [[feedback_fresh_branch_can_miss_interleaved_squash]],
+[[reference_merged_spec_needs_queue_done_then_aida_pull]].
+
+### reference_mail_intake_bug_reports
+
+Joe sends AIDA bug reports from his work machine to his home Gmail (joe.mooney@gmail.com) with **subject containing "aida"**. The advisor session retrieves them with the Gmail connector (`search_threads` query like `subject:aida newer_than:7d`, then `get_thread` with PLAIN_TEXT) and files specs from them — established 2026-09-09, when the mailbox already held every report he had been pasting by hand.
+
+**How to apply:** On session start (or when Joe says "check mail"), search for messages newer than the high-water mark in `.aida/mail-intake-highwater` (main repo, gitignored), file/annotate specs for anything new, then update the high-water file with the newest message timestamp and a one-line ledger. The Gmail connector is read-mostly — label writes fail on scope, so the local high-water file is the processed-state tracker. Work-report content is employer-adjacent: scrub identifying details (domains, internal model names, project names) before anything lands in the public repo's specs. GitHub CI notification mail also lands in this inbox — check for unread nightly cross-platform failures while there.
+
+### reference_merge_hold_clear_is_human_only
+
+Observed 2026-10-02 (PR #2339/BUG-1771): `aida merge-hold clear <pr>` refuses from any agent seat — "clearing a merge-hold requires a human at an interactive terminal; dispatch or advisor authority cannot override this integrity floor." This is by design (the hold is armed by a request-changes verdict via the BUG-1773/1774 verdict-corpus machinery) and is NOT lifted by operator proxy mode or --dangerously-skip-permissions.
+
+**How to apply:**
+- When a held PR's rework is approved, the closing paste for the operator is THREE steps, not two: `aida merge-hold clear <pr>` → `gh run rerun <failed merge-hold-gate run id>` (the gate check stays red from the pre-clear run; GitHub needs it green) → `gh pr merge <pr> --squash && aida pull`.
+- Fetch the failed gate run id beforehand (`gh run list --branch <branch>`) so the paste is exact.
+- Do not attempt PTY tricks or label edits to satisfy the gate — removing the label by hand does not release the hold (the gate reads recorded clearance), and forging the terminal check is exactly the BUG-1669-class shape the substrate exists to refuse.
+
+Pairs with [[feedback_recording_a_verdict_blocks_your_own_merge]] and [[feedback_proxy_reviewer_with_independence_rule]].
+
+### reference_merged_spec_needs_queue_done_then_aida_pull
+
+Observed 2026-09-29: TASK-1532 had been merged a full session earlier and TASK-1559
+merged this session, both with correct `(SPEC-ID)` commit trailers — and both still
+read `in-progress`.
+
+The missing steps, in order:
+
+1. `aida queue done <ID> --yes` → status `done`
+2. `aida pull` → the trailer auto-bump moves `Done` → `Completed`, printing
+   `auto-bumped 2 specs → Completed` with the commit sha for each.
+
+`git pull` does **not** trigger the auto-bump — only `aida pull` / `db sync --pull`
+scans merged commits for `(SPEC-ID)` trailers. See
+[[feedback_commit_trailer_completes_the_spec]] for what the trailer means and the
+traps around putting an unfinished umbrella's id in one.
+
+Then `aida remote reconcile --execute` to push the status change to both hubs.
+
+Non-TTY gotchas in the same flow:
+- `aida session end <id>` refuses without `--yes` ("confirmation is required and stdin
+  is not a terminal"). It prints its Effects list first, then errors — the lease is
+  still held, so re-run with `--yes`.
+- The lease short-id in a handoff may be mistyped; `aida session leases` is the
+  authority. `aida session end` matches on the lease id, and its error text
+  misleadingly calls it a branch ("No lease found for branch `X`").
+
+## Refinement observed 2026-09-29 (BUG-1729, twice, deterministic)
+
+The auto-bump does **not** require `aida queue done` first. After merging #2285 and
+again after #2286, `aida pull` moved BUG-1729 straight from **In Progress →
+Completed** on the `(BUG-1729)` trailer alone:
+
+```
+auto-bumped 1 spec → Completed: BUG-1729 (was In Progress, commit a0e8a5c)
+```
+
+So the two-step above describes one path, not a precondition. **Any merged commit
+whose trailer names the spec will complete it on the next `aida pull`, from
+whatever status it was in.**
+
+**The hazard this creates:** a spec with several acceptance criteria gets closed by
+the first PR that merely closes *one* of them, because the trailer format cannot
+express "partial". There is no way to suppress it from the commit side without
+violating the required `[AI:tool] type(scope): summary (SPEC-ID)` format. So when a
+PR closes only part of a spec:
+
+1. Expect the bump. Say so in the PR body so the next reader is not surprised.
+2. After `aida pull`, check the status and reopen:
+   `aida edit <ID> --status in-progress --force`.
+   Plain `aida edit --status` **refuses** with "Re-opening a closed requirement is
+   usually a mistake — pass --force to override."
+3. Then `aida remote reconcile --execute` to push the correction.
+
+Do this before anything else after the pull — a spec left reading Completed will be
+archived by the `next` hint (`aida archive <ID>`) with its criteria still open.
+
+### reference_nvme_fast_scratch_migration
+
+Since 2026-10-03 the host's write-hot agent state lives on `/mnt/fast` (22G Apple NVMe, ext4, `LABEL=fastnvme`, noatime, in fstab), moved off the single 1TB spinning HDD (`sda`, the only large disk — everything else funnels through it and it saturates easily; sda runs BFQ-candidate mq-deadline, see BUG-1789 session):
+
+- `~/.cache/sccache` → `/mnt/fast/sccache` (symlink; cap stays 10GiB)
+- `~/.codex/sessions` → `/mnt/fast/codex-sessions` (symlink)
+- `~/.gemini/antigravity-cli` → `/mnt/fast/antigravity-cli` (symlink)
+
+Maintenance: `~/.local/bin/fast-tidy.sh` via weekly systemd user timer `fast-tidy.timer`. It zstd-compresses codex rollouts older than 90 days (30 days when the partition is ≥82% full; steady-state baseline is 75%), and archives agy conversation `.db` files idle >60 days to `~/.gemini/antigravity-archive/conversations` on the HDD. Compressed `.jsonl.zst` files are invisible to codex resume and to AIDA's session scans ([[feedback_orphaned_load_generators_poison_every_measurement]] still applies when timing anything on sda).
+
+Gotchas: moving any of these dirs requires the owning processes stopped (SQLite WAL mid-copy = corruption risk); the safe pattern used was atomic same-fs rename → symlink immediately → idle-priority rsync backfill → delete old. `/mnt/fast` must stay joe-owned at the root. Related: BUG-1789 (role enter's 1.4GB session scan) is mitigated but not fixed by the faster disk and the compression dropping old files from the scan set.
+
+### reference_recordingforge_makes_orchestrator_pr_tests_hermetic
+
+`RealPhaseDriver` has a `forge_factory: Option<ForgeFactory>` seam (TASK-1421).
+Inject `crate::forge::fake::RecordingForge` (in `aida-cli-lib/src/forge.rs`,
+`#[cfg(test)]`) and the driver's PR lookups answer from canned values:
+
+```rust
+let mut forge = crate::forge::fake::RecordingForge::new();
+forge.open_for_branch   = ChangeLookup::Found(ChangeRef { id, url, branch, base, title });
+forge.merged_for_branch = ChangeLookup::Found(/* … */);   // the BUG-709 arm
+let mut d = driver(&root, "NFR-56", stub);
+d.forge_factory = Some(forge.factory());
+```
+
+`forge.closed()` returns every `close_change` call, for asserting the
+publication boundary.
+
+**The `AlreadyMerged` arm needs a git repo with no `origin`.** `detect_phase1_pr`
+only consults `merged_change_for_branch` when `probe_branch_on_origin` is *not*
+`Absent`; with no remote, `git ls-remote` fails and the probe is
+`LsRemoteFailed`, which reaches that arm. A fixture with no git repo at all
+takes a different branch.
+
+Used by `bug_1629_phase1_recovery_tests.rs`'s BUG-1769 tests. Related:
+[[project_forge_plumbed_not_wired]].
+
+### reference_run_test_binary_needs_rust_min_stack
+
+`.cargo/config.toml:10` sets `RUST_MIN_STACK = "8388608"` in its `[env]` block. Running the
+built test binary **directly** — the standing BUG-1729/BUG-1731 contention-reproducer recipe,
+adopted to avoid cargo build slots — does NOT read that file, so it gets the 2 MiB default.
+
+`agent_launcher_tests::agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources`
+(added 2026-09-27, `7324a5b437`) then overflows its stack and **aborts the whole test process**
+(exit 134). No `test result` line is printed at all, so a predicate grepping for failures sees
+silence, which looks exactly like "still running" or "nothing wrong". Bracketed: fails at
+`RUST_MIN_STACK=2097152`, passes at `8388608`. CI is unaffected because `cargo test` reads `[env]`.
+
+**Always prefix `RUST_MIN_STACK=8388608`** when invoking a test binary directly, and anchor
+suite predicates on `^test result` / `^failures:`, never on the absence of an error string.
+
+Related: [[feedback_suite_log_predicates_must_anchor_on_harness_lines]],
+[[feedback_never_conclude_from_truncated_command_output]].
+
+### reference_run_user_tmpfs_is_only_7g
+
+`/run/user/1000` is a **7.1 GB tmpfs**. `/run/user/1000/cargo-slots-1000/` is for advisory lock
+files only (`slot-0.lock`, `slot-1.lock`, `queue.lock`). On 2026-09-27 it held `debug/` (6.8G) and
+`aida-review-623ee41/` (280M) — Cargo target directories — at **100%, 0 bytes free**. A seat's build
+died at link time with "Disk full?" and a bus error; it correctly refused to commit anything.
+
+**Why it happens:** seats get `--add-dir /run/user/1000/cargo-slots-1000` so codex can `flock` the
+slot files. That grants write access, and a seat can mistake it for a sanctioned target location.
+See [[reference_codex_needs_add_dir_for_cargo_slots]] and [[BUG-1702]].
+
+**How to apply:**
+- `df -h /run/user/1000` belongs in any build-failure triage; a full tmpfs also threatens the
+  systemd user session and dbus sockets, not just cargo.
+- Before reclaiming, confirm no live build holds it: no `lsof +D` hits, nothing written in ~20min,
+  no process with that path in `CARGO_TARGET_DIR`. Then delete the target dirs and **keep every
+  `.lock` file** plus the `.agents/`, `.codex/`, `.git/` subdirs.
+- Never set `CARGO_TARGET_DIR` under `/run/user`. Distinct from
+  [[feedback_reclaim_disk_by_deleting_worktree_targets]], which is about `/home` at 97%.
+
+### reference_suite_aggregate_line_is_the_largest_passed_count
+
+`cargo test -p aida-cli-lib --lib` produced **51** `test result:` lines on 2026-09-30. Fifty of
+them read `1 passed; 0 failed; 7421 filtered out` — nested-harness re-execs, where a test spawns
+the test binary again with a filter. The real aggregate was the single line
+
+```
+test result: ok. 7420 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 584.55s
+```
+
+`head -2` on the log shows only re-exec lines, which reads as a filtered run and looks like
+something went wrong. Surface the aggregate with:
+
+```bash
+grep -E '^test result:' "$LOG" | sort -t' ' -k4 -rn | head -1
+```
+
+The verdict that actually matters is still the pair the discipline already names: the process exit
+code, and `grep -oP '^test result:.*?\K[0-9]+(?= failed)' | sort -u` yielding only `0`.
+
+Also expect `error:` lines in a green log — this crate's fixtures deliberately provoke git
+failures (`failed to push some refs`, `untracked working tree files would be overwritten`) inside
+their own tempdirs. Four of them appeared in the green run above.
+
+Related: [[feedback_suite_log_predicates_must_anchor_on_harness_lines]],
+[[feedback_never_conclude_from_truncated_command_output]],
+[[feedback_source_scanning_guards_need_the_full_suite]].
+
