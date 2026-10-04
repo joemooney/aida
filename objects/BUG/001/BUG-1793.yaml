@@ -17,12 +17,12 @@ description: |
   3. `aida list` renders held distinctly and excludes it from ready-lenses.
   4. Only an operator (or explicitly authorized seat) can lift the hold.
   5. Migration note for the TASK-1580-style convention.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-03T22:10:15.228076438Z
+modified_at: 2026-10-04T02:28:54.664319044Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,11 @@ comments:
   content: Commit 71ecbbb52c references this requirement
   created_at: 2026-10-03T19:47:36.880442949Z
   modified_at: 2026-10-03T19:47:36.880442949Z
+- id: 01a104be-2d08-7de3-97c7-86febd10a86a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized(). Triage reason: Advisor converted the current-head PR-2393 request-changes verdict into the linked implementer brief; the branch has compile, authorization, drain, projection, and acceptance-test blockers.'
+  created_at: 2026-10-04T02:28:54.664317771Z
+  modified_at: 2026-10-04T02:28:54.664317771Z
 history:
 - id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
   author: joe
@@ -68,15 +73,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a104be-2d08-7de3-97c7-86e4d3ec2d79
+  author: joe
+  timestamp: 2026-10-04T02:28:54.664312005Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:49:19.704322600Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized()'
-  recovery_hint: address the review findings, move BUG-1793 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T22:10:15.228076438Z
