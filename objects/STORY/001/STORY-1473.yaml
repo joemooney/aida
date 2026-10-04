@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-10-04T06:29:17.125207633Z
+modified_at: 2026-10-04T06:35:34.567117059Z
 req_type: Story
 tags:
 - authority
@@ -61,6 +61,12 @@ comments:
     OPERATOR DECISION UPDATE (Joe, 2026-10-03): For child issuance, choose an explicit delegation set. A parent session may issue only child seats listed in its TTY-issued delegation scope, intersected with the roster; roster membership alone grants no delegation power. The revised ADR-66 and sketch record this. Advisor signoff is still required before implementation.
   created_at: 2026-10-04T06:29:17.125207633Z
   modified_at: 2026-10-04T06:29:17.125207633Z
+- id: 01a105a0-0127-77d3-a8d7-88d27f205b5b
+  author: joe
+  content: Independent advisor review passed for the revised STORY-1473 sketch on 2026-10-03. Signoff covers legacy scalar roster entries mapping to singleton allowed-seat sets, explicit empty-by-default delegation, validated revocable session grants, fresh-shell and MCP startup behavior, and the launcher/authorization inventory. No implementation changes made during review.
+  created_at: 2026-10-04T06:35:34.567117059Z
+  modified_at: 2026-10-04T06:35:34.567117059Z
+  relayed_from: advisor
 history:
 - id: 01a0def4-ce7f-7a71-a26a-0698f546a335
   author: joe
