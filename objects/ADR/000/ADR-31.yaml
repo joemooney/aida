@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:11:21.813869212Z
-modified_at: 2026-10-04T04:53:02.896431084Z
+modified_at: 2026-10-04T04:53:04.067611701Z
 req_type: Decision
 tags:
 - codex
@@ -30,3 +30,6 @@ relationships:
   target_id: 01a0a385-ec30-7ed0-b1a9-9d5b90a00c91
   created_at: 2026-09-15T07:11:41.016580693Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
+  created_at: 2026-10-04T04:53:04.067611701Z
