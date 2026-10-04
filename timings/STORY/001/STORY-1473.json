@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1473",
+  "publishes": [
+    {
+      "at": "2026-10-04T15:07:53.214322330Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T06:30:25.732461974Z",
+      "spec": "STORY-1473",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1473",
+        "branch": "story-1473",
+        "first_seen": "2026-10-04T06:30:25.732445433+00:00"
+      }
+    }
+  ]
+}
