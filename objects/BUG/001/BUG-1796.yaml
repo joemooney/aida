@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-04T02:39:23.597448896Z
+modified_at: 2026-10-04T02:39:30.732061676Z
 req_type: Bug
 tags:
 - pull
@@ -70,6 +70,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Acceptance item 3 lacks byte-identical full-output coverage for a normal two-remote pull.. Triage reason: Current-head advisor review verified AC1/AC2 and requests one AC3 full-output regression for a normal two-remote pull; see the linked Codex brief.'
   created_at: 2026-10-04T02:39:23.597447444Z
   modified_at: 2026-10-04T02:39:23.597447444Z
+- id: 01a104c7-e195-7b50-bab9-e9ae7e97d020
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-1796):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6e2eb3f0d72e
+    Recorded: 2026-10-04T02:37:02.104032093+00:00
+    Findings:
+    1. BUG-1796 acceptance item 3 requires a byte-identical test of normal two-remote pull output. The added bug_1796_normal_two_leg_pull_headings_keep_their_legacy_bytes test only compares two formatting helper strings; it does not run handle_pull_command/aida pull with both remotes configured, capture the resulting output, or compare it to the pre-change output. Add a full-path regression test that configures both remotes and pins the complete normal pull output byte-for-byte.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-04T02:39:30.709971662Z
+  modified_at: 2026-10-04T02:39:30.709971662Z
 history:
 - id: 01a103ce-75a5-7c31-accb-2bcbfa1f5f6d
   author: joe
