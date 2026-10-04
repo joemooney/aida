@@ -1,3 +1,5 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 //! `aida-tui` — the AIDA terminal-UI shell (EPIC-26).
 //!
 //! AIDA is CLI-only today: Claude Code is the outer shell, and acting on

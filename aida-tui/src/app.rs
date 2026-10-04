@@ -998,24 +998,21 @@ impl App {
         //    the block so the `&self.activity` borrow ends before the
         //    `&mut self` write call.
         let block = self.activity.last().map(palette::format_injection);
-        match block {
-            Some(text) => {
-                if self.write_to_focused_pty(&text) {
-                    self.push_activity(ActivityEntry::note(
-                        "palette",
-                        "injected the result into the resumed conversation",
-                    ));
-                } else {
-                    self.push_activity(ActivityEntry::note(
-                        "palette",
-                        "no focused session to inject into — resumed only",
-                    ));
-                }
+        if let Some(text) = block {
+            if self.write_to_focused_pty(&text) {
+                self.push_activity(ActivityEntry::note(
+                    "palette",
+                    "injected the result into the resumed conversation",
+                ));
+            } else {
+                self.push_activity(ActivityEntry::note(
+                    "palette",
+                    "no focused session to inject into — resumed only",
+                ));
             }
-            // Defensive: routing guarantees a result, but never panic if the
-            // log was somehow cleared between routing and handling.
-            None => {}
         }
+        // Defensive: routing guarantees a result, but never panic if the
+        // log was somehow cleared between routing and handling.
         self.full_repaint(out)
     }
 

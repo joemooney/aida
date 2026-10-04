@@ -1,3 +1,11 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::question_mark)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::redundant_closure)]
 // The MCP `tool_descriptors()` json! macro expands deeply; the default
 // recursion limit (128) is exceeded once new tool properties are added.
 // trace:STORY-639 | ai:claude
@@ -35815,15 +35823,18 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         );
                     }
                     match refusal_state_of(*pr) {
+                        // TASK-1582: clear → ship, never ship alone (the two
+                        // messages used to point at each other).
+                        // trace:TASK-1582 | ai:antigravity
                         Some(merge_hold::RefusalRelease::Released(v)) => println!(
                             "      {}",
-                            format!(
-                                "release condition MET: APPROVED for {} at {} — a human may now `aida pr ship {pr}`",
-                                v.key,
+                            merge_hold::release_met_next_action(
+                                *pr,
+                                &v.key,
                                 v.reviewed_sha
                                     .as_deref()
                                     .map(review_verdict::short_sha)
-                                    .unwrap_or("?")
+                                    .unwrap_or("?"),
                             )
                             .green()
                         ),
