@@ -1,0 +1,22 @@
+id: 01a1078f-7fc3-7792-9e26-78b839edd634
+spec_id: TASK-1591
+agreed_id: TASK-1591
+title: Multi-seat roster support and CLI commands
+description: 'Support an array of allowed seats per user in registry/team.toml. Add CLI commands: aida team allow-seat <user> <seat> and aida team disallow-seat <user> <seat>.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T15:36:47.299354246Z
+modified_at: 2026-10-04T15:36:47.299354246Z
+req_type: Task
+tags:
+- architecture
+- auth
+filed_at:
+  code_sha: 5f2e20a8437c043aa1deaf25bee105cc5eda84cb
+  branch: doc-6-implementation
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1b8bdda092
+  vendor: antigravity
