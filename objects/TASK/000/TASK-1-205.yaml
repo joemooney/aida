@@ -1,0 +1,29 @@
+id: 01a108d6-fab7-725c-a949-8b075faed74a
+spec_id: TASK-1-205
+title: 'Latent: stamp paths passing empty findings (stamp_pr_review_verdict lib.rs:9422…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1799, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Latent: stamp paths passing empty findings (stamp_pr_review_verdict lib.rs:9422; BUG-775 stamp lib.rs:93824) mark reviewer-written same-round findings as inherited_findings:true — harmless today (no drain-stamped approvals carry findings in corpus) but will silently drop legitimate carry-forwards if a drain reviewer ever approves with findings; add a guard or test
+
+  PR: #2420
+  Reviewed sha: d345e6d37cb5913e5e86caab16fa1690c105d589
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-04T21:34:29.047618684Z
+modified_at: 2026-10-04T21:34:29.047618684Z
+req_type: Task
+tags:
+- carried-from:BUG-1799
+- finding-hash:f3a6df62
+- from-review:PR-2420
+- kind:carried-forward
+filed_at:
+  code_sha: 35c8f323270e2f045c4372e568d8eb6b30273899
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
