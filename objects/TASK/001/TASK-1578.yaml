@@ -13,10 +13,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T16:23:45.167588033Z
-modified_at: 2026-10-03T16:23:52.109890836Z
+modified_at: 2026-10-04T04:41:14.344592500Z
 req_type: Task
 relationships:
 - rel_type: References
   target_id: 01a101f4-7982-7ac2-851d-e85cddfdf1ec
   created_at: 2026-10-03T16:23:52.109883656Z
   created_by: joe
+comments:
+- id: 01a10537-5368-7f91-9704-58de04bec487
+  author: joe
+  content: |
+    Advisor review: acceptance is sufficiently specific to approve. The scope is the role-enter picker’s in-project role scan; the optimization stops only after a tier-1 structural role marker is resolved and rejected, while a tier-2-only session must still be parsed through the fallback window. Acceptance requires a fixture with 200 recent in-project multi-MB nonmatching tier-1 sessions, a still-reachable older matching session, and tier-2 compatibility. Existing `select_recent_sessions` instrumentation exposes files/bytes read, so the head-only and reachability claims can be asserted deterministically without timing benchmarks. The optional directory and resume-target filters are clearly optional and are not needed to pass acceptance.
+  created_at: 2026-10-04T04:41:14.344592500Z
+  modified_at: 2026-10-04T04:41:14.344592500Z
