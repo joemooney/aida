@@ -2267,7 +2267,7 @@ pub enum RoleCommand {
 
         /// Explicitly allow this session to issue child grants for this seat.
         /// May be repeated; omitted means this session cannot delegate seats.
-        // trace:STORY-1473 | ai:codex
+        // trace:STORY-1473, TASK-1592 | ai:antigravity
         #[clap(long = "delegate-seat")]
         delegate_seats: Vec<String>,
     },

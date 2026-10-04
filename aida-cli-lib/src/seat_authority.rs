@@ -141,6 +141,7 @@ pub(crate) fn require_direct_tty() -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-1473, TASK-1592 | ai:antigravity
 pub(crate) fn issue_direct(
     project_root: &Path,
     seat: &str,
