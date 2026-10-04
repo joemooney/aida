@@ -26,6 +26,10 @@ tags:
 - needs-operator
 - roles
 - security
+relationships:
+- rel_type: Parent
+  target_id: 01a10593-033c-71a0-b1dc-abef981b97bf
+  created_at: 2026-10-04T06:21:25.303332824Z
 comments:
 - id: 01a0dc30-856f-7e31-97ff-06354d642e62
   author: joe
