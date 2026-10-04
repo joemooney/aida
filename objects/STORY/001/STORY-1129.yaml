@@ -27,10 +27,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T15:53:31.439264756Z
+modified_at: 2026-10-04T04:50:54.616958348Z
 req_type: Story
 tags:
-- mcp cli agent-surface scaffolding token-economics decision
+- agent-surface
+- cli
+- decision
+- mcp
+- scaffolding
+- token-economics
 relationships:
 - rel_type:
     custom: implemented-by
