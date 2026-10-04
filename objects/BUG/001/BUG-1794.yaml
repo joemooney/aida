@@ -24,12 +24,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T03:14:57.899642214Z
+modified_at: 2026-10-04T03:17:51.654854208Z
 req_type: Bug
 tags:
 - cross-platform
 - regression
 - windows
+comments:
+- id: 01a104ea-fda6-7f82-9484-929150f3d920
+  author: ai:codex:joe
+  content: 'Implementation: commit 2f910f1a31 on bug-1794-2 normalizes Windows drive/UNC canonical path spellings before lease matching. The advisor-code-gate regression now writes the ordinary spelling and checks that the implementer lease beats the advisor roster; Windows coverage also checks descendants and rejects sibling-prefix paths. Verification: cargo fmt --all -- --check, the advisor role-precedence test, five lease-coverage tests, and make check-ci-fast (19 fast gates) passed. Windows cross-compilation was unavailable locally because x86_64-w64-mingw32-gcc is missing; Windows CI remains required.'
+  created_at: 2026-10-04T03:17:51.654854208Z
+  modified_at: 2026-10-04T03:17:51.654854208Z
 history:
 - id: 01a103ce-85a1-7103-8cde-abcab96e80cf
   author: joe
