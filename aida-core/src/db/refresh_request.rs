@@ -89,6 +89,7 @@ impl RequestLock {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&path)?;
         fs2::FileExt::lock_exclusive(&file)?;
         Ok(Self(file))

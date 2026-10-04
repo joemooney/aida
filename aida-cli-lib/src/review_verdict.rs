@@ -2120,6 +2120,26 @@ pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
     out
 }
 
+pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, RecordedVerdict)> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|p| {
+            let spec = p.file_stem()?.to_str()?.to_string();
+            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let verdict = parse_recorded_verdict(&body)?;
+            Some((spec, verdict))
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
 #[cfg(test)]
 #[path = "tests/review_verdict_tests.rs"]
 mod review_verdict_tests;

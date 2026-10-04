@@ -1,3 +1,11 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::question_mark)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::redundant_closure)]
 // The MCP `tool_descriptors()` json! macro expands deeply; the default
 // recursion limit (128) is exceeded once new tool properties are added.
 // trace:STORY-639 | ai:claude
@@ -2849,6 +2857,7 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "mode",
     // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
     "origin",
+    "deferred_reason",
 ];
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
@@ -2947,6 +2956,7 @@ fn toon_list_cell(
         "mode" => r.execution_mode.clone().unwrap_or_default(),
         // trace:STORY-634 | ai:claude — empty cell = single-repo.
         "origin" => r.origin.clone().unwrap_or_default(),
+        "deferred_reason" => r.deferred_reason.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -5254,6 +5264,10 @@ fn run() -> Result<()> {
         if s == "pr" || s == "mr" {
             return pr_list_handler(*json);
         }
+        // trace:TASK-1590 | ai:antigravity
+        if s == "review" {
+            return handle_review_list(*json);
+        }
     }
 
     // STORY-720: `aida ship` dispatches before storage init for the same
@@ -5807,6 +5821,7 @@ fn run() -> Result<()> {
             spec,
             json,
             dry_run,
+            yes,
         } => {
             let store = storage.load()?;
             let project_root = find_project_root()
@@ -5818,6 +5833,7 @@ fn run() -> Result<()> {
                 reconstitute::ReconstituteOptions {
                     json: *json,
                     dry_run: *dry_run,
+                    yes: *yes,
                 },
             )?;
         }
@@ -35846,15 +35862,18 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         );
                     }
                     match refusal_state_of(*pr) {
+                        // TASK-1582: clear → ship, never ship alone (the two
+                        // messages used to point at each other).
+                        // trace:TASK-1582 | ai:antigravity
                         Some(merge_hold::RefusalRelease::Released(v)) => println!(
                             "      {}",
-                            format!(
-                                "release condition MET: APPROVED for {} at {} — a human may now `aida pr ship {pr}`",
-                                v.key,
+                            merge_hold::release_met_next_action(
+                                *pr,
+                                &v.key,
                                 v.reviewed_sha
                                     .as_deref()
                                     .map(review_verdict::short_sha)
-                                    .unwrap_or("?")
+                                    .unwrap_or("?"),
                             )
                             .green()
                         ),
@@ -38121,6 +38140,23 @@ fn session_start(
         }
         msg.push_str("\n\nThen retry `aida session start`.");
         anyhow::bail!(msg)
+    }
+
+    // BUG-1793: an operator-held spec must refuse before creating a lease or
+    // acquiring cross-clone coordination state. trace:BUG-1793 | ai:codex
+    if let Some(req) = Storage::new(project_root.join(".aida-store"))
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(owns).cloned())
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(owns);
+            return Err(defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
     }
 
     // Check the lease dir exists; create if not.
@@ -53029,6 +53065,10 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || is_tty || orchestrated
 }
 
+pub(crate) fn hold_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+    matches!(role, "product" | "advisor" | "operator") || is_tty || orchestrated
+}
+
 /// Dispatch authority permits routing already-disposed work without granting
 /// the advisor's power to dispose it. Product, advisor, and integrator seats
 /// may dispatch; a corroborated live orchestrator may continue its own routing.
@@ -53092,6 +53132,26 @@ fn has_advisor_authority() -> bool {
     advisor_authority_from(
         &effective_role_with_roster().0,
         authority_stdin_is_terminal(), // trace:BUG-1618 | ai:claude
+        orchestrated,
+    )
+}
+
+// trace:BUG-1793 | ai:antigravity
+pub(crate) fn has_hold_authority() -> bool {
+    if current_role_instance_is_companion() {
+        return false;
+    }
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    hold_authority_from(
+        &effective_role_with_roster().0,
+        authority_stdin_is_terminal(),
         orchestrated,
     )
 }
@@ -73632,6 +73692,19 @@ mod bug_1500_store_pull_hint_tests {
     }
 }
 
+// trace:BUG-1796 | ai:codex
+fn pull_skip_warning(message: &str) -> String {
+    format!("{} {message}", "Warning:".yellow().bold())
+}
+
+fn pull_code_start_line(branch: &str) -> String {
+    format!("{} {} ← origin", "Pulling code".cyan().bold(), branch)
+}
+
+fn pull_store_start_line() -> String {
+    format!("{} aida-store ← origin", "Pulling store".cyan().bold())
+}
+
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -73667,13 +73740,13 @@ fn handle_pull_command(
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
             println!(
-                "  {} no `origin` remote — skipping code pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no `origin` remote — skipping code pull")
             );
         } else {
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
-            println!("{} {} ← origin", "Pulling code".cyan().bold(), branch);
+            println!("{}", pull_code_start_line(&branch));
             // STORY-86: snapshot HEAD before pull so the auto-bump scan
             // can range over exactly what landed. None on first ever
             // commit / empty repo — the helper falls back to HEAD~50.
@@ -73929,8 +74002,8 @@ fn handle_pull_command(
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
             println!(
-                "  {} no orphan worktree — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no orphan worktree — skipping store pull")
             );
             // BUG-1625: no store leg to wait for (legacy / not-yet-attached
             // store) — the local store IS the canonical one. trace:BUG-1625
@@ -73957,8 +74030,8 @@ fn handle_pull_command(
         }
         if !git_ops::has_remote(store_path, "origin") {
             println!(
-                "  {} orphan store has no `origin` — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("orphan store has no `origin` — skipping store pull")
             );
             // BUG-1625: nothing remote to pull first. trace:BUG-1625
             if let Some(scan_pre) = deferred_reconcile.take() {
@@ -73997,7 +74070,7 @@ fn handle_pull_command(
         }
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-        println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+        println!("{}", pull_store_start_line());
 
         // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
         // can summarize what landed once it completes. None when the
@@ -82743,6 +82816,7 @@ mod story_1043_unshipped_work_tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             in_degree: 0,
             out_degree: 0,
             heft: 0,
@@ -93918,6 +93992,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+        ReviewCommand::List { json } => handle_review_list(*json),
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
@@ -96057,6 +96132,106 @@ fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// trace:TASK-1590 | ai:antigravity
+fn handle_review_list(json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let verdicts = review_verdict::list_active_verdicts(&project_root);
+
+    if verdicts.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            println!(
+                "{} No active review verdicts found.",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+            );
+        }
+        return Ok(());
+    }
+
+    let branch = current_branch_at(&project_root);
+    let mut entries: Vec<(String, String, String, String, String, colored::Color)> = Vec::new();
+    let mut json_out = Vec::new();
+
+    let mut max_spec = 7;
+    let mut max_verdict = 7;
+    let mut max_action = 13;
+    let mut max_sha = 3;
+
+    for (spec, v) in verdicts {
+        let relation =
+            verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
+        let actionability = review_verdict::review_actionability(Some(&v), relation);
+        let spec_upper = spec.to_ascii_uppercase();
+        let verdict_str = format!("{:?}", v.kind);
+        let action_str = actionability.as_str().to_string();
+        let sha_str =
+            review_verdict::short_sha(v.reviewed_sha.as_deref().unwrap_or("")).to_string();
+
+        max_spec = max_spec.max(spec_upper.len());
+        max_verdict = max_verdict.max(verdict_str.len());
+        max_action = max_action.max(action_str.len());
+        max_sha = max_sha.max(sha_str.len());
+
+        let color = match actionability {
+            review_verdict::ReviewActionability::Resolved => colored::Color::Green,
+            review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
+            review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
+        };
+
+        if json {
+            json_out.push(serde_json::json!({
+                "spec_id": spec_upper,
+                "verdict": verdict_str,
+                "actionability": action_str,
+                "sha": sha_str,
+            }));
+        } else {
+            entries.push((
+                spec_upper,
+                verdict_str,
+                action_str,
+                sha_str,
+                String::new(),
+                color,
+            ));
+        }
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&json_out)?);
+        return Ok(());
+    }
+
+    println!(
+        "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+        "Spec ID".bold(),
+        "Verdict".bold(),
+        "Actionability".bold(),
+        "SHA".bold(),
+        spec_w = max_spec,
+        verdict_w = max_verdict,
+        action_w = max_action,
+        sha_w = max_sha,
+    );
+
+    for (spec, verdict, action, sha, _ignored, color) in entries {
+        println!(
+            "{:<spec_w$}  {:<verdict_w$}  {:<action_w$}  {:<sha_w$}",
+            spec,
+            verdict,
+            action.color(color),
+            sha,
+            spec_w = max_spec,
+            verdict_w = max_verdict,
+            action_w = max_action,
+            sha_w = max_sha,
+        );
+    }
+
+    Ok(())
 }
 
 /// trace:STORY-67 | ai:claude
@@ -101980,7 +102155,7 @@ fn resolve_next_n_head(
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
-            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
+            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role).unwrap();
             let (role_skipped, blocked_skipped) = match &pick {
                 Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
                 None => (

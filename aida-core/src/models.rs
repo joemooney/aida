@@ -397,7 +397,9 @@ pub fn forbidden_attention_transition(
     } else {
         Some(
             "a Needs Attention spec can only be triaged to Approved, \
-             In Progress, or Rejected"
+             In Progress, or Rejected; to mark it done, go via In Progress \
+             (aida edit <ID> --status in-progress, then --status done); a merged \
+             PR referencing this spec completes it via aida pull"
                 .to_string(),
         )
     }
@@ -4306,6 +4308,13 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_until: Option<String>,
 
+    /// Operator's reason for parking this requirement. Unlike the revisit
+    /// trigger, this explains why the hold exists and is retained with the
+    /// deferred state. Legacy deferred rows deserialize without a reason.
+    // trace:BUG-1793 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_reason: Option<String>,
+
     // trace:TASK-1148 | ai:claude
     /// Narrative risk notes — the residual risk / blast-radius call an
     /// implementer recorded that is NOT derivable from git, status, or trace
@@ -4534,6 +4543,10 @@ pub struct RequirementSummaryDto {
     pub deferred_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deferred_until: Option<String>,
+    /// Why the requirement is parked, when the defer is an operator hold.
+    // trace:BUG-1793 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deferred_reason: Option<String>,
 }
 
 impl From<&Requirement> for RequirementSummaryDto {
@@ -4563,6 +4576,7 @@ impl From<&Requirement> for RequirementSummaryDto {
             deferred: r.deferred,
             deferred_at: r.deferred_at,
             deferred_until: r.deferred_until.clone(),
+            deferred_reason: r.deferred_reason.clone(),
         }
     }
 }
@@ -4607,6 +4621,7 @@ impl Requirement {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             // trace:TASK-1148 | ai:claude
             risk_notes: None,
             test_coverage_notes: None,
@@ -8818,6 +8833,19 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         }
     }
 
+    // trace:BUG-1797 | ai:codex
+    #[test]
+    fn needs_attention_refusal_explains_done_routes() {
+        let message = forbidden_attention_transition(
+            &RequirementStatus::NeedsAttention,
+            &RequirementStatus::Done,
+        )
+        .expect("NeedsAttention → Done must remain forbidden");
+
+        assert!(message.contains("aida edit <ID> --status in-progress, then --status done"));
+        assert!(message.contains("a merged PR referencing this spec completes it via aida pull"));
+    }
+
     /// STORY-332: transitions that do not touch NeedsAttention are never
     /// constrained — the rule must not regress AIDA's free-form status edits.
     #[test]
@@ -8853,7 +8881,9 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
                 ),
                 (NeedsAttention, to) if !matches!(to, Approved | InProgress | Rejected) => Some(
                     "a Needs Attention spec can only be triaged to Approved, \
-                     In Progress, or Rejected"
+                     In Progress, or Rejected; to mark it done, go via In Progress \
+                     (aida edit <ID> --status in-progress, then --status done); a merged \
+                     PR referencing this spec completes it via aida pull"
                         .to_string(),
                 ),
                 _ => None,

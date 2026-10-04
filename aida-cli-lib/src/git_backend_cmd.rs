@@ -96,13 +96,28 @@ fn print_rework_needed_notes(
 /// `effective_needs_attention_lens_with_source` in `lib.rs` does walk children;
 /// unifying the two is its own change, on its own spec.
 // trace:TASK-1572 | ai:claude
+// trace:BUG-1798 | ai:claude
 fn row_parked_lens(
-    store: &aida_core::RequirementsStore,
+    backend: &aida_core::CachedGitBackend,
+    lazy_store: &mut Option<aida_core::RequirementsStore>,
     row: &aida_core::RequirementSummary,
 ) -> Option<status_display::NeedsAttentionLens> {
     if !row.status.eq_ignore_ascii_case("NeedsAttention") {
         return None;
     }
+
+    // For non-epics, we don't need to walk children, so a single read suffices
+    if !row.req_type.eq_ignore_ascii_case("epic") {
+        let req = backend.get_requirement(&row.id).ok().flatten()?;
+        return status_display::needs_attention_lens(&req);
+    }
+
+    // For epics, we must walk children, which requires the full store.
+    let store = lazy_store.get_or_insert_with(|| {
+        aida_core::db::DatabaseBackend::load(backend)
+            .unwrap_or_else(|_| backend.load_metadata_only().unwrap_or_default())
+    });
+
     let req = store.get_requirement_by_id(&row.id)?;
     crate::effective_needs_attention_lens_with_source(
         store,
@@ -388,11 +403,19 @@ where
     });
 
     let render_status = |r: &aida_core::RequirementSummary| -> String {
-        let label = status_display::display_status_for_type(&r.req_type, &r.status);
-        if options.no_glyph {
-            status_display::status_cell_no_glyph(label, 13)
+        let held = r
+            .tags
+            .iter()
+            .any(|tag| tag.eq_ignore_ascii_case("operator-held"));
+        let label = if held {
+            "Held".to_string()
         } else {
-            status_display::status_cell(label, 11)
+            status_display::display_status_for_type(&r.req_type, &r.status).to_string()
+        };
+        if options.no_glyph {
+            status_display::status_cell_no_glyph(&label, 13)
+        } else {
+            status_display::status_cell(&label, 11)
         }
     };
     let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
@@ -524,6 +547,7 @@ mod list_title_width_tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             in_degree: 0,
             out_degree: 0,
             heft: 0,
@@ -2175,10 +2199,12 @@ pub(crate) fn handle_git_backend_command(
                 // trace:TASK-1464 | ai:claude — creation / completion date sorts.
                 "created" => aida_core::SortOrder::CreatedDesc,
                 "completed" => aida_core::SortOrder::CompletedDesc,
+                // trace:TASK-1587 | ai:antigravity
+                "id" => aida_core::SortOrder::IdAsc,
                 "modified" | "" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', or 'completed'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', 'completed', or 'id'); using 'modified'"
                     );
                     aida_core::SortOrder::ModifiedDesc
                 }
@@ -2229,10 +2255,7 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
-            use aida_core::db::DatabaseBackend;
-            let store = backend
-                .load()
-                .unwrap_or_else(|_| backend.load_metadata_only().unwrap());
+            let mut lazy_store = None;
 
             // BUG-1771: narrow the widened query back down to the requested
             // parked lens(es). Runs before every downstream lens so the rows the
@@ -2250,7 +2273,7 @@ pub(crate) fn handle_git_backend_command(
                     if !r.status.eq_ignore_ascii_case("NeedsAttention") {
                         return true;
                     }
-                    row_parked_lens(&store, r)
+                    row_parked_lens(&backend, &mut lazy_store, r)
                         .is_some_and(|lens| parked_lens_keys.contains(&lens.palette_key()))
                 });
             }
@@ -2756,7 +2779,7 @@ pub(crate) fn handle_git_backend_command(
                         let (in_flight, blocked, queued) = row_routing(r);
                         // trace:BUG-1771 | ai:claude — one lens computation
                         // shared with the `--status shelved` filter.
-                        let parked_lens = row_parked_lens(&store, r);
+                        let parked_lens = row_parked_lens(&backend, &mut lazy_store, r);
                         // TASK-1456: a Done row folded in by
                         // `select_done_rework_rows` still carries `status:
                         // "Done"` — the machine-consumer contract that field
@@ -4288,6 +4311,7 @@ pub(crate) fn handle_git_backend_command(
             spec,
             json,
             dry_run,
+            yes,
         } => {
             let store = backend.load()?;
             let project_root = find_project_root()?;
@@ -4298,6 +4322,7 @@ pub(crate) fn handle_git_backend_command(
                 crate::reconstitute::ReconstituteOptions {
                     json: *json,
                     dry_run: *dry_run,
+                    yes: *yes,
                 },
             )?;
         }
@@ -4686,6 +4711,13 @@ pub(crate) fn handle_git_backend_command(
                             },
                         );
                         object.insert(
+                            "deferred_reason".to_string(),
+                            match req.deferred_reason.as_deref() {
+                                Some(reason) => serde_json::Value::String(reason.to_string()),
+                                None => serde_json::Value::Null,
+                            },
+                        );
+                        object.insert(
                             "priority".to_string(),
                             serde_json::Value::String(format!("{}", req.effective_priority())),
                         );
@@ -4801,6 +4833,9 @@ pub(crate) fn handle_git_backend_command(
                             ));
                             if let Some(trigger) = status_display::deferred_revisit_trigger(&req) {
                                 lines.push(crate::toon::scalar("deferred_until", &trigger));
+                            }
+                            if let Some(reason) = req.deferred_reason.as_deref() {
+                                lines.push(crate::toon::scalar("deferred_reason", reason));
                             }
                         } else {
                             lines.push(crate::toon::scalar(
@@ -6979,10 +7014,16 @@ pub(crate) fn handle_git_backend_command(
             // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
             archive_cmd::handle_unarchive_command(id, &backend, store_path)?;
         }
-        Command::Defer { id, until } => {
+        Command::Defer { id, until, reason } => {
             // STORY-584: park a spec on the primed/conditional shelf, hidden
             // from the default open-work view. trace:STORY-584 | ai:claude
-            defer_cmd::defer_single(id, until.as_deref(), &backend, store_path)?;
+            defer_cmd::defer_single(
+                id,
+                until.as_deref(),
+                reason.as_deref(),
+                &backend,
+                store_path,
+            )?;
         }
         Command::Undefer { id } => {
             // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude

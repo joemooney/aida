@@ -9,8 +9,7 @@
 // trace:STORY-1476 | ai:claude
 
 use crate::evaluator::{
-    ChoiceResponse, EvaluatorEngine, EvaluatorError, EvaluatorFuture, MockEvaluator, NoulResponse,
-    ScoreResponse,
+    ChoiceResponse, EvaluatorEngine, EvaluatorFuture, MockEvaluator, NoulResponse, ScoreResponse,
 };
 use crate::graded_review::{
     execute_graded_review, generate_graded_reviewer_prompt, AcceptanceCommandPolicy, CriterionKind,

@@ -26,6 +26,7 @@ fn summary(
         deferred: false,
         deferred_at: None,
         deferred_until: None,
+        deferred_reason: None,
         in_degree: 0,
         out_degree: 0,
         heft: 0,

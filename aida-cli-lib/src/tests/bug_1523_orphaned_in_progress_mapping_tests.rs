@@ -8,7 +8,6 @@ use super::*;
 /// renders. The pre-existing `awaiting_you.rs` test
 /// (`orphaned_in_progress_renders_and_distinguishes_abandoned_from_not_yet_started`)
 /// covers rendering only; this covers detection → emission.
-
 fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
         id: id.to_string(),

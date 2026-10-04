@@ -9008,6 +9008,15 @@ pub(crate) fn resolve_queue_work_plan(
 
     if let Some(arg_str) = arg {
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
+            // A deferred spec is an explicit operator hold. Refuse before
+            // queue synthesis or other pickup side effects. trace:BUG-1793
+            if req.deferred && req.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    req.spec_id.as_deref().unwrap_or(arg_str),
+                    req.deferred_reason.as_deref(),
+                    req.deferred_until.as_deref(),
+                ));
+            }
             // trace:BUG-1106 | ai:codex
             // A phase child is assigned by the live orchestrator, not by its
             // temporary phase role. If the reviewer phase is asked to pick up
@@ -10739,6 +10748,25 @@ pub(crate) fn handle_queue_work(
             None => return Err(e),
         },
     };
+
+    // Recheck the resolved anchor, including no-argument queue-head pickup.
+    // This runs before launch resolution, calibration, worktree creation, or
+    // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
+    if let Some(req) = storage
+        .load()?
+        .requirements
+        .into_iter()
+        .find(|r| spec_matches(r, &plan.anchor_display))
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+            return Err(crate::defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
 
     // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
     // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
@@ -12768,6 +12796,8 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) status: RequirementStatus,
     pub(crate) for_role: Option<String>,
     pub(crate) deferred: bool,
+    pub(crate) deferred_reason: Option<String>,
+    pub(crate) deferred_until: Option<String>,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
     pub(crate) tags: std::collections::HashSet<String>,
     /// BUG-1608: the STORY-333 pickability verdict, resolved against the
@@ -12837,10 +12867,11 @@ pub(crate) fn effective_auto_complete_role(role_override: Option<&str>) -> Strin
 /// session type for them. Unrouted entries remain drivable by the effective
 /// role for backwards compatibility.
 // trace:BUG-862 | ai:codex
+// trace:BUG-1793 | ai:antigravity
 pub(crate) fn pick_auto_complete_head_for_role(
     candidates: &[AutoCompleteHeadCandidate],
     effective_role: &str,
-) -> Option<AutoCompleteHeadPick> {
+) -> anyhow::Result<Option<AutoCompleteHeadPick>> {
     let effective_role = canonical_role_name(effective_role);
     let mut status_skipped = Vec::new();
     let mut role_skipped = Vec::new();
@@ -12857,6 +12888,13 @@ pub(crate) fn pick_auto_complete_head_for_role(
             }
         }
         if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
             deferred_skipped.push(candidate.id.clone());
             continue;
         }
@@ -12885,7 +12923,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 blocked_skipped.push((candidate.id.clone(), reason.clone()));
                 continue;
             }
-            return Some(AutoCompleteHeadPick {
+            return Ok(Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
                 role_skipped,
@@ -12893,11 +12931,11 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 guided_or_operator_skipped,
                 release_skipped,
                 blocked_skipped,
-            });
+            }));
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
     }
-    None
+    Ok(None)
 }
 
 pub(crate) fn auto_complete_head_candidates_with_roles(
@@ -12927,6 +12965,8 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     status: r.status.clone(),
                     for_role: e.for_role.clone(),
                     deferred: r.deferred,
+                    deferred_reason: r.deferred_reason.clone(),
+                    deferred_until: r.deferred_until.clone(),
                     execution_mode: r.execution_mode,
                     tags: r.tags.clone(),
                     // BUG-1608: PRIN-5 fail closed — `pickability` treats a
@@ -12957,30 +12997,41 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
     role_override: Option<&str>,
 ) -> Result<Vec<(String, RequirementStatus, Option<String>)>> {
     let effective_role = effective_auto_complete_role(role_override);
-    Ok(
+    let mut out = Vec::new();
+    for candidate in
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
-            .into_iter()
-            .filter(|candidate| {
-                !matches!(
-                    candidate.execution_mode,
-                    Some(
-                        aida_core::ExecutionMode::Guided
-                            | aida_core::ExecutionMode::Operator
-                            | aida_core::ExecutionMode::Decide
-                    )
-                )
-            })
-            .filter(|candidate| !candidate.is_release_task())
-            .filter(|candidate| {
-                candidate
-                    .for_role
-                    .as_deref()
-                    .map(|r| canonical_role_name(r) == effective_role)
-                    .unwrap_or(true)
-            })
-            .map(|candidate| (candidate.id, candidate.status, candidate.blocked))
-            .collect(),
-    )
+    {
+        if matches!(
+            candidate.execution_mode,
+            Some(
+                aida_core::ExecutionMode::Guided
+                    | aida_core::ExecutionMode::Operator
+                    | aida_core::ExecutionMode::Decide
+            )
+        ) {
+            continue;
+        }
+        if candidate.is_release_task() {
+            continue;
+        }
+        if let Some(for_role) = candidate.for_role.as_deref() {
+            if canonical_role_name(for_role) != effective_role {
+                continue;
+            }
+        }
+        if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
+            continue;
+        }
+        out.push((candidate.id, candidate.status, candidate.blocked));
+    }
+    Ok(out)
 }
 
 /// Build the `(display_id, status)` candidate list for the active role's
@@ -13021,7 +13072,7 @@ pub(crate) fn resolve_auto_complete_head(
     let role_label = effective_auto_complete_role(role_override);
     let candidates = auto_complete_head_candidates_with_roles(storage, user_id, Some(&role_label))?;
 
-    match pick_auto_complete_head_for_role(&candidates, &role_label) {
+    match pick_auto_complete_head_for_role(&candidates, &role_label)? {
         Some(pick) => {
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
