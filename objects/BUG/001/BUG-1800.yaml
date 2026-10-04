@@ -1,0 +1,32 @@
+id: 01a108bd-9045-722c-a924-ba91f0037310
+spec_id: BUG-1800
+agreed_id: BUG-1800
+title: 'merged-agent-worktrees: undecidable batched-integration class has no disposition path — gc --force skips it and ship step 6 re-verifies forever'
+description: |
+  Observed 2026-10-04: `aida worktree gc --yes --force` on a repo with 33 batched-integration-era agent worktrees removed NOTHING — every finding is "content is undecidable — kept, flagged for operator decision — not auto-removed", even under --force. The findings offer no command to record that operator decision, so:
+  - `aida pr ship` step 6 re-derives the same 33 "undecidable" verdicts on every ship (operator-visible minutes of wall clock per merge), and
+  - any scheduled merged-worktrees guard (TASK-1596) would trip on every run, which the registry's own doctrine classifies as noise.
+
+  The caution itself is correct (squash-ancestry makes byte-level merge verification impossible); the gap is that the resulting judgment call has nowhere to land. Fix candidates:
+  (a) a disposition verb — e.g. `aida worktree dismiss <path|--category batched-undecidable>` — that archives the branch tip under refs/archive/, removes the worktree + branch, and ledgers who decided;
+  (b) cache the per-worktree verdict (keyed by branch tip sha) so step 6 verifies each undecidable tree once, not per ship;
+  (a)+(b) together is the complete fix: (b) stops the tax immediately, (a) drains the list.
+
+  Acceptance sketch: after the operator dispositions the 33, `aida pr ship` step 6 completes without re-verifying them; a NEW undecidable worktree still gets flagged exactly once; the dismissal is ledgered (who/when/shas) and the archived ref makes it fully reversible.
+
+  Provenance: operator-reported slow step 6 + the pasted gc --yes --force transcript, 2026-10-04. Related: TASK-1596 (monthly guard — must stay disabled until this lands), TASK-1595 (deferred: stranded local commits detector).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T21:06:43.397787247Z
+modified_at: 2026-10-04T21:06:43.397787247Z
+req_type: Bug
+filed_at:
+  code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
