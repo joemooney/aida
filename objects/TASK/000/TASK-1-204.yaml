@@ -11,13 +11,23 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-04T19:46:56.402130847Z
-modified_at: 2026-10-04T19:49:41.806727885Z
+modified_at: 2026-10-04T19:49:42.718338817Z
 req_type: Task
 tags:
 - carried-from:BUG-1794
 - finding-hash:63b34174
 - from-review:BUG-1794
 - kind:carried-forward
+comments:
+- id: 01a10877-0ebe-77fa-a8ad-91db0d230d21
+  author: joe
+  content: |
+    Rejected as already-addressed, not as wrong: this carried-forward finding is the BUG-1794 request-changes finding itself, fixed by the rework the approval covered — windows_path_key now folds Unicode casing (str::to_lowercase) with Windows-gated Åsa/åsa case-variant and sibling-prefix regression tests (commit 77afe9c7, content present at approved head 37af379b on PR #2410).
+
+    Why the phantom existed: `aida review record --verdict approved` preserves the previous round's findings[] when --finding is omitted, so the carry-forward sweep read the APPROVED record as an approval WITH outstanding findings. Filed BUG follow-up to make resolved findings not carry forward (or require explicit disposition per finding at approval time).
+  created_at: 2026-10-04T19:49:42.718338817Z
+  modified_at: 2026-10-04T19:49:42.718338817Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 history:
 - id: 01a10877-0b2e-76b6-ba3e-490fbd004b24
   author: joe
