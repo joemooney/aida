@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-04T02:47:05.418764775Z
-modified_at: 2026-10-04T02:47:05.418764775Z
+modified_at: 2026-10-04T04:41:09.398502833Z
 req_type: Task
 tags:
 - carried-from:TASK-1575
 - finding-hash:2d7d7bed
 - from-review:PR-2396
 - kind:carried-forward
+comments:
+- id: 01a10537-4016-7770-a9ea-ad32e6078e98
+  author: joe
+  content: |
+    Advisor disposition: reject as already resolved; do not implement again. TASK-1575's merged PR #2396 (commit 8f448c153e0265c94be912f73f0fe7c34e480608) was approved after the reviewer mutation-tested both findings: pass-2 evidenced truncation now runs before carrier filtering, and the snapshot-None carrier branch sets `truncated = true`. The exact-head approved verdict records both fixes, and current main contains the `truncated = true` branch in `aida-cli-lib/src/lib.rs` around lines 82307–82319. This carried-forward draft no longer represents open work.
+  created_at: 2026-10-04T04:41:09.398502833Z
+  modified_at: 2026-10-04T04:41:09.398502833Z
 filed_at:
   code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
   branch: main
