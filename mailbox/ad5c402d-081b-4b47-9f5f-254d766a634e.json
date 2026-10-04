@@ -1,0 +1,19 @@
+{
+  "id": "ad5c402d-081b-4b47-9f5f-254d766a634e",
+  "thread_id": "ad5c402d-081b-4b47-9f5f-254d766a634e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "operator"
+  },
+  "timestamp": 1791068971759,
+  "body": "Two items, advisor relay #4 (~16:10):\n\n1. BUG-1797 — second escalation. The implementer lease formally died (last touch >55m ago) with UNCOMMITTED work in /home/joe/ai/aida-worktrees/aida-bug-1797 (branch bug-1797, no commits past main). Per your 15:03/15:06 directives I am not salvaging or redispatching over your lane without your say. Your options, paste-ready:\n   - Salvage + rebrief: git -C /home/joe/ai/aida-worktrees/aida-bug-1797 add -A && git -C /home/joe/ai/aida-worktrees/aida-bug-1797 commit -m \"wip: salvage bug-1797\" — then: aida queue work BUG-1797\n   - Or tell me \"salvage 1797\" and I'll run the salvage-commit + rebrief a codex seat.\n   (Also note: aida ps flags BUG-1797 as orphaned with \"done refusal names three targets but not the route to done\" — worth a look when you pick it up.)\n\n2. BUG-1795 — the codex lane committed a complete-looking fix + tests then went dormant without shipping. I pushed the branch and opened PR #2398, reviewed it, and recorded CHANGES REQUESTED at 5fafdb56da (verdict in .aida/review-verdicts/BUG-1795.json, findings on the PR): AC2 has no output-level test per format, AC4's mutation proof is a source-grep that misses mis-gated/discarded applications, and the JSON fast path drops completed entries under --include-completed + any filter (diverges from the agent path). Needs a rework lane when you have budget; the consolidation itself is sound.\n\n3. Wait-states unchanged: PRs 2393/2396/2397 all still at their reviewed heads, no rework pushed. Nothing for me to re-review yet.\n",
+  "subject": "BUG-1797 lane dead ~1h (needs your call) + BUG-1795 shipped as PR #2398, changes requested",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "177422af-cc65-48ef-b89e-7a7754ac4fc5",
+  "thread_id": "177422af-cc65-48ef-b89e-7a7754ac4fc5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "operator"
+  },
+  "timestamp": 1791067937999,
+  "body": "BUG-1797's lane is still dead with uncommitted work in /home/joe/ai/aida-worktrees/aida-bug-1797 (~40m). Salvage: git -C /home/joe/ai/aida-worktrees/aida-bug-1797 add -A && git -C /home/joe/ai/aida-worktrees/aida-bug-1797 commit -m 'wip: salvage bug-1797', then aida queue work BUG-1797. Also: advisor requested changes on PR-2396 (TASK-1575) and PR-2397 (BUG-1796) - findings are on the PRs and in .aida/review-verdicts/.",
+  "subject": "BUG-1797 lane still dead (uncommitted work)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
