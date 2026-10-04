@@ -120,7 +120,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:10:44.000996596Z
-modified_at: 2026-10-04T04:51:18.182822772Z
+modified_at: 2026-10-04T04:51:19.080767055Z
 req_type: Story
 tags:
 - consultation
@@ -140,6 +140,9 @@ relationships:
   target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   created_at: 2026-09-21T06:13:57.679959439Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-10-04T04:51:19.080767055Z
 comments:
 - id: 01a0c2a8-c7a5-7aa0-8e4f-3e3c0eead8cb
   author: joe
