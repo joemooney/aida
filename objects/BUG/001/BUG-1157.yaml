@@ -21,10 +21,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:22:17.142170427Z
-modified_at: 2026-09-15T12:50:09.893830390Z
+modified_at: 2026-10-04T04:49:27.577092697Z
 req_type: Bug
 tags:
-- autoprogress derisk execution-mode keystone-tag aida:autoprogress
+- aida:autoprogress
+- autoprogress
+- derisk
+- execution-mode
+- keystone-tag
 relationships:
 - rel_type:
     custom: implemented-by
