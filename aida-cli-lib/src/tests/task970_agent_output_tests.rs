@@ -118,6 +118,22 @@ fn fields_selects_and_orders_columns() {
 // the agent rows and the human table. trace:STORY-734 | ai:claude
 #[test]
 fn fields_agent_toon_emits_only_chosen_fields() {
+    // trace:BUG-1793 | ai:antigravity
+    #[test]
+    fn fields_agent_toon_emits_deferred_reason() {
+        let mut req = fields_summary("STORY-1", "t", "approved", "low");
+        req.deferred_reason = Some("waiting for user".to_string());
+        assert_eq!(
+            toon_list_cell(&req, (false, false, false), "deferred_reason"),
+            "waiting for user"
+        );
+
+        req.deferred_reason = None;
+        assert_eq!(
+            toon_list_cell(&req, (false, false, false), "deferred_reason"),
+            ""
+        );
+    }
     let selected = toon_list_fields(Some("id,priority")).unwrap();
     assert_eq!(selected, vec!["id", "priority"]);
     // Narrower than the default schema.

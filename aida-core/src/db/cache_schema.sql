@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS requirements_cache (
     deferred INTEGER NOT NULL DEFAULT 0,   -- STORY-584: view-flag parallel to archived
     deferred_at TEXT,                      -- ISO RFC3339; NULL when not deferred (STORY-584)
     deferred_until TEXT,                   -- free-text revisit trigger; NULL when none (STORY-584)
+    deferred_reason TEXT,
     -- STORY-632: deterministic local graph-centrality, computed during cache
     -- rebuild from the relationship graph — NEVER stored in canonical YAML.
     -- in_degree  = count of inbound edges (specs that reference/depend-on this);

@@ -47,13 +47,9 @@ pub(crate) fn hold_refusal(
     .into()
 }
 
+// trace:BUG-1793 | ai:antigravity
 fn hold_authorized() -> bool {
-    match std::env::var("AIDA_SESSION_ROLE") {
-        Ok(role) => matches!(role.as_str(), "product" | "advisor" | "operator"),
-        // An unseated interactive operator remains the authority. Build seats
-        // must not set or clear an operator hold.
-        Err(_) => true,
-    }
+    crate::has_hold_authority()
 }
 
 /// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /

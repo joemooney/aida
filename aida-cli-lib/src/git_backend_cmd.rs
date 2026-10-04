@@ -4709,6 +4709,13 @@ pub(crate) fn handle_git_backend_command(
                             },
                         );
                         object.insert(
+                            "deferred_reason".to_string(),
+                            match req.deferred_reason.as_deref() {
+                                Some(reason) => serde_json::Value::String(reason.to_string()),
+                                None => serde_json::Value::Null,
+                            },
+                        );
+                        object.insert(
                             "priority".to_string(),
                             serde_json::Value::String(format!("{}", req.effective_priority())),
                         );
@@ -4824,6 +4831,9 @@ pub(crate) fn handle_git_backend_command(
                             ));
                             if let Some(trigger) = status_display::deferred_revisit_trigger(&req) {
                                 lines.push(crate::toon::scalar("deferred_until", &trigger));
+                            }
+                            if let Some(reason) = req.deferred_reason.as_deref() {
+                                lines.push(crate::toon::scalar("deferred_reason", reason));
                             }
                         } else {
                             lines.push(crate::toon::scalar(

@@ -661,7 +661,7 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
         name: "deferred_reason",
         example: "waiting for the dependency decision",
         provenance: Provenance::User,
-        description: "Why the operator is holding this spec. Set with `aida defer --reason`; +             pickup refuses held specs until an authorized seat runs `aida undefer`.",
+        description: "Why the operator is holding this spec. Set with `aida defer --reason`; pickup refuses held specs until an authorized seat runs `aida undefer`.",
     },
     // trace:TASK-1148 | ai:claude
     FieldDoc {
