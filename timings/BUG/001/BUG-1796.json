@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1796",
+  "publishes": [
+    {
+      "at": "2026-10-04T06:13:58.982321986Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T22:07:05.185743871Z",
+      "spec": "BUG-1796",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:20:07.822265179Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T22:51:45.775629695Z",
+      "spec": "BUG-1796",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2397,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b9daecf963fa8fd1d816e3f92f12bfee66e9288c"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:51:46.498839112Z",
+      "spec": "BUG-1796",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "AC1's pin tests only the formatting helper with fabricated messages; reverting the call sites to Note: leaves the suite green, so the behavior coverage the AC demands does not exist",
+        "recovery_hint": "address the review findings, move BUG-1796 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-03T23:42:59.694849012Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T23:44:08.938754605Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T00:13:26.700790563Z",
+      "spec": "BUG-1796",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2397,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "11084a6bc4bf8dceec2d332cdfe3c68353abbf77"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:13:29.122512063Z",
+      "spec": "BUG-1796",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 2: AC1 rework itself verified (real-binary shell test named in ci.yml, green at head, red with call sites reverted to Note: — advisor-run mutation proof), but CI Build is red: the new gate is unclassified in scripts/ci-gate-tiers.toml and the TASK-1555 guard fails",
+        "recovery_hint": "address the review findings, move BUG-1796 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:27:01.159310548Z",
+      "spec": "BUG-1796",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1796",
+        "branch": "bug-1796",
+        "first_seen": "2026-10-04T00:27:01.159264562+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:37:02.115084851Z",
+      "spec": "BUG-1796",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2397,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "6e2eb3f0d72ee2722a928cfe230ffbbf9a94248a"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:37:03.265085516Z",
+      "spec": "BUG-1796",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Acceptance item 3 lacks byte-identical full-output coverage for a normal two-remote pull.",
+        "recovery_hint": "address the review findings, move BUG-1796 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:39:30.686884271Z",
+      "spec": "BUG-1796",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T03:31:48.313941714Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T03:34:45.178945091Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:23:40.842126551Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:45:42.611853775Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T05:18:53.661506311Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T05:39:05.735913113Z",
+      "spec": "BUG-1796",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2397,
+        "verdict": "APPROVED",
+        "reviewed_sha": "38554877027e0fe14abb786cef249db498f5a1a8"
+      }
+    },
+    {
+      "ts": "2026-10-04T06:12:50.171328108Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T06:13:51.972151305Z",
+      "spec": "BUG-1796",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2397
+      }
+    },
+    {
+      "ts": "2026-10-04T06:13:58.974285006Z",
+      "spec": "BUG-1796",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "59fbd44b76a77fc369d82ac02dae7c5d54db2239",
+        "pr": 2397,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
