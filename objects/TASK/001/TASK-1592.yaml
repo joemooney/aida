@@ -3,12 +3,12 @@ spec_id: TASK-1592
 agreed_id: TASK-1592
 title: File-backed session grants for role enter
 description: Update aida role enter <seat> to support --delegate-seat <child-seat>. It should generate a session token saved to a local state file containing the parent seat and delegated child seats, and export AIDA_SESSION_GRANT=<uuid>.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T15:36:58.717664667Z
-modified_at: 2026-10-04T21:25:33.778038221Z
+modified_at: 2026-10-04T21:45:16.882038190Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a108e0-dd46-7302-8db8-d7ddf9be7b45
+  author: aida-auto-bump
+  timestamp: 2026-10-04T21:45:16.870097754Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a108e0-dd52-7726-81fb-b2475ca2ddb9
+  timestamp: 2026-10-04T21:45:16.882036778Z
+  agent: aida
+  commit_sha: 38b69c68ef9e2f7d66dd399c5f98595c8cdb3193
+  summary: Completed via merge 38b69c68
 filed_at:
   code_sha: 5f2e20a8437c043aa1deaf25bee105cc5eda84cb
   branch: doc-6-implementation
@@ -40,3 +53,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 1b8bdda092
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T21:45:16.870072514Z
+  completion_sha: 38b69c68ef9e2f7d66dd399c5f98595c8cdb3193
