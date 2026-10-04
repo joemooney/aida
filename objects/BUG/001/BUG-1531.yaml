@@ -117,7 +117,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:55.400149929Z
-modified_at: 2026-10-04T04:49:51.446091059Z
+modified_at: 2026-10-04T04:49:52.420213654Z
 req_type: Bug
 tags:
 - alert-fatigue
@@ -135,6 +135,9 @@ relationships:
   target_id: 01a0bffa-3c62-79a2-a184-b8ca39402b76
   created_at: 2026-09-21T05:16:43.196428265Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-10-04T04:49:52.420213654Z
 comments:
 - id: 01a0c269-f68f-7be1-9e49-a7c76625e452
   author: joe
