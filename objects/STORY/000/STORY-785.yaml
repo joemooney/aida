@@ -46,10 +46,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:58:23.474341539Z
-modified_at: 2026-08-29T20:17:56.684688969Z
+modified_at: 2026-10-04T04:50:42.356619834Z
 req_type: Story
 tags:
-- northstar code-decision aida:why
+- aida:why
+- code-decision
+- northstar
 history:
 - id: 01a04f2b-f7c6-72c2-8d9e-fafc008aabac
   author: aida-auto-bump
