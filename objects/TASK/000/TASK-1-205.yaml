@@ -1,5 +1,6 @@
 id: 01a108d6-fab7-725c-a949-8b075faed74a
 spec_id: TASK-1-205
+agreed_id: TASK-1316
 title: 'Latent: stamp paths passing empty findings (stamp_pr_review_verdict lib.rs:9422…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1799, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
