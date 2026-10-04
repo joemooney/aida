@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-20T18:08:13.869367085Z
-modified_at: 2026-10-04T04:45:31.195561744Z
+modified_at: 2026-10-04T04:49:29.982885257Z
 req_type: Bug
 tags:
 - batch:night-0920
@@ -65,6 +65,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0c243-58ea-7042-9328-f5999706e2e6
   created_at: 2026-10-04T04:45:31.195561744Z
+- rel_type: Parent
+  target_id: 01a0c242-e1c8-70a2-b384-364e1790859e
+  created_at: 2026-10-04T04:49:29.982885257Z
 comments:
 - id: 01a0c004-1eb7-7f52-834b-f1be2738cec2
   author: joe
