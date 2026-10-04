@@ -1,0 +1,41 @@
+id: 01a104d8-0ef0-74e1-a7f6-c746814b010d
+spec_id: ADR-65
+agreed_id: ADR-65
+title: Keep Linux PRs fast with weekly platform checks
+description: |
+  ## Context
+  The operator wants Linux iteration to stay fast while Windows remains supported at lower priority. Current PR CI already runs only on Ubuntu. The cross-platform workflow runs daily on main and manually; macOS is disabled by the existing TASK-1570 direction. ADR-47 predates this new direction and defers all cross-platform validation until the queue is empty.
+
+  ## Proposed direction for advisor review
+  - Keep main as the only long-lived integration branch. Do not maintain permanent Windows or macOS branches with weekly merge-back.
+  - Keep the Ubuntu Build check required on every PR and push to main. Do not add Windows or macOS jobs to the blocking Linux PR path.
+  - Run Windows validation weekly against current main, and retain manual dispatch for urgent checks. Platform fixes use short-lived topic branches and normal PRs into main.
+  - Keep macOS disabled under TASK-1570 unless the operator explicitly re-enables it.
+  - Preserve the existing fresh cross-platform check before releases. A weekly scheduled run does not by itself satisfy the current 24-hour release gate.
+  - Profile Linux PR gate time separately; this branch and cadence decision must not weaken Linux test coverage. Any Linux speed changes should be evidence-based and reviewed separately.
+
+  ## Acceptance
+  1. The normal PR and main-push required check set remains Linux-only.
+  2. Windows validation runs on a weekly schedule against main and can be dispatched manually.
+  3. No long-lived platform branch or scheduled branch merge-back is required; fixes land through normal PRs to main.
+  4. macOS remains disabled until a new operator decision, and the current release freshness gate remains in force.
+  5. The decision records Linux runtime as a separate optimization concern so weekly platform cadence is not represented as a Linux speedup.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T02:57:10.896951126Z
+modified_at: 2026-10-04T02:57:10.896951126Z
+req_type: Decision
+tags:
+- branch-policy
+- ci
+- cross-platform
+- throughput
+filed_at:
+  code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: codex
