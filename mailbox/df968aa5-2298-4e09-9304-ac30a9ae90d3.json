@@ -1,0 +1,17 @@
+{
+  "id": "df968aa5-2298-4e09-9304-ac30a9ae90d3",
+  "thread_id": "df968aa5-2298-4e09-9304-ac30a9ae90d3",
+  "from": "aida-session-reap",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1791078858912,
+  "body": "Spec TASK-1560 has merged and its branch is finished — you are free to exit this session whenever you like. Its worktree (/home/joe/ai/aida-worktrees/aida-task-1560) will be reaped automatically once your process exits (the post-merge pass, or `aida session reap`). Nothing here needs you; this is an FYI, no action required.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
