@@ -54,10 +54,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:06:54.901043014Z
-modified_at: 2026-09-22T09:15:41.996259469Z
+modified_at: 2026-10-04T04:49:06.331153428Z
 req_type: Bug
 tags:
-- agent-surface papercut orchestrator
+- agent-surface
+- orchestrator
+- papercut
 comments:
 - id: 01a0c61b-343b-7340-b80d-c4c75382b66f
   author: joe
