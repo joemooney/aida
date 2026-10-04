@@ -18,10 +18,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T05:38:34.146439147Z
-modified_at: 2026-07-18T14:51:26.039447741Z
+modified_at: 2026-10-04T04:46:25.447867475Z
 req_type: Bug
 tags:
-- aida:questions substrate-gap from-dogfood
+- aida:questions
+- from-dogfood
+- substrate-gap
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T14:51:26.039447741Z
