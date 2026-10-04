@@ -9,6 +9,13 @@ feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
 modified_at: 2026-10-04T07:48:21.100386397Z
 req_type: Doc
+relationships:
+- rel_type: References
+  target_id: 01a0d626-b41b-7d82-9b13-939d31ae2bfc
+  created_at: 2026-10-04T07:48:34.088924384Z
+- rel_type: References
+  target_id: 01a10593-033c-71a0-b1dc-abef981b97bf
+  created_at: 2026-10-04T07:48:34.088924384Z
 filed_at:
   code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
   branch: story-1473
