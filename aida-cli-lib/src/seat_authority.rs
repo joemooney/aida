@@ -58,7 +58,15 @@ fn read_grant(id: &str) -> Result<SeatGrant> {
 fn write_grant(grant: &SeatGrant) -> Result<()> {
     let dir = grant_dir()?;
     std::fs::create_dir_all(&dir)?;
-    let path = grant_path(&grant.id)?;
+    // Derive the final path from the SAME resolved dir as the staging file:
+    // `grant_path` re-resolves the home from the environment, and under the
+    // test harness a sibling test may legitimately swap `$AIDA_HOME`/`$HOME`
+    // between the two reads — the rename target would then sit in a directory
+    // this call never created. trace:STORY-1473 | ai:claude
+    if Uuid::parse_str(&grant.id).is_err() {
+        bail!("invalid session grant handle");
+    }
+    let path = dir.join(format!("{}.json", grant.id));
     let bytes = serde_json::to_vec_pretty(grant)?;
     let tmp = dir.join(format!(".{}.tmp", grant.id));
     #[cfg(unix)]
@@ -273,6 +281,12 @@ pub(crate) mod test_support {
         seat: &str,
         delegable: &[&str],
     ) -> String {
+        // The mint resolves env-derived paths (the grant-store home via
+        // `$AIDA_HOME`/`$HOME`); hold the process env lock for the duration
+        // unless the caller already does, so a sibling test's guard cannot
+        // swap those variables mid-mint and strand the record in a home this
+        // mint never prepared. trace:STORY-1473 | ai:claude
+        let _lock = (!crate::test_env::holds_env_lock()).then(crate::test_env::env_lock);
         let aida_dir = project_root.join(".aida");
         std::fs::create_dir_all(&aida_dir).unwrap();
         let config = aida_dir.join("config.toml");

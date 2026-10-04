@@ -124,6 +124,13 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
 
     let defer = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "product")
+        // ADR-66: setting an operator hold needs a granted product seat; the
+        // role env alone confers nothing. trace:STORY-1473 | ai:claude
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&home, &repo, "product", &[])
+                .expect("fixture repo is initialized"),
+        )
         .args([
             "defer",
             &spec,
@@ -213,6 +220,13 @@ fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
 
     let release = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "product")
+        // ADR-66: lifting the hold needs the granted product seat, same as
+        // setting it. trace:STORY-1473 | ai:claude
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&home, &repo, "product", &[])
+                .expect("fixture repo is initialized"),
+        )
         .args(["undefer", &spec])
         .output()
         .expect("release operator hold");
