@@ -67,10 +67,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T05:06:23.460943032Z
-modified_at: 2026-09-23T10:28:55.701016635Z
+modified_at: 2026-10-04T04:47:47.590790621Z
 req_type: Bug
 tags:
-- parent:EPIC-62 awaiting coordination-surface alert-fatigue severity:operational
+- alert-fatigue
+- awaiting
+- coordination-surface
+- parent:EPIC-62
+- severity:operational
 comments:
 - id: 01a0cd94-99d9-7f01-aa0f-84a0b22ad632
   author: joe
