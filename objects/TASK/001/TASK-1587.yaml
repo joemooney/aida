@@ -1,0 +1,19 @@
+id: 01a104e0-3f78-7172-81c2-23063804485d
+spec_id: TASK-1587
+agreed_id: TASK-1587
+title: Allow aida list to be sorted by id
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T03:06:07.608816794Z
+modified_at: 2026-10-04T03:06:07.608816794Z
+req_type: Task
+filed_at:
+  code_sha: 06ec0c91d6e5037e13c89086ac6de9f05119b94a
+  branch: fix-bug-1798
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: antigravity
