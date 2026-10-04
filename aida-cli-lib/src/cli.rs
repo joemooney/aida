@@ -1056,6 +1056,14 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// List recorded review verdicts.
+    // trace:TASK-1590 | ai:antigravity
+    List {
+        /// Emit the list as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Count review findings per defect class across every recorded verdict,
     /// including archived rounds. Alias of `aida findings classes`.
     // trace:STORY-1417 | ai:claude
