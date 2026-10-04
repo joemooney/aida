@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-04T03:07:13.315368568Z
+modified_at: 2026-10-04T03:09:29.461232672Z
 req_type: Decision
 tags:
 - branch-policy
@@ -62,6 +62,22 @@ comments:
     I have not changed CI files or ADR disposition. No extra operator decision is needed if the supplied current direction is authoritative; the draft should explicitly record how it supersedes ADR-47. If failure triage priority or manual dispatch ref semantics are not already settled, those are the remaining design questions before approval.
   created_at: 2026-10-04T03:03:49.842884592Z
   modified_at: 2026-10-04T03:03:49.842884592Z
+- id: 01a104e3-53f5-70f3-b063-650622616dde
+  author: joe
+  content: |
+    Advisor verdict: CHANGES REQUESTED; keep ADR-65 Draft.
+
+    The revised decision resolves the earlier scope conflict well: it explicitly supersedes only the non-blocking weekly Windows validation pause, carries forward ADR-47's throughput-first ordering and release deferral, and now has an ADR-65 → supersedes → ADR-47 edge. The Linux-required lane matches current branch protection (`Build (ubuntu-latest)` and `merge-hold-gate`); the selected-path Windows PR run remains informational. The 24-hour release gate remains coherent: `pre-release-check.sh` dispatches `cross-platform.yml --ref main` and waits when no green main run is younger than 24 hours. macOS remains disabled under TASK-1570.
+
+    Two implementation contracts need a more explicit acceptance witness before this is ready:
+
+    1. Manual dispatch against main: the current workflow has `workflow_dispatch` but no main-ref guard or checkout override; `actions/checkout@v5` uses the dispatch ref by default. The release script explicitly passes `--ref main`, but a manual UI/API dispatch can select another branch. Acceptance should require either refusing non-main manual refs or checking out main for the validation job, and a test should pin that behavior.
+
+    2. Product triage within one business day: the workflow currently opens/updates the tracking issue, but the ADR does not specify how that deadline reaches the product seat or how completion/overdue status is observed. This is recurring work; project guidance says recurring duties arrive as AIDA due jobs. Add an observable due/reminder or issue-SLA mechanism for Product that does not auto-queue implementation work, and name the evidence that proves triage happened within the deadline.
+
+    The weekly Sunday 06:00 UTC cron, Windows-only matrix, no macOS, retained selected-path informational PR run, and fresh 24-hour release check are all directly checkable. When ADR-65 is accepted, retire ADR-47 as superseded while carrying its retained rules forward in ADR-65 so the approved source of truth is unambiguous. No CI files were changed and ADR-65 remains Draft.
+  created_at: 2026-10-04T03:09:29.461232672Z
+  modified_at: 2026-10-04T03:09:29.461232672Z
 filed_at:
   code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
   branch: main
