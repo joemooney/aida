@@ -339,3 +339,52 @@ fn sorted(ids: &[&String]) -> Vec<String> {
     v.sort();
     v
 }
+
+#[test]
+fn epic_inherits_child_lens() {
+    let fixture = init_fixture();
+    let p = parked_fixture(&fixture);
+
+    // Create an epic and add it as parent to the shelved task
+    let out = ok(
+        "aida add epic",
+        aida(
+            &fixture,
+            &[
+                "add",
+                "--title",
+                "epic test",
+                "--type",
+                "epic",
+                "--status",
+                "approved",
+            ],
+        ),
+    );
+    let epic_id = out
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+        .find(|t| t.starts_with("EPIC-") && t[5..].chars().all(|c| c.is_ascii_digit()))
+        .unwrap()
+        .to_string();
+    ok(
+        "aida rel add",
+        aida(
+            &fixture,
+            &[
+                "rel", "add", "--from", &epic_id, "--to", &p.shelved, "--type", "Parent",
+            ],
+        ),
+    );
+
+    // Epic should have inherited NeedsAttention status and the Shelved lens.
+    let list = list_ids(&fixture, &["--status", "shelved"]);
+    assert!(
+        list.contains(&epic_id),
+        "epic must inherit shelved lens from child"
+    );
+
+    assert_eq!(
+        list_lens(&fixture, &["--status", "shelved"], &epic_id).as_deref(),
+        Some("Shelved")
+    );
+}

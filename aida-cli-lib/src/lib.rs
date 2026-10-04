@@ -19077,7 +19077,7 @@ fn effective_needs_attention_lens(
     effective_needs_attention_lens_with_source(store, req, display_status).map(|(_, lens)| lens)
 }
 
-fn effective_needs_attention_lens_with_source<'a>(
+pub(crate) fn effective_needs_attention_lens_with_source<'a>(
     store: &'a aida_core::RequirementsStore,
     req: &'a aida_core::models::Requirement,
     display_status: &RequirementStatus,
