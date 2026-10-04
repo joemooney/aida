@@ -147,10 +147,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T01:48:27.132082612Z
-modified_at: 2026-09-23T07:36:04.163336541Z
+modified_at: 2026-10-04T04:50:19.199082120Z
 req_type: Bug
 tags:
-- batch:night-0920 integrity merge-safety drain-safe from:review-pr-1972
+- batch:night-0920
+- drain-safe
+- from:review-pr-1972
+- integrity
+- merge-safety
 relationships:
 - rel_type: References
   target_id: 01a0c058-3d0c-7eb1-993d-3976581722cb
