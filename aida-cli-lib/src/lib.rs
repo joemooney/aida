@@ -73596,6 +73596,19 @@ mod bug_1500_store_pull_hint_tests {
     }
 }
 
+// trace:BUG-1796 | ai:codex
+fn pull_skip_warning(message: &str) -> String {
+    format!("{} {message}", "Warning:".yellow().bold())
+}
+
+fn pull_code_start_line(branch: &str) -> String {
+    format!("{} {} ← origin", "Pulling code".cyan().bold(), branch)
+}
+
+fn pull_store_start_line() -> String {
+    format!("{} aida-store ← origin", "Pulling store".cyan().bold())
+}
+
 fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
@@ -73631,13 +73644,13 @@ fn handle_pull_command(
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
             println!(
-                "  {} no `origin` remote — skipping code pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no `origin` remote — skipping code pull")
             );
         } else {
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
-            println!("{} {} ← origin", "Pulling code".cyan().bold(), branch);
+            println!("{}", pull_code_start_line(&branch));
             // STORY-86: snapshot HEAD before pull so the auto-bump scan
             // can range over exactly what landed. None on first ever
             // commit / empty repo — the helper falls back to HEAD~50.
@@ -73893,8 +73906,8 @@ fn handle_pull_command(
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
             println!(
-                "  {} no orphan worktree — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("no orphan worktree — skipping store pull")
             );
             // BUG-1625: no store leg to wait for (legacy / not-yet-attached
             // store) — the local store IS the canonical one. trace:BUG-1625
@@ -73921,8 +73934,8 @@ fn handle_pull_command(
         }
         if !git_ops::has_remote(store_path, "origin") {
             println!(
-                "  {} orphan store has no `origin` — skipping store pull",
-                "Note:".dimmed()
+                "  {}",
+                pull_skip_warning("orphan store has no `origin` — skipping store pull")
             );
             // BUG-1625: nothing remote to pull first. trace:BUG-1625
             if let Some(scan_pre) = deferred_reconcile.take() {
@@ -73961,7 +73974,7 @@ fn handle_pull_command(
         }
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-        println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+        println!("{}", pull_store_start_line());
 
         // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
         // can summarize what landed once it completes. None when the

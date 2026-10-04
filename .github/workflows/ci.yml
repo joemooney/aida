@@ -248,6 +248,12 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_bug_1688_shipped_launch_refusals.sh
 
+      # BUG-1796: exercise both skipped pull legs through the real CLI in a
+      # fresh project with no origin remote. trace:BUG-1796 | ai:codex
+      - name: Run no-origin pull warning fixture
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_bug_1796_no_origin_pull_warnings.sh
+
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test

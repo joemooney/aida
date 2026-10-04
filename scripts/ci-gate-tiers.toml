@@ -57,6 +57,7 @@
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
 "Run shipped full-access launch refusal fixtures" = "fast"
+"Run no-origin pull warning fixture" = "full"
 "Run advisor-code-gate substrate test" = "full"
 "Run pre-commit provenance move-detection test" = "fast"
 "Run agent-skill-hook installer fixtures" = "fast"
