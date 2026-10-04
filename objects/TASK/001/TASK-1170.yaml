@@ -22,10 +22,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T06:29:30.103660179Z
+modified_at: 2026-10-04T04:45:49.780535627Z
 req_type: Task
 tags:
-- aida:init scaffold cross-vendor codex parity from-operator
+- aida:init
+- codex
+- cross-vendor
+- from-operator
+- parity
+- scaffold
 comments:
 - id: 019f87fc-5037-7b11-95a8-0fe44138dc5d
   author: joe
