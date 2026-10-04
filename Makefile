@@ -413,6 +413,12 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		ln -sf "../../aida-core/templates/commands/$$name" ".claude/commands/$$name"; \
 		echo "  Linked: .claude/commands/$$name -> aida-core/templates/commands/$$name"; \
 	done
+	# trace:TASK-1560 | ai:antigravity
+	@echo "Syncing .aida/discipline/ mirror..."
+	@mkdir -p .aida/discipline
+	@for f in aida-core/templates/.aida/discipline/*.md; do \
+		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
+	done
 	@$(MAKE) --no-print-directory sync-agent-skills
 	@echo "Template sync complete!"
 
@@ -423,6 +429,19 @@ sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regul
 
 # trace:TASK-1520 | ai:codex
 check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
+	@echo "Checking .aida/discipline/ mirror..."
+	@for f in aida-core/templates/.aida/discipline/*.md; do \
+		target=".aida/discipline/$$(basename $$f)"; \
+		if [ -f "$$target" ]; then \
+			if ! diff -q "$$f" "$$target" > /dev/null 2>&1; then \
+				echo "  CONTENT DIFFERS: $$target and $$f"; \
+				errors=1; \
+			fi; \
+		else \
+			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+	done; \
 	@echo "Checking .agents/skills/aida-* for drift..."
 	@cargo run -q -p aida-core --example agent_skill_pack -- check
 
