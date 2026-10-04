@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:11.375734789Z
-modified_at: 2026-10-04T04:50:22.014119299Z
+modified_at: 2026-10-04T04:52:59.531043941Z
 req_type: Epic
 tags:
 - agents
@@ -48,6 +48,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0a3ca-f14a-7611-9d17-cfbe6f86bc96
   created_at: 2026-09-15T06:39:44.086862559Z
+- rel_type: Parent
+  target_id: 01a0a3eb-14a1-78c2-8361-bb748eaf6008
+  created_at: 2026-10-04T04:52:59.531043941Z
 comments:
 - id: 01a0a3c1-af03-77c3-8bc7-98866a2bdb1e
   author: joe
