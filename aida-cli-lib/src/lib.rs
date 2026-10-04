@@ -1,3 +1,9 @@
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::question_mark)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::redundant_closure)]
 // The MCP `tool_descriptors()` json! macro expands deeply; the default
 // recursion limit (128) is exceeded once new tool properties are added.
 // trace:STORY-639 | ai:claude
