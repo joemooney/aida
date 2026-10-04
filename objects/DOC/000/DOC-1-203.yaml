@@ -1,5 +1,6 @@
 id: 01a105e2-a1ec-7ef2-83b3-2fa524ffd0fd
 spec_id: DOC-1-203
+agreed_id: DOC-6
 title: Entering session-bound seats and delegating child seats
 description: |
   Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...])"` at an interactive human TTY to establish a session seat. The requested seat must be in the user's team roster; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>` at a TTY. Child delegation is empty by default: list each permitted child seat with a repeated `--delegate-seat`. AIDA launchers issue a distinct grant for each requested child seat; children cannot delegate onward unless explicitly issued delegation scope. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An MCP server captures the grant it starts with, so enter advisor at a TTY and restart/reconnect the server to change its authority.
