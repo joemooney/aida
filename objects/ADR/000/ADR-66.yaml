@@ -56,7 +56,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T06:21:23.132987925Z
-modified_at: 2026-10-04T06:35:35.609421716Z
+modified_at: 2026-10-04T15:06:34.414942314Z
 req_type: Decision
 tags:
 - authority
@@ -66,6 +66,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0d626-b41b-7d82-9b13-939d31ae2bfc
   created_at: 2026-10-04T06:21:25.303332824Z
+- rel_type:
+    custom: implemented-by
+  target_id: 01a10773-360d-7132-9597-5873e5339282
+  created_at: 2026-10-04T15:06:34.414937994Z
+  created_by: joe
 comments:
 - id: 01a10596-7b0d-7eb1-bae8-d42a8ae192f1
   author: joe
