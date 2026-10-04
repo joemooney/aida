@@ -21,12 +21,12 @@ description: |
   1. `aida pull` in a repo with no origin exits non-zero OR prints a WARNING-level line per skipped leg; a test pins whichever is chosen.
   2. `aida doctor` (or an existing check category) surfaces orphan-store-ahead-of-remote with the count; test with a store N commits ahead of a configured remote.
   3. Normal two-remote pull output unchanged (byte-identical test).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-03T23:44:07.151915803Z
+modified_at: 2026-10-04T00:13:26.722103952Z
 req_type: Bug
 tags:
 - pull
@@ -103,6 +103,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10442-2742-71b0-a069-b583c018921e
+  author: aida-orchestrator
+  timestamp: 2026-10-04T00:13:26.722148048Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
@@ -118,6 +125,14 @@ implementation_info:
     cargo test -p aida-cli-lib bug_1796 -- --nocapture (3 passed)
   implemented_at: 2026-10-03T22:38:50.566824424Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 2: AC1 rework itself verified (real-binary shell test named in ci.yml, green at head, red with call sites reverted to Note: — advisor-run mutation proof), but CI Build is red: the new gate is unclassified in scripts/ci-gate-tiers.toml and the TASK-1555 guard fails'
+  recovery_hint: address the review findings, move BUG-1796 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-04T00:13:26.722103952Z
 interface_changes:
   cli:
   - aida pull warns when code or store pulls are skipped
