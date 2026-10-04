@@ -13,8 +13,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:23.250863450Z
-modified_at: 2026-10-04T03:20:25.756019569Z
+modified_at: 2026-10-04T03:20:56.578062538Z
 req_type: Task
+comments:
+- id: 01a104ed-d002-7741-8cb4-294b0f4917a1
+  author: joe
+  content: 'Implementation note: The user chose a merge queue. Enabled `merge_group` triggers on `ci.yml` and `web.yml`. For this to fully take effect, the GitHub repository settings must have ''Require merge queue'' enabled for the `main` branch.'
+  created_at: 2026-10-04T03:20:56.578062538Z
+  modified_at: 2026-10-04T03:20:56.578062538Z
 history:
 - id: 01a104e5-3fb7-7322-88bb-7d819bcc65b4
   author: joe
