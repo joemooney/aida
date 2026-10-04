@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T19:49:55.911469462Z
-modified_at: 2026-10-04T20:51:53.716877414Z
+modified_at: 2026-10-04T20:51:58.902314287Z
 req_type: Bug
 comments:
 - id: 01a10878-8a8d-7444-8162-c28f8c45702c
@@ -25,6 +25,67 @@ comments:
   created_at: 2026-10-04T19:51:19.949851059Z
   modified_at: 2026-10-04T19:51:19.949851059Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+- id: 01a108b0-1136-7400-9ce5-06149af5c971
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 3 (reviewer)
+
+    Recorded by `aida queue work BUG-1799 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 3 (reviewer) · kind `tool-exit`
+    - Seat: reviewer (session role: product)
+    - Parent spec: BUG-1799
+    - Branch under test: main
+    - Commit under test: b602a5d9cab2
+    - Recorded at: 2026-10-04T20:51:56.535579871+00:00
+
+    ### Failure
+
+    PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+    Overlapping files:
+      aida-cli-lib/src/lib.rs
+
+    Recover with:
+      aida pr rebase 2420              # clean rebase + force-push-with-lease
+      aida pr rebase 2420 --interactive  # if conflicts need manual resolve
+
+    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 3/3)
+
+    Failure kind: `tool-exit`
+
+    ### Recovery hint shown to the operator
+
+    Address the review feedback, then push fixups: `aida queue rework BUG-1799 --work`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-04T20:51:56.535579871+00:00
+
+    ### Phase durations
+
+      - phase 2 (ci): 5113 ms
+      - phase 3 (reviewer): 14310 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"BUG-1799","started_at":"2026-10-04T20:51:32.826455838+00:00","completed_at":"2026-10-04T20:51:56.535579871+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"tool-exit","failure_message":"PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  aida-cli-lib/src/lib.rs\n\nRecover with:\n  aida pr rebase 2420              # clean rebase + force-push-with-lease\n  aida pr rebase 2420 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 3/3)","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":5113},{"phase":3,"slug":"reviewer","elapsed_ms":14310}],"total_ms":20433,"binary_sha":"62e3374e51","auto_rebase":[{"phase":3,"pr_number":2420,"outcome":"skipped:not-headless"},{"phase":3,"pr_number":2420,"outcome":"skipped:not-headless"},{"phase":3,"pr_number":2420,"outcome":"skipped:not-headless"}]}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent BUG-1799 --title "drain phase 3 (reviewer) failure on BUG-1799" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-04T20:51:58.902307916Z
+  modified_at: 2026-10-04T20:51:58.902307916Z
 history:
 - id: 01a10878-6191-716e-a344-a98f041a2ec8
   author: joe
