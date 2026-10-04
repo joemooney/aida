@@ -8,10 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:58:17.135448106Z
-modified_at: 2026-09-14T02:16:58.802413861Z
+modified_at: 2026-10-04T04:48:52.256244858Z
 req_type: Bug
 tags:
-- cli clap digest crash regression
+- clap
+- cli
+- crash
+- digest
+- regression
 comments:
 - id: 01a09daa-27f2-7502-91bb-12732ece5338
   author: joe
