@@ -529,11 +529,11 @@ pub fn message_state_rank(m: &Message) -> u8 {
 /// Messages shown by the default `aida mailbox inbox`: unread messages plus a
 /// small newest-first tail of already-read, non-archived messages.
 // trace:TASK-1211 | ai:codex
-pub fn default_inbox_view<'a>(
-    inbox: Vec<&'a Message>,
+pub fn default_inbox_view(
+    inbox: Vec<&Message>,
     read_watermark: Option<i64>,
     recent_read_tail: usize,
-) -> Vec<&'a Message> {
+) -> Vec<&Message> {
     let mark = read_watermark.unwrap_or(i64::MIN);
     let mut unread = Vec::new();
     let mut read = Vec::new();
@@ -557,11 +557,11 @@ pub fn default_inbox_view<'a>(
 /// Archive candidates for a stale-read sweep. Unread, deleted, and already
 /// archived messages are never selected.
 // trace:TASK-1211 | ai:codex
-pub fn archive_candidates<'a>(
-    inbox: Vec<&'a Message>,
+pub fn archive_candidates(
+    inbox: Vec<&Message>,
     read_watermark: Option<i64>,
     older_than_timestamp: i64,
-) -> Vec<&'a Message> {
+) -> Vec<&Message> {
     let mark = read_watermark.unwrap_or(i64::MIN);
     let mut out: Vec<&Message> = inbox
         .into_iter()
