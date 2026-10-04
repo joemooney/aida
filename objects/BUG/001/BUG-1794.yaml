@@ -19,12 +19,12 @@ description: |
   NOTE: if the hypothesis holds, the defect may be PRODUCT (a real Windows user's commit gate would ignore worktree leases), not test-only — triage that first, per the BUG-1728 Family-D lesson: do not assume fixture-only, and do not close by cfg-gating the test.
 
   Per ADR-47/ADR-62 this is deferred Windows work; recorded so the next cross-platform pass starts from the mechanism instead of re-running a 30-minute job.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T03:47:55.985740291Z
+modified_at: 2026-10-04T05:43:04.221295913Z
 req_type: Bug
 tags:
 - cross-platform
@@ -74,6 +74,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1056f-ef1d-7452-9bcf-3b6bfe82d898
+  author: aida-orchestrator
+  timestamp: 2026-10-04T05:43:04.221334072Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: dcada4dae31800124dc9a0bed9d582d8c4c76b7c
   branch: main
@@ -91,4 +98,12 @@ implementation_info:
     make check-ci-fast (19 fast gates passed)
   implemented_at: 2026-10-04T03:19:08.248442398Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Core Windows spelling normalization is covered, but its casing fold is ASCII-only and does not preserve Windows case-insensitive matching for Unicode path components.
+  recovery_hint: address the review findings, move BUG-1794 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-04T05:43:04.221295913Z
 interface_changes: {}
