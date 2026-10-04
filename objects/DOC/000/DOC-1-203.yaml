@@ -1,0 +1,21 @@
+id: 01a105e2-a1ec-7ef2-83b3-2fa524ffd0fd
+spec_id: DOC-1-203
+title: Entering session-bound seats and delegating child seats
+description: 'Use  at an interactive human TTY to establish a session seat. The requested seat must be in the user''s team roster; add or remove roster seats with  and  at a TTY. Child delegation is empty by default: list each permitted child seat with a repeated . AIDA launchers issue a distinct grant for each requested child seat; children cannot delegate onward unless explicitly issued delegation scope.  is only a display/routing hint and cannot grant authority. An MCP server captures the grant it starts with, so enter advisor at a TTY and restart/reconnect the server to change its authority.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T07:48:21.100386397Z
+modified_at: 2026-10-04T07:48:21.100386397Z
+req_type: Doc
+filed_at:
+  code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
+  branch: story-1473
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0317d5d94a
+  vendor: codex
+custom_fields:
+  audience: user,agent
+  scenario: session-authority
