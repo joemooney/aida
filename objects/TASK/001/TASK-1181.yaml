@@ -50,10 +50,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:20.598452738Z
-modified_at: 2026-08-29T19:54:13.692453528Z
+modified_at: 2026-10-04T04:41:56.585817499Z
 req_type: Task
 tags:
-- codex aida:init hooks
+- aida:init
+- codex
+- hooks
 relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
