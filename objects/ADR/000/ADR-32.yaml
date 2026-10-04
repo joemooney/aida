@@ -15,10 +15,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:14:47.585886847Z
-modified_at: 2026-09-15T07:15:15.679027636Z
+modified_at: 2026-10-04T04:52:56.879929305Z
 req_type: Decision
 tags:
-- codex permission-posture config scope derisk parent:epic-65
+- codex
+- config
+- derisk
+- parent:epic-65
+- permission-posture
+- scope
 relationships:
 - rel_type: References
   target_id: 01a0a3bf-4b2b-7511-b772-05fce9155280
