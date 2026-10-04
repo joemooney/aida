@@ -18,12 +18,12 @@ description: |
   3. Deferred specs are hidden from the default `aida list` view and excluded from ready/pickup lenses. `aida list --deferred` and `aida show <ID>` display the Deferred/Held marker, the underlying lifecycle status, reason, and revisit trigger when present.
   4. Only an operator or explicitly authorized seat can lift a hold. Lifting it clears the defer marker and preserves the underlying lifecycle status.
   5. Document migration from the TASK-1580-style convention.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-04T14:53:20.808390943Z
+modified_at: 2026-10-04T15:38:50.977494556Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,8 +125,27 @@ history:
   - field_name: status
     old_value: Done
     new_value: InProgress
+- id: 01a10791-62ca-7040-9ec0-800b5707e058
+  author: aida-auto-bump
+  timestamp: 2026-10-04T15:38:50.954877397Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a10791-62e1-7a83-a9fe-8d3f61a68d8b
+  timestamp: 2026-10-04T15:38:50.977483180Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-1793-2026-10-04T022854Z.md.acked
+  commit_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
+  summary: 'PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized()'
+  punted:
+  - 'punted: PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized()'
+  review_verdict: request-changes
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:49:19.704322600Z
   implemented_by: joe
+  completed_at: 2026-10-04T15:38:50.954853422Z
+  completion_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
 interface_changes: {}
