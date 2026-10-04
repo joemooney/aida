@@ -21,10 +21,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T14:58:26.483962647Z
-modified_at: 2026-10-02T04:29:20.685819206Z
+modified_at: 2026-10-04T04:49:23.233340692Z
 req_type: Bug
 tags:
-- authority security launch scripts from:TASK-1549
+- authority
+- from:TASK-1549
+- launch
+- scripts
+- security
 comments:
 - id: 01a0e360-2de6-7fe1-9d34-4817e3bf8689
   author: joe
