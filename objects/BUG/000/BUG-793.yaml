@@ -53,10 +53,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:36:14.129284858Z
-modified_at: 2026-08-29T19:54:12.516369161Z
+modified_at: 2026-10-04T04:46:49.126561680Z
 req_type: Bug
 tags:
-- codex aida:init mcp hooks
+- aida:init
+- codex
+- hooks
+- mcp
 relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
