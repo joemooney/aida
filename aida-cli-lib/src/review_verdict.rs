@@ -447,10 +447,16 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
     } else {
         first_of(SHA_KEYS)
     };
+    let surviving_findings = surviving_against_previous_round(obj, &findings);
     let inherited_findings = obj
         .get("inherited_findings")
         .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+        .unwrap_or_else(|| {
+            // BUG-1799 P2: Legacy verdicts without the flag still generate phantom successors.
+            // If the flag is absent, and the verdict has findings, and ALL of them survived
+            // from the previous round, it means they were inherited (not explicitly recorded).
+            !findings.is_empty() && findings.len() == surviving_findings.len()
+        });
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
@@ -466,7 +472,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
             .or_else(|| str_field("comment_body"))
             .or_else(|| str_field("body")),
         inherited_findings,
-        surviving_findings: surviving_against_previous_round(obj, &findings),
+        surviving_findings,
         findings,
     })
 }
@@ -1207,11 +1213,18 @@ pub(crate) fn build_verdict_object(
                 .map(str::to_string)
         })
         .map(|w| canonical_verdict_word(&w));
+    let prev_sha = obj
+        .get("reviewed_sha")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let is_same_head = prev_sha.as_deref() == reviewed_sha;
+
     let mut set = |k: &str, v: Option<&str>| {
         if let Some(v) = v.map(str::trim).filter(|s| !s.is_empty()) {
             obj.insert(k.to_string(), serde_json::Value::String(v.to_string()));
         }
     };
+
     set("verdict", verdict_word.as_deref());
     set("reviewed_sha", reviewed_sha);
     set("reviewed_branch", reviewed_branch);
@@ -1235,8 +1248,11 @@ pub(crate) fn build_verdict_object(
         // `review_classes::apply_finding_classes`.
         // trace:STORY-1417 | ai:claude
         obj.remove("finding_classes");
-        obj.remove("inherited_findings");
-    } else if obj.contains_key("findings") {
+        obj.insert(
+            "inherited_findings".to_string(),
+            serde_json::Value::Bool(false),
+        );
+    } else if obj.contains_key("findings") && !is_same_head && reviewed_sha.is_some() {
         // trace:BUG-1799 | ai:antigravity
         obj.insert(
             "inherited_findings".to_string(),
