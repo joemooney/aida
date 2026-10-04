@@ -35801,15 +35801,18 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                         );
                     }
                     match refusal_state_of(*pr) {
+                        // TASK-1582: clear → ship, never ship alone (the two
+                        // messages used to point at each other).
+                        // trace:TASK-1582 | ai:antigravity
                         Some(merge_hold::RefusalRelease::Released(v)) => println!(
                             "      {}",
-                            format!(
-                                "release condition MET: APPROVED for {} at {} — a human may now `aida pr ship {pr}`",
-                                v.key,
+                            merge_hold::release_met_next_action(
+                                *pr,
+                                &v.key,
                                 v.reviewed_sha
                                     .as_deref()
                                     .map(review_verdict::short_sha)
-                                    .unwrap_or("?")
+                                    .unwrap_or("?"),
                             )
                             .green()
                         ),
