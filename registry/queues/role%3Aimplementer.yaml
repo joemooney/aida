@@ -168,3 +168,11 @@
   note: Current-head advisor review verified AC1/AC2 and requests one AC3 full-output regression for a normal two-remote pull; see the linked Codex brief.
   added_at: 2026-10-04T02:39:31.852287132Z
   for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a104f7-8772-7472-b36e-62333a0bc367
+  position: 420000
+  added_by: role:implementer
+  note: Implement approved ADR-65 policy. Preserve existing release freshness behavior; add deterministic workflow and schedule evidence per acceptance.
+  added_at: 2026-10-04T03:32:28.815643923Z
+  for_role: implementer
+  added_by_machine: imac
