@@ -110,6 +110,10 @@ pub trait DatabaseBackend: Send + Sync {
 
     /// Loads the entire requirements store from the database
     fn load(&self) -> Result<RequirementsStore>;
+    // trace:TASK-1514 | ai:antigravity
+    fn load_for_read(&self) -> Result<RequirementsStore> {
+        self.load()
+    }
 
     /// Saves the entire requirements store to the database
     fn save(&self, store: &RequirementsStore) -> Result<()>;
@@ -210,6 +214,16 @@ pub trait DatabaseBackend: Send + Sync {
     }
 
     /// Lists all requirements (non-archived by default)
+    fn list_requirements_for_read(&self, include_archived: bool) -> Result<Vec<Requirement>> {
+        let store = self.load_for_read()?;
+        Ok(store
+            .requirements
+            .iter()
+            .filter(|r| include_archived || !r.archived)
+            .cloned()
+            .collect())
+    }
+
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
         let store = self.load()?;
         Ok(store

@@ -1443,7 +1443,7 @@ impl<'a> McpServer<'a> {
 
     // trace:STORY-82 | ai:claude
     fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let status_filter = args.get("status").and_then(|v| v.as_str());
         let type_filter = args.get("type").and_then(|v| v.as_str());
         let priority_filter = args.get("priority").and_then(|v| v.as_str());
@@ -1693,7 +1693,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
@@ -2320,7 +2320,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: query")?;
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let query_lower = query.to_lowercase();
         // STORY-82: optional type/status narrowing (mirrors `aida search`).
         let type_filter = args.get("type").and_then(|v| v.as_str());
@@ -2425,7 +2425,7 @@ impl<'a> McpServer<'a> {
             })
             .unwrap_or_default();
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let root = store
             .get_requirement_by_spec_id(spec)
             .ok_or_else(|| format!("Requirement '{}' not found", spec))?;
@@ -2563,7 +2563,7 @@ impl<'a> McpServer<'a> {
         // `resolve_history_id_filter`. trace:BUG-588 | ai:claude
         let spec_id = spec_id.map(|raw| {
             if let Ok(uuid) = uuid::Uuid::parse_str(&raw) {
-                if let Ok(store) = self.storage.load() {
+                if let Ok(store) = self.storage.load_for_read() {
                     if let Some(req) = store.requirements.iter().find(|r| r.id == uuid) {
                         if let Some(sid) = &req.spec_id {
                             return sid.clone();
@@ -3079,7 +3079,7 @@ impl<'a> McpServer<'a> {
     }
 
     fn tool_list_features(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         if store.features.is_empty() {
             return Ok("No features defined in this project.".to_string());
@@ -3351,7 +3351,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Project Database into RequirementSummary shape that findings.rs expects.
         let summaries = build_summaries(&store);
@@ -3953,7 +3953,7 @@ impl<'a> McpServer<'a> {
             .storage
             .queue_list(&user_id, include_completed)
             .map_err(|e| e.to_string())?;
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Same role-filter resolution as `aida queue list` (BUG-87). MCP has
         // no shell role context, so the active-role default is None — pass
@@ -5495,7 +5495,7 @@ impl<'a> McpServer<'a> {
     // to `gh` and stays CLI-only; this mirrors only the substrate-grounded
     // parts the server can read directly (store counts, leases, queue depth).
     fn tool_status_unified(&self, args: &Value) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         // BUG-717: mirror the CLI work-view (`aida status` / `aida list`) —
         // exclude standing-artifact / stateless types (vision / principle /
         // term / constraint / folder / meta) so the MCP status count agrees
@@ -5798,7 +5798,7 @@ impl<'a> McpServer<'a> {
     // ========================================================================
 
     fn resource_project_summary(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         let total = store.requirements.len();
         let by_status =
@@ -5839,7 +5839,7 @@ impl<'a> McpServer<'a> {
     }
 
     fn resource_requirements_tree(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         let mut output = "# Requirements Tree\n\n".to_string();
 
@@ -5890,7 +5890,7 @@ impl<'a> McpServer<'a> {
     /// axis), plus the Done-awaiting-merge bucket `aida queue list` appends so
     /// freshly-shipped work stays visible until auto-bump. trace:STORY-535
     fn resource_queue_in_flight(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Live lease scopes — the same set `tool_list_requirements`'s in_flight
         // filter and `aida queue list --in-flight-only` derive. trace:STORY-535
@@ -5974,7 +5974,7 @@ impl<'a> McpServer<'a> {
                 "Invalid protocol resource URI: aida://protocol/{path}"
             ));
         }
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let protocol = aida_core::resolve_protocol(&store, req_type, lane)
             .ok_or_else(|| format!("No type protocol found for `{req_type}`"))?;
         if lane.is_some() && protocol.lane_protocol.is_none() {
@@ -6014,7 +6014,7 @@ impl<'a> McpServer<'a> {
             .trim()
             .parse()
             .map_err(|_| format!("Invalid PR number in resource URI: aida://pr/{}", raw))?;
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Findings raised against PR-N (cheap, tag-only). trace:STORY-535
         let mut findings: Vec<String> = store
@@ -6083,7 +6083,7 @@ impl<'a> McpServer<'a> {
         if name.is_empty() {
             return Err("Empty batch name in resource URI: aida://batch/<name>".to_string());
         }
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let tag = format!("batch:{}", name);
 
         let (mut shipped, mut in_flight, mut working, mut remaining) =

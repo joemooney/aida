@@ -1398,6 +1398,12 @@ impl DatabaseBackend for CachedGitBackend {
         self.inner.path()
     }
 
+    // trace:TASK-1514 | ai:antigravity
+    fn load_for_read(&self) -> Result<RequirementsStore> {
+        self.ensure_cache_fresh_for_read_with_schema_retry()?;
+        self.inner.load()
+    }
+
     fn load(&self) -> Result<RequirementsStore> {
         // Phase 1: reads delegate to git. Phase 2 will switch list/search
         // to the cache.
@@ -1506,6 +1512,11 @@ impl DatabaseBackend for CachedGitBackend {
     // trace:BUG-1670 | ai:claude
     fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
         CachedGitBackend::get_requirement_unambiguous_for_read(self, id)
+    }
+
+    fn list_requirements_for_read(&self, include_archived: bool) -> Result<Vec<Requirement>> {
+        self.ensure_cache_fresh_for_read_with_schema_retry()?;
+        self.inner.list_requirements(include_archived)
     }
 
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
