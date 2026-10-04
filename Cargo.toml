@@ -73,3 +73,8 @@ hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 dotenvy = "0.15"
+
+[profile.agent]
+inherits = "release"
+opt-level = 1
+debug = false
