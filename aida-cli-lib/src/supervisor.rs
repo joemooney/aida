@@ -510,6 +510,10 @@ pub(crate) enum RedriveApply {
 /// reaches the cap sooner, never later. On success also emits
 /// `SpecRequeued` (the requeue trail, which the cap does not count).
 // trace:STORY-1429 trace:TASK-1492 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only: production re-drives go
+// through `apply_requeue` → `supervisor_requeue_with`; this wrapper wires the
+// real emitters so tests can exercise one re-drive end to end.
+#[cfg(test)]
 pub(crate) fn supervisor_requeue<B: DatabaseBackend>(
     backend: &B,
     project_root: &std::path::Path,
@@ -912,7 +916,12 @@ mod tests {
         let evs = events::read_all(tmp.path());
         let kinds: Vec<&str> = evs.iter().map(|e| e.kind.name()).collect();
         assert_eq!(kinds, vec!["SpecReDriven", "SpecRequeued"]);
-        assert_eq!(events::supervisor_redrive_state(tmp.path(), "STORY-1").0, 1);
+        assert_eq!(
+            events::RedriveHistory::from_events(&events::read_all(tmp.path()))
+                .get("STORY-1")
+                .0,
+            1
+        );
 
         // Under-the-write check: no longer parked, so nothing happens.
         assert_eq!(
@@ -950,7 +959,7 @@ mod tests {
                 },
             ),
         );
-        let before = events::supervisor_redrive_state(root, "STORY-7");
+        let before = events::RedriveHistory::from_events(&events::read_all(root)).get("STORY-7");
         assert_eq!(before.0, 1);
         events::emit(
             root,
@@ -967,7 +976,10 @@ mod tests {
                 },
             ),
         );
-        assert_eq!(events::supervisor_redrive_state(root, "STORY-7"), before);
+        assert_eq!(
+            events::RedriveHistory::from_events(&events::read_all(root)).get("STORY-7"),
+            before
+        );
     }
 
     // The parked check and the reclassification run on the copy read under

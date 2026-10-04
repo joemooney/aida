@@ -99,11 +99,15 @@ fn zero_byte_headless_log_classifies_as_launch_failure() {
     let log = dir.join(format!("bug-826-{session}.jsonl"));
     std::fs::write(&log, "").unwrap();
 
-    assert!(headless_log_is_zero_bytes(tmp.path(), session));
+    // trace:TASK-1581 | ai:antigravity — via the BUG-1716 classifier
+    assert_eq!(
+        headless_launch_log_evidence(tmp.path(), session),
+        Some(EmptyLaunchLog::ZeroBytes)
+    );
 
     std::fs::write(&log, "{\"type\":\"system\",\"subtype\":\"init\"}\n").unwrap();
     assert!(
-        !headless_log_is_zero_bytes(tmp.path(), session),
+        headless_launch_log_evidence(tmp.path(), session).is_none(),
         "a non-empty log for the same session must not be retried as launch death"
     );
 }

@@ -393,22 +393,13 @@ fn requirement_summaries(project_root: &std::path::Path) -> Vec<aida_core::Requi
 /// commits, whose trailer names what a plan is FOR, not what shipped.
 ///
 /// The search is bounded to commits after the branch's merge-base — a landing
-/// commit for this branch's work cannot predate the fork. Any git failure
-/// returns `false` (no signal). This is a merge SIGNAL only; content safety is
-/// proven separately before anything is removed.
+/// commit for this branch's work cannot predate the fork. Returns the first
+/// such commit — the landing point recency checks use — and `None` (no signal)
+/// when there is none or on any git failure. This is a merge SIGNAL only;
+/// content safety is proven separately before anything is removed.
 // trace:BUG-1657 | ai:claude
-pub(crate) fn spec_trailer_landed_on(
-    project_root: &std::path::Path,
-    default_ref: &str,
-    branch: &str,
-    spec: &str,
-) -> bool {
-    spec_landing_commit(project_root, default_ref, branch, spec).is_some()
-}
-
-/// Return the first commit after `branch` diverged that names `spec` as
-/// delivered. This is the landing point used by recency checks.
 // trace:BUG-1718 | ai:codex
+// trace:TASK-1581 | ai:antigravity — absorbed the unused bool wrapper.
 pub(crate) fn spec_landing_commit(
     project_root: &std::path::Path,
     default_ref: &str,
@@ -910,22 +901,6 @@ fn reap_one(
     checked_tip: Option<&str>,
 ) -> String {
     reap_one_with_clear_hooks(project_root, lease, checked_tip, || {}, || {})
-}
-
-// trace:TASK-1543 | ai:codex
-fn reap_one_with_missing_worktree_hook(
-    project_root: &std::path::Path,
-    lease: &SessionLease,
-    checked_tip: Option<&str>,
-    before_missing_worktree_clear: impl FnOnce(),
-) -> String {
-    reap_one_with_clear_hooks(
-        project_root,
-        lease,
-        checked_tip,
-        before_missing_worktree_clear,
-        || {},
-    )
 }
 
 // trace:BUG-1694 | ai:claude

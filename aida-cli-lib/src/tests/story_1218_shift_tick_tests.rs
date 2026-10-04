@@ -1910,7 +1910,12 @@ fn shift_redrive_cap_survives_event_rotation() {
     std::fs::write(aida.join("events.jsonl.1"), archive).unwrap();
     std::fs::write(aida.join("events.jsonl"), "").unwrap();
     // The live stream alone would reset the count.
-    assert_eq!(events::supervisor_redrive_state(tmp.path(), "TASK-9").0, 0);
+    assert_eq!(
+        events::RedriveHistory::from_events(&events::read_all(tmp.path()))
+            .get("TASK-9")
+            .0,
+        0
+    );
     let history = events::read_redrive_history_strict(tmp.path()).expect("readable");
     assert_eq!(history.get("TASK-9").0, 3);
 

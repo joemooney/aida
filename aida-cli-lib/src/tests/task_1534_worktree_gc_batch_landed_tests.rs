@@ -2,7 +2,7 @@
 //! batch-landed branches are no longer 'no merge signal'.
 //!
 //! Acceptance criteria:
-//! 1. worktree gc computes the field with session_reap's spec_trailer_landed_on
+//! 1. worktree gc computes the field with session_reap's spec_landing_commit
 //!    and applies the same content proof (patch-id or merge-tree no-op).
 //! 2. Fixture test: a batch-landed branch is reported reclaimable; one with an
 //!    unshipped commit is not.

@@ -772,36 +772,6 @@ pub fn latest_spec_shelved<'a>(events: &'a [Event], spec: &str) -> Option<&'a Ev
     })
 }
 
-/// Return the newest terminal event for `spec`, ignoring later non-terminal
-/// phase telemetry. Legacy streams may return `None`: terminal completion
-/// events were not backfilled when this predicate was introduced.
-// trace:BUG-1286 | ai:codex
-pub fn latest_terminal_for_spec<'a>(events: &'a [Event], spec: &str) -> Option<&'a Event> {
-    events.iter().rev().find(|event| {
-        event
-            .spec
-            .as_deref()
-            .is_some_and(|event_spec| event_spec.eq_ignore_ascii_case(spec))
-            && event.kind.is_terminal()
-    })
-}
-
-/// STORY-1051: the supervisor's re-drive count for `spec` and the timestamp of
-/// its most recent supervised re-drive, both derived from `SpecReDriven`
-/// events. `(0, None)` when the supervisor has never re-driven this spec.
-// trace:STORY-1051 | ai:claude
-pub fn supervisor_redrive_state(project_root: &Path, spec: &str) -> (u32, Option<DateTime<Utc>>) {
-    let mut count = 0u32;
-    let mut last = None;
-    for ev in read_all(project_root) {
-        if ev.spec.as_deref() == Some(spec) && matches!(ev.kind, EventKind::SpecReDriven { .. }) {
-            count += 1;
-            last = Some(ev.ts);
-        }
-    }
-    (count, last)
-}
-
 /// Path to the single rotated archive of the previous run's events — the file
 /// [`rotate_if_oversized`] renames the live stream to when it outgrows the cap.
 /// One generation is kept (each rotation overwrites the prior archive), so
@@ -2032,48 +2002,25 @@ mod tests {
     }
 
     // BUG-1286: terminality is a property of the kind, not the event's
-    // position in an append-only stream.
+    // position in an append-only stream — trailing phase telemetry after a
+    // merge (a build crash, a late PhaseDonePr) must never read as terminal.
+    // trace:BUG-1286 | ai:codex
+    // trace:TASK-1581 | ai:antigravity — asserted on the kind predicate; the
+    // stream-scanning helper it used to go through had no production caller.
     #[test]
-    fn latest_terminal_ignores_trailing_phase_events_and_survives_build_crash() {
-        let phase = |idx: i32, slug: &str| {
-            Event::new(
-                Some("BUG-1286".into()),
-                "run",
-                EventKind::PhaseEntered {
-                    idx,
-                    slug: slug.into(),
-                    vendor: None,
-                    seat: None,
-                    model: None,
-                    effort: None,
-                    attempt: 1,
-                },
-            )
-        };
-        let mut stream = vec![Event::new(
-            Some("BUG-1286".into()),
-            "run",
-            EventKind::PrMerged { pr: 42 },
-        )];
-        stream.push(phase(5, "pull"));
-        stream.push(phase(6, "build"));
-
-        // Crash case: the stream stops after build entered. The merge remains
-        // the newest terminal fact even without a completion record.
-        assert!(matches!(
-            latest_terminal_for_spec(&stream, "bug-1286").map(|e| &e.kind),
-            Some(EventKind::PrMerged { pr: 42 })
-        ));
-
-        stream.push(Event::new(
-            Some("BUG-1286".into()),
-            "run",
-            EventKind::PhaseDonePr { pr: 42 },
-        ));
-        assert!(matches!(
-            latest_terminal_for_spec(&stream, "BUG-1286").map(|e| &e.kind),
-            Some(EventKind::PrMerged { pr: 42 })
-        ));
+    fn trailing_phase_events_are_not_terminal() {
+        assert!(EventKind::PrMerged { pr: 42 }.is_terminal());
+        assert!(!EventKind::PhaseEntered {
+            idx: 6,
+            slug: "build".into(),
+            vendor: None,
+            seat: None,
+            model: None,
+            effort: None,
+            attempt: 1,
+        }
+        .is_terminal());
+        assert!(!EventKind::PhaseDonePr { pr: 42 }.is_terminal());
     }
 
     #[test]
@@ -2106,7 +2053,7 @@ mod tests {
     // STORY-1051: the supervisor's attempt count + backoff come from the event
     // log (ADR-26 fork B), so prove the derivation reads back correctly.
     #[test]
-    fn supervisor_redrive_state_counts_and_timestamps_from_the_log() {
+    fn redrive_history_counts_and_timestamps_from_the_log() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         // Two supervised re-drives of STORY-9, one of a different spec.
@@ -2154,10 +2101,12 @@ mod tests {
             ),
         );
 
-        let (count, last) = supervisor_redrive_state(root, "STORY-9");
+        // trace:TASK-1581 | ai:antigravity — the production fold (TASK-1492).
+        let history = RedriveHistory::from_events(&read_all(root));
+        let (count, last) = history.get("STORY-9");
         assert_eq!(count, 2, "only SpecReDriven for STORY-9 counts");
         assert!(last.is_some(), "last re-drive timestamp is recorded");
-        let (none, ts) = supervisor_redrive_state(root, "STORY-NEVER");
+        let (none, ts) = history.get("STORY-NEVER");
         assert_eq!(none, 0);
         assert!(ts.is_none());
     }

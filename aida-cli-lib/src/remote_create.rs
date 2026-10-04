@@ -1527,13 +1527,6 @@ impl MirrorSyncReport {
             .collect()
     }
 
-    pub fn pushed(&self) -> Vec<&MirrorSyncRow> {
-        self.rows
-            .iter()
-            .filter(|r| matches!(r.outcome, MirrorSyncOutcome::Pushed { .. }))
-            .collect()
-    }
-
     /// Plain-text report, one line per row and per skip reason.
     pub fn render(&self) -> String {
         let short = |s: &str| s.chars().take(12).collect::<String>();
@@ -3362,11 +3355,18 @@ host = \"should.not.count\"
             "precondition: the mirror is empty"
         );
 
+        // trace:TASK-1581 | ai:antigravity — test-local count of pushed rows.
+        let pushed = |r: &MirrorSyncReport| {
+            r.rows
+                .iter()
+                .filter(|row| matches!(row.outcome, MirrorSyncOutcome::Pushed { .. }))
+                .count()
+        };
         let report = mirror_sync_hubs(&project).unwrap();
         assert!(report.skipped.is_empty(), "nothing skipped: {report:?}");
         assert!(report.failures().is_empty(), "no failures: {report:?}");
         assert_eq!(
-            report.pushed().len(),
+            pushed(&report),
             2,
             "main and the store both pushed: {report:?}"
         );
@@ -3380,7 +3380,7 @@ host = \"should.not.count\"
 
         // Idempotent: the second run reports both hubs up to date.
         let again = mirror_sync_hubs(&project).unwrap();
-        assert!(again.pushed().is_empty(), "{again:?}");
+        assert_eq!(pushed(&again), 0, "{again:?}");
         assert!(again.failures().is_empty());
         assert!(
             again

@@ -266,11 +266,17 @@ fn task_1543_reap_preserves_worktree_directory_that_reappears_before_registratio
         |_| false,
     );
     let lease = fixture_lease(&wt, "spec-reappeared", "TASK-1543");
-    let outcome = reap_one_with_missing_worktree_hook(&root, &lease, tip.as_deref(), || {
-        std::fs::create_dir_all(&wt).unwrap();
-        std::fs::write(wt.join(".git"), &gitfile).unwrap();
-        std::fs::write(wt.join("precious.txt"), "preserve me").unwrap();
-    });
+    let outcome = reap_one_with_clear_hooks(
+        &root,
+        &lease,
+        tip.as_deref(),
+        || {
+            std::fs::create_dir_all(&wt).unwrap();
+            std::fs::write(wt.join(".git"), &gitfile).unwrap();
+            std::fs::write(wt.join("precious.txt"), "preserve me").unwrap();
+        },
+        || {},
+    );
     assert!(
         wt.join("precious.txt").exists(),
         "reappeared worktree content must remain after reap_one"

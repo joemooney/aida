@@ -280,8 +280,8 @@ fn bug_1657_direct_merges_still_reap() {
 fn bug_1657_trailer_match_is_exact_and_ignores_plan_commits() {
     let (_tmp, root) = batched_repo();
     // A prefix of a landed id is not that id.
-    assert!(!spec_trailer_landed_on(&root, "main", "spec-a", "BUG-900"));
-    assert!(spec_trailer_landed_on(&root, "main", "spec-a", "bug-9001"));
+    assert!(spec_landing_commit(&root, "main", "spec-a", "BUG-900").is_none());
+    assert!(spec_landing_commit(&root, "main", "spec-a", "bug-9001").is_some());
 
     // A plan commit names what it plans, not what shipped.
     git(&root, &["checkout", "-q", "-b", "spec-f", "main"]);
@@ -293,7 +293,7 @@ fn bug_1657_trailer_match_is_exact_and_ignores_plan_commits() {
         "plan\n",
         "[AI:claude] docs(plans): plan f (BUG-9006)",
     );
-    assert!(!spec_trailer_landed_on(&root, "main", "spec-f", "BUG-9006"));
+    assert!(spec_landing_commit(&root, "main", "spec-f", "BUG-9006").is_none());
 }
 
 #[test]
