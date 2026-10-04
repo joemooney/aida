@@ -1,0 +1,29 @@
+id: 01a104ce-cd56-7472-bb72-bd3291edafd4
+spec_id: TASK-1-200
+title: In collect_unshipped_work_items_bounded (aida-cli-lib/src/lib.rs, end of pass 2…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1575, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  In collect_unshipped_work_items_bounded (aida-cli-lib/src/lib.rs, end of pass 2), the new carrier-suppression retain runs BEFORE the pre-existing 'if evidenced < survivors.len() { scanned -= ...; survivors.truncate(evidenced) }'. That truncation is count-based and assumes the first 'evidenced' entries are exactly the evidenced ones. The retain can remove an evidenced survivor from that prefix and shift a never-evidenced survivor into the kept range. Repro shape: survivors [A(spec X, local-only), B(spec Y)] after the pushed-sort; pass-2 loop hits the deadline at idx 1 (evidenced=1, only A queried); spec X's carrier query is incomplete (deadline or gh failure) -> retain removes A -> survivors=[B] -> evidenced(1) < len(1) is false -> B is reported WITHOUT its --head history query or review-snapshot confirmation ever running: a row built on evidence never fetched, the exact PRIN-5 invariant this function pins. Required: run the evidenced truncation BEFORE the carrier retain (or track evidenced survivors by identity instead of count), and add a test pinning this scenario (deadline break mid-pass-2, carrier spec owning an earlier-sorted evidenced survivor, later survivor of another spec must NOT appear in rows).
+
+  PR: #2396
+  Reviewed sha: 8f448c153e0265c94be912f73f0fe7c34e480608
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-04T02:47:04.278359958Z
+modified_at: 2026-10-04T02:47:04.278359958Z
+req_type: Task
+tags:
+- carried-from:TASK-1575
+- finding-hash:aee93323
+- from-review:PR-2396
+- kind:carried-forward
+filed_at:
+  code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 658eb885d8
+  vendor: codex
