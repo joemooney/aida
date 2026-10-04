@@ -31,13 +31,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T04:39:54.938488038Z
-modified_at: 2026-10-04T04:44:45.295529851Z
+modified_at: 2026-10-04T04:44:46.695041268Z
 req_type: Task
 tags:
 - lifecycle
 - ownership
 - parent:BUG-1470
 - severity:operational
+relationships:
+- rel_type: Child
+  target_id: 01a0c001-1e2d-76b2-95a1-a46f86e24287
+  created_at: 2026-10-04T04:44:46.695041268Z
 comments:
 - id: 01a0c26e-ad82-7ed0-91d9-bbfcc2d4e4f3
   author: joe
