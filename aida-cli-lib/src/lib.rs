@@ -14491,6 +14491,13 @@ fn findings_needing_a_successor(
     if !verdict.kind.approves() {
         return Vec::new();
     }
+    // BUG-1799: The sweep skips findings whose round predates the approving round.
+    // If findings were inherited verbatim (no --finding passed), they predate the
+    // approving round. If they were explicitly re-recorded, they carry forward.
+    // trace:BUG-1799 | ai:antigravity
+    if verdict.inherited_findings {
+        return Vec::new();
+    }
     let mut seen = std::collections::HashSet::new();
     verdict
         .findings
@@ -116349,3 +116356,7 @@ mod bug_1650_store_resolver_tests;
 #[cfg(test)]
 #[path = "tests/bug_1670_stale_cache_callers_tests.rs"]
 mod bug_1670_stale_cache_callers_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1799_carry_forward_tests.rs"]
+mod bug_1799_carry_forward_tests;

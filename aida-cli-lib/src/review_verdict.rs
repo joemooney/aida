@@ -171,6 +171,10 @@ pub struct RecordedVerdict {
     pub review_comment: Option<String>,
     /// Optional structured findings, preserved when a newer reviewer writes it.
     pub findings: Vec<String>,
+    /// BUG-1799: True if the findings in this round were inherited verbatim from
+    /// the previous round without being explicitly re-recorded.
+    // trace:BUG-1799 | ai:antigravity
+    pub inherited_findings: bool,
     /// STORY-1391: findings that also appeared in the PREVIOUS round. Empty on
     /// a first round, and empty when every finding is new. Populated by
     /// [`parse_recorded_verdict`] from the retained `rounds`, so every caller
@@ -443,6 +447,10 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
     } else {
         first_of(SHA_KEYS)
     };
+    let inherited_findings = obj
+        .get("inherited_findings")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
@@ -457,6 +465,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         review_comment: str_field("review_comment")
             .or_else(|| str_field("comment_body"))
             .or_else(|| str_field("body")),
+        inherited_findings,
         surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
     })
@@ -1226,6 +1235,13 @@ pub(crate) fn build_verdict_object(
         // `review_classes::apply_finding_classes`.
         // trace:STORY-1417 | ai:claude
         obj.remove("finding_classes");
+        obj.remove("inherited_findings");
+    } else if obj.contains_key("findings") {
+        // trace:BUG-1799 | ai:antigravity
+        obj.insert(
+            "inherited_findings".to_string(),
+            serde_json::Value::Bool(true),
+        );
     }
     Ok(obj)
 }
