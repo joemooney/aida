@@ -23,8 +23,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T16:57:10.789226548Z
-modified_at: 2026-10-04T16:57:10.789226548Z
+modified_at: 2026-10-04T18:11:32.555140408Z
 req_type: Task
+comments:
+- id: 01a1081d-2e4b-79c2-8c29-6d6ecb0d6c77
+  author: joe
+  content: |
+    Addendum from PR #2418 round-2 CI fix (head 8f0e516f): design confirmation D.
+
+    D. main's BUG-1793 `hold_authority_from` keeps a bare-TTY authority leg (`… || is_tty || orchestrated`), which ADR-66 removed from `advisor_authority_from` ("TTY presence only issues a seat grant; it does not bypass"). Reconcile the reasoned-hold gate with ADR-66: either drop the TTY leg so hold authority also flows only from a validated grant, or record why holds deliberately keep a human-at-TTY carve-out. Advisor's initial read: the carve-out is defensible (a human at a TTY is the supervision the hold exists to reach) but should be an explicit, documented decision, not drift.
+  created_at: 2026-10-04T18:11:32.555140408Z
+  modified_at: 2026-10-04T18:11:32.555140408Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 filed_at:
   code_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
   branch: main
