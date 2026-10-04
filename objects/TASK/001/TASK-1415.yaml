@@ -276,10 +276,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T06:12:14.796135922Z
-modified_at: 2026-09-23T08:10:23.319946440Z
+modified_at: 2026-10-04T04:44:39.148490785Z
 req_type: Task
 tags:
-- parent:EPIC-62 discipline-pack observation severity:operational propagation-candidate
+- discipline-pack
+- observation
+- parent:EPIC-62
+- propagation-candidate
+- severity:operational
 comments:
 - id: 01a0ccff-0d53-7830-a3bc-34f25c55a27b
   author: joe
