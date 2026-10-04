@@ -225,8 +225,10 @@ fn pick_dev_binary_dir(
 ) -> Result<(std::path::PathBuf, &'static str, BinarySelectionReason)> {
     let release = repo.join("target/release/aida");
     let debug = repo.join("target/debug/aida");
+    let agent = repo.join("target/agent/aida");
     let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
     let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+    let agent_mtime = std::fs::metadata(&agent).and_then(|m| m.modified()).ok();
 
     if let Some(req) = requested {
         return match req {
@@ -246,8 +248,7 @@ fn pick_dev_binary_dir(
             "release" => {
                 if release_mtime.is_none() {
                     anyhow::bail!(
-                        "No release build at {}.\nRun `cargo build --release` first, \
-                         or `aida dev activate debug` to use the debug build.",
+                        "No release build at {}.\nRun `cargo build --release` first.",
                         release.display()
                     );
                 }
@@ -257,23 +258,37 @@ fn pick_dev_binary_dir(
                     BinarySelectionReason::Explicit,
                 ))
             }
-            other => anyhow::bail!("unknown profile '{}': expected debug or release", other),
+            "agent" => {
+                if agent_mtime.is_none() {
+                    anyhow::bail!(
+                        "No agent build at {}.\nRun `make build-fast` first.",
+                        agent.display()
+                    );
+                }
+                Ok((
+                    repo.join("target/agent"),
+                    "agent",
+                    BinarySelectionReason::Explicit,
+                ))
+            }
+            other => anyhow::bail!(
+                "unknown profile '{}': expected debug, release, or agent",
+                other
+            ),
         };
     }
 
-    // BUG-643: auto mode (pin == auto) must RE-PICK the freshest SHA-matched
-    // binary on EVERY activate — never stay sticky on whichever build is
-    // already active. Probe both candidates ({mtime, sha-verdict}) and run the
-    // pure selector so a just-rebuilt debug flips in over an older release.
-    let (release_cand, debug_cand) = dev_build_candidates(repo);
-    match auto_select_dev_profile(release_cand, debug_cand) {
+    let (release_cand, debug_cand, agent_cand) = dev_build_candidates(repo);
+    match auto_select_dev_profile(release_cand, debug_cand, agent_cand) {
         Some((DevProfile::Release, reason)) => Ok((repo.join("target/release"), "release", reason)),
         Some((DevProfile::Debug, reason)) => Ok((repo.join("target/debug"), "debug", reason)),
+        Some((DevProfile::Agent, reason)) => Ok((repo.join("target/agent"), "agent", reason)),
         None => anyhow::bail!(
-            "No aida binary found at {} or {}.\n\
-             Run `cargo build --release` (or just `cargo build`) first.",
+            "No aida binary found at {}, {}, or {}.\n\
+             Run `make build-fast` (or `cargo build`) first.",
             release.display(),
-            debug.display()
+            debug.display(),
+            agent.display()
         ),
     }
 }
@@ -282,18 +297,27 @@ fn pick_dev_binary_dir(
 /// Used for the stale-build warning + PS1 marker.
 // trace:FR-1-068 | ai:claude
 fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
-    let other = if active == "debug" {
-        "release"
-    } else {
-        "debug"
-    };
     let active_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", active)))
         .and_then(|m| m.modified())
         .ok();
-    let other_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", other)))
-        .and_then(|m| m.modified())
-        .ok();
-    matches!((active_mtime, other_mtime), (Some(a), Some(o)) if o > a)
+    let a_mtime = match active_mtime {
+        Some(m) => m,
+        None => return false,
+    };
+
+    for other in &["release", "debug", "agent"] {
+        if *other == active {
+            continue;
+        }
+        if let Ok(m) = std::fs::metadata(repo.join(format!("target/{}/aida", other))) {
+            if let Ok(mod_time) = m.modified() {
+                if mod_time > a_mtime {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Which build profile auto-selection chose.
@@ -302,6 +326,7 @@ fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
 pub(crate) enum DevProfile {
     Release,
     Debug,
+    Agent,
 }
 
 impl DevProfile {
@@ -309,6 +334,7 @@ impl DevProfile {
         match self {
             DevProfile::Release => "release",
             DevProfile::Debug => "debug",
+            DevProfile::Agent => "agent",
         }
     }
 }
@@ -353,43 +379,46 @@ fn sha_rank(m: ShaMatch) -> u8 {
 pub(crate) fn auto_select_dev_profile(
     release: Option<DevBuildCandidate>,
     debug: Option<DevBuildCandidate>,
+    agent: Option<DevBuildCandidate>,
 ) -> Option<(DevProfile, BinarySelectionReason)> {
-    match (release, debug) {
-        (Some(r), Some(d)) => {
-            let (rr, dr) = (sha_rank(r.sha), sha_rank(d.sha));
-            let pick = if rr != dr {
-                // Stronger SHA match wins outright.
-                if rr > dr {
-                    DevProfile::Release
-                } else {
-                    DevProfile::Debug
-                }
-            } else if r.mtime != d.mtime {
-                // Same SHA class → freshest mtime wins (the sticky-bug fix).
-                if r.mtime > d.mtime {
-                    DevProfile::Release
-                } else {
-                    DevProfile::Debug
-                }
-            } else {
-                // Exact tie → release, the stable conventional default.
-                DevProfile::Release
-            };
-            let winner_sha = match pick {
-                DevProfile::Release => r.sha,
-                DevProfile::Debug => d.sha,
-            };
-            let reason = match winner_sha {
-                ShaMatch::Exact => BinarySelectionReason::ShaExactMatch,
-                ShaMatch::Ancestor => BinarySelectionReason::ShaAncestorMatch,
-                ShaMatch::Unrelated | ShaMatch::Unknown => BinarySelectionReason::RecencyFallback,
-            };
-            Some((pick, reason))
-        }
-        (Some(_), None) => Some((DevProfile::Release, BinarySelectionReason::OnlyOne)),
-        (None, Some(_)) => Some((DevProfile::Debug, BinarySelectionReason::OnlyOne)),
-        (None, None) => None,
+    let mut candidates = Vec::new();
+    if let Some(r) = release {
+        candidates.push((DevProfile::Release, r));
     }
+    if let Some(d) = debug {
+        candidates.push((DevProfile::Debug, d));
+    }
+    if let Some(a) = agent {
+        candidates.push((DevProfile::Agent, a));
+    }
+
+    if candidates.is_empty() {
+        return None;
+    }
+    if candidates.len() == 1 {
+        return Some((candidates[0].0, BinarySelectionReason::OnlyOne));
+    }
+
+    candidates.sort_by(|(p1, c1), (p2, c2)| {
+        let r1 = sha_rank(c1.sha);
+        let r2 = sha_rank(c2.sha);
+        r2.cmp(&r1)
+            .then_with(|| c2.mtime.cmp(&c1.mtime))
+            .then_with(|| match (p1, p2) {
+                (DevProfile::Agent, _) => std::cmp::Ordering::Less,
+                (_, DevProfile::Agent) => std::cmp::Ordering::Greater,
+                (DevProfile::Release, _) => std::cmp::Ordering::Less,
+                (_, DevProfile::Release) => std::cmp::Ordering::Greater,
+                _ => std::cmp::Ordering::Equal,
+            })
+    });
+    let (pick, winner) = candidates[0];
+    let reason = match winner.sha {
+        ShaMatch::Exact => BinarySelectionReason::ShaExactMatch,
+        ShaMatch::Ancestor => BinarySelectionReason::ShaAncestorMatch,
+        ShaMatch::Unrelated | ShaMatch::Unknown => BinarySelectionReason::RecencyFallback,
+    };
+    Some((pick, reason))
 }
 
 /// Probe `<repo>/target/{release,debug}/aida`: file mtime + embedded-SHA
@@ -399,11 +428,17 @@ pub(crate) fn auto_select_dev_profile(
 // trace:BUG-643 | ai:claude
 fn dev_build_candidates(
     repo: &std::path::Path,
-) -> (Option<DevBuildCandidate>, Option<DevBuildCandidate>) {
+) -> (
+    Option<DevBuildCandidate>,
+    Option<DevBuildCandidate>,
+    Option<DevBuildCandidate>,
+) {
     let release = repo.join("target/release/aida");
     let debug = repo.join("target/debug/aida");
+    let agent = repo.join("target/agent/aida");
     let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
     let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+    let agent_mtime = std::fs::metadata(&agent).and_then(|m| m.modified()).ok();
     let head_sha = current_branch_head_sha(repo);
     let verdict = |mtime: Option<std::time::SystemTime>, bin: &std::path::Path| {
         mtime.map(|m| {
@@ -422,6 +457,7 @@ fn dev_build_candidates(
     (
         verdict(release_mtime, &release),
         verdict(debug_mtime, &debug),
+        verdict(agent_mtime, &agent),
     )
 }
 
@@ -450,8 +486,8 @@ pub(crate) fn resolve_activation_request<'a>(
 /// ("debug"/"release"), or None if no build exists.
 // trace:BUG-643 | ai:claude
 fn auto_pick_profile_name(repo: &std::path::Path) -> Option<&'static str> {
-    let (release_cand, debug_cand) = dev_build_candidates(repo);
-    auto_select_dev_profile(release_cand, debug_cand).map(|(p, _)| p.as_str())
+    let (release_cand, debug_cand, agent_cand) = dev_build_candidates(repo);
+    auto_select_dev_profile(release_cand, debug_cand, agent_cand).map(|(p, _)| p.as_str())
 }
 
 fn sha_prefix_match(a: &str, b: &str) -> bool {
