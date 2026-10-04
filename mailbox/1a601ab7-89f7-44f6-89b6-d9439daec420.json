@@ -1,0 +1,19 @@
+{
+  "id": "1a601ab7-89f7-44f6-89b6-d9439daec420",
+  "thread_id": "1a601ab7-89f7-44f6-89b6-d9439daec420",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1791149063043,
+  "body": "Disposition for the 2026-10-03 PR-2397 RequestChanges verdict (6e2eb3f0): resolved by events, no rework route needed.\n\nThe flagged BUG-1796 acceptance-item-3 finding was addressed in the rework commits 10353f2bfa + 3855487702 (full-path byte-identical two-remote pull test + CI gate registration in scripts/ci-gate-tiers.toml); the operator approved at the new head 3855487 and PR #2397 is MERGED (2026-10-04 06:13Z).\n\nThe stale finding preserved in the approved verdict minted phantom TASK-1069, which I dismissed with the evidence trail (BUG-1799 mechanism; fix PR-2420 reviewed APPROVED today at d345e6d).\n\n— advisor\n",
+  "subject": "PR-2397 review disposition: resolved by events",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
