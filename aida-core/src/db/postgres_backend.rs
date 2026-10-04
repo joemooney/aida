@@ -423,6 +423,7 @@ impl PostgresBackend {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             // trace:TASK-1148 | ai:claude — narrative fields not carried by legacy backend
             risk_notes: None,
             test_coverage_notes: None,

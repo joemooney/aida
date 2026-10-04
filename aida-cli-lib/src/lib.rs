@@ -2857,6 +2857,7 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "mode",
     // trace:STORY-634 | ai:claude — the multi-repo repo/component dimension.
     "origin",
+    "deferred_reason",
 ];
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
@@ -2955,6 +2956,7 @@ fn toon_list_cell(
         "mode" => r.execution_mode.clone().unwrap_or_default(),
         // trace:STORY-634 | ai:claude — empty cell = single-repo.
         "origin" => r.origin.clone().unwrap_or_default(),
+        "deferred_reason" => r.deferred_reason.clone().unwrap_or_default(),
         _ => String::new(),
     }
 }
@@ -38109,6 +38111,23 @@ fn session_start(
         anyhow::bail!(msg)
     }
 
+    // BUG-1793: an operator-held spec must refuse before creating a lease or
+    // acquiring cross-clone coordination state. trace:BUG-1793 | ai:codex
+    if let Some(req) = Storage::new(project_root.join(".aida-store"))
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(owns).cloned())
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(owns);
+            return Err(defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
+
     // Check the lease dir exists; create if not.
     let leases = leases_dir(&project_root);
     std::fs::create_dir_all(&leases)?;
@@ -53015,6 +53034,10 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || is_tty || orchestrated
 }
 
+pub(crate) fn hold_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
+    matches!(role, "product" | "advisor" | "operator") || is_tty || orchestrated
+}
+
 /// Dispatch authority permits routing already-disposed work without granting
 /// the advisor's power to dispose it. Product, advisor, and integrator seats
 /// may dispatch; a corroborated live orchestrator may continue its own routing.
@@ -53078,6 +53101,26 @@ fn has_advisor_authority() -> bool {
     advisor_authority_from(
         &effective_role_with_roster().0,
         authority_stdin_is_terminal(), // trace:BUG-1618 | ai:claude
+        orchestrated,
+    )
+}
+
+// trace:BUG-1793 | ai:antigravity
+pub(crate) fn has_hold_authority() -> bool {
+    if current_role_instance_is_companion() {
+        return false;
+    }
+    let orchestrated = find_main_worktree_root()
+        .map(|root| {
+            matches!(
+                orchestrator::detect(&root),
+                orchestrator::OrchestratorContext::Orchestrated
+            )
+        })
+        .unwrap_or(false);
+    hold_authority_from(
+        &effective_role_with_roster().0,
+        authority_stdin_is_terminal(),
         orchestrated,
     )
 }
@@ -82742,6 +82785,7 @@ mod story_1043_unshipped_work_tests {
             deferred: false,
             deferred_at: None,
             deferred_until: None,
+            deferred_reason: None,
             in_degree: 0,
             out_degree: 0,
             heft: 0,
@@ -102080,7 +102124,7 @@ fn resolve_next_n_head(
     let effective_role = effective_auto_complete_role(role_override);
     match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
-            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
+            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role).unwrap();
             let (role_skipped, blocked_skipped) = match &pick {
                 Some(pick) => (pick.role_skipped.clone(), pick.blocked_skipped.clone()),
                 None => (

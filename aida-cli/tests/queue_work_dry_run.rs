@@ -106,6 +106,113 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
 }
 
 #[test]
+fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+
+    let defer = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        .args([
+            "defer",
+            &spec,
+            "--reason",
+            "waiting for operator clearance",
+            "--until",
+            "the dependency decision lands",
+        ])
+        .output()
+        .expect("set operator hold");
+    assert!(
+        defer.status.success(),
+        "defer failed: {}",
+        String::from_utf8_lossy(&defer.stderr)
+    );
+
+    let pickup = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--dry-run"])
+        .output()
+        .expect("attempt queue pickup");
+    let pickup_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&pickup.stdout),
+        String::from_utf8_lossy(&pickup.stderr)
+    );
+    assert!(
+        !pickup.status.success(),
+        "held pickup unexpectedly succeeded: {}",
+        String::from_utf8_lossy(&pickup.stdout)
+    );
+    assert!(
+        pickup_message.contains("waiting for operator clearance"),
+        "pickup error omitted hold reason: {pickup_message}"
+    );
+    assert!(
+        pickup_message.contains("the dependency decision lands"),
+        "pickup error omitted revisit trigger: {pickup_message}"
+    );
+
+    let path = base_dir.join("held-worktree");
+    let path_string = path.to_string_lossy().into_owned();
+    let start = aida(&repo, &home)
+        .args([
+            "session",
+            "start",
+            "--owns",
+            &spec,
+            "--role",
+            "implementer",
+            "--base",
+            "main",
+            "--path",
+            &path_string,
+        ])
+        .output()
+        .expect("attempt direct session start");
+    let start_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&start.stdout),
+        String::from_utf8_lossy(&start.stderr)
+    );
+    assert!(
+        !start.status.success(),
+        "held session start unexpectedly succeeded: {start_message}"
+    );
+    assert!(
+        start_message.contains("waiting for operator clearance"),
+        "session start error omitted hold reason: {start_message}"
+    );
+    assert!(!path.exists(), "held start created a worktree");
+
+    let unauthorized = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .args(["undefer", &spec])
+        .output()
+        .expect("attempt unauthorized hold release");
+    assert!(!unauthorized.status.success());
+    let unauthorized_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&unauthorized.stdout),
+        String::from_utf8_lossy(&unauthorized.stderr)
+    );
+    assert!(
+        unauthorized_message.contains("only the product"),
+        "unauthorized release did not name the seat gate: {unauthorized_message}"
+    );
+
+    let release = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        .args(["undefer", &spec])
+        .output()
+        .expect("release operator hold");
+    assert!(
+        release.status.success(),
+        "authorized release failed: {}",
+        String::from_utf8_lossy(&release.stderr)
+    );
+}
+
+#[test]
 fn defer_removes_queued_rows_across_queue_identities() {
     let base = tempfile::tempdir().expect("tempdir");
     let base_dir = base.path().canonicalize().expect("canonicalize tempdir");

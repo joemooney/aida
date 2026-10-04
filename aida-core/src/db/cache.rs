@@ -66,6 +66,7 @@ pub struct RequirementSummary {
     pub deferred_at: Option<String>,
     /// Free-text revisit trigger; None when not set. trace:STORY-584 | ai:claude
     pub deferred_until: Option<String>,
+    pub deferred_reason: Option<String>,
     /// Inbound edge count — deterministic local centrality. trace:STORY-632 | ai:claude
     pub in_degree: u32,
     /// Outbound edge count. trace:STORY-632 | ai:claude
@@ -1906,6 +1907,7 @@ impl Cache {
             "SELECT id, spec_id, agreed_id, title, description, status, priority,
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
+                    deferred_reason,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
                     has_pending_decision, execution_mode, weight, origin, completed_at
              FROM requirements_cache WHERE 1=1",
@@ -2124,6 +2126,7 @@ impl Cache {
                           c.status, c.priority, c.owner, c.feature, c.req_type,
                           c.tags_json, c.created_at, c.modified_at, c.archived,
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
+                          c.deferred_reason,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
                           c.blocked, c.has_pending_decision, c.execution_mode, c.weight,
                           c.origin, c.completed_at
@@ -2395,6 +2398,7 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "deferred",
     "deferred_at",
     "deferred_until",
+    "deferred_reason",
     "in_degree",
     "out_degree",
     "heft",
@@ -2788,6 +2792,7 @@ fn insert_one(
     let deferred = if req.deferred { 1 } else { 0 };
     let deferred_at = req.deferred_at.map(|dt| dt.to_rfc3339());
     let deferred_until = req.deferred_until.clone();
+    let deferred_reason = req.deferred_reason.clone();
     let req_type_str = format!("{:?}", req.req_type);
     // trace:BUG-626 | ai:claude — an epic's status is a read-only rollup of its
     // children; the override (when present) is the derived value.
@@ -2812,9 +2817,10 @@ fn insert_one(
             id, spec_id, agreed_id, title, description, status, priority,
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
+            deferred_reason,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
             has_pending_decision, execution_mode, weight, origin, completed_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -2834,6 +2840,7 @@ fn insert_one(
             deferred,
             deferred_at,
             deferred_until,
+            deferred_reason,
             degrees.in_degree,
             degrees.out_degree,
             degrees.heft,
@@ -2908,25 +2915,26 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         deferred: deferred_int != 0,
         deferred_at: row.get(16)?,
         deferred_until: row.get(17)?,
-        // trace:STORY-632 | ai:claude — columns 18/19/20 (stored as INTEGER).
-        in_degree: row.get::<_, i64>(18)?.max(0) as u32,
-        out_degree: row.get::<_, i64>(19)?.max(0) as u32,
-        heft: row.get::<_, i64>(20)?.max(0) as u32,
-        yaml_path: row.get(21)?,
-        // trace:STORY-639 | ai:claude — column index 22, nullable.
-        assignee: row.get(22)?,
-        // trace:TASK-902 | ai:claude — column index 23, INTEGER 0/1.
-        blocked: row.get::<_, i64>(23)? != 0,
-        // trace:TASK-1065 | ai:claude — column index 24, INTEGER 0/1.
-        has_pending_decision: row.get::<_, i64>(24)? != 0,
-        // trace:STORY-776 | ai:claude — column index 25, nullable TEXT.
-        execution_mode: row.get(25)?,
-        // trace:FR-283 | ai:claude — column index 26, nullable REAL.
-        weight: row.get(26)?,
-        // trace:STORY-634 | ai:claude — column index 27, nullable TEXT.
-        origin: row.get(27)?,
-        // trace:TASK-1474 | ai:claude — column index 28, nullable TEXT.
-        completed_at: row.get(28)?,
+        deferred_reason: row.get(18)?,
+        // trace:STORY-632 | ai:claude — columns 19/20/21 (stored as INTEGER).
+        in_degree: row.get::<_, i64>(19)?.max(0) as u32,
+        out_degree: row.get::<_, i64>(20)?.max(0) as u32,
+        heft: row.get::<_, i64>(21)?.max(0) as u32,
+        yaml_path: row.get(22)?,
+        // trace:STORY-639 | ai:claude — column index 23, nullable.
+        assignee: row.get(23)?,
+        // trace:TASK-902 | ai:claude — column index 24, INTEGER 0/1.
+        blocked: row.get::<_, i64>(24)? != 0,
+        // trace:TASK-1065 | ai:claude — column index 25, INTEGER 0/1.
+        has_pending_decision: row.get::<_, i64>(25)? != 0,
+        // trace:STORY-776 | ai:claude — column index 26, nullable TEXT.
+        execution_mode: row.get(26)?,
+        // trace:FR-283 | ai:claude — column index 27, nullable REAL.
+        weight: row.get(27)?,
+        // trace:STORY-634 | ai:claude — column index 28, nullable TEXT.
+        origin: row.get(28)?,
+        // trace:TASK-1474 | ai:claude — column index 29, nullable TEXT.
+        completed_at: row.get(29)?,
     })
 }
 
@@ -3166,6 +3174,32 @@ fn yaml_path_for(req: &Requirement) -> String {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-1793 | ai:antigravity
+    #[test]
+    fn test_cache_round_trip_of_deferred_reason() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("test.db");
+        let cache = Cache::open(&path).unwrap();
+
+        let mut req = sample_req("TASK-42", "held task");
+        req.deferred = true;
+        req.deferred_reason = Some("waiting for ops".into());
+        req.deferred_until = Some("next week".into());
+
+        cache.upsert_requirement(&req)?;
+
+        let loaded = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })?
+            .into_iter()
+            .next()
+            .unwrap();
+        assert_eq!(loaded.deferred_reason.as_deref(), Some("waiting for ops"));
+        assert_eq!(loaded.deferred_until.as_deref(), Some("next week"));
+        Ok(())
+    }
     use super::super::cache_lock::{
         foreign_writer_holds_lock, observe_cache_lock, remove_cache_lock_info,
         write_cache_lock_info,
@@ -3828,7 +3862,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         // Default filter: skip archived → 2 rows.
-        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        let all = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(all.len(), 2);
 
         // Filter by owner.
@@ -3872,7 +3911,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         // The assignee column round-trips (None for the unassigned row).
-        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        let all = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
         let by_id = |id: &str| {
             all.iter()
                 .find(|r| r.spec_id.as_deref() == Some(id))
@@ -4731,7 +4775,10 @@ mod tests {
 
         // And a query touching the `blocked` column must succeed, not error.
         let rows = cache
-            .list_summaries(&ListFilter::default())
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
             .expect("list reading the `blocked` column must succeed after self-heal");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
@@ -5212,7 +5259,10 @@ mod tests {
         );
 
         let rows = cache
-            .list_summaries(&ListFilter::default())
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
             .expect("list should see a recreated requirements_cache table");
         assert!(rows.is_empty());
     }
@@ -5423,7 +5473,10 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = reader_cache
-                .list_summaries(&ListFilter::default())
+                .list_summaries(&ListFilter {
+                    defer: DeferFilter::Both,
+                    ..Default::default()
+                })
                 .map(|rows| rows.into_iter().map(|row| row.title).collect::<Vec<_>>());
             tx.send(result).unwrap();
         });
@@ -6603,7 +6656,10 @@ mod tests {
             let cache = Cache::open(&path).context("reopen read-only cache")?;
             let snapshot = cache.read_snapshot().context("pin read-only snapshot")?;
             let rows = snapshot
-                .list_summaries(&ListFilter::default())
+                .list_summaries(&ListFilter {
+                    defer: DeferFilter::Both,
+                    ..Default::default()
+                })
                 .context("query read-only snapshot")?;
             anyhow::ensure!(rows
                 .iter()
