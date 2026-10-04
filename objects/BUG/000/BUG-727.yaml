@@ -15,11 +15,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-16T06:40:14.134597707Z
-modified_at: 2026-07-20T06:54:28.789660800Z
+modified_at: 2026-10-04T04:46:09.185488226Z
 req_type: Bug
 tags:
-- aida:pr-ship keystone supervised substrate governance severity:major
+- aida:pr-ship
 - batch:keystone-0719
+- governance
+- keystone
+- severity:major
+- substrate
+- supervised
 history:
 - id: 019f7e4d-ffaf-7930-80df-244f17da7808
   author: aida-auto-bump
