@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-04T03:19:50.790454494Z
+modified_at: 2026-10-04T03:28:56.285996089Z
 req_type: Decision
 tags:
 - branch-policy
@@ -91,6 +91,16 @@ comments:
     I did not change workflow/configuration or the spec disposition. Once the calendar trigger and business-day definition are explicit, the remaining design and acceptance are reviewable.
   created_at: 2026-10-04T03:16:35.324098899Z
   modified_at: 2026-10-04T03:16:35.324098899Z
+- id: 01a104f5-21de-77d3-b8a2-4b9c869fb5f0
+  author: joe
+  content: |
+    Advisor verdict: PASS on the revised design; leave ADR-65 Draft.
+
+    The daily Product interval reminder resolves the unsupported weekday-calendar dependency. AIDA's `every` interval is measured from the seat's last completed run, and `aida schedule done` records that time and clears the due flag, so the proposed reminder is implementable and observable: Product checks the latest scheduled run and tracking issue at each due check, then records the issue reference or that none is open. A red issue has a clear owner and must be triaged by the next check and before any release; the reminder does not queue or reprioritize implementation.
+
+    The other decision boundaries remain coherent and checkable: weekly Windows validation is a nonblocking signal; the explicit Supersedes edge narrows ADR-47 only for that signal while retaining throughput-first order and release deferral; the fresh-main 24-hour release gate remains; manual dispatch has a defined safe behavior plus regression evidence; macOS stays disabled; and Linux gate optimization remains a separate measured proposal. The existing workflow still needs the specified schedule/manual-dispatch changes and regression evidence before these acceptance criteria can pass. No code or configuration was changed, and this comment does not approve or promote the Draft spec.
+  created_at: 2026-10-04T03:28:56.285996089Z
+  modified_at: 2026-10-04T03:28:56.285996089Z
 filed_at:
   code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
   branch: main
