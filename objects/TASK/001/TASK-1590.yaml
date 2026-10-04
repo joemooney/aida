@@ -3,12 +3,12 @@ spec_id: TASK-1590
 agreed_id: TASK-1590
 title: Add aida review list command to show statuses of all review verdicts
 description: ''
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T15:05:33.902772529Z
-modified_at: 2026-10-04T15:05:59.079271065Z
+modified_at: 2026-10-04T15:31:39.045965984Z
 req_type: Task
 history:
 - id: 01a10773-4c27-7151-8e49-4783fbe05db7
@@ -18,6 +18,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1078a-cb9e-7661-9f7d-e81476d931fb
+  author: aida-auto-bump
+  timestamp: 2026-10-04T15:31:39.038287820Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1078a-cba5-71c1-968e-6297a5e0342e
+  timestamp: 2026-10-04T15:31:39.045964258Z
+  agent: implementer
+  commit_sha: 98eef61d4be3c2725244d0989d336a2bc189b97b
+  summary: Completed via merge 98eef61d
 filed_at:
   code_sha: 158d4ff3affdab47006323eb6619c0618dfcbc77
   branch: main
@@ -25,3 +38,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 1b8bdda092
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T15:31:39.038262797Z
+  completion_sha: 98eef61d4be3c2725244d0989d336a2bc189b97b
