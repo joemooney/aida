@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1799",
+  "publishes": [
+    {
+      "at": "2026-10-04T21:34:28.686862404Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T19:51:10.033135297Z",
+      "spec": "BUG-1799",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:23:52.380313781Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:40:37.794434955Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "queue-pickup",
+        "reason": "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:40:51.417978127Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "queue-pickup",
+        "reason": "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:45.884979831Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:51.526670054Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "ci",
+        "cause": "watchdog",
+        "attempt": 2,
+        "max": 3,
+        "detail": "CI on PR-2420 did not reach a terminal state in time"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:51.527381735Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 2
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:56.408714335Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "ci",
+        "cause": "watchdog",
+        "attempt": 3,
+        "max": 3,
+        "detail": "CI on PR-2420 did not reach a terminal state in time"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:56.683533930Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 3
+      }
+    },
+    {
+      "ts": "2026-10-04T20:43:03.260613157Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "ci",
+        "kind": "watchdog",
+        "detail": "CI on PR-2420 did not reach a terminal state in time (attempt 3/3)",
+        "recovery_hint": "CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `gh run list --branch bug-1799`, then re-run auto-complete once CI settles."
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:33.399794117Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:38.016631115Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:38.964037253Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:43.190481649Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "reviewer",
+        "cause": "tool-exit",
+        "attempt": 2,
+        "max": 3,
+        "detail": "PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  aida-cli-lib/src/lib.rs\n\nRecover with:\n  aida pr rebase 2420              # clean rebase + force-push-with-lease\n  aida pr rebase 2420 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code)."
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:43.695576579Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 2
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:48.167544363Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "reviewer",
+        "cause": "tool-exit",
+        "attempt": 3,
+        "max": 3,
+        "detail": "PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  aida-cli-lib/src/lib.rs\n\nRecover with:\n  aida pr rebase 2420              # clean rebase + force-push-with-lease\n  aida pr rebase 2420 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code)."
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:48.608821036Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 3
+      }
+    },
+    {
+      "ts": "2026-10-04T20:51:54.720516410Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108af-ab53-7206-a5da-61bbb9b72feb",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "tool-exit",
+        "detail": "PR-2420 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  aida-cli-lib/src/lib.rs\n\nRecover with:\n  aida pr rebase 2420              # clean rebase + force-push-with-lease\n  aida pr rebase 2420 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 3/3)",
+        "recovery_hint": "Address the review feedback, then push fixups: `aida queue rework BUG-1799 --work`"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:59:12.076045347Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108b6-aa22-7680-ad4a-785afb53cf35",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T21:17:20.404877868Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108b6-aa22-7680-ad4a-785afb53cf35",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T21:18:23.503926470Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2420,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d345e6d37cb5913e5e86caab16fa1690c105d589"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:18:56.232226290Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T21:19:01.114070978Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T21:19:02.054212703Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T21:21:41.907199507Z",
+      "spec": "BUG-1799",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "d345e6d37cb5913e5e86caab16fa1690c105d589"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:22:05.047158961Z",
+      "spec": "BUG-1799",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:22:05.047204703Z",
+      "spec": "BUG-1799",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:34:18.119450351Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T21:34:23.860230272Z",
+      "spec": "BUG-1799",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2420
+      }
+    },
+    {
+      "ts": "2026-10-04T21:34:28.679153129Z",
+      "spec": "BUG-1799",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "35c8f323270e2f045c4372e568d8eb6b30273899",
+        "pr": 2420,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
