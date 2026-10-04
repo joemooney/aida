@@ -1,0 +1,33 @@
+id: 01a108a7-ed32-75ea-9c33-d28b5e085cc5
+spec_id: STORY-1522
+agreed_id: STORY-1522
+title: 'Review PR-2420: [AI:antigravity] fix(review): carry-forward sweep skips findings whose round predates the approving round (BUG-1799)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `shelve-r`) for branch `bug-1799`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2420>
+  - Branch: `bug-1799` → `main`
+
+  ## Covers
+
+  - BUG-1799
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2420` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T20:43:05.394029586Z
+modified_at: 2026-10-04T20:43:05.394029586Z
+req_type: Story
+filed_at:
+  code_sha: 72ec58311c2c215070318d063161eafed5800851
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
