@@ -1,0 +1,27 @@
+id: 01a10874-8512-7721-a991-0d5449d1383e
+spec_id: TASK-1-204
+title: windows_path_key uses to_ascii_lowercase(), so a recorded lease path containing…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1794, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  windows_path_key uses to_ascii_lowercase(), so a recorded lease path containing a Unicode component such as Åsa does not match a canonical cwd spelling using åsa. Windows path matching is case-insensitive for such names; add a Windows-gated Unicode case-variant regression test and use a normalization that handles Unicode casing before approving this path.
+  Reviewed sha: 37af379bc56755a39b13ba8d46bbe34009ab573a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-04T19:46:56.402130847Z
+modified_at: 2026-10-04T19:46:56.402130847Z
+req_type: Task
+tags:
+- carried-from:BUG-1794
+- finding-hash:63b34174
+- from-review:BUG-1794
+- kind:carried-forward
+filed_at:
+  code_sha: 72ec58311c2c215070318d063161eafed5800851
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
