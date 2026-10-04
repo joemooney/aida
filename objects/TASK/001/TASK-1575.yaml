@@ -59,12 +59,12 @@ description: |
      (`per_head_history_queries_run_only_for_surviving_candidates`) stays green: no return to
      querying every candidate up front. A spec with NO survivors must trigger NO carrier queries.
   4. The starvation and truncation-honesty fixtures from BUG-1288/BUG-1756 stay green.
-status: NeedsAttention
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:02:47.325576068Z
-modified_at: 2026-10-03T23:52:00.420332543Z
+modified_at: 2026-10-04T02:29:19.559270627Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -83,6 +83,11 @@ comments:
   content: 'Rework for PR #2396 at 8f448c153e: moved count-based evidenced truncation ahead of incomplete-carrier filtering so filtering cannot promote never-evidenced survivors; the no-snapshot carrier branch now marks the scan incomplete. Added both targeted regression tests. Finding-1 pin was red before the ordering fix (reported TASK-1582 without its --head query), then green after; snapshot-none incomplete pin passed. Existing carrier fixture, lazy per-head operation-count, starvation, and truncation-honesty tests passed; cargo fmt and git diff --check passed. Pushed to the same PR branch.'
   created_at: 2026-10-03T23:52:00.420332543Z
   modified_at: 2026-10-03T23:52:00.420332543Z
+- id: 01a104be-8e47-7851-a940-46216ae6cdf5
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Carrier retain breaks the count-based evidenced truncation: a truncated pass-2 can report a never-evidenced survivor (PRIN-5); snapshot-None suppression is silent. No triage reason was given.'
+  created_at: 2026-10-04T02:29:19.559265863Z
+  modified_at: 2026-10-04T02:29:19.559265863Z
 history:
 - id: 01a0fffa-efcd-7443-907a-499e5ae89031
   author: joe
@@ -105,11 +110,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Carrier retain breaks the count-based evidenced truncation: a truncated pass-2 can report a never-evidenced survivor (PRIN-5); snapshot-None suppression is silent'
-  recovery_hint: address the review findings, move TASK-1575 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-03T22:48:30.170531461Z
+- id: 01a104be-8e47-7851-a940-46102691c20e
+  author: joe
+  timestamp: 2026-10-04T02:29:19.559259787Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
