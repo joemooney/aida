@@ -1,0 +1,19 @@
+id: 01a104dc-12ee-72e3-ad87-4044dfd61853
+spec_id: TASK-1586
+agreed_id: TASK-1586
+title: Fix Makefile check-agent-skills output formatting
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T03:01:34.062314764Z
+modified_at: 2026-10-04T03:01:34.062314764Z
+req_type: Task
+filed_at:
+  code_sha: 06ec0c91d6e5037e13c89086ac6de9f05119b94a
+  branch: fix-bug-1798
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: antigravity
