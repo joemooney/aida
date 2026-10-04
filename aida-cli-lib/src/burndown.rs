@@ -4093,7 +4093,6 @@ mod tests {
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
-    #[test]
     // BUG-1715: a comment whose 9th BYTE falls inside a multi-byte character used
     // to panic `split_at` — "byte index 9 is not a char boundary" — which took
     // down `aida human` and the burndown's open-facts collection for the entire
