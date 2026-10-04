@@ -11,6 +11,7 @@ pub struct PrListEntry {
     pub branch: String,
     pub title: String,
     pub status: String,
+    pub ci: String,
     pub rebase_needed: bool,
     pub updated_at: String,
 }
@@ -40,10 +41,11 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
     use colored::Colorize;
 
     println!(
-        "{} {} {} {} {} {}",
+        "{} {} {} {} {} {} {}",
         format!("{:<15}", "Spec ID").bold(),
         format!("{:<8}", "PR").bold(),
         format!("{:<12}", "Status").bold(),
+        format!("{:<12}", "CI").bold(),
         format!("{:<15}", "Rebase Needed?").bold(),
         format!("{:<10}", "Updated").bold(),
         "Title".bold()
@@ -55,11 +57,18 @@ pub(crate) fn pr_list_handler(json: bool) -> Result<()> {
         } else {
             format!("{:<15}", "No").green()
         };
+        let ci_str = match e.ci.as_str() {
+            "Passing" | "SUCCESS" => format!("{:<12}", e.ci).green(),
+            "Failing" | "FAILURE" => format!("{:<12}", e.ci).red(),
+            "Pending" | "PENDING" | "IN_PROGRESS" => format!("{:<12}", e.ci).yellow(),
+            _ => format!("{:<12}", e.ci).normal(),
+        };
         println!(
-            "{} {} {} {} {} {}",
+            "{} {} {} {} {} {} {}",
             format!("{:<15}", e.spec_id).bold(),
             format!("{:<8}", format!("#{}", e.pr_number)),
             format!("{:<12}", e.status),
+            ci_str,
             rebase_str,
             format!("{:<10}", e.updated_at),
             e.title
@@ -78,7 +87,7 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
             "--state",
             "open",
             "--json",
-            "number,url,headRefName,title,mergeable,reviewDecision,updatedAt",
+            "number,url,headRefName,title,mergeable,reviewDecision,updatedAt,statusCheckRollup",
         ])
         .output()
         .context("running gh pr list")?;
@@ -86,24 +95,23 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
     anyhow::ensure!(out.status.success(), "gh pr list failed");
 
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
     struct GhPr {
         number: u64,
         url: String,
-        #[serde(rename = "headRefName")]
-        head_ref: String,
+        head_ref_name: String,
         title: String,
         mergeable: String,
-        #[serde(rename = "reviewDecision")]
         review_decision: String,
-        #[serde(rename = "updatedAt")]
         updated_at: String,
+        status_check_rollup: Option<Vec<serde_json::Value>>,
     }
 
     let prs: Vec<GhPr> = serde_json::from_slice(&out.stdout)?;
     let mut entries = Vec::new();
 
     for pr in prs {
-        let specs = extract_specs(&pr.title, &pr.head_ref);
+        let specs = extract_specs(&pr.title, &pr.head_ref_name);
         let status = if pr.review_decision.is_empty() {
             "Open".to_string()
         } else {
@@ -111,14 +119,47 @@ fn pr_list_github(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
         };
         let rebase_needed = pr.mergeable == "CONFLICTING" || pr.mergeable == "UNKNOWN"; // GH often says UNKNOWN if it hasn't checked recently, but CONFLICTING is the main one. We can also check if behind? gh pr list doesn't give behind count easily without fields that cause n+1. We'll stick to CONFLICTING.
 
+        let mut ci_status = "Unknown".to_string();
+        if let Some(rollup) = &pr.status_check_rollup {
+            if rollup.is_empty() {
+                ci_status = "None".to_string();
+            } else {
+                let mut has_failure = false;
+                let mut has_pending = false;
+                for check in rollup {
+                    if let Some(conclusion) = check.get("conclusion").and_then(|c| c.as_str()) {
+                        if conclusion == "FAILURE"
+                            || conclusion == "TIMED_OUT"
+                            || conclusion == "ACTION_REQUIRED"
+                        {
+                            has_failure = true;
+                        }
+                    }
+                    if let Some(status) = check.get("status").and_then(|s| s.as_str()) {
+                        if status == "IN_PROGRESS" || status == "QUEUED" {
+                            has_pending = true;
+                        }
+                    }
+                }
+                if has_failure {
+                    ci_status = "Failing".to_string();
+                } else if has_pending {
+                    ci_status = "Pending".to_string();
+                } else {
+                    ci_status = "Passing".to_string();
+                }
+            }
+        }
+
         for spec in specs {
             entries.push(PrListEntry {
                 spec_id: spec,
                 pr_number: pr.number,
                 url: pr.url.clone(),
-                branch: pr.head_ref.clone(),
+                branch: pr.head_ref_name.clone(),
                 title: pr.title.clone(),
                 status: status.clone(),
+                ci: ci_status.clone(),
                 rebase_needed,
                 updated_at: parse_and_format_date(&pr.updated_at),
             });
@@ -167,6 +208,7 @@ fn pr_list_gitlab(project_root: &std::path::Path) -> Result<Vec<PrListEntry>> {
                 branch: mr.source_branch.clone(),
                 title: mr.title.clone(),
                 status: "Open".to_string(), // Could fetch approvals but that's N+1 calls
+                ci: "Unknown".to_string(),
                 rebase_needed,
                 updated_at: parse_and_format_date(&mr.updated_at),
             });
