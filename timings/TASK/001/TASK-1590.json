@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1590",
+  "publishes": [
+    {
+      "at": "2026-10-04T15:31:39.729059950Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T15:06:00.680582778Z",
+      "spec": "TASK-1590",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T15:15:35.873978745Z",
+      "spec": "TASK-1590",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2419
+      }
+    },
+    {
+      "ts": "2026-10-04T15:19:37.450064665Z",
+      "spec": "TASK-1590",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1590",
+        "branch": "task-1590",
+        "first_seen": "2026-10-04T15:19:37.449919775+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:31:25.668018611Z",
+      "spec": "TASK-1590",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T15:31:32.725567148Z",
+      "spec": "TASK-1590",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2419
+      }
+    },
+    {
+      "ts": "2026-10-04T15:31:39.721460635Z",
+      "spec": "TASK-1590",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "98eef61d4be3c2725244d0989d336a2bc189b97b",
+        "pr": 2419,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
