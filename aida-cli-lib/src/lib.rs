@@ -44922,15 +44922,6 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
     newest_len
 }
 
-/// BUG-826: a non-zero headless vendor exit with a zero-byte JSONL log is a
-/// launch failure. The model produced no stream events, so the orchestrator
-/// should retry the launch and clean up the just-created lease instead of
-/// treating it as implementer work that failed.
-// trace:BUG-826 | ai:codex
-fn headless_log_is_zero_bytes(project_root: &std::path::Path, session_id: &str) -> bool {
-    headless_log_len(project_root, session_id) == Some(0)
-}
-
 /// BUG-1716: the two log shapes that witness a headless vendor which emitted
 /// nothing. `ZeroBytes` is BUG-826's original signature — the vendor started,
 /// created its JSONL log, and died before writing a single stream event.

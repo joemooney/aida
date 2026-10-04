@@ -474,7 +474,7 @@ fn is_marked_unverifiable(obj: &JsonObj) -> bool {
 
 /// STORY-1391: the findings in `current` that also appeared in the most recent
 /// archived round. Shared by [`parse_recorded_verdict`] and
-/// [`findings_surviving_round`] so the two can never disagree about what
+/// `findings_surviving_round` (test-only) so the two can never disagree about what
 /// "survived" means.
 // trace:STORY-1391 | ai:claude
 type JsonObj = serde_json::Map<String, serde_json::Value>;
@@ -933,6 +933,10 @@ fn archive_current_round(
 /// report unrelated findings as survivors — a false survivor sends someone to
 /// rewrite a brief that was fine.
 // trace:STORY-1391 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only body-string projection; the
+// production path reads `surviving_findings` from `parse_recorded_verdict`,
+// and both share `surviving_against_previous_round`.
+#[cfg(test)]
 pub fn findings_surviving_round(body: &str) -> Vec<String> {
     let Ok(serde_json::Value::Object(obj)) = serde_json::from_str(body) else {
         return Vec::new();

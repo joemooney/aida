@@ -387,11 +387,14 @@ fn branch_requirement_ids(branch: &str, prefixes: &[String]) -> Vec<(String, Str
 /// configured prefixes as foreign requirement IDs.
 // trace:BUG-1244 | ai:codex
 // trace:BUG-1628 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only: production always passes the
+// project's configured prefixes to `branch_belongs_to_spec_with_prefixes`.
+#[cfg(test)]
 pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
     branch_belongs_to_spec_with_prefixes(branch, spec, &[])
 }
 
-/// BUG-1628: [`branch_belongs_to_spec`] with the project's configured
+/// BUG-1628: `branch_belongs_to_spec` with the project's configured
 /// prefixes (see [`configured_spec_prefixes`]). Every requirement ID the
 /// branch names — under any recognised prefix — must be the target (or one of
 /// its dotted/dashed children); at least one must be present.

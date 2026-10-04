@@ -18,11 +18,6 @@
 //! is reclaimed immediately; a TTL backstop covers any other wedge.
 // trace:STORY-1171 | ai:claude
 
-// The acquire-side API (acquire/MergeLease/DEFAULT_WAIT and its helpers) is
-// exercised by the tests below and lands wired into the merge paths (pr ship +
-// drain, spanning check→merge→pull) in the STORY-1171 follow-up; `status()` is
-// live now via `aida merge-lock`. Allow dead_code until the wiring lands.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -144,8 +139,8 @@ fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
     None
 }
 
-/// RAII guard: releasing (explicitly or on drop) removes the lockfile IF we hold
-/// it. A no-op if already released.
+/// RAII guard: dropping it removes the lockfile IF we hold it. Release early
+/// with `drop(lease)`.
 #[must_use = "the merge-lease releases when dropped; hold it across the critical section"]
 #[derive(Debug)]
 pub(crate) struct MergeLease {
@@ -154,10 +149,8 @@ pub(crate) struct MergeLease {
 }
 
 impl MergeLease {
-    /// Explicit release (idempotent). Dropping does the same.
-    pub(crate) fn release(mut self) {
-        self.do_release();
-    }
+    // trace:TASK-1581 | ai:antigravity — the explicit `release(self)` had no
+    // caller; `drop(lease)` is the same operation.
     fn do_release(&mut self) {
         if self.held {
             let _ = std::fs::remove_file(&self.path);
@@ -264,7 +257,7 @@ mod tests {
             "must actually wait the bound"
         );
         // Release → the branch is free again.
-        held.release();
+        drop(held);
         acquire(root, "main", Some(3), "third", Duration::from_millis(300)).unwrap();
     }
 

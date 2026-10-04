@@ -2,7 +2,7 @@ use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
     dispatched_branch_head_sha, ensure_implementer_branch_pushed, find_orchestrated_lease,
-    head_commit_message, headless_log_is_zero_bytes, lease_path, list_leases,
+    head_commit_message, headless_launch_log_evidence, lease_path, list_leases,
     missing_implementer_worktree_push_gate, orchestrated_lease_receipt_path,
     orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
     prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
@@ -1164,7 +1164,10 @@ fn empty_launch_release_removes_the_matching_lease() {
     )
     .unwrap();
 
-    assert!(headless_log_is_zero_bytes(root, session_id));
+    assert_eq!(
+        headless_launch_log_evidence(root, session_id),
+        Some(super::EmptyLaunchLog::ZeroBytes)
+    );
     let mut d = driver(root, "BUG-826");
     let stub = root.join("aida-session-end-stub");
     crate::test_exec::write_executable(

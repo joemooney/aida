@@ -185,8 +185,8 @@ CLI. The gap is not the substrate; it is that the headless orchestrator
    matcher). For a non-Claude agent the invariant evaporates unless an MCP/CLI
    write gate refuses code writes for the advisor role. (Substrate-as-bouncer.)
 4. **TUI hosting a Codex session.** `app.rs::spawn_tab` hosts
-   `aida queue work`, which calls the Claude-only `spawn_claude_session` and
-   threads Claude `--session-id`/`--resume` flags. No spec covers a Codex-hosted
+   `aida queue work`, which launches through Claude-specific session
+   builders and threads Claude `--session-id`/`--resume` flags. No spec covers a Codex-hosted
    TUI tab or Codex crash-recovery resume.
 5. **In-agent status footer parity.** ~~Codex's footer is a fixed field set; the
    command-backed `aida statusline` richness is lost inside the agent.~~

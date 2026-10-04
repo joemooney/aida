@@ -10192,6 +10192,9 @@ fn headless_waiting_rule_suffix(role: &str) -> String {
     )
 }
 
+// trace:TASK-1581 | ai:antigravity — test-only: the production caller derives
+// the real rework round and calls `derive_queue_work_prompt_with_round`.
+#[cfg(test)]
 pub(crate) fn derive_queue_work_prompt(
     plan: &QueueWorkPlan,
     role: &str,
@@ -10199,7 +10202,7 @@ pub(crate) fn derive_queue_work_prompt(
     guided: bool,
     review_findings: Option<&str>,
 ) -> String {
-    // Tests and non-rework callers: the first rework is round 2 by definition.
+    // Tests only: the first rework is round 2 by definition.
     derive_queue_work_prompt_with_round(plan, role, plan_only, guided, review_findings, 2)
 }
 
@@ -10477,7 +10480,7 @@ pub(crate) fn rework_findings_block_for_spec(
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
 /// headless launch deferred by `--no-launch`. Built from
-/// `session::claude_headless_args` — the exact argv `exec_claude_headless`
+/// `session::claude_headless_args_with_posture` — the exact argv `exec_claude_headless`
 /// feeds to `claude` — so the printed hint can never drift from the real
 /// launch (correct flag order, `--session-id` included, prompt last).
 /// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
@@ -12126,7 +12129,7 @@ pub(crate) fn handle_queue_work(
         if no_human {
             // STORY-263: mirror the headless launch the non-`--no-launch`
             // path would have run. BUG-225: render it from
-            // `claude_headless_args` (via `headless_launch_hint`) so the
+            // `claude_headless_args_with_posture` (via `headless_launch_hint`) so the
             // copy-pasteable command can't drift from `exec_claude_headless`
             // — same flag order, `--session-id` included, prompt last.
             // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
