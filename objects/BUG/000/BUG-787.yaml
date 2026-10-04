@@ -8,10 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:45.174321949Z
-modified_at: 2026-10-02T06:34:52.468485726Z
+modified_at: 2026-10-04T04:46:36.995361385Z
 req_type: Bug
 tags:
-- aida:review needs-repro-verification from-downstream:quizdom
+- aida:review
+- from-downstream:quizdom
+- needs-repro-verification
 comments:
 - id: 01a0fb52-a4b4-7993-a6d8-a779d153c8d7
   author: joe
