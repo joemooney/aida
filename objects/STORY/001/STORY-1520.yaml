@@ -24,12 +24,12 @@ description: |
   - Review the exact PR head against BUG-1794 acceptance and the Windows-specific regression behavior.
   - Approve or request changes for BUG-1794, citing evidence and the reviewed SHA.
   - Mark this story completed once PR #2410 is merged.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:19:23.050475365Z
-modified_at: 2026-10-04T03:43:36.079975569Z
+modified_at: 2026-10-04T19:46:55.177944829Z
 req_type: Story
 relationships:
 - rel_type:
@@ -43,6 +43,11 @@ comments:
   content: 'Review verdict: APPROVED for BUG-1794 at exact PR head 2f910f1a31da6f0a094f09fb87a3c371469db110. Review prompt covered BUG-1794 only. The Windows path key normalizes slash/case and extended-length/UNC prefixes, with a segment-boundary descendant check; the Windows fixture writes ordinary lease spelling against canonicalized cwd, and Windows-only tests cover drive/UNC normalization and sibling-prefix rejection. Focused Linux test passed: cargo test -p aida-cli-lib worktree_lease_role_takes_precedence_over_roster_role (1 passed). Required Build (ubuntu-latest) and merge-hold-gate passed at this SHA. Main is 2 commits ahead of merge-base; changed files do not overlap. GitHub refused an APPROVE review because the authenticated PR author account cannot approve its own PR; the evidence and verdict are posted as PR comment https://github.com/joemooney/aida/pull/2410#issuecomment-5976249965. No merge or merge-hold clearance performed. STORY-1520 remains in progress pending PR merge.'
   created_at: 2026-10-04T03:43:36.079975569Z
   modified_at: 2026-10-04T03:43:36.079975569Z
+- id: 01a10874-815d-7775-bb4c-483fbdf9a0cc
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2410 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-04T19:46:55.453250501Z
+  modified_at: 2026-10-04T19:46:55.453250501Z
 history:
 - id: 01a104f4-43f8-7a63-97dc-a534d2c1e0b4
   author: joe
@@ -51,6 +56,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10874-815d-7775-bb4c-4840ffda0ac1
+  author: aida-auto-bump
+  timestamp: 2026-10-04T19:46:55.453255570Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 2f910f1a31da6f0a094f09fb87a3c371469db110
   branch: bug-1794-2
@@ -58,3 +70,6 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 585f46e32a
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T19:46:55.453249424Z
