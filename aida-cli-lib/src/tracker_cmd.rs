@@ -174,7 +174,7 @@ pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Resul
             let config = aida_core::JiraConfig::load()?;
             let client = aida_core::JiraClient::new(config.clone())?;
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
             let req = store
                 .requirements
                 .iter()
@@ -225,7 +225,7 @@ pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Resul
             let config = aida_core::JiraConfig::load()?;
             let client = aida_core::JiraClient::new(config.clone())?;
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
 
             // Find AIDA requirements linked to Jira issues
             // Link detection: title starts with [DEV-N] or [PROJ-N], or has jira: tags
@@ -427,7 +427,7 @@ pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Resul
                 return Ok(());
             }
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
             let existing_titles: std::collections::HashSet<String> =
                 store.requirements.iter().map(|r| r.title.clone()).collect();
 
@@ -663,7 +663,7 @@ pub(crate) fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> R
             let config = aida_core::GitHubConfig::load()?;
             let client = aida_core::GitHubClient::new(config.clone())?;
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
             let req = store
                 .requirements
                 .iter()
@@ -717,7 +717,7 @@ pub(crate) fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> R
             let config = aida_core::GitHubConfig::load()?;
             let client = aida_core::GitHubClient::new(config)?;
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
 
             // Find AIDA requirements linked to GitHub issues (by [GH-N] prefix or URL)
             let linked: Vec<(&Requirement, u64)> = store
@@ -899,7 +899,7 @@ pub(crate) fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> R
             }
 
             // Check which issues are already imported (by matching title pattern)
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
             let existing_titles: std::collections::HashSet<String> =
                 store.requirements.iter().map(|r| r.title.clone()).collect();
 
@@ -1346,7 +1346,7 @@ pub(crate) fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> R
                 return Ok(());
             }
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
 
             // Load sync states based on filter
             let sync_states = if let Some(req_id) = id {
@@ -1644,7 +1644,7 @@ pub(crate) fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> R
             config_with_token.token = Some(token);
             let client = GitLabClient::new(config_with_token)?;
 
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
 
             // Get sync states to refresh
             let sync_states = if let Some(req_id) = id {

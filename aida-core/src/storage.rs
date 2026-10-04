@@ -432,6 +432,23 @@ impl Storage {
 
     /// Loads requirements from file with file locking
     /// Automatically detects file type from extension (.db/.sqlite for SQLite, otherwise YAML)
+    pub fn load_for_read(&self) -> Result<RequirementsStore> {
+        let is_sqlite = matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        );
+        if is_sqlite {
+            return self.load_sqlite();
+        }
+        if self.file_path.is_dir() {
+            use crate::db::DatabaseBackend;
+            let backend = self.git_backend_for(&self.file_path)?;
+            return backend.load_for_read();
+        }
+        // fallback to standard load (YAML)
+        self.load()
+    }
+
     pub fn load(&self) -> Result<RequirementsStore> {
         // Check if this is a SQLite database by extension
         let is_sqlite = matches!(

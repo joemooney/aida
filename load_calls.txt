@@ -1,0 +1,313 @@
+aida-cli-lib/src/cache_cmd.rs:376:    let store = backend.inner().load()?;
+aida-cli-lib/src/cache_cmd.rs:385:        let store = backend.inner().load()?;
+aida-cli-lib/src/type_cmd.rs:18:    let mut store = storage.load()?;
+aida-cli-lib/src/feature_cmd.rs:17:    let mut store = storage.load()?;
+aida-cli-lib/src/backlog.rs:608:    let store = storage.load()?;
+aida-cli-lib/src/backlog.rs:767:    let store = storage.load()?;
+aida-cli-lib/src/backlog.rs:921:        let mut store_now = storage.load()?;
+aida-cli-lib/src/backlog.rs:950:    let store = storage.load()?;
+aida-cli-lib/src/backlog.rs:1203:    let store = storage.load()?;
+aida-cli-lib/src/schedule_cmd.rs:204:    let store = storage.load().ok();
+aida-cli-lib/src/schedule_cmd.rs:283:    let mut store = storage.load()?;
+aida-cli-lib/src/doc_cmd.rs:14:    let store = storage.load()?;
+aida-cli-lib/src/doc_cmd.rs:156:            let store = backend.load()?;
+aida-cli-lib/src/doc_cmd.rs:238:            let store = backend.load()?;
+aida-cli-lib/src/doc_cmd.rs:298:            let store = backend.load()?;
+aida-cli-lib/src/doctor_cmd.rs:462:        .load()
+aida-cli-lib/src/doctor_cmd.rs:6715:    let mut store = storage.load()?;
+aida-cli-lib/src/doctor_cmd.rs:6947:    let mut store = storage.load()?;
+aida-cli-lib/src/doctor_cmd.rs:7026:    let store = storage.load()?;
+aida-cli-lib/src/doctor_cmd.rs:9220:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:10452:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:10487:        let healed = storage.load().unwrap().requirements[0].clone();
+aida-cli-lib/src/doctor_cmd.rs:10510:        let mut store = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:10516:            storage.load().unwrap().requirements[0].status,
+aida-cli-lib/src/doctor_cmd.rs:10655:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:10716:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:11108:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/doctor_cmd.rs:11151:        let reloaded = storage.load().unwrap();
+aida-cli-lib/src/tracker_cmd.rs:177:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:228:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:430:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:666:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:720:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:902:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:1349:            let store = storage.load()?;
+aida-cli-lib/src/tracker_cmd.rs:1647:            let store = storage.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:154:/// Keeping this helper free of `backend.load()` and live repository scans is
+aida-cli-lib/src/git_backend_cmd.rs:160:/// `backend.load()` on the single-spec show path — a full-store scan costing
+aida-cli-lib/src/git_backend_cmd.rs:163:/// it on two literal markers, and asserted the substring `backend.load()` was
+aida-cli-lib/src/git_backend_cmd.rs:691:    let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:877:    /// verified by injecting `backend.load()` into `show_cached_context` and
+aida-cli-lib/src/git_backend_cmd.rs:1240:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:1308:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:1540:                backend.load().ok()
+aida-cli-lib/src/git_backend_cmd.rs:1612:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:2300:            // backend.load() — so the deep-epic view stays as cache-fast as the
+aida-cli-lib/src/git_backend_cmd.rs:2534:            // already carries `r.blocked` — no full backend.load() over every
+aida-cli-lib/src/git_backend_cmd.rs:2994:                let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:3651:                        let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:4222:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:4270:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:4286:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:4307:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:4341:                let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:5635:                let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:7352:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:7757:                let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
+aida-cli-lib/src/git_backend_cmd.rs:7767:                            backend.load().map(|s| s.requirements).unwrap_or_default();
+aida-cli-lib/src/git_backend_cmd.rs:7877:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:8013:            let store = backend.load()?;
+aida-cli-lib/src/git_backend_cmd.rs:8182:            // Storage façade now handles directory paths via GitBackend.load().
+aida-cli-lib/src/rel_def_cmd.rs:67:    let store = storage.load()?;
+aida-cli-lib/src/rel_def_cmd.rs:129:    let store = storage.load()?;
+aida-cli-lib/src/rel_def_cmd.rs:199:    let mut store = storage.load()?;
+aida-cli-lib/src/rel_def_cmd.rs:260:    let mut store = storage.load()?;
+aida-cli-lib/src/rel_def_cmd.rs:327:    let mut store = storage.load()?;
+aida-cli-lib/src/record_cmd.rs:19:            let store = backend.load()?;
+aida-cli-lib/src/record_cmd.rs:57:            let store = backend.load()?;
+aida-cli-lib/src/drain_cmd.rs:807:        .load()
+aida-cli-lib/src/drain_cmd.rs:942:        .load()
+aida-cli-lib/src/config_cmd.rs:18:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:5737:            let store = storage.load()?;
+aida-cli-lib/src/lib.rs:5785:            let store = storage.load()?;
+aida-cli-lib/src/lib.rs:5797:            let store = storage.load()?;
+aida-cli-lib/src/lib.rs:5819:            let store = storage.load()?;
+aida-cli-lib/src/lib.rs:5846:            let store = storage.load()?;
+aida-cli-lib/src/lib.rs:6114:                storage.load().ok()
+aida-cli-lib/src/lib.rs:6933:                backend.load().ok()
+aida-cli-lib/src/lib.rs:11124:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:12394:    Ok(storage.load()?.requirements.len())
+aida-cli-lib/src/lib.rs:17770:    let store = backend.load()?;
+aida-cli-lib/src/lib.rs:18653:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:18704:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:18895:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:19327:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:19915:    let Ok(mut store) = storage.load() else {
+aida-cli-lib/src/lib.rs:19979:    let Ok(mut store) = storage.load() else {
+aida-cli-lib/src/lib.rs:20031:    let store_for_lookup = storage.load()?;
+aida-cli-lib/src/lib.rs:20034:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:20279:    let store_for_lookup = storage.load()?;
+aida-cli-lib/src/lib.rs:20285:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:20420:    let store_for_lookup = storage.load()?;
+aida-cli-lib/src/lib.rs:20426:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:20741:    let store = backend.load()?;
+aida-cli-lib/src/lib.rs:20832:    let store = backend.load()?;
+aida-cli-lib/src/lib.rs:31192:    let store = storage.load().ok()?;
+aida-cli-lib/src/lib.rs:31738:    let store = storage.load().ok()?;
+aida-cli-lib/src/lib.rs:34645:/// TARGETED per-uuid lookups rather than a full-store `backend.load()` (a scan
+aida-cli-lib/src/lib.rs:38182:    let preflight_store = Storage::new(project_root.join(".aida-store")).load().ok();
+aida-cli-lib/src/lib.rs:38925:        match storage.load().and_then(|mut store| {
+aida-cli-lib/src/lib.rs:39930:    let store_snapshot = storage.load().ok();
+aida-cli-lib/src/lib.rs:43359:        if let Ok(storage) = Storage::new(store_path).load() {
+aida-cli-lib/src/lib.rs:46984:        let store = storage.load()?;
+aida-cli-lib/src/lib.rs:47173:            .load()
+aida-cli-lib/src/lib.rs:47284:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:47540:                        .load()
+aida-cli-lib/src/lib.rs:48108:        if let Ok(store) = storage.load() {
+aida-cli-lib/src/lib.rs:49987:    let store = storage.load().ok();
+aida-cli-lib/src/lib.rs:51060:        .and_then(|s| s.load().ok())
+aida-cli-lib/src/lib.rs:65612:    let Ok(store) = Storage::new(main_root.join(".aida-store")).load() else {
+aida-cli-lib/src/lib.rs:66650:        if let Ok(store) = Storage::new(main_root.join(".aida-store")).load() {
+aida-cli-lib/src/lib.rs:68502:            let store = storage.load().ok();
+aida-cli-lib/src/lib.rs:68915:/// full `backend.load()` (which parses every YAML — ~1.0s of `aida ps`'s ~1.3s).
+aida-cli-lib/src/lib.rs:68968:/// `aida list` ride) instead of a full `backend.load()`. The summaries carry
+aida-cli-lib/src/lib.rs:69094:    // projection (the STORY-707 pattern), NOT a full `backend.load()` — profiling
+aida-cli-lib/src/lib.rs:75194:    let after = storage.load()?;
+aida-cli-lib/src/lib.rs:76818:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:77186:    let after = storage.load().unwrap_or_else(|_| store.clone());
+aida-cli-lib/src/lib.rs:77762:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:78175:    let after = storage.load().unwrap_or_else(|_| store.clone());
+aida-cli-lib/src/lib.rs:79459:    // the rich `aida status` path no longer needs a full `backend.load()` to
+aida-cli-lib/src/lib.rs:85008:    let store = backend.load()?;
+aida-cli-lib/src/lib.rs:85575:// cache that powers sub-ms `aida list`. No `backend.load()`, no `gh`, no
+aida-cli-lib/src/lib.rs:85707:/// same read-only cache `read_draft_backlog_depth` uses — NO `backend.load()`, no
+aida-cli-lib/src/lib.rs:86586:/// consume from the CACHE read-projection instead of a full `backend.load()`.
+aida-cli-lib/src/lib.rs:86591:/// on-disk set `backend.load()` returned). Each lightweight `Requirement` carries
+aida-cli-lib/src/lib.rs:86658:// read-projection, never a full `backend.load()` over the object YAMLs, and the
+aida-cli-lib/src/lib.rs:87826://     HEAD, and graph reads the worktree YAML via inner.load());
+aida-cli-lib/src/lib.rs:90335:            return Storage::new(legacy_path).load();
+aida-cli-lib/src/lib.rs:92073:    let store = match storage.load() {
+aida-cli-lib/src/lib.rs:95770:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:96373:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:96925:/// instead of `storage.load()` (a scan of every YAML on the queue write path).
+aida-cli-lib/src/lib.rs:97669:            .load()
+aida-cli-lib/src/lib.rs:97915:        .load()
+aida-cli-lib/src/lib.rs:97966:    let Some(store) = storage.load().ok() else {
+aida-cli-lib/src/lib.rs:99334:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:99413:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:99463:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:103262:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:103603:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:103729:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:103982:    let mut store = storage.load()?;
+aida-cli-lib/src/lib.rs:104227:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:104274:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:104303:    let store = storage.load()?;
+aida-cli-lib/src/lib.rs:104322:    let Ok(store) = storage.load() else {
+aida-cli-lib/src/rules_cmd.rs:32:            let store = backend.load()?;
+aida-cli-lib/src/db_cmd.rs:182:            let store = backend.load()?;
+aida-cli-lib/src/db_cmd.rs:384:            let store = source_backend.load()?;
+aida-cli-lib/src/status_cmd.rs:357:    // path — sub-second, NO `backend.load()`, NO `gh`/network, NO live-session
+aida-cli-lib/src/status_cmd.rs:425:    // from the CACHE read-projection, NOT a full `backend.load()` over every
+aida-cli-lib/src/status_cmd.rs:1617:    let store = storage.load()?;
+aida-cli-lib/src/trace_cmd.rs:97:    let mut store = storage.load()?;
+aida-cli-lib/src/trace_cmd.rs:174:    let store = storage.load()?;
+aida-cli-lib/src/trace_cmd.rs:298:    let mut store = storage.load()?;
+aida-cli-lib/src/trace_cmd.rs:513:        let mut store = storage.load()?;
+aida-cli-lib/src/trace_cmd.rs:680:        let mut store = storage.load()?;
+aida-cli-lib/src/supervisor.rs:138:    let store = backend.load()?;
+aida-cli-lib/src/supervisor.rs:1158:        let store = backend.load().unwrap();
+aida-cli-lib/src/supervisor.rs:1180:        for r in backend.load().unwrap().requirements {
+aida-cli-lib/src/supervisor.rs:1197:        let snapshot = backend.load().unwrap();
+aida-cli-lib/src/supervisor.rs:1244:            let store = backend.load().unwrap();
+aida-cli-lib/src/supervisor.rs:1285:            for r in backend.load().unwrap().requirements {
+aida-cli-lib/src/supervisor.rs:1308:        let store = backend.load().unwrap();
+aida-cli-lib/src/supervisor.rs:1359:        for r in backend.load().unwrap().requirements {
+aida-cli-lib/src/supervise_cmd.rs:105:    let store = backend.load()?;
+aida-cli-lib/src/supervise_cmd.rs:514:    let store = backend.load()?;
+aida-cli-lib/src/metrics_cmd.rs:42:    let store = Storage::new(project_root.join(".aida-store")).load()?;
+aida-cli-lib/src/shift.rs:2878:    match backend.load() {
+aida-cli-lib/src/protocol_cmd.rs:14:    let mut store = storage.load()?;
+aida-cli-lib/src/protocol_cmd.rs:47:    let mut store = storage.load()?;
+aida-cli-lib/src/protocol_cmd.rs:283:        let store = storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:1446:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:1696:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:1865:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:2001:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:2323:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:2428:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:2566:                if let Ok(store) = self.storage.load() {
+aida-cli-lib/src/mcp.rs:2981:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3026:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3082:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3193:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3354:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3436:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3494:        let mut store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:3956:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4069:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4130:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4221:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4348:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4439:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4668:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:4722:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5412:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5445:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5498:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5801:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5842:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5893:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:5977:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:6017:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:6086:        let store = self.storage.load().map_err(|e| e.to_string())?;
+aida-cli-lib/src/mcp.rs:9224:        let mut store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:9846:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:10107:        let mut store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:10118:        let mut store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:10357:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:10429:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:10926:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11001:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11038:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11051:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11106:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11114:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11142:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11165:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11200:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11248:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11278:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11317:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11563:        let mut store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:11742:        let store = srv.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:12397:        let loaded = cli_view.load().unwrap();
+aida-cli-lib/src/mcp.rs:12707:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:12749:        assert!(server.storage.load().unwrap().requirements.is_empty());
+aida-cli-lib/src/mcp.rs:12786:        assert!(server.storage.load().unwrap().requirements.is_empty());
+aida-cli-lib/src/mcp.rs:13127:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:13163:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:13196:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/mcp.rs:13255:        let store = server.storage.load().unwrap();
+aida-cli-lib/src/report_cmd.rs:92:            let store = storage.load()?;
+aida-cli-lib/src/report_cmd.rs:166:    let store = storage.load()?;
+aida-cli-lib/src/report_cmd.rs:313:    let mut store = storage.load()?;
+aida-cli-lib/src/report_cmd.rs:460:    let store = storage.load()?;
+aida-cli-lib/src/report_cmd.rs:503:        let Ok(store) = storage.load() else {
+aida-cli-lib/src/report_cmd.rs:835:        let from_load = open_upstream_report_rows(&backend.load().unwrap(), "2.0.0");
+aida-cli-lib/src/load_cmd.rs:28:    let store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:129:    let mut store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:205:    let mut store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:266:    let mut store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:302:    let store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:328:    let mut store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:360:    let mut store = storage.load()?;
+aida-cli-lib/src/comment_cmd.rs:383:    let mut store = storage.load()?;
+aida-cli-lib/src/pr_cmd.rs:3278:    let store = match Storage::new(project_root.join(".aida-store")).load() {
+aida-cli-lib/src/pr_cmd.rs:3282:            match Storage::new(main_root.join(".aida-store")).load() {
+aida-cli-lib/src/pr_cmd.rs:3356:    let Ok(store) = storage.load() else {
+aida-cli-lib/src/queue_cmd.rs:81:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:813:/// pattern) rather than a full `storage.load()` YAML scan, so the view stays
+aida-cli-lib/src/queue_cmd.rs:1577:            // a slow `storage.load()` full YAML scan. trace:STORY-672
+aida-cli-lib/src/queue_cmd.rs:1600:            // the same path `aida list` uses, ~0.2s) instead of `storage.load()`
+aida-cli-lib/src/queue_cmd.rs:1621:                    Some(storage.load()?)
+aida-cli-lib/src/queue_cmd.rs:1657:                        if let Ok(full_store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:1728:                    Some(storage.load()?)
+aida-cli-lib/src/queue_cmd.rs:1786:                        storage.load().ok().map(|full_store| {
+aida-cli-lib/src/queue_cmd.rs:1930:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:3238:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:3312:            // BUG-634: avoid a full-store scan (`storage.load()` parses every
+aida-cli-lib/src/queue_cmd.rs:3417:                    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:3758:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:3857:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:4142:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:4477:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:4995:            let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:5956:                        let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:7232:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:7933:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:7965:            let fresh_store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:8082:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:9007:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:10714:                let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:10748:            if let Ok(store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:10764:        if let Ok(store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:10996:            .load()
+aida-cli-lib/src/queue_cmd.rs:11027:        if let Ok(store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:11055:        if let Ok(store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:11074:                if let Ok(store) = storage.load() {
+aida-cli-lib/src/queue_cmd.rs:11756:    let status_before_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+aida-cli-lib/src/queue_cmd.rs:11788:        let status_after_pull: Option<RequirementStatus> = storage.load().ok().and_then(|store| {
+aida-cli-lib/src/queue_cmd.rs:12911:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:13317:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:13401:    let store = storage.load()?;
+aida-cli-lib/src/queue_cmd.rs:13495:    let store = storage.load().ok();
+aida-cli-lib/src/queue_cmd.rs:14391:        let store = storage.load()?;
+aida-cli-lib/src/import_export_cmd.rs:23:    let store = storage.load()?;
+aida-cli-lib/src/import_export_cmd.rs:111:    let mut store = storage.load()?;
+aida-cli-lib/src/init_cmd.rs:214:        storage.load()?
+aida-cli-lib/src/init_cmd.rs:1043:    if let Ok(store) = Storage::new(&source).load() {
+aida-cli-lib/src/init_cmd.rs:2395:    let mut store = storage.load()?;
+aida-cli-lib/src/init_cmd.rs:2419:    let mut store = storage.load()?;
+aida-cli-lib/src/init_cmd.rs:2986:        let store = storage.load().unwrap();
+aida-cli-lib/src/init_cmd.rs:3008:        let store2 = storage.load().unwrap();
+aida-cli-lib/src/init_cmd.rs:3073:        let store = storage.load().unwrap();
+aida-cli-lib/src/init_cmd.rs:3114:        let store = storage.load().unwrap();
+aida-cli-lib/src/init_cmd.rs:4260:                .load()
+aida-cli-lib/src/init_cmd.rs:4953:        .load()
+aida-cli-lib/src/global_queue.rs:175:    let mut entries = mutation.load()?;
+aida-cli-lib/src/global_queue.rs:193:    let mut entries = mutation.load()?;
+aida-cli-lib/src/relationship_cmd.rs:82:    let mut store = storage.load()?;
+aida-cli-lib/src/relationship_cmd.rs:195:    let mut store = storage.load()?;
+aida-cli-lib/src/relationship_cmd.rs:224:    let store = storage.load()?;
+aida-cli-lib/src/autopilot_audit.rs:1113:    let store = crate::Storage::new(project_root.join(".aida-store")).load()?;
+aida-cli-lib/src/autopilot_audit.rs:1170:                let current = storage.load().ok().and_then(|s| {
+aida-cli-lib/src/autopilot_audit.rs:1239:                let store = storage.load()?;
+aida-cli-lib/src/autopilot_audit.rs:1248:                let store = storage.load()?;
+aida-cli-lib/src/related_edge_migration.rs:335:    let store = backend.load()?;
+aida-cli-lib/src/scaffold_cmd.rs:30:            let store = storage.load()?;
+aida-cli-lib/src/scaffold_cmd.rs:159:            let store = storage.load()?;
+aida-cli-lib/src/scaffold_cmd.rs:208:            let store = storage.load()?;
+aida-cli-lib/src/scaffold_cmd.rs:604:            let store = storage.load()?;
+aida-cli-lib/src/scaffold_cmd.rs:629:            let store = storage.load()?;

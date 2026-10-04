@@ -1614,7 +1614,7 @@ pub(crate) fn handle_status_command(
     store_path_override: Option<&std::path::Path>,
     storage: &Storage,
 ) -> Result<()> {
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
     let project_root = std::env::current_dir()?;
 
     println!("{}", "─── Project ───".bold());
