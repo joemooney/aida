@@ -101,7 +101,7 @@ build: ensure-agent-skill-hooks ## Build all packages (debug mode)
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-release: ## Build all packages (release mode, optimized)
-	cargo build --workspace --release
+	cargo build --workspace --profile agent
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 # trace:TASK-1154 | ai:claude
@@ -116,11 +116,11 @@ build-release: ## Build all packages (release mode, optimized)
 # trace:BUG-1684 | ai:codex
 build-fast: ensure-agent-skill-hooks ## Build all packages (release + incremental — for iteration, NOT shipping)
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
-		aida dev build-guard release $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
+		aida dev build-guard agent $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
 		echo "Note: current aida predates the live-wave build guard; bootstrapping it now."; \
 	fi
-	RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build --workspace --release
+	RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build --workspace --profile agent
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-all: build cli-remote ## Build everything including remote features

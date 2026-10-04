@@ -2782,7 +2782,7 @@ pub enum DevCommand {
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]
     BuildGuard {
-        #[clap(value_parser = ["debug", "release"])]
+        #[clap(value_parser = ["debug", "release", "agent"])]
         profile: String,
         #[clap(long)]
         after_wave: bool,

@@ -65,6 +65,7 @@
 "Minimal aida-cli build for docs-only guards" = "full"
 "CLI-manual drift-guard (every command documented)" = "full"
 "Monitor contract drift guard" = "full"
+"Performance profile guard" = "fast"
 "Check formatting" = "fast"
 "Removed mode-flag spelling guard" = "fast"
 "Check Rust test portability ratchet" = "fast"

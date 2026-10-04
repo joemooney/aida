@@ -405,6 +405,10 @@ jobs:
           BASE="origin/${{ github.base_ref }}"
           python3 docs/monitor-contract-fixtures/verify.py "$BASE"
 
+      - name: Performance profile guard
+        run: ./tests/test_performance_profile_opt_level.sh
+        shell: bash
+
       - name: Check formatting
         if: steps.changes.outputs.full_ci == 'true'
         run: cargo fmt --all -- --check
