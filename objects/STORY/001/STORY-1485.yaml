@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-04T04:57:01.720998760Z
+modified_at: 2026-10-04T06:04:35.738922580Z
 req_type: Story
 tags:
 - needs-sketch
@@ -36,6 +36,23 @@ comments:
   content: 'SKETCH proposed: docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md on branch story-1485. Proposes orchestrator-only default; main-worktree shared atomic occupancy record with permanent flock and generation fencing; identity-aware liveness; competing live claims refused, handoff reads warned, non-holder writes/dispatch refused; graceful request/ack takeover with 120s bounded grace; hard stop only with human-at-TTY or explicit operator config, process identity rechecked; dirty worktrees reported and takeover events exposed through history. Independent advisor signoff is still required before implementation. Session 01a10544e508 created the isolated worktree and moved Approved to In Progress.'
   created_at: 2026-10-04T04:57:01.720998760Z
   modified_at: 2026-10-04T04:57:01.720998760Z
+- id: 01a10583-a41a-77c0-b3e7-8048ad1021b5
+  author: ai:codex:joe
+  content: |-
+    INDEPENDENT ADVISOR REVIEW — CHANGES REQUESTED (sketch edeac57b63, 2026-10-03). No ADVISOR SIGNOFF yet. I independently reviewed the sketch, operator takeover acceptance, STORY-1473 and its comments, session_handoff_seat/seat_rotation, liveness, CLI dispatch gates, and MCP dispatch authority.
+
+    Architecture I support: orchestrator-only default; shared main-worktree occupancy with permanent sidecar lock and atomic replacement; live competing claims refused; inspection warned; unknown liveness blocks mutation; generation fencing; graceful takeover only on matching holder release/ack or proven death; dirty work reported without alteration; existing integrator lock retained.
+
+    Minimum revised sketch for signoff:
+    1. Name claim/status/release/takeover/ack CLI and configuration surfaces, plus an explicit entry-point inventory for seat dispatch: burndown run, queue work auto-complete, child agent launch, auto-enqueue/queue routing, and MCP queue mutation. State how callers are classified as orchestrator-scoped without letting an old holder omit its seat or reset an env var to bypass fencing. Ordinary implementer work remains unaffected.
+    2. Make ownership validation atomic with the handoff write/dispatch commitment. A check immediately before action followed by unlocking can race with transfer. Describe either locking through bounded commitment or a generation-bound dispatch reservation; no lock spans peer waits or harness termination. Specify transfer/release races and resumable pending request identity.
+    3. Separate transport from acknowledgment authority. Durable mailbox messages can use explicitly supplied sender identities (mailbox_cmd.rs); a freeform mail ack must not transfer ownership. Matching request ID + holder session + generation must be validated by the seat release/ack operation, using the authoritative session binding.
+    4. Define Alive/Dead/Unknown probes explicitly. Existing process_identity_is_alive returns true when start identity is missing, and pid_is_alive maps miscellaneous probe errors to false; neither is sufficient by itself to prove death or authorize killing. Hard stop requires positive current identity and harness mapping, including background Claude daemon/session correspondence; unsupported or ambiguous mappings refuse.
+    5. Declare STORY-1473 a hard prerequisite for production authority activation (currently In Progress, guided; current CLI authority still resolves roster/env, MCP env). State the exact human authorization/config trust boundary and reject headless/MCP/env-only peer kill. Agents have same-user file access, so an ordinary repo config flag is not proof that the operator authorized it.
+
+    Items 1-4 are implementation choices that the author can concretize and resubmit; they need no new operator approval. Item 5 must reuse an independently accepted STORY-1473 authority contract or obtain the operator decision for any new trusted kill configuration. A fail-closed interim adapter that disables kill until authority exists is acceptable scaffolding, and I can sign off such explicitly bounded scaffolding; it does not satisfy the authorized-hard-takeover acceptance and must not be represented as completion of STORY-1485. The full story remains gated on its existing operator acceptance. No acceptance criteria were relaxed, no implementation or merge was performed.
+  created_at: 2026-10-04T06:04:35.738922580Z
+  modified_at: 2026-10-04T06:04:35.738922580Z
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
