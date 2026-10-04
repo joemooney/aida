@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1520",
+  "publishes": [
+    {
+      "at": "2026-10-04T19:46:56.265767245Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T03:27:59.962590668Z",
+      "spec": "STORY-1520",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T19:46:56.248879421Z",
+      "spec": "STORY-1520",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "pr": 2410,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

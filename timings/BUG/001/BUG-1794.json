@@ -5,9 +5,34 @@
     {
       "at": "2026-10-04T03:19:08.413311337Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-04T19:46:56.228196916Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-03T22:07:09.300591391Z",
+      "spec": "BUG-1794",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:52:01.804998086Z",
+      "spec": "BUG-1794",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-04T03:14:59.235696203Z",
       "spec": "BUG-1794",
@@ -16,6 +41,89 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-04T03:41:15.183176213Z",
+      "spec": "BUG-1794",
+      "seat": "product",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2410,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2f910f1a31da6f0a094f09fb87a3c371469db110"
+      }
+    },
+    {
+      "ts": "2026-10-04T05:43:04.200440895Z",
+      "spec": "BUG-1794",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2410,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "2f910f1a31da6f0a094f09fb87a3c371469db110"
+      }
+    },
+    {
+      "ts": "2026-10-04T05:43:06.358672885Z",
+      "spec": "BUG-1794",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Core Windows spelling normalization is covered, but its casing fold is ASCII-only and does not preserve Windows case-insensitive matching for Unicode path components.",
+        "recovery_hint": "address the review findings, move BUG-1794 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:44:14.964240845Z",
+      "spec": "BUG-1794",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:55:15.417278614Z",
+      "spec": "BUG-1794",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "77afe9c72e8454849bb02c0d7f44755523feebd1"
+      }
+    },
+    {
+      "ts": "2026-10-04T19:29:10.718632387Z",
+      "spec": "BUG-1794",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "37af379bc56755a39b13ba8d46bbe34009ab573a"
+      }
+    },
+    {
+      "ts": "2026-10-04T19:46:39.644023879Z",
+      "spec": "BUG-1794",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2410
+      }
+    },
+    {
+      "ts": "2026-10-04T19:46:56.170448375Z",
+      "spec": "BUG-1794",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "72ec58311c2c215070318d063161eafed5800851",
+        "closed_by": "auto-bump"
       }
     }
   ]
