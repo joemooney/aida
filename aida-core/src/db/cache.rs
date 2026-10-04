@@ -3184,7 +3184,10 @@ mod tests {
         cache.upsert_requirement(&req)?;
 
         let loaded = cache
-            .list_summaries(&ListFilter::default())?
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })?
             .into_iter()
             .next()
             .unwrap();
@@ -3854,7 +3857,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         // Default filter: skip archived → 2 rows.
-        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        let all = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(all.len(), 2);
 
         // Filter by owner.
@@ -3898,7 +3906,12 @@ mod tests {
         cache.rebuild_from_store(&store, "head").unwrap();
 
         // The assignee column round-trips (None for the unassigned row).
-        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        let all = cache
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
+            .unwrap();
         let by_id = |id: &str| {
             all.iter()
                 .find(|r| r.spec_id.as_deref() == Some(id))
@@ -4757,7 +4770,10 @@ mod tests {
 
         // And a query touching the `blocked` column must succeed, not error.
         let rows = cache
-            .list_summaries(&ListFilter::default())
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
             .expect("list reading the `blocked` column must succeed after self-heal");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
@@ -5238,7 +5254,10 @@ mod tests {
         );
 
         let rows = cache
-            .list_summaries(&ListFilter::default())
+            .list_summaries(&ListFilter {
+                defer: DeferFilter::Both,
+                ..Default::default()
+            })
             .expect("list should see a recreated requirements_cache table");
         assert!(rows.is_empty());
     }
@@ -5449,7 +5468,10 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = reader_cache
-                .list_summaries(&ListFilter::default())
+                .list_summaries(&ListFilter {
+                    defer: DeferFilter::Both,
+                    ..Default::default()
+                })
                 .map(|rows| rows.into_iter().map(|row| row.title).collect::<Vec<_>>());
             tx.send(result).unwrap();
         });
@@ -6629,7 +6651,10 @@ mod tests {
             let cache = Cache::open(&path).context("reopen read-only cache")?;
             let snapshot = cache.read_snapshot().context("pin read-only snapshot")?;
             let rows = snapshot
-                .list_summaries(&ListFilter::default())
+                .list_summaries(&ListFilter {
+                    defer: DeferFilter::Both,
+                    ..Default::default()
+                })
                 .context("query read-only snapshot")?;
             anyhow::ensure!(rows
                 .iter()

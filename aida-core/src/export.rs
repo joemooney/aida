@@ -793,7 +793,9 @@ mod tests {
             "id": "f7d250bf-5b3e-4ec3-8bd5-2bee2c4b7bb9",
             "title": "A legacy export",
             "status": "Draft",
-            "type": "Task"
+            "req_type": "Task",
+            "priority": "Medium",
+            "original_uuid": "f7d250bf-5b3e-4ec3-8bd5-2bee2c4b7bb9"
         }"#;
         let exported: ExportedRequirement = serde_json::from_str(legacy_json).unwrap();
         assert_eq!(exported.title, "A legacy export");
