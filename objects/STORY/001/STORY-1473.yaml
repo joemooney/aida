@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-10-04T06:21:49.090061853Z
+modified_at: 2026-10-04T06:29:17.125207633Z
 req_type: Story
 tags:
 - authority
@@ -55,6 +55,12 @@ comments:
     OPERATOR DECISION (Joe, 2026-10-03): Agreed to **TTY grant + scoped child seat**. Joe explicitly selects a roster-allowed seat at an interactive TTY; AIDA launchers may issue each child only its explicitly requested, roster-allowed session seat; environment role variables are hints, not authority. Roster writes remain human-at-TTY only. Recorded as ADR-66 (Draft). Implementation sketch: `docs/plans/2026-10-03-story-1473-advisor-seat-issuance-sketch.md`. Per STORY-1473, wait for independent advisor signoff on the sketch before code; no implementation authorized yet.
   created_at: 2026-10-04T06:21:49.090061853Z
   modified_at: 2026-10-04T06:21:49.090061853Z
+- id: 01a1059a-3ec5-7971-9af6-9d8a4248b6f7
+  author: joe
+  content: |
+    OPERATOR DECISION UPDATE (Joe, 2026-10-03): For child issuance, choose an explicit delegation set. A parent session may issue only child seats listed in its TTY-issued delegation scope, intersected with the roster; roster membership alone grants no delegation power. The revised ADR-66 and sketch record this. Advisor signoff is still required before implementation.
+  created_at: 2026-10-04T06:29:17.125207633Z
+  modified_at: 2026-10-04T06:29:17.125207633Z
 history:
 - id: 01a0def4-ce7f-7a71-a26a-0698f546a335
   author: joe
