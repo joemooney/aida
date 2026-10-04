@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1560",
+  "publishes": [
+    {
+      "at": "2026-10-04T01:53:44.581546326Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-30T13:13:52.533243879Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T01:07:55.592337896Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T01:12:05.185380413Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2400
+      }
+    },
+    {
+      "ts": "2026-10-04T01:22:01.377040342Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T01:32:13.919817150Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T01:32:18.451621889Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T01:49:14.323719345Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T01:52:25.671373167Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T01:53:32.675607678Z",
+      "spec": "TASK-1560",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2400
+      }
+    },
+    {
+      "ts": "2026-10-04T01:53:44.574101411Z",
+      "spec": "TASK-1560",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "658eb885d828d150fa6e7030d7aa1c9cfd87acf2",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
