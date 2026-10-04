@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Reclaimed 86G from 11 stale worktree target/ caches: 89% -> 79%, 101G -> 186G free. Script with six safety rails at .aida/scripts/reclaim-worktree-targets.sh. Product gap filed as TASK-1562: the guard''s own remediation advises ''aida session reap'' (does not touch a kept worktree''s cache) and ''cargo clean'' (clears the SHARED main target the live binary uses) - neither reclaims this space.'
+due_since: 2026-10-04T16:08:48.053182302Z
+due_reason: on CronJobFailed:disk-headroom-guard
