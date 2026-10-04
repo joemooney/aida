@@ -1,12 +1,4 @@
 - user_id: joe
-  requirement_id: 01a10350-e89c-7271-bcb4-95ddb0068054
-  position: 29000
-  added_by: joe
-  note: auto-queued by `session end` (01a1032b); covers 1 spec
-  added_at: 2026-10-03T19:50:02.372479592Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a10468-7291-7082-b1e4-5f3d84df7891
   position: 35000
   added_by: joe
