@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-04T03:34:40.426378989Z
+modified_at: 2026-10-04T03:35:11.312925663Z
 req_type: Bug
 tags:
 - pull
@@ -82,6 +82,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-04T02:39:30.709971662Z
   modified_at: 2026-10-04T02:39:30.709971662Z
+- id: 01a104fa-dad0-7933-bf71-12d5a45a64bb
+  author: joe
+  content: Implemented AC3 full-path byte-identical test for normal two-remote pull output, removed the partial rust test, and added the script to CI.
+  created_at: 2026-10-04T03:35:11.312925663Z
+  modified_at: 2026-10-04T03:35:11.312925663Z
 history:
 - id: 01a103ce-75a5-7c31-accb-2bcbfa1f5f6d
   author: joe
