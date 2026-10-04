@@ -3,12 +3,12 @@ spec_id: BUG-1797
 agreed_id: BUG-1797
 title: needs-attention → done refusal names three targets but not the route to done
 description: 'From TASK-1574 intake (AIDA-57 item 2, re-verified 2026-10-03): the refusal at aida-core/src/models.rs:399 and :8855 still reads ''a Needs Attention spec can only be triaged to Approved, In Progress, or Rejected''. The natural post-rework flow (refusing verdict → rework → fresh APPROVE → mark done) hits this bouncer; three separate relay implementers hit it in one session, and the message does not name the legal two-step route. The TRANSITION ITSELF is design-intent and stays (lifecycle.rs transition_guard; a merged PR referencing the spec completes directly from NeedsAttention via git_merge_completes, BUG-405). Fix the message only: append the route, e.g. ''— to mark it done, go via In Progress (…--status in-progress, then --status done); a merged PR referencing this spec completes it via aida pull.'' Acceptance: (1) refusal text names the two-step route and the merge path; (2) both emission sites updated (models.rs has two); (3) a test pins the wording; (4) no transition behavior change.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:39.754099926Z
-modified_at: 2026-10-04T00:55:21.625290363Z
+modified_at: 2026-10-04T01:35:41.373187952Z
 req_type: Bug
 tags:
 - lifecycle
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1048d-733d-7fc1-89ff-0b18a2c7b61e
+  author: ai:codex:joe
+  timestamp: 2026-10-04T01:35:41.373186456Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
