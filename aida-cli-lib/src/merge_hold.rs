@@ -2025,6 +2025,25 @@ pub(crate) enum RefusalRelease {
     Held(String),
 }
 
+/// TASK-1582: `aida merge-hold list`'s next-action line once a refusal hold's
+/// release condition is MET. The hold is still ARMED, and `aida pr ship`
+/// refuses an armed hold for any seat without the human integrity floor
+/// (BUG-1566) — so pointing at ship alone sent agent seats in a loop between
+/// the two commands. The line names the CLEAR step first (clear → ship). It
+/// still names the human's one-step `aida pr ship`, because that path
+/// releases the hold AND pins the merge to the verdict's head (BUG-1532);
+/// after a plain clear the ship falls back to the approval-gate pin.
+/// `short_sha` is the verdict's reviewed sha (already shortened) or `?`.
+// trace:TASK-1582 | ai:antigravity
+pub(crate) fn release_met_next_action(pr: u64, key: &str, short_sha: &str) -> String {
+    format!(
+        "release condition MET: APPROVED for {key} at {short_sha} — the hold is still armed; \
+         next: `aida merge-hold clear {pr}` (human, recorded), then `aida pr ship {pr}`. \
+         A human at a terminal may instead run `aida pr ship {pr}` alone, which releases the \
+         hold and pins the merge to {short_sha}; agent seats are refused until it is cleared"
+    )
+}
+
 /// The verdict keys a refusal hold is answered under: its typed
 /// `verdict_ref` first, then the PR-keyed record (`PR-<n>`). Structural
 /// only — the marker's prose is never parsed for a key (criterion 6).
@@ -2746,6 +2765,25 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-1582 acceptance 1: with a hold armed, the next-action line names
+    // `aida merge-hold clear` BEFORE `aida pr ship` (no circular hints).
+    // trace:TASK-1582.ac14557d | ai:antigravity
+    #[test]
+    fn task_1582_release_met_next_action_names_clear_before_ship() {
+        let line = release_met_next_action(2386, "TASK-1", "abc1234");
+        let clear = line
+            .find("`aida merge-hold clear 2386`")
+            .unwrap_or_else(|| panic!("no clear step: {line}"));
+        let ship = line
+            .find("`aida pr ship 2386`")
+            .unwrap_or_else(|| panic!("no ship step: {line}"));
+        assert!(clear < ship, "clear must come first: {line}");
+        assert!(line.contains("APPROVED for TASK-1 at abc1234"), "{line}");
+        assert!(line.contains("still armed"), "{line}");
+        assert!(line.contains("pins the merge to abc1234"), "{line}");
+        assert!(!line.contains("may now `aida pr ship"), "{line}");
+    }
 
     #[cfg(unix)]
     fn shell_args(script: String) -> Vec<String> {

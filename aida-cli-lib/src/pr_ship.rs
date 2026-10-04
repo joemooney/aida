@@ -669,6 +669,98 @@ where
     })
 }
 
+/// TASK-1582: the placeholder the dry-run plan prints for the TASK-1458
+/// approval pin (`MergeOptions.match_head`). The plan runs before the
+/// approval gate reads the head, so the literal sha is not yet known.
+pub const DRY_RUN_PIN_PLACEHOLDER: &str = "<approved-head-sha>";
+
+/// TASK-1582: the merge step as the real ship runs it, with the PR number
+/// and pin as placeholders. GitHub's line is rendered from
+/// [`crate::forge::github_merge_argv`] — the argv builder the real merge
+/// uses — so the flag shape tracks it (the old plan printed a bare
+/// `gh pr merge <N> --squash` and omitted `--match-head-commit`). The plan's
+/// footnote covers what a pre-resolution plan cannot know: whether a pin
+/// applies and whether a repaired `--subject` is appended. GitLab merges
+/// through the merge API rather than `glab mr merge`, so its line is the
+/// familiar CLI equivalent plus an explicit abbreviation note.
+/// `None` = no forge command (pure git).
+// trace:TASK-1582 | ai:antigravity
+pub fn dry_run_merge_cmd(forge: crate::forge::ForgeKind, delete_branch: bool) -> Option<String> {
+    match forge {
+        crate::forge::ForgeKind::GitHub => {
+            let opts = crate::forge::MergeOptions {
+                method: crate::forge::MergeMethod::Squash,
+                squash_subject: None,
+                delete_branch,
+                match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
+            };
+            let argv: Vec<String> = crate::forge::github_merge_argv(0, &opts)
+                .into_iter()
+                .enumerate()
+                .map(|(i, a)| if i == 2 { "<N>".to_string() } else { a })
+                .collect();
+            Some(format!("gh {}", argv.join(" ")))
+        }
+        crate::forge::ForgeKind::GitLab => {
+            let base = if delete_branch {
+                forge.merge_cmd("<N>")?
+            } else {
+                forge.change_cmd_hint("merge", "<N> --squash")?
+            };
+            Some(format!(
+                "{base}  (abbreviated: AIDA merges through the GitLab merge API with sha=<MR head read at merge time>, checked against {DRY_RUN_PIN_PLACEHOLDER})"
+            ))
+        }
+        crate::forge::ForgeKind::None => None,
+    }
+}
+
+/// TASK-1582: how step 5 identifies a lease in operator-facing text — its id
+/// plus the SCOPE, ROLE and WORKTREE PATH, so an agent can tell a stale
+/// implementer lease from its own live coordination session before acting
+/// (the id alone once told a mid-cascade integrator to end its own session).
+// trace:TASK-1582 | ai:antigravity
+pub fn describe_lease_for_step5(
+    id: &str,
+    scope: &str,
+    role: Option<&str>,
+    worktree: &std::path::Path,
+) -> String {
+    let role = role
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+        .unwrap_or("unrecorded");
+    format!(
+        "lease {id} (scope {scope}, role {role}, worktree {})",
+        worktree.display()
+    )
+}
+
+/// TASK-1582: step 5's instruction when this shell sits inside the shipped
+/// branch's lease worktree, so `aida session end` would refuse. Names the
+/// lease's scope/role/worktree and tells a caller whose OWN session it is
+/// to leave it alone. Returns `(stderr line, activity-log detail)`.
+// trace:TASK-1582 | ai:antigravity
+pub fn step5_inside_worktree_messages(
+    id: &str,
+    scope: &str,
+    role: Option<&str>,
+    worktree: &std::path::Path,
+    branch: &str,
+) -> (String, String) {
+    let lease = describe_lease_for_step5(id, scope, role, worktree);
+    let line = format!(
+        "  step 5: {lease} holds the shipped branch {branch}, and this shell is inside its worktree, \
+         so it was not ended.\n          If that is your own active session, leave it running; otherwise \
+         exit this shell, then run `aida session end {id}` (check `aida session leases` first)."
+    );
+    let detail = format!(
+        "shell inside {lease} for branch {branch} — not ended; run `aida session end {id}` after \
+         exiting unless it is the caller's own session"
+    );
+    (line, detail)
+}
+
 /// Format the dry-run plan: one line per resolved step, in execution
 /// order, prefixed by an arrow. Pure so the contract-visible output is
 /// pinned by tests — drift here is what makes the CLI feel inconsistent
@@ -699,8 +791,7 @@ pub fn format_dry_run_plan(
                 .unwrap_or_else(|| "watch CI to completion".to_string()),
             ShipStep::Merge {
                 delete_branch: true,
-            } => forge
-                .merge_cmd("<N>")
+            } => dry_run_merge_cmd(forge, true)
                 .unwrap_or_else(|| format!("merge the {noun} and delete the branch")),
             ShipStep::Merge {
                 delete_branch: false,
@@ -711,8 +802,7 @@ pub fn format_dry_run_plan(
                     crate::forge::ForgeKind::GitLab => "--remove-source-branch",
                     crate::forge::ForgeKind::None => "branch delete",
                 };
-                forge
-                    .change_cmd_hint("merge", "<N> --squash")
+                dry_run_merge_cmd(forge, false)
                     .map(|c| format!("{c}  (skip {flag}: branch protected — sibling worktree or stacked children)"))
                     .unwrap_or_else(|| format!("merge the {noun} (keep the branch: protected — sibling worktree or stacked children)"))
             }
@@ -720,6 +810,14 @@ pub fn format_dry_run_plan(
             ShipStep::EndLease => "aida session end <lease>".to_string(),
         };
         out.push_str(&format!("  {n}. {desc}\n"));
+    }
+    // TASK-1582: say what the pin placeholder stands for. trace:TASK-1582 | ai:antigravity
+    if steps.iter().any(|s| matches!(s, ShipStep::Merge { .. }))
+        && forge != crate::forge::ForgeKind::None
+    {
+        out.push_str(&format!(
+            "  · {DRY_RUN_PIN_PLACEHOLDER}: the head the merge is pinned to, resolved at merge time — the approved head when an approval covers it (the forge then refuses a moved head); with no covering approval the pin is omitted. A repaired `--subject` is appended when the squash subject needs its trailer.\n"
+        ));
     }
     if opts.no_pull {
         out.push_str("  · --no-pull: aida pull step skipped\n");
@@ -2460,6 +2558,98 @@ mod tests {
         );
         assert!(plan.contains("skip --remove-source-branch"), "{plan}");
         assert!(!plan.contains("gh pr"), "{plan}");
+    }
+
+    // TASK-1582 acceptance 2: the dry-run merge step is the literal argv the
+    // real merge runs (github_merge_argv over merge_args), pin included.
+    // trace:TASK-1582.acd089f0 | ai:antigravity
+    #[test]
+    fn task_1582_dry_run_merge_step_matches_real_merge_argv_with_pin() {
+        let opts = PrShipOptions {
+            pr_number: None,
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+            complexity: None,
+            effort: None,
+        };
+        for delete_branch in [true, false] {
+            let real = crate::forge::github_merge_argv(
+                4242,
+                &crate::forge::MergeOptions {
+                    method: crate::forge::MergeMethod::Squash,
+                    squash_subject: None,
+                    delete_branch,
+                    match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
+                },
+            );
+            // Same shape as merge_args, then the pin.
+            assert_eq!(
+                &real[..real.len() - 2],
+                merge_args(4242, delete_branch, None).as_slice()
+            );
+            let expected = format!("3. gh {}", real.join(" ").replace("4242", "<N>"));
+            let steps = vec![
+                ShipStep::ResolvePr {
+                    create_if_needed: true,
+                },
+                ShipStep::WatchCi,
+                ShipStep::Merge { delete_branch },
+            ];
+            let plan = format_dry_run_plan(&opts, &steps, crate::forge::ForgeKind::GitHub);
+            assert!(plan.contains(&expected), "missing `{expected}` in:\n{plan}");
+            assert!(
+                plan.contains("--match-head-commit <approved-head-sha>"),
+                "{plan}"
+            );
+            assert!(
+                plan.contains("· <approved-head-sha>: the head the merge is pinned to")
+                    && plan.contains("the pin is omitted"),
+                "{plan}"
+            );
+        }
+    }
+
+    // trace:TASK-1582.acd089f0 | ai:antigravity
+    #[test]
+    fn task_1582_gitlab_dry_run_merge_step_states_abbreviation_and_pin() {
+        let line = dry_run_merge_cmd(crate::forge::ForgeKind::GitLab, true).unwrap();
+        assert!(
+            line.starts_with("glab mr merge <N> --squash --remove-source-branch"),
+            "{line}"
+        );
+        assert!(line.contains("abbreviated"), "{line}");
+        assert!(
+            line.contains("checked against <approved-head-sha>"),
+            "{line}"
+        );
+        assert_eq!(dry_run_merge_cmd(crate::forge::ForgeKind::None, true), None);
+    }
+
+    // TASK-1582 acceptance 3: step 5 names scope, role and worktree path.
+    // trace:TASK-1582.ac6f4c6f | ai:antigravity
+    #[test]
+    fn task_1582_step5_messages_name_scope_role_and_worktree() {
+        let wt = std::path::Path::new("/tmp/aida-worktrees/aida-task-9");
+        let (line, detail) =
+            step5_inside_worktree_messages("01abc", "TASK-9", Some("integrator"), wt, "task-9");
+        for text in [&line, &detail] {
+            assert!(text.contains("lease 01abc"), "{text}");
+            assert!(text.contains("scope TASK-9"), "{text}");
+            assert!(text.contains("role integrator"), "{text}");
+            assert!(
+                text.contains("worktree /tmp/aida-worktrees/aida-task-9"),
+                "{text}"
+            );
+            assert!(text.contains("`aida session end 01abc`"), "{text}");
+        }
+        assert!(line.contains("your own active session"), "{line}");
+        // Legacy leases without a role still say so explicitly.
+        let ending = describe_lease_for_step5("01abc", "TASK-9", None, wt);
+        assert_eq!(
+            ending,
+            "lease 01abc (scope TASK-9, role unrecorded, worktree /tmp/aida-worktrees/aida-task-9)"
+        );
     }
 
     #[test]

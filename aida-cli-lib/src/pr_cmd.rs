@@ -2871,25 +2871,31 @@ pub(crate) fn pr_ship_handler(
                     .map(|c| c.starts_with(&lease.worktree_path))
                     .unwrap_or(false);
                 if inside_target {
-                    eprintln!(
-                        "  step 5: lease {} owns this shell's worktree — \
-                         exit this shell, then run `aida session end {}`",
-                        lease.id, lease.id
+                    // TASK-1582: name scope/role/worktree, not just the id.
+                    // trace:TASK-1582 | ai:antigravity
+                    let (line, detail) = pr_ship::step5_inside_worktree_messages(
+                        &lease.id,
+                        &lease.scope,
+                        lease.role.as_deref(),
+                        &lease.worktree_path,
+                        &lease.branch,
                     );
+                    eprintln!("{line}");
                     log_ship_activity(
                         &main_worktree,
                         Some(pr_number),
                         &ShipStep::EndLease,
-                        &StepOutcome::Skipped(format!(
-                            "shell inside lease {} — user must run `aida session end {}` after exiting",
-                            lease.id, lease.id
-                        )),
+                        &StepOutcome::Skipped(detail),
                     );
                 } else {
                     eprintln!(
-                        "  step 5: ending lease {} (worktree {})",
-                        lease.id,
-                        lease.worktree_path.display()
+                        "  step 5: ending {}",
+                        pr_ship::describe_lease_for_step5(
+                            &lease.id,
+                            &lease.scope,
+                            lease.role.as_deref(),
+                            &lease.worktree_path,
+                        )
                     );
                     let aida_bin = pr_ship_post_merge_aida_exe();
                     let end_status = std::process::Command::new(&aida_bin)
