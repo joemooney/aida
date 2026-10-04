@@ -33,14 +33,49 @@ const LOCKS_SUBDIR: &str = "coordination";
 /// The two per-repo process-lock file names + their human label.
 const LOCK_FILES: &[(&str, &str)] = &[("drain.lock.toml", "drain"), ("solo.lock.toml", "solo")];
 
+// trace:STORY-1473 | ai:codex
 /// The shared per-user role roster — `registry/team.toml` on the `aida-store`
-/// branch. Maps a `user_id` to a role string. This is the read-side mirror of
-/// the aida-cli `TeamRoster`; the on-disk TOML shape is identical
-/// (`[members]\nalice = "advisor"`). trace:STORY-646 trace:STORY-648
+/// branch. Maps a `user_id` to allowed seat names. Legacy scalar values are
+/// read as singleton sets; writes always use arrays.
+#[derive(Debug, Clone, Serialize)]
+#[serde(transparent)]
+struct SeatList(Vec<String>);
+
+impl SeatList {
+    fn into_vec(self) -> Vec<String> {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SeatList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Input {
+            Legacy(String),
+            Many(Vec<String>),
+        }
+        Ok(Self(match Input::deserialize(deserializer)? {
+            Input::Legacy(role) => vec![role],
+            Input::Many(roles) => roles,
+        }))
+    }
+}
+
+// trace:STORY-1473 | ai:codex
+/// Read-compatible, array-canonical seat roster.
+/// ```toml
+/// [members]
+/// alice = ["advisor", "reviewer"]
+/// bob = "implementer" # legacy singleton, accepted on read
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TeamRoster {
     #[serde(default)]
-    pub members: BTreeMap<String, String>,
+    members: BTreeMap<String, SeatList>,
 }
 
 impl TeamRoster {
@@ -62,14 +97,38 @@ impl TeamRoster {
         toml::from_str(&content).unwrap_or_default()
     }
 
-    /// The roster role for `user_id`, if recorded (raw, un-canonicalized).
+    /// The roster seats for `user_id`, if recorded (raw, un-canonicalized).
+    pub fn seats_for(&self, user_id: &str) -> Option<Vec<String>> {
+        self.members.get(user_id).cloned().map(SeatList::into_vec)
+    }
+
+    // trace:STORY-1473 | ai:codex
+    /// Snapshot roster entries for non-CLI consumers such as queue recipient
+    /// discovery.
+    pub fn entries(&self) -> Vec<(String, Vec<String>)> {
+        self.members
+            .iter()
+            .map(|(user, seats)| (user.clone(), seats.clone().into_vec()))
+            .collect()
+    }
+
+    /// Compatibility accessor for dashboard callers that still display one
+    /// seat: returns the first allowed seat, if any.
     pub fn role_for(&self, user_id: &str) -> Option<&str> {
-        self.members.get(user_id).map(String::as_str)
+        self.members.get(user_id).and_then(|seats| match seats {
+            SeatList(roles) => roles.first().map(String::as_str),
+        })
     }
 
     /// Set (or replace) a user's role.
     fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
-        self.members.insert(user_id.to_string(), role.to_string());
+        self.members
+            .insert(user_id.to_string(), SeatList(vec![role.to_string()]));
+        self
+    }
+
+    fn with_seats(mut self, user_id: &str, seats: Vec<String>) -> Self {
+        self.members.insert(user_id.to_string(), SeatList(seats));
         self
     }
 
@@ -156,6 +215,16 @@ pub fn core_role_names() -> [&'static str; 5] {
 /// writes locally and lets the next `aida push` upload. The CALLER is
 /// responsible for validating/canonicalizing `role` first. trace:STORY-650
 pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Result<()> {
+    set_allowed_seats_cas(store_root, user_id, &[role.to_string()])
+}
+
+/// Replace a user's complete allowlist. CLI callers must enforce the
+/// interactive-TTY issuance policy before calling this store primitive.
+pub fn set_allowed_seats_cas(
+    store_root: &Path,
+    user_id: &str,
+    seats: &[String],
+) -> std::io::Result<()> {
     use crate::git_ops;
 
     const MAX_RETRIES: u32 = 10;
@@ -181,14 +250,14 @@ pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Re
         let mut roster = TeamRoster::load(store_root);
         let nodes = load_node_roster(store_root);
         roster.migrate_integer_keys(&nodes);
-        let roster = roster.with_role_set(user_id, role);
+        let roster = roster.with_seats(user_id, seats.to_vec());
         let content = toml::to_string_pretty(&roster)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(&registry_path, content)?;
 
         // Step 3: stage + commit.
         git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
-        let msg = format!("chore(registry): set team role {} = {}", user_id, role);
+        let msg = format!("chore(registry): set team seats for {}", user_id);
         git_ops::commit(store_root, &msg).map_err(io_err)?;
 
         // Step 4: push (or stop here when solo).
@@ -212,6 +281,91 @@ pub fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> std::io::Re
     Err(std::io::Error::other(format!(
         "could not write the team role after {} attempts (store push kept being rejected) — \
          run `aida db sync --pull` and retry",
+        MAX_RETRIES
+    )))
+}
+
+/// Add one seat to a user's allowlist, migrating a legacy scalar to an array
+/// on write. Idempotent when the seat is already present.
+pub fn allow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> std::io::Result<()> {
+    update_seats_cas(store_root, user_id, seat, true).map(|_| ())
+}
+
+/// Remove one seat from a user's allowlist. An empty result removes the member
+/// entry; absent seats are a friendly no-op.
+pub fn disallow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> std::io::Result<bool> {
+    update_seats_cas(store_root, user_id, seat, false)
+}
+
+fn update_seats_cas(
+    store_root: &Path,
+    user_id: &str,
+    seat: &str,
+    allow: bool,
+) -> std::io::Result<bool> {
+    use crate::git_ops;
+
+    const MAX_RETRIES: u32 = 10;
+    let registry_path = TeamRoster::path(store_root);
+    if let Some(parent) = registry_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
+    let local_only = !git_ops::has_remote(store_root, "origin");
+    let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
+        }
+        let mut roster = TeamRoster::load(store_root);
+        let nodes = load_node_roster(store_root);
+        roster.migrate_integer_keys(&nodes);
+        let mut seats = roster.seats_for(user_id).unwrap_or_default();
+        let changed = if allow {
+            if seats.iter().any(|existing| existing == seat) {
+                false
+            } else {
+                seats.push(seat.to_string());
+                seats.sort();
+                true
+            }
+        } else {
+            let before = seats.len();
+            seats.retain(|existing| existing != seat);
+            seats.len() != before
+        };
+        if !changed {
+            return Ok(false);
+        }
+        if seats.is_empty() {
+            roster.members.remove(user_id);
+        } else {
+            roster = roster.with_seats(user_id, seats);
+        }
+        let content = toml::to_string_pretty(&roster)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(&registry_path, content)?;
+        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
+        let verb = if allow { "allow" } else { "disallow" };
+        let msg = format!("chore(registry): {} {} for {}", verb, seat, user_id);
+        git_ops::commit(store_root, &msg).map_err(io_err)?;
+        if local_only {
+            return Ok(true);
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(true),
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+            }
+            Err(e) => return Err(io_err(e)),
+        }
+    }
+    Err(std::io::Error::other(format!(
+        "could not update team seats after {} attempts (store push kept being rejected) — run `aida db sync --pull` and retry",
         MAX_RETRIES
     )))
 }

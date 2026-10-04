@@ -314,6 +314,8 @@ mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
+// trace:STORY-1473 | ai:codex
+mod seat_authority;
 mod seat_rotation;
 mod seats;
 mod server_cmd;
@@ -9104,9 +9106,13 @@ fn questions_clarify(
     // demanding an install the machine may not permit — the clarify loop
     // drives a Claude Code skill, so Codex parity arrives with the
     // skills-parity work, not by swapping the binary here.
+    let project_root = find_project_root()?;
+    let child_grant =
+        seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let status_code = std::process::Command::new("claude")
         .arg(&prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env(seat_authority::GRANT_ENV, child_grant.id)
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -9165,14 +9171,15 @@ fn questions_remedy(
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("remedy-{}", req.display_id().to_ascii_lowercase()));
     let session_id = uuid::Uuid::now_v7().to_string();
-    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-    let status =
-        session::spawn_vendor_headless(vendor, &prompt, &session_id, &log_path, &tee, false);
-    match previous_role {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
+    let status = session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+        false,
+    );
     let status = status?;
     if status.success() {
         Ok(())
@@ -11666,12 +11673,11 @@ fn handle_done_command(
     {
         // BUG-585: name the ACTUAL escape hatches, not a circular re-run of the
         // same command. A non-TTY agent/script gets nothing new by re-running
-        // `aida done`; the working path is a real terminal OR the advisor role
-        // (AIDA_SESSION_ROLE=advisor satisfies `advisor_authority_from`).
+        // `aida done`; the working path is a valid session grant established
+        // through `aida role enter advisor` at a human TTY.
         // trace:BUG-585 | ai:claude
         anyhow::bail!(
-            "marking {display_id} done needs a TTY or the advisor role. \
-             Run it in an interactive shell, or set `AIDA_SESSION_ROLE=advisor` (for scripts/agents)."
+            "marking {display_id} done needs advisor authority. Run `aida role enter advisor` at an interactive TTY, or ask an advisor session to do it."
         );
     }
     // BUG-1286 F1: `aida done` is an into-Completed transition and must emit the
@@ -22963,15 +22969,13 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
     Ok(roles)
 }
 
-/// True when this process has an explicitly-entered role in its environment.
+/// True when this process carries a currently valid session-bound seat grant.
 ///
 /// The read side still defaults to `implementer` when unset, but operator-facing
 /// recovery surfaces need to distinguish "defaulted" from "seated".
 // trace:BUG-1044 | ai:codex
 pub(crate) fn active_role_env_present() -> bool {
-    std::env::var("AIDA_SESSION_ROLE")
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false)
+    seat_authority::current_grant(&statusline_project_root()).is_some()
 }
 
 /// Most recently used role, derived from the same role files `aida role list`
@@ -29400,11 +29404,21 @@ fn agent_new_bg_dispatch(
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .env_remove("AIDA_SESSION_GRANT")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Some(role) = &plan.role {
-        command.env("AIDA_SESSION_ROLE", role);
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
     }
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
@@ -32258,11 +32272,21 @@ fn run_tracked_agent(
         // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
+        .env_remove("AIDA_SESSION_GRANT")
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
     if let Some(role) = &plan.role {
-        command.env("AIDA_SESSION_ROLE", role);
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
     }
     command.env("AIDA_ROLE_INSTANCE", plan.role_instance.as_str());
     if let Some(spec) = &plan.current_spec {
@@ -52734,33 +52758,30 @@ fn effective_role_resolved() -> (String, bool) {
     resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
 }
 
-/// STORY-646: the effective role for the *guardrail*, consulting the durable
-/// per-user roster (`registry/team.toml`) FIRST, then `AIDA_SESSION_ROLE`, then
-/// the default. So a rostered user gets their role even with no env set; a
-/// non-rostered user (or an absent/unreachable store) resolves exactly as
-/// [`effective_role`] does today (backward-compatible). Best-effort — never
-/// blocks. Returns the role plus where it came from (for the refusal message).
-/// trace:STORY-646 | ai:claude
+// trace:STORY-1473 | ai:codex
+/// Resolve the authorization seat only from a validated grant. The roster is
+/// a ceiling, not an active seat; the environment role remains display/routing
+/// metadata. Missing or invalid grants get the least-privilege implementer
+/// baseline.
 fn effective_role_with_roster() -> (String, team::RoleSource) {
-    let user_id = current_user_id(None);
-    match find_project_root().map(|root| root.join(".aida-store")) {
-        Ok(store_root) if store_root.join("objects").is_dir() => {
-            team::effective_role_for_user(&store_root, &user_id)
-        }
-        // No attached store → fall straight through to env / default.
-        _ => team::resolve_effective_role(None, std::env::var("AIDA_SESSION_ROLE").ok().as_deref()),
+    match find_project_root() {
+        Ok(root) => match seat_authority::current_seat(&root) {
+            Some(seat) => (seat, team::RoleSource::Grant),
+            None => ("implementer".to_string(), team::RoleSource::Default),
+        },
+        Err(_) => ("implementer".to_string(), team::RoleSource::Default),
     }
 }
 
+// trace:STORY-1473 | ai:codex
 /// STORY-647 (team RBAC slice 2): enforce the team permission map for a gated
 /// op. Resolves the `[team]` policy + the caller's gated effective role (strict
 /// mode honored), and bails with a clear, role-naming refusal when the role
 /// doesn't satisfy the op's minimum role — UNLESS `force` is set (the audited
 /// guardrail escape hatch). Best-effort: an unreachable store/config falls back
-/// to the all-default (non-strict) policy and never hard-blocks. The
-/// advisor-authority TTY/orchestrator carve-outs of [`has_advisor_authority`]
-/// are honored first so interactive humans and live drains are never blocked by
-/// this finer gate. trace:STORY-647 | ai:claude
+/// to the all-default (non-strict) policy and never hard-blocks. Live
+/// orchestrators keep their workflow carve-out; TTY presence only issues a
+/// seat grant and does not bypass this role gate.
 fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
     if force {
         return Ok(());
@@ -52771,13 +52792,9 @@ fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
         Err(_) => return Ok(()),
     };
     let config = permissions::TeamPermissions::load(&project_root);
-    // Interactive humans + live orchestrators keep their slice-1 carve-out: they
-    // hold advisor authority regardless of role, so the finer gate never blocks
-    // them. CRUCIAL for strict mode: we must NOT reuse `has_advisor_authority()`
-    // here — its role leg consults the NON-strict env fallback, so an env
-    // `AIDA_SESSION_ROLE=advisor` would slip a non-rostered user past the strict
-    // gate. Bypass ONLY on the TTY / live-orchestrator carve-outs; the role is
-    // resolved strict-aware below. trace:STORY-647 | ai:claude
+    // Live orchestrators retain their workflow carve-out. TTY presence is not
+    // authority; the role is resolved from a validated grant below.
+    // trace:STORY-1473
     if authority_carveout_active() {
         return Ok(());
     }
@@ -52791,12 +52808,9 @@ fn enforce_team_gate(op: permissions::GatedOp, force: bool) -> Result<()> {
     anyhow::bail!(permissions::refusal_message(op, &role, source, &config));
 }
 
-/// STORY-647: the non-role half of [`has_advisor_authority`] — an interactive
-/// (TTY) session OR a corroborated live orchestrator. These are legitimate
-/// authority in the guardrail model regardless of role, so the finer RBAC gates
-/// bypass them. Kept distinct from `has_advisor_authority` so the team gates do
-/// NOT inherit its env-role leg (which would let `AIDA_SESSION_ROLE=advisor`
-/// bypass strict mode). trace:STORY-647 | ai:claude
+// trace:STORY-1473 | ai:codex
+/// Live orchestrator only. A TTY is an issuance requirement, not an authority
+/// bypass.
 fn authority_carveout_active() -> bool {
     let orchestrated = find_main_worktree_root()
         .map(|root| {
@@ -52806,14 +52820,14 @@ fn authority_carveout_active() -> bool {
             )
         })
         .unwrap_or(false);
-    authority_stdin_is_terminal() || orchestrated // trace:BUG-1618 | ai:claude
+    orchestrated
 }
 
 /// STORY-647: the protected-spec variant of [`enforce_team_gate`] — gates
 /// editing/transitioning a spec carrying any `[team] protected_tags` entry on
 /// the configured `protected_role` (advisor by default). A no-op when the spec
 /// carries no protected tag, when `force` is set, or when the caller holds
-/// advisor authority (TTY / live drain / advisor role). Best-effort.
+/// advisor authority (live drain / advisor grant). Best-effort.
 /// trace:STORY-647 | ai:claude
 fn enforce_protected_spec_gate<'a, I>(tags: I, force: bool) -> Result<()>
 where
@@ -53062,7 +53076,8 @@ fn resolve_human_only(req_type: &RequirementType, human_only: bool, no_human_onl
 /// the TASK-647/ADR-3 gate still blocks an un-orchestrated agent.
 /// trace:BUG-460 trace:TASK-647 | ai:claude
 pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
-    role == "advisor" || is_tty || orchestrated
+    let _ = is_tty; // TTY is used to issue a grant, never as authority by itself.
+    role == "advisor" || orchestrated
 }
 
 pub(crate) fn hold_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
@@ -53099,9 +53114,9 @@ pub(crate) fn current_role_instance_is_companion() -> bool {
 /// not here. trace:STORY-646 | ai:claude
 fn team_role_refusal_clause() -> String {
     let (role, source) = effective_role_with_roster();
-    if source == team::RoleSource::Roster && role != "advisor" {
+    if source == team::RoleSource::Grant && role != "advisor" {
         format!(
-            " Your team role is `{}` — ask an advisor, or fix it with `aida team set-role`.",
+            " Your active session seat is `{}` — ask an advisor to review the requested action.",
             role
         )
     } else {
@@ -58651,6 +58666,8 @@ fn handle_intake_command(
     // The skill reads the resolved policy + the bounded fence from env; the
     // prompt stays the human-facing surface (mirrors the advisor tier's
     // env-passed payload). trace:STORY-560
+    let child_grant =
+        seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let mut command = std::process::Command::new("claude");
     command
         .arg("-p")
@@ -58658,6 +58675,7 @@ fn handle_intake_command(
         .arg("--permission-mode")
         .arg(mode)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env(seat_authority::GRANT_ENV, child_grant.id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
         .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
         .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))
@@ -60664,12 +60682,16 @@ fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitSt
     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("burndown");
     let tee_handle = headless_tee::start_tee(&log_path, &tee_opts);
 
+    let child_grant =
+        seat_authority::issue_child(&project_root, "implementer", &current_user_id(None))?;
     let status_code = std::process::Command::new("claude")
         .args(burndown_verbose_claude_args(prompt, mode))
         .stdout(std::process::Stdio::from(log))
         // BUG-607: the launcher holds the exclusive drain lock — the agent must
         // trust it and not self-detect a "competing" drain (see the quiet path).
         .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env(seat_authority::GRANT_ENV, child_grant.id)
         // TASK-1169 / ADR-22: identical bounded ceiling to the quiet path —
         // `--verbose` adds visibility, never a behaviour fork.
         // trace:TASK-1169 | ai:claude
@@ -93328,7 +93350,12 @@ fn review_spec_launch_reviewer(
         false,
     )
     .map_err(|e| anyhow::anyhow!("aida review: {e}"))?;
-    session::spawn_reviewer_launch_plan(&plan).context("failed to launch the reviewer")
+    // ADR-66: the reviewer child grant validates against the PROJECT root,
+    // resolved the same way every other authority check resolves it — not
+    // whatever directory the process happens to sit in.
+    // trace:STORY-1473 | ai:claude
+    session::spawn_reviewer_launch_plan(&plan, &find_project_root()?)
+        .context("failed to launch the reviewer")
 }
 
 /// trace:STORY-553 | ai:claude — `aida review <SPEC>`: the human-review
@@ -114414,6 +114441,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &worktree,
             &tee_opts,
             false,
+            "implementer",
         )
         .map_err(|e| {
             PhaseFailure::of(

@@ -1220,40 +1220,11 @@ async fn set_team_role_impl(
     user: String,
     body: SetRoleRequest,
 ) -> Result<Json<SetRoleResponse>, (StatusCode, Json<ApiError>)> {
-    let canonical = aida_core::team::canonical_role(&body.role);
-    if canonical.is_empty() {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "a role name is required (e.g. \"advisor\")",
-        ));
-    }
-    // The server validates against the core role set (it has no view of the
-    // caller's local `~/.aida/roles/`). trace:STORY-650 | ai:claude
-    let known = aida_core::team::core_role_names();
-    if !known.iter().any(|r| r.eq_ignore_ascii_case(&canonical)) {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            format!(
-                "unknown role `{}`. Known roles: {}.",
-                body.role,
-                known.join(", ")
-            ),
-        ));
-    }
-
-    let store_root = project_root(&state);
-    if let Err(e) = aida_core::team::set_role_cas(&store_root, &user, &canonical) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("setting team role failed: {e}"),
-        ));
-    }
-
-    Ok(Json(SetRoleResponse {
-        user,
-        role: canonical,
-        caveat: aida_core::team::ROLE_GUARDRAIL_CAVEAT.to_string(),
-    }))
+    let _ = (state, user, body);
+    Err(ApiError::new(
+        StatusCode::FORBIDDEN,
+        "team seat changes require a human at an interactive TTY; use `aida team set-role` or `aida team allow-seat`",
+    ))
 }
 
 async fn set_team_role(
@@ -4508,20 +4479,17 @@ ttl_secs = 1800
     }
 
     #[tokio::test]
-    async fn put_role_writes_team_toml_and_returns_caveat() {
+    async fn put_role_requires_a_local_interactive_tty() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        // A git store at root/store so set_role_cas's git ops have a repo + the
-        // role lands in registry/team.toml under the store root.
         let store_dir = root.join("store");
         std::fs::create_dir_all(&store_dir).unwrap();
-        init_git_store(&store_dir);
         let db_path = store_dir.join("store.yaml");
         let backend = create_backend(&db_path, None).expect("yaml backend");
         backend.save(&RequirementsStore::new()).expect("save store");
         let state = Arc::new(ServerState::new(backend).expect("server state"));
 
-        let resp = match set_team_role_legacy(
+        let (status, error) = match set_team_role_legacy(
             State(state.clone()),
             Path("alice".to_string()),
             Json(SetRoleRequest {
@@ -4530,21 +4498,13 @@ ttl_secs = 1800
         )
         .await
         {
-            Ok(Json(r)) => r,
-            Err((_, e)) => panic!("set role errored: {}", e.0.error),
+            Ok(_) => panic!("REST cannot perform a TTY-only seat write"),
+            Err((status, error)) => (status, error),
         };
-
-        assert_eq!(resp.user, "alice");
-        assert_eq!(resp.role, "advisor");
-        assert!(
-            resp.caveat.contains("Guardrail, not security"),
-            "the response surfaces the guardrail caveat: {}",
-            resp.caveat
-        );
-
-        // The role landed in registry/team.toml under the store root.
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(error.0.error.contains("interactive TTY"));
         let roster = aida_core::team::TeamRoster::load(&store_dir);
-        assert_eq!(roster.role_for("alice"), Some("advisor"));
+        assert_eq!(roster.role_for("alice"), None);
     }
 
     #[tokio::test]
@@ -4569,7 +4529,7 @@ ttl_secs = 1800
             Ok(_) => panic!("unknown role should be rejected"),
             Err((status, _)) => status,
         };
-        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
     /// Initialize a minimal git repo in `dir` so the team.toml CAS write (which

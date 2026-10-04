@@ -326,7 +326,7 @@ fn spawned_agy_process_receives_the_ordered_argv() {
     let mock = write_argv_capture_mock(tmp.path(), &capture);
     let log = tmp.path().join("headless.log");
 
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
@@ -335,10 +335,30 @@ fn spawned_agy_process_receives_the_ordered_argv() {
         // dependent on whatever the ambient config resolves to.
         ("AIDA_AGENT_MODEL", None),
         ("AIDA_AGENT_EFFORT", Some("high")),
+        (crate::seat_authority::GRANT_ENV, None),
     ]);
+    // ADR-66: the headless spawn issues the child a scoped implementer
+    // grant, so the launcher needs an active grant delegating that seat,
+    // validated against the (ambient-pinned) project root. Minted AFTER the
+    // guard so the record lands under the fixture AIDA_HOME.
+    // trace:STORY-1473 | ai:claude
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &crate::current_user_id(None),
+        "advisor",
+        &["implementer"],
+    );
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: project.clone(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+    }));
 
     let prompt = "/aida-pickup BUG-1680";
-    let status = session::spawn_vendor_headless(
+    let spawned = session::spawn_vendor_headless(
         HeadlessVendor::Agy,
         prompt,
         "019e0000-0000-7000-8000-0000000000aa",
@@ -348,8 +368,9 @@ fn spawned_agy_process_receives_the_ordered_argv() {
             label: None,
         },
         false,
-    )
-    .expect("spawning the argv-recording fixture must succeed");
+    );
+    crate::test_ambient::replace(outer);
+    let status = spawned.expect("spawning the argv-recording fixture must succeed");
     assert!(status.success(), "fixture exits 0");
 
     let argv = read_captured_argv(&capture);

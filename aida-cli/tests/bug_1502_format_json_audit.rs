@@ -8,6 +8,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::{Command, Output};
 
+// STORY-1473 / ADR-66: env roles confer no authority; the builder rides a
+// validated advisor seat grant for the advisor-gated setup steps.
+mod support;
+
 /// Build a real-binary command that is incapable of escaping its fixture.
 ///
 /// Review reproductions often run with live AIDA coordination variables in
@@ -31,6 +35,11 @@ fn aida_command_with_inherited(repo: &Path, home: &Path, inherited: &[(&str, &Pa
         .env("HOME", home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_SESSION_ROLE", "advisor");
+    // ADR-66: the role env is only a hint; advisor-gated setup writes ride a
+    // validated seat grant. trace:STORY-1473 | ai:claude
+    if let Some(grant) = support::ensure_seat(home, repo, "advisor", &[]) {
+        command.env("AIDA_SESSION_GRANT", grant);
+    }
     for (name, value) in inherited {
         command.env(name, value);
     }

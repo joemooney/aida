@@ -191,6 +191,66 @@ class McpClient:
             return ""
 
 
+def mint_seat_grant(root: Path, seat: str, delegable: tuple[str, ...] = ()) -> dict[str, str]:
+    """STORY-1473 / ADR-66: mint a validated, session-bound seat grant for a
+    CLI invocation in this hermetic fixture.
+
+    An env role is only a display/routing hint, so an advisor-gated setup step
+    must carry the records ``aida role enter`` would create at a human TTY: a
+    roster ceiling in the project store plus a grant record under the
+    (isolated) HOME. Mirrors
+    ``aida-cli-lib/src/seat_authority.rs::test_support::mint_grant_for``
+    exactly; a drifting field fails these suites closed, never open. No
+    production bypass is involved.
+    trace:STORY-1473 | ai:claude
+    """
+    import datetime as _dt
+    import uuid as _uuid
+
+    subject = (
+        os.environ.get("AIDA_USER")
+        or os.environ.get("USER")
+        or os.environ.get("USERNAME")
+        or "default"
+    )
+    # The store the binary will detect for `root` (set up by `aida init`).
+    store = root / ".aida-store"
+    config = root / ".aida" / "config.toml"
+    if config.is_file():
+        for line in config.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("store_path"):
+                value = line.split("=", 1)[1].strip().strip("\"'")
+                if value:
+                    store = root / value
+                break
+    registry = store / "registry"
+    registry.mkdir(parents=True, exist_ok=True)
+    (store / "objects").mkdir(parents=True, exist_ok=True)
+    seats = ", ".join(f'"{s}"' for s in dict.fromkeys((seat, *delegable)))
+    (registry / "team.toml").write_text(f'[members]\n"{subject}" = [{seats}]\n')
+
+    grant_id = str(_uuid.uuid4())
+    now = _dt.datetime.now(_dt.timezone.utc)
+    record = {
+        "id": grant_id,
+        "principal": subject,
+        "subject": subject,
+        "session_id": str(_uuid.uuid4()),
+        "seat": seat,
+        "tty_issued_at": now.isoformat(),
+        "delegable_seats": list(delegable),
+        "parent_grant_id": None,
+        "issued_at": now.isoformat(),
+        "expires_at": (now + _dt.timedelta(hours=23)).isoformat(),
+        "revoked_at": None,
+    }
+    grants = Path(os.environ["HOME"]) / ".aida" / "session-grants"
+    grants.mkdir(parents=True, exist_ok=True)
+    (grants / f"{grant_id}.json").write_text(json.dumps(record, indent=2))
+    return {"AIDA_SESSION_GRANT": grant_id}
+
+
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     if env:
@@ -590,7 +650,13 @@ def test_spec_graph_round_trips(client: McpClient, spec: str, aida: Path, root: 
     # the execution pipeline. Triage the spec into the pipeline out-of-band as
     # the advisor (CLI with AIDA_SESSION_ROLE=advisor) so the implementer-
     # legitimate Approved → InProgress flip below is exercised through MCP.
-    approved = run([str(aida), "edit", spec, "--status", "approved"], root, {"AIDA_SESSION_ROLE": "advisor"})
+    # STORY-1473 / ADR-66: the env role is only a hint — the advisor approval
+    # rides a validated seat grant minted into this hermetic fixture.
+    approved = run(
+        [str(aida), "edit", spec, "--status", "approved"],
+        root,
+        {"AIDA_SESSION_ROLE": "advisor", **mint_seat_grant(root, "advisor")},
+    )
     require(approved.returncode == 0, f"advisor CLI could not approve {spec}:\nstdout={approved.stdout}\nstderr={approved.stderr}")
 
     # BUG-449/BUG-481: Approved → InProgress is an implementer-legitimate

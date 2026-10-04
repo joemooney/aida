@@ -554,7 +554,9 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // BUG-1056 half, preserved: WITH advisor authority the punted spec resumes
     // and becomes the pickable queue head. STORY-1353 gates this transition; it
     // does not remove it.
-    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor")); // trace:BUG-1618 | ai:claude
+    // ADR-66: a validated advisor grant, not an env role, carries the
+    // authority. trace:STORY-1473 | ai:claude
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
     rework(&storage).unwrap();
 
     let updated = storage.load().unwrap();
@@ -1115,9 +1117,11 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     backend.save(&store).unwrap();
 
     // BUG-1618: the test's premise is a NON-TTY advisor; pin it rather than
-    // inherit whatever stdin `cargo test` was launched with.
-    // trace:BUG-1618 | ai:claude
-    let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor"));
+    // inherit whatever stdin `cargo test` was launched with. ADR-66: the
+    // advisor seat is a validated session grant (a grant-seated advisor keeps
+    // authority off-TTY; the TTY mattered only at issuance).
+    // trace:BUG-1618 trace:STORY-1473 | ai:claude
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
     handle_queue_rework(
         &storage,
         "BUG-13110",
@@ -1302,8 +1306,10 @@ fn rework_refuses_while_other_session_lease_is_live() {
 
 #[test]
 fn rework_proceeds_over_dead_lease() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9102")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
     write_lease(tmp.path(), &lease_for("BUG-9102", Some(DEAD_PID)));
     rework_as(&storage, "BUG-9102", None, false).expect("a dead claim does not block");
     assert_eq!(status_of(&storage, "BUG-9102"), RequirementStatus::Approved);
@@ -1384,11 +1390,15 @@ fn rework_in_progress_metadata_only_refuses_over_live_lease() {
 /// The reason goes into the audit note once, not also as a second comment.
 #[test]
 fn rework_reason_is_recorded_once_and_emits_spec_requeued() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::events::EVENTS_DISABLE_ENV, None),
-    ]);
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9107")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[(crate::events::EVENTS_DISABLE_ENV, None)],
+    );
     rework_as(&storage, "BUG-9107", Some("fixed on main"), false).unwrap();
     let store = storage.load().unwrap();
     let r = store.get_requirement_by_spec_id("BUG-9107").unwrap();
@@ -1568,11 +1578,15 @@ fn triage_loop_without_tty_prints_hints_and_never_prompts() {
 
 #[test]
 fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
-        ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::events::EVENTS_DISABLE_ENV, None),
-    ]);
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9112")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        tmp.path(),
+        "advisor",
+        &[],
+        &[(crate::events::EVENTS_DISABLE_ENV, None)],
+    );
     let mut input = std::io::Cursor::new(b"r\n".to_vec());
     crate::queue_cmd::rework_triage_loop(
         &storage,
@@ -1601,7 +1615,6 @@ fn triage_loop_r_keystroke_lands_approved_queued_and_emits_spec_requeued() {
 /// comes back to the same spec with the requeue now offered.
 #[test]
 fn triage_loop_d_decides_then_returns_to_the_same_spec() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let mut r = parked("BUG-9113");
     r.decision_request = Some(aida_core::DecisionRequest {
         question: "which fork?".into(),
@@ -1614,6 +1627,9 @@ fn triage_loop_d_decides_then_returns_to_the_same_spec() {
         answered_at: None,
     });
     let (_tmp, storage) = story_1429_fixture(vec![r]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(_tmp.path(), "advisor", &[]);
     // `r` first is not offered (decision pending) and is an unknown key; then
     // `d` answers; then `r` requeues.
     let mut input = std::io::Cursor::new(b"r\nd\nr\n".to_vec());
@@ -1717,8 +1733,10 @@ fn findings_tip_points_at_the_loop() {
 /// them is a lease, so none may make the gate "unknown": the requeue proceeds.
 #[test]
 fn rework_proceeds_with_companion_files_in_the_lease_dir() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9115")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
     let dead = lease_for("BUG-9115", Some(DEAD_PID));
     write_lease(tmp.path(), &dead);
     let dir = tmp.path().join(".aida").join("sessions");
@@ -1795,8 +1813,10 @@ fn truncated_lease_is_retried_then_scoped() {
 /// A corrupt lease for a DIFFERENT spec does not block this requeue.
 #[test]
 fn rework_ignores_unparseable_lease_for_another_spec() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let (tmp, storage) = story_1429_fixture(vec![parked("BUG-9117")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
     let dir = tmp.path().join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
@@ -1856,8 +1876,6 @@ fn mcp_claim_fixture_round_trips_backslash_worktree_path() {
 /// through the same liveness check, so the requeue proceeds.
 #[test]
 fn requeue_gate_reads_mcp_claims_like_pickup() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
-
     // Live claim (a real worktree; liveness injected as the pickup gate's
     // predicate would report a live session there): refuses.
     let (tmp, _storage) = story_1429_fixture(vec![parked("BUG-9118")]);
@@ -1875,6 +1893,9 @@ fn requeue_gate_reads_mcp_claims_like_pickup() {
 
     // Worktree-less claim (the MCP default): Stale, the requeue proceeds.
     let (tmp2, storage2) = story_1429_fixture(vec![parked("BUG-9119")]);
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp2.path(), "advisor", &[]);
     write_mcp_claim(tmp2.path(), "BUG-9119", "");
     rework_as(&storage2, "BUG-9119", None, false).expect("a worktree-less claim is not live");
     assert_eq!(

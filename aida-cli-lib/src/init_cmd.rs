@@ -2088,7 +2088,7 @@ fn complete_init_scaffolding(
     // dead-end. trace:BUG-585 | ai:claude
     println!(
         "    {}",
-        "      (scripts/agents: prefix AIDA_SESSION_ROLE=advisor)".dimmed()
+        "      (enter advisor at a human TTY with `aida role enter advisor`)".dimmed()
     );
     println!(
         "    {}{}see your commit linked to the task — {}",

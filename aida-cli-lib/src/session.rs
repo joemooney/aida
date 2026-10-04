@@ -1210,9 +1210,16 @@ pub fn spawn_vendor_headless_with_seat(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
+    let child_grant = crate::seat_authority::issue_child(
+        &headless_worktree_root(),
+        seat.as_str(),
+        &crate::current_user_id(None),
+    )?;
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_ROLE", seat.as_str())
+        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -1374,9 +1381,17 @@ pub(crate) fn interactive_reviewer_launch_plan(
 // trace:BUG-1607 | ai:claude
 pub(crate) fn spawn_reviewer_launch_plan(
     plan: &ReviewerLaunchPlan,
+    project_root: &std::path::Path,
 ) -> Result<std::process::ExitStatus> {
+    let grant = crate::seat_authority::issue_child(
+        project_root,
+        "reviewer",
+        &crate::current_user_id(None),
+    )?;
     std::process::Command::new(&plan.program)
         .args(&plan.args)
+        .env(crate::seat_authority::GRANT_ENV, grant.id)
+        .env("AIDA_SESSION_ROLE", "reviewer")
         .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", plan.program))
 }
@@ -3007,6 +3022,7 @@ pub fn spawn_claude_headless_resume(
     cwd: &Path,
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
+    seat: &str,
 ) -> Result<std::process::ExitStatus> {
     use std::process::{Command, Stdio};
     if let Some(dir) = log_path.parent() {
@@ -3027,10 +3043,13 @@ pub fn spawn_claude_headless_resume(
     // bounded ceiling, so a resumed drain can't diverge from a fresh one.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    let child_grant = crate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
     let status = Command::new(program)
         .current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_ROLE", seat)
+        .env(crate::seat_authority::GRANT_ENV, child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())

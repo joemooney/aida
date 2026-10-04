@@ -13,6 +13,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+// STORY-1473 / ADR-66: env roles confer no authority; advisor-gated setup
+// steps ride a validated seat grant.
+mod support;
+
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn git(repo: &Path, args: &[&str]) {
@@ -114,6 +118,11 @@ impl Project {
     fn add_with_description(&self, kind: &str, title: &str, description: &str) -> String {
         let out = aida(&self.repo, &self.home)
             .env("AIDA_SESSION_ROLE", "advisor")
+            .env(
+                "AIDA_SESSION_GRANT",
+                support::ensure_seat(&self.home, &self.repo, "advisor", &[])
+                    .expect("fixture repo is initialized"),
+            )
             .args([
                 "add",
                 "--type",
@@ -306,6 +315,11 @@ fn reviewer_prompt_round_one_cites_the_untraced_criteria_list() {
     );
     let queue_add = aida(&p.repo, &p.home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&p.home, &p.repo, "advisor", &[])
+                .expect("fixture repo is initialized"),
+        )
         .args(["queue", "add", &reviewer_spec, "--for", "reviewer"])
         .output()
         .expect("run aida queue add reviewer");

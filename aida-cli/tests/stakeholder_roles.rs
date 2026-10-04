@@ -112,8 +112,11 @@ fn role_list_surfaces_stakeholder_personas_without_role_files() {
     assert!(out.contains("requester"), "{out}");
     assert!(out.contains("least-privilege"), "{out}");
     assert!(out.contains("not a build seat"), "{out}");
-    assert!(out.contains("AIDA_SESSION_ROLE=guest"), "{out}");
-    assert!(out.contains("AIDA_SESSION_ROLE=requester"), "{out}");
+    // ADR-66: the persona hint points at `aida role enter`, never an env-var
+    // override (env roles confer nothing). trace:STORY-1473 | ai:claude
+    assert!(out.contains("aida role enter guest"), "{out}");
+    assert!(out.contains("aida role enter requester"), "{out}");
+    assert!(!out.contains("AIDA_SESSION_ROLE="), "{out}");
 }
 
 #[test]

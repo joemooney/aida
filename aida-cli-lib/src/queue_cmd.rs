@@ -388,11 +388,9 @@ pub(crate) fn advance_dispatch(
                 && !has_advisor_authority()
             {
                 println!(
-                    "  {} approving {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor aida queue advance {}`.{}",
+                    "  {} approving {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
-                    display,
                     roleless_recovery_sentence()
                 );
                 return Ok(());
@@ -444,8 +442,7 @@ pub(crate) fn advance_dispatch(
                     && !has_advisor_authority()
                 {
                     println!(
-                        "  {} rejecting {} needs the advisor role. \
-                         Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
+                        "  {} rejecting {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         display.bold(),
                         roleless_recovery_sentence()
@@ -518,8 +515,7 @@ pub(crate) fn advance_dispatch(
                 && !has_advisor_authority()
             {
                 println!(
-                    "  {} closing {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
+                    "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
                     roleless_recovery_sentence()
@@ -8195,14 +8191,11 @@ pub(crate) fn handle_queue_rework(
             && !has_advisor_authority()
         {
             println!(
-                "  {} reworking {} from {} to {} needs the advisor role (or an \
-                 interactive terminal). Re-run as advisor: \
-                 `AIDA_SESSION_ROLE=advisor aida queue rework {}`.{}",
+                "  {} reworking {} from {} to {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 display_id.bold(),
                 current_status,
                 new_status,
-                display_id,
                 roleless_recovery_sentence()
             );
             return Ok(());
@@ -12292,6 +12285,14 @@ pub(crate) fn handle_queue_work(
             launch_vendor,
         );
     }
+    if !no_human {
+        let child_grant = crate::seat_authority::issue_child(
+            &project_root,
+            &crate::canonical_role_name(&role),
+            &crate::current_user_id(None),
+        )?;
+        std::env::set_var(crate::seat_authority::GRANT_ENV, child_grant.id);
+    }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
     // no caller-minted session id / AIDA-addressable resume, and the interactive
     // tab launch is never `--no-human` (the headless drain resolves its own
@@ -12370,6 +12371,7 @@ pub(crate) fn handle_queue_work(
                     &lease.worktree_path,
                     &tee_opts,
                     contained,
+                    &role,
                 )?;
                 std::process::exit(status.code().unwrap_or(1));
             }
@@ -12544,7 +12546,7 @@ pub(crate) fn run_standalone_reviewer(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
                 let status = session::spawn_claude_headless_resume(
-                    prompt, &id, &log_path, worktree, &tee_opts, contained,
+                    prompt, &id, &log_path, worktree, &tee_opts, contained, "reviewer",
                 )?;
                 (status, Some(log_path))
             } else {
@@ -12671,7 +12673,7 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let status = session::spawn_reviewer_launch_plan(&plan)?;
+                let status = session::spawn_reviewer_launch_plan(&plan, project_root)?;
                 (status, None)
             }
         }

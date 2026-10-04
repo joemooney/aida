@@ -36,10 +36,12 @@ version = "0.15.0"
 dependencies = [
  "aida-cli-lib",
  "aida-core",
+ "chrono",
  "rusqlite",
  "serde_json",
  "tempfile",
  "toml",
+ "uuid",
 ]
 
 [[package]]

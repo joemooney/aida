@@ -38,6 +38,10 @@ serde_json.workspace = true
 # TASK-1561: a placement test patches the scaffolded `.aida/config.toml`; it
 # parses the result so a fixture typo cannot masquerade as a placement failure.
 toml.workspace = true
+# STORY-1473: tests/support/mod.rs mints validated session-grant records (the
+# ADR-66 seat fixture) — uuid handles + RFC3339 issue/expiry stamps.
+uuid.workspace = true
+chrono.workspace = true
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

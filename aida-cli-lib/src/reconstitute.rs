@@ -906,19 +906,20 @@ fn run_headless(
         crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(label.to_string());
     let session_id = uuid::Uuid::now_v7().to_string();
     let previous_dir = std::env::current_dir().ok();
-    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
     // ADR-44: the probe runs INSIDE an empty directory outside the project so
     // the headless launcher's cwd (and any file the agent might reach for)
     // is that scratch dir, not the repo.
     std::env::set_current_dir(cwd)
         .with_context(|| format!("could not enter scratch dir {}", cwd.display()))?;
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-    let status =
-        crate::session::spawn_vendor_headless(vendor, prompt, &session_id, log_path, &tee, false);
-    match previous_role {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
+    let status = crate::session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        prompt,
+        &session_id,
+        log_path,
+        &tee,
+        false,
+    );
     if let Some(d) = previous_dir {
         let _ = std::env::set_current_dir(d);
     }
