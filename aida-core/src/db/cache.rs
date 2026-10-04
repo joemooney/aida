@@ -393,6 +393,9 @@ pub enum SortOrder {
     WeightDesc,
     /// Newest-created first by `created_at` DESC.
     // trace:TASK-1464 | ai:claude
+    /// Alphabetical by requirement ID.
+    // trace:TASK-1587 | ai:antigravity
+    IdAsc,
     CreatedDesc,
     /// Most-recently-completed first, ordered on the real `completed_at`
     /// timestamp (STORY-86, stamped by the Done->Completed auto-bump) rather
@@ -2055,6 +2058,8 @@ impl Cache {
             SortOrder::WeightDesc => sql.push_str(" ORDER BY weight DESC, modified_at DESC"),
             // trace:TASK-1464 | ai:claude
             SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
+            // trace:TASK-1587 | ai:antigravity
+            SortOrder::IdAsc => sql.push_str(" ORDER BY COALESCE(spec_id, id) ASC"),
             // trace:TASK-1474 | ai:claude — order on the real `completed_at`
             // timestamp (STORY-86); a Completed row that predates STORY-86
             // (completed_at never stamped) falls back to modified_at, same as
@@ -7064,5 +7069,32 @@ mod tests {
         stop.store(true, Ordering::SeqCst);
         reader.join().expect("reader saw an inconsistent snapshot");
         assert!(reads.load(Ordering::SeqCst) > 0);
+    }
+    // trace:TASK-1587 | ai:antigravity
+    #[test]
+    fn list_summaries_sorts_by_id() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let b = sample_req("B-2", "second");
+        let a = sample_req("A-1", "first");
+        let c = sample_req("C-3", "third");
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(b);
+        store.requirements.push(c);
+        store.requirements.push(a);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::IdAsc,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("A-1"));
+        assert_eq!(rows[1].spec_id.as_deref(), Some("B-2"));
+        assert_eq!(rows[2].spec_id.as_deref(), Some("C-3"));
     }
 }

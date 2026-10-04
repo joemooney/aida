@@ -9538,10 +9538,12 @@ pub enum Command {
         /// so load-bearing specs surface at the top; `weight` = heaviest
         /// user-set numeric weight/score first (unweighted specs sort last);
         /// `created` = newest-created first; `completed` = most-recently-
-        /// completed first (specs with no completion date sort last).
+        /// completed first (specs with no completion date sort last);
+        /// `id` = alphabetical by requirement ID.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
         // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
+        // trace:TASK-1587 | ai:antigravity — adds the `id` order.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 

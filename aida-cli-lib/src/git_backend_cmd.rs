@@ -2190,10 +2190,12 @@ pub(crate) fn handle_git_backend_command(
                 // trace:TASK-1464 | ai:claude — creation / completion date sorts.
                 "created" => aida_core::SortOrder::CreatedDesc,
                 "completed" => aida_core::SortOrder::CompletedDesc,
+                // trace:TASK-1587 | ai:antigravity
+                "id" => aida_core::SortOrder::IdAsc,
                 "modified" | "" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', or 'completed'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', 'completed', or 'id'); using 'modified'"
                     );
                     aida_core::SortOrder::ModifiedDesc
                 }

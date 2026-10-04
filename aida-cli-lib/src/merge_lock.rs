@@ -258,7 +258,7 @@ mod tests {
         );
         // Release → the branch is free again.
         drop(held);
-        acquire(root, "main", Some(3), "third", Duration::from_millis(300)).unwrap();
+        let _ = acquire(root, "main", Some(3), "third", Duration::from_millis(300)).unwrap();
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod tests {
             ttl_secs: 600,
         };
         std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
-        acquire(root, "main", Some(2), "steal", Duration::from_millis(200)).unwrap();
+        let _ = acquire(root, "main", Some(2), "steal", Duration::from_millis(200)).unwrap();
     }
 
     #[test]
