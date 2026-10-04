@@ -32,7 +32,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:52:50.919097069Z
-modified_at: 2026-09-13T20:52:50.919097069Z
+modified_at: 2026-10-04T04:53:06.030345853Z
 req_type: Principle
 tags:
-- design-principle skills agent-surface cross-vendor positioning
+- agent-surface
+- cross-vendor
+- design-principle
+- positioning
+- skills
