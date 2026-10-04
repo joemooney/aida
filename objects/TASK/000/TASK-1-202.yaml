@@ -1,0 +1,29 @@
+id: 01a1058c-3df4-7802-915e-5131306df8bb
+spec_id: TASK-1-202
+title: BUG-1796 acceptance item 3 requires a byte-identical test of normal two-remote …
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1796, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  BUG-1796 acceptance item 3 requires a byte-identical test of normal two-remote pull output. The added bug_1796_normal_two_leg_pull_headings_keep_their_legacy_bytes test only compares two formatting helper strings; it does not run handle_pull_command/aida pull with both remotes configured, capture the resulting output, or compare it to the pre-change output. Add a full-path regression test that configures both remotes and pins the complete normal pull output byte-for-byte.
+
+  PR: #2397
+  Reviewed sha: 38554877027e0fe14abb786cef249db498f5a1a8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-04T06:13:59.412734985Z
+modified_at: 2026-10-04T06:13:59.412734985Z
+req_type: Task
+tags:
+- carried-from:BUG-1796
+- finding-hash:96f5f2a8
+- from-review:PR-2397
+- kind:carried-forward
+filed_at:
+  code_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1b8bdda092
+  vendor: antigravity
