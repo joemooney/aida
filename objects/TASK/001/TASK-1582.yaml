@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:35.363046278Z
-modified_at: 2026-10-04T01:16:46.992137892Z
+modified_at: 2026-10-04T02:39:32.049979054Z
 req_type: Task
 tags:
 - messaging
@@ -32,6 +32,17 @@ comments:
   content: 'Implemented in PR-2403 (aa2523f, b678a44). A: merge-hold list release-MET line names `aida merge-hold clear` before `aida pr ship`, and keeps the human one-step ship path because it pins to the verdict head (BUG-1532) — clear->ship falls back to the approval-gate pin. B: dry-run merge line rendered via forge::github_merge_argv with --match-head-commit <approved-head-sha>; footnote states the pin is conditional and --subject may be appended; GitLab gets an explicit abbreviation note. C: step 5 names lease scope/role/worktree/branch and tells a caller to leave its own session running. Independent review subagent pass; all review findings addressed. All 3 ACs traced to tests. Supervised: awaiting human merge.'
   created_at: 2026-10-04T01:16:46.992137892Z
   modified_at: 2026-10-04T01:16:46.992137892Z
+- id: 01a104c7-e6d1-76c3-92e5-9f401abff19f
+  author: joe
+  content: |-
+    Code Review Outcome Details:
+    An independent subagent reviewed the diff prior to commit and raised 4 findings, all addressed:
+    1. [Medium - Safety] The initial implementation for Item A told humans to run `merge-hold clear` then `pr ship`. The reviewer caught that doing this loses the approved-head merge pin (BUG-1532), because `clear` drops the record that `ship` relies on to pin the merge. Fixed by rewording the hint: it lists `clear` first for agents, but explicitly retains the single-step `pr ship` instruction for humans at a terminal so the pin is preserved.
+    2. [Medium - Accuracy] The dry-run plan footprint (Item B) didn't clarify that the `--match-head-commit` pin is conditional, nor that a repaired `--subject` might be appended. Fixed by adding a footnote explaining this dynamic behavior.
+    3. [Low - Accuracy] The GitLab dry-run note claimed it sent a specific pin, but it actually sends the MR head read at merge time and checks it. Fixed the note wording.
+    4. [Low - UX] The step 5 instruction (Item C) was a ~300-character unbroken line. Added line breaks for readability.
+  created_at: 2026-10-04T02:39:32.049979054Z
+  modified_at: 2026-10-04T02:39:32.049979054Z
 history:
 - id: 01a103ce-7dc4-7eb0-ac77-516e29dfee8f
   author: joe
