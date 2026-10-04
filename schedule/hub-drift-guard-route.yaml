@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Drift already reconciled before this seat picked it up: ''aida remote status'' shows main, aida-store, and release v0.15.0 in sync across origin and gitlab (main 04043d46ab, aida-store d5986a23fb on both). Local aida-store is +2 ahead of both hubs equally; will fan out via ''aida db sync --push'' at session end per BUG-1746 discipline.'
+due_since: 2026-10-04T06:37:36.216030540Z
+due_reason: on CronJobFailed:hub-drift-guard
