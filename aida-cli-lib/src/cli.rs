@@ -1056,6 +1056,14 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// List recorded review verdicts.
+    // trace:TASK-1590 | ai:antigravity
+    List {
+        /// Emit the list as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Count review findings per defect class across every recorded verdict,
     /// including archived rounds. Alias of `aida findings classes`.
     // trace:STORY-1417 | ai:claude
@@ -9538,10 +9546,12 @@ pub enum Command {
         /// so load-bearing specs surface at the top; `weight` = heaviest
         /// user-set numeric weight/score first (unweighted specs sort last);
         /// `created` = newest-created first; `completed` = most-recently-
-        /// completed first (specs with no completion date sort last).
+        /// completed first (specs with no completion date sort last);
+        /// `id` = alphabetical by requirement ID.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
         // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
+        // trace:TASK-1587 | ai:antigravity — adds the `id` order.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 
@@ -9839,9 +9849,15 @@ pub enum Command {
         #[clap(long)]
         json: bool,
 
-        /// Print the probe brief and exit without launching anything.
+        /// Print the probe briefs and exit without launching anything.
         #[clap(long)]
         dry_run: bool,
+
+        /// Confirm launching the headless agent runs when stdin is not a
+        /// terminal (unattended runs refuse without it).
+        // trace:STORY-1425 | ai:claude
+        #[clap(long)]
+        yes: bool,
     },
 
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
@@ -10283,7 +10299,8 @@ pub enum Command {
     /// default open-work view but not filed away the way archive is.
     ///
     /// Defer is a view-level flag distinct from status (it does not touch the
-    /// lifecycle state machine). Use `--until` to record the revisit trigger —
+    /// lifecycle state machine). Use `--reason` to record why this is an
+    /// operator hold and `--until` to record the revisit trigger —
     /// the free-text condition that brings the spec back (e.g.
     /// `--until "when a slice verb ships"`). That trigger is the one thing
     /// distinguishing deferred (prospective, primed) from archived
@@ -10302,6 +10319,11 @@ pub enum Command {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
         until: Option<String>,
+
+        /// Why the work is being held. Required for a durable operator hold;
+        /// legacy deferrals may omit it.
+        #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
+        reason: Option<String>,
     },
 
     /// Inverse of `aida defer` — clears the deferred flag (and its revisit

@@ -339,7 +339,7 @@ fn is_essentially_empty(text: &str) -> bool {
             .trim()
             .trim_start_matches('#')
             .trim_start_matches('>')
-            .trim_start_matches(|c: char| c == '-' || c == '*' || c == '+')
+            .trim_start_matches(['-', '*', '+'])
             .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')')
             .trim();
         for word in line.split_whitespace() {

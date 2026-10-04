@@ -4380,8 +4380,7 @@ mod tests {
         let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             await_holder_ready(ready_rx, thread)
         }))
-        .err()
-        .expect("the waiter returned although the holder never armed the channel");
+        .expect_err("the waiter returned although the holder never armed the channel");
         let msg = payload
             .downcast_ref::<String>()
             .map(String::as_str)

@@ -1732,7 +1732,7 @@ mod tests {
         assert_eq!(map.get("TASK-1"), Some(&SpecLiveness::Live));
         assert_eq!(map.get("TASK-2"), Some(&SpecLiveness::Stale));
         assert_eq!(map.get("TASK-3"), Some(&SpecLiveness::Stale));
-        assert!(map.get("TASK-9").is_none());
+        assert!(!map.contains_key("TASK-9"));
 
         let _ = std::fs::remove_dir_all(&live_wt);
     }
@@ -1780,7 +1780,7 @@ mod tests {
             orphan_excluded: true,
         }];
         let map = spec_verdicts(&specs, &[], &[], now);
-        assert!(map.get("EPIC-1").is_none());
+        assert!(!map.contains_key("EPIC-1"));
     }
 
     #[test]

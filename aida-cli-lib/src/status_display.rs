@@ -472,6 +472,17 @@ pub(crate) fn deferred_display_label(req: &aida_core::models::Requirement) -> Op
     if !is_deferred(req) {
         return None;
     }
+    if let Some(reason) = req
+        .deferred_reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+    {
+        let trigger = deferred_revisit_trigger(req)
+            .map(|trigger| format!("; revisit: {trigger}"))
+            .unwrap_or_default();
+        return Some(format!("Held ({reason}{trigger})"));
+    }
     Some(label_with_reason(
         DEFERRED_LABEL,
         deferred_revisit_trigger(req).as_deref(),

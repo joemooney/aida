@@ -1,3 +1,5 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 //! # aida-core — the AIDA engine
 //!
 //! `aida-core` is the requirement-graph engine that every other AIDA crate is

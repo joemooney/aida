@@ -1,5 +1,4 @@
 use super::*;
-use std::path::PathBuf;
 
 #[test]
 // trace:BUG-1772.ac3dfbab | ai:antigravity

@@ -4748,7 +4748,7 @@ mod bug_1612_save_conflict_tests {
         let (state, raw, task) = git_server(dir.path());
 
         // First REST mutation lands.
-        add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("one"))
+        let _ = add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("one"))
             .await
             .unwrap_or_else(|_| panic!("first comment failed"));
 
@@ -4766,7 +4766,7 @@ mod bug_1612_save_conflict_tests {
 
         // The in-memory store was reloaded, so the retry succeeds and keeps
         // the other writer's edit.
-        add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("two"))
+        let _ = add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("two"))
             .await
             .unwrap_or_else(|_| panic!("retry after reload failed"));
         let on_disk = raw.get_requirement_by_spec_id("TASK-1").unwrap().unwrap();

@@ -379,8 +379,10 @@ mod tests {
 
     #[test]
     fn mark_stale_clears_the_last_probe_timer() {
-        let mut probe = LivenessProbe::default();
-        probe.last_probe = Some(Instant::now());
+        let mut probe = LivenessProbe {
+            last_probe: Some(Instant::now()),
+            ..Default::default()
+        };
         probe.mark_stale();
         assert!(probe.last_probe.is_none());
     }

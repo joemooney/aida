@@ -3270,7 +3270,7 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     // resolve a project root (not in a project), keep the old global behaviour.
     // trace:BUG-447 | ai:claude
     let mut out: Vec<SessionMeta> =
-        collect_global_project_sessions(150, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
+        collect_global_project_sessions(150, Some(SESSION_SCAN_BYTE_BUDGET), None, None, |m| {
             m.spec
                 .as_deref()
                 .map(|s| s.eq_ignore_ascii_case(want))
@@ -3290,11 +3290,14 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
 // trace:BUG-1789 | ai:antigravity
 pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> {
     let want = canonical_session_role(role);
-    let mut out: Vec<SessionMeta> =
-        collect_global_project_sessions(limit, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
-            m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str())
-        })?
-        .collect();
+    let mut out: Vec<SessionMeta> = collect_global_project_sessions(
+        limit,
+        Some(SESSION_SCAN_BYTE_BUDGET),
+        Some(&want),
+        None,
+        |m| m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str()),
+    )?
+    .collect();
     out.sort_by_key(|m| m.age_seconds);
     fill_branches(&mut out);
     normalize_specs(&mut out);
@@ -3306,14 +3309,21 @@ pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> 
 /// [`select_recent_sessions`] for the bounds. `byte_budget: None` means only
 /// the file-count bound applies (used by exact id-prefix resume lookups).
 // trace:BUG-1789 | ai:antigravity
+// trace:TASK-1578 | ai:antigravity
 fn collect_global_project_sessions<F>(
     limit: usize,
     byte_budget: Option<u64>,
+    expected_role: Option<&str>,
+    id_prefix: Option<&str>,
     mut filter_fn: F,
 ) -> Result<impl Iterator<Item = SessionMeta>>
 where
     F: FnMut(&SessionMeta) -> bool,
 {
+    let project_root = crate::find_main_worktree_root().ok();
+    let encoded_cwd = project_root
+        .as_deref()
+        .map(crate::process_probe::encode_cwd_for_projects);
     let home = crate::home_dir().context("HOME not set; cannot locate sessions")?;
     let projects = home.join(".claude").join("projects");
     let mut entries: Vec<SessionLogEntry> = Vec::new();
@@ -3324,6 +3334,11 @@ where
                 if !p.is_dir() {
                     continue;
                 }
+                if let Some(enc) = &encoded_cwd {
+                    if p.file_name().and_then(|s| s.to_str()) != Some(enc) {
+                        continue;
+                    }
+                }
                 let Ok(files) = std::fs::read_dir(&p) else {
                     continue;
                 };
@@ -3331,6 +3346,15 @@ where
                     let fp = f.path();
                     if fp.extension().and_then(|s| s.to_str()) != Some("jsonl") {
                         continue;
+                    }
+                    if let Some(prefix) = id_prefix {
+                        if !fp
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .is_some_and(|s| s.starts_with(prefix))
+                        {
+                            continue;
+                        }
                     }
                     if let Ok(mtime) = f.metadata().and_then(|m| m.modified()) {
                         entries.push(SessionLogEntry {
@@ -3343,17 +3367,38 @@ where
             }
         }
     }
-    entries.extend(codex_entries()?);
-    entries.extend(antigravity_entries()?);
+    let mut codex = codex_entries()?;
+    let mut antigravity = antigravity_entries()?;
+    if let Some(prefix) = id_prefix {
+        let f = |e: &SessionLogEntry| {
+            e.path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| {
+                    s.starts_with(prefix)
+                        || (e.agent == "codex"
+                            && codex_id_from_rollout_stem(s).is_some_and(|s| s.starts_with(prefix)))
+                })
+        };
+        codex.retain(f);
+        antigravity.retain(|e: &SessionLogEntry| {
+            e.path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s.starts_with(prefix))
+        });
+    }
+    entries.extend(codex);
+    entries.extend(antigravity);
     entries.sort_by(|a, b| b.mtime.cmp(&a.mtime));
 
     let now = SystemTime::now();
-    let project_root = crate::find_main_worktree_root().ok();
     let agents = load_agent_views_for_enrich();
     let (sessions, _stats) = select_recent_sessions(
         entries,
         limit,
         byte_budget,
+        expected_role,
         now,
         project_root.as_deref(),
         &agents,
@@ -3382,6 +3427,7 @@ fn select_recent_sessions<F>(
     entries: Vec<SessionLogEntry>,
     limit: usize,
     byte_budget: Option<u64>,
+    expected_role: Option<&str>,
     now: SystemTime,
     project_root: Option<&Path>,
     agents: &[crate::agent_registry::AgentRegistryView],
@@ -3409,9 +3455,14 @@ where
                 .unwrap_or(true)
         };
         let scope: Option<&dyn Fn(&str) -> bool> = project_root.map(|_| &in_scope as _);
-        let Ok((mut m, n)) =
-            parse_session_meta_counted(&entry.path, entry.mtime, now, entry.agent, scope)
-        else {
+        let Ok((mut m, n)) = parse_session_meta_counted(
+            &entry.path,
+            entry.mtime,
+            now,
+            entry.agent,
+            expected_role,
+            scope,
+        ) else {
             continue;
         };
         stats.bytes_read += n;
@@ -3628,7 +3679,7 @@ fn parse_session_meta_for_agent(
     now: SystemTime,
     agent: &'static str,
 ) -> Result<SessionMeta> {
-    parse_session_meta_counted(path, mtime, now, agent, None).map(|(meta, _)| meta)
+    parse_session_meta_counted(path, mtime, now, agent, None, None).map(|(meta, _)| meta)
 }
 
 /// Same as [`parse_session_meta_for_agent`], also returning the number of
@@ -3640,11 +3691,13 @@ fn parse_session_meta_for_agent(
 /// instead of a full per-file cap. Trade-off: a session launched outside the
 /// project that later moved into it is no longer matched.
 // trace:BUG-1789 | ai:antigravity
+// trace:TASK-1578 | ai:antigravity
 fn parse_session_meta_counted(
     path: &Path,
     mtime: SystemTime,
     now: SystemTime,
     agent: &'static str,
+    expected_role: Option<&str>,
     in_scope: Option<&dyn Fn(&str) -> bool>,
 ) -> Result<(SessionMeta, u64)> {
     use std::io::{BufRead, BufReader};
@@ -3835,6 +3888,13 @@ fn parse_session_meta_counted(
                         if name != "none" {
                             role = Some(canonical_session_role(&name));
                         }
+                        break;
+                    }
+                }
+            }
+            if role_resolved {
+                if let (Some(expected), Some(r)) = (expected_role, &role) {
+                    if r != expected {
                         break;
                     }
                 }
@@ -4255,7 +4315,7 @@ fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
     // Allow a generous walk — user might have written down the id from a
     // weeks-old session; collect everything and filter.
     let all: Vec<SessionMeta> =
-        collect_global_project_sessions(usize::MAX, None, |_| true)?.collect();
+        collect_global_project_sessions(usize::MAX, None, None, Some(prefix), |_| true)?.collect();
     let matches: Vec<&SessionMeta> = all.iter().filter(|s| s.id.starts_with(prefix)).collect();
     match matches.len() {
         0 => anyhow::bail!("no session matches id prefix `{}`", prefix),
@@ -5023,7 +5083,8 @@ mod tests {
         );
         write_bug1789_rollout(&path, &head, 8 * 1024 * 1024);
         let now = SystemTime::now();
-        let (meta, bytes) = parse_session_meta_counted(&path, now, now, "codex", None).unwrap();
+        let (meta, bytes) =
+            parse_session_meta_counted(&path, now, now, "codex", None, None).unwrap();
         assert!(
             bytes <= SESSION_META_MAX_BYTES,
             "read {bytes} bytes, cap is {SESSION_META_MAX_BYTES}"
@@ -5098,6 +5159,7 @@ mod tests {
             entries,
             8,
             Some(SESSION_SCAN_BYTE_BUDGET),
+            Some(want.as_str()),
             SystemTime::now(),
             Some(&project),
             &[],
@@ -5119,11 +5181,9 @@ mod tests {
         }
     }
 
-    // trace:BUG-1789 | ai:antigravity
+    // trace:TASK-1578 | ai:antigravity
     #[test]
-    fn bug1789_in_project_non_matching_rollouts_trip_the_byte_budget() {
-        // Worst case: every log is in-project (so each costs a full per-file
-        // cap) but none matches the role. The budget must stop the scan.
+    fn task1578_in_project_non_matching_tier1_breaks_early_and_reaches_older() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("proj");
         std::fs::create_dir_all(&project).unwrap();
@@ -5145,21 +5205,36 @@ mod tests {
                 agent: "codex",
             });
         }
+        // Add an older matching session at the end.
+        let id = format!("01a067ec-facc-71a0-9a69-{:012x}", 200);
+        let path = tmp
+            .path()
+            .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+        let head = format!(
+            "{}{{\"message\":\"AIDA_SESSION_ROLE=advisor\"}}\n",
+            bug1789_session_meta_line(&id, &project)
+        );
+        write_bug1789_rollout(&path, &head, 3 * 1024 * 1024);
+        entries.push(SessionLogEntry {
+            path,
+            mtime: base - std::time::Duration::from_secs(200),
+            agent: "codex",
+        });
+
         let (rows, stats) = select_recent_sessions(
             entries,
             8,
             Some(SESSION_SCAN_BYTE_BUDGET),
+            Some("advisor"),
             SystemTime::now(),
             Some(&project),
             &[],
             &mut |m: &SessionMeta| m.role.as_deref() == Some("advisor"),
         );
-        assert!(rows.is_empty());
-        assert!(stats.bytes_read <= SESSION_SCAN_BYTE_BUDGET);
-        assert_eq!(
-            stats.files_opened as u64,
-            SESSION_SCAN_BYTE_BUDGET / SESSION_META_MAX_BYTES
-        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+        assert!(stats.bytes_read < SESSION_SCAN_BYTE_BUDGET);
+        assert_eq!(stats.files_opened, 201);
     }
 
     // trace:BUG-1789 | ai:antigravity
@@ -5185,6 +5260,7 @@ mod tests {
         let (rows, stats) = select_recent_sessions(
             entries,
             8,
+            None,
             None,
             SystemTime::now(),
             Some(&project),

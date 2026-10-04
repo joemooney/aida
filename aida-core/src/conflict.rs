@@ -310,26 +310,24 @@ pub fn merge_spec_three_way(
         &theirs.archived,
         ours_is_winner,
     );
-    merged.archived_at = merge_scalar(
+    merged.archived_at = *merge_scalar(
         &base.archived_at,
         &ours.archived_at,
         &theirs.archived_at,
         ours_is_winner,
-    )
-    .clone();
+    );
     merged.deferred = *merge_scalar(
         &base.deferred,
         &ours.deferred,
         &theirs.deferred,
         ours_is_winner,
     );
-    merged.deferred_at = merge_scalar(
+    merged.deferred_at = *merge_scalar(
         &base.deferred_at,
         &ours.deferred_at,
         &theirs.deferred_at,
         ours_is_winner,
-    )
-    .clone();
+    );
     merged.deferred_until = merge_scalar(
         &base.deferred_until,
         &ours.deferred_until,
