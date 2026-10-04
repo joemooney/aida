@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1425",
+  "publishes": [
+    {
+      "at": "2026-10-04T07:42:31.006568164Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-24T07:46:26.197679690Z",
+      "spec": "STORY-1425",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-09-24T08:08:19.794051992Z",
+      "spec": "STORY-1425",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-02T03:48:59.644996506Z",
+      "spec": "STORY-1425",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T06:36:07.400786817Z",
+      "spec": "STORY-1425",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T07:04:39.281441645Z",
+      "spec": "STORY-1425",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2417
+      }
+    },
+    {
+      "ts": "2026-10-04T07:42:17.988220933Z",
+      "spec": "STORY-1425",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T07:42:23.837337411Z",
+      "spec": "STORY-1425",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2417
+      }
+    },
+    {
+      "ts": "2026-10-04T07:42:30.998370704Z",
+      "spec": "STORY-1425",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ee269a29c349087d40b910c2a022092a2e8593fe",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
