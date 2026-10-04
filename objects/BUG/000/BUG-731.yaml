@@ -18,11 +18,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T14:59:51.503302349Z
-modified_at: 2026-07-19T01:02:08.553243541Z
+modified_at: 2026-10-04T04:45:09.690531175Z
 req_type: Bug
 tags:
+- aida:init
 - batch:papercuts-0718
-- codex cross-vendor parity aida:init from-dogfood
+- codex
+- cross-vendor
+- from-dogfood
+- parity
 history:
 - id: 019f77e5-10a3-7142-910a-9a5e006b0aa9
   author: aida-auto-bump
