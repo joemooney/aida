@@ -1,0 +1,19 @@
+id: 01a10514-8ac1-76f0-a541-82ed8eb64295
+spec_id: TASK-1589
+agreed_id: TASK-1589
+title: Add CI status column to aida pr list output
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T04:03:14.753757186Z
+modified_at: 2026-10-04T04:03:14.753757186Z
+req_type: Task
+filed_at:
+  code_sha: ff7d0a3c2ac5adcee21b60459fe0fff00949d319
+  branch: task-1583-list-pr
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 593327e874
+  vendor: antigravity
