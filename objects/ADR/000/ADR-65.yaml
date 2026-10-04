@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-04T03:11:58.433134488Z
+modified_at: 2026-10-04T03:16:35.324098899Z
 req_type: Decision
 tags:
 - branch-policy
@@ -79,6 +79,18 @@ comments:
     The weekly Sunday 06:00 UTC cron, Windows-only matrix, no macOS, retained selected-path informational PR run, and fresh 24-hour release check are all directly checkable. When ADR-65 is accepted, retire ADR-47 as superseded while carrying its retained rules forward in ADR-65 so the approved source of truth is unambiguous. No CI files were changed and ADR-65 remains Draft.
   created_at: 2026-10-04T03:09:29.461232672Z
   modified_at: 2026-10-04T03:09:29.461232672Z
+- id: 01a104e9-d37c-71b0-b580-762778375d41
+  author: joe
+  content: |
+    Advisor verdict: CHANGES REQUESTED; keep ADR-65 Draft.
+
+    The revision closes the previous manual-dispatch and ownership gaps: manual dispatch now has two safe, observable behaviors with required regression evidence; the Product seat owns follow-up, sees it through `aida schedule due --seat product`, and records disposition through `aida schedule done`. The ADR-65 → supersedes → ADR-47 edge and narrow supersession remain coherent. The weekly Windows signal is nonblocking, throughput-first ordering and release deferral remain explicit, and the existing 24-hour release check still dispatches fresh `main` when needed.
+
+    One operational contract is not yet implementable as written. AIDA's current schedule job model supports interval (`every`), event (`on`), and snapshot predicate (`when`) triggers; it has no calendar/weekday trigger. An interval cannot guarantee “first business day after each Sunday run,” and an event-triggered job becomes due on the event rather than the next business day. Also specify what counts as a business day (weekdays only, or which holiday calendar/time zone) and acceptance evidence that proves the due date across a Sunday run and a holiday/weekend boundary. Either define a supported implementation mechanism for this one-time-per-week due date, or revise the policy to a trigger the current scheduler can represent while preserving the one-business-day triage SLA.
+
+    I did not change workflow/configuration or the spec disposition. Once the calendar trigger and business-day definition are explicit, the remaining design and acceptance are reviewable.
+  created_at: 2026-10-04T03:16:35.324098899Z
+  modified_at: 2026-10-04T03:16:35.324098899Z
 filed_at:
   code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
   branch: main
