@@ -3,12 +3,12 @@ spec_id: TASK-1589
 agreed_id: TASK-1589
 title: Add CI status column to aida pr list output
 description: ''
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T04:03:14.753757186Z
-modified_at: 2026-10-04T04:27:40.102143716Z
+modified_at: 2026-10-04T07:04:57.603718596Z
 req_type: Task
 history:
 - id: 01a1052a-e6c6-7953-9fa9-011b9dbafda0
@@ -18,6 +18,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a105ba-e7fb-7742-b47e-d5c95b9557fa
+  author: aida-auto-bump
+  timestamp: 2026-10-04T07:04:57.595901943Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a105ba-e803-76f3-9888-795a42e910bd
+  timestamp: 2026-10-04T07:04:57.603717212Z
+  agent: aida
+  commit_sha: b13d34f2fc4f6c8248c9070fffd7b397c9c42094
+  summary: Completed via merge b13d34f2
 filed_at:
   code_sha: ff7d0a3c2ac5adcee21b60459fe0fff00949d319
   branch: task-1583-list-pr
@@ -25,3 +38,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 593327e874
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T07:04:57.595876327Z
+  completion_sha: b13d34f2fc4f6c8248c9070fffd7b397c9c42094
