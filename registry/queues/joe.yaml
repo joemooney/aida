@@ -22,3 +22,11 @@
   added_at: 2026-10-03T23:56:37.570852158Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a10343-1814-7812-bbf9-53783abf21de
+  position: 34000
+  added_by: joe
+  note: 'Product order: medium-priority Windows CI regression; queue after current integration/rework gates clear.'
+  added_at: 2026-10-04T00:51:07.996872110Z
+  for_role: implementer
+  added_by_machine: imac
