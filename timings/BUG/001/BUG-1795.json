@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1795",
+  "publishes": [
+    {
+      "at": "2026-10-04T00:21:49.997208090Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T22:36:30.885821186Z",
+      "spec": "BUG-1795",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:37:35.576084253Z",
+      "spec": "BUG-1795",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1795",
+        "branch": "bug-1795",
+        "first_seen": "2026-10-03T22:37:35.576066177+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T23:42:32.519756833Z",
+      "spec": "BUG-1795",
+      "seat": "product",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T23:43:17.592507711Z",
+      "spec": "BUG-1795",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    }
+  ]
+}
