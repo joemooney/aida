@@ -5815,6 +5815,7 @@ fn run() -> Result<()> {
             spec,
             json,
             dry_run,
+            yes,
         } => {
             let store = storage.load()?;
             let project_root = find_project_root()
@@ -5826,6 +5827,7 @@ fn run() -> Result<()> {
                 reconstitute::ReconstituteOptions {
                     json: *json,
                     dry_run: *dry_run,
+                    yes: *yes,
                 },
             )?;
         }
