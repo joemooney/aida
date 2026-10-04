@@ -27,7 +27,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-22T04:35:00.449463648Z
-modified_at: 2026-09-22T04:35:00.449463648Z
+modified_at: 2026-10-04T04:52:26.651289706Z
 req_type: Decision
 tags:
-- cloudflare access ci gitlab security
+- access
+- ci
+- cloudflare
+- gitlab
+- security
