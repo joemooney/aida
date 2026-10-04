@@ -37,3 +37,10 @@
   added_at: 2026-10-04T02:44:28.904068333Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a104db-aebe-7cc2-8a2e-a80f4752b97c
+  position: 38000
+  added_by: joe
+  note: advisor-cleared at filing
+  added_at: 2026-10-04T03:01:24.681260082Z
+  for_role: implementer
