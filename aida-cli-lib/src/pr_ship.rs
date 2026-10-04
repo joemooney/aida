@@ -2562,6 +2562,7 @@ mod tests {
 
     // TASK-1582 acceptance 2: the dry-run merge step is the literal argv the
     // real merge runs (github_merge_argv over merge_args), pin included.
+    // trace:TASK-1582.acd089f0 | ai:antigravity
     #[test]
     fn task_1582_dry_run_merge_step_matches_real_merge_argv_with_pin() {
         let opts = PrShipOptions {
@@ -2609,6 +2610,7 @@ mod tests {
         }
     }
 
+    // trace:TASK-1582.acd089f0 | ai:antigravity
     #[test]
     fn task_1582_gitlab_dry_run_merge_step_states_abbreviation_and_pin() {
         let line = dry_run_merge_cmd(crate::forge::ForgeKind::GitLab, true).unwrap();
@@ -2625,6 +2627,7 @@ mod tests {
     }
 
     // TASK-1582 acceptance 3: step 5 names scope, role and worktree path.
+    // trace:TASK-1582.ac6f4c6f | ai:antigravity
     #[test]
     fn task_1582_step5_messages_name_scope_role_and_worktree() {
         let wt = std::path::Path::new("/tmp/aida-worktrees/aida-task-9");

@@ -2768,6 +2768,7 @@ mod tests {
 
     // TASK-1582 acceptance 1: with a hold armed, the next-action line names
     // `aida merge-hold clear` BEFORE `aida pr ship` (no circular hints).
+    // trace:TASK-1582.ac14557d | ai:antigravity
     #[test]
     fn task_1582_release_met_next_action_names_clear_before_ship() {
         let line = release_met_next_action(2386, "TASK-1", "abc1234");
