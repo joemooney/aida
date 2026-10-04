@@ -11,11 +11,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:16:16.429295950Z
-modified_at: 2026-07-18T22:50:42.642450912Z
+modified_at: 2026-10-04T04:47:02.611519876Z
 req_type: Bug
 tags:
-- aida:pr severity:cosmetic from-dogfood
+- aida:pr
 - batch:papercuts-0718
+- from-dogfood
+- severity:cosmetic
 relationships:
 - rel_type:
     custom: implemented-by
