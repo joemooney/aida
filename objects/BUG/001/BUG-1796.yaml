@@ -21,12 +21,12 @@ description: |
   1. `aida pull` in a repo with no origin exits non-zero OR prints a WARNING-level line per skipped leg; a test pins whichever is chosen.
   2. `aida doctor` (or an existing check category) surfaces orphan-store-ahead-of-remote with the count; test with a store N commits ahead of a configured remote.
   3. Normal two-remote pull output unchanged (byte-identical test).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-04T04:23:40.333804544Z
+modified_at: 2026-10-04T06:13:58.098244128Z
 req_type: Bug
 tags:
 - pull
@@ -165,6 +165,25 @@ history:
   - field_name: status
     old_value: Done
     new_value: InProgress
+- id: 01a1058c-38d0-76b3-b46a-ab72e9ee4883
+  author: aida-auto-bump
+  timestamp: 2026-10-04T06:13:58.096853105Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1058c-38d2-7b00-bd63-ff0e0e1ea76b
+  timestamp: 2026-10-04T06:13:58.098231797Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-1796-2026-10-04T023922Z.md.acked
+  commit_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
+  summary: 'AC1/2/3 satisfied at exact head: real no-origin warnings, doctor reports 3 commits/3 unpushed, and a real two-remote pull is byte-pinned; both fixtures and required Ubuntu Build pass, including trace gate after transient store-detach recovery.'
+  punted:
+  - 'punted: AC1''s pin tests only the formatting helper with fabricated messages; reverting the call sites to Note: leaves the suite green, so the behavior coverage the AC demands does not exist'
+  - 'punted: Round 2: AC1 rework itself verified (real-binary shell test named in ci.yml, green at head, red with call sites reverted to Note: — advisor-run mutation proof), but CI Build is red: the new gate is unclassified in scripts/ci-gate-tiers.toml and the TASK-1555 guard fails'
+  - 'punted: Acceptance item 3 lacks byte-identical full-output coverage for a normal two-remote pull.'
+  review_verdict: approved
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
@@ -180,6 +199,8 @@ implementation_info:
     cargo test -p aida-cli-lib bug_1796 -- --nocapture (3 passed)
   implemented_at: 2026-10-03T22:38:50.566824424Z
   implemented_by: joe
+  completed_at: 2026-10-04T06:13:58.096825297Z
+  completion_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
 interface_changes:
   cli:
   - aida pull warns when code or store pulls are skipped
