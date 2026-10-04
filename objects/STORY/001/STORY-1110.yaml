@@ -24,10 +24,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:46.513977697Z
-modified_at: 2026-09-15T11:35:24.208625664Z
+modified_at: 2026-10-04T04:51:33.491760458Z
 req_type: Story
 tags:
-- guest-requester-persona role intake parent:epic-64 slice-1
+- guest-requester-persona
+- intake
+- parent:epic-64
+- role
+- slice-1
 relationships:
 - rel_type: Parent
   target_id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
