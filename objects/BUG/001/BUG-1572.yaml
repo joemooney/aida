@@ -37,11 +37,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T21:06:06.231730031Z
-modified_at: 2026-09-21T23:31:00.588519872Z
+modified_at: 2026-10-04T04:50:17.028499747Z
 req_type: Bug
 tags:
+- agent-surface
 - batch:perf-gate
-- performance agent-surface papercut
+- papercut
+- performance
 comments:
 - id: 01a0c640-926a-7430-a95a-6f0c99ced16d
   author: joe
