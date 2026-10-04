@@ -11,7 +11,7 @@ description: |
   - Keep Ubuntu Build and merge-hold gate as the required PR checks. Windows remains informational on its existing selected-path PR runs; do not add Windows or macOS to the blocking Linux PR path.
   - Run scheduled Windows validation once each Sunday at 06:00 UTC against the latest `main`. Manual dispatch must either reject a non-`main` ref before doing work or explicitly check out the latest `main`; it must never validate an arbitrary feature branch while presented as the main platform check.
   - Keep macOS disabled under TASK-1570 unless the operator explicitly re-enables it.
-  - Supersede only ADR-47's blanket deferral of scheduled cross-platform validation: this non-blocking weekly Windows signal may run while the implementation queue is active. ADR-47's throughput-first ordering remains. A red result creates or updates the existing tracking issue; product triages that issue within one business day. Register a recurring AIDA product seat job for the first business day after the scheduled run so the reminder appears in `aida schedule due --seat product`; record completion with `aida schedule done` and a note linking the issue or recording that no red issue existed. The reminder does not automatically enter or interrupt the implementation queue. Windows fixes stay behind Linux work unless the operator explicitly reprioritizes a security, data-loss, or release-blocking issue. Release work itself remains deferred under ADR-47 until the queue is empty.
+  - Supersede only ADR-47's blanket deferral of scheduled cross-platform validation: this non-blocking weekly Windows signal may run while the implementation queue is active. ADR-47's throughput-first ordering remains. A red result creates or updates the existing tracking issue. Product owns disposition and gets a daily AIDA seat reminder to inspect the latest run and issue. Product records the result with `aida schedule done` and a note linking the issue or recording that no red issue existed. Triage occurs by the next due product check and before any release; no calendar-based business-day SLA is claimed because AIDA's scheduler has interval, event, and predicate triggers but no weekday/holiday calendar. The reminder does not automatically enter or interrupt the implementation queue. Windows fixes stay behind Linux work unless the operator explicitly reprioritizes a security, data-loss, or release-blocking issue. Release work itself remains deferred under ADR-47 until the queue is empty.
   - Preserve the existing fresh-green cross-platform check before releases. A weekly scheduled run does not satisfy the 24-hour release gate; release preparation must dispatch a fresh run on `main` when the last green result is stale.
   - Treat Linux PR runtime as a separate optimization concern. Measure the current gate and its slowest steps before proposing changes; preserve Linux coverage unless an independently reviewed optimization demonstrates equivalent coverage.
 
@@ -21,7 +21,7 @@ description: |
   3. Manual dispatch cannot silently validate a caller-selected feature branch as the main platform check: a non-`main` dispatch is visibly rejected before the matrix, or the workflow explicitly checks out the latest `main`. Add a regression check for the selected behavior.
   4. Selected-path Windows PR runs remain informational. There is no long-lived platform branch or scheduled merge-back workflow; fixes reach `main` through normal PRs.
   5. macOS remains disabled until a new operator decision.
-  6. A weekly product seat job becomes due on the first business day after each scheduled run and appears in `aida schedule due --seat product`. Product records completion and triage evidence with `aida schedule done`; an open red-run issue is triaged within one business day, and no issue means the job is closed with that observation. The job never auto-queues implementation work or displaces Linux work.
+  6. A daily Product seat job reminds the Product seat to inspect the latest scheduled Windows result and its tracking issue. The job appears in `aida schedule due --seat product`, and completion is recorded with `aida schedule done` plus the issue number or a no-open-issue note. A red issue is triaged by the next due Product check and before any release; the job never auto-queues implementation work or displaces Linux work.
   7. ADR-47 is explicitly narrowed only for non-blocking weekly Windows validation. Its throughput-first queue ordering and release deferral remain in force.
   8. The release check still requires a green cross-platform result within 24 hours and can dispatch a fresh `main` run when needed.
   9. Linux gate optimization is handled as a separate measured change with coverage-preserving evidence.
@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-04T03:16:35.324098899Z
+modified_at: 2026-10-04T03:19:50.790454494Z
 req_type: Decision
 tags:
 - branch-policy
