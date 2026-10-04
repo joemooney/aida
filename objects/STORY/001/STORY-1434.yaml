@@ -44,11 +44,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:27:13.842442950Z
-modified_at: 2026-09-24T05:28:39.514504046Z
+modified_at: 2026-10-04T04:51:37.777653634Z
 req_type: Story
 tags:
 - docs:impacted
-- substrate lifecycle papercut
+- lifecycle
+- papercut
+- substrate
 history:
 - id: 01a0d1e3-2553-72d0-850b-ed99047b20f9
   author: aida-auto-bump
