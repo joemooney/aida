@@ -8,10 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:23:07.477949662Z
-modified_at: 2026-07-19T02:11:50.571781428Z
+modified_at: 2026-10-04T04:47:00.883602805Z
 req_type: Bug
 tags:
-- aida:session kind:observation from-dogfood
+- aida:session
+- from-dogfood
+- kind:observation
 history:
 - id: 019f7824-e0a6-7c12-94d7-1fe866c1216d
   author: aida-auto-bump
