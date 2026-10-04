@@ -416,7 +416,7 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	# trace:TASK-1560 | ai:antigravity
 	@echo "Syncing .aida/discipline/ mirror..."
 	@mkdir -p .aida/discipline
-	errors=0; \
+	@errors=0; \
 	for f in aida-core/templates/.aida/discipline/*.md; do \
 		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
 	done
@@ -431,7 +431,7 @@ sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regul
 # trace:TASK-1520 | ai:codex
 check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
 	@echo "Checking .aida/discipline/ mirror..."
-	errors=0; \
+	@errors=0; \
 	for f in aida-core/templates/.aida/discipline/*.md; do \
 		target=".aida/discipline/$$(basename $$f)"; \
 		if [ -f "$$target" ]; then \
