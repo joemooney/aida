@@ -1,10 +1,7 @@
 job: performance-guard-route
-last_run: 2026-10-03T19:12:05.743776831Z
+last_run: 2026-10-04T21:27:23.726502306Z
 last_by:
   seat: advisor
-  session: 424cc773-b969-4027-95eb-13a904e9c298
+  session: bfd19354-cbdf-496f-9fae-64fb73c21959
   vendor: antigravity
 result: done
-note: 'Root-caused, not a code regression. Today''s trips came from stale installed binaries sha 0bd634c (~/.local/bin/aida built 2026-09-11, ~/.cargo/bin/aida built 2026-09-13) still shadowing PATH for non-dev-activated sessions (role=product, 224 calls today, 5.6-20.5s session start/show — they predate the BUG-1789 role-enter resume-scan fix, PR #2389). Repair: both paths reinstalled from target/release (e1422ae139). The window''s worst call (35488ms, advisor binary d5b1957658, 2026-10-02T23:15Z) was drain-night contention, consistent with yesterday''s environmental disposition. Control on current binary: 5 consecutive ''aida show'' at 90-140ms under live rustc load. Budgets unchanged. 09-29 audit_error ''malformed typed doctor output'' did not recur today.'
-due_since: 2026-10-04T01:16:58.937423026Z
-due_reason: on CronJobFailed:performance-guard
