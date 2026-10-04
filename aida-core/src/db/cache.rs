@@ -7076,9 +7076,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let cache = Cache::open(dir.path().join("cache.db")).unwrap();
 
-        let mut b = sample_req("B-2", "second");
-        let mut a = sample_req("A-1", "first");
-        let mut c = sample_req("C-3", "third");
+        let b = sample_req("B-2", "second");
+        let a = sample_req("A-1", "first");
+        let c = sample_req("C-3", "third");
 
         let mut store = RequirementsStore::new();
         store.requirements.push(b);
