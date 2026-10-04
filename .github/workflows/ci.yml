@@ -256,6 +256,10 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_bug_1796_no_origin_pull_warnings.sh
 
+      - name: Run normal two-remote pull byte identical fixture
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh
+
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test
