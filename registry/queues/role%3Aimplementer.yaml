@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a10325-e6a6-7da0-beab-6067afb0368a
+  position: 309000
+  added_by: role:implementer
+  note: Advisor converted the current-head PR-2393 request-changes verdict into the linked implementer brief; the branch has compile, authorization, drain, projection, and acceptance-test blockers.
+  added_at: 2026-10-04T02:28:55.724929666Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a10353-4a7d-7121-a3f6-286fe5e3df09
   position: 310000
   added_by: role:implementer
