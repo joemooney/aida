@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1521",
+  "publishes": [
+    {
+      "at": "2026-10-04T21:24:51.821972089Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T15:10:04.789085530Z",
+      "spec": "STORY-1521",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:24:51.812331969Z",
+      "spec": "STORY-1521",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:24:51.812400175Z",
+      "spec": "STORY-1521",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
