@@ -8,11 +8,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T02:22:35.630711223Z
-modified_at: 2026-07-19T19:27:02.088708067Z
+modified_at: 2026-10-04T04:46:14.496401274Z
 req_type: Bug
 tags:
-- aida:defer lifecycle kind:observation from-dogfood
+- aida:defer
 - batch:keystone-0719
+- from-dogfood
+- kind:observation
+- lifecycle
 relationships:
 - rel_type:
     custom: implemented-by
