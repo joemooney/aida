@@ -2026,6 +2026,14 @@ pub enum PrCommand {
         branch: Option<String>,
     },
 
+    /// List open PRs/MRs with their mapped spec IDs and rebase status.
+    #[clap(visible_alias = "mr")]
+    List {
+        /// Emit the list as a JSON array.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Rebase a PR onto its base in a temporary worktree, then
     /// force-push-with-lease the rebased branch. Collapses the standard
     /// 6-command "rebase a PR before review" recipe into one call.

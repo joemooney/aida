@@ -88,6 +88,7 @@ mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+pub(crate) mod pr_list;
 mod protocol_cmd;
 mod queue_cmd;
 mod runaway_seats;
@@ -106,6 +107,7 @@ use drain_cmd::*;
 use mcp_cmd::*;
 use orchestrator_cmd::*;
 use pr_cmd::*;
+use pr_list::*;
 use queue_cmd::*;
 use solo_cmd::*;
 use status_cmd::*;
@@ -5240,6 +5242,18 @@ fn run() -> Result<()> {
     // trace:STORY-90 | ai:claude
     if let Command::Pr(pr_cmd) = &cli.command {
         return handle_pr_command(pr_cmd);
+    }
+
+    // trace:TASK-1583 | ai:antigravity
+    if let Command::List {
+        shortcut: Some(s),
+        json,
+        ..
+    } = &cli.command
+    {
+        if s == "pr" || s == "mr" {
+            return pr_list_handler(*json);
+        }
     }
 
     // STORY-720: `aida ship` dispatches before storage init for the same
