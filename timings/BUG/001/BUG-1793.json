@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1793",
+  "publishes": [
+    {
+      "at": "2026-10-04T15:38:54.862862400Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-03T19:08:13.317044485Z",
+      "spec": "BUG-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T19:48:48.625642350Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2393
+      }
+    },
+    {
+      "ts": "2026-10-03T20:48:59.875698402Z",
+      "spec": "BUG-1793",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1793",
+        "branch": "bug-1793",
+        "first_seen": "2026-10-03T20:48:59.875670233+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:10:15.207614095Z",
+      "spec": "BUG-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2393,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "78f4ad49ce"
+      }
+    },
+    {
+      "ts": "2026-10-03T22:10:19.172144614Z",
+      "spec": "BUG-1793",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "PR #2393 does not compile (11x E0560: RequirementSummary lacks deferred_reason) and AC2/AC3/AC4 are unmet; roster-backed authority gate must replace the env-only default-open hold_authorized()",
+        "recovery_hint": "address the review findings, move BUG-1793 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-04T01:25:37.623060020Z",
+      "spec": "BUG-1793",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "queue-pickup",
+        "reason": "needs-triage",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:28:55.279422017Z",
+      "spec": "BUG-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T06:32:56.921836427Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T14:53:22.563280279Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T15:13:07.189054065Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T15:14:30.310160348Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T15:15:42.842275203Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T15:33:37.074539911Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T15:36:51.397938215Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T15:38:11.293226339Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T15:38:17.236115913Z",
+      "spec": "BUG-1793",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2393
+      }
+    },
+    {
+      "ts": "2026-10-04T15:38:54.853156778Z",
+      "spec": "BUG-1793",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "62e3374e5173363fb67dfce21e21b73adea921f3",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
