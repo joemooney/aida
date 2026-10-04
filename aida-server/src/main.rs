@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::all)]
 // trace:FR-0227 | ai:claude:high
 //! AIDA gRPC Server

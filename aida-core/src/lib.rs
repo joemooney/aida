@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::all)]
 //! # aida-core — the AIDA engine
 //!

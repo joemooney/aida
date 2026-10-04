@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![allow(clippy::all)]
 //! `aida-tui` — the AIDA terminal-UI shell (EPIC-26).
 //!
