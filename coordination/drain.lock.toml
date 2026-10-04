@@ -1,0 +1,12 @@
+scope = "drain"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 1098508
+pid_start_time = "2026-10-04T02:43:24+00:00"
+agent = "queue integrate"
+started_at = "2026-10-04T02:43:33.595598949+00:00"
+heartbeat_at = "2026-10-04T02:43:33.595598949+00:00"
+ttl_secs = 1800
+process_backed = true
+review_verb = false
