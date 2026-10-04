@@ -1,0 +1,27 @@
+id: 01a10877-4247-7611-b92b-bf574c5df9b4
+spec_id: BUG-1799
+agreed_id: BUG-1799
+title: Carried-forward finding sweep treats resolved request-changes findings on an APPROVED verdict as outstanding
+description: |
+  Observed 2026-10-04 on BUG-1794 / PR #2410: the rework-then-approve cycle produced phantom draft TASK-1-204.
+
+  Mechanism: `aida review record --verdict approved` with no --finding flags preserves the previous round's findings[] in the verdict record (documented behavior). The carry-forward sweep then reads "APPROVED verdict with findings[]" and files each finding as a draft task "carried forward from an APPROVED review verdict" — but those findings were the BLOCKING findings of the request-changes round, and the approval exists precisely because the rework addressed them. Result: every request-changes → rework → approve cycle mints a duplicate task for work already shipped, and an advisor has to spot and reject it (TASK-1-204 was rejected with the evidence trail).
+
+  Possible fixes (implementer/product to choose): (a) the sweep skips findings whose round predates the approving round; (b) `review record --verdict approved` requires an explicit per-finding disposition (resolved | carry-forward) when the prior round had findings; (c) approval clears findings[] by default with an opt-in --carry-findings. Option (a) is least intrusive; (b) is the most honest audit trail.
+
+  Acceptance sketch: after a request-changes verdict with finding F at sha A, then an approved verdict at sha B with no --finding flags, the carry-forward sweep files nothing for F; a finding explicitly re-recorded at approval time still carries forward.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T19:49:55.911469462Z
+modified_at: 2026-10-04T19:49:55.911469462Z
+req_type: Bug
+filed_at:
+  code_sha: 72ec58311c2c215070318d063161eafed5800851
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
