@@ -70,10 +70,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T09:58:21.276137615Z
-modified_at: 2026-10-04T04:44:08.324637229Z
+modified_at: 2026-10-04T04:44:21.639248931Z
 req_type: Task
 tags:
-- measurement observability needs-operator-decision
+- measurement
+- needs-operator-decision
+- observability
 relationships:
 - rel_type: References
   target_id: 01a0df60-6993-7053-835f-ad2754cff462
