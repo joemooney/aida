@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-10-02T18:33:52.342166192Z
+modified_at: 2026-10-04T01:14:05.545280098Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -108,6 +108,11 @@ comments:
   created_at: 2026-10-02T18:33:52.342166192Z
   modified_at: 2026-10-02T18:33:52.342166192Z
   session_id: 8de4c3c9-7ff4-4c24-94c3-b23cbb2f30bf
+- id: 01a10479-ad69-71f1-89a4-d686c56638bd
+  author: joe
+  content: Implemented new agent profile. Measured cold build for 'agent' profile ~20% faster than 'release', and warm builds are significantly snappier due to less intensive optimization (opt-level 1 vs 3). The machine was not fully quiet, but the relative advantage is clear. Proceeding with the change.
+  created_at: 2026-10-04T01:14:05.545280098Z
+  modified_at: 2026-10-04T01:14:05.545280098Z
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
   author: joe
