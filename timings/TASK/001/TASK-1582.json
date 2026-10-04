@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1582",
+  "publishes": [
+    {
+      "at": "2026-10-04T04:42:41.615147588Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T04:42:41.614973265Z",
+      "spec": "TASK-1582",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:42:41.615046614Z",
+      "spec": "TASK-1582",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

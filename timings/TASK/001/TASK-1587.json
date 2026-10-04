@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1587",
+  "publishes": [
+    {
+      "at": "2026-10-04T04:30:46.700212118Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T03:06:15.026431299Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T03:09:22.545610744Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:30:34.462589380Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2413
+      }
+    },
+    {
+      "ts": "2026-10-04T04:30:46.691314520Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:30:46.691368135Z",
+      "spec": "TASK-1587",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
