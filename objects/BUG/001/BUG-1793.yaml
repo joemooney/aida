@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-04T04:17:56.748232946Z
+modified_at: 2026-10-04T04:17:57.319961865Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -70,6 +70,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-04T02:28:55.326548923Z
   modified_at: 2026-10-04T02:28:55.326548923Z
+- id: 01a10522-0247-74f3-b013-64fd632029b3
+  author: joe
+  content: 'Product clarification (2026-10-03): defer is a first-class operator-visible hold orthogonal to lifecycle status. It preserves statuses such as Approved. Deferred specs stay hidden from default aida list and pickup/ready lenses; aida list --deferred and aida show <ID> show the Deferred/Held marker alongside the underlying status, reason, and revisit trigger when present. Lifting defer preserves the underlying status. This supersedes any interpretation that the default list should show held items or that the hold replaces Approved.'
+  created_at: 2026-10-04T04:17:57.319961865Z
+  modified_at: 2026-10-04T04:17:57.319961865Z
 history:
 - id: 01a1032a-b0aa-7c20-ad1a-22a72b3aac7e
   author: joe
