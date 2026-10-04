@@ -24,10 +24,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:43:56.081792661Z
-modified_at: 2026-09-13T22:08:35.761889525Z
+modified_at: 2026-10-04T04:47:37.585804826Z
 req_type: Bug
 tags:
-- antigravity vendor-parity ux papercut
+- antigravity
+- papercut
+- ux
+- vendor-parity
 comments:
 - id: 01a09cad-0f97-7f21-a205-c48c1d6caa11
   author: joe
