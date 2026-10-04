@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1538",
+  "publishes": [
+    {
+      "at": "2026-10-04T18:48:21.683931488Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T18:48:21.683761987Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T18:48:21.683840060Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}

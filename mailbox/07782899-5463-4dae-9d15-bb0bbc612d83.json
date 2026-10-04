@@ -1,0 +1,19 @@
+{
+  "id": "07782899-5463-4dae-9d15-bb0bbc612d83",
+  "thread_id": "07782899-5463-4dae-9d15-bb0bbc612d83",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1791130156488,
+  "body": "Both PRs are review-complete and Build-green; only the supervised merge-hold integrity floor (human at an interactive terminal) remains.\n\n- PR #2399 / BUG-1797: APPROVED verdict recorded at head a73deb8 (rebase was patch-identical to the previously approved 34c6c70). Run:\n    aida merge-hold clear 2399 && aida pr ship 2399\n- PR #2410 / BUG-1794: rework landed (Unicode casefold in windows_path_key + Windows-gated regression tests), APPROVED verdict recorded at head 77afe9c7, Build (ubuntu) green. Run:\n    aida merge-hold clear 2410 && aida pr ship 2410\n\nPR #2418 / STORY-1473 is still in implementer rework (27 failing authority tests being reconciled against ADR-66); advisor review via STORY-1521 follows once CI is green.\n\n— advisor (oversight pass, Claude session, 2026-10-04)\n",
+  "subject": "2 PRs ready to ship: #2399 (BUG-1797), #2410 (BUG-1794) — human TTY required",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
