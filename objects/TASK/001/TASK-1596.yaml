@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T20:57:22.898899845Z
-modified_at: 2026-10-04T21:01:13.005369922Z
+modified_at: 2026-10-04T21:07:56.529237072Z
 req_type: Task
 comments:
 - id: 01a108b8-85ad-71ab-9e11-e8517d534975
@@ -25,6 +25,15 @@ comments:
     Watch-out recorded for the enablement: if the "undecidable batched-integration" worktree class is never removable by gc --force, the guard trips every run — disable and file the gap instead of living with noise.
   created_at: 2026-10-04T21:01:13.005369922Z
   modified_at: 2026-10-04T21:01:13.005369922Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+- id: 01a108be-adf1-74e4-a962-28f51e58b46e
+  author: joe
+  content: |
+    Evidence update (2026-10-04): the operator ran `aida worktree gc --yes --force` — it removed ZERO of the 33 flagged trees; the whole backlog was the "undecidable batched-integration" class, which even --force skips ("flagged for operator decision — not auto-removed"). Consequence for this task: the monthly guard MUST ship disabled-by-default and stay disabled in this repo until BUG-1800 lands (verdict caching and/or a disposition verb); otherwise it trips on every run, which the registry doctrine classifies as noise.
+
+    The 33 were manually dispositioned by the advisor seat the same day under operator delegation: each branch tip archived under refs/archive/batch-era/<branch>, then worktree removed and branch deleted (registry 116 → 85 worktrees). The archive refs are the reversibility net and the model for BUG-1800's disposition verb.
+  created_at: 2026-10-04T21:07:56.529237072Z
+  modified_at: 2026-10-04T21:07:56.529237072Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 filed_at:
   code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
