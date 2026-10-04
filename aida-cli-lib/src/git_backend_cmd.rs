@@ -95,19 +95,21 @@ fn print_rework_needed_notes(
 /// making the filter disagree with the label would be the worse bug. The legacy
 /// `effective_needs_attention_lens_with_source` in `lib.rs` does walk children;
 /// unifying the two is its own change, on its own spec.
-// trace:BUG-1771 | ai:claude
+// trace:TASK-1572 | ai:claude
 fn row_parked_lens(
-    backend: &aida_core::CachedGitBackend,
+    store: &aida_core::RequirementsStore,
     row: &aida_core::RequirementSummary,
 ) -> Option<status_display::NeedsAttentionLens> {
     if !row.status.eq_ignore_ascii_case("NeedsAttention") {
         return None;
     }
-    backend
-        .get_requirement(&row.id)
-        .ok()
-        .flatten()
-        .and_then(|req| status_display::needs_attention_lens(&req))
+    let req = store.get_requirement_by_id(&row.id)?;
+    crate::effective_needs_attention_lens_with_source(
+        store,
+        req,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .map(|(_, lens)| lens)
 }
 
 /// TASK-1456: `aida list --format json`'s `status_label`/`status_lens`
@@ -2227,6 +2229,7 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
+            let store = backend.load_metadata_only()?;
 
             // BUG-1771: narrow the widened query back down to the requested
             // parked lens(es). Runs before every downstream lens so the rows the
@@ -2244,7 +2247,7 @@ pub(crate) fn handle_git_backend_command(
                     if !r.status.eq_ignore_ascii_case("NeedsAttention") {
                         return true;
                     }
-                    row_parked_lens(&backend, r)
+                    row_parked_lens(&store, r)
                         .is_some_and(|lens| parked_lens_keys.contains(&lens.palette_key()))
                 });
             }
@@ -2750,7 +2753,7 @@ pub(crate) fn handle_git_backend_command(
                         let (in_flight, blocked, queued) = row_routing(r);
                         // trace:BUG-1771 | ai:claude — one lens computation
                         // shared with the `--status shelved` filter.
-                        let parked_lens = row_parked_lens(&backend, r);
+                        let parked_lens = row_parked_lens(&store, r);
                         // TASK-1456: a Done row folded in by
                         // `select_done_rework_rows` still carries `status:
                         // "Done"` — the machine-consumer contract that field
