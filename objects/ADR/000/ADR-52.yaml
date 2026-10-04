@@ -51,10 +51,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T22:29:09.548277118Z
-modified_at: 2026-09-21T22:41:08.797690067Z
+modified_at: 2026-10-04T04:52:22.576191856Z
 req_type: Decision
 tags:
-- merge-hold integrity governance
+- governance
+- integrity
+- merge-hold
 comments:
 - id: 01a0c621-56bd-7602-a305-1735e6bcf9ee
   author: joe
