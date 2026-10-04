@@ -59,12 +59,12 @@ description: |
      (`per_head_history_queries_run_only_for_surviving_candidates`) stays green: no return to
      querying every candidate up front. A spec with NO survivors must trigger NO carrier queries.
   4. The starvation and truncation-honesty fixtures from BUG-1288/BUG-1756 stay green.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T04:02:47.325576068Z
-modified_at: 2026-10-04T02:29:22.782288173Z
+modified_at: 2026-10-04T02:47:02.742277561Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -129,3 +129,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a104ce-c73d-7041-b9bd-a734c27317d9
+  author: aida-auto-bump
+  timestamp: 2026-10-04T02:47:02.717870731Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a104ce-c756-7b73-b299-2ba2b7e401a2
+  timestamp: 2026-10-04T02:47:02.742272688Z
+  agent: 2845f7b7-7883-4114-9561-45e50ff45dc7
+  brief_ref: .aida/agent-briefs/codex/TASK-1575-2026-10-03T233717Z.md.acked
+  commit_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
+  summary: 'Rework verified at 8f448c153e: evidenced truncation now precedes the carrier retain (mutation-proven: old order re-reports the never-evidenced TASK-1582 row), snapshot-None sets truncated=true (mutation-proven: removal flips scan to complete:true), regression/starvation/honesty pins green'
+  punted:
+  - 'punted: Carrier retain breaks the count-based evidenced truncation: a truncated pass-2 can report a never-evidenced survivor (PRIN-5); snapshot-None suppression is silent'
+  review_verdict: approved
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T02:47:02.717844923Z
+  completion_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
