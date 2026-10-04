@@ -1,0 +1,19 @@
+id: 01a104d8-a404-78d1-b67f-d47a90720617
+spec_id: EPIC-75
+agreed_id: EPIC-75
+title: epic test
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T02:57:49.060494513Z
+modified_at: 2026-10-04T02:57:49.060494513Z
+req_type: Epic
+filed_at:
+  code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 585f46e32a
+  vendor: antigravity
