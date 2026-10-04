@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T02:57:10.896951126Z
-modified_at: 2026-10-04T02:57:32.187790888Z
+modified_at: 2026-10-04T03:03:49.842884592Z
 req_type: Decision
 tags:
 - branch-policy
@@ -37,6 +37,23 @@ relationships:
   target_id: 01a0c074-3ed9-7a81-bf28-bd8ac8614a6c
   created_at: 2026-10-04T02:57:32.187786742Z
   created_by: joe
+comments:
+- id: 01a104de-2552-7ac1-9725-5871294f014b
+  author: joe
+  content: |
+    Advisor review — decision sketch is coherent at the direction level, but I recommend keeping ADR-65 Draft until its conflict and operational contract are explicit.
+
+    Coherent pieces: shared main with short-lived PR branches; Ubuntu remains the only required Build job on PRs/main (GitHub branch protection currently requires `Build (ubuntu-latest)` plus `merge-hold-gate`); Windows validation remains a separate lane; macOS stays disabled under TASK-1570; and the existing 24-hour release freshness check remains compatible because a stale weekly run causes pre-release-check.sh to dispatch a fresh workflow run on main and block until it finishes green. The current cross-platform workflow also has path-filtered informational Windows PR runs; they are not required checks.
+
+    Blocking documentation issue: approved ADR-47 explicitly defers Windows/cross-platform work AND releases until the queue is empty. ADR-65 currently adds only a References edge and calls ADR-47 superseded in prose. If the operator's new direction replaces that pause, record an explicit Supersedes relationship and say which other ADR-47 consequence remains (especially throughput-first queue ordering). If it is only an exception while the queue is active, document that narrower scope instead.
+
+    Operational gap: ADR-47 was prompted by repeated red Windows nights with nobody triaging them. The current workflow opens/comments on a scheduled-failure tracking issue and closes it on scheduled recovery, but ADR-65 names no owner, response expectation, or rule for whether Windows fixes may interrupt the throughput-first queue. State the intended failure response and priority so weekly validation does not recreate the same unattended-red condition.
+
+    Make the acceptance directly checkable: pin the weekly UTC cron day/time; state whether manual dispatch targets main or the caller-selected ref; verify the scheduled job checks main and its matrix is Windows-only; verify the blocking PR/main check set stays Ubuntu Build plus merge-hold only while any path-filtered Windows PR job remains informational; verify no macOS matrix entry; and retain a test for the unchanged 24-hour release gate, including that a stale weekly result dispatches a fresh main run and blocks on its conclusion.
+
+    I have not changed CI files or ADR disposition. No extra operator decision is needed if the supplied current direction is authoritative; the draft should explicitly record how it supersedes ADR-47. If failure triage priority or manual dispatch ref semantics are not already settled, those are the remaining design questions before approval.
+  created_at: 2026-10-04T03:03:49.842884592Z
+  modified_at: 2026-10-04T03:03:49.842884592Z
 filed_at:
   code_sha: 585f46e32a5b94c9066ae72fee687afd8b4bd815
   branch: main
