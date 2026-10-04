@@ -3,12 +3,12 @@ spec_id: BUG-1797
 agreed_id: BUG-1797
 title: needs-attention → done refusal names three targets but not the route to done
 description: 'From TASK-1574 intake (AIDA-57 item 2, re-verified 2026-10-03): the refusal at aida-core/src/models.rs:399 and :8855 still reads ''a Needs Attention spec can only be triaged to Approved, In Progress, or Rejected''. The natural post-rework flow (refusing verdict → rework → fresh APPROVE → mark done) hits this bouncer; three separate relay implementers hit it in one session, and the message does not name the legal two-step route. The TRANSITION ITSELF is design-intent and stays (lifecycle.rs transition_guard; a merged PR referencing the spec completes directly from NeedsAttention via git_merge_completes, BUG-405). Fix the message only: append the route, e.g. ''— to mark it done, go via In Progress (…--status in-progress, then --status done); a merged PR referencing this spec completes it via aida pull.'' Acceptance: (1) refusal text names the two-step route and the merge path; (2) both emission sites updated (models.rs has two); (3) a test pins the wording; (4) no transition behavior change.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:39.754099926Z
-modified_at: 2026-10-04T02:45:06.266847897Z
+modified_at: 2026-10-04T19:13:29.344091378Z
 req_type: Bug
 tags:
 - lifecycle
@@ -64,6 +64,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10855-e4f8-77f2-ad98-ae27f142e37f
+  author: aida-auto-bump
+  timestamp: 2026-10-04T19:13:29.336321261Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10855-e500-766a-a721-c6134cdd3636
+  timestamp: 2026-10-04T19:13:29.344082360Z
+  agent: implementer
+  commit_sha: b0f1ed83d1b0a1c3773c3b1e50b4683b52124723
+  summary: Head moved only by GitHub update-branch merge of main (for the stale ci.yml guard); diff vs main is patch-id identical (7f504c82) to the twice-approved change — message-only refusal wording with pin test. Fresh CI runs against the new workflow definition.
+  review_verdict: approved
 filed_at:
   code_sha: 71ecbbb52c3aa8819c8b9a289e9594c8d70270ec
   branch: main
@@ -72,3 +86,7 @@ filed_at:
   aida_build_sha: e1422ae139
   vendor: antigravity
   session: 424cc773-b969-4027-95eb-13a904e9c298
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-04T19:13:29.336296025Z
+  completion_sha: b0f1ed83d1b0a1c3773c3b1e50b4683b52124723
