@@ -1,0 +1,35 @@
+id: 01a108a3-7fc0-71ab-893e-36a9150065e6
+spec_id: TASK-1595
+agreed_id: TASK-1595
+title: Detect local-only commits stranded in agent worktrees (unshipped-work gap)
+description: |
+  ## Why
+  2026-10-04: TASK-1538's slice-1 split commit existed only locally in an agent worktree; the session reset its branch to main before pushing, and the commit went dangling — invisible to every branch search, found only via `git fsck` and a 669-commit tree scan, then pinned as recovered/task-1538-split. The unshipped-work detector (awaiting / session reap) only flags PUSHED branches that are ahead of main; a local-only commit whose branch was reset or deleted is a silent loss until someone misses the file.
+
+  ## What
+  A companion check (doctor category and/or the unshipped-work surface) that detects, per registered agent worktree:
+  1. local branches whose tip is not on any remote (unpushed commits), and
+  2. dangling commits reachable from worktree reflogs (HEAD@{n} / branch reflogs) that reference a SPEC-ID in their message but are on no ref.
+  Surface them like unshipped work: spec, worktree, sha, age, recovery command (pin to recovered/<spec> branch). Never auto-delete; pinning is the only auto-safe action.
+
+  ## Acceptance sketch
+  - A worktree with a committed-but-unpushed branch is reported with its ahead count.
+  - A worktree whose branch was reset past a SPEC-ID commit reports the dangling sha via reflog, with a one-command pin recovery.
+  - Clean worktrees produce no output; the check stays within the existing awaiting/doctor latency budget (no full fsck on every pass — reflogs only; fsck behind an opt-in flag).
+
+  Provenance: operator request (Joe) after the TASK-1538 recovery, 2026-10-04. Deferred by operator: backlog clearing takes priority.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T20:38:15.232158882Z
+modified_at: 2026-10-04T20:38:15.232158882Z
+req_type: Task
+filed_at:
+  code_sha: 72ec58311c2c215070318d063161eafed5800851
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
