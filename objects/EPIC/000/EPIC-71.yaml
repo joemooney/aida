@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:38:35.944935297Z
-modified_at: 2026-10-04T04:41:15.399126465Z
+modified_at: 2026-10-04T04:49:46.386522147Z
 req_type: Epic
 tags:
 - cost
@@ -53,6 +53,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0cc00-e145-7541-b275-189d3cbfaa6b
   created_at: 2026-10-04T04:41:15.399126465Z
+- rel_type: Parent
+  target_id: 01a0cbf5-9bcf-7581-9afe-6f0767ab39a2
+  created_at: 2026-10-04T04:49:46.386522147Z
 comments:
 - id: 01a0bb96-424c-7b03-8cb1-af24e0233886
   author: joe
