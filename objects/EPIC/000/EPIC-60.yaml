@@ -43,10 +43,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:06:45.483941259Z
-modified_at: 2026-09-07T06:17:55.247559939Z
+modified_at: 2026-10-04T04:50:26.312057700Z
 req_type: Epic
 tags:
-- codex vendor-parity
+- codex
+- vendor-parity
 relationships:
 - rel_type: Parent
   target_id: 01a04eeb-5496-7a43-8318-491ee2ce16e6
