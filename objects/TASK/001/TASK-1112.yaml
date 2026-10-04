@@ -11,10 +11,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-07T05:12:31.422766141Z
-modified_at: 2026-07-07T07:50:29.091405557Z
+modified_at: 2026-10-04T04:42:58.750841077Z
 req_type: Task
 tags:
-- codex-first-class migration:claude-to-codex
+- codex-first-class
+- migration:claude-to-codex
 relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
