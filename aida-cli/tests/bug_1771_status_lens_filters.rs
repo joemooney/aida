@@ -361,11 +361,7 @@ fn epic_inherits_child_lens() {
             ],
         ),
     );
-    let epic_id = out
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
-        .find(|t| t.starts_with("EPIC-") && t[5..].chars().all(|c| c.is_ascii_digit()))
-        .unwrap()
-        .to_string();
+    let epic_id = out.split_whitespace().nth(1).unwrap().to_string();
     ok(
         "aida rel add",
         aida(
