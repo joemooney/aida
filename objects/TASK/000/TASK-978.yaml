@@ -8,11 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T04:52:50.921063666Z
-modified_at: 2026-06-30T23:17:03.304189243Z
+modified_at: 2026-10-04T04:44:18.313502608Z
 req_type: Task
 tags:
+- liveness
 - needs-design
-- parent:EPIC-54 redesign tui liveness visibility
+- parent:EPIC-54
+- redesign
+- tui
+- visibility
 - zen-ready
 comments:
 - id: 019f1ac7-5032-7fc3-843d-783d8596a8cf
