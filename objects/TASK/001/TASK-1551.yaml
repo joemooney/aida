@@ -27,12 +27,12 @@ description: |
   Sequence with TASK-1537 (baseline build timings for aida-cli-lib), which is already queued and deliberately held for a quiet machine for the same reason: take TASK-1537's baseline FIRST, then evaluate this against it. Two build-timing measurements taken under different unrecorded load are not comparable.
 
   Out of scope: changing [profile.release], changing test/dev opt-level, and the STORY-1488 crate split (a separate and larger lever on the same problem).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-10-04T02:41:13.154899286Z
+modified_at: 2026-10-04T02:43:19.389661908Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -133,6 +133,11 @@ comments:
     - **Description:** The new shell script correctly verifies the profile options. Ensure it is hooked up to CI or the main test runner so it provides the ongoing protection required by AC4.
   created_at: 2026-10-04T02:41:13.154899286Z
   modified_at: 2026-10-04T02:41:13.154899286Z
+- id: 01a104cb-5ede-7c12-a236-cc7fe46dbbaa
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit c561b14), but completion is held at Done: unresolved BlockedBy TASK-1537 (Approved). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted). The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1551 --since c561b14^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1551 --status completed`. (merge sha: c561b1401f398d28be7787f6369d278865bbd8d1)'
+  created_at: 2026-10-04T02:43:19.390002521Z
+  modified_at: 2026-10-04T02:43:19.390002521Z
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
   author: joe
@@ -148,3 +153,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a104cb-5edd-7873-9944-408277a182a7
+  author: aida-auto-bump
+  timestamp: 2026-10-04T02:43:19.389997704Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
