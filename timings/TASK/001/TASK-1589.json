@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1589",
+  "publishes": [
+    {
+      "at": "2026-10-04T07:04:58.693138946Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T04:04:04.186757139Z",
+      "spec": "TASK-1589",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2412
+      }
+    },
+    {
+      "ts": "2026-10-04T04:27:45.959724365Z",
+      "spec": "TASK-1589",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T07:04:43.297992943Z",
+      "spec": "TASK-1589",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T07:04:49.568455234Z",
+      "spec": "TASK-1589",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2412
+      }
+    },
+    {
+      "ts": "2026-10-04T07:04:58.685537478Z",
+      "spec": "TASK-1589",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b13d34f2fc4f6c8248c9070fffd7b397c9c42094",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
