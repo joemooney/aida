@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T09:58:21.276137615Z
-modified_at: 2026-10-02T19:47:03.548711586Z
+modified_at: 2026-10-04T04:44:08.324637229Z
 req_type: Task
 tags:
 - measurement observability needs-operator-decision
@@ -166,3 +166,16 @@ comments:
   created_at: 2026-10-02T19:47:03.548711586Z
   modified_at: 2026-10-02T19:47:03.548711586Z
   session_id: 2ac91c1e-8d4e-42a6-b079-e54f997d41e4
+decision_request:
+  question: Which policy do you authorize for the performance guard under fleet contention? This records direction only. If you choose budget recalibration, specify the new ceiling and tolerance and the contention assumption. If you choose contention-aware measurement, specify the load metric, numeric threshold, and whether samples are excluded or bucketed. The task must remain parked until any required values are captured; the agent must not infer them.
+  choices:
+  - label: Keep current budget
+    consequence: Retain the current ceiling and tolerance and treat fleet-contention trips as load signals, accepting that this may mask real regressions during those periods.
+    resolution: directive:keep-current-budget-as-load-signal
+  - label: Raise the budget
+    consequence: Raise ceiling and tolerance only after you choose exact values and state the contention assumption; choosing this direction alone does not authorize an inferred number.
+    resolution: directive:raise-budget-needs-operator-values
+  - label: Make measurement contention-aware
+    consequence: Record host load and either bucket or exclude samples above your chosen metric threshold; you must specify the metric, numeric threshold, and behavior.
+    resolution: directive:contention-aware-needs-operator-threshold
+  asked_at: 2026-10-04T04:44:08.324637229Z
