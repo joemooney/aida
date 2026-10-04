@@ -8,10 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-18T18:42:46.555589003Z
-modified_at: 2026-07-18T19:21:26.083612369Z
+modified_at: 2026-10-04T04:46:18.803783576Z
 req_type: Bug
 tags:
-- aida:queue scope-routing from-dogfood
+- aida:queue
+- from-dogfood
+- scope-routing
 implementation_info:
   implemented: false
   completed_at: 2026-07-18T19:21:26.083612369Z
