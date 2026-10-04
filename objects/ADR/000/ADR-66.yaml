@@ -50,7 +50,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T06:21:23.132987925Z
-modified_at: 2026-10-04T06:25:10.413393734Z
+modified_at: 2026-10-04T06:29:17.764358775Z
 req_type: Decision
 tags:
 - authority
@@ -68,6 +68,12 @@ comments:
   created_at: 2026-10-04T06:25:10.413393734Z
   modified_at: 2026-10-04T06:25:10.413393734Z
   relayed_from: advisor
+- id: 01a1059a-4144-73e1-8b79-99dc607d8476
+  author: joe
+  content: |
+    OPERATOR DECISION (Joe, 2026-10-03): Child issuance is limited by an explicit delegation set in the parent session's TTY-issued grant. A parent may issue only a requested child seat present in that set and allowed by the roster. Roster membership alone does not permit a session to grant another seat. This resolves the operator question from the previous advisor review; independent advisor signoff on the revised sketch is still pending.
+  created_at: 2026-10-04T06:29:17.764358775Z
+  modified_at: 2026-10-04T06:29:17.764358775Z
 filed_at:
   code_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
   branch: main
