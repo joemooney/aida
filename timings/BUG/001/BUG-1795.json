@@ -5,6 +5,10 @@
     {
       "at": "2026-10-04T00:21:49.997208090Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-04T00:22:04.645008673Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -48,6 +52,25 @@
         "event": "DispositionChanged",
         "before": "Approved",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:22:04.644844904Z",
+      "spec": "BUG-1795",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-04T00:22:04.644896603Z",
+      "spec": "BUG-1795",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
