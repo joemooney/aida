@@ -24,10 +24,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T01:54:53.786005560Z
-modified_at: 2026-09-23T21:19:04.014660914Z
+modified_at: 2026-10-04T04:51:45.188440390Z
 req_type: Story
 tags:
-- scheduler aida:init aida:schedule onboarding substrate-as-bouncer parent:EPIC-71
+- aida:init
+- aida:schedule
+- onboarding
+- parent:EPIC-71
+- scheduler
+- substrate-as-bouncer
 relationships:
 - rel_type: Blocks
   target_id: 01a0cbf5-f47e-7bf2-9912-67578e234451
