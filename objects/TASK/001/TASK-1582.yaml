@@ -21,11 +21,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:35.363046278Z
-modified_at: 2026-10-04T00:58:49.331149101Z
+modified_at: 2026-10-04T01:16:46.992137892Z
 req_type: Task
 tags:
 - messaging
 - pr-ship
+comments:
+- id: 01a1047c-2410-7522-b31c-f27e99c0c51c
+  author: joe
+  content: 'Implemented in PR-2403 (aa2523f, b678a44). A: merge-hold list release-MET line names `aida merge-hold clear` before `aida pr ship`, and keeps the human one-step ship path because it pins to the verdict head (BUG-1532) — clear->ship falls back to the approval-gate pin. B: dry-run merge line rendered via forge::github_merge_argv with --match-head-commit <approved-head-sha>; footnote states the pin is conditional and --subject may be appended; GitLab gets an explicit abbreviation note. C: step 5 names lease scope/role/worktree/branch and tells a caller to leave its own session running. Independent review subagent pass; all review findings addressed. All 3 ACs traced to tests. Supervised: awaiting human merge.'
+  created_at: 2026-10-04T01:16:46.992137892Z
+  modified_at: 2026-10-04T01:16:46.992137892Z
 history:
 - id: 01a103ce-7dc4-7eb0-ac77-516e29dfee8f
   author: joe
