@@ -39,8 +39,26 @@ pub(crate) fn handle_scaffold_command(
                 ));
             }
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let status = check_scaffold_status(&store, &root, &config, db_path);
+
+            // Existing per-vendor packs remain maintained for compatibility;
+            // make their legacy status visible even when clean.
+            // trace:TASK-1519 | ai:codex
+            let legacy_packs: Vec<_> = [
+                (".codex/skills", "Codex"),
+                (".antigravity/skills", "Antigravity"),
+            ]
+            .into_iter()
+            .filter(|(path, _)| {
+                std::fs::symlink_metadata(root.join(path)).is_ok_and(|m| m.file_type().is_dir())
+            })
+            .map(|(path, vendor)| format!("{vendor}: {path}"))
+            .collect();
+            if !legacy_packs.is_empty() {
+                println!("Legacy skill packs maintained: {}", legacy_packs.join(", "));
+            }
 
             // Generate HTML report if requested
             if *report {
@@ -143,7 +161,8 @@ pub(crate) fn handle_scaffold_command(
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let mut scaffolder =
                 Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
             let preview = scaffolder.preview(&store);
@@ -191,7 +210,8 @@ pub(crate) fn handle_scaffold_command(
                 .clone()
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             let mut scaffolder =
                 Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
@@ -204,6 +224,10 @@ pub(crate) fn handle_scaffold_command(
             }
 
             let preview = scaffolder.preview(&store);
+            // Records on every exit, including an early IO error.
+            // trace:TASK-1503 | ai:claude
+            let skill_recorder =
+                aida_core::scaffolding::SkillDeliveryRecorder::new(&root, &preview, !*dry_run);
 
             let mut created = 0usize;
             let mut updated = 0usize;
@@ -220,13 +244,31 @@ pub(crate) fn handle_scaffold_command(
                 // the scaffold files are symlinks into aida-core/templates/ and
                 // std::fs::write would corrupt the source master. Skip + warn.
                 // trace:BUG-718 | ai:claude
-                if let Some(target) = aida_core::scaffolding::symlink_target(&full_path) {
-                    println!(
-                        "  {} {} → {} (skipped — symlink; writing would corrupt the target)",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        artifact.path.display(),
-                        target.display()
-                    );
+                // BUG-1645: nor through a symlinked skill directory (or skill
+                // pack directory) the user owns. trace:BUG-1645 | ai:claude
+                if let Some((link, target)) = aida_core::scaffolding::symlink_blocking_write(
+                    &root,
+                    &artifact.path,
+                    &full_path,
+                ) {
+                    if link == full_path {
+                        println!(
+                            "  {} {} → {} (skipped — symlink; writing would corrupt the target; {})",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            artifact.path.display(),
+                            target.display(),
+                            aida_core::scaffolding::SYMLINK_SKIP_REMEDY
+                        );
+                    } else {
+                        println!(
+                            "  {} {} (skipped — {} is a symlinked directory → {}; not writing through it; {})",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            artifact.path.display(),
+                            link.strip_prefix(&root).unwrap_or(&link).display(),
+                            target.display(),
+                            aida_core::scaffolding::SYMLINK_SKIP_REMEDY
+                        );
+                    }
                     skipped += 1;
                     continue;
                 }
@@ -315,6 +357,9 @@ pub(crate) fn handle_scaffold_command(
                 }
             }
 
+            // trace:TASK-1503 | ai:claude
+            drop(skill_recorder);
+
             println!();
             if *dry_run {
                 let total_changes = would_create + would_update;
@@ -369,7 +414,14 @@ pub(crate) fn handle_scaffold_command(
             use aida_core::templates::TemplateLoader;
 
             let dest = output.clone().unwrap_or_else(|| {
-                dirs::config_dir()
+                // trace:TASK-1513 | ai:claude
+                // trace:TASK-1553 | ai:codex
+                aida_core::home::config_dir()
+                    .map(|p| {
+                        #[cfg(test)]
+                        crate::test_home::assert_hermetic(&p);
+                        p
+                    })
                     .map(|p| p.join("aida/templates"))
                     .unwrap_or_else(|| std::path::PathBuf::from("templates"))
             });
@@ -454,7 +506,7 @@ pub(crate) fn handle_scaffold_command(
                         version.2,
                     );
                     println!(
-                        "  use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly"
+                        "  use the project's `.agents/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly"
                     );
                     println!(
                         "  prune any old install with `rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files"
@@ -464,7 +516,7 @@ pub(crate) fn handle_scaffold_command(
             }
             let dest_dir = match dest {
                 Some(d) => d.clone(),
-                None => dirs::home_dir()
+                None => crate::home_dir()
                     .ok_or_else(|| anyhow::anyhow!("cannot resolve home directory"))?
                     .join(".codex")
                     .join("prompts"),
@@ -477,7 +529,7 @@ pub(crate) fn handle_scaffold_command(
                 dest_dir.display()
             );
             println!(
-                "  note: current Codex interactive sessions use `.codex/skills/` via `/skills` or `$aida-*`; `~/.codex/prompts` is not advertised as `/aida-*` slash commands"
+                "  note: current Codex interactive sessions use the project's `.agents/skills/` via `/skills` or `$aida-*`; `~/.codex/prompts` is not advertised as `/aida-*` slash commands"
             );
             println!(
                 "  written: {}   skipped (already present): {}",
@@ -513,6 +565,25 @@ pub(crate) fn handle_scaffold_command(
             }
             let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
             crate::scaffold_refresh::print_refresh_summary(&packs);
+            // A memory-lane project stays a memory lane: no discipline pack,
+            // type protocols, or permission setup. trace:BUG-1662 | ai:claude
+            if crate::scaffold_refresh::is_memory_lane(&root) {
+                println!(
+                    "  {} memory-lane project: refreshed only the memory-lane skills and AGENTS.md block (no discipline pack, type protocols, or permission setup).",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
+                return Ok(());
+            }
+            // A minimal-footprint project installs only what minimal init installs:
+            // no discipline pack, type protocols, or permission setup.
+            // trace:TASK-1536 | ai:agy
+            if crate::scaffold_refresh::is_minimal(&root) {
+                println!(
+                    "  {} minimal-footprint project: refreshed only minimal setup (no discipline pack, type protocols, or permission setup).",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                );
+                return Ok(());
+            }
             let seeded = crate::protocol_cmd::seed_missing_protocols(storage)?;
             if seeded > 0 {
                 println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
@@ -538,9 +609,10 @@ pub(crate) fn handle_scaffold_command(
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
 
+            // trace:BUG-1639 | ai:claude
             let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
                 root.clone(),
-                ScaffoldConfig::default(),
+                crate::init_cmd::scaffold_config_for_project(&root),
                 db_path.to_path_buf(),
             );
             let preview = scaffolder.preview(&store);
@@ -562,7 +634,8 @@ pub(crate) fn handle_scaffold_command(
                 anyhow::bail!("Project root does not exist: {}", root.display());
             }
 
-            let config = ScaffoldConfig::default();
+            // trace:BUG-1639 | ai:claude
+            let config = crate::init_cmd::scaffold_config_for_project(&root);
             // Use with_database so our preview matches what `scaffold status`
             // produces — without the db_path the scaffolder renders CLAUDE.md
             // / AGENTS.md against legacy defaults, which then "drifts" against
@@ -759,6 +832,41 @@ mod bug1555_tests {
     }
 }
 
+#[cfg(test)]
+mod task1503_tests {
+    use super::run_scaffold_upgrade;
+    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+
+    fn preview(root: &std::path::Path) -> (Scaffolder, aida_core::ScaffoldPreview) {
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&aida_core::RequirementsStore::default());
+        (scaffolder, preview)
+    }
+
+    /// `aida scaffold upgrade` (even `--force`) never recreates a delivered
+    /// skill the user deleted, and records the deletion as an opt-out.
+    // trace:TASK-1503 | ai:claude
+    #[test]
+    fn scaffold_upgrade_respects_deleted_delivered_skill() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (scaffolder, p) = preview(root);
+        scaffolder.apply(&p).unwrap();
+        let codex = root.join(".agents/skills"); // trace:BUG-1639 | ai:claude
+        std::fs::remove_dir_all(codex.join("aida-commit")).unwrap();
+
+        for force in [false, true] {
+            let (_, p) = preview(root);
+            run_scaffold_upgrade(root, &p, false, force, false).unwrap();
+            assert!(!codex.join("aida-commit").exists(), "force={force}");
+        }
+        let m = aida_core::scaffolding::refresh::read_skill_manifest(&codex)
+            .unwrap()
+            .unwrap();
+        assert!(m.opted_out.contains("aida-commit"));
+    }
+}
+
 /// Category-aware scaffold upgrade. For each artifact, decide what to do
 /// based on its `FileCategory` and current drift state, then either
 /// write or leave alone. Output is grouped by category with per-file
@@ -779,7 +887,7 @@ mod bug1555_tests {
 /// just with cleaner output).
 ///
 // trace:FR-1-028 | ai:claude
-fn run_scaffold_upgrade(
+pub(crate) fn run_scaffold_upgrade(
     project_root: &std::path::Path,
     preview: &aida_core::ScaffoldPreview,
     dry_run: bool,
@@ -801,6 +909,10 @@ fn run_scaffold_upgrade(
         unchanged: usize,
     }
 
+    // Records on every exit, including an early IO error.
+    // trace:TASK-1503 | ai:claude
+    let skill_recorder =
+        aida_core::scaffolding::SkillDeliveryRecorder::new(project_root, preview, !dry_run);
     let mut by_cat: std::collections::BTreeMap<&str, CategoryStats> =
         std::collections::BTreeMap::new();
 
@@ -818,7 +930,22 @@ fn run_scaffold_upgrade(
         // follows the link and would corrupt the master. Skip + warn instead,
         // for every category/action, in dry-run and for real.
         // trace:BUG-718 | ai:claude
-        if let Some(target) = aida_core::scaffolding::symlink_target(&on_disk_path) {
+        // BUG-1645: the same for a symlinked skill (or skill pack) directory.
+        // trace:BUG-1645 | ai:claude
+        if let Some((link, target)) = aida_core::scaffolding::symlink_blocking_write(
+            project_root,
+            &artifact.path,
+            &on_disk_path,
+        ) {
+            let target = if link == on_disk_path {
+                target
+            } else {
+                PathBuf::from(format!(
+                    "{} (via symlinked directory {})",
+                    target.display(),
+                    link.strip_prefix(project_root).unwrap_or(&link).display()
+                ))
+            };
             stats.symlinked.push((artifact.path.clone(), target));
             continue;
         }
@@ -1023,6 +1150,9 @@ fn run_scaffold_upgrade(
         }
     }
 
+    // trace:TASK-1503 | ai:claude
+    drop(skill_recorder);
+
     // Render. One block per category, in the same order as the SPIKE
     // doc + the FileCategory enum (template → seed → managed-merge).
     let order = ["template", "seed", "managed-merge"];
@@ -1083,9 +1213,10 @@ fn run_scaffold_upgrade(
         if !stats.symlinked.is_empty() {
             // BUG-718: these were skipped to protect a source-of-truth master.
             println!(
-                "  {} {} skipped — symlink into another tree; writing would corrupt the target (NOT written):",
+                "  {} {} skipped — symlink into another tree; writing would corrupt the target (NOT written; {}):",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                stats.symlinked.len()
+                stats.symlinked.len(),
+                aida_core::scaffolding::SYMLINK_SKIP_REMEDY
             );
             for (path, target) in &stats.symlinked {
                 println!(

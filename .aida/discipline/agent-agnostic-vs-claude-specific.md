@@ -75,6 +75,21 @@ may or may not have loaded, it is per-agent onboarding aid, not a gate.
 
 ---
 
+## Routing rules for durable lessons
+
+When a session learns a durable lesson (a habit, a sequencing rule, or a topology fact), do not default to writing it into the Claude-only `~/.claude/projects/<slug>/memory/` pack. That location is **operator-erasable** and **invisible to other agents** (like Codex or Antigravity) occupying the same seat. Use this four-tier routing rule to place the lesson in a vendor-neutral home:
+
+| tier | test | home |
+|---|---|---|
+| must hold, mechanically checkable | could a brand-new agent that read nothing still be stopped? | a **gate** (pre-commit, reviewer phase, `aida doctor` check) |
+| universal, aids-not-enforces | would any agent in this seat need it? | `aida-core/templates/.aida/discipline/*.md` → `make sync-templates` |
+| repo-specific fact | is it about *this* codebase's topology? | `docs/agents/aida-repository-guide.md` |
+| genuinely one-agent | is it about Claude Code's own surface? | stays in the Claude memory pack |
+
+**Escape hatch**: A lesson that reveals a **product defect** is none of the above. It becomes a spec (e.g., BUG-1234), because asking every future seat to remember that a CLI misinforms them is the weakest available fix.
+
+---
+
 ## What is Claude Code-shaped (per-agent)
 
 These are scaffolded by default because Claude Code is AIDA's default

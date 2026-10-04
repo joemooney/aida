@@ -651,19 +651,12 @@ fn bg_spawn_fresh_boundary_is_strict_less_than() {
 /// the same process; we serialize via a static mutex so they
 /// don't trample each other's env.
 fn with_bg_fetch_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
-    // BUG-697: shared process-global env lock (was a module-local mutex).
-    let _guard = crate::test_env::env_lock();
-    let prev = std::env::var("AIDA_BG_FETCH").ok();
-    match val {
-        Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
-        None => std::env::remove_var("AIDA_BG_FETCH"),
-    }
-    let result = f();
-    match prev {
-        Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
-        None => std::env::remove_var("AIDA_BG_FETCH"),
-    }
-    result
+    // BUG-697 / TASK-1532: route through EnvVarGuard. trace:TASK-1532 | ai:agy
+    let _guard = match val {
+        Some(v) => crate::test_env::EnvVarGuard::set("AIDA_BG_FETCH", v),
+        None => crate::test_env::EnvVarGuard::unset("AIDA_BG_FETCH"),
+    };
+    f()
 }
 
 #[test]
@@ -1332,7 +1325,10 @@ fn status_advance_requires_advisor_authority_parity_with_oracle() {
     use super::status_advance_requires_advisor_authority as gate;
     use aida_core::models::RequirementStatus as S;
     fn oracle(from: &S, to: &S) -> bool {
-        matches!(from, S::Draft | S::NeedsAttention)
+        // BUG-1611: a closed source reopened into the pipeline is gated too
+        // (idempotent terminal self-edges excepted). trace:BUG-1611 | ai:claude
+        (matches!(from, S::Draft | S::NeedsAttention)
+            || (matches!(from, S::Completed | S::Rejected | S::Superseded) && from != to))
             && matches!(
                 to,
                 S::Approved | S::Planned | S::InProgress | S::Done | S::Completed
@@ -1346,6 +1342,7 @@ fn status_advance_requires_advisor_authority_parity_with_oracle() {
         S::Done,
         S::Completed,
         S::Rejected,
+        S::Superseded,
         S::NeedsAttention,
     ];
     for from in &all {
@@ -5389,6 +5386,8 @@ fn entry_scope_session_match_decision_table() {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     // No routing tags = visible everywhere.
@@ -5493,6 +5492,8 @@ fn session_aggregation_dedupes_and_promotes() {
         scope_tags: vec![],
         scope_status: None,
         system_prompt: None,
+        launch_prompt: None,
+        launch_prompt_spec: None,
     };
     std::fs::write(&role_path, toml::to_string_pretty(&role).unwrap()).unwrap();
 
@@ -5575,6 +5576,79 @@ fn write_session_env_file_creates_aida_dir_if_needed() {
     assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
 }
 
+/// BUG-1783: isolate_cargo_target_dir correctly appends the worktree name.
+// trace:BUG-1783 | ai:codex
+#[test]
+fn test_isolate_cargo_target_dir_appends_worktree_name() {
+    let parent = std::path::Path::new("dummy-parent/target");
+    let worktree1 = std::path::Path::new("dummy/some-worktree");
+    let worktree2 = std::path::Path::new("dummy/other-worktree");
+    let isolated1 = crate::isolate_cargo_target_dir(parent, worktree1);
+    let isolated2 = crate::isolate_cargo_target_dir(parent, worktree2);
+    assert_eq!(
+        isolated1,
+        std::path::PathBuf::from("dummy-parent/target/worktrees/some-worktree")
+    );
+    assert_eq!(
+        isolated2,
+        std::path::PathBuf::from("dummy-parent/target/worktrees/other-worktree")
+    );
+    assert_ne!(isolated1, isolated2);
+}
+
+/// BUG-1783: isolate_cargo_target_dir falls back to parent if no file name.
+// trace:BUG-1783 | ai:codex
+#[test]
+fn test_isolate_cargo_target_dir_falls_back_on_missing_name() {
+    let parent = std::path::Path::new("dummy-parent/target");
+    let worktree = std::path::Path::new("/");
+    let isolated = crate::isolate_cargo_target_dir(parent, worktree);
+    assert_eq!(isolated, std::path::PathBuf::from("dummy-parent/target"));
+}
+
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_cargo_target_guard_accepts_matching_worktree() {
+    let worktree = std::path::Path::new("checkouts/aida-task-1577");
+    let target = std::path::Path::new("checkouts/parent/target/worktrees/aida-task-1577");
+    assert!(crate::is_session_cargo_target_dir(target, worktree));
+}
+
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_cargo_target_guard_rejects_parent_and_other_worktree() {
+    let worktree = std::path::Path::new("checkouts/aida-task-1577");
+    assert!(!crate::is_session_cargo_target_dir(
+        std::path::Path::new("checkouts/parent/target"),
+        worktree
+    ));
+    assert!(!crate::is_session_cargo_target_dir(
+        std::path::Path::new("checkouts/parent/target/worktrees/other"),
+        worktree
+    ));
+}
+
+// trace:TASK-1577 | ai:codex
+#[test]
+fn session_end_removes_isolated_target_and_preserves_parent_target() {
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = tmp.path().join("aida-task-1577");
+    let parent = tmp.path().join("target");
+    let isolated = parent.join("worktrees/aida-task-1577");
+    std::fs::create_dir_all(&worktree).unwrap();
+    std::fs::create_dir_all(&isolated).unwrap();
+    std::fs::write(parent.join("parent-marker"), "keep").unwrap();
+    std::fs::write(isolated.join("build-marker"), "remove").unwrap();
+
+    crate::remove_session_cargo_target_dir(&isolated, &worktree);
+
+    assert!(!isolated.exists());
+    assert_eq!(
+        std::fs::read(parent.join("parent-marker")).unwrap(),
+        b"keep"
+    );
+}
+
 /// TASK-63: parse_session_env handles the shape we write today.
 /// Cover the round-trip with render_session_env_file (the source of
 /// truth for what we produce) so a future change to the shim format
@@ -5655,27 +5729,38 @@ fn parse_session_env_handles_unquoted_value() {
     assert_eq!(pairs, vec![("FOO".to_string(), "bar".to_string())]);
 }
 
-/// TASK-63: apply_session_env_to_process really mutates the process
-/// env, and returns the names it set. Use a name unique to this test
-/// so parallel test runs don't trample each other.
-// trace:TASK-63 | ai:claude
+/// TASK-63: apply_session_env_to_process returns the names it set, and
+/// (BUG-1624) sets only the allowlisted session-env names. A name outside
+/// the allowlist is neither set nor reported; the positive side is pinned
+/// on the pure `trusted_session_env` so the test never mutates a real
+/// session variable other tests read.
+// trace:TASK-63 trace:BUG-1624 | ai:claude
 #[test]
 fn apply_session_env_to_process_sets_env() {
     const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
-    // SAFETY: scoped to this test; not racing with anything that
-    // reads VAR.
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var(VAR);
-    }
+    // Clearing VAR mutates the process env, which races any concurrent env
+    // read regardless of key; hold the shared env lock for the whole test.
+    // trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::unset(VAR);
     let body = format!("export {}='hello world'\n", VAR);
     let applied = apply_session_env_to_process(&body);
-    assert_eq!(applied, vec![VAR.to_string()]);
-    assert_eq!(std::env::var(VAR).unwrap(), "hello world");
-    #[allow(unused_unsafe)]
-    unsafe {
-        std::env::remove_var(VAR);
-    }
+    assert!(applied.is_empty(), "{applied:?}");
+    assert!(std::env::var_os(VAR).is_none());
+    // A tempdir target: `/w/target` is not absolute on Windows (no drive)
+    // and would be dropped there. trace:BUG-1648 | ai:claude
+    let tree = tempfile::tempdir().unwrap();
+    let target = tree.path().join("target").display().to_string();
+    let pairs = trusted_session_env(
+        &format!("export CARGO_TARGET_DIR='{target}'\nexport AIDA_AGENT_TYPE='claude'\n"),
+        std::path::Path::new("rel/aida"),
+    );
+    assert_eq!(
+        pairs,
+        vec![
+            ("CARGO_TARGET_DIR".to_string(), target.clone()),
+            ("AIDA_AGENT_TYPE".to_string(), "claude".to_string()),
+        ]
+    );
 }
 
 /// STORY-52: leases predating the cargo_target_dir field must still
@@ -5743,6 +5828,8 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
     std::fs::write(
         leases.join("abcdef123456.toml"),
@@ -5766,22 +5853,31 @@ fn parent_project_root_for_session_none_for_legacy_lease() {
     let leases = worktree.join(".aida").join("sessions");
     std::fs::create_dir_all(&leases).unwrap();
 
-    // Old-format lease: no parent_project_root field.
+    // Old-format lease: no parent_project_root field. The path is
+    // TOML-encoded: a raw Windows path (`C:\Users\...`) in a basic string
+    // is an invalid escape, the lease would not parse, and the `is_none()`
+    // below would pass for the wrong reason. trace:BUG-1648 | ai:claude
     let toml_text = format!(
         r#"
 id = "legacylease01"
 scope = "EPIC-20"
 slug = "epic-20"
 owner = "u"
-worktree_path = "{}"
+worktree_path = {}
 branch = "br"
 started_at = "2026-05-04T00:00:00Z"
 hostname = "h"
 "#,
-        worktree.canonicalize().unwrap().display()
+        toml::Value::String(worktree.canonicalize().unwrap().display().to_string())
     );
     std::fs::write(leases.join("legacylease01.toml"), toml_text).unwrap();
 
+    // The lease must load and cover cwd, so the `None` below is the missing
+    // parent field, not a parse failure. trace:BUG-1648 | ai:claude
+    assert!(
+        active_lease_for_cwd(&worktree, &worktree.canonicalize().unwrap()).is_some(),
+        "legacy lease must parse and cover cwd"
+    );
     assert!(parent_project_root_for_session(&worktree).is_none());
 }
 

@@ -1,5 +1,15 @@
 use super::*;
 
+#[test]
+fn bug_1796_skipped_pull_legs_are_labeled_as_warnings() {
+    // trace:BUG-1796.ac5879d3 | ai:codex
+    for leg in ["code", "store"] {
+        let line = pull_skip_warning(&format!("skipping {leg} pull"));
+        assert!(line.contains("Warning:"), "{line}");
+        assert!(line.contains(&format!("skipping {leg} pull")), "{line}");
+    }
+}
+
 fn run_git_in(repo: &std::path::Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -419,5 +429,289 @@ fn store_sync_config_parse_error_names_file_line_and_fix_hint() {
     assert!(
         msg.contains("Fix the TOML syntax"),
         "error should include a fix hint: {msg}"
+    );
+}
+
+// ----- BUG-1625: the store leg pulls BEFORE code-leg reconcile -----
+
+/// A git-canonical store "hub" (bare, branch `aida-store`) plus the OTHER
+/// machine's clone of it, seeded with one Draft spec. Temp repos only.
+fn make_store_hub_with_draft_spec(
+    spec_id: &str,
+) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    use aida_core::db::DatabaseBackend;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let hub = tmp.path().join("store-hub.git");
+    std::fs::create_dir_all(&hub).unwrap();
+    run_git_in(
+        &hub,
+        &["init", "--bare", "--initial-branch=aida-store", "--quiet"],
+    );
+    let other = tmp.path().join("other-machine-store");
+    std::fs::create_dir_all(&other).unwrap();
+    run_git_in(&other, &["init", "--initial-branch=aida-store", "--quiet"]);
+    run_git_in(&other, &["config", "user.email", "test@example.com"]);
+    run_git_in(&other, &["config", "user.name", "Test"]);
+    run_git_in(&other, &["remote", "add", "origin", hub.to_str().unwrap()]);
+    let backend = aida_core::db::GitBackend::new(&other).unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new(format!("test-{spec_id}"), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.set_status_from_str("Draft");
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    run_git_in(&other, &["push", "--quiet", "origin", "aida-store"]);
+    (tmp, hub, other)
+}
+
+fn clone_store_into(hub: &std::path::Path, dest: &std::path::Path) {
+    let parent = dest.parent().unwrap();
+    run_git_in(
+        parent,
+        &[
+            "clone",
+            "--quiet",
+            "--branch",
+            "aida-store",
+            hub.to_str().unwrap(),
+            dest.to_str().unwrap(),
+        ],
+    );
+    run_git_in(dest, &["config", "user.email", "test@example.com"]);
+    run_git_in(dest, &["config", "user.name", "Test"]);
+}
+
+/// BUG-1625 acceptance: the remote store already has the spec Completed, the
+/// local store is stale (Draft), and the code pull brings in a commit that
+/// names the spec. Before the fix the code leg auto-bumped the STALE local
+/// Draft → Done first, and the later store merge picked the newer Done over
+/// the remote Completed. After `aida pull` the spec must still be Completed
+/// and no Draft→Done transition may have been written.
+// trace:BUG-1625 | ai:claude
+#[test]
+fn bug1625_pull_syncs_store_before_code_reconcile_and_keeps_completed() {
+    use aida_core::db::DatabaseBackend;
+    let spec_id = "BUG-9725";
+    let (_code_bare_tmp, _proj_tmp, code_bare, project_root) = make_remote_and_clone();
+    let (_store_tmp, hub, other) = make_store_hub_with_draft_spec(spec_id);
+
+    // Local store: a clone taken while the spec was still Draft (stale).
+    let store_path = project_root.join(".aida-store");
+    clone_store_into(&hub, &store_path);
+
+    // The other machine completes the spec and publishes it.
+    let other_backend = aida_core::db::GitBackend::new(&other).unwrap();
+    let mut r = other_backend
+        .get_requirement_by_spec_id(spec_id)
+        .unwrap()
+        .unwrap();
+    let prior = r.status.clone();
+    r.set_status_from_str("Completed");
+    r.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{prior:?}"),
+            format!("{:?}", r.status),
+        )],
+    );
+    other_backend.update_requirement(&r).unwrap();
+    run_git_in(&other, &["push", "--quiet", "origin", "aida-store"]);
+
+    // The code remote gains a trailered commit naming the spec.
+    push_remote_commit_referencing(&code_bare, spec_id);
+
+    handle_pull_command(&store_path, false, false, true, true, false).unwrap();
+
+    let after = Storage::new(store_path.clone()).load().unwrap();
+    let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+    assert!(
+        matches!(req.status, RequirementStatus::Completed),
+        "BUG-1625: {spec_id} must stay Completed after `aida pull`, was {:?}",
+        req.status
+    );
+    let regressed = req.history.iter().any(|h| {
+        h.changes
+            .iter()
+            .any(|c| c.field_name == "status" && c.new_value == "Done")
+    });
+    assert!(
+        !regressed,
+        "BUG-1625: no Draft→Done transition may be written against a stale store: {:?}",
+        req.history
+    );
+    // The fresh store is committed; the code leg left nothing to publish.
+    assert_eq!(
+        run_git_in(&store_path, &["status", "--porcelain"]),
+        "",
+        "store worktree should be clean"
+    );
+}
+
+/// BUG-1625: when the store leg fails, the code-derived reconcile must stay
+/// unapplied (the local store may be stale) — a Done spec named by the pulled
+/// commit is NOT bumped, and pull reports the failure.
+// trace:BUG-1625 | ai:claude
+#[test]
+fn bug1625_store_pull_failure_leaves_code_reconcile_unapplied() {
+    use aida_core::db::DatabaseBackend;
+    let spec_id = "BUG-9726";
+    let (_code_bare_tmp, _proj_tmp, code_bare, project_root) = make_remote_and_clone();
+
+    let store_path = project_root.join(".aida-store");
+    std::fs::create_dir_all(&store_path).unwrap();
+    run_git_in(
+        &store_path,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git_in(&store_path, &["config", "user.email", "test@example.com"]);
+    run_git_in(&store_path, &["config", "user.name", "Test"]);
+    // An origin that cannot be reached: the store pull fails.
+    let missing = project_root.join("no-such-store-hub.git");
+    run_git_in(
+        &store_path,
+        &["remote", "add", "origin", missing.to_str().unwrap()],
+    );
+    let backend = aida_core::db::GitBackend::new(&store_path).unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = aida_core::Requirement::new(format!("test-{spec_id}"), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.set_status_from_str("Done");
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    push_remote_commit_referencing(&code_bare, spec_id);
+
+    let result = handle_pull_command(&store_path, false, false, true, true, false);
+    assert!(result.is_err(), "a failed store leg must fail the pull");
+
+    let after = Storage::new(store_path.clone()).load().unwrap();
+    let req = after.get_requirement_by_spec_id(spec_id).unwrap();
+    assert!(
+        matches!(req.status, RequirementStatus::Done),
+        "BUG-1625: reconcile must not run when the store did not sync, was {:?}",
+        req.status
+    );
+}
+
+/// BUG-1625: a followup that already exists in the (freshly pulled) store —
+/// as a child of the parent, or tagged with followup provenance — is
+/// recognised as already filed rather than reported as declined.
+// trace:BUG-1625 | ai:claude
+#[test]
+fn bug1625_followup_filed_in_store_recognises_existing_followups() {
+    let mut parent = aida_core::Requirement::new("parent".to_string(), String::new());
+    parent.spec_id = Some("BUG-9727".to_string());
+    let mut child = aida_core::Requirement::new("Tighten the widget".to_string(), String::new());
+    child.spec_id = Some("TASK-9728".to_string());
+    parent.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::Parent,
+        target_id: child.id,
+        created_at: None,
+        created_by: None,
+    });
+    let mut tagged = aida_core::Requirement::new("Document the knob".to_string(), String::new());
+    tagged.spec_id = Some("TASK-9729".to_string());
+    tagged
+        .tags
+        .insert(format!("{FOLLOWUP_SRC_TAG_PREFIX}docs/plans/x.md"));
+    let unrelated = aida_core::Requirement::new("Unrelated work".to_string(), String::new());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![parent, child, tagged, unrelated],
+        ..Default::default()
+    };
+    let plan = "docs/plans/x.md";
+    assert!(followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "  tighten the WIDGET ",
+        plan
+    ));
+    assert!(followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Document the knob",
+        plan
+    ));
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Unrelated work",
+        plan
+    ));
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Never filed",
+        plan
+    ));
+    // BUG-1633: a same-titled spec filed from ANOTHER plan is not this
+    // plan's followup. trace:BUG-1633 | ai:claude
+    assert!(!followup_filed_in_store(
+        &store,
+        "BUG-9727",
+        "Document the knob",
+        "docs/plans/other.md"
+    ));
+}
+
+#[test]
+fn bug1780_concurrent_fetch_does_not_break_pull_code_leg() {
+    let (_bare_tmp, _proj_tmp, bare, project_root) = make_remote_and_clone();
+    let store_path = project_root.join("requirements.yaml");
+    let storage = Storage::new(store_path.clone());
+    storage
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+
+    let spec_id = "STORY-1780".to_string();
+    seed_done_spec_at(&store_path, &spec_id);
+    push_remote_file(&bare, "update.txt", "from remote\n", &spec_id);
+
+    // Mock git in PATH to simulate concurrent fetch breaking `git pull`.
+    // The old code used `git pull --ff-only` which we intercept to simulate the bug.
+    // The new code uses `git fetch` and `git merge`, which pass through the mock
+    // and succeed (since the mock only breaks `pull`).
+    let mock_dir = std::env::temp_dir().join(format!("aida_mock_{}", std::process::id()));
+    std::fs::create_dir_all(&mock_dir).unwrap();
+    let mock_git = mock_dir.join("git");
+    let mock_script = format!(
+        r#"#!/bin/bash
+# Only fail if operating on our specific project root
+is_our_repo=0
+for arg in "$@"; do
+    if [[ "$arg" == "{}"* ]]; then
+        is_our_repo=1
+    fi
+done
+
+if [ "$is_our_repo" -eq 1 ]; then
+    for arg in "$@"; do
+        if [ "$arg" = "pull" ]; then
+            echo "fatal: Cannot rebase onto multiple branches." >&2
+            exit 128
+        fi
+    done
+fi
+
+exec /usr/bin/git "$@"
+"#,
+        project_root.display()
+    );
+    crate::test_exec::write_executable(&mock_git, mock_script);
+
+    let mut new_path = mock_dir.to_string_lossy().into_owned();
+    if let Ok(old_path) = std::env::var("PATH") {
+        new_path = format!("{}:{}", new_path, old_path);
+    }
+
+    // Use AIDA's test_env helper instead of raw env::set_var
+    let _path_guard = crate::test_env::EnvVarGuard::set("PATH", &new_path);
+
+    let result = handle_pull_command(&store_path, true, false, true, true, false);
+
+    assert!(
+        result.is_ok(),
+        "BUG-1780: code leg should survive concurrent fetch mock"
     );
 }

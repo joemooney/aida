@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-537 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -34,6 +35,11 @@ pub struct KnownHost {
     pub label: Option<String>,
     /// Preferred SSH port for push-to-create (None → 22).
     pub ssh_port: Option<u16>,
+    /// An `ssh_port` found in `remotes.toml` that is not a valid port
+    /// (`"22a"`, `70000`), kept as TOML value text so a save writes it back
+    /// unchanged instead of silently dropping it. `None` when absent or valid.
+    // trace:BUG-1650 | ai:claude
+    pub ssh_port_raw: Option<String>,
 }
 
 // ───────────────────────────── pure helpers ─────────────────────────────
@@ -127,14 +133,46 @@ pub fn attach_fallback_hint(host: &str, repo_name: &str) -> String {
 /// Path to the machine-global remote-hosts memory file (`~/.aida/remotes.toml`).
 /// Returns None when the home dir can't be resolved.
 pub fn known_hosts_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
+    crate::home_dir().map(|h| h.join(".aida").join("remotes.toml"))
 }
 
 /// Parse the `[[gitlab_host]]` array-of-tables from a `remotes.toml` body.
-/// Hand-rolled (mirrors the project's other section parsers) to avoid a serde
-/// round-trip for a tiny file. Pure over its `&str` input → unit-testable.
+/// Pure over its `&str` input → unit-testable.
 /// trace:STORY-537 | ai:claude
+///
+/// A body that parses as TOML is read through the `toml` crate, so quoted
+/// values (a label containing `"` or `#`) come back exactly as
+/// [`serialize_known_hosts`] wrote them. `ssh_port` is accepted as an integer
+/// or as a numeric string (`"2222"`, which older hand edits used), so the next
+/// save does not drop it. A hand-edited file that is not valid TOML falls back
+/// to a lenient line scan that strips `"` or `'` quotes.
+// trace:BUG-1649 trace:BUG-1650 | ai:claude
 pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
+    if let Ok(table) = toml_body.parse::<toml::Table>() {
+        return table
+            .get("gitlab_host")
+            .and_then(|v| v.as_array())
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|e| e.as_table())
+                    .filter_map(|t| {
+                        let host = t.get("host")?.as_str()?.to_string();
+                        let raw_port = t.get("ssh_port");
+                        let ssh_port = raw_port.and_then(ssh_port_value);
+                        (!host.is_empty()).then(|| KnownHost {
+                            host,
+                            label: t.get("label").and_then(|v| v.as_str()).map(String::from),
+                            ssh_port,
+                            ssh_port_raw: raw_port
+                                .filter(|_| ssh_port.is_none())
+                                .map(|v| v.to_string()),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
     let mut hosts = Vec::new();
     let mut cur: Option<KnownHost> = None;
     let flush = |cur: &mut Option<KnownHost>, hosts: &mut Vec<KnownHost>| {
@@ -155,6 +193,7 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
                 host: String::new(),
                 label: None,
                 ssh_port: None,
+                ssh_port_raw: None,
             });
             continue;
         }
@@ -165,17 +204,34 @@ pub fn parse_known_hosts(toml_body: &str) -> Vec<KnownHost> {
         }
         if let (Some(entry), Some((key, val))) = (cur.as_mut(), line.split_once('=')) {
             let key = key.trim();
-            let val = val.trim().trim_matches('"');
+            // trace:BUG-1650 | ai:claude
+            let val = val.trim().trim_matches('"').trim_matches('\'');
             match key {
                 "host" => entry.host = val.to_string(),
                 "label" => entry.label = Some(val.to_string()),
-                "ssh_port" => entry.ssh_port = val.parse::<u16>().ok(),
+                "ssh_port" => {
+                    entry.ssh_port = val.trim().parse::<u16>().ok();
+                    entry.ssh_port_raw = entry
+                        .ssh_port
+                        .is_none()
+                        .then(|| aida_core::toml_quote::toml_string(val.trim()));
+                }
                 _ => {}
             }
         }
     }
     flush(&mut cur, &mut hosts);
     hosts
+}
+
+/// `ssh_port` as a TOML integer or a numeric string, when it fits a `u16`.
+// trace:BUG-1650 | ai:claude
+fn ssh_port_value(v: &toml::Value) -> Option<u16> {
+    match v {
+        toml::Value::Integer(n) => u16::try_from(*n).ok(),
+        toml::Value::String(s) => s.trim().parse::<u16>().ok(),
+        _ => None,
+    }
 }
 
 /// Serialize known hosts back to a `remotes.toml` body. Pure → round-trippable.
@@ -187,12 +243,23 @@ pub fn serialize_known_hosts(hosts: &[KnownHost]) -> String {
     );
     for h in hosts {
         s.push_str("\n[[gitlab_host]]\n");
-        s.push_str(&format!("host = \"{}\"\n", h.host));
+        // trace:BUG-1649 | ai:claude
+        s.push_str(&format!(
+            "host = {}\n",
+            aida_core::toml_quote::toml_string(&h.host)
+        ));
         if let Some(label) = &h.label {
-            s.push_str(&format!("label = \"{label}\"\n"));
+            s.push_str(&format!(
+                "label = {}\n",
+                aida_core::toml_quote::toml_string(label)
+            ));
         }
         if let Some(port) = h.ssh_port {
             s.push_str(&format!("ssh_port = {port}\n"));
+        } else if let Some(raw) = &h.ssh_port_raw {
+            // Unparseable port: write the original value text back unchanged.
+            // trace:BUG-1650 | ai:claude
+            s.push_str(&format!("ssh_port = {raw}\n"));
         }
     }
     s
@@ -208,7 +275,18 @@ pub fn load_known_hosts() -> Vec<KnownHost> {
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    parse_known_hosts(&body)
+    let hosts = parse_known_hosts(&body);
+    // trace:BUG-1650 | ai:claude
+    for h in &hosts {
+        if let Some(raw) = &h.ssh_port_raw {
+            eprintln!(
+                "warning: {}: ssh_port = {raw} for {} is not a valid port; using 22 and keeping the value as written",
+                path.display(),
+                h.host
+            );
+        }
+    }
+    hosts
 }
 
 /// Insert-or-update a host in the remembered set (dedup by host), then persist.
@@ -224,6 +302,7 @@ pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
         }
         if new.ssh_port.is_some() {
             existing.ssh_port = new.ssh_port;
+            existing.ssh_port_raw = None;
         }
     } else {
         hosts.push(new);
@@ -273,7 +352,7 @@ fn is_interactive() -> bool {
 fn is_on_path(bin: &str) -> bool {
     Command::new(bin)
         .arg("--version")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -439,6 +518,7 @@ fn create_via_gitlab_ssh(
                 host: host.to_string(),
                 label: None,
                 ssh_port: port,
+                ssh_port_raw: None,
             });
             println!("Wired origin + pushed {branch}. Run `aida push` to sync the aida-store leg.");
             Ok(())
@@ -503,6 +583,7 @@ fn interactive_menu(
                     host: host.clone(),
                     label: None,
                     ssh_port: Some(p),
+                    ssh_port_raw: None,
                 });
             }
         }
@@ -796,7 +877,13 @@ fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
 }
 
 fn glab_config_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("glab-cli").join("config.yml"))
+    // trace:TASK-1513 | ai:claude
+    // trace:TASK-1553 | ai:codex
+    aida_core::home::config_dir().map(|dir| {
+        #[cfg(test)]
+        crate::test_home::assert_hermetic(&dir);
+        dir.join("glab-cli").join("config.yml")
+    })
 }
 
 fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> {
@@ -1172,25 +1259,44 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
 /// pre-push hook without clobbering a user's custom one.
 const MIRROR_HOOK_MARKER: &str = "aida remote mirror-push";
 
+/// First line of the generated hook's comment banner. The doctor
+/// `mirror-hook-drift` scan recognizes AIDA's own hook by THIS line, not by
+/// `MIRROR_HOOK_MARKER`: the installer tells owners of a custom pre-push
+/// hook to paste the marker line (`aida remote mirror-push "$1" || true`)
+/// into their hook, so the marker also matches hooks AIDA must never offer
+/// to rewrite. Embedded in `mirror_pre_push_hook_script` so the generator
+/// and the recognizer cannot drift apart.
+// trace:BUG-1738 | ai:claude
+pub(crate) const MIRROR_HOOK_HEADER: &str =
+    "# Mirror fan-out pre-push hook — installed by `aida remote mirror`.";
+
 /// The pre-push hook shim `aida remote mirror` installs. POSIX sh — git runs
 /// hooks under /bin/sh. Pipes the ref lines git feeds the hook straight
 /// through to the plumbing subcommand and always exits 0, so mirroring can
 /// never block the origin push (even when `aida` is not on PATH or an older
 /// binary lacks the hidden plumbing subcommand).
 pub fn mirror_pre_push_hook_script() -> String {
+    format!(
     "#!/bin/sh\n\
-     # Mirror fan-out pre-push hook — installed by `aida remote mirror`.\n\
+     {MIRROR_HOOK_HEADER}\n\
      # Fans each code ref pushed to origin out to every configured mirror hub\n\
      # ([store.sync] mirror_remotes in .aida/config.toml). Best-effort: a\n\
      # mirror failure warns and never blocks the push. Safe to delete;\n\
      # reinstall with `aida remote mirror <name>`.\n\
      unset GIT_DIR GIT_WORK_TREE\n\
-     # trace:TASK-154 | ai:codex\n\
+     # Git runs pre-push for dry-runs but omits the flag from the hook environment.\n\
+     git_args=$(ps -p \"$PPID\" -o args= 2>/dev/null) || {{ echo \"mirror-push: could not inspect git arguments; skipped\" >&2; exit 0; }}\n\
+     case \" $git_args \" in *\" --dry-run \"*|*\" -n \"*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac\n\
+     # trace:BUG-1706 | ai:codex\n\
      if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then\n\
-     \u{20} aida remote mirror-push \"$1\" || true\n\
+     \u{20} if [ -n \"$mirror_dry_run\" ]; then\n\
+     \u{20} \u{20} aida remote mirror-push \"$1\" --dry-run || true\n\
+     \u{20} else\n\
+     \u{20} \u{20} aida remote mirror-push \"$1\" || true\n\
+     \u{20} fi\n\
      fi\n\
      exit 0\n"
-        .to_string()
+    )
 }
 
 /// Parse the ref lines git feeds a pre-push hook on stdin
@@ -1222,69 +1328,498 @@ pub fn mirror_push_refspecs(ref_lines: &str) -> Vec<String> {
 
 /// `aida remote mirror-push <pushed-remote>` — the hook's plumbing target.
 /// Reads the pre-push ref lines from stdin and fans them out.
-pub fn handle_remote_mirror_push(project_root: &Path, pushed_remote: &str) -> Result<()> {
+// trace:BUG-1706 | ai:codex
+pub fn handle_remote_mirror_push(
+    project_root: &Path,
+    pushed_remote: &str,
+    dry_run: bool,
+) -> Result<()> {
     let mut ref_lines = String::new();
     use std::io::Read;
     std::io::stdin().lock().read_to_string(&mut ref_lines).ok();
-    run_mirror_push(project_root, pushed_remote, &ref_lines)
+    run_mirror_push(project_root, pushed_remote, &ref_lines, dry_run)
 }
 
-/// Fan the pushed refs out to every configured mirror hub. Best-effort per
-/// hub: an unreachable or diverged mirror WARNS and is skipped — this
-/// function never errors, so the triggering origin push is never blocked.
-pub fn run_mirror_push(project_root: &Path, pushed_remote: &str, ref_lines: &str) -> Result<()> {
+/// Fan the pushed refs out to every configured mirror hub. Every hub is
+/// attempted; the report says what was mirrored or why a hub was skipped.
+///
+/// BUG-1676: this used to exit 0 silently in every skip case and after every
+/// failure, so the hub-drift guard saw the mirror hours behind while the
+/// usage log showed `mirror-push` "succeeding" in ~11 ms (those were pushes
+/// to the mirror itself, which are no-ops). Now each skip names its reason on
+/// stdout, and a mirror push that fails returns an error so the exit code is
+/// non-zero. The pre-push hook shim runs this with `|| true`, so the
+/// triggering origin push is still never blocked.
+// trace:BUG-1676 | ai:claude
+pub fn run_mirror_push(
+    project_root: &Path,
+    pushed_remote: &str,
+    ref_lines: &str,
+    dry_run: bool,
+) -> Result<()> {
     // Only a push to origin fans out — a push to a mirror (including the
     // hook's own nested pushes) is a no-op, which also breaks recursion.
     if pushed_remote != "origin" {
+        println!(
+            "  mirror-push: push targets `{pushed_remote}`, not origin — nothing to mirror \
+             (mirrors follow origin; a forge-side merge is mirrored by `aida pull` / \
+             `aida remote mirror-sync`)"
+        );
         return Ok(());
     }
     let refspecs = mirror_push_refspecs(ref_lines);
     if refspecs.is_empty() {
+        println!(
+            "  mirror-push: no code refs in this push — nothing to mirror (the store branch \
+             and ref deletions are skipped by design)"
+        );
         return Ok(());
     }
     let cfg = crate::read_store_sync_config(project_root).unwrap_or_default();
+    let mirrors: Vec<&String> = cfg
+        .mirror_remotes
+        .iter()
+        .filter(|m| *m != "origin")
+        .collect();
+    if mirrors.is_empty() {
+        println!(
+            "  mirror-push: no mirror hubs configured ([store.sync] mirror_remotes) — nothing to do"
+        );
+        return Ok(());
+    }
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
-    for mirror in &cfg.mirror_remotes {
-        if mirror == "origin" {
-            continue;
-        }
+    let mut failures: Vec<String> = Vec::new();
+    for mirror in mirrors {
         if !aida_core::git_ops::has_remote(project_root, mirror) {
-            eprintln!("  {warn} mirror remote `{mirror}` not configured — skipping");
+            println!(
+                "  mirror-push: mirror `{mirror}` is listed in [store.sync] mirror_remotes but is \
+                 not a git remote here — skipped (`aida remote mirror {mirror} --url <url>`)"
+            );
             continue;
         }
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["push", "--quiet", mirror])
+        let mut command = Command::new("git");
+        command.arg("-C").arg(project_root).args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            "--quiet",
+        ]);
+        if dry_run {
+            command.arg("--dry-run");
+        }
+        let out = command
+            .arg(crate::git_arg_guard::END_OF_OPTIONS)
+            .arg(mirror) // trace:BUG-1622 | ai:claude
             .args(&refspecs)
             .output();
         match out {
             Ok(o) if o.status.success() => {
-                println!("  mirrored {} ref(s) → {mirror}", refspecs.len());
+                let action = if dry_run { "would mirror" } else { "mirrored" };
+                println!(
+                    "  {action} {} ref(s) → {mirror}: {}",
+                    refspecs.len(),
+                    refspecs
+                        .iter()
+                        .map(|r| mirror_refspec_label(r))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                if dry_run {
+                    let preview = String::from_utf8_lossy(&o.stdout);
+                    if !preview.trim().is_empty() {
+                        print!("{preview}");
+                    }
+                }
             }
             Ok(o) => {
-                // Surface git's diagnostic line (a rejected ref, an
-                // unreachable repo), not its trailing advice prose.
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                let detail = stderr
-                    .lines()
-                    .find(|l| {
-                        let l = l.trim_start();
-                        l.starts_with("fatal:") || l.starts_with("error:") || l.starts_with('!')
-                    })
-                    .or_else(|| stderr.lines().rfind(|l| !l.trim().is_empty()))
-                    .unwrap_or("")
-                    .trim();
+                let detail = git_push_failure_detail(&String::from_utf8_lossy(&o.stderr));
                 eprintln!(
-                    "  {warn} mirror `{mirror}` push failed — skipped ({detail}); check drift with `aida remote status`"
+                    "  {warn} mirror `{mirror}` push failed ({detail}); check drift with `aida remote status`"
                 );
+                failures.push(format!("{mirror}: {detail}"));
             }
             Err(e) => {
-                eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped");
+                eprintln!("  {warn} mirror `{mirror}` push failed: {e}");
+                failures.push(format!("{mirror}: {e}"));
             }
         }
     }
-    Ok(())
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "mirror-push: {} mirror push(es) failed — {}",
+            failures.len(),
+            failures.join("; ")
+        )
+    }
+}
+
+/// `<sha>:refs/heads/<branch>` → `<branch>@<short sha>` for a report line.
+// trace:BUG-1676 | ai:claude
+fn mirror_refspec_label(refspec: &str) -> String {
+    match refspec.split_once(':') {
+        Some((sha, target)) => format!(
+            "{}@{}",
+            target.strip_prefix("refs/heads/").unwrap_or(target),
+            sha.chars().take(12).collect::<String>()
+        ),
+        None => refspec.to_string(),
+    }
+}
+
+/// Surface git's diagnostic line (a rejected ref, an unreachable repo), not
+/// its trailing advice prose.
+// trace:BUG-1676 | ai:claude
+fn git_push_failure_detail(stderr: &str) -> String {
+    stderr
+        .lines()
+        .find(|l| {
+            let l = l.trim_start();
+            l.starts_with("fatal:") || l.starts_with("error:") || l.starts_with('!')
+        })
+        .or_else(|| stderr.lines().rfind(|l| !l.trim().is_empty()))
+        .unwrap_or("push failed")
+        .trim()
+        .to_string()
+}
+
+/// BUG-1676: one hub's outcome for one branch in a mirror sync.
+// trace:BUG-1676 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MirrorSyncOutcome {
+    /// The hub was moved to origin's tip (`from` is the hub's previous tip,
+    /// `None` when the hub did not have the branch yet).
+    Pushed { from: Option<String>, to: String },
+    /// The hub already held origin's tip.
+    UpToDate { sha: String },
+    /// Origin does not have the branch, so there is nothing to mirror.
+    NoSource,
+    /// The push failed (unreachable hub, diverged branch, rejected ref).
+    Failed(String),
+}
+
+/// BUG-1676: one row of a mirror-sync report.
+// trace:BUG-1676 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MirrorSyncRow {
+    pub mirror: String,
+    pub branch: String,
+    pub outcome: MirrorSyncOutcome,
+}
+
+/// BUG-1676: what a mirror sync did, hub by hub and branch by branch, plus
+/// the reasons it did nothing at all.
+// trace:BUG-1676 | ai:claude
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MirrorSyncReport {
+    pub rows: Vec<MirrorSyncRow>,
+    /// Whole-sync skip reasons (no mirrors configured, no origin, origin
+    /// unreachable) and per-hub skips (a listed mirror that is not a remote).
+    pub skipped: Vec<String>,
+}
+
+impl MirrorSyncReport {
+    pub fn failures(&self) -> Vec<&MirrorSyncRow> {
+        self.rows
+            .iter()
+            .filter(|r| matches!(r.outcome, MirrorSyncOutcome::Failed(_)))
+            .collect()
+    }
+
+    /// Plain-text report, one line per row and per skip reason.
+    pub fn render(&self) -> String {
+        let short = |s: &str| s.chars().take(12).collect::<String>();
+        let mut out = String::new();
+        for reason in &self.skipped {
+            out.push_str(&format!("  mirror-sync: {reason}\n"));
+        }
+        for r in &self.rows {
+            let line = match &r.outcome {
+                MirrorSyncOutcome::Pushed { from, to } => format!(
+                    "  mirrored {} → {}: {} → {}",
+                    r.branch,
+                    r.mirror,
+                    from.as_deref()
+                        .map(short)
+                        .unwrap_or_else(|| "(absent)".to_string()),
+                    short(to)
+                ),
+                MirrorSyncOutcome::UpToDate { sha } => {
+                    format!("  {} on {} already at {}", r.branch, r.mirror, short(sha))
+                }
+                MirrorSyncOutcome::NoSource => {
+                    format!(
+                        "  {} is not on origin — nothing to mirror to {}",
+                        r.branch, r.mirror
+                    )
+                }
+                MirrorSyncOutcome::Failed(detail) => {
+                    format!("  {} → {} FAILED: {detail}", r.branch, r.mirror)
+                }
+            };
+            out.push_str(&line);
+            out.push('\n');
+        }
+        out
+    }
+
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "skipped": self.skipped,
+            "rows": self.rows.iter().map(|r| {
+                let (state, from, to, detail) = match &r.outcome {
+                    MirrorSyncOutcome::Pushed { from, to } => ("pushed", from.clone(), Some(to.clone()), None),
+                    MirrorSyncOutcome::UpToDate { sha } => ("up-to-date", None, Some(sha.clone()), None),
+                    MirrorSyncOutcome::NoSource => ("no-source", None, None, None),
+                    MirrorSyncOutcome::Failed(d) => ("failed", None, None, Some(d.clone())),
+                };
+                serde_json::json!({
+                    "mirror": r.mirror,
+                    "branch": r.branch,
+                    "state": state,
+                    "from": from,
+                    "to": to,
+                    "detail": detail,
+                })
+            }).collect::<Vec<_>>(),
+            "failures": self.failures().len(),
+        })
+    }
+}
+
+/// BUG-1676: the branches every mirror hub must track — the default branch
+/// and the spec store. Deduplicated in case they coincide.
+// trace:BUG-1676 | ai:claude
+fn mirror_sync_branches(project_root: &Path) -> Vec<String> {
+    let mut branches = vec![aida_core::git_ops::default_branch_name(project_root)];
+    if !branches.iter().any(|b| b == STORE_BRANCH) {
+        branches.push(STORE_BRANCH.to_string());
+    }
+    branches
+}
+
+/// BUG-1676: push origin's tip of the default branch and of the spec store to
+/// every configured mirror hub, by sha, so each hub holds exactly what origin
+/// holds.
+///
+/// Why this exists: the pre-push hook only mirrors refs pushed FROM this
+/// machine TO origin. The default branch advances by forge-side squash merges
+/// and is only ever pulled locally, so the hook never sees it; the store
+/// branch is pushed to origin by every targeted `aida edit` write, none of
+/// which fan out (only `aida db sync --push` does). Both hubs therefore
+/// drift for hours between the rare full syncs. This is the one fan-out that
+/// follows ORIGIN rather than a local push: `aida pull` runs it best-effort
+/// after both legs succeed (drain phase 5, `aida pr ship`, an operator
+/// catch-up), and `aida remote mirror-sync` runs it on demand.
+///
+/// Never force-pushes: a diverged hub is reported as `Failed` with git's
+/// diagnostic and left for `aida remote reconcile` (store) or a manual
+/// reconcile (code). Runs from `project_root`; the store worktree shares its
+/// object database, so fetching origin's store tip here is enough to push it
+/// on.
+// trace:BUG-1676 | ai:claude
+pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
+    use aida_core::git_ops;
+    let mut report = MirrorSyncReport::default();
+    let cfg = crate::read_store_sync_config(project_root).unwrap_or_default();
+    let mirrors: Vec<String> = cfg
+        .mirror_remotes
+        .iter()
+        .filter(|m| m.as_str() != "origin")
+        .cloned()
+        .collect();
+    if mirrors.is_empty() {
+        report
+            .skipped
+            .push("no mirror hubs configured ([store.sync] mirror_remotes) — nothing to do".into());
+        return Ok(report);
+    }
+    if !git_ops::has_remote(project_root, "origin") {
+        report.skipped.push(
+            "no `origin` remote — mirrors follow origin, so there is nothing to mirror".into(),
+        );
+        return Ok(report);
+    }
+    let live_mirrors: Vec<String> = mirrors
+        .into_iter()
+        .filter(|m| {
+            if git_ops::has_remote(project_root, m) {
+                true
+            } else {
+                report.skipped.push(format!(
+                    "mirror `{m}` is listed in [store.sync] mirror_remotes but is not a git \
+                     remote here — skipped (`aida remote mirror {m} --url <url>`)"
+                ));
+                false
+            }
+        })
+        .collect();
+    if live_mirrors.is_empty() {
+        return Ok(report);
+    }
+
+    let branches = mirror_sync_branches(project_root);
+    // Origin's tips, by ls-remote (no object transfer). All-None means origin
+    // is unreachable or empty: report it once and do not mark every hub failed.
+    let sources: Vec<(String, Option<String>)> = branches
+        .iter()
+        .map(|b| {
+            (
+                b.clone(),
+                git_ops::remote_branch_head_sha(project_root, "origin", b),
+            )
+        })
+        .collect();
+    if sources.iter().all(|(_, sha)| sha.is_none()) {
+        report.skipped.push(format!(
+            "origin is unreachable or has none of {} — nothing to mirror",
+            branches.join(", ")
+        ));
+        return Ok(report);
+    }
+
+    for (branch, source) in &sources {
+        let Some(source) = source else {
+            for mirror in &live_mirrors {
+                report.rows.push(MirrorSyncRow {
+                    mirror: mirror.clone(),
+                    branch: branch.clone(),
+                    outcome: MirrorSyncOutcome::NoSource,
+                });
+            }
+            continue;
+        };
+        // Make sure origin's tip is in the local object database; a push by
+        // sha needs the objects, and the local branch may be behind origin
+        // (a forge-side merge) or ahead of it (unpushed work).
+        let fetched = Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args([
+                "fetch",
+                "--quiet",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                "origin",
+                &format!("refs/heads/{branch}"),
+            ]) // trace:BUG-1622 | ai:claude
+            .output();
+        let fetch_error = match fetched {
+            Ok(o) if o.status.success() => None,
+            Ok(o) => Some(git_push_failure_detail(&String::from_utf8_lossy(&o.stderr))),
+            Err(e) => Some(e.to_string()),
+        };
+        for mirror in &live_mirrors {
+            if let Some(err) = &fetch_error {
+                report.rows.push(MirrorSyncRow {
+                    mirror: mirror.clone(),
+                    branch: branch.clone(),
+                    outcome: MirrorSyncOutcome::Failed(format!("fetch from origin failed: {err}")),
+                });
+                continue;
+            }
+            let current = git_ops::remote_branch_head_sha(project_root, mirror, branch);
+            if current.as_deref() == Some(source.as_str()) {
+                report.rows.push(MirrorSyncRow {
+                    mirror: mirror.clone(),
+                    branch: branch.clone(),
+                    outcome: MirrorSyncOutcome::UpToDate {
+                        sha: source.clone(),
+                    },
+                });
+                continue;
+            }
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args([
+                    "push",
+                    "--quiet",
+                    crate::git_arg_guard::END_OF_OPTIONS,
+                    mirror,
+                    &format!("{source}:refs/heads/{branch}"),
+                ]) // trace:BUG-1622 | ai:claude
+                .output();
+            let outcome = match out {
+                // Verify the hub really moved: a push that "succeeds" without
+                // landing is exactly the silent drift this sync exists to end.
+                Ok(o) if o.status.success() => {
+                    match git_ops::remote_branch_head_sha(project_root, mirror, branch) {
+                        Some(now) if now == *source => MirrorSyncOutcome::Pushed {
+                            from: current,
+                            to: source.clone(),
+                        },
+                        other => MirrorSyncOutcome::Failed(format!(
+                            "push reported success but the hub is at {}",
+                            other.as_deref().unwrap_or("(unreadable)")
+                        )),
+                    }
+                }
+                Ok(o) => MirrorSyncOutcome::Failed(git_push_failure_detail(
+                    &String::from_utf8_lossy(&o.stderr),
+                )),
+                Err(e) => MirrorSyncOutcome::Failed(e.to_string()),
+            };
+            report.rows.push(MirrorSyncRow {
+                mirror: mirror.clone(),
+                branch: branch.clone(),
+                outcome,
+            });
+        }
+    }
+    Ok(report)
+}
+
+/// `aida remote mirror-sync [--json]`: run [`mirror_sync_hubs`], print the
+/// report, and exit non-zero when any hub push failed.
+// trace:BUG-1676 | ai:claude
+pub fn handle_remote_mirror_sync(project_root: &Path, json: bool) -> Result<()> {
+    let report = mirror_sync_hubs(project_root)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+    } else {
+        print!("{}", report.render());
+    }
+    let failures = report.failures();
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "mirror-sync: {} hub push(es) failed — {}",
+            failures.len(),
+            failures
+                .iter()
+                .map(|r| match &r.outcome {
+                    MirrorSyncOutcome::Failed(d) => format!("{} → {}: {d}", r.branch, r.mirror),
+                    _ => String::new(),
+                })
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+    }
+}
+
+/// Best-effort mirror sync at the end of a successful `aida pull`. Silent on
+/// success (a pushed or up-to-date hub prints nothing); a failure prints the
+/// report and a hint on stderr. Never changes the pull's exit code.
+// trace:BUG-1676 | ai:claude
+pub fn mirror_sync_after_pull(project_root: &Path) {
+    let warn = crate::glyph(crate::glyphs::Glyph::Warning);
+    match mirror_sync_hubs(project_root) {
+        Ok(report) => {
+            let failures = report.failures();
+            if !failures.is_empty() {
+                eprint!("{}", report.render());
+                eprintln!(
+                    "  {warn} {} mirror hub push(es) failed — the mirror is behind origin; see \
+                     `aida remote status`, then `aida remote mirror-sync` (or `aida remote \
+                     reconcile` for a diverged store)",
+                    failures.len()
+                );
+            }
+        }
+        Err(e) => eprintln!("  {warn} mirror sync skipped: {e}"),
+    }
 }
 
 /// Add `name` to `[store.sync] mirror_remotes` in the project's
@@ -1348,23 +1883,29 @@ fn add_mirror_remote_to_config(project_root: &Path, name: &str) -> Result<bool> 
 }
 
 /// Resolve the repo's hooks directory (`git rev-parse --git-path hooks`, so
-/// linked worktrees and `core.hooksPath` are honored) and install the mirror
-/// pre-push shim there. Idempotent: refreshes its own hook in place, never
+/// linked worktrees and `core.hooksPath` are honored). Shared by the
+/// installer and the doctor `mirror-hook-drift` scan so the hook they write
+/// and the hook they inspect are always the same file.
+// trace:BUG-1738 | ai:claude
+pub(crate) fn repo_hooks_dir(project_root: &Path) -> std::path::PathBuf {
+    let rel = git_out(project_root, &["rev-parse", "--git-path", "hooks"])
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| ".git/hooks".to_string());
+    let p = Path::new(&rel);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        project_root.join(p)
+    }
+}
+
+/// Install the mirror pre-push shim into the repo's hooks directory.
+/// Idempotent: refreshes its own hook in place, never
 /// clobbers a custom pre-push hook (prints the one line to add instead).
 fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
     let check = crate::glyph(crate::glyphs::Glyph::Check);
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
-    let rel = git_out(project_root, &["rev-parse", "--git-path", "hooks"])
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| ".git/hooks".to_string());
-    let hooks_dir = {
-        let p = Path::new(&rel);
-        if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            project_root.join(p)
-        }
-    };
+    let hooks_dir = repo_hooks_dir(project_root);
     std::fs::create_dir_all(&hooks_dir)
         .with_context(|| format!("failed to create {}", hooks_dir.display()))?;
     let target = hooks_dir.join("pre-push");
@@ -2272,16 +2813,110 @@ hosts:
                 host: "gitlab.joemooney.com".to_string(),
                 label: Some("personal GitLab".to_string()),
                 ssh_port: Some(2222),
+                ssh_port_raw: None,
             },
             KnownHost {
                 host: "gitlab.corp.com".to_string(),
                 label: None,
                 ssh_port: None,
+                ssh_port_raw: None,
             },
         ];
         let body = serialize_known_hosts(&hosts);
         let parsed = parse_known_hosts(&body);
         assert_eq!(parsed, hosts);
+    }
+
+    // trace:BUG-1649 | ai:claude
+    #[test]
+    fn bug_1649_known_hosts_quote_and_backslash_round_trip() {
+        let hosts = vec![KnownHost {
+            host: "gitlab.example.com".to_string(),
+            label: Some("Joe's \"work\" # GitLab C:\\Users\\RUNNER~1\\x".to_string()),
+            ssh_port: Some(2222),
+            ssh_port_raw: None,
+        }];
+        let body = serialize_known_hosts(&hosts);
+        let parsed: toml::Table = toml::from_str(&body).expect("valid TOML");
+        let entry = parsed["gitlab_host"].as_array().unwrap()[0]
+            .as_table()
+            .unwrap();
+        assert_eq!(entry["label"].as_str(), hosts[0].label.as_deref());
+        assert_eq!(parse_known_hosts(&body), hosts);
+        // Ordinary values keep the historical basic-string rendering.
+        let plain = serialize_known_hosts(&[KnownHost {
+            host: "gitlab.corp.com".to_string(),
+            label: Some("corp".to_string()),
+            ssh_port: None,
+            ssh_port_raw: None,
+        }]);
+        assert!(plain.contains("host = \"gitlab.corp.com\"\nlabel = \"corp\"\n"));
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_string_ssh_port_survives_parse_and_resave() {
+        let body = "[[gitlab_host]]\nhost = \"gitlab.example.com\"\nssh_port = \"2222\"\n";
+        let parsed = parse_known_hosts(body);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].ssh_port, Some(2222));
+        // The next save writes the port back (as an integer) instead of dropping it.
+        let resaved = serialize_known_hosts(&parsed);
+        assert_eq!(parse_known_hosts(&resaved), parsed);
+        let table: toml::Table = toml::from_str(&resaved).unwrap();
+        assert_eq!(
+            table["gitlab_host"].as_array().unwrap()[0]["ssh_port"].as_integer(),
+            Some(2222)
+        );
+    }
+
+    // Review finding 5: an invalid ssh_port is not used, but it is not
+    // dropped either — the next save writes it back exactly as found.
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_invalid_ssh_port_round_trips_unchanged() {
+        for bad in ["\"22a\"", "\"70000\"", "70000", "\"ssh\"", "true", "-1"] {
+            let body = format!("[[gitlab_host]]\nhost = \"h\"\nssh_port = {bad}\n");
+            let parsed = parse_known_hosts(&body);
+            assert_eq!(parsed[0].ssh_port, None, "{bad}");
+            assert_eq!(parsed[0].ssh_port_raw.as_deref(), Some(bad), "{bad}");
+            let resaved = serialize_known_hosts(&parsed);
+            assert!(
+                resaved.contains(&format!("\nssh_port = {bad}\n")),
+                "{resaved}"
+            );
+            assert_eq!(parse_known_hosts(&resaved), parsed, "{bad}");
+        }
+        // The line fallback keeps it too (as a quoted string).
+        let body = "not valid toml\n[[gitlab_host]]\nhost = h\nssh_port = 22a\n";
+        let parsed = parse_known_hosts(body);
+        assert_eq!(parsed[0].ssh_port, None);
+        assert_eq!(parsed[0].ssh_port_raw.as_deref(), Some("\"22a\""));
+        assert!(serialize_known_hosts(&parsed).contains("\nssh_port = \"22a\"\n"));
+        // A valid port is never shadowed by a raw value.
+        let ok = parse_known_hosts("[[gitlab_host]]\nhost = \"h\"\nssh_port = 2222\n");
+        assert_eq!(
+            (ok[0].ssh_port, ok[0].ssh_port_raw.as_deref()),
+            (Some(2222), None)
+        );
+    }
+
+    // trace:BUG-1650 | ai:claude
+    #[test]
+    fn bug_1650_line_fallback_strips_single_quotes() {
+        // `not valid toml` forces the line-scan fallback.
+        let body = "not valid toml\n[[gitlab_host]]\nhost = 'gitlab.example.com'\nlabel = 'work'\nssh_port = '2222'\n";
+        assert!(body.parse::<toml::Table>().is_err());
+        let parsed = parse_known_hosts(body);
+        assert_eq!(
+            parsed,
+            vec![KnownHost {
+                host: "gitlab.example.com".to_string(),
+                label: Some("work".to_string()),
+                ssh_port: Some(2222),
+                ssh_port_raw: None,
+            }]
+        );
     }
 
     #[test]
@@ -2409,6 +3044,91 @@ host = \"should.not.count\"
             s.trim_end().ends_with("exit 0"),
             "hook must never block the push"
         );
+        assert!(s.contains("--dry-run") && s.contains(" -n "));
+    }
+
+    // This integration seam executes a POSIX `/bin/sh` hook; native Windows
+    // runners do not provide `/bin/sh`. The script remains covered on Windows
+    // by `mirror_hook_script_is_a_posix_best_effort_shim` above.
+    // trace:BUG-1777 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn mirror_hook_forwards_dry_run_spellings_as_preview_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let log = tmp.path().join("calls");
+        let fake_aida = bin.join("aida");
+        // trace:BUG-1725 | ai:claude
+        crate::test_exec::write_executable(
+            &fake_aida,
+            format!(
+                "#!/bin/sh\nif [ \"$3\" = --help ]; then exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\n",
+                log.display()
+            ),
+        );
+        let fake_ps = bin.join("ps");
+        crate::test_exec::write_executable(
+            &fake_ps,
+            "#!/bin/sh\nprintf '%s\\n' \"$AIDA_TEST_PARENT_ARGS\"\n",
+        );
+        let hook = tmp.path().join("pre-push");
+        crate::test_exec::write_executable(&hook, mirror_pre_push_hook_script());
+
+        for args in ["git push --dry-run origin main", "git push origin main -n"] {
+            let status = Command::new("/bin/sh")
+                .arg(&hook)
+                .arg("origin")
+                .env("PATH", &bin)
+                .env("AIDA_TEST_PARENT_ARGS", args)
+                .stdin(std::process::Stdio::null())
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        let status = Command::new("/bin/sh")
+            .arg(&hook)
+            .arg("origin")
+            .env("PATH", &bin)
+            .env("AIDA_TEST_PARENT_ARGS", "git push origin main")
+            .stdin(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let calls = std::fs::read_to_string(log).unwrap();
+        let calls: Vec<_> = calls.lines().collect();
+        assert_eq!(
+            calls,
+            [
+                "remote mirror-push origin --dry-run",
+                "remote mirror-push origin --dry-run",
+                "remote mirror-push origin"
+            ]
+        );
+    }
+
+    #[test]
+    fn mirror_push_dry_run_does_not_update_mirror_ref() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let sha = init_repo_with_commit(&project);
+        let mirror = tmp.path().join("mirror.git");
+        git(tmp.path(), &["init", "-q", "--bare", "mirror.git"]);
+        git(
+            &project,
+            &["remote", "add", "mirror", mirror.to_str().unwrap()],
+        );
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[store.sync]\nmirror_remotes = [\"mirror\"]\n",
+        )
+        .unwrap();
+        let lines = format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
+
+        run_mirror_push(&project, "origin", &lines, true).unwrap();
+        assert!(git_out(&mirror, &["rev-parse", "refs/heads/main"]).is_none());
     }
 
     #[test]
@@ -2463,13 +3183,14 @@ host = \"should.not.count\"
             tmp.path(),
             "gitlab",
             "refs/heads/main x refs/heads/main y\n",
+            false,
         )
         .unwrap();
     }
 
-    // A code push to origin lands on the mirror hub; a dead mirror WARNS
-    // without erroring; the store branch is not touched. Local file remotes
-    // only — no network.
+    // A code push to origin lands on the mirror hub; a dead mirror is
+    // reported as a failure (non-zero) without stopping the other hubs; the
+    // store branch is not touched. Local file remotes only — no network.
     #[test]
     fn run_mirror_push_fans_out_and_survives_dead_mirror() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2498,8 +3219,16 @@ host = \"should.not.count\"
             "refs/heads/main {sha} refs/heads/main {ZEROS}\n\
              refs/heads/aida-store {sha} refs/heads/aida-store {ZEROS}\n"
         );
-        // Best-effort: the dead + unconfigured mirrors must not error out.
-        run_mirror_push(&project, "origin", &lines).unwrap();
+        // BUG-1676: every hub is still attempted (main lands on the live
+        // mirror below), the unconfigured hub is a reported skip, and the
+        // dead hub's failure now surfaces as a non-zero exit instead of a
+        // silent 0.
+        let err = run_mirror_push(&project, "origin", &lines, false).unwrap_err();
+        assert!(
+            err.to_string().contains("1 mirror push(es) failed")
+                && err.to_string().contains("dead"),
+            "the dead mirror must be reported as a failure: {err}"
+        );
 
         let mirrored =
             git_out(&mirror, &["rev-parse", "refs/heads/main"]).map(|s| s.trim().to_string());
@@ -2512,6 +3241,301 @@ host = \"should.not.count\"
             git_out(&mirror, &["rev-parse", "--verify", "refs/heads/aida-store"]).is_none(),
             "the store branch must NOT be mirrored by the code hook"
         );
+    }
+
+    /// Commit `name` with `content` in `repo`'s current branch. Test helper.
+    // trace:BUG-1676 | ai:claude
+    fn commit_file(repo: &Path, name: &str, content: &str, msg: &str) -> String {
+        std::fs::write(repo.join(name), content).unwrap();
+        git(repo, &["add", name]);
+        git(
+            repo,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-q",
+                "-m",
+                msg,
+            ],
+        );
+        git_out(repo, &["rev-parse", "HEAD"])
+            .unwrap()
+            .trim()
+            .to_string()
+    }
+
+    fn tip(repo: &Path, branch: &str) -> Option<String> {
+        git_out(
+            repo,
+            &["rev-parse", "--verify", &format!("refs/heads/{branch}")],
+        )
+        .map(|s| s.trim().to_string())
+    }
+
+    /// BUG-1676 fixture: a project clone with an `origin` bare hub and a
+    /// `mirror` bare hub, `main` and an orphan `aida-store` both pushed to
+    /// origin, and `[store.sync] mirror_remotes = ["mirror"]`. Returns
+    /// (project, origin, mirror).
+    // trace:BUG-1676 | ai:claude
+    fn two_hub_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let project = tmp.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        git(tmp, &["init", "-q", "--bare", "origin.git"]);
+        git(tmp, &["init", "-q", "--bare", "mirror.git"]);
+        let origin = tmp.join("origin.git");
+        let mirror = tmp.join("mirror.git");
+        git(
+            &project,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        git(
+            &project,
+            &["remote", "add", "mirror", mirror.to_str().unwrap()],
+        );
+        git(&project, &["push", "-q", "origin", "main"]);
+        // The spec store: an orphan branch, pushed to origin only (the way
+        // every targeted `aida edit` write pushes it).
+        git(&project, &["checkout", "-q", "--orphan", STORE_BRANCH]);
+        git(&project, &["rm", "-rfq", "--cached", "."]);
+        std::fs::remove_file(project.join("file.txt")).unwrap();
+        commit_file(&project, "objects.yaml", "specs: []\n", "store init");
+        git(&project, &["push", "-q", "origin", STORE_BRANCH]);
+        git(&project, &["checkout", "-q", "main"]);
+        let cfg_dir = project.join(".aida");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        std::fs::write(
+            cfg_dir.join("config.toml"),
+            "[store.sync]\nmirror_remotes = [\"mirror\"]\n",
+        )
+        .unwrap();
+        (project, origin, mirror)
+    }
+
+    /// Advance `branch` on origin from a second clone — the shape of a
+    /// forge-side squash merge (main) or another clone's store push
+    /// (aida-store): the project's local branch never pushes it.
+    // trace:BUG-1676 | ai:claude
+    fn advance_on_origin(tmp: &Path, origin: &Path, branch: &str, name: &str) -> String {
+        let other = tmp.join(format!("other-{branch}"));
+        git(
+            tmp,
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                branch,
+                origin.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+        let sha = commit_file(&other, name, "changed\n", &format!("advance {branch}"));
+        git(&other, &["push", "-q", "origin", branch]);
+        sha
+    }
+
+    // BUG-1676 acceptance 3: after a merge that only origin saw, both `main`
+    // and `aida-store` reach the mirror hub; a second sync is a no-op.
+    #[test]
+    fn bug_1676_mirror_sync_pushes_main_and_store_to_the_mirror_after_a_forge_side_merge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        let main_sha = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+        let store_sha = advance_on_origin(tmp.path(), &origin, STORE_BRANCH, "spec.yaml");
+        assert_ne!(
+            tip(&project, "main").as_deref(),
+            Some(main_sha.as_str()),
+            "precondition: the local main is behind origin (forge-side merge)"
+        );
+        assert!(
+            tip(&mirror, "main").is_none(),
+            "precondition: the mirror is empty"
+        );
+
+        // trace:TASK-1581 | ai:antigravity — test-local count of pushed rows.
+        let pushed = |r: &MirrorSyncReport| {
+            r.rows
+                .iter()
+                .filter(|row| matches!(row.outcome, MirrorSyncOutcome::Pushed { .. }))
+                .count()
+        };
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(report.skipped.is_empty(), "nothing skipped: {report:?}");
+        assert!(report.failures().is_empty(), "no failures: {report:?}");
+        assert_eq!(
+            pushed(&report),
+            2,
+            "main and the store both pushed: {report:?}"
+        );
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(main_sha.as_str()));
+        assert_eq!(
+            tip(&mirror, STORE_BRANCH).as_deref(),
+            Some(store_sha.as_str())
+        );
+        assert_eq!(tip(&origin, "main"), tip(&mirror, "main"));
+        assert_eq!(tip(&origin, STORE_BRANCH), tip(&mirror, STORE_BRANCH));
+
+        // Idempotent: the second run reports both hubs up to date.
+        let again = mirror_sync_hubs(&project).unwrap();
+        assert_eq!(pushed(&again), 0, "{again:?}");
+        assert!(again.failures().is_empty());
+        assert!(
+            again
+                .rows
+                .iter()
+                .all(|r| matches!(r.outcome, MirrorSyncOutcome::UpToDate { .. })),
+            "{again:?}"
+        );
+        let rendered = again.render();
+        assert!(rendered.contains("main on mirror already at"), "{rendered}");
+        assert!(
+            rendered.contains("aida-store on mirror already at"),
+            "{rendered}"
+        );
+    }
+
+    // BUG-1676 acceptance 2: a dead hub is a reported failure and a non-zero
+    // exit from `aida remote mirror-sync`; the live hub is still synced; a
+    // listed-but-missing remote is a named skip, not a failure.
+    #[test]
+    fn bug_1676_mirror_sync_reports_failures_and_skips_and_exits_non_zero() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        let dead = tmp.path().join("does-not-exist.git");
+        git(&project, &["remote", "add", "dead", dead.to_str().unwrap()]);
+        std::fs::write(
+            project.join(".aida").join("config.toml"),
+            "[store.sync]\nmirror_remotes = [\"dead\", \"mirror\", \"unconfigured\"]\n",
+        )
+        .unwrap();
+        let main_sha = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert_eq!(report.skipped.len(), 1, "{report:?}");
+        assert!(report.skipped[0].contains("unconfigured"), "{report:?}");
+        let failures = report.failures();
+        assert_eq!(
+            failures.len(),
+            2,
+            "main and store both fail on the dead hub: {report:?}"
+        );
+        assert!(failures.iter().all(|r| r.mirror == "dead"));
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(main_sha.as_str()));
+        assert!(report.render().contains("FAILED"), "{}", report.render());
+
+        let err = handle_remote_mirror_sync(&project, false).unwrap_err();
+        assert!(err.to_string().contains("2 hub push(es) failed"), "{err}");
+        // JSON shape carries the same facts.
+        let json = report.to_json();
+        assert_eq!(json["failures"], 2);
+        assert_eq!(json["rows"].as_array().unwrap().len(), 4);
+    }
+
+    // BUG-1676: a hub whose branch has diverged from origin is never
+    // force-pushed — the sync reports it as a failure (non-zero) and leaves
+    // the hub exactly where it was, while the branch that only needs a
+    // fast-forward still lands.
+    #[test]
+    fn bug_1676_mirror_sync_never_force_pushes_a_diverged_hub() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        // Seed the mirror with origin's main, then give it a commit origin
+        // does not have, then advance origin separately: the hub diverged.
+        git(&project, &["push", "-q", "mirror", "main"]);
+        let hub_only = tmp.path().join("hub-only");
+        git(
+            tmp.path(),
+            &[
+                "clone",
+                "-q",
+                "--branch",
+                "main",
+                mirror.to_str().unwrap(),
+                hub_only.to_str().unwrap(),
+            ],
+        );
+        let diverged_sha = commit_file(&hub_only, "hub.txt", "hub only\n", "hub-only commit");
+        git(&hub_only, &["push", "-q", "origin", "main"]);
+        let origin_main = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+        assert_ne!(origin_main, diverged_sha);
+
+        let report = mirror_sync_hubs(&project).unwrap();
+        let failures = report.failures();
+        assert_eq!(failures.len(), 1, "only main diverged: {report:?}");
+        assert_eq!(failures[0].branch, "main");
+        assert_eq!(
+            tip(&mirror, "main").as_deref(),
+            Some(diverged_sha.as_str()),
+            "the diverged hub must be left untouched"
+        );
+        assert_eq!(
+            tip(&mirror, STORE_BRANCH),
+            tip(&origin, STORE_BRANCH),
+            "the store still fast-forwards onto the hub"
+        );
+        assert!(handle_remote_mirror_sync(&project, false).is_err());
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(diverged_sha.as_str()));
+    }
+
+    // BUG-1676: nothing configured / no origin are whole-sync skips with a
+    // reason, never failures.
+    #[test]
+    fn bug_1676_mirror_sync_names_why_it_did_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(report.rows.is_empty());
+        assert!(
+            report.skipped[0].contains("no mirror hubs configured"),
+            "{report:?}"
+        );
+
+        let cfg_dir = project.join(".aida");
+        std::fs::create_dir_all(&cfg_dir).unwrap();
+        std::fs::write(
+            cfg_dir.join("config.toml"),
+            "[store.sync]\nmirror_remotes = [\"mirror\"]\n",
+        )
+        .unwrap();
+        git(
+            &project,
+            &[
+                "remote",
+                "add",
+                "mirror",
+                tmp.path().join("m.git").to_str().unwrap(),
+            ],
+        );
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(report.rows.is_empty());
+        assert!(
+            report.skipped[0].contains("no `origin` remote"),
+            "{report:?}"
+        );
+        assert!(handle_remote_mirror_sync(&project, true).is_ok());
+    }
+
+    // BUG-1676 acceptance 2 for the hook plumbing: each skip names its reason
+    // on stdout and a non-origin push is a no-op that says so.
+    #[test]
+    fn bug_1676_run_mirror_push_names_every_skip_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let sha = init_repo_with_commit(&project);
+        // No mirrors configured at all → Ok, nothing pushed.
+        let lines = format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
+        run_mirror_push(&project, "origin", &lines, false).unwrap();
+        // Only the store branch in the push → Ok, nothing to mirror.
+        let store_only = format!("refs/heads/aida-store {sha} refs/heads/aida-store {ZEROS}\n");
+        run_mirror_push(&project, "origin", &store_only, false).unwrap();
+        // A push to the mirror itself → Ok (recursion guard).
+        run_mirror_push(&project, "mirror", &lines, false).unwrap();
     }
 
     // One-command setup is idempotent: remote wired, config listed, hook

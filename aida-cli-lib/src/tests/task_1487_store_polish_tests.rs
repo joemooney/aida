@@ -1,0 +1,348 @@
+//! TASK-1487: store-resolution polish from the TASK-1486 review.
+//! - `unattached_distributed_root` agrees with the main resolver's BUG-433
+//!   shape detection (`.aida-store/objects` present, no config, no branch).
+//! - `command_triggers_per_write_auto_push` recognizes the tracker
+//!   subcommands that actually write the local store (a non-dry-run
+//!   `jira`/`github pull`), and nothing else.
+//! - `bulk_import_via_writer` stamps oplog entries with an attached
+//!   dispenser's node id instead of defaulting to "0", which also changes the
+//!   assigned SPEC-ID to a node-scoped `TYPE-<node>-NNN` form.
+//! - `mcp_serve_project_root` prefers an explicit `--file <dir>` hint over a
+//!   cwd-derived git root, and `project_root_from_store_hint` derives the
+//!   real project root from that hint (a STORE path, per convention) instead
+//!   of treating the hint itself as the project root.
+// trace:TASK-1487 | ai:claude
+
+use super::*;
+use std::fs;
+use std::process::Command as StdCommand;
+use tempfile::TempDir;
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let ok = StdCommand::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .expect("git spawn")
+        .status
+        .success();
+    assert!(ok, "git {args:?} failed");
+}
+
+fn init_repo(root: &std::path::Path) {
+    fs::create_dir_all(root).unwrap();
+    git(root, &["init", "-q"]);
+    git(root, &["config", "user.email", "t@example.com"]);
+    git(root, &["config", "user.name", "t"]);
+    fs::write(root.join("README.md"), "hi\n").unwrap();
+    git(root, &["add", "."]);
+    git(root, &["commit", "-q", "-m", "init"]);
+}
+
+/// BUG-433 shape: the store is physically attached (`.aida-store/objects`
+/// exists) but neither `.aida/config.toml` nor an `aida-store` branch is
+/// present — e.g. a session worktree forked from a commit that predates the
+/// committed scaffolding. `unattached_distributed_root` must recognize this
+/// project as distributed, the same way the main resolver's `distributed_root`
+/// computation does via `attached_store_present`, instead of missing it and
+/// letting `aida init --refresh` fall through to a stale legacy store.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn unattached_distributed_root_recognizes_bug_433_shape() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("proj");
+    init_repo(&root);
+    fs::create_dir_all(root.join(".aida-store/objects")).unwrap();
+
+    assert!(
+        !branch_exists_anywhere(&root, "aida-store"),
+        "fixture must not have an aida-store branch"
+    );
+    assert!(
+        !root.join(".aida/config.toml").exists(),
+        "fixture must not declare distributed mode"
+    );
+
+    assert_eq!(
+        unattached_distributed_root(&root).as_deref(),
+        Some(root.as_path()),
+        "a physically-attached store must be recognized even with no config \
+         and no aida-store branch"
+    );
+}
+
+/// A plain git repo with none of the three distributed signals stays
+/// unrecognized — the BUG-433 shape check must not turn every git repo into
+/// a "distributed project".
+// trace:TASK-1487 | ai:claude
+#[test]
+fn unattached_distributed_root_stays_none_without_any_distributed_signal() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path().join("proj");
+    init_repo(&root);
+    assert!(unattached_distributed_root(&root).is_none());
+}
+
+/// Only a non-dry-run tracker pull writes the local store (via
+/// `bulk_import_via_writer`); every other tracker subcommand only reads the
+/// store or talks to the remote tracker, so auto-push must not fire for
+/// those.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn per_write_auto_push_fires_only_for_non_dry_run_tracker_pulls() {
+    assert!(command_triggers_per_write_auto_push(&Command::Jira(
+        JiraCommand::Pull {
+            jql: None,
+            limit: 50,
+            dry_run: false,
+        }
+    )));
+    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
+        JiraCommand::Pull {
+            jql: None,
+            limit: 50,
+            dry_run: true,
+        }
+    )));
+    assert!(command_triggers_per_write_auto_push(&Command::Github(
+        GitHubCommand::Pull {
+            labels: None,
+            open_only: true,
+            limit: 50,
+            dry_run: false,
+        }
+    )));
+    assert!(!command_triggers_per_write_auto_push(&Command::Github(
+        GitHubCommand::Pull {
+            labels: None,
+            open_only: true,
+            limit: 50,
+            dry_run: true,
+        }
+    )));
+    // Read-only / remote-only tracker subcommands never trigger it.
+    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
+        JiraCommand::List {
+            jql: None,
+            limit: 20,
+        }
+    )));
+    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
+        JiraCommand::Push {
+            id: "TASK-1".to_string(),
+        }
+    )));
+}
+
+/// Seed an existing oplog whose log-level node id is still the unregistered
+/// default ("0") — the realistic state of a store that already has history
+/// from before a node id was claimed. `GitBackend::record_op` only ever
+/// upgrades `log.node_id` away from exactly `"0"`, so a brand-new (never
+/// written) oplog — whose `OpLog::default()` node id is `""`, not `"0"` —
+/// would mask the bug this test targets.
+// trace:TASK-1487 | ai:claude
+fn seed_oplog_at_node_zero(store_dir: &std::path::Path) {
+    let oplog_path = store_dir.join("oplog.yaml");
+    aida_core::oplog::OpLog::new("0".to_string())
+        .save(&oplog_path)
+        .unwrap();
+}
+
+/// The core of the item-4 bug: `bulk_import_via_writer` used to build its own
+/// fresh `GitBackend` and ignore any dispenser the caller's `Storage` carried,
+/// so every tracker-imported requirement's oplog entry was stamped node_id
+/// "0" regardless of this clone's real node id. Attaching the dispenser via
+/// `Storage::with_dispenser` must now reach the oplog.
+///
+/// This also changes the SPEC-ID a tracker import assigns: with a dispenser
+/// attached, `RequirementsStore::generate_requirement_id` formats through the
+/// dispenser (node-scoped `TYPE-<node>-NNN`) instead of a bare metadata-counter
+/// short ID. Pinned here so that behavior change is visible in one place —
+/// accepted per the TASK-1486/1487 review (a tracker-imported spec now needs
+/// `aida db merge-gate` to collapse it to an agreed short ID, same as every
+/// other node-scoped write).
+// trace:TASK-1487 | ai:claude
+#[test]
+fn bulk_import_via_writer_uses_the_storages_dispenser_node_id() {
+    use aida_core::models::DispenserHandle;
+    use aida_core::{DatabaseBackend, IdMode, MemoryDispenser};
+    use std::sync::Arc;
+
+    let tmp = TempDir::new().unwrap();
+    let store_dir = tmp.path().join("aida-store");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    seed_oplog_at_node_zero(&store_dir);
+
+    let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed {
+        node_id: "7".to_string(),
+    }));
+    let storage = Storage::new(&store_dir).with_dispenser(DispenserHandle(dispenser));
+
+    let mut req = Requirement::new("Imported issue".to_string(), "from a tracker".to_string());
+    req.req_type = RequirementType::Task;
+    let n = bulk_import_via_writer(&storage, "feat(jira)", std::iter::once(req)).unwrap();
+    assert_eq!(n, 1);
+
+    let oplog_path = store_dir.join("oplog.yaml");
+    let log = aida_core::oplog::OpLog::load(&oplog_path).expect("oplog written");
+    assert_eq!(
+        log.node_id, "7",
+        "bulk_import_via_writer must stamp the oplog with the attached \
+         dispenser's node id, not leave the node_id-\"0\" default in place"
+    );
+
+    let store = aida_core::GitBackend::new(&store_dir)
+        .unwrap()
+        .load()
+        .unwrap();
+    let imported = store
+        .requirements
+        .iter()
+        .find(|r| r.title == "Imported issue")
+        .expect("the imported requirement is in the store");
+    assert_eq!(
+        imported.spec_id.as_deref(),
+        Some("TASK-7-001"),
+        "a dispenser-attached import must assign a node-scoped id \
+         (TYPE-<node>-NNN), not a bare metadata-counter short id"
+    );
+}
+
+/// Without an attached dispenser, the historical default (node_id "0" is
+/// never upgraded) is unchanged — this is a targeted fix, not a behavior
+/// change for every other `Storage` caller.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn bulk_import_via_writer_leaves_node_zero_unchanged_without_a_dispenser() {
+    let tmp = TempDir::new().unwrap();
+    let store_dir = tmp.path().join("aida-store");
+    std::fs::create_dir_all(&store_dir).unwrap();
+    seed_oplog_at_node_zero(&store_dir);
+    let storage = Storage::new(&store_dir);
+
+    let req = Requirement::new("Imported issue".to_string(), "from a tracker".to_string());
+    bulk_import_via_writer(&storage, "feat(jira)", std::iter::once(req)).unwrap();
+
+    let oplog_path = store_dir.join("oplog.yaml");
+    let log = aida_core::oplog::OpLog::load(&oplog_path).expect("oplog written");
+    assert_eq!(log.node_id, "0");
+}
+
+/// Item 3 of the TASK-1487 follow-up review: `--file <dir> mcp-serve` must
+/// derive its project root from the explicit `--file` directory, not from
+/// cwd — cwd may be unrelated to (or simply not inside) the directory the
+/// user explicitly pointed at. An explicit hint always wins over whatever
+/// cwd's git walk found. (The hint itself is a STORE path per the
+/// `--file`/`.aida-store` convention — `.aida-store`'s parent, here — see
+/// the `project_root_from_store_hint*` tests below for that derivation.)
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_prefers_the_explicit_file_hint_over_cwd() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    let hint = std::path::PathBuf::from("/explicit/repo/.aida-store");
+    let unrelated_cwd_root = std::path::PathBuf::from("/unrelated/cwd/repo");
+    assert_eq!(
+        mcp_serve_project_root(&store_path, Some(&hint), Some(unrelated_cwd_root)),
+        std::path::PathBuf::from("/explicit/repo")
+    );
+}
+
+/// Without an explicit `--file <dir>` hint (the normal distributed-store
+/// resolution path), the historical cwd-walk result is used unchanged.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_falls_back_to_cwd_without_a_hint() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    let cwd_root = std::path::PathBuf::from("/cwd/repo");
+    assert_eq!(
+        mcp_serve_project_root(&store_path, None, Some(cwd_root.clone())),
+        cwd_root
+    );
+}
+
+/// When neither an explicit hint nor a cwd git root resolves, fall back to
+/// the store path itself (the pre-existing last-resort default).
+// trace:TASK-1487 | ai:claude
+#[test]
+fn mcp_serve_project_root_falls_back_to_store_path_when_nothing_resolves() {
+    let store_path = std::path::PathBuf::from("/some/store");
+    assert_eq!(mcp_serve_project_root(&store_path, None, None), store_path);
+}
+
+/// The regression the strict review caught: `--file <dir>`/`AIDA_STORE`
+/// conventionally point at the STORE directory (`<repo>/.aida-store` — the
+/// one `GitBackend::new` expects `objects/` directly under, and the ~20
+/// `project_root.join(".aida-store")` call sites use), not the project root.
+/// The common case — a hint whose final component is literally
+/// `.aida-store` — resolves to its parent.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_resolves_aida_store_suffix_to_its_parent() {
+    let hint = std::path::PathBuf::from("/repo/.aida-store");
+    assert_eq!(
+        project_root_from_store_hint(&hint),
+        std::path::PathBuf::from("/repo")
+    );
+}
+
+/// A hint that IS itself a project root (has its own `.git`) is used as-is —
+/// no `.aida-store` suffix to strip, nothing to walk up to.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_a_hint_that_is_already_a_project_root_resolves_to_itself() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    assert_eq!(project_root_from_store_hint(&repo), repo);
+}
+
+/// A hint nested under an enclosing project (not itself named `.aida-store`,
+/// not itself a project root) walks up and finds it.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_walks_up_to_an_enclosing_project_root() {
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    let nested_store = repo.join("some").join("nested-store");
+    std::fs::create_dir_all(&nested_store).unwrap();
+    assert_eq!(project_root_from_store_hint(&nested_store), repo);
+}
+
+/// A bare sandbox store (the `AIDA_STORE` dev-playground path, SPIKE-48)
+/// with no enclosing project resolves to itself — there's nothing else to
+/// point at. Guards the walk-up with a FAKE temp root (the fixture's own
+/// tmp dir) so this doesn't depend on — or risk polluting reasoning about —
+/// the real system `/tmp`.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_bare_sandbox_store_resolves_to_itself() {
+    let tmp = TempDir::new().unwrap();
+    let sandbox_store = tmp.path().join("sandbox-store");
+    std::fs::create_dir_all(&sandbox_store).unwrap();
+    let fake_roots = vec![tmp.path().to_path_buf()];
+    assert_eq!(
+        project_root_from_store_hint_with_roots(&sandbox_store, &fake_roots),
+        sandbox_store
+    );
+}
+
+/// BUG-1598 guard: the walk-up must never adopt a (fake, here) temp root as
+/// the project even if it superficially looks like one — proves the guard
+/// actually fires, not just that no marker happened to be there.
+// trace:TASK-1487 | ai:claude
+#[test]
+fn project_root_from_store_hint_never_adopts_a_guarded_temp_root_even_if_it_looks_like_one() {
+    let tmp = TempDir::new().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".git")).unwrap();
+    let sandbox_store = tmp.path().join("sandbox-store");
+    std::fs::create_dir_all(&sandbox_store).unwrap();
+    let fake_roots = vec![tmp.path().to_path_buf()];
+    assert_eq!(
+        project_root_from_store_hint_with_roots(&sandbox_store, &fake_roots),
+        sandbox_store,
+        "the guard must refuse to adopt a temp root as the project even when \
+         it has a .git"
+    );
+}

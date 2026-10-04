@@ -187,3 +187,57 @@ fn resolve_objective_errors_when_absent() {
     let dir = tempfile::tempdir().unwrap();
     assert!(resolve_objective(None, dir.path()).is_err());
 }
+
+// BUG-1623 n3: with --json --execute, stdout carries exactly one JSON
+// document and the nudge line goes to stderr; a dry run never runs the
+// nudge.
+// trace:BUG-1623 | ai:claude
+#[test]
+fn watch_json_execute_keeps_stdout_pure_json_and_routes_nudge_to_stderr() {
+    let report = WatchReport {
+        objective: "EPIC-1".to_string(),
+        total_children: 2,
+        done_children: 1,
+        drift: vec!["STORY-2".to_string()],
+        realigned: vec!["STORY-2".to_string()],
+        redrive: "off (ADR-26 default)".to_string(),
+        redriven: Vec::new(),
+        reclassified: Vec::new(),
+        redrive_plan: Vec::new(),
+    };
+    let line = "nudged advisor about 1 transiently parked spec(s)";
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let mut calls = 0;
+    emit_pass_output(
+        &report,
+        true,
+        true,
+        &mut || {
+            calls += 1;
+            Some(line.to_string())
+        },
+        &mut out,
+        &mut err,
+    )
+    .unwrap();
+    assert_eq!(calls, 1);
+    let out = String::from_utf8(out).unwrap();
+    let doc: serde_json::Value = serde_json::from_str(&out).expect("stdout is one JSON document");
+    assert_eq!(doc["objective"], "EPIC-1");
+    assert!(!out.contains(line), "{out}");
+    assert_eq!(String::from_utf8(err).unwrap().trim(), line);
+
+    // A dry run does not nudge at all.
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    emit_pass_output(
+        &report,
+        false,
+        true,
+        &mut || panic!("a dry run must not nudge"),
+        &mut out,
+        &mut err,
+    )
+    .unwrap();
+    serde_json::from_slice::<serde_json::Value>(&out).unwrap();
+    assert!(err.is_empty());
+}

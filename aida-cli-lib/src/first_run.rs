@@ -256,32 +256,14 @@ pub fn after_spec_completed(project_root: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use tempfile::TempDir;
 
     /// Serialize tests mutating the env knobs (cargo runs tests in-process,
     /// parallel).
-    fn with_env<R>(vars: &[(&str, Option<&str>)], f: impl FnOnce() -> R) -> R {
-        // BUG-697: shared process-global env lock (was a module-local mutex).
-        let _guard = crate::test_env::env_lock();
-        let prev: Vec<(String, Option<String>)> = vars
-            .iter()
-            .map(|(k, _)| (k.to_string(), std::env::var(k).ok()))
-            .collect();
-        for (k, v) in vars {
-            match v {
-                Some(v) => std::env::set_var(k, v),
-                None => std::env::remove_var(k),
-            }
-        }
-        let out = f();
-        for (k, v) in prev {
-            match v {
-                Some(v) => std::env::set_var(&k, v),
-                None => std::env::remove_var(&k),
-            }
-        }
-        out
+    fn with_env<R>(vars: &[(&'static str, Option<&str>)], f: impl FnOnce() -> R) -> R {
+        // BUG-697 / TASK-1532: route through EnvVarsGuard. trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarsGuard::apply(vars);
+        f()
     }
 
     fn write_config(dir: &Path, body: &str) {

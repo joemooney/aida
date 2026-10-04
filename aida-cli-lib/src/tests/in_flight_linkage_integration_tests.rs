@@ -605,9 +605,12 @@ fn linkage_branch_crossing_surfaces_all_matching_branches() {
 /// when the operator runs `aida review` from main.
 #[test]
 fn human_review_open_change_hint_is_branch_explicit() {
-    let hint = review_open_change_hint(crate::forge::ForgeKind::GitHub, "bug-816");
+    let hint = review_open_change_hint(crate::forge::ForgeKind::GitHub, "bug-816", "main");
     assert!(hint.contains("git push -u origin bug-816"), "{hint}");
-    assert!(hint.contains("gh pr create --head bug-816"), "{hint}");
+    assert!(
+        hint.contains("gh pr create --head bug-816 --base main"),
+        "{hint}"
+    );
     assert!(hint.contains("git log -1 --format=%s bug-816"), "{hint}");
     assert!(!hint.contains("--fill"), "{hint}");
 }

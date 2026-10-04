@@ -595,12 +595,17 @@ fn trace_sweep(
         .arg("--pretty=format:%H|%s|%b")
         .arg("--no-merges");
 
-    if let Some(b) = branch {
-        cmd.arg(b);
-    }
-
     if let Some(n) = limit {
         cmd.arg(format!("-{}", n));
+    }
+
+    // Options first, then `--end-of-options` so the branch is always read as
+    // a revision. trace:BUG-1622 | ai:claude
+    if let Some(b) = branch {
+        crate::git_arg_guard::reject_option_like("--branch", b)?;
+        cmd.arg(crate::git_arg_guard::END_OF_OPTIONS)
+            .arg(b)
+            .arg("--");
     }
 
     let output = cmd.output().context("Failed to run git log")?;

@@ -204,6 +204,7 @@ def setup_project(aida: Path, root: Path) -> None:
         cwd=root,
         capture_output=True,
         text=True,
+        stdin=subprocess.DEVNULL,
     )
     if init.returncode != 0:
         raise Drift(f"aida init failed:\nstdout={init.stdout}\nstderr={init.stderr}")

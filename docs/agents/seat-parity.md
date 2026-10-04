@@ -43,6 +43,51 @@ The audit was refreshed for TASK-1279 on 2026-09-19.
   conversational waiting; they do not require Codex to call Claude's
   `AskUserQuestion` or harness-only `Monitor` tools.
 
+## Skill discovery (non-Claude skill packs)
+
+AIDA scaffolds one portable skill pack at `.agents/skills/aida-*/SKILL.md` for
+Codex and Antigravity. The pack is derived from the Claude skill set minus a
+short, commented Claude-only list in `aida-core/templates/skill-inventory.toml`,
+so a new skill reaches every vendor by default. The layout rests on this
+matrix, run on 2026-09-25 against the local runtimes:
+
+| | Codex 0.157.0 | Antigravity (agy) 1.2.11 |
+|---|---|---|
+| Discovers `.agents/skills/` | Yes (listed as a skill root) | Yes |
+| Symlinked `SKILL.md` | **No**, silently skipped | Yes |
+| Regular-file copy of `SKILL.md` | Yes | Yes |
+| Hard-linked `SKILL.md` | Yes | Yes |
+| Symlinked skill directory holding a regular `SKILL.md` | Yes | Not tested |
+| Still discovers legacy `.codex/skills/` / `.antigravity/skills/` | `.codex/skills/` **yes**, a live root; `.antigravity/skills/` no | Neither; as far as 1.2.12 can be read, `.antigravity/skills/` never was a surface |
+| Reads `.claude/skills/` | **No** | No |
+| Same `aida-*` name in two packs it reads | Lists **both** entries under one name; no dedup, no precedence applied at listing time | Overrides by priority (workspace > declared > global > built-in); cannot arise between AIDA packs, since only `.agents/skills` is read |
+
+The legacy and `.claude/skills` rows were filled in on 2026-09-27 against Codex
+0.157.1 and agy 1.2.12 (TASK-1521). Method, quoted vendor documentation and the
+per-question evidence class are in
+`docs/research/2026-09-27-vendor-skill-discovery-paths.md`.
+
+Consequences:
+
+- `SKILL.md` under `.agents/skills/` must be a regular file. AIDA always writes
+  one (with its checksum header after the YAML frontmatter); a symlink there
+  is invisible to Codex.
+- New installs never create `.codex/skills/` or `.antigravity/skills/`. An
+  existing real `.codex/skills/` is still maintained from the same derived list,
+  which the 2026-09-27 rows show is the wrong resting state: Codex reads that
+  pack *and* `.agents/skills/`, so a maintained legacy pack lists every AIDA
+  skill twice under one name. Retiring it is TASK-1519.
+- AIDA manages only `aida-*` entries under `.agents/skills/`. Other tools'
+  skills in that directory are never read, rewritten or pruned, and
+  `aida scaffold refresh` does not adopt a `.agents/skills/` that holds no
+  AIDA skill and no AIDA manifest.
+- The pack is expected only when Codex or Antigravity is in the project's
+  saved agent selection; a Claude-only project is not told it is missing.
+
+An earlier note claimed `.codex/skills/` was the Codex discovery surface. It is
+*a* Codex surface — 0.157.1 still reads it — but not the canonical one, and not
+one Antigravity reads; the matrix above supersedes the claim.
+
 ## Evidence captured on 2026-09-19
 
 SCOPE OF THIS EVIDENCE, stated so the matrix is not read as more proven than it is:

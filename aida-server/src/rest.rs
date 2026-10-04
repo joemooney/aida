@@ -204,6 +204,14 @@ impl ApiError {
     }
 }
 
+/// Map a server-side store save failure to a REST error: 409 when a
+/// concurrent edit conflicts (the in-memory store was reloaded; retry), 500
+/// otherwise.
+// trace:BUG-1612 | ai:claude
+fn save_api_error(e: crate::service::StoreSaveError) -> (StatusCode, Json<ApiError>) {
+    ApiError::new(e.http_status(), e.message().to_string())
+}
+
 #[derive(Serialize)]
 struct PingResponse {
     status: String,
@@ -729,9 +737,8 @@ async fn auth_register(
 
     let mut store = backend.store.write().await;
     store.add_user(user.clone());
-    if let Err(e) = backend.backend.save(&store) {
-        tracing::error!("Failed to save after register: {e}");
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    backend.save_store(&mut store).map_err(save_api_error)?;
 
     let role = auth.role_for_handle(&user.handle);
     let session_token = auth
@@ -791,9 +798,8 @@ async fn auth_set_pin(
     }
 
     user.set_pin(&body.new_pin);
-    if let Err(e) = backend.backend.save(&store) {
-        tracing::error!("Failed to save after PIN change: {e}");
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    backend.save_store(&mut store).map_err(save_api_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -843,9 +849,8 @@ async fn auth_register_legacy(
 
     let mut store = state.store.write().await;
     store.add_user(user.clone());
-    if let Err(e) = state.backend.save(&store) {
-        tracing::error!("Failed to save after register: {e}");
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
 
     let role = auth.role_for_handle(&user.handle);
     let session_token = auth
@@ -902,9 +907,8 @@ async fn auth_set_pin_legacy(
     }
 
     user.set_pin(&body.new_pin);
-    if let Err(e) = state.backend.save(&store) {
-        tracing::error!("Failed to save after PIN change: {e}");
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1097,12 +1101,8 @@ async fn set_assignee_impl(
     let updated = store.requirements[idx].clone();
 
     if changed {
-        if let Err(e) = state.backend.save(&store) {
-            return Err(ApiError::new(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                e.to_string(),
-            ));
-        }
+        // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+        state.save_store(&mut store).map_err(save_api_error)?;
     }
     drop(store);
     if changed {
@@ -1714,12 +1714,8 @@ async fn create_requirement(
     let proto_req = requirement_to_proto(added_req);
 
     drop(store);
-    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    backend.save_current().await.map_err(save_api_error)?;
 
     Ok((
         StatusCode::CREATED,
@@ -1755,7 +1751,9 @@ async fn update_requirement(
         req.description = description;
     }
     if let Some(status) = body.status {
-        req.status = parse_status(&status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(req, parse_status(&status), REST_STATUS_AUTHOR);
     }
     if let Some(priority) = body.priority {
         req.priority = parse_priority(&priority);
@@ -1798,12 +1796,8 @@ async fn update_requirement(
     let proto_req = requirement_to_proto(req);
 
     drop(store);
-    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    backend.save_current().await.map_err(save_api_error)?;
 
     Ok(Json(proto::UpdateRequirementResponse {
         requirement: Some(proto_req),
@@ -1828,12 +1822,8 @@ async fn delete_requirement(
     store.requirements.remove(idx);
 
     drop(store);
-    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    backend.save_current().await.map_err(save_api_error)?;
 
     Ok(Json(proto::DeleteRequirementResponse {
         success: true,
@@ -1857,21 +1847,18 @@ async fn add_comment(
         )
     })?;
 
+    // trace:BUG-1614 | ai:claude — Comment::new takes (author, content); do not swap.
     let comment = aida_core::Comment::new(
-        body.content,
         body.author.unwrap_or_else(|| "anonymous".to_string()),
+        body.content,
     );
 
     let proto_comment = comment_to_proto(&comment);
     store.requirements[idx].comments.push(comment);
 
     drop(store);
-    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    backend.save_current().await.map_err(save_api_error)?;
 
     Ok((
         StatusCode::CREATED,
@@ -2144,12 +2131,8 @@ async fn create_requirement_legacy(
     let proto_req = requirement_to_proto(added_req);
 
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    state.save_current().await.map_err(save_api_error)?;
 
     Ok((
         StatusCode::CREATED,
@@ -2183,7 +2166,9 @@ async fn update_requirement_legacy(
         req.description = description;
     }
     if let Some(status) = body.status {
-        req.status = parse_status(&status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(req, parse_status(&status), REST_STATUS_AUTHOR);
     }
     if let Some(priority) = body.priority {
         req.priority = parse_priority(&priority);
@@ -2226,12 +2211,8 @@ async fn update_requirement_legacy(
     let proto_req = requirement_to_proto(req);
 
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    state.save_current().await.map_err(save_api_error)?;
 
     Ok(Json(proto::UpdateRequirementResponse {
         requirement: Some(proto_req),
@@ -2254,12 +2235,8 @@ async fn delete_requirement_legacy(
     store.requirements.remove(idx);
 
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    state.save_current().await.map_err(save_api_error)?;
 
     Ok(Json(proto::DeleteRequirementResponse {
         success: true,
@@ -2281,21 +2258,18 @@ async fn add_comment_legacy(
         )
     })?;
 
+    // trace:BUG-1614 | ai:claude — Comment::new takes (author, content); do not swap.
     let comment = aida_core::Comment::new(
-        body.content,
         body.author.unwrap_or_else(|| "anonymous".to_string()),
+        body.content,
     );
 
     let proto_comment = comment_to_proto(&comment);
     store.requirements[idx].comments.push(comment);
 
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    state.save_current().await.map_err(save_api_error)?;
 
     Ok((
         StatusCode::CREATED,
@@ -2411,6 +2385,12 @@ fn find_requirement_index(store: &aida_core::RequirementsStore, id: &str) -> Opt
         .position(|r| r.spec_id.as_ref().map(|s| s == id).unwrap_or(false))
 }
 
+/// BUG-1637: history author for a status change made through the REST API,
+/// which carries no caller identity. It is not an automated author, so the
+/// BUG-1625 merge guard treats the change as intentional.
+// trace:BUG-1637 | ai:claude
+const REST_STATUS_AUTHOR: &str = "aida-rest";
+
 fn parse_status(s: &str) -> aida_core::RequirementStatus {
     match s.to_lowercase().as_str() {
         "draft" => aida_core::RequirementStatus::Draft,
@@ -2519,7 +2499,13 @@ async fn update_requirement_v2_legacy(
     })?;
 
     if let Some(status) = &body.status {
-        store.requirements[idx].status = parse_status(status);
+        // BUG-1637: through the one shared status-history helper.
+        // trace:BUG-1637 | ai:claude
+        aida_core::conflict::set_status_recorded(
+            &mut store.requirements[idx],
+            parse_status(status),
+            REST_STATUS_AUTHOR,
+        );
     }
     if let Some(priority) = &body.priority {
         store.requirements[idx].priority = parse_priority(priority);
@@ -2553,12 +2539,8 @@ async fn update_requirement_v2_legacy(
     let updated = store.requirements[idx].clone();
 
     // Persist changes
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     drop(store);
     state.mark_saved().await;
 
@@ -2630,12 +2612,8 @@ async fn create_requirement_v2_legacy(
         .clone();
 
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to save: {}", e),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    state.save_current().await.map_err(save_api_error)?;
     state.mark_saved().await;
 
     Ok((StatusCode::CREATED, Json(added)))
@@ -2792,12 +2770,8 @@ async fn assign_sprint_legacy(
         })?
         .clone();
 
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     drop(store);
     state.mark_saved().await;
 
@@ -2832,12 +2806,8 @@ async fn remove_sprint_legacy(
         })?
         .clone();
 
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     drop(store);
     state.mark_saved().await;
 
@@ -2924,12 +2894,8 @@ async fn set_parent_legacy(
         })?
         .clone();
 
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     drop(store);
     state.mark_saved().await;
 
@@ -3401,12 +3367,8 @@ async fn update_settings_metadata(
         title: store.title.clone(),
         description: store.description.clone(),
     };
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(resp))
 }
 
@@ -3438,12 +3400,8 @@ async fn create_relationship_def(
                 "Failed to retrieve created definition",
             )
         })?;
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok((StatusCode::CREATED, Json(created)))
 }
 
@@ -3467,12 +3425,8 @@ async fn update_relationship_def(
                 "Definition not found after update",
             )
         })?;
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(updated))
 }
 
@@ -3484,12 +3438,8 @@ async fn delete_relationship_def(
     store
         .remove_relationship_definition(&name)
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
 
@@ -3529,12 +3479,8 @@ async fn create_type_def(
         ..body
     };
     store.type_definitions.push(def.clone());
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok((StatusCode::CREATED, Json(def)))
 }
 
@@ -3572,12 +3518,8 @@ async fn update_type_def(
         };
     }
     let updated = def.clone();
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(updated))
 }
 
@@ -3605,12 +3547,8 @@ async fn delete_type_def(
     store
         .type_definitions
         .retain(|d| !d.name.eq_ignore_ascii_case(&name));
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
 
@@ -3650,12 +3588,8 @@ async fn create_reaction_def(
         ..body
     };
     store.reaction_definitions.push(def.clone());
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok((StatusCode::CREATED, Json(def)))
 }
 
@@ -3690,12 +3624,8 @@ async fn update_reaction_def(
         };
     }
     let updated = def.clone();
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(updated))
 }
 
@@ -3723,12 +3653,8 @@ async fn delete_reaction_def(
     store
         .reaction_definitions
         .retain(|d| !d.name.eq_ignore_ascii_case(&name));
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
 
@@ -3755,12 +3681,8 @@ async fn update_id_config(
     let mut store = state.store.write().await;
     store.id_config = body;
     let updated = store.id_config.clone();
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(updated))
 }
 
@@ -3819,12 +3741,8 @@ async fn update_prefixes(
         allowed_prefixes: store.allowed_prefixes.clone(),
         restrict_prefixes: store.restrict_prefixes,
     };
-    if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            e.to_string(),
-        ));
-    }
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload; never log-and-succeed.
+    state.save_store(&mut store).map_err(save_api_error)?;
     Ok(Json(resp))
 }
 
@@ -4772,5 +4690,171 @@ mod summary_endpoint_tests {
             summary_bytes * 2 < full_bytes,
             "summary ({summary_bytes}) should be far smaller than full ({full_bytes})"
         );
+    }
+}
+
+/// BUG-1612: every server save goes through `ServerState::save_store`. A save
+/// that conflicts with a concurrent on-disk edit returns 409, reloads the
+/// in-memory store, and the next save succeeds; auth paths surface the error
+/// instead of logging and succeeding.
+// trace:BUG-1612 | ai:claude
+#[cfg(test)]
+mod bug_1612_save_conflict_tests {
+    use super::*;
+    use crate::web_auth::{WebAuthMode, WebAuthState};
+    use aida_core::db::{create_backend, DatabaseBackend};
+    use aida_core::RequirementsStore;
+
+    /// A git-backed server over a store holding TASK-1 and user `alice`.
+    /// Returns the state, a raw writer on the same store, and TASK-1.
+    fn git_server(
+        root: &std::path::Path,
+    ) -> (
+        Arc<ServerState>,
+        aida_core::GitBackend,
+        aida_core::Requirement,
+    ) {
+        let store_dir = root.join("store");
+        let raw = aida_core::GitBackend::new(&store_dir).unwrap();
+        let mut seed = RequirementsStore::new();
+        seed.add_user(models::User::new(
+            "Alice".into(),
+            "alice@example.com".into(),
+            "alice".into(),
+        ));
+        raw.save(&seed).unwrap();
+        let mut task = aida_core::Requirement::new("Task one".into(), "d".into());
+        task.spec_id = Some("TASK-1".into());
+        let task = raw.add_requirement(task).unwrap();
+        let backend = create_backend(&store_dir, None).unwrap();
+        (
+            Arc::new(ServerState::new(backend).unwrap()),
+            aida_core::GitBackend::new(&store_dir).unwrap(),
+            task,
+        )
+    }
+
+    fn comment(text: &str) -> Json<AddCommentRequest> {
+        Json(AddCommentRequest {
+            content: text.into(),
+            author: Some("tester".into()),
+            parent_comment_id: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn rest_save_conflict_is_409_then_next_save_succeeds() {
+        let dir = tempfile::tempdir().unwrap();
+        let (state, raw, task) = git_server(dir.path());
+
+        // First REST mutation lands.
+        let _ = add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("one"))
+            .await
+            .unwrap_or_else(|_| panic!("first comment failed"));
+
+        // Another writer edits TASK-1 on disk; the server's copy is now stale.
+        raw.update_spec_atomically(&task, |r| r.title = "edited elsewhere".into())
+            .unwrap();
+
+        // The next REST mutation of TASK-1 conflicts: 409, nothing written.
+        let Err((code, _)) =
+            add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("two")).await
+        else {
+            panic!("a conflicting save must fail");
+        };
+        assert_eq!(code, StatusCode::CONFLICT);
+
+        // The in-memory store was reloaded, so the retry succeeds and keeps
+        // the other writer's edit.
+        let _ = add_comment_legacy(State(state.clone()), Path("TASK-1".into()), comment("two"))
+            .await
+            .unwrap_or_else(|_| panic!("retry after reload failed"));
+        let on_disk = raw.get_requirement_by_spec_id("TASK-1").unwrap().unwrap();
+        assert_eq!(on_disk.title, "edited elsewhere");
+        assert_eq!(on_disk.comments.len(), 2, "both comments persisted");
+    }
+
+    #[tokio::test]
+    async fn pin_change_surfaces_a_save_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let (state, raw, task) = git_server(dir.path());
+        let auth = WebAuthState::for_test(WebAuthMode::Pin);
+        let alice = state.store.read().await.users[0].clone();
+        let session_user = AuthenticatedUser {
+            user_id: alice.id.to_string(),
+            handle: "alice".into(),
+            name: "Alice".into(),
+            project: String::new(),
+            role: crate::web_auth::UserRole::Editor,
+        };
+        let pin_request = || {
+            Json(SetPinRequest {
+                current_pin: String::new(),
+                new_pin: "4321".into(),
+            })
+        };
+
+        // An in-flight server edit of TASK-1 collides with a concurrent edit.
+        state.store.write().await.requirements[0].title = "server edit".into();
+        raw.update_spec_atomically(&task, |r| r.title = "edited elsewhere".into())
+            .unwrap();
+
+        let result = auth_set_pin_legacy(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Extension(session_user.clone()),
+            pin_request(),
+        )
+        .await;
+        let Err((code, _)) = result else {
+            panic!("the PIN change must surface the failed save, not succeed");
+        };
+        assert_eq!(code, StatusCode::CONFLICT);
+
+        // After the reload, the PIN change goes through and persists.
+        let ok = auth_set_pin_legacy(
+            State(state.clone()),
+            Extension(auth),
+            Extension(session_user),
+            pin_request(),
+        )
+        .await;
+        assert!(matches!(ok, Ok(StatusCode::NO_CONTENT)));
+        let persisted = raw.load().unwrap();
+        assert!(persisted.users[0].verify_pin("4321"));
+        assert_eq!(persisted.requirements[0].title, "edited elsewhere");
+    }
+
+    // trace:BUG-1614 | ai:claude — add_comment_legacy previously called
+    // Comment::new(body.content, body.author), but Comment::new takes
+    // (author, content); content and author were stored swapped.
+    #[tokio::test]
+    async fn rest_add_comment_stores_content_and_author_without_swap() {
+        let dir = tempfile::tempdir().unwrap();
+        let (state, raw, _task) = git_server(dir.path());
+
+        let request = Json(AddCommentRequest {
+            content: "the requirement needs a design review".into(),
+            author: Some("bob".into()),
+            parent_comment_id: None,
+        });
+
+        let (status, Json(response)) =
+            add_comment_legacy(State(state.clone()), Path("TASK-1".into()), request)
+                .await
+                .unwrap_or_else(|_| panic!("add_comment_legacy failed"));
+        assert_eq!(status, StatusCode::CREATED);
+
+        let returned = response.comment.expect("response carries the comment");
+        assert_eq!(returned.content, "the requirement needs a design review");
+        assert_eq!(returned.author, "bob");
+
+        let on_disk = raw.get_requirement_by_spec_id("TASK-1").unwrap().unwrap();
+        assert_eq!(on_disk.comments.len(), 1);
+        assert_eq!(
+            on_disk.comments[0].content,
+            "the requirement needs a design review"
+        );
+        assert_eq!(on_disk.comments[0].author, "bob");
     }
 }

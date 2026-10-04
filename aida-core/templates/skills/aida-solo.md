@@ -90,7 +90,10 @@ subagent** — each takes ONE spec end-to-end to a PR:
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — read it
 > (`aida show <SPEC> -c`), implement to acceptance, add `// trace:<SPEC>` (plain
 > `//`, never `///`), `cargo build` + `cargo test` + `cargo fmt --all -- --check`
-> (check the exit code), commit `[AI:claude] type(scope): … (<SPEC>)` + the
+> (check the exit code), then the project's CI-gate target if it has one
+> (`make -n check-ci-fast >/dev/null 2>&1 && make check-ci-fast` — the gates a
+> documented check set omits, trace:TASK-1555), commit
+> `[AI:claude] type(scope): … (<SPEC>)` + the
 > co-author trailer, push, open a PR, `aida queue done <SPEC>`, then reply ONLY
 > the PR URL or `BLOCKED: <reason>`.
 

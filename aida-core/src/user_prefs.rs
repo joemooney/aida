@@ -37,7 +37,7 @@ impl UserPreferences {
     /// `~/.aida/preferences.toml`. Returns None if the home dir is unknown
     /// (e.g., HOME unset on a CI runner).
     pub fn path() -> Option<PathBuf> {
-        dirs::home_dir().map(|h| h.join(".aida").join("preferences.toml"))
+        crate::home::home_dir().map(|h| h.join(".aida").join("preferences.toml"))
     }
 
     /// Load from `~/.aida/preferences.toml`, returning defaults when the

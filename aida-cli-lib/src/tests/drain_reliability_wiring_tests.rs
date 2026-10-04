@@ -457,7 +457,7 @@ fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
     git(&["branch", "task-4", &head]);
     git(&["update-ref", "refs/remotes/origin/task-4", &head]);
     let fake_gh = root.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_gh,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -491,18 +491,12 @@ fi
 exit 1
 "#
         .replace("__HEAD__", &head),
-    )
-    .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&fake_gh, perms).unwrap();
-    }
+    );
 
-    let prev = std::env::var("AIDA_TEST_GH_BINARY").ok();
-    std::env::set_var("AIDA_TEST_GH_BINARY", &fake_gh);
+    // The guard holds the shared env lock for the rest of the test (every
+    // probe below spawns the fake gh) and restores the prior value on drop.
+    // trace:BUG-1666 | ai:claude
+    let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &fake_gh);
     let (facts, branch, pr) = probe_resume_facts(root, &storage, "TASK-4", None);
 
     assert_eq!(pr, Some(3));
@@ -558,10 +552,6 @@ exit 1
         !facts.reviewed,
         "same-head opposing spec evidence must resume at reviewer"
     );
-    match prev {
-        Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
-        None => std::env::remove_var("AIDA_TEST_GH_BINARY"),
-    }
 }
 
 #[test]

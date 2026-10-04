@@ -44,7 +44,7 @@ fn home_dir() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
         return Some(PathBuf::from(home).join("home"));
     }
-    dirs::home_dir()
+    crate::home_dir()
 }
 
 /// Load a `config.toml` into an editable document, or a fresh empty one if the

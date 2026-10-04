@@ -205,6 +205,13 @@ pub fn resolve_conflict(
 /// genuine conflict resolved by the deterministic LWW winner (BUG-578), never
 /// order-dependently. So different-field concurrent edits both survive.
 ///
+/// **Terminal status never regresses to an automated write (BUG-1625).** After
+/// the field merge, if one side is terminal (Completed/Rejected/Superseded) and
+/// the merged status is the other side's non-terminal value produced ONLY by
+/// automated authors (auto-bump / reconcile), the terminal status is kept even
+/// when the automated write is newer. A human reopen is unaffected. See
+/// `automated_regression_of_terminal`.
+///
 /// `base` anchors the field-level 3-way diff (which side changed each field) and
 /// the id-keyed array unions.
 // trace:BUG-586 | ai:claude
@@ -259,6 +266,14 @@ pub fn merge_spec_three_way(
         ours_is_winner,
     )
     .clone();
+    // BUG-1625: an automated status write (auto-bump / reconcile) computed
+    // against a stale snapshot must never regress a terminal status the other
+    // side already reached — see `automated_regression_of_terminal`.
+    // trace:BUG-1625 | ai:claude
+    if let Some(terminal_side) = automated_regression_of_terminal(base, ours, theirs, &merged) {
+        merged.status = terminal_side.status.clone();
+        merged.custom_status = terminal_side.custom_status.clone();
+    }
     merged.priority = merge_scalar(
         &base.priority,
         &ours.priority,
@@ -295,26 +310,24 @@ pub fn merge_spec_three_way(
         &theirs.archived,
         ours_is_winner,
     );
-    merged.archived_at = merge_scalar(
+    merged.archived_at = *merge_scalar(
         &base.archived_at,
         &ours.archived_at,
         &theirs.archived_at,
         ours_is_winner,
-    )
-    .clone();
+    );
     merged.deferred = *merge_scalar(
         &base.deferred,
         &ours.deferred,
         &theirs.deferred,
         ours_is_winner,
     );
-    merged.deferred_at = merge_scalar(
+    merged.deferred_at = *merge_scalar(
         &base.deferred_at,
         &ours.deferred_at,
         &theirs.deferred_at,
         ours_is_winner,
-    )
-    .clone();
+    );
     merged.deferred_until = merge_scalar(
         &base.deferred_until,
         &ours.deferred_until,
@@ -343,6 +356,15 @@ pub fn merge_spec_three_way(
     // by the object-level winner snapshot — same rule as execution_mode.
     merged.origin =
         merge_scalar(&base.origin, &ours.origin, &theirs.origin, ours_is_winner).clone();
+    // CR-8: filing provenance is write-once — the first stamp ever recorded
+    // wins (base, then the deterministic winner, then the other side), so a
+    // divergent sync can never rewrite or drop it. trace:CR-8 | ai:claude
+    let loser: &Requirement = if ours_is_winner { theirs } else { ours };
+    merged.filed_at = base
+        .filed_at
+        .clone()
+        .or_else(|| winner.filed_at.clone())
+        .or_else(|| loser.filed_at.clone());
 
     // History: union by entry id, deterministic order. base contributes
     // nothing new (append-only ⇒ ours+theirs ⊇ base) but we fold it in too so
@@ -390,6 +412,197 @@ pub fn merge_spec_three_way(
         merge_dependencies_three_way(&base.dependencies, &ours.dependencies, &theirs.dependencies);
 
     merged
+}
+
+/// History authors that sign automated (machine-derived) status transitions:
+/// the merge-driven Done→Completed / Draft→Done auto-bump and the
+/// `reconcile-status` sweep. A status change authored by anyone else — a
+/// human `aida edit`, an agent session acting explicitly — is an intentional
+/// transition.
+///
+/// BUG-1632 adds the automated writers that used to change status without any
+/// history, so the guard could not see them: the orchestrator shelve, the
+/// `queue rework` repeated-findings loop guard, the MCP `post_punt` tool and the
+/// re-drive supervisor's requeue. Each now records its status transition under
+/// its own name below.
+// trace:BUG-1625 trace:BUG-1632 | ai:claude
+///
+/// BUG-1637 adds the remaining automated writers (doctor, the PR-open Done
+/// assertion, the lease-take and session-start In Progress bumps, the zen
+/// auto-approve and the orchestrator's phase-1 bump and restore), so every
+/// automated status write now carries an automated author.
+// trace:BUG-1625 trace:BUG-1632 trace:BUG-1637 | ai:claude
+pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &[
+    AUTO_BUMP_AUTHOR,
+    RECONCILE_AUTHOR,
+    ORCHESTRATOR_SHELVE_AUTHOR,
+    LOOP_GUARD_AUTHOR,
+    MCP_PUNT_AUTHOR,
+    SUPERVISOR_REQUEUE_AUTHOR,
+    DOCTOR_AUTHOR,
+    PR_OPEN_AUTHOR,
+    LEASE_TAKE_AUTHOR,
+    SESSION_START_AUTHOR,
+    ZEN_APPROVE_AUTHOR,
+    ORCHESTRATOR_PHASE1_AUTHOR,
+];
+
+/// History author for the merge-driven auto-bump (Done→Completed,
+/// Draft→Done, and the stranded-review / closure-hold resolutions).
+// trace:BUG-1625 trace:BUG-1637 | ai:claude
+pub const AUTO_BUMP_AUTHOR: &str = "aida-auto-bump";
+/// History author for the `aida db reconcile-status` sweep.
+// trace:BUG-1625 trace:BUG-1637 | ai:claude
+pub const RECONCILE_AUTHOR: &str = "aida-reconcile";
+/// History author for `aida doctor --heal` status repairs (the
+/// lease/status drift heal).
+// trace:BUG-1637 | ai:claude
+pub const DOCTOR_AUTHOR: &str = "aida-doctor";
+/// History author for the In Progress→Done assertion made after a PR opens
+/// (`ensure_spec_done_after_pr`).
+// trace:BUG-1637 | ai:claude
+pub const PR_OPEN_AUTHOR: &str = "aida-pr-open";
+/// History author for the SubagentStart hook's Approved→In Progress bump at
+/// lease-take.
+// trace:BUG-1637 | ai:claude
+pub const LEASE_TAKE_AUTHOR: &str = "aida-lease-take";
+/// History author for `aida session start`'s Approved→In Progress bump.
+// trace:BUG-1637 | ai:claude
+pub const SESSION_START_AUTHOR: &str = "aida-session-start";
+/// History author for the zen autopilot's Draft→Approved auto-approve.
+// trace:BUG-1637 | ai:claude
+pub const ZEN_APPROVE_AUTHOR: &str = "aida-zen-approve";
+/// History author for the orchestrator's phase-1 pre-spawn In Progress bump
+/// and its restore after a lease failure.
+// trace:BUG-1637 | ai:claude
+pub const ORCHESTRATOR_PHASE1_AUTHOR: &str = "aida-orchestrator-phase1";
+
+/// True when `status` is terminal (Completed, Rejected, Superseded — the
+/// `lifecycle::State::is_terminal` set). Automated writers use it to refuse
+/// leaving a terminal status inside their atomic write.
+// trace:BUG-1637 | ai:claude
+pub fn is_terminal_status(status: &crate::models::RequirementStatus) -> bool {
+    crate::lifecycle::State::from_status(status).is_terminal()
+}
+
+/// History author for the orchestrator's shelve (a failed phase parks the spec
+/// in NeedsAttention).
+// trace:BUG-1632 | ai:claude
+pub const ORCHESTRATOR_SHELVE_AUTHOR: &str = "aida-orchestrator";
+/// History author for the `queue rework` loop guard that returns a spec to
+/// NeedsAttention when identical review findings recur.
+// trace:BUG-1632 | ai:claude
+pub const LOOP_GUARD_AUTHOR: &str = "aida-loop-guard";
+/// History author for the MCP `post_punt` tool's flip to NeedsAttention.
+// trace:BUG-1632 | ai:claude
+pub const MCP_PUNT_AUTHOR: &str = "aida-mcp-punt";
+/// History author for the re-drive supervisor's NeedsAttention -> Approved
+/// requeue.
+// trace:BUG-1632 | ai:claude
+pub const SUPERVISOR_REQUEUE_AUTHOR: &str = "aida-supervisor";
+
+/// Append a status history entry `from -> req.status` under `author` when the
+/// status actually changed. Automated writers pass one of the
+/// [`AUTOMATED_STATUS_AUTHORS`] so the BUG-1625 merge guard can see them;
+/// human writers pass the caller's identity, so a human edit after an
+/// automated one leaves mixed history and the guard lets the human win.
+///
+/// BUG-1637: this is the ONE place a status transition is written to history.
+/// Every status write path calls it (directly, or via [`set_status_recorded`]).
+// trace:BUG-1632 trace:BUG-1637 | ai:claude
+pub fn record_status_transition(
+    req: &mut Requirement,
+    author: &str,
+    from: &crate::models::RequirementStatus,
+) {
+    if &req.status == from {
+        return;
+    }
+    let change =
+        Requirement::field_change("status", format!("{:?}", from), format!("{:?}", req.status));
+    req.record_change(author.to_string(), vec![change]);
+}
+
+/// Set `req.status = to` and record the transition under `author` (see
+/// [`record_status_transition`]). Returns the prior status.
+// trace:BUG-1637 | ai:claude
+pub fn set_status_recorded(
+    req: &mut Requirement,
+    to: crate::models::RequirementStatus,
+    author: &str,
+) -> crate::models::RequirementStatus {
+    let from = std::mem::replace(&mut req.status, to);
+    record_status_transition(req, author, &from);
+    from
+}
+
+/// True when `author` is one of [`AUTOMATED_STATUS_AUTHORS`].
+// trace:BUG-1625 | ai:claude
+pub fn is_automated_status_author(author: &str) -> bool {
+    AUTOMATED_STATUS_AUTHORS.contains(&author)
+}
+
+/// BUG-1625 terminal-status guard for [`merge_spec_three_way`].
+///
+/// **Rule: a terminal status (Completed, Rejected, Superseded — the
+/// `lifecycle::State::is_terminal` set) is never replaced by a non-terminal
+/// one that came from an automated source.** Returns the terminal side whose
+/// status must be kept, or `None` when the ordinary field merge stands.
+///
+/// It fires only when ALL of these hold:
+/// - the field merge picked a non-terminal status,
+/// - exactly one side (`T`) is terminal and the other (`N`) carries the
+///   merged non-terminal status,
+/// - `N` added at least one status history entry that `base` and `T` lack,
+///   and EVERY such entry is by an [`AUTOMATED_STATUS_AUTHORS`] author.
+///
+/// That is the incident shape: a clone whose store was stale auto-bumped a
+/// spec Draft→Done while the canonical store already had it Completed; the
+/// Done write was newer, so plain LWW regressed Completed→Done.
+///
+/// An explicit reopen (the TASK-47 `aida edit --status … --force` path) is
+/// authored by a person, so any non-automated status entry on `N` disables the
+/// guard and the reopen merges exactly as before. A side with no status history
+/// evidence also falls back to the ordinary merge.
+// trace:BUG-1625 | ai:claude
+fn automated_regression_of_terminal<'a>(
+    base: &Requirement,
+    ours: &'a Requirement,
+    theirs: &'a Requirement,
+    merged: &Requirement,
+) -> Option<&'a Requirement> {
+    let is_terminal =
+        |r: &Requirement| crate::lifecycle::State::from_status(&r.status).is_terminal();
+    if is_terminal(merged) {
+        return None;
+    }
+    let (terminal, non_terminal) = match (is_terminal(ours), is_terminal(theirs)) {
+        (true, false) => (ours, theirs),
+        (false, true) => (theirs, ours),
+        _ => return None,
+    };
+    if non_terminal.status != merged.status {
+        return None;
+    }
+    let known: std::collections::HashSet<Uuid> = base
+        .history
+        .iter()
+        .chain(terminal.history.iter())
+        .map(|h| h.id)
+        .collect();
+    let mut new_status_authors = non_terminal
+        .history
+        .iter()
+        .filter(|h| !known.contains(&h.id))
+        .filter(|h| h.changes.iter().any(|c| c.field_name == "status"))
+        .map(|h| h.author.as_str())
+        .peekable();
+    new_status_authors.peek()?;
+    if new_status_authors.all(is_automated_status_author) {
+        Some(terminal)
+    } else {
+        None
+    }
 }
 
 /// Three-way merge of a single scalar field against the merge base (BUG-586).
@@ -2095,5 +2308,297 @@ mod tests {
         let theirs = vec![qe(b, 1000, 5), qe(a, 2000, 0)];
         let merged = merge_queue_three_way(&[], &ours, &theirs);
         assert_eq!(merged, vec![qe(b, 1000, 5), qe(a, 2000, 0)]);
+    }
+
+    // trace:CR-8 | ai:claude — a divergent sync never rewrites or drops the
+    // write-once filing provenance.
+    #[test]
+    fn cr8_three_way_merge_keeps_first_filing_provenance() {
+        let stamp = |sha: &str| {
+            Some(crate::models::FilingProvenance {
+                code_sha: Some(sha.to_string()),
+                ..Default::default()
+            })
+        };
+        let mut base = make_req("t", "draft");
+        base.filed_at = stamp("aaa");
+        let mut ours = base.clone();
+        ours.filed_at = None;
+        ours.modified_at = base.modified_at + chrono::Duration::seconds(5);
+        let mut theirs = base.clone();
+        theirs.filed_at = stamp("bbb");
+        let merged = merge_spec_three_way(&base, &ours, &theirs);
+        assert_eq!(merged.filed_at, stamp("aaa"));
+    }
+
+    // ----- BUG-1625: terminal status never regresses to an automated write -----
+
+    fn status_hist(author: &str, ts: &str, old: &str, new: &str) -> HistoryEntry {
+        HistoryEntry {
+            id: Uuid::now_v7(),
+            author: author.to_string(),
+            timestamp: DateTime::parse_from_rfc3339(ts)
+                .unwrap()
+                .with_timezone(&Utc),
+            changes: vec![FieldChange {
+                field_name: "status".to_string(),
+                old_value: old.to_string(),
+                new_value: new.to_string(),
+            }],
+        }
+    }
+
+    fn at(ts: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(ts)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    /// The incident shape: base Draft; the remote (canonical) side reached
+    /// Completed; a stale local clone auto-bumped Draft→Done LATER. Plain LWW
+    /// picked Done. The guard keeps Completed, in both merge orientations.
+    // trace:BUG-1625 | ai:claude
+    #[test]
+    fn bug1625_automated_write_never_regresses_terminal_status() {
+        let base = make_req("Spec", "Draft");
+
+        let mut remote = base.clone();
+        remote.set_status_from_str("Completed");
+        remote.history.push(status_hist(
+            "aida-auto-bump",
+            "2026-09-25T01:08:27Z",
+            "Draft",
+            "Completed",
+        ));
+        remote.modified_at = at("2026-09-25T01:08:27Z");
+
+        let mut stale_local = base.clone();
+        stale_local.set_status_from_str("Done");
+        stale_local.history.push(status_hist(
+            "aida-auto-bump",
+            "2026-09-25T16:46:29Z",
+            "Draft",
+            "Done",
+        ));
+        stale_local.modified_at = at("2026-09-25T16:46:29Z");
+
+        for (ours, theirs) in [(&remote, &stale_local), (&stale_local, &remote)] {
+            let merged = merge_spec_three_way(&base, ours, theirs);
+            assert_eq!(merged.status, crate::models::RequirementStatus::Completed);
+            // Both histories still survive (audit trail intact).
+            assert_eq!(merged.history.len(), 2);
+        }
+
+        // Same rule for a reconcile-authored regression and for Rejected.
+        let mut rejected = base.clone();
+        rejected.set_status_from_str("Rejected");
+        rejected.history.push(status_hist(
+            "joe",
+            "2026-09-25T01:00:00Z",
+            "Draft",
+            "Rejected",
+        ));
+        rejected.modified_at = at("2026-09-25T01:00:00Z");
+        let mut reconciled = base.clone();
+        reconciled.set_status_from_str("In Progress");
+        reconciled.history.push(status_hist(
+            "aida-reconcile",
+            "2026-09-25T02:00:00Z",
+            "Draft",
+            "In Progress",
+        ));
+        reconciled.modified_at = at("2026-09-25T02:00:00Z");
+        let merged = merge_spec_three_way(&base, &reconciled, &rejected);
+        assert_eq!(merged.status, crate::models::RequirementStatus::Rejected);
+    }
+
+    /// Explicit human reopen (TASK-47 `aida edit --status … --force`) must still
+    /// win: a person-authored status entry on the non-terminal side disables
+    /// the guard, even if an automated bump followed it on that side.
+    // trace:BUG-1625 | ai:claude
+    #[test]
+    fn bug1625_human_reopen_of_terminal_still_merges() {
+        let mut base = make_req("Spec", "Completed");
+        base.history.push(status_hist(
+            "aida-auto-bump",
+            "2026-09-20T00:00:00Z",
+            "Done",
+            "Completed",
+        ));
+        base.modified_at = at("2026-09-20T00:00:00Z");
+
+        // Remote side: an unrelated edit (title) — status untouched, Completed.
+        let mut remote = base.clone();
+        remote.title = "Spec (renamed)".to_string();
+        remote.modified_at = at("2026-09-21T00:00:00Z");
+
+        // Local side: a person reopened it.
+        let mut reopened = base.clone();
+        reopened.set_status_from_str("In Progress");
+        reopened.history.push(status_hist(
+            "joe",
+            "2026-09-22T00:00:00Z",
+            "Completed",
+            "In Progress",
+        ));
+        reopened.modified_at = at("2026-09-22T00:00:00Z");
+
+        for (ours, theirs) in [(&reopened, &remote), (&remote, &reopened)] {
+            let merged = merge_spec_three_way(&base, ours, theirs);
+            assert_eq!(merged.status, crate::models::RequirementStatus::InProgress);
+            assert_eq!(merged.title, "Spec (renamed)");
+        }
+
+        // A reopen followed by an automated bump on the same side is still a
+        // human-driven transition: the guard stays off.
+        let mut reopened_then_bumped = reopened.clone();
+        reopened_then_bumped.set_status_from_str("Done");
+        reopened_then_bumped.history.push(status_hist(
+            "aida-auto-bump",
+            "2026-09-23T00:00:00Z",
+            "In Progress",
+            "Done",
+        ));
+        reopened_then_bumped.modified_at = at("2026-09-23T00:00:00Z");
+        let merged = merge_spec_three_way(&base, &reopened_then_bumped, &remote);
+        assert_eq!(merged.status, crate::models::RequirementStatus::Done);
+    }
+
+    /// Without history evidence (or with two non-terminal sides) the ordinary
+    /// merge is unchanged — the guard is narrow.
+    // trace:BUG-1625 | ai:claude
+    #[test]
+    fn bug1625_guard_is_inert_without_automated_evidence() {
+        let base = make_req("Spec", "Draft");
+        let mut completed = base.clone();
+        completed.set_status_from_str("Completed");
+        completed.modified_at = at("2026-09-25T01:00:00Z");
+        let mut done = base.clone();
+        done.set_status_from_str("Done");
+        done.modified_at = at("2026-09-25T02:00:00Z");
+        // No status history on the Done side → plain LWW (Done is newer).
+        let merged = merge_spec_three_way(&base, &done, &completed);
+        assert_eq!(merged.status, crate::models::RequirementStatus::Done);
+        assert!(is_automated_status_author("aida-auto-bump"));
+        assert!(is_automated_status_author("aida-reconcile"));
+        assert!(!is_automated_status_author("joe"));
+    }
+
+    /// BUG-1632: the automated writers that used to leave no status history
+    /// now record one under a name the guard counts as automated, and the
+    /// helper records nothing when the status did not change.
+    // trace:BUG-1632 | ai:claude
+    #[test]
+    fn bug1632_automated_writer_authors_are_recognized() {
+        for author in [
+            ORCHESTRATOR_SHELVE_AUTHOR,
+            LOOP_GUARD_AUTHOR,
+            MCP_PUNT_AUTHOR,
+            SUPERVISOR_REQUEUE_AUTHOR,
+        ] {
+            assert!(is_automated_status_author(author), "{author}");
+        }
+
+        let base = make_req("Spec", "In Progress");
+        let mut unchanged = base.clone();
+        record_status_transition(&mut unchanged, MCP_PUNT_AUTHOR, &base.status);
+        assert!(unchanged.history.is_empty());
+
+        let mut completed = base.clone();
+        completed.set_status_from_str("Completed");
+        completed.modified_at = at("2026-09-25T01:00:00Z");
+        let mut punted = base.clone();
+        punted.set_status_from_str("Needs Attention");
+        record_status_transition(&mut punted, MCP_PUNT_AUTHOR, &base.status);
+        punted.modified_at = at("2026-09-25T02:00:00Z");
+        assert_eq!(punted.history.len(), 1);
+        for (ours, theirs) in [(&punted, &completed), (&completed, &punted)] {
+            let merged = merge_spec_three_way(&base, ours, theirs);
+            assert_eq!(merged.status, crate::models::RequirementStatus::Completed);
+        }
+    }
+
+    /// BUG-1637: every automated writer's author is recognized, and
+    /// `set_status_recorded` sets the status and records the transition in one
+    /// step (nothing when the status did not change).
+    // trace:BUG-1637 | ai:claude
+    #[test]
+    fn bug1637_automated_authors_and_set_status_recorded() {
+        for author in [
+            AUTO_BUMP_AUTHOR,
+            RECONCILE_AUTHOR,
+            DOCTOR_AUTHOR,
+            PR_OPEN_AUTHOR,
+            LEASE_TAKE_AUTHOR,
+            SESSION_START_AUTHOR,
+            ZEN_APPROVE_AUTHOR,
+            ORCHESTRATOR_PHASE1_AUTHOR,
+        ] {
+            assert!(is_automated_status_author(author), "{author}");
+        }
+        assert_eq!(AUTO_BUMP_AUTHOR, "aida-auto-bump");
+        assert_eq!(RECONCILE_AUTHOR, "aida-reconcile");
+
+        use crate::models::RequirementStatus as S;
+        let mut req = make_req("Spec", "Approved");
+        let from = set_status_recorded(&mut req, S::InProgress, SESSION_START_AUTHOR);
+        assert_eq!(from, S::Approved);
+        assert_eq!(req.status, S::InProgress);
+        assert_eq!(req.history.len(), 1);
+        assert_eq!(req.history[0].author, SESSION_START_AUTHOR);
+        assert_eq!(req.history[0].changes[0].old_value, "Approved");
+        assert_eq!(req.history[0].changes[0].new_value, "InProgress");
+        set_status_recorded(&mut req, S::InProgress, SESSION_START_AUTHOR);
+        assert_eq!(req.history.len(), 1, "no entry for a no-op");
+
+        for terminal in [S::Completed, S::Rejected, S::Superseded] {
+            assert!(is_terminal_status(&terminal));
+        }
+        for open in [
+            S::Draft,
+            S::Approved,
+            S::InProgress,
+            S::Done,
+            S::NeedsAttention,
+        ] {
+            assert!(!is_terminal_status(&open));
+        }
+    }
+
+    /// BUG-1637: a human change recorded after an automated one on the same
+    /// side makes that side's history mixed, so the guard stays off and the
+    /// human's (newer) status wins. Without the human entry (the old,
+    /// unrecorded human write) the side read as all-automated and the guard
+    /// kept the terminal status instead.
+    // trace:BUG-1637 | ai:claude
+    #[test]
+    fn bug1637_human_after_automated_is_not_read_as_automated() {
+        use crate::models::RequirementStatus as S;
+        let base = make_req("Spec", "Approved");
+        let mut rejected = base.clone();
+        set_status_recorded(&mut rejected, S::Rejected, "joe");
+        rejected.modified_at = at("2026-09-25T01:00:00Z");
+
+        let mut bumped = base.clone();
+        set_status_recorded(&mut bumped, S::InProgress, SESSION_START_AUTHOR);
+        // The old, unrecorded human write.
+        let mut unrecorded = bumped.clone();
+        unrecorded.status = S::Done;
+        unrecorded.modified_at = at("2026-09-25T02:00:00Z");
+        // The same write, recorded under the person.
+        let mut recorded = bumped.clone();
+        set_status_recorded(&mut recorded, S::Done, "joe");
+        recorded.modified_at = at("2026-09-25T02:00:00Z");
+
+        for (ours, theirs) in [(&recorded, &rejected), (&rejected, &recorded)] {
+            assert_eq!(merge_spec_three_way(&base, ours, theirs).status, S::Done);
+        }
+        for (ours, theirs) in [(&unrecorded, &rejected), (&rejected, &unrecorded)] {
+            assert_eq!(
+                merge_spec_three_way(&base, ours, theirs).status,
+                S::Rejected,
+                "control: an unrecorded human write reads as all-automated"
+            );
+        }
     }
 }

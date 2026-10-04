@@ -104,6 +104,8 @@ fn file_zen_review_brief_short_circuits() {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     };
 
     // Handoff disabled → None, no side effects.

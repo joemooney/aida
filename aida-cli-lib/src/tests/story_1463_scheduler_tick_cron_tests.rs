@@ -49,6 +49,51 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
     ));
 }
 
+// BUG-1600: the per-turn hook invokes `schedule tick --hook`; the installed
+// crontab entry invokes plain `schedule tick` (tagged with
+// `AIDA_SCHEDULE_INVOKER=cron`, not a CLI flag). Both shapes must keep
+// parsing exactly as before.
+// trace:BUG-1600 | ai:claude
+#[test]
+fn schedule_tick_hook_and_timer_shapes_parse() {
+    let cli = Cli::try_parse_from(["aida", "schedule", "tick", "--hook"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: true })
+    ));
+
+    // The timer/cron shape: no --hook.
+    let cli = Cli::try_parse_from(["aida", "schedule", "tick"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: false })
+    ));
+}
+
+// BUG-1600: `schedule tick` has no JSON projection. This locks in the
+// exact clap-introspection fact `enforce_json_format_capability` relies on
+// to reject `--format json` before dispatch — if this ever flips (a real
+// `--json` gets added to `Tick`), the cron-line builder's choice to pass
+// plain `schedule tick` needs a conscious second look, not silent drift.
+// trace:BUG-1600 | ai:claude
+#[test]
+fn schedule_tick_has_no_json_capability() {
+    use clap::CommandFactory;
+    let root = Cli::command();
+    let schedule = root
+        .get_subcommands()
+        .find(|c| c.get_name() == "schedule")
+        .expect("schedule subcommand must exist");
+    let tick = schedule
+        .get_subcommands()
+        .find(|c| c.get_name() == "tick")
+        .expect("schedule tick subcommand must exist");
+    assert!(
+        !tick.get_arguments().any(|a| a.get_id().as_str() == "json"),
+        "schedule tick must not declare --json — nothing may pass it --format json"
+    );
+}
+
 #[test]
 fn init_no_schedule_flag_parses() {
     let cli = Cli::try_parse_from(["aida", "init", "--no-schedule"]).unwrap();
@@ -86,8 +131,8 @@ fn build_tick_cron_line_matches_reference_shape() {
     let aida_exe = Path::new("/home/joe/.aida/bin/aida");
     let line = build_tick_cron_line(repo, aida_exe).unwrap();
 
-    // */15 * * * * cd <repo> && PATH='<bin-dir>:...' <abs-aida> schedule tick
-    // --format json >> ~/.aida/schedule-tick.log 2>&1 # <marker>
+    // */15 * * * * cd <repo> && PATH='<bin-dir>:...' AIDA_SCHEDULE_INVOKER=cron
+    // <abs-aida> schedule tick >> ~/.aida/schedule-tick.log 2>&1 # <marker>
     assert!(line.starts_with("*/15 * * * * cd "), "{line}");
     // The whole PATH assignment is quoted as one shell word (not just the
     // bin dir) so it can never be split or glob-expanded on the way in.
@@ -95,12 +140,23 @@ fn build_tick_cron_line_matches_reference_shape() {
         line.contains("PATH='/home/joe/.aida/bin:/usr/local/bin:/usr/bin:/bin'"),
         "{line}"
     );
+    // BUG-1600: tags the invocation source in scheduler telemetry so a
+    // cron-driven tick is distinguishable from the per-turn hook (--hook).
+    assert!(line.contains("AIDA_SCHEDULE_INVOKER=cron"), "{line}");
     assert!(
         line.contains("'/home/joe/.aida/bin/aida' schedule tick"),
         "{line}"
     );
+    // BUG-1600: `schedule tick` has no `--format`/`--json` projection — a
+    // prior version of this line added `--format json`, which `aida`
+    // rejects before dispatch on every single tick (see the audit in
+    // docs/cli-format-json-audit.md). The line must never reintroduce it.
     assert!(
-        line.contains("schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1"),
+        !line.contains("--format"),
+        "must not pass an unsupported --format to `schedule tick`: {line}"
+    );
+    assert!(
+        line.contains("schedule tick >> ~/.aida/schedule-tick.log 2>&1"),
         "{line}"
     );
     assert!(
@@ -143,14 +199,49 @@ fn crontab_after_install_appends_without_clobbering_existing_entries() {
 }
 
 #[test]
-fn crontab_after_install_is_idempotent() {
+fn crontab_after_install_is_idempotent_when_content_matches() {
     let marker = "aida-schedule-tick:/repo";
-    let existing = format!("*/15 * * * * cd /repo && aida schedule tick # {marker}\n");
+    let line = format!("*/15 * * * * cd /repo && aida schedule tick # {marker}");
+    let existing = format!("{line}\n");
     assert_eq!(
-        crontab_after_install(&existing, marker, "irrelevant new line # different"),
+        crontab_after_install(&existing, marker, &line),
         None,
-        "already installed → no-op"
+        "byte-identical entry already installed → true no-op"
     );
+}
+
+// BUG-1600: a stale entry (e.g. one installed before this fix, still
+// carrying `--format json`) must be rewritten IN PLACE the next time
+// install/refresh runs — not silently left broken because "a line with
+// this marker already exists".
+#[test]
+fn crontab_after_install_repairs_a_stale_line_in_place() {
+    let marker = "aida-schedule-tick:/repo";
+    let stale = format!(
+        "*/15 * * * * cd /repo && aida schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("0 4 * * * some-other-cronjob\n{stale}\n0 5 * * * another-cronjob\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("stale content must be rewritten, not treated as a no-op");
+
+    assert!(
+        !body.contains(&stale),
+        "the stale line must be gone: {body}"
+    );
+    assert!(
+        body.contains(&fresh),
+        "the fresh line must replace it: {body}"
+    );
+    // Repaired in place, not appended at the end — every other line's
+    // relative order is preserved.
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(lines[0], "0 4 * * * some-other-cronjob");
+    assert_eq!(lines[1], fresh);
+    assert_eq!(lines[2], "0 5 * * * another-cronjob");
 }
 
 #[test]
@@ -162,6 +253,272 @@ fn crontab_after_install_handles_no_trailing_newline() {
         body,
         "0 4 * * * some-other-cronjob\n*/15 * * * * cd /repo && aida schedule tick # aida-schedule-tick:/repo\n"
     );
+}
+
+// BUG-1605: an install predating the marker convention (STORY-1463) wrote a
+// tick line with no trailing `# <marker>` comment. `crontab_after_install`
+// didn't recognise it as its own and appended a second, correctly-marked
+// line — both then ran. The legacy line must be repaired in place instead.
+#[test]
+fn crontab_after_install_repairs_a_legacy_unmarked_line() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy = "*/15 * * * * cd /repo && PATH=/usr/bin /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("0 4 * * * some-other-cronjob\n{legacy}\n0 5 * * * another-cronjob\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("a legacy unmarked line must be repaired in place, not treated as a no-op");
+
+    assert!(
+        !body.contains(legacy),
+        "the legacy line must be gone: {body}"
+    );
+    assert!(
+        body.contains(&fresh),
+        "the fresh marked line must replace it: {body}"
+    );
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(lines.len(), 3, "no second line was appended: {body}");
+    assert_eq!(lines[0], "0 4 * * * some-other-cronjob");
+    assert_eq!(lines[1], fresh);
+    assert_eq!(lines[2], "0 5 * * * another-cronjob");
+}
+
+// BUG-1605: a legacy line may quote the repo path, the aida binary path,
+// both, or neither — `install-cron`'s own reference shape quotes both, but
+// hand-installed or older entries varied.
+#[test]
+fn crontab_after_install_repairs_a_legacy_line_with_quoted_fields() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy =
+        "*/15 * * * * cd '/repo' && PATH='/usr/bin' '/repo/target/release/aida' schedule tick >> ~/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{legacy}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("a quoted legacy line must still be recognised and repaired");
+    assert!(!body.contains(legacy), "{body}");
+    assert!(body.contains(&fresh), "{body}");
+    assert_eq!(body.lines().count(), 1);
+}
+
+// BUG-1605: a different repo's legacy (unmarked) tick line must never be
+// touched while installing THIS repo's entry.
+#[test]
+fn crontab_after_install_leaves_another_repos_legacy_line_untouched() {
+    let marker = "aida-schedule-tick:/repo/a";
+    let other_legacy = "*/15 * * * * cd /repo/b && /repo/b/target/release/aida schedule tick >> ~/.aida/schedule-tick.log 2>&1";
+    let existing = format!("{other_legacy}\n");
+    let line = "*/15 * * * * cd /repo/a && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # aida-schedule-tick:/repo/a";
+
+    let body = crontab_after_install(&existing, marker, line)
+        .expect("this repo has no entry yet and must be appended");
+
+    assert!(
+        body.contains(other_legacy),
+        "must not touch a different repo's legacy line: {body}"
+    );
+    assert!(body.contains(line), "must append this repo's entry: {body}");
+    assert_eq!(body.lines().count(), 2);
+}
+
+/// BUG-1605 regression: a legacy line for a repo whose path is a strict
+/// PREFIX of another's (`/x/aida` vs `/x/aida-web`) must not be mistaken for
+/// the shorter repo's own legacy line — the same prefix-collision guard
+/// `line_has_marker` upholds for the marker case.
+#[test]
+fn crontab_after_install_leaves_a_prefix_path_repos_legacy_line_untouched() {
+    let marker_short = "aida-schedule-tick:/x/aida";
+    let legacy_long = "*/15 * * * * cd /x/aida-web && /x/aida-web/target/release/aida schedule tick >> ~/.aida/schedule-tick.log 2>&1";
+    let existing = format!("{legacy_long}\n");
+    let line =
+        "*/15 * * * * cd /x/aida && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # aida-schedule-tick:/x/aida";
+
+    let body = crontab_after_install(&existing, marker_short, line).expect(
+        "the short repo's entry is missing and must be appended, not confused with the long \
+         repo's legacy line",
+    );
+
+    assert!(
+        body.contains(legacy_long),
+        "must keep the long repo's untouched legacy line: {body}"
+    );
+    assert!(body.contains(line), "{body}");
+    assert_eq!(body.lines().count(), 2);
+}
+
+// BUG-1605: an install that has been through both eras — a legacy unmarked
+// line AND a stale marked line — must collapse to exactly one correct line,
+// not two.
+#[test]
+fn crontab_after_install_collapses_legacy_plus_marked_into_one_line() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy = "*/15 * * * * cd /repo && /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let stale_marked = format!(
+        "*/15 * * * * cd /repo && aida schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("0 4 * * * unrelated\n{legacy}\n{stale_marked}\n0 5 * * * another\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("both a legacy and a marked line exist; must collapse to one");
+
+    let lines: Vec<&str> = body.lines().collect();
+    let tick_lines: Vec<&&str> = lines
+        .iter()
+        .filter(|l| l.contains("schedule tick"))
+        .collect();
+    assert_eq!(
+        tick_lines.len(),
+        1,
+        "exactly one tick line must remain: {body}"
+    );
+    assert_eq!(*tick_lines[0], fresh);
+    assert_eq!(lines[0], "0 4 * * * unrelated", "line order preserved");
+    assert_eq!(
+        lines[lines.len() - 1],
+        "0 5 * * * another",
+        "line order preserved"
+    );
+}
+
+// BUG-1605: every line untouched by the repair — another repo's, or wholly
+// unrelated — must pass through byte-for-byte (odd internal spacing and
+// all), never normalised or re-serialized.
+#[test]
+fn crontab_after_install_preserves_unrelated_lines_byte_for_byte() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy =
+        "*/15 * * * * cd /repo && /repo/target/release/aida schedule tick >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let odd_unrelated = "0    4 * * *   /bin/weird-spacing-job   # a comment, oddly spaced";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{odd_unrelated}\n{legacy}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh).unwrap();
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines[0], odd_unrelated,
+        "unrelated line must survive byte-for-byte: {body}"
+    );
+}
+
+// BUG-1605 regression (reviewer-found blocker): a legacy line the user
+// commented out by hand (deliberately disabling it) is inert and must
+// never be silently reactivated. Since no ACTIVE entry exists for this
+// repo, this is the same case as "no entry at all": install-cron appends a
+// fresh active line, leaving the commented line exactly as the user left
+// it.
+#[test]
+fn crontab_after_install_leaves_a_commented_out_legacy_line_untouched() {
+    let marker = "aida-schedule-tick:/repo";
+    let commented_legacy = "# */15 * * * * cd /repo && /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{commented_legacy}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("no ACTIVE entry exists for this repo; a fresh one must be appended");
+
+    assert!(
+        body.contains(commented_legacy),
+        "the user's deliberately-disabled line must survive byte-for-byte: {body}"
+    );
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines.len(),
+        2,
+        "appended alongside, not repaired in place: {body}"
+    );
+    assert_eq!(lines[0], commented_legacy, "left byte-for-byte untouched");
+    assert_eq!(lines[1], fresh, "a fresh active line is appended");
+}
+
+// BUG-1605 regression (reviewer-found blocker): the marker check has the
+// same hole — `line_has_marker` only checked the trailing bytes, so a
+// commented-out marked line (`# */15 ... # <marker>`) still "ended with"
+// the marker and was treated as an active, repairable entry. Fixed the
+// same way: a commented-out line is never a marker match either, so this
+// is again "no ACTIVE entry" → append a fresh active line, and the
+// commented line is left exactly as the user left it (today's marked-path
+// semantics for "no active entry": append, never repair-in-place).
+#[test]
+fn crontab_after_install_leaves_a_commented_out_marked_line_untouched() {
+    let marker = "aida-schedule-tick:/repo";
+    let commented_marked = format!(
+        "# */15 * * * * cd /repo && aida schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!("{commented_marked}\n");
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("a commented-out marked line is not an active entry; a fresh one must be appended");
+
+    assert!(
+        body.contains(&commented_marked),
+        "the user's deliberately-disabled marked line must survive byte-for-byte: {body}"
+    );
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(
+        lines.len(),
+        2,
+        "appended alongside, not repaired in place: {body}"
+    );
+    assert_eq!(lines[0], commented_marked, "left byte-for-byte untouched");
+    assert_eq!(lines[1], fresh, "a fresh active line is appended");
+}
+
+// BUG-1605 regression: a repo can carry MORE THAN ONE active legacy line —
+// several old installs stacking up before the marker convention existed.
+// All of them must collapse into exactly one correct, active line, not
+// just the first one found.
+#[test]
+fn crontab_after_install_collapses_two_legacy_lines_into_one() {
+    let marker = "aida-schedule-tick:/repo";
+    let legacy_a = "*/15 * * * * cd /repo && /repo/target/release/aida schedule tick --format json >> /home/joe/.aida/schedule-tick.log 2>&1";
+    let legacy_b =
+        "*/15 * * * * cd /repo && PATH=/usr/bin aida schedule tick >> ~/.aida/schedule-tick.log 2>&1";
+    let fresh = format!(
+        "*/15 * * * * cd /repo && aida schedule tick >> ~/.aida/schedule-tick.log 2>&1 # {marker}"
+    );
+    let existing = format!(
+        "0 4 * * * unrelated\n{legacy_a}\n0 5 * * * middle\n{legacy_b}\n0 6 * * * trailing\n"
+    );
+
+    let body = crontab_after_install(&existing, marker, &fresh)
+        .expect("two active legacy lines exist; must collapse to one");
+
+    let lines: Vec<&str> = body.lines().collect();
+    let tick_lines: Vec<&&str> = lines
+        .iter()
+        .filter(|l| l.contains("schedule tick"))
+        .collect();
+    assert_eq!(
+        tick_lines.len(),
+        1,
+        "exactly one active tick line must remain: {body}"
+    );
+    assert_eq!(*tick_lines[0], fresh);
+    assert!(!body.contains(legacy_a), "{body}");
+    assert!(!body.contains(legacy_b), "{body}");
+    assert_eq!(lines.len(), 4, "one legacy line dropped, not both kept");
+    assert_eq!(lines[0], "0 4 * * * unrelated");
+    assert_eq!(
+        lines[1], fresh,
+        "the first legacy line's slot is repaired in place"
+    );
+    assert_eq!(lines[2], "0 5 * * * middle");
+    assert_eq!(lines[3], "0 6 * * * trailing");
 }
 
 #[test]
@@ -287,11 +644,11 @@ fn write_schedule_config(project_root: &Path, body: &str) {
     std::fs::write(project_root.join(".aida/config.toml"), body).unwrap();
 }
 
+// trace:TASK-1532 | ai:agy
 #[test]
 fn enabled_substrate_job_count_counts_only_enabled_substrate_jobs() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     write_schedule_config(
         tmp.path(),
         r#"
@@ -317,25 +674,21 @@ enabled = true
 "#,
     );
     let count = enabled_substrate_job_count(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
     assert_eq!(count, 1);
 }
 
 #[test]
 fn enabled_substrate_job_count_is_zero_with_no_registry() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     let count = enabled_substrate_job_count(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
     assert_eq!(count, 0);
 }
 
 #[test]
 fn overdue_substrate_jobs_flags_only_jobs_past_2x_interval() {
     let tmp = tempfile::tempdir().unwrap();
-    let _guard = crate::test_env::env_lock();
-    std::env::set_var("AIDA_HOME", tmp.path());
+    let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
     write_schedule_config(
         tmp.path(),
         r#"
@@ -375,7 +728,6 @@ enabled = true
     .unwrap();
 
     let overdue = overdue_substrate_jobs(tmp.path()).unwrap();
-    std::env::remove_var("AIDA_HOME");
 
     let names: Vec<&str> = overdue.iter().map(|o| o.name.as_str()).collect();
     assert_eq!(names, vec!["way-overdue"]);
@@ -385,25 +737,36 @@ enabled = true
 // Pure finding assembly (PRIN-5: unknown evidence must never render as ok)
 // ---------------------------------------------------------------------------
 
+/// A cron-only status (a platform without systemd): the pre-TASK-1491 shape.
+fn cron_only(cron: CronDriverStatus) -> crate::schedule_driver::DriverStatus {
+    crate::schedule_driver::DriverStatus {
+        cron,
+        systemd: crate::schedule_driver::SystemdDriverStatus::Unsupported,
+    }
+}
+
 fn at(hour: u32) -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 9, 22, hour, 0, 0).unwrap()
 }
 
 #[test]
 fn no_finding_when_no_enabled_substrate_jobs() {
-    let findings = build_scheduler_driver_findings(0, CronDriverStatus::Missing, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(0, &cron_only(CronDriverStatus::Missing), &[], at(12));
     assert!(findings.is_empty());
 }
 
 #[test]
 fn no_finding_when_driver_installed_and_nothing_overdue() {
-    let findings = build_scheduler_driver_findings(2, CronDriverStatus::Installed, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(2, &cron_only(CronDriverStatus::Installed), &[], at(12));
     assert!(findings.is_empty());
 }
 
 #[test]
 fn finding_when_enabled_jobs_but_no_driver_installed() {
-    let findings = build_scheduler_driver_findings(2, CronDriverStatus::Missing, &[], at(12));
+    let findings =
+        build_scheduler_driver_findings(2, &cron_only(CronDriverStatus::Missing), &[], at(12));
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].category, "scheduler-driver");
     assert_eq!(findings[0].id, "scheduler-tick-not-installed");
@@ -416,7 +779,9 @@ fn finding_when_enabled_jobs_but_no_driver_installed() {
 fn finding_says_unknown_not_ok_when_driver_status_cannot_be_determined() {
     let findings = build_scheduler_driver_findings(
         1,
-        CronDriverStatus::Unknown("no crontab on Windows".to_string()),
+        &cron_only(CronDriverStatus::Unknown(
+            "no crontab on Windows".to_string(),
+        )),
         &[],
         at(12),
     );
@@ -438,8 +803,12 @@ fn finding_when_a_substrate_job_is_overdue_even_with_driver_installed() {
         interval: Duration::hours(6),
         last_run: at(12) - Duration::hours(20),
     }];
-    let findings =
-        build_scheduler_driver_findings(1, CronDriverStatus::Installed, &overdue, at(12));
+    let findings = build_scheduler_driver_findings(
+        1,
+        &cron_only(CronDriverStatus::Installed),
+        &overdue,
+        at(12),
+    );
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].id, "scheduler-job-overdue");
     assert!(findings[0].summary.contains("performance-guard"));
@@ -453,7 +822,8 @@ fn both_findings_can_fire_together() {
         interval: Duration::hours(6),
         last_run: at(12) - Duration::hours(20),
     }];
-    let findings = build_scheduler_driver_findings(1, CronDriverStatus::Missing, &overdue, at(12));
+    let findings =
+        build_scheduler_driver_findings(1, &cron_only(CronDriverStatus::Missing), &overdue, at(12));
     let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
     assert_eq!(
         ids,

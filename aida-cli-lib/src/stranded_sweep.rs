@@ -13,7 +13,7 @@
 //! store/forge plumbing already in scope.
 // trace:TASK-1307 | ai:claude
 
-use crate::review_verdict::{RecordedVerdict, TipRelation};
+use crate::review_verdict::{self, RecordedVerdict, TipRelation, VerdictKind};
 
 /// Which of the four TASK-1307 conditions hold for one spec. All four true
 /// is the stranded state the sweep reports; any single false condition
@@ -97,6 +97,71 @@ pub(crate) fn is_spec_keyed_verdict_filename(stem: &str) -> bool {
     // Anything else ("PR-REVIEW-NOTES") is a spec id that merely starts
     // with "PR-" and stays included.
     digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit())
+}
+
+/// TASK-1423: which specs carry a review refusal that no subsequent commit
+/// has answered, and for how long — the offline counterpart to
+/// [`StrandedRow`]/`run_stranded_sweep`'s forge-backed report. Reads the same
+/// per-spec verdict files, but the "has this moved on?" check comes from
+/// LOCAL git (a branch ref already on disk) instead of asking the forge for
+/// the PR's live head — see `local_branch_tip` in `lib.rs` — so the answer
+/// stays available offline and fast even after the authoring session has
+/// exited and no queue entry or hold exists to say so.
+// trace:TASK-1423 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct StalledRow {
+    pub(crate) spec_id: String,
+    pub(crate) verdict_kind: VerdictKind,
+    pub(crate) reviewed_sha: Option<String>,
+    pub(crate) reviewed_branch: Option<String>,
+    pub(crate) recorded_at: Option<String>,
+    pub(crate) summary: Option<String>,
+    /// Elapsed seconds since `recorded_at`, when it parses. `None` means the
+    /// stall duration could not be measured — reported as "unknown" rather
+    /// than guessed or omitted (PRIN-5).
+    pub(crate) stall_secs: Option<i64>,
+    /// Past `awaiting_you::REFUSAL_OVERDUE_SECS`. `false` when `stall_secs`
+    /// is `None` — an unmeasured stall is never claimed overdue.
+    pub(crate) overdue: bool,
+}
+
+/// TASK-1423: does `verdict` represent a review refusal with NO subsequent
+/// run? Two independent things both have to hold:
+///
+///   - [`review_verdict::is_outstanding_refusal`] (BUG-1529's test: blocking,
+///     not already closed by a merge, and the spec itself isn't Completed) —
+///     the same "is this refusal still live" test the awaiting-you PR-review
+///     surface already uses, reused rather than re-derived, and
+///   - `relation` is exactly [`TipRelation::AtReviewedSha`] — the branch's
+///     tip (resolved from LOCAL git; see `local_branch_tip` in `lib.rs`) IS
+///     the reviewed commit. `AdvancedPast` and `Rewritten` both mean a
+///     subsequent run already happened; `Unknown` means this reader cannot
+///     prove one didn't (no `reviewed_sha`, no resolvable branch, …) — and an
+///     unproven claim of "stalled" is not reported, the same fail-closed
+///     stance [`classify_stranded`] already takes on `verdict_refusing_at_head`.
+// trace:TASK-1423 | ai:claude
+pub(crate) fn is_stalled(
+    verdict: &RecordedVerdict,
+    spec_completed: bool,
+    relation: TipRelation,
+) -> bool {
+    review_verdict::is_outstanding_refusal(verdict, spec_completed)
+        && matches!(relation, TipRelation::AtReviewedSha)
+}
+
+/// TASK-1423 acceptance: "sorted by staleness descending, because the single
+/// most useful output is the oldest one." Rows whose duration is unmeasured
+/// (`stall_secs: None`) sort LAST — never fabricated a position by guessing
+/// they're either the oldest or the freshest. Ties (including all-`None`)
+/// break on `spec_id` for a deterministic, diffable report.
+// trace:TASK-1423 | ai:claude
+pub(crate) fn sort_by_staleness(rows: &mut [StalledRow]) {
+    rows.sort_by(|a, b| match (a.stall_secs, b.stall_secs) {
+        (Some(x), Some(y)) => y.cmp(&x).then_with(|| a.spec_id.cmp(&b.spec_id)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.spec_id.cmp(&b.spec_id),
+    });
 }
 
 #[cfg(test)]
@@ -200,5 +265,89 @@ mod tests {
     fn pr_anchored_handshake_filenames_are_excluded() {
         assert!(!is_spec_keyed_verdict_filename("PR-2014"));
         assert!(!is_spec_keyed_verdict_filename("pr-2014"));
+    }
+
+    // trace:TASK-1423 | ai:claude
+    fn stalled_row(spec_id: &str, stall_secs: Option<i64>) -> StalledRow {
+        StalledRow {
+            spec_id: spec_id.to_string(),
+            verdict_kind: VerdictKind::RequestChanges,
+            reviewed_sha: Some("aaaa".to_string()),
+            reviewed_branch: Some("claude/task-1".to_string()),
+            recorded_at: None,
+            summary: None,
+            stall_secs,
+            overdue: false,
+        }
+    }
+
+    #[test]
+    fn a_refusal_at_the_reviewed_head_with_no_merge_or_completion_is_stalled() {
+        let v = verdict(VerdictKind::RequestChanges, "aaaa");
+        assert!(is_stalled(&v, false, TipRelation::AtReviewedSha));
+    }
+
+    #[test]
+    fn a_refusal_closed_by_a_later_merge_is_not_stalled() {
+        let mut v = verdict(VerdictKind::RequestChanges, "aaaa");
+        v.closed_by_merge = Some("bbbb".to_string());
+        assert!(!is_stalled(&v, false, TipRelation::AtReviewedSha));
+    }
+
+    #[test]
+    fn a_refusal_on_a_completed_spec_is_not_stalled() {
+        let v = verdict(VerdictKind::RequestChanges, "aaaa");
+        assert!(!is_stalled(&v, true, TipRelation::AtReviewedSha));
+    }
+
+    #[test]
+    fn an_approval_is_never_stalled() {
+        let v = verdict(VerdictKind::Approved, "aaaa");
+        assert!(!is_stalled(&v, false, TipRelation::AtReviewedSha));
+    }
+
+    #[test]
+    fn a_branch_that_has_advanced_past_the_review_is_not_stalled() {
+        let v = verdict(VerdictKind::RequestChanges, "aaaa");
+        assert!(!is_stalled(&v, false, TipRelation::AdvancedPast));
+    }
+
+    #[test]
+    fn a_rewritten_branch_is_not_stalled() {
+        let v = verdict(VerdictKind::RequestChanges, "aaaa");
+        assert!(!is_stalled(&v, false, TipRelation::Rewritten));
+    }
+
+    // The population an unresolvable local branch cannot distinguish from a
+    // real subsequent run — PRIN-5: absent evidence is not reported as a
+    // positive "stalled" claim.
+    #[test]
+    fn an_unresolvable_branch_is_not_reported_as_stalled() {
+        let v = verdict(VerdictKind::RequestChanges, "aaaa");
+        assert!(!is_stalled(&v, false, TipRelation::Unknown));
+    }
+
+    #[test]
+    fn staleness_sort_puts_the_oldest_first_and_unknown_last() {
+        let mut rows = vec![
+            stalled_row("TASK-2", Some(60)),
+            stalled_row("TASK-4", None),
+            stalled_row("TASK-1", Some(3600)),
+            stalled_row("TASK-3", None),
+        ];
+        sort_by_staleness(&mut rows);
+        let ids: Vec<&str> = rows.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-1", "TASK-2", "TASK-3", "TASK-4"]);
+    }
+
+    #[test]
+    fn staleness_sort_breaks_ties_by_spec_id() {
+        let mut rows = vec![
+            stalled_row("TASK-9", Some(100)),
+            stalled_row("TASK-5", Some(100)),
+        ];
+        sort_by_staleness(&mut rows);
+        let ids: Vec<&str> = rows.iter().map(|r| r.spec_id.as_str()).collect();
+        assert_eq!(ids, vec!["TASK-5", "TASK-9"]);
     }
 }

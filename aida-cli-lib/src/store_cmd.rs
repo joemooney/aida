@@ -288,9 +288,7 @@ fn store_status() -> Result<()> {
     }
     let trailer_output = trailers.wait_with_output()?;
     let trailer_text = String::from_utf8_lossy(&trailer_output.stdout).to_string();
-    let paired_store_sha: Option<String> = trailer_text
-        .lines()
-        .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()));
+    let paired_store_sha = parse_paired_store_sha(&trailer_text);
 
     // Current orphan-store HEAD.
     let store_head: Option<String> = if store_path.exists() {
@@ -349,6 +347,8 @@ fn store_status() -> Result<()> {
                     "rev-list",
                     "--left-right",
                     "--count",
+                    // trace:BUG-1622 | ai:claude
+                    crate::git_arg_guard::END_OF_OPTIONS,
                     &format!("{}...{}", p, c),
                 ])
                 .output()
@@ -472,4 +472,15 @@ fn store_install_hook(force: bool) -> Result<()> {
         "aida store status".cyan()
     );
     Ok(())
+}
+
+/// The `Aida-Store:` trailer's store SHA, when it is a commit ID. The
+/// trailer is free text in a commit message, so anything else is treated as
+/// no trailer rather than handed to git.
+// trace:BUG-1622 | ai:claude
+pub(crate) fn parse_paired_store_sha(trailer_text: &str) -> Option<String> {
+    trailer_text
+        .lines()
+        .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()))
+        .filter(|s| crate::git_arg_guard::is_hex_sha(s))
 }

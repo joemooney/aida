@@ -58,6 +58,7 @@
 //! (advertise) and `tools/call` (reject above-tier calls). See `McpProfile`,
 //! `tool_min_profile`, and `resolve_mcp_profile`.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::cmp::Ordering;
 use std::ffi::OsString;
 use std::io::{self, BufRead, Write};
@@ -255,7 +256,10 @@ fn parse_aida_binary_identity(output: &str) -> Option<McpBinaryIdentity> {
 }
 
 fn query_aida_binary_identity(exe: &Path) -> Option<McpBinaryIdentity> {
-    let out = Command::new(exe).arg("--version").output().ok()?;
+    let out = Command::new(exe)
+        .arg("--version")
+        .output_retrying_etxtbsy()
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -308,7 +312,7 @@ fn exec_mcp_respawn(plan: McpRespawnPlan) -> Result<()> {
 
     #[cfg(windows)]
     {
-        command.spawn().map_err(|e| {
+        command.spawn_retrying_etxtbsy().map_err(|e| {
             anyhow::anyhow!(
                 "failed to spawn MCP self-respawn via {}: {}",
                 plan.exe.display(),
@@ -759,7 +763,7 @@ fn project_roles_dir(project_root: &Path) -> PathBuf {
 }
 
 fn global_roles_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("roles"))
+    crate::home_dir().map(|h| h.join(".aida").join("roles"))
 }
 
 /// List all roles for the project (and any global roles), newest-active first,
@@ -953,6 +957,31 @@ fn render_git_linkage_md(project_root: &Path, spec_id: &str, verbose: bool) -> S
     out
 }
 
+/// The MCP `post_punt` status flip: `NeedsAttention` when the STORY-332
+/// transition guard allows it (from In Progress or Done), otherwise no change,
+/// so a terminal spec is never moved. Returns whether the status changed.
+///
+/// BUG-1632: an agent's punt is an automated write, so the flip is recorded in
+/// the status history under [`aida_core::conflict::MCP_PUNT_AUTHOR`]; the
+/// BUG-1625 merge guard then keeps a terminal status another clone reached
+/// meanwhile.
+// trace:BUG-334 trace:BUG-1632 | ai:claude
+pub(crate) fn mcp_punt_status_flip(req: &mut aida_core::Requirement) -> bool {
+    if aida_core::forbidden_attention_transition(
+        &req.status,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .is_some()
+    {
+        return false;
+    }
+    let from = req.status.clone();
+    req.status = aida_core::RequirementStatus::NeedsAttention;
+    aida_core::conflict::record_status_transition(req, aida_core::conflict::MCP_PUNT_AUTHOR, &from);
+    req.modified_at = Utc::now();
+    true
+}
+
 impl<'a> McpServer<'a> {
     fn new(storage: &'a Storage, project_root: PathBuf) -> Self {
         // trace:STORY-474 | ai:claude — resolve the active profile from env /
@@ -1061,6 +1090,10 @@ impl<'a> McpServer<'a> {
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
+        // Re-arm for each call, including calls that return early. A long-lived
+        // server must never inherit a previous call's stale observation.
+        // trace:TASK-1526 | ai:codex
+        let cache_scope = aida_core::db::cache_refresh::CacheReadScope::new();
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
@@ -1229,28 +1262,20 @@ impl<'a> McpServer<'a> {
             // (Claude Code) keep working; schema-driven clients (Codex, Cursor)
             // read the same logical payload out of `structuredContent` without
             // parsing the human string. trace:STORY-399 | ai:claude
-            Ok(content) => {
-                let content_array = json!([{
-                    "type": "text",
-                    "text": content
-                }]);
-                JsonRpcResponse::success(
-                    id.clone(),
-                    json!({
-                        "content": content_array,
-                        "structuredContent": {
-                            "content": content_array
-                        }
-                    }),
-                )
-            }
+            Ok(content) => JsonRpcResponse::success(
+                id.clone(),
+                cache_labelled_tool_result(content, &cache_scope),
+            ),
             // STORY-401: render the free-form tool error into a stable,
             // machine-readable envelope — `isError: true`, a short
             // `<tool>: <code>: <message>` text, and a `structuredError`
             // payload clients can branch on. trace:STORY-401 | ai:claude
             Err(e) => JsonRpcResponse::success(
                 id.clone(),
-                McpError::classify(tool_name, &e).to_result_value(),
+                cache_labelled_result(
+                    McpError::classify(tool_name, &e).to_result_value(),
+                    &cache_scope,
+                ),
             ),
         }
     }
@@ -1418,7 +1443,7 @@ impl<'a> McpServer<'a> {
 
     // trace:STORY-82 | ai:claude
     fn tool_list_requirements(&self, args: &Value) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let status_filter = args.get("status").and_then(|v| v.as_str());
         let type_filter = args.get("type").and_then(|v| v.as_str());
         let priority_filter = args.get("priority").and_then(|v| v.as_str());
@@ -1668,7 +1693,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let req = store
             .get_requirement_by_spec_id(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
@@ -1896,9 +1921,20 @@ impl<'a> McpServer<'a> {
 
         // Optional tags
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
+            // BUG-1770: an MCP client is the caller most likely to hand a
+            // whole tag line in as one array element, and the blob it creates
+            // is invisible to every tag-keyed filter afterwards. Same rule as
+            // the CLI, phrased in this surface's own syntax.
+            // trace:BUG-1770 | ai:claude
             for t in tag_arr {
                 if let Some(s) = t.as_str() {
-                    req.tags.insert(s.to_string());
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    crate::validate_tag_value(trimmed, crate::TagRepair::JsonArray("tags"))
+                        .map_err(|e| e.to_string())?;
+                    req.tags.insert(trimmed.to_string());
                 }
             }
         }
@@ -2043,10 +2079,20 @@ impl<'a> McpServer<'a> {
 
         // STORY-82: tags — replace the set with the provided list.
         if let Some(tag_arr) = args.get("tags").and_then(|v| v.as_array()) {
-            let new_tags: std::collections::HashSet<String> = tag_arr
-                .iter()
-                .filter_map(|t| t.as_str().map(str::to_string))
-                .collect();
+            // BUG-1770: the MCP replace path needs the same rule as
+            // `aida edit --tags`. trace:BUG-1770 | ai:claude
+            let mut new_tags: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for t in tag_arr {
+                if let Some(s) = t.as_str() {
+                    let trimmed = s.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    crate::validate_tag_value(trimmed, crate::TagRepair::JsonArray("tags"))
+                        .map_err(|e| e.to_string())?;
+                    new_tags.insert(trimmed.to_string());
+                }
+            }
             // trace:BUG-1252 | ai:codex
             let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false)
                 || args
@@ -2090,7 +2136,10 @@ impl<'a> McpServer<'a> {
                     return Err(msg);
                 }
                 changes.push(format!("status: {} → {}", req.status, new_status));
-                req.status = new_status;
+                // BUG-1637: a caller-authored status write, recorded under the
+                // caller. trace:BUG-1637 | ai:claude
+                let from = std::mem::replace(&mut req.status, new_status);
+                crate::record_caller_status_transition(req, &from);
             }
         }
 
@@ -2271,7 +2320,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .ok_or("Missing required parameter: query")?;
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let query_lower = query.to_lowercase();
         // STORY-82: optional type/status narrowing (mirrors `aida search`).
         let type_filter = args.get("type").and_then(|v| v.as_str());
@@ -2376,7 +2425,7 @@ impl<'a> McpServer<'a> {
             })
             .unwrap_or_default();
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let root = store
             .get_requirement_by_spec_id(spec)
             .ok_or_else(|| format!("Requirement '{}' not found", spec))?;
@@ -2450,7 +2499,10 @@ impl<'a> McpServer<'a> {
             })
             .collect();
         let rollup = status_rollup(&store, &result.nodes);
-        serde_json::to_string_pretty(&json!({
+        // TASK-1526: same carrier as `aida graph --json` (graph_cmd.rs), which
+        // serializes this identical document through `json_pretty`.
+        // trace:TASK-1526 | ai:claude
+        crate::cache_output::json_pretty(&json!({
             "root": root_label,
             "mode": canonical_mode,
             "count": result.nodes.len(),
@@ -2473,6 +2525,32 @@ impl<'a> McpServer<'a> {
     // `events` boolean so existing agent callers do not change shape.
     // trace:STORY-1028 | ai:codex
     fn tool_history(&self, args: &Value) -> Result<String, String> {
+        // trace:STORY-1477 | ai:codex
+        use crate::history_layout::{Layout, Templates};
+        let layout_arg = |key: &str| -> Result<Option<&str>, String> {
+            match args.get(key) {
+                None => Ok(None),
+                Some(Value::String(raw)) => Ok(Some(raw)),
+                _ => Err(format!("invalid {key}: expected a string")),
+            }
+        };
+        let template = layout_arg("template")?;
+        let fields = layout_arg("fields")?;
+        if (template.is_some() && fields.is_some())
+            || ((template.is_some() || fields.is_some())
+                && args.get("oneline").and_then(Value::as_bool) == Some(true))
+            || (template.is_some() && args.get("events").and_then(Value::as_bool) == Some(true))
+        {
+            return Err("invalid combination: template/fields are mutually exclusive, cannot combine with oneline; template cannot combine with explicit events".into());
+        }
+        let layout = template
+            .map(|raw| Templates::load(&self.project_root)?.resolve(raw))
+            .transpose()
+            .map_err(|e: anyhow::Error| format!("invalid template: {e:#}"))?;
+        let selected_fields = fields
+            .map(crate::history_layout::fields)
+            .transpose()
+            .map_err(|e| e.to_string())?;
         let spec_id = args
             .get("spec_id")
             .and_then(|v| v.as_str())
@@ -2485,7 +2563,7 @@ impl<'a> McpServer<'a> {
         // `resolve_history_id_filter`. trace:BUG-588 | ai:claude
         let spec_id = spec_id.map(|raw| {
             if let Ok(uuid) = uuid::Uuid::parse_str(&raw) {
-                if let Ok(store) = self.storage.load() {
+                if let Ok(store) = self.storage.load_for_read() {
                     if let Some(req) = store.requirements.iter().find(|r| r.id == uuid) {
                         if let Some(sid) = &req.spec_id {
                             return sid.clone();
@@ -2515,12 +2593,45 @@ impl<'a> McpServer<'a> {
         let type_filter = str_arg("type");
         let author_filter = str_arg("author");
         let shipped_only = bool_arg("shipped");
+        // TASK-1512: CLI parity for `--to`/`--from`/`--opened`, with the same
+        // status spellings, the same refusal for an unknown status, and the
+        // same refusal to combine `shipped` (= `to: completed`) with `to` or
+        // `opened`. trace:TASK-1512 | ai:claude
+        let to_status = str_arg("to")
+            .map(|raw| history::resolve_status_filter("to", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let from_status = str_arg("from")
+            .map(|raw| history::resolve_status_filter("from", &raw))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let opened_only = bool_arg("opened");
+        // Both refusals start with `invalid ` so `McpErrorCode::classify`
+        // reports them as `invalid_arg`, not `internal`.
+        if shipped_only && (to_status.is_some() || opened_only) {
+            return Err(
+                "invalid combination: `shipped` is the same as `to: completed`; it cannot be combined with `to` or `opened`"
+                    .to_string(),
+            );
+        }
+        history::validate_transition_pair(
+            from_status.as_deref(),
+            to_status.as_deref(),
+            "from",
+            "to",
+        )
+        .map_err(|e| e.to_string())?;
         // `--shipped` implies events mode, mirroring the CLI. The MCP default has
         // always been events mode (the structured ledger), so `events` defaults
         // true here and a caller passing `events: false` only matters for the
         // digest-vs-events distinction the CLI surfaces.
-        let events_mode =
-            args.get("events").and_then(|v| v.as_bool()).unwrap_or(true) || shipped_only;
+        let events_mode = layout.is_some()
+            || selected_fields.is_some()
+            || args.get("events").and_then(|v| v.as_bool()).unwrap_or(true)
+            || shipped_only
+            || opened_only
+            || to_status.is_some()
+            || from_status.is_some();
         let status_changes_only = bool_arg("status_changes");
         let comments_only = bool_arg("comments");
         let oneline = bool_arg("oneline");
@@ -2537,6 +2648,11 @@ impl<'a> McpServer<'a> {
         let opts = HistoryOpts {
             limit,
             max_commits,
+            // MCP exposes no `max_commits` override — the window here is
+            // always the computed default, so `window_exhausted` below is
+            // always meaningful as "the default window ran out."
+            // trace:BUG-1617 | ai:claude
+            max_commits_explicit: false,
             events_mode,
             id_filter: spec_id,
             type_filter,
@@ -2545,6 +2661,9 @@ impl<'a> McpServer<'a> {
             until,
             status_changes_only,
             shipped_only,
+            to_status,
+            from_status,
+            opened_only,
             comments_only,
             oneline,
             // MCP consumers expect the full event ledger, not the CLI's
@@ -2560,12 +2679,43 @@ impl<'a> McpServer<'a> {
             // visible (the CLI-only default-view hide doesn't apply here).
             exclude_meta: false,
         };
-        let events = history::collect_event_records(self.storage.path(), &opts)
+        if matches!(layout, Some(Layout::Full | Layout::Oneline)) {
+            return history::render_template_alias(
+                self.storage.path(),
+                &opts,
+                matches!(layout, Some(Layout::Oneline)),
+            )
+            .map_err(|e| e.to_string());
+        }
+        let records = history::collect_event_records(self.storage.path(), &opts)
             .map_err(|e| e.to_string())?;
-        serde_json::to_string_pretty(&json!({
-            "count": events.len(),
-            "events": events,
-        }))
+        if let Some(fields) = &selected_fields {
+            return crate::history_layout::project_json(&records, fields)
+                .map_err(|e| e.to_string());
+        }
+        if let Some(Layout::Custom(template)) = &layout {
+            return template.render_records(&records).map_err(|e| e.to_string());
+        }
+        // BUG-1617: tell a caller when the default commit window ran out
+        // before `limit` events were found, so a short `events` array reads
+        // as "there may be more — widen the window" rather than "that's
+        // everything." trace:BUG-1617 | ai:claude
+        // TASK-1505 slice 2: additive provenance. `source` says whether the
+        // history index or a git walk answered; `index_tip` is the store
+        // commit an index answer reflects (null for a walk).
+        // trace:TASK-1508 | ai:claude
+        // BUG-1631: one JSON builder for MCP and `aida history --json`.
+        // trace:BUG-1631 | ai:claude
+        // TASK-1526: and one serializer, so the shared builder's "cannot drift"
+        // contract survives the cache label. An object output always carries
+        // `cache` in-band on BOTH surfaces; the envelope label and the trailing
+        // note are additive for MCP, not a substitute carrier.
+        // trace:TASK-1526 | ai:claude
+        crate::cache_output::json_pretty(&history::records_json(
+            &records.events,
+            records.window_exhausted,
+            &records.source,
+        ))
         .map_err(|e| e.to_string())
     }
 
@@ -2929,7 +3079,7 @@ impl<'a> McpServer<'a> {
     }
 
     fn tool_list_features(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         if store.features.is_empty() {
             return Ok("No features defined in this project.".to_string());
@@ -3077,18 +3227,8 @@ impl<'a> McpServer<'a> {
             .get_requirement_unambiguous_mut(spec)
             .map_err(|e| e.to_string())?
         {
-            Some(req)
-                if aida_core::forbidden_attention_transition(
-                    &req.status,
-                    &aida_core::RequirementStatus::NeedsAttention,
-                )
-                .is_none() =>
-            {
-                req.status = aida_core::RequirementStatus::NeedsAttention;
-                req.modified_at = Utc::now();
-                true
-            }
-            _ => false,
+            Some(req) => mcp_punt_status_flip(req),
+            None => false,
         };
         if flipped {
             self.storage.save(&store).map_err(|e| e.to_string())?;
@@ -3211,7 +3351,7 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Project Database into RequirementSummary shape that findings.rs expects.
         let summaries = build_summaries(&store);
@@ -3367,7 +3507,10 @@ impl<'a> McpServer<'a> {
         } else {
             "dismissed"
         };
-        req.status = new_status;
+        // BUG-1637: a caller-authored triage, recorded under the caller.
+        // trace:BUG-1637 | ai:claude
+        let from = std::mem::replace(&mut req.status, new_status);
+        crate::record_caller_status_transition(req, &from);
         if let Some(r) = reason {
             req.add_comment(Comment::new(
                 "mcp".to_string(),
@@ -3810,7 +3953,7 @@ impl<'a> McpServer<'a> {
             .storage
             .queue_list(&user_id, include_completed)
             .map_err(|e| e.to_string())?;
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Same role-filter resolution as `aida queue list` (BUG-87). MCP has
         // no shell role context, so the active-role default is None — pass
@@ -4081,6 +4224,20 @@ impl<'a> McpServer<'a> {
         let display = Self::display_id_of(req);
         let spec_id = req.spec_id.clone().unwrap_or_else(|| "???".to_string());
 
+        // BUG-1611: the same lifecycle guard as the CLI `queue done`, through
+        // the shared decision, before any write. A Draft / NeedsAttention spec
+        // needs the server's approval authority; a closed spec is refused
+        // outright. trace:BUG-1611 | ai:claude
+        if let Some(refusal) =
+            crate::queue_done_lifecycle_refusal(&req.status, mcp_caller_has_advisor_authority())
+        {
+            return Err(crate::queue_done_lifecycle_refusal_message(
+                &display,
+                &req.status,
+                refusal,
+            ));
+        }
+
         // STORY-86: queue done flips to Done (work finished on a branch), not
         // Completed — the auto-bump on merge advances Done → Completed. Stamp
         // implementation_info the same way the CLI path does. trace:EPIC-27
@@ -4139,28 +4296,30 @@ impl<'a> McpServer<'a> {
             Some(test_plan.join("\n"))
         };
 
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
         self.storage
-            .update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Done");
-                    r.modified_at = now;
-                    let info = r
-                        .implementation_info
-                        .get_or_insert_with(aida_core::ImplementationInfo::default);
-                    info.implemented = true;
-                    info.implemented_at.get_or_insert(now);
-                    if info.implemented_by.is_none() {
-                        info.implemented_by = Some(completer.clone());
-                    }
-                    if let Some(ref tool) = source_tool {
-                        info.source_tool.get_or_insert_with(|| tool.clone());
-                    }
-                    if let Some(ref tp) = captured_test_plan {
-                        info.test_coverage_notes = Some(tp.clone());
-                    }
-                    if let Some(ref ic) = captured_ic {
-                        r.interface_changes = Some(ic.clone());
-                    }
+            .update_spec_atomically(req, |r| {
+                // trace:BUG-1637 | ai:claude
+                let from = r.status.clone();
+                r.set_status_from_str("Done");
+                crate::record_caller_status_transition(r, &from);
+                r.modified_at = now;
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
+                }
+                if let Some(ref tp) = captured_test_plan {
+                    info.test_coverage_notes = Some(tp.clone());
+                }
+                if let Some(ref ic) = captured_ic {
+                    r.interface_changes = Some(ic.clone());
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -4292,11 +4451,6 @@ impl<'a> McpServer<'a> {
             // until a worker establishes a lease. trace:BUG-1470 | ai:codex
             None => crate::rework_target_for_mode(&current_status, false),
         };
-        if let Some(ref new_status) = target_status {
-            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
-                return Err(message);
-            }
-        }
 
         // Terminal-status guard (mirrors the CLI). trace:EPIC-27
         if matches!(
@@ -4317,66 +4471,133 @@ impl<'a> McpServer<'a> {
             ));
         }
 
-        let mut summary = String::new();
-        let mut kept_warning: Option<String> = None;
+        // BUG-1611: the authority gate runs after the closed-work guard so a
+        // non-forced rework of a closed spec names the reopen first; a forced
+        // one still meets the (now terminal-aware) lifecycle guard here.
+        // trace:BUG-1611 | ai:claude
         if let Some(ref new_status) = target_status {
-            if new_status != &current_status {
-                let new_status = new_status.clone();
-                let now = chrono::Utc::now();
-                // TASK-1311: mirror the CLI rework — leaving NeedsAttention
-                // clears the shelve markers so the drain picks the spec up.
-                // trace:TASK-1311 | ai:claude
-                let leaving_attention = current_status == RequirementStatus::NeedsAttention
-                    && new_status != RequirementStatus::NeedsAttention;
-                self.storage
-                    .update_atomically(|s| {
-                        if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                            r.set_status_from_str(&format!("{:?}", new_status));
-                            r.modified_at = now;
-                            if leaving_attention {
-                                // An MCP caller is never a human at a
-                                // terminal, so it never clears the advisor's
-                                // escalation to a human. trace:TASK-1311
-                                let cleared = crate::requeue::clear_shelve_markers(r, false);
-                                kept_warning =
-                                    crate::requeue::kept_escalation_warning(&display, &cleared);
-                                let note = cleared.audit_note(
-                                    "the `queue_rework` MCP tool",
-                                    &new_status.to_string(),
-                                    reason,
-                                );
-                                r.add_comment(aida_core::Comment::new(
-                                    crate::get_default_author(),
-                                    note,
-                                ));
-                            }
-                        }
-                    })
-                    .map_err(|e| e.to_string())?;
-                if leaving_attention {
-                    crate::queue_cmd::clear_failure_reason_targeted(&self.storage, &spec_id);
-                }
-                crate::record_role_activity(&spec_id, "rework");
-                crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
-                summary.push_str(&format!(
-                    "{} status: {} → {}\n",
-                    display, current_status, new_status
-                ));
-                if let Some(w) = &kept_warning {
-                    summary.push_str(&format!("Warning: {w}\n"));
-                }
+            if let Some(message) = mcp_status_gate_message(&current_status, new_status) {
+                return Err(message);
             }
         }
 
-        // Optional audit comment.
-        if let Some(reason_text) = reason {
+        // STORY-1429: the lease gate, identical to the CLI door. A live lease
+        // held by another session refuses even with `force: true`; an unknown
+        // lease state refuses too. Runs before any write.
+        // trace:STORY-1429 | ai:claude
+        let flips = target_status.as_ref().is_some_and(|t| t != &current_status);
+        let project_root = crate::queue_cmd::requeue_project_root(self.storage);
+        if flips
+            && matches!(
+                current_status,
+                RequirementStatus::NeedsAttention | RequirementStatus::InProgress
+            )
+        {
+            let check =
+                crate::requeue_lease_gate(&project_root, &[spec_id.as_str(), display.as_str()]);
+            if let Some(msg) = check.refusal(&display) {
+                return Err(msg);
+            }
+        }
+
+        let mut summary = String::new();
+        let mut reason_recorded = false;
+        if let Some(ref new_status) = target_status {
+            if new_status != &current_status {
+                if current_status == RequirementStatus::NeedsAttention {
+                    // STORY-1429: the one owner, applied to the one spec with
+                    // a status re-read before its targeted write. An MCP caller is never a human at a
+                    // terminal, so it never clears the advisor's escalation to
+                    // a human. trace:STORY-1429 trace:TASK-1311 | ai:claude
+                    let ctx = crate::requeue::ReturnCtx {
+                        via: "the `queue_rework` MCP tool".to_string(),
+                        via_slug: "mcp",
+                        author: crate::get_default_author(),
+                        clear_escalation: false,
+                        reason: reason.map(str::to_string),
+                        automated: false, // trace:BUG-1632 | ai:claude
+                    };
+                    let (outcome, _) = crate::requeue::return_to_flight_in_storage(
+                        self.storage,
+                        req_id,
+                        &current_status,
+                        new_status,
+                        &ctx,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    match &outcome {
+                        crate::requeue::ReturnOutcome::Returned { cleared, .. } => {
+                            reason_recorded = true;
+                            crate::requeue::emit_requeued(&project_root, &display, &ctx, &outcome);
+                            summary.push_str(&format!(
+                                "{} status: {} → {}\n",
+                                display, current_status, new_status
+                            ));
+                            if let Some(w) =
+                                crate::requeue::kept_escalation_warning(&display, cleared)
+                            {
+                                summary.push_str(&format!("Warning: {w}\n"));
+                            }
+                        }
+                        crate::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
+                            return Ok(crate::requeue::unchanged_message(&display, &outcome)
+                                .unwrap_or_default());
+                        }
+                        _ => {
+                            return Err(crate::requeue::unchanged_message(&display, &outcome)
+                                .unwrap_or_default());
+                        }
+                    }
+                } else {
+                    let new_status = new_status.clone();
+                    let now = chrono::Utc::now();
+                    let mut moved_to: Option<RequirementStatus> = None;
+                    // Per-spec compare-and-swap under the store write lock; the
+                    // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
+                    self.storage
+                        .update_spec_atomically(req, |r| {
+                            // STORY-1429: compare-and-swap on the copy read
+                            // under the write. trace:STORY-1429 | ai:claude
+                            if r.status != current_status {
+                                moved_to = Some(r.status.clone());
+                                return;
+                            }
+                            r.set_status_from_str(&format!("{:?}", new_status));
+                            // BUG-1637: caller-authored. trace:BUG-1637 | ai:claude
+                            crate::record_caller_status_transition(r, &current_status);
+                            r.modified_at = now;
+                            // TASK-1477: the `queue_rework` MCP tool can also
+                            // reopen a Completed spec — clear the stale
+                            // completed_at so the next completion stamps a
+                            // fresh date. trace:TASK-1477 | ai:claude
+                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                        })
+                        .map_err(|e| e.to_string())?;
+                    if let Some(actual) = moved_to {
+                        return Err(format!(
+                            "{display} moved from {current_status} to {actual} while this \
+                             request ran; nothing was changed"
+                        ));
+                    }
+                    summary.push_str(&format!(
+                        "{} status: {} → {}\n",
+                        display, current_status, new_status
+                    ));
+                }
+                crate::record_role_activity(&spec_id, "rework");
+                crate::update_manifest_for_status(&spec_id, &format!("{:?}", new_status));
+            }
+        }
+
+        // Optional audit comment. STORY-1429: a reason already carried by the
+        // NeedsAttention audit note is not written a second time.
+        if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
             let author = crate::get_default_author();
             let comment = aida_core::Comment::new(author, reason_text.to_string());
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
             self.storage
-                .update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        r.add_comment(comment);
-                    }
+                .update_spec_atomically(req, |r| {
+                    r.add_comment(comment);
                 })
                 .map_err(|e| e.to_string())?;
         }
@@ -5108,7 +5329,13 @@ impl<'a> McpServer<'a> {
             ));
         }
         let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
-        let cache = aida_core::Cache::open(&cache_path).map_err(|e| e.to_string())?;
+        // trace:TASK-1526 | ai:codex
+        let backend = aida_core::CachedGitBackend::open(&store_path, &cache_path)
+            .map_err(|e| e.to_string())?;
+        backend
+            .ensure_cache_fresh_with_schema_retry()
+            .map_err(|e| e.to_string())?;
+        let cache = backend.cache();
         let recorded_sha = cache
             .source_head_sha()
             .map_err(|e| e.to_string())?
@@ -5268,7 +5495,7 @@ impl<'a> McpServer<'a> {
     // to `gh` and stays CLI-only; this mirrors only the substrate-grounded
     // parts the server can read directly (store counts, leases, queue depth).
     fn tool_status_unified(&self, args: &Value) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         // BUG-717: mirror the CLI work-view (`aida status` / `aida list`) —
         // exclude standing-artifact / stateless types (vision / principle /
         // term / constraint / folder / meta) so the MCP status count agrees
@@ -5361,7 +5588,9 @@ impl<'a> McpServer<'a> {
 
         // --unused: commands not seen since the cutoff.
         if let Some(raw) = unused_raw {
-            let cutoff_window = crate::parse_days_arg(raw).map_err(|e| e.to_string())?;
+            // trace:TASK-1509 | ai:claude
+            let cutoff_window =
+                crate::queue_cmd::parse_lookback(raw, "unused").map_err(|e| e.to_string())?;
             let cutoff = now - cutoff_window;
             let mut last_seen: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
                 std::collections::HashMap::new();
@@ -5569,7 +5798,7 @@ impl<'a> McpServer<'a> {
     // ========================================================================
 
     fn resource_project_summary(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         let total = store.requirements.len();
         let by_status =
@@ -5610,7 +5839,7 @@ impl<'a> McpServer<'a> {
     }
 
     fn resource_requirements_tree(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         let mut output = "# Requirements Tree\n\n".to_string();
 
@@ -5661,7 +5890,7 @@ impl<'a> McpServer<'a> {
     /// axis), plus the Done-awaiting-merge bucket `aida queue list` appends so
     /// freshly-shipped work stays visible until auto-bump. trace:STORY-535
     fn resource_queue_in_flight(&self) -> Result<String, String> {
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Live lease scopes — the same set `tool_list_requirements`'s in_flight
         // filter and `aida queue list --in-flight-only` derive. trace:STORY-535
@@ -5745,7 +5974,7 @@ impl<'a> McpServer<'a> {
                 "Invalid protocol resource URI: aida://protocol/{path}"
             ));
         }
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let protocol = aida_core::resolve_protocol(&store, req_type, lane)
             .ok_or_else(|| format!("No type protocol found for `{req_type}`"))?;
         if lane.is_some() && protocol.lane_protocol.is_none() {
@@ -5785,7 +6014,7 @@ impl<'a> McpServer<'a> {
             .trim()
             .parse()
             .map_err(|_| format!("Invalid PR number in resource URI: aida://pr/{}", raw))?;
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
 
         // Findings raised against PR-N (cheap, tag-only). trace:STORY-535
         let mut findings: Vec<String> = store
@@ -5854,7 +6083,7 @@ impl<'a> McpServer<'a> {
         if name.is_empty() {
             return Err("Empty batch name in resource URI: aida://batch/<name>".to_string());
         }
-        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let store = self.storage.load_for_read().map_err(|e| e.to_string())?;
         let tag = format!("batch:{}", name);
 
         let (mut shipped, mut in_flight, mut working, mut remaining) =
@@ -6153,7 +6382,7 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
     }
 }
 
-// trace:TASK-551 | ai:codex
+// trace:TASK-551 | ai:codex trace:BUG-1602 | ai:claude
 fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
@@ -6163,26 +6392,10 @@ fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
         );
     }
 
-    let lowered = trimmed.to_ascii_lowercase();
-    Ok(match lowered.as_str() {
-        "parent" => RelationshipType::Parent,
-        "child" => RelationshipType::Child,
-        "duplicate" => RelationshipType::Duplicate,
-        "verifies" => RelationshipType::Verifies,
-        "verified-by" | "verified_by" | "verifiedby" => RelationshipType::VerifiedBy,
-        "references" | "related" | "relates-to" | "relates_to" | "relatesto" => {
-            RelationshipType::References
-        }
-        "blocked-by" | "blocked_by" | "blockedby" | "depends-on" | "depends_on" | "dependson" => {
-            RelationshipType::BlockedBy
-        }
-        "blocks" => RelationshipType::Blocks,
-        // trace:TASK-1176 | ai:claude — the supersede lineage pair.
-        "superseded-by" | "superseded_by" | "supersededby" | "replaced-by" | "replaced_by"
-        | "replacedby" => RelationshipType::SupersededBy,
-        "supersedes" | "replaces" => RelationshipType::Supersedes,
-        custom => RelationshipType::Custom(custom.to_string()),
-    })
+    // BUG-1602: delegate to the same shared parser `rel add` / `rel remove`
+    // use, so a spelling this tool accepts is exactly the same set the CLI
+    // accepts (and vice versa).
+    Ok(RelationshipType::parse_relationship_type(trimmed))
 }
 
 /// Read the current git branch under `project_root`. `None` on detached HEAD
@@ -6263,6 +6476,12 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 weight: r.weight.map(|w| w as f64),
                 // trace:STORY-634 | ai:claude
                 origin: r.origin.as_ref().map(|o| o.to_string()),
+                // trace:TASK-1474 | ai:claude
+                completed_at: r
+                    .implementation_info
+                    .as_ref()
+                    .and_then(|i| i.completed_at)
+                    .map(|t| t.to_rfc3339()),
                 yaml_path: String::new(),
             }
         })
@@ -6683,6 +6902,38 @@ pub fn resolve_mcp_profile(project_root: &Path, override_token: Option<&str>) ->
     McpProfile::default()
 }
 
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_tool_result(
+    content: String,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    let content_array = json!([{ "type": "text", "text": content }]);
+    cache_labelled_result(
+        json!({ "content": content_array, "structuredContent": { "content": content_array } }),
+        scope,
+    )
+}
+
+// trace:TASK-1526 | ai:codex
+fn cache_labelled_result(
+    mut result: Value,
+    scope: &aida_core::db::cache_refresh::CacheReadScope,
+) -> Value {
+    if scope.touched() {
+        let note = scope
+            .stale()
+            .map(|s| s.note())
+            .unwrap_or_else(|| "note: cached results are current.".to_string());
+        result["content"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"type": "text", "text": note}));
+        result["structuredContent"] =
+            json!({"content": result["content"], "cache": scope.metadata()});
+    }
+    result
+}
+
 // ============================================================================
 // Tool descriptors (kept at module scope for register-agent + tests)
 // ============================================================================
@@ -6738,9 +6989,21 @@ fn text_envelope_output_schema(payload_description: &str) -> Value {
             },
             "structuredContent": {
                 "type": "object",
-                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Absent on error (see `structuredError`).",
+                "description": "Path B (STORY-399): machine-readable mirror of the text envelope, present on success. Also present after a tolerant read on an error response (see `structuredError`).",
                 "properties": {
-                    "content": text_content_array()
+                    "content": text_content_array(),
+                    "cache": {
+                        "type": "object",
+                        "description": "Read-cache freshness for this tools/call, present when the tolerant cache path was touched.",
+                        "properties": {
+                            "stale": { "type": "boolean" },
+                            "cache_head": { "type": ["string", "null"] },
+                            "store_head": { "type": "string" },
+                            "built_at": { "type": ["string", "null"] },
+                            "refreshing": { "type": "string" }
+                        },
+                        "required": ["stale"]
+                    }
                 },
                 "required": ["content"]
             }
@@ -7258,13 +7521,23 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "history",
-            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records by default; explicit template returns human text in the existing MCP text envelope; fields projects ordered JSON event keys. template and fields are mutually exclusive. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/to/from/opened/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    "template": {
+                        "type": "string",
+                        "example": "{id} {event}",
+                        "description": "Opt-in human event text: inline if it contains {, otherwise a scoped template name (user > project > builtin). Fields: commit,date[:strftime],author,id,type,priority,title,kind,event,from,to,comment; escape {{/}}. Title: Added/Deleted/TitleChange new value; priority: Added/PriorityChange new value; absent otherwise. Comment is a CommentsAdded count/summary, never a body. Missing fields are empty. Cannot combine with fields, oneline or explicit events:true. No save/remove API."
+                    },
+                    "fields": {
+                        "type": "string",
+                        "example": "id,date,event",
+                        "description": "Ordered CSV event fields: commit,date,author,id,type,priority,title,kind,event,from,to,comment. Returns the existing JSON envelope with only these keys in each events row, in caller order; unavailable event-local values are null. Selects the full event feed. Cannot combine with template or oneline."
+                    },
                     "spec_id": {
                         "type": "string",
-                        "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history --id`). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
+                        "description": "Optional SPEC-ID filter for a single requirement's event history (mirrors `aida history events --id`, i.e. `aida history <SPEC-ID> --full`: the full event trail, not the status-progression view). Accepts the raw UUID `show_requirement` returns; it is resolved to the canonical SPEC-ID before filtering.",
                         "example": "TASK-538"
                     },
                     "events": {
@@ -7286,12 +7559,12 @@ pub fn tool_descriptors() -> Value {
                     },
                     "since": {
                         "type": "string",
-                        "description": "Optional lower time bound, passed through to git just like `aida history --since` (RFC3339 or relative expressions supported by git).",
+                        "description": "Optional lower time bound (mirrors `aida history --since`). Accepts a relative duration meaning 'that far before now' (`30m`, `5h`, `7d`, `2w`, or `<N> minutes/hours/days/weeks ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local time), or a full RFC3339 timestamp (zone honored exactly). Other git date phrases are no longer passed through and are rejected. A `since` that resolves later than `until` is rejected.",
                         "example": "24 hours ago"
                     },
                     "until": {
                         "type": "string",
-                        "description": "Optional upper time bound (mirrors `aida history --until`; RFC3339 or relative expressions supported by git).",
+                        "description": "Optional upper time bound (mirrors `aida history --until`). Same forms as `since`: a relative duration, an ISO date (local midnight), a zone-less ISO datetime (local time), or RFC3339.",
                         "example": "2026-06-01"
                     },
                     "limit": {
@@ -7303,7 +7576,23 @@ pub fn tool_descriptors() -> Value {
                     },
                     "shipped": {
                         "type": "boolean",
-                        "description": "Only Done->Completed ship transitions, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
+                        "description": "Only transitions into Completed (merged to the default branch), from any prior status, newest first — the 'did my ship register?' view (mirrors `aida history --shipped`). Implies events mode; composes with since/until/limit.",
+                        "default": false,
+                        "example": true
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "Only status transitions into this status (mirrors `aida history --to`). Accepts the spellings `aida edit --status` does (`approved`, `in-progress`, `needs-attention`, any case) plus `accepted` for approved; an unknown status is an error listing the valid set. With `from`, both ends must match; `from` and `to` naming the same status is refused. With `status_changes` it narrows the transitions; with `comments` or `opened` the result is the union. Cannot be combined with `shipped` (which is `to: completed`).",
+                        "example": "approved"
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "Only status transitions out of this status (mirrors `aida history --from`). Alone it matches any transition leaving that status; same spellings and combination rules as `to`.",
+                        "example": "in-progress"
+                    },
+                    "opened": {
+                        "type": "boolean",
+                        "description": "Only spec-creation events: the specs filed in the window, whatever status they were filed at (mirrors `aida history --opened` and its alias `--created`). Combined with `to`/`from`, `status_changes` or `comments`, the result is the union of both kinds of event. Cannot be combined with `shipped`.",
                         "default": false,
                         "example": true
                     },
@@ -7328,7 +7617,7 @@ pub fn tool_descriptors() -> Value {
                 }
             },
             "outputSchema": text_envelope_output_schema(
-                "pretty-printed JSON `{ count, events }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields."
+                "With explicit template: human text in this same text envelope. With fields: pretty-printed JSON with caller-ordered projected events rows (unavailable event-local values are null) and the same envelope. Neither parameter: unchanged pretty-printed JSON `{ count, events, window_exhausted, source, index_tip }`, where each event has `sha`, `timestamp`, `author`, `spec_id`, `req_type`, `kind`, `summary`, and structured `detail` fields, plus the flat per-event row fields `id` (same as `spec_id`), `ts` (same as `timestamp`), and `from`/`to` (old and new value of a status, priority, title, owner, feature or type transition; null for other kinds). `window_exhausted` is true when the commit walk hit its cap before `count` reached the requested `limit` — there may be older matching events beyond it; a caller who needs them should narrow with `since`/`until`, since the MCP tool has no `max_commits` override of its own. `source` is `history-cache` when the rebuildable history index answered or `git-walk` when the store's git log was read directly (the index was off, still filling, or could not prove it held the whole answer); both return the same events. `index_tip` is the full store commit SHA an index answer reflects, or null for `git-walk`."
             )
         },
 
@@ -7878,7 +8167,7 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_done",
-            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
+            "description": "Mark a requirement Done and remove it from the queue in one step. Mirrors `aida queue done`. Flips status to Done (work finished on a branch) — the merge auto-bump later advances Done → Completed. Refuses a spec that has not passed the approval gate (Draft or NeedsAttention, unless the server holds approval authority) and a closed spec (Rejected, Completed, Superseded). Stamps implementation_info. Optionally capture user-facing interface changes (the deterministic operator-digest source) via interface_cli/mcp/tui/other, or no_interface_change for a no-impact spec. Optionally record the verification steps the builder ran via test_plan (surfaced in the PR body).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -8220,8 +8509,9 @@ fn workflow_tool_descriptors() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "since": { "type": "string", "description": "Window for the aggregation, e.g. `30d`, `90d` (default `30d`).", "example": "30d" },
-                    "unused": { "type": "string", "description": "Instead of top commands, list commands NOT used within this window (deprecation candidates).", "example": "30d" },
+                    // trace:TASK-1509 | ai:claude
+                    "since": { "type": "string", "description": "Window start for the aggregation (default `30d`): a relative duration (`30d`, `12h`, `2w`, `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (local time), or RFC3339.", "example": "30d" },
+                    "unused": { "type": "string", "description": "Instead of top commands, list commands NOT used since this point (deprecation candidates). Same forms as `since`.", "example": "30d" },
                     "errors": { "type": "boolean", "description": "Show only commands with errors, ranked by error rate.", "example": false },
                     "limit": { "type": "integer", "description": "Cap the number of rows returned (default 20).", "example": 20 }
                 }
@@ -8609,6 +8899,62 @@ mod tests {
     use std::thread;
     use tempfile::tempdir;
 
+    // trace:TASK-1526 | ai:codex
+    #[test]
+    fn mcp_read_tool_result_carries_cache_object_each_call() {
+        use aida_core::db::cache_refresh::*;
+        for state in [
+            RefreshState::Deferred,
+            RefreshState::WriterBusy,
+            RefreshState::WorkerRunning,
+        ] {
+            let scope = CacheReadScope::new();
+            record_read(Some(StaleServe {
+                stale: true,
+                cache_head: Some("old".into()),
+                store_head: "new".into(),
+                built_at: None,
+                refreshing: state,
+            }));
+            let result = cache_labelled_tool_result("rows".into(), &scope);
+            assert_eq!(result["structuredContent"]["cache"]["stale"], true);
+            assert_eq!(
+                result["structuredContent"]["cache"]["refreshing"],
+                serde_json::to_value(state).unwrap()
+            );
+            assert_eq!(result["content"].as_array().unwrap().len(), 2);
+            assert_eq!(result["content"][1]["text"], scope.stale().unwrap().note());
+        }
+        {
+            let scope = CacheReadScope::new();
+            record_read(Some(StaleServe {
+                stale: true,
+                cache_head: None,
+                store_head: "new".into(),
+                built_at: None,
+                refreshing: RefreshState::Deferred,
+            }));
+            let result = cache_labelled_result(
+                json!({"isError": true, "content": [{"type": "text", "text": "failed"}], "structuredError": {"code": "failed"}}),
+                &scope,
+            );
+            assert_eq!(result["structuredContent"]["cache"]["stale"], true);
+            assert_eq!(result["isError"], true);
+            assert_eq!(result["structuredError"]["code"], "failed");
+        }
+        let scope = CacheReadScope::new();
+        record_read(None);
+        let result = cache_labelled_tool_result("rows".into(), &scope);
+        assert_eq!(result["structuredContent"]["cache"]["stale"], false);
+        drop(scope);
+        let scope = CacheReadScope::new();
+        assert!(
+            cache_labelled_tool_result("untouched".into(), &scope)["structuredContent"]
+                .get("cache")
+                .is_none()
+        );
+    }
+
     fn mk_server(dir: &Path) -> McpServer<'static> {
         // Cache-backed Storage isn't required for the coordination-only tools;
         // we still need *a* Storage to instantiate the server. Point it at a
@@ -8617,6 +8963,238 @@ mod tests {
         std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
         let storage = Box::leak(Box::new(Storage::new(cache_path)));
         McpServer::new(storage, dir.to_path_buf())
+    }
+
+    /// BUG-1617: the `history` MCP tool's JSON now carries a top-level
+    /// `window_exhausted` boolean alongside `count`/`events`. This is a
+    /// wiring/shape test — a small fixture (one status flip) is nowhere
+    /// near the tool's 500-commit window floor, so `window_exhausted` is
+    /// always false here; the exhaustion-detection *logic* itself (true vs.
+    /// false depending on where the commit cap lands relative to the
+    /// requested limit) is covered directly against
+    /// `collect_filtered_events` in `history.rs`'s own tests, cheaply,
+    /// without needing hundreds of commits to trip the MCP tool's fixed
+    /// floor.
+    // trace:BUG-1617 | ai:claude
+    #[test]
+    fn tool_history_json_carries_window_exhausted_field() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+
+        let git = |args: &[&str]| {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+
+        let rel = std::path::Path::new("objects/BUG/000/BUG-1.yaml");
+        let full = store_root.join(rel);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "flip"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+
+        let response = server
+            .tool_history(&json!({"limit": 5}))
+            .expect("tool_history should succeed against a fresh git fixture");
+        let parsed: Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(
+            parsed.get("window_exhausted"),
+            Some(&Value::Bool(false)),
+            "plenty of window left relative to the tiny fixture — expected window_exhausted: false, got: {parsed}"
+        );
+        assert!(
+            parsed.get("count").and_then(Value::as_u64).unwrap_or(0) >= 1,
+            "expected at least the one status-change event, got: {parsed}"
+        );
+    }
+
+    /// TASK-1512: the `history` tool takes `to`/`from`/`opened` with the
+    /// CLI's semantics: the same status spellings, the same refusal for an
+    /// unknown status or `shipped` combined with `to`/`opened`, and the
+    /// union of creations and transitions.
+    // trace:TASK-1512 | ai:claude
+    #[test]
+    fn task_1512_mcp_history_transition_and_opened_filters() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let git = |args: &[&str]| {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        git(&["config", "commit.gpgsign", "false"]);
+        let bug1 = store_root.join("objects/BUG/000/BUG-1.yaml");
+        let bug2 = store_root.join("objects/BUG/000/BUG-2.yaml");
+        std::fs::create_dir_all(bug1.parent().unwrap()).unwrap();
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "file 1"]);
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: InProgress\n").unwrap();
+        std::fs::write(&bug2, "spec_id: BUG-2\ntitle: u\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "start 1, file 2 approved"]);
+        std::fs::write(&bug1, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "bounce 1"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let kinds = |args: Value| -> Vec<(String, String)> {
+            let v: Value = serde_json::from_str(&server.tool_history(&args).unwrap()).unwrap();
+            v["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|e| {
+                    (
+                        e["id"].as_str().unwrap().to_string(),
+                        e["kind"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+
+        assert_eq!(
+            kinds(json!({"from": "in_progress", "to": "accepted"})),
+            vec![pair("BUG-1", "status_change")]
+        );
+        assert_eq!(
+            kinds(json!({"opened": true})),
+            vec![pair("BUG-2", "added"), pair("BUG-1", "added")]
+        );
+        assert_eq!(
+            kinds(json!({"opened": true, "to": "approved"})),
+            vec![
+                pair("BUG-1", "status_change"),
+                pair("BUG-2", "added"),
+                pair("BUG-1", "added")
+            ]
+        );
+        let err = server.tool_history(&json!({"to": "nope"})).unwrap_err();
+        assert!(err.contains("expected one of"), "{err}");
+        let err = server
+            .tool_history(&json!({"shipped": true, "opened": true}))
+            .unwrap_err();
+        assert!(err.contains("shipped"), "{err}");
+        let err = server
+            .tool_history(&json!({"from": "approved", "to": "accepted"}))
+            .unwrap_err();
+        assert!(err.contains("both `Approved`"), "{err}");
+
+        // Every refusal reaches the client as `invalid_arg`, not `internal`.
+        for args in [
+            json!({"shipped": true, "opened": true}),
+            json!({"shipped": true, "to": "approved"}),
+            json!({"from": "in-progress", "to": "in_progress"}),
+            json!({"to": "nope"}),
+        ] {
+            let resp = server.handle_tools_call(
+                &json!(1),
+                &json!({"name": "history", "arguments": args.clone()}),
+            );
+            let result = resp.result.expect("tools/call returns a result");
+            assert_eq!(result["isError"], json!(true), "{args}");
+            assert_eq!(
+                result["structuredError"]["code"],
+                json!("invalid_arg"),
+                "{args}: {result}"
+            );
+        }
+    }
+
+    /// TASK-1505 slice 2: the `history` tool reports where its answer came
+    /// from. With the index switched on it answers from the index as of the
+    /// store HEAD (`source: history-cache`, `index_tip: <HEAD>`); switched
+    /// off it walks git (`source: git-walk`, `index_tip: null`), and the
+    /// events are the same either way. The store lives one level down in the
+    /// temp dir so the index file lands inside it.
+    // trace:TASK-1508 | ai:claude
+    #[test]
+    fn task_1508_mcp_history_reports_source_field() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("proj").join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let git = |args: &[&str]| -> String {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(&store_root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "t"]);
+        git(&["config", "commit.gpgsign", "false"]);
+        let full = store_root.join("objects/BUG/000/BUG-1.yaml");
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Draft\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "seed"]);
+        std::fs::write(&full, "spec_id: BUG-1\ntitle: t\nstatus: Approved\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "flip"]);
+        let head = git(&["rev-parse", "HEAD"]);
+
+        let storage = Storage::new(&store_root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let call = || -> Value {
+            serde_json::from_str(&server.tool_history(&json!({"limit": 5})).unwrap()).unwrap()
+        };
+
+        crate::history_cache::set_test_serve_enabled(true);
+        let served = call();
+        crate::history_cache::set_test_serve_enabled(false);
+        assert_eq!(served["source"], json!("history-cache"), "{served}");
+        assert_eq!(served["index_tip"], json!(head), "{served}");
+
+        let walked = call();
+        assert_eq!(walked["source"], json!("git-walk"), "{walked}");
+        assert_eq!(walked["index_tip"], Value::Null, "{walked}");
+        assert_eq!(served["events"], walked["events"]);
+        assert_eq!(served["count"], walked["count"]);
+        assert_eq!(served["window_exhausted"], walked["window_exhausted"]);
     }
 
     #[test]
@@ -10360,6 +10938,9 @@ mod tests {
     #[test]
     fn mcp_update_requirement_gates_advisor_and_merge_driven_statuses() {
         let dir = tempdir().unwrap();
+        // BUG-1618: pin the ambient project root / TTY / identity so a leased
+        // worktree's live roster cannot grant the refusal paths advisor authority.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let added = server
             .tool_add_requirement(&json!({
@@ -10432,6 +11013,10 @@ mod tests {
     #[test]
     fn mcp_update_requirement_gates_draft_into_pipeline() {
         let dir = tempdir().unwrap();
+        // BUG-1618: this asserts MCP refusals, which resolve advisor authority
+        // from the process-global AIDA_SESSION_ROLE; a leased agent session
+        // inherits `advisor`. Pin a hermetic, role-less ambient context.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let added = server
             .tool_add_requirement(&json!({
@@ -10489,6 +11074,10 @@ mod tests {
     #[test]
     fn mcp_triage_finding_promote_is_advisor_gated() {
         let dir = tempdir().unwrap();
+        // BUG-1618: this asserts MCP refusals, which resolve advisor authority
+        // from the process-global AIDA_SESSION_ROLE; a leased agent session
+        // inherits `advisor`. Pin a hermetic, role-less ambient context.
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
         let server = mk_server(dir.path());
         let filed = server
             .tool_file_finding(&json!({
@@ -12407,6 +12996,10 @@ mod tests {
 
     #[test]
     fn queue_add_list_remove_roundtrip() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
 
@@ -12440,6 +13033,10 @@ mod tests {
 
     #[test]
     fn queue_add_refuses_terminal_without_force() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Terminal spec");
@@ -12459,6 +13056,10 @@ mod tests {
 
     #[test]
     fn queue_next_and_work_peek_the_head() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-peek-user";
@@ -12500,6 +13101,10 @@ mod tests {
 
     #[test]
     fn queue_done_flips_to_done_and_dequeues() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-done-user";
@@ -12508,6 +13113,10 @@ mod tests {
         server
             .tool_queue_add_inner(&json!({ "id": &spec, "user": u }))
             .unwrap();
+        // BUG-1611: `queue_done` finishes approved work; the seed lands Draft,
+        // so move it into flight the way the advisor + `queue work` would.
+        // trace:BUG-1611 | ai:claude
+        force_status(&server, &spec, RequirementStatus::InProgress);
 
         let done = server
             .tool_queue_done(&json!({ "id": &spec, "user": u }))
@@ -12528,8 +13137,45 @@ mod tests {
         assert!(listed.contains("Queue is empty"), "listed: {listed}");
     }
 
+    /// BUG-1611: MCP `queue_done` runs the same lifecycle guard as the CLI. A
+    /// closed spec is refused whatever the server's role (so this check does
+    /// not depend on the test shell's AIDA_SESSION_ROLE), with no write and
+    /// neutral guidance; an In Progress spec passes (covered above).
+    // trace:BUG-1611 | ai:claude
+    #[test]
+    fn queue_done_refuses_a_closed_spec_without_writing() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        let u = "queue-done-closed-user";
+        let spec = seed_req(&server, "Declined");
+        force_status(&server, &spec, RequirementStatus::Rejected);
+
+        let err = server
+            .tool_queue_done(&json!({ "id": &spec, "user": u }))
+            .expect_err("queue_done on a Rejected spec must refuse");
+        assert!(err.contains("queue done refused"), "err: {err}");
+        assert!(!err.contains("AIDA_SESSION_ROLE"), "err: {err}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&spec).unwrap();
+        assert_eq!(req.status, RequirementStatus::Rejected);
+        assert!(req.implementation_info.is_none());
+
+        // The authority half, through the shared decision the tool calls.
+        assert!(crate::queue_done_lifecycle_refusal(&RequirementStatus::Draft, false).is_some());
+        assert!(crate::queue_done_lifecycle_refusal(&RequirementStatus::Approved, false).is_none());
+    }
+
     #[test]
     fn queue_rework_flips_status_and_requeues() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-rework-user";
@@ -12560,6 +13206,10 @@ mod tests {
 
     #[test]
     fn queue_rework_refuses_terminal_without_force() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Closed spec");
@@ -12580,6 +13230,10 @@ mod tests {
     // trace:BUG-480 | ai:claude
     #[test]
     fn mcp_queue_add_and_rework_are_advisor_gated() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let spec = seed_req(&server, "Authority-gated queue target");
@@ -12624,6 +13278,11 @@ mod tests {
     #[test]
     fn mcp_authority_gate_honors_advisor_role() {
         use RequirementStatus::*;
+        // BUG-1618: the env-resolving wrapper assertions below need a session with
+        // no advisor role entered; a leased agent session inherits one
+        // (AIDA_SESSION_ROLE=advisor). Pin a hermetic, role-less ambient context.
+        let dir = tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None); // trace:BUG-1618 | ai:claude
 
         // ---- Status gate: advisor-gated transitions ----
         // The advisor-authority transitions the bug names.
@@ -12737,6 +13396,10 @@ mod tests {
 
     #[test]
     fn queue_move_reorders() {
+        // STORY-1429: these tools read AIDA_SESSION_ROLE; hold the test env
+        // lock (pinned unset) so a sibling test that sets it cannot race.
+        // trace:STORY-1429 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
         let dir = tempdir().unwrap();
         let server = mk_git_server(dir.path());
         let u = "queue-move-user";

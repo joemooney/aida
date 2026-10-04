@@ -25,12 +25,17 @@ Use `aida dev activate` so `aida` resolves to this checkout, and
 `aida dev deactivate` to return to the released binary. Common checks:
 
 ```bash
+make check-ci-fast        # PRE-PUSH GATE: every CI gate needing no build (~90s)
 make build-fast
 cargo test --workspace
-cargo fmt --all -- --check
-cargo clippy --workspace
-tests/test_mcp_stdio.sh --skip-agent-contract
+make check-ci             # the rest of CI's gates, locally, in CI's order
 ```
+
+`make check-ci-fast` is the gate to run before every push. CI's Build job runs
+~36 gates; enumerating a handful here is what let ~25 of them stay
+undiscoverable until a red CI run. The targets run CI's own step bodies out of
+`.github/workflows/ci.yml`, so they cannot drift from it;
+`make check-ci-list` prints which gates run locally, which are skipped, and why.
 
 ## Template architecture
 
@@ -49,6 +54,7 @@ and agent docs are links or generated mirrors. Edit the template master, then ru
 | Agent communication | `docs/agents/session-communication.md` |
 | MCP/client setup | `docs/agents/aida-mcp-install-matrix.md` |
 | CLI reference | `docs/cli/` or `aida <command> --help` |
+| Call-graph navigation (what calls/uses a symbol) | `codegraph callers`/`callees`/`impact` when installed — but it skips files over 1 MiB, so `aida-cli-lib/src/lib.rs` is NOT in its graph; treat "no callers" as unverified until `rg` agrees |
 | Specialized workflow | invoke the matching AIDA skill; do not preload its body |
 
 ## Context economy

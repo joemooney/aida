@@ -15,6 +15,7 @@
 //! auto-merge is unaffected (the granularity the branch-protection concern needs).
 // trace:BUG-1167 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,18 @@ pub(crate) enum HoldReasonKind {
 }
 
 impl HoldReasonKind {
+    /// BUG-1691: stricter gates remain primary when different kinds compose.
+    // trace:BUG-1691 | ai:codex
+    pub(crate) fn strictness(self) -> u8 {
+        match self {
+            Self::Recusal => 4,
+            Self::Decision => 3,
+            Self::Rework => 2,
+            Self::Supervision => 1,
+            Self::Unknown => 0,
+        }
+    }
+
     pub(crate) fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "supervision" => Some(Self::Supervision),
@@ -224,6 +237,10 @@ pub(crate) struct MergeHoldRecord {
     // trace:STORY-1416 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placed_by: Option<String>,
+    /// Displaced holds retained for audit; primary reason_kind is strictest.
+    // trace:BUG-1691 | ai:codex
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub absorbed: Vec<AbsorbedHold>,
 }
 
 /// BUG-1532 criterion 10: the identity of a recorded review verdict — the
@@ -241,6 +258,39 @@ pub(crate) struct VerdictRef {
     pub reviewed_sha: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recorded_by: Option<String>,
+}
+
+/// Flat shadow of a hold displaced by a stricter kind.
+// trace:BUG-1691 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct AbsorbedHold {
+    pub reason_kind: HoldReasonKind,
+    pub detail: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recused_principals: Vec<PrincipalIdentity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_head_sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verdict_ref: Option<VerdictRef>,
+}
+
+impl AbsorbedHold {
+    // trace:BUG-1691 | ai:codex
+    fn from_record(record: &MergeHoldRecord) -> Self {
+        Self {
+            reason_kind: record.reason_kind,
+            detail: record.detail.clone(),
+            recused_principals: record.recused_principals.clone(),
+            target_head_sha: record.target_head_sha.clone(),
+            spec: record.spec.clone(),
+            placed_by: record.placed_by.clone(),
+            verdict_ref: record.verdict_ref.clone(),
+        }
+    }
 }
 
 impl VerdictRef {
@@ -344,6 +394,7 @@ impl MergeHoldRecord {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }
     }
 }
@@ -377,12 +428,32 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
     std::fs::write(hold_path(project_root, pr), body)
 }
 
-/// Write a v2 typed marker. JSON is intentionally self-contained so all
-/// offline surfaces can route it without parsing operator prose.
-// trace:STORY-1397 | ai:codex
+/// Write a v2 typed marker, preserving stricter existing gates.
+// trace:STORY-1397 trace:BUG-1691 | ai:codex
 pub(crate) fn write_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    match compose_with_existing(project_root, record) {
+        Composed::Placed(r) => write_marker(project_root, &r, true),
+        Composed::Preserved(r) => write_marker(project_root, &r, false),
+    }
+}
+
+/// Replace the marker; reserved for the explicit operator escape hatch.
+// trace:STORY-1397 trace:BUG-1691 | ai:codex
+fn write_typed_hold_replacing(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    write_marker(project_root, record, true)
+}
+
+// trace:BUG-1691 | ai:codex
+fn write_marker(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    reconcile_route: bool,
 ) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -402,12 +473,30 @@ pub(crate) fn write_typed_hold(
     let mut normalized = record.clone();
     normalized.schema_version = 2;
     normalized.legacy = false;
-    if normalized.reason_kind == HoldReasonKind::Recusal {
+    if reconcile_route && normalized.reason_kind == HoldReasonKind::Recusal {
         reconcile_recusal_route(project_root, &mut normalized)?;
     }
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)
+    match std::fs::remove_file(clearance_path(project_root, record.pr)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)?;
+    // trace:BUG-1693 | ai:codex
+    let mut event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: record.pr as u32,
+            placed: true,
+            reason: Some(record.detail.clone()),
+        },
+    );
+    event.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &event);
+    Ok(())
 }
 
 /// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
@@ -439,7 +528,63 @@ pub(crate) fn place_hand_hold(
             }
         ));
     }
-    write_typed_hold(project_root, record).map_err(|e| e.to_string())
+    write_typed_hold_replacing(project_root, record).map_err(|e| e.to_string())
+}
+
+/// Compose an incoming hold with the marker already present on the PR.
+// trace:BUG-1691 | ai:codex
+// trace:BUG-1691 | ai:codex
+enum Composed {
+    Placed(MergeHoldRecord),
+    Preserved(MergeHoldRecord),
+}
+
+// trace:BUG-1691 | ai:codex
+fn compose_with_existing(project_root: &Path, incoming: &MergeHoldRecord) -> Composed {
+    let Some(existing) = read_hold_record(project_root, incoming.pr) else {
+        return Composed::Placed(incoming.clone());
+    };
+    compose_holds(&existing, incoming)
+}
+
+/// Pure precedence policy for two hold records.
+// trace:BUG-1691 | ai:codex
+fn compose_holds(existing: &MergeHoldRecord, incoming: &MergeHoldRecord) -> Composed {
+    if existing.reason_kind == incoming.reason_kind {
+        let mut out = incoming.clone();
+        merge_absorbed(&mut out.absorbed, &existing.absorbed);
+        return Composed::Placed(out);
+    }
+    let (mut primary, loser, preserved) =
+        if incoming.reason_kind.strictness() > existing.reason_kind.strictness() {
+            (incoming.clone(), existing, false)
+        } else {
+            (existing.clone(), incoming, true)
+        };
+    let mut carried = loser.absorbed.clone();
+    carried.push(AbsorbedHold::from_record(loser));
+    merge_absorbed(&mut primary.absorbed, &carried);
+    primary
+        .absorbed
+        .retain(|a| a.reason_kind != primary.reason_kind);
+    if preserved {
+        Composed::Preserved(primary)
+    } else {
+        Composed::Placed(primary)
+    }
+}
+
+/// Union absorbed shadows by kind, with the newest entry taking precedence.
+// trace:BUG-1691 | ai:codex
+fn merge_absorbed(into: &mut Vec<AbsorbedHold>, extra: &[AbsorbedHold]) {
+    for e in extra {
+        if let Some(slot) = into.iter_mut().find(|a| a.reason_kind == e.reason_kind) {
+            *slot = e.clone();
+        } else {
+            into.push(e.clone());
+        }
+    }
+    into.sort_by_key(|a| std::cmp::Reverse(a.reason_kind.strictness()));
 }
 
 /// Refresh a recusal hold from live evidence: adopt a moved PR head (which
@@ -635,6 +780,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
                     release_condition: None,
                     spec: None,
                     placed_by: None,
+                    absorbed: Vec::new(),
                 }),
             }
         }
@@ -655,6 +801,7 @@ pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHold
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }),
     }
 }
@@ -709,6 +856,7 @@ pub(crate) fn typed_hold(
         release_condition: None,
         spec: None,
         placed_by: Some(placing_seat()),
+        absorbed: Vec::new(),
     }
 }
 
@@ -805,6 +953,29 @@ pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
         .join(format!("PR-{pr}.json"))
 }
 
+/// Local audit signal for a hold placed through AIDA whose marker disappeared
+/// without the human clearance command recording a release.
+// trace:BUG-1693 | ai:codex
+pub(crate) fn unrecorded_marker_removals(project_root: &Path) -> Vec<u64> {
+    use crate::events::EventKind;
+    let mut latest = std::collections::BTreeMap::<u32, bool>::new();
+    for event in crate::events::read_all_with_archive(project_root) {
+        if let EventKind::MergeHoldChanged { pr, placed, .. } = event.kind {
+            latest.insert(pr, placed);
+        }
+    }
+    latest
+        .into_iter()
+        .filter_map(|(pr, placed)| {
+            let pr = u64::from(pr);
+            (placed
+                && !hold_path(project_root, pr).exists()
+                && !clearance_path(project_root, pr).exists())
+            .then_some(pr)
+        })
+        .collect()
+}
+
 pub(crate) fn record_clearance(
     project_root: &Path,
     record: &MergeHoldRecord,
@@ -850,7 +1021,13 @@ pub(crate) fn record_clearance_with_verdict(
 /// which would let a merge through when the marker was present but unreadable —
 /// the exact fail-open class this whole marker exists to prevent.
 pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
-    read_hold_record(project_root, pr).map(|record| record.detail)
+    read_hold_record(project_root, pr)
+        .map(|record| record.detail)
+        .or_else(|| {
+            unrecorded_marker_removals(project_root)
+                .contains(&pr)
+                .then(|| MARKER_MISSING_REASON.to_string())
+        })
 }
 
 /// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
@@ -890,6 +1067,308 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
 /// client chokepoint never sees). trace on the item below stays a plain comment.
 // trace:BUG-1167 | ai:claude
 pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
+/// Permanent forge-side evidence that this PR has been held at least once.
+// trace:BUG-1693 | ai:codex
+pub(crate) const HOLD_RECORDED_LABEL: &str = "aida:merge-hold-recorded";
+/// Forge-side mirror of the human-gated clearance record.
+// trace:BUG-1693 | ai:codex
+pub(crate) const HOLD_CLEARED_LABEL: &str = "aida:merge-hold-cleared";
+
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MergeHoldLabel {
+    pub name: &'static str,
+    pub color: &'static str,
+    pub description: &'static str,
+}
+
+pub(crate) const MERGE_HOLD_LABELS: [MergeHoldLabel; 3] = [
+    MergeHoldLabel {
+        name: HOLD_LABEL,
+        color: "B60205",
+        description: "Supervised merge hold — merge-hold-gate fails while present",
+    },
+    MergeHoldLabel {
+        name: HOLD_RECORDED_LABEL,
+        color: "B60205",
+        description: "Supervised merge hold was recorded — persists across clearance",
+    },
+    MergeHoldLabel {
+        name: HOLD_CLEARED_LABEL,
+        color: "0E8A16",
+        description: "Recorded merge hold has a human-gated clearance",
+    },
+];
+
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LabelDefinitions {
+    Read {
+        present: Vec<&'static str>,
+        missing: Vec<&'static str>,
+    },
+    NoForge,
+    Unknown(String),
+}
+
+pub(crate) fn label_definitions(project_root: &Path) -> LabelDefinitions {
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    if kind == crate::forge::ForgeKind::None {
+        return LabelDefinitions::NoForge;
+    }
+    let pin = match resolve_pinned_repo(project_root, kind) {
+        Ok(Some(pin)) => pin,
+        Ok(None) => return LabelDefinitions::NoForge,
+        Err(err) => return LabelDefinitions::Unknown(err),
+    };
+    label_definitions_with(project_root, &pin, run_forge_cli_stdout_bounded)
+}
+
+// A doctor probe must not let a hung forge CLI stall diagnostics indefinitely.
+// Keep this separate from the shared runner used by hold placement.
+const LABEL_DEFINITIONS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn run_forge_cli_stdout_bounded(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+) -> Result<(bool, String), String> {
+    run_forge_cli_stdout_bounded_with(project_root, cli, args, LABEL_DEFINITIONS_TIMEOUT)
+}
+
+fn run_forge_cli_stdout_bounded_with(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+    timeout: std::time::Duration,
+) -> Result<(bool, String), String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    let mut command = std::process::Command::new(cli);
+    command
+        .current_dir(project_root)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let stdout = child.stdout.take().expect("piped stdout");
+    let stdout_sender = sender.clone();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = stdout.take(4 * 1024 * 1024).read_to_end(&mut output);
+        let _ = stdout_sender.send((false, result, output));
+    });
+    let stderr = child.stderr.take().expect("piped stderr");
+    let stderr_sender = sender.clone();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = stderr.take(4 * 1024 * 1024).read_to_end(&mut output);
+        let _ = stderr_sender.send((true, result, output));
+    });
+    drop(sender);
+    let deadline = Instant::now() + timeout;
+    let mut status = None;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut stdout_read = false;
+    let mut stderr_read = false;
+    loop {
+        if status.is_none() {
+            status = child
+                .try_wait()
+                .map_err(|e| format!("could not wait for {cli}: {e}"))?;
+        }
+        while let Ok((is_stderr, result, output)) = receiver.try_recv() {
+            result.map_err(|e| format!("could not read {cli} output: {e}"))?;
+            if is_stderr {
+                stderr = output;
+                stderr_read = true;
+            } else {
+                stdout = output;
+                stdout_read = true;
+            }
+        }
+        if let Some(status) = status.as_ref().filter(|_| stdout_read && stderr_read) {
+            let output = if status.success() { stdout } else { stderr };
+            return Ok((
+                status.success(),
+                String::from_utf8_lossy(&output).to_string(),
+            ));
+        }
+        if Instant::now() >= deadline {
+            #[cfg(unix)]
+            unsafe {
+                libc::killpg(child.id() as libc::pid_t, libc::SIGKILL);
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("timed out after {}s", timeout.as_secs()));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+fn label_definitions_with(
+    root: &Path,
+    pin: &PinnedRepo,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> LabelDefinitions {
+    use crate::forge::ForgeKind;
+    let (cli, args) = match pin.kind {
+        ForgeKind::GitHub => (
+            "gh",
+            vec![
+                "label".into(),
+                "list".into(),
+                "-R".into(),
+                pin.repo_arg(),
+                "--json".into(),
+                "name".into(),
+                "--limit".into(),
+                "200".into(),
+            ],
+        ),
+        ForgeKind::GitLab => (
+            "glab",
+            vec!["label".into(), "list".into(), "-R".into(), pin.repo_arg()],
+        ),
+        ForgeKind::None => return LabelDefinitions::NoForge,
+    };
+    let output = match runner(root, cli, &args) {
+        Ok((true, out)) => out,
+        Ok((false, out)) => return LabelDefinitions::Unknown(out),
+        Err(err) => return LabelDefinitions::Unknown(err),
+    };
+    let names: Vec<String> = if pin.kind == ForgeKind::GitHub {
+        match serde_json::from_str::<Vec<serde_json::Value>>(&output) {
+            Ok(rows) => match rows
+                .iter()
+                .map(|row| {
+                    row.get("name")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_owned)
+                })
+                .collect::<Option<Vec<_>>>()
+            {
+                Some(names) => names,
+                None => {
+                    return LabelDefinitions::Unknown(
+                        "gh label list output did not contain a name for every row".into(),
+                    )
+                }
+            },
+            Err(err) => {
+                return LabelDefinitions::Unknown(format!(
+                    "could not parse gh label list output: {err}"
+                ))
+            }
+        }
+    } else {
+        output.lines().map(str::to_owned).collect()
+    };
+    let exists = |name: &&str| {
+        if pin.kind == ForgeKind::GitHub {
+            names.iter().any(|candidate| candidate == *name)
+        } else {
+            names.iter().any(|line| line_defines(line, name))
+        }
+    };
+    let present = MERGE_HOLD_LABELS
+        .iter()
+        .map(|l| l.name)
+        .filter(exists)
+        .collect();
+    let missing = MERGE_HOLD_LABELS
+        .iter()
+        .map(|l| l.name)
+        .filter(|n| !exists(n))
+        .collect();
+    LabelDefinitions::Read { present, missing }
+}
+
+// GitLab emits decorated raw lines. A label match is valid only when its next
+// character cannot continue a label identifier (for example, a longer label).
+fn line_defines(line: &str, name: &str) -> bool {
+    line.match_indices(name).any(|(start, _)| {
+        line[start + name.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !(ch.is_alphanumeric() || matches!(ch, '-' | '_' | ':')))
+    })
+}
+
+pub(crate) fn create_label_command(
+    pin: &PinnedRepo,
+    label: MergeHoldLabel,
+) -> (&'static str, Vec<String>) {
+    use crate::forge::ForgeKind;
+    let args = match pin.kind {
+        ForgeKind::GitHub => vec![
+            "label".into(),
+            "create".into(),
+            label.name.into(),
+            "-R".into(),
+            pin.repo_arg(),
+            "--color".into(),
+            label.color.into(),
+            "--description".into(),
+            label.description.into(),
+            "--force".into(),
+        ],
+        ForgeKind::GitLab => vec![
+            "label".into(),
+            "create".into(),
+            "-R".into(),
+            pin.repo_arg(),
+            "--name".into(),
+            label.name.into(),
+            "--color".into(),
+            label.color.into(),
+            "--description".into(),
+            label.description.into(),
+        ],
+        ForgeKind::None => Vec::new(),
+    };
+    (pin.kind.cli_name(), args)
+}
+
+pub(crate) fn provision_label_definitions(
+    root: &Path,
+    pin: &PinnedRepo,
+    missing: &[&'static str],
+) -> Vec<(&'static str, Result<(), String>)> {
+    MERGE_HOLD_LABELS
+        .iter()
+        .filter(|label| missing.contains(&label.name))
+        .map(|label| {
+            let (cli, args) = create_label_command(pin, *label);
+            let result = match run_forge_cli(root, cli, &args) {
+                Ok((true, _)) => Ok(()),
+                Ok((false, output))
+                    if pin.kind == crate::forge::ForgeKind::GitLab
+                        && output.to_ascii_lowercase().contains("already exists") =>
+                {
+                    Ok(())
+                }
+                Ok((false, output)) => {
+                    Err(output.lines().next().unwrap_or("non-zero exit").to_string())
+                }
+                Err(err) => Err(err),
+            };
+            (label.name, result)
+        })
+        .collect()
+}
 
 /// Whether the forge change currently carries the Layer-2 merge-hold label.
 ///
@@ -1397,6 +1876,15 @@ fn parse_labeled_changes(pin: &PinnedRepo, json: &str) -> Result<Vec<u64>, Strin
 // trace:BUG-1469 | ai:claude
 pub(crate) const LABEL_ONLY_REASON: &str = "label-only (no marker)";
 
+/// The reason shown for a hold AIDA recorded placing whose marker then
+/// disappeared with no clearance record — the tampering shape this spec exists
+/// to make visible. Single-sourced so the `read_hold` synthetic value, the
+/// `merge-hold clear` acknowledgement and the doctor finding all say the same
+/// thing.
+// trace:BUG-1693 | ai:claude
+pub(crate) const MARKER_MISSING_REASON: &str =
+    "hold marker missing without a recorded clearance (tampering suspected)";
+
 /// Which half of a hold exists. `Marker` covers both the marker-only and the
 /// marker+label shapes (the label column says which); `LabelOnly` is a hold a
 /// seat placed with a bare forge label.
@@ -1469,7 +1957,7 @@ pub(crate) fn premise_stale(
     verdict_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
     status_of: impl Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
+    use crate::review_verdict::{same_reviewed_sha, short_sha};
     let mut why = Vec::new();
     let prose_specs = || crate::pr_ship::extract_spec_ids_from_text(&record.detail);
     if record.reason_kind == HoldReasonKind::Rework {
@@ -1535,6 +2023,25 @@ pub(crate) enum RefusalRelease {
     /// was recorded against — or, when the verdict carries no sha, names the
     /// MISSING PROVENANCE as the reason (criterion 11).
     Held(String),
+}
+
+/// TASK-1582: `aida merge-hold list`'s next-action line once a refusal hold's
+/// release condition is MET. The hold is still ARMED, and `aida pr ship`
+/// refuses an armed hold for any seat without the human integrity floor
+/// (BUG-1566) — so pointing at ship alone sent agent seats in a loop between
+/// the two commands. The line names the CLEAR step first (clear → ship). It
+/// still names the human's one-step `aida pr ship`, because that path
+/// releases the hold AND pins the merge to the verdict's head (BUG-1532);
+/// after a plain clear the ship falls back to the approval-gate pin.
+/// `short_sha` is the verdict's reviewed sha (already shortened) or `?`.
+// trace:TASK-1582 | ai:antigravity
+pub(crate) fn release_met_next_action(pr: u64, key: &str, short_sha: &str) -> String {
+    format!(
+        "release condition MET: APPROVED for {key} at {short_sha} — the hold is still armed; \
+         next: `aida merge-hold clear {pr}` (human, recorded), then `aida pr ship {pr}`. \
+         A human at a terminal may instead run `aida pr ship {pr}` alone, which releases the \
+         hold and pins the merge to {short_sha}; agent seats are refused until it is cleared"
+    )
 }
 
 /// The verdict keys a refusal hold is answered under: its typed
@@ -1729,17 +2236,71 @@ pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
     }
 }
 
-/// Best-effort mirror of the marker state to the `aida:merge-hold` label on the
-/// change (PR/MR), so Layer 2 can enforce server-side. Failures are swallowed:
-/// the file marker is the source of truth; the label is a convenience mirror and
-/// its absence only weakens Layer 2, never the client chokepoint.
+/// Mirror active hold state and its history/clearance proof to forge labels so
+/// Layer 2 can reject label-only release. Failures are returned to callers;
+/// otherwise a failed clearance-label update could look like a successful clear.
 ///
 /// STORY-1165: forge-routed. GitHub → `gh pr edit --add-label/--remove-label`;
 /// GitLab → `glab mr update --label/--unlabel`; pure-git → no-op (no forge to
-/// label). This is what lets the GitLab merge-hold-gate CI job (the Layer-2
-/// analog of merge-hold-gate.yml) see the label on an MR.
+/// labels. This lets both merge-hold-gate workflows require clearance after a
+/// hold.
 // trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)
-pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), String> {
+// trace:BUG-1747 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LabelSyncError {
+    /// A named label is not DEFINED in the repository. Deterministic and
+    /// operator-fixable; never retried.
+    DefinitionMissing {
+        names: Vec<String>,
+        detail: String,
+    },
+    Other(String),
+}
+
+impl LabelSyncError {
+    pub(crate) fn is_definition_missing(&self) -> bool {
+        matches!(self, Self::DefinitionMissing { .. })
+    }
+}
+
+impl std::fmt::Display for LabelSyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DefinitionMissing { names, detail } => write!(f, "{detail}; missing label definition(s): {}. Run `aida merge-hold labels --create-missing`.", names.join(", ")),
+            Self::Other(message) => f.write_str(message),
+        }
+    }
+}
+
+fn classify_label_sync_failure(stderr: &str, candidates: &[&str]) -> LabelSyncError {
+    let names: Vec<String> = candidates
+        .iter()
+        .filter(|name| stderr.contains(&format!("'{}' not found", name)))
+        .map(|name| (*name).to_string())
+        .collect();
+    if names.is_empty() {
+        LabelSyncError::Other(
+            stderr
+                .lines()
+                .next()
+                .unwrap_or("label update failed")
+                .trim()
+                .to_string(),
+        )
+    } else {
+        LabelSyncError::DefinitionMissing {
+            names,
+            detail: stderr
+                .lines()
+                .next()
+                .unwrap_or("label definition missing")
+                .trim()
+                .to_string(),
+        }
+    }
+}
+
+pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), LabelSyncError> {
     sync_label_with(project_root, pr, held, run_forge_cli)
 }
 
@@ -1755,7 +2316,7 @@ pub(crate) fn sync_label_with(
     pr: u64,
     held: bool,
     runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
-) -> Result<(), String> {
+) -> Result<(), LabelSyncError> {
     let kind = crate::forge::resolve_forge_kind(project_root);
     // TASK-1455: pin the repo; an unresolvable one refuses (and is recorded
     // as unsynced) instead of letting `gh`/`glab` guess from the cwd.
@@ -1767,13 +2328,14 @@ pub(crate) fn sync_label_with(
             if held {
                 let _ = record_label_state(project_root, pr, &LabelState::Unsynced(err.clone()));
             }
-            return Err(err);
+            return Err(LabelSyncError::Other(err));
         }
     };
     let Some((cli, args)) = sync_label_command(&pin, pr, held) else {
         return Ok(());
     };
     let mut last_err = String::new();
+    let mut sync_error = None;
     for attempt in 0..2 {
         match runner(project_root, cli, &args) {
             Ok((true, _)) => {
@@ -1783,6 +2345,20 @@ pub(crate) fn sync_label_with(
                 return Ok(());
             }
             Ok((false, stderr)) => {
+                let classified = classify_label_sync_failure(
+                    &stderr,
+                    &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL],
+                );
+                if classified.is_definition_missing() {
+                    last_err = stderr
+                        .lines()
+                        .next()
+                        .unwrap_or("label definition missing")
+                        .trim()
+                        .to_string();
+                    sync_error = Some(classified);
+                    break;
+                }
                 last_err = stderr
                     .lines()
                     .next()
@@ -1799,7 +2375,8 @@ pub(crate) fn sync_label_with(
     if held {
         let _ = record_label_state(project_root, pr, &LabelState::Unsynced(last_err.clone()));
     }
-    Err(format!("`{cli} {}` failed: {last_err}", args.join(" ")))
+    let legacy = format!("`{cli} {}` failed: {last_err}", args.join(" "));
+    Err(sync_error.unwrap_or(LabelSyncError::Other(legacy)))
 }
 
 fn run_forge_cli(
@@ -1810,7 +2387,7 @@ fn run_forge_cli(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
@@ -1826,7 +2403,7 @@ fn run_forge_cli_stdout(
     let out = std::process::Command::new(cli)
         .current_dir(project_root)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
@@ -1847,46 +2424,562 @@ fn sync_label_command(
     use crate::forge::ForgeKind;
     match pin.kind {
         ForgeKind::GitHub => {
-            let flag = if held {
-                "--add-label"
+            let (flag, label) = if held {
+                ("--add-label", format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
             } else {
-                "--remove-label"
+                ("--remove-label", HOLD_LABEL.to_string())
             };
-            Some((
-                "gh",
-                vec![
-                    "pr".into(),
-                    "edit".into(),
-                    pr.to_string(),
-                    "-R".into(),
-                    pin.repo_arg(),
-                    flag.into(),
-                    HOLD_LABEL.into(),
-                ],
-            ))
+            let mut args = vec![
+                "pr".into(),
+                "edit".into(),
+                pr.to_string(),
+                "-R".into(),
+                pin.repo_arg(),
+                flag.into(),
+                label,
+            ];
+            if held {
+                // Both partial-failure interleavings fail closed: {hold, recorded,
+                // cleared} fails gate rule 1; {recorded} fails rule 2. No
+                // interleaving yields a passing gate.
+                // trace:BUG-1693 | ai:codex
+                args.extend(["--remove-label".into(), HOLD_CLEARED_LABEL.into()]);
+            } else {
+                args.extend(["--add-label".into(), HOLD_CLEARED_LABEL.into()]);
+            }
+            Some(("gh", args))
         }
         ForgeKind::GitLab => {
-            let flag = if held { "--label" } else { "--unlabel" };
-            Some((
-                "glab",
-                vec![
-                    "mr".into(),
-                    "update".into(),
-                    pr.to_string(),
-                    "-R".into(),
-                    pin.repo_arg(),
-                    flag.into(),
-                    HOLD_LABEL.into(),
-                ],
-            ))
+            let (flag, label) = if held {
+                ("--label", format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
+            } else {
+                ("--unlabel", HOLD_LABEL.to_string())
+            };
+            let mut args = vec![
+                "mr".into(),
+                "update".into(),
+                pr.to_string(),
+                "-R".into(),
+                pin.repo_arg(),
+                flag.into(),
+                label,
+            ];
+            if held {
+                // Both partial-failure interleavings fail closed: {hold, recorded,
+                // cleared} fails gate rule 1; {recorded} fails rule 2. No
+                // interleaving yields a passing gate.
+                // trace:BUG-1693 | ai:codex
+                args.extend(["--unlabel".into(), HOLD_CLEARED_LABEL.into()]);
+            } else {
+                args.extend(["--label".into(), HOLD_CLEARED_LABEL.into()]);
+            }
+            Some(("glab", args))
         }
         ForgeKind::None => None,
+    }
+}
+
+// ── BUG-1774: the corpus-derived half of the merge chokepoint ───────────────
+//
+// A refusing verdict used to hold a PR only when it was recorded through
+// `handle_review_record_at`, the one producer that stamps the marker + label.
+// Every other producer of a verdict artifact (`adopt_direct_write`, the drain's
+// `stamp_pr_review_verdict`, a hand-written file) armed nothing. Enforcement
+// state is therefore DERIVED from the verdict corpus here, at the chokepoint
+// every AIDA merge funnels through, rather than stamped once per writer. The
+// marker and the label stay as mirrors (ADR-37's server half is a GitHub
+// required check that can read a label but not the local corpus), and they are
+// refreshed from the SAME predicate the gate refuses on, so they cannot
+// disagree with the corpus.
+// trace:BUG-1774 | ai:claude
+
+/// What the verdict corpus says about merging a PR at its current head.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CorpusMergeGate {
+    /// No live verdict evidence, or the corpus cleanly approves the head.
+    Clear,
+    /// The merge is refused. `arm` carries the definite blocking verdict AT
+    /// the evaluated head when there is one — the only evidence the mirrors
+    /// (marker + label) are armed from. A fail-closed refusal with no definite
+    /// at-head blocker (unknown head, stale verdicts, conflicting corpus)
+    /// refuses without arming: mirroring uncertainty as state would put the
+    /// label on every PR whose head cannot be read.
+    Refuse {
+        message: String,
+        arm: Option<CorpusArm>,
+    },
+}
+
+/// The definite at-head blocking verdict backing a refusal (AC4: whatever
+/// refreshes the mirror does so from the gate's own predicate result).
+// trace:BUG-1774 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CorpusArm {
+    pub key: String,
+    pub sha: String,
+    pub verdict_raw: String,
+    pub recorded_by: Option<String>,
+}
+
+/// The gate's release syntax, spoken in every refusal (a refusal must name the
+/// repair the caller can actually run).
+fn corpus_release_hint(pr: u64, key: &str) -> String {
+    format!(
+        "The hold lifts only when the findings are addressed on a NEW head and a fresh \
+         APPROVED verdict is recorded at it — `aida review record {key} --verdict approved \
+         --sha <new-head> --pr {pr}` after reviewing it — then merge again."
+    )
+}
+
+/// Pure decision over the gathered verdict bodies. This is the fail-closed
+/// MERGE form, not BUG-1773's fail-open view form (`corpus_hold_at_head`):
+/// once live verdict evidence exists, only a clean APPROVED reconciliation at
+/// the current head lets the merge proceed. An unknown head, a verdict left at
+/// an older head, an approval recorded at the OLD rejected sha, and a corpus
+/// that cannot be reconciled all refuse (parent AC2/AC3).
+///
+/// A verdict closed by a merge is the original verdict PLUS a record that the
+/// branch moved on (BUG-1529) — history, not evidence about this head — so it
+/// is excluded before the corpus is judged, exactly as the view excludes it.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn corpus_merge_gate(
+    pr: u64,
+    bodies: &[(String, String)],
+    head: Option<&str>,
+) -> CorpusMergeGate {
+    use crate::review_verdict as rv;
+    let live: Vec<&(String, String)> = bodies
+        .iter()
+        .filter(|(_, body)| rv::parse_recorded_verdict(body).is_none_or(|v| !v.is_closed()))
+        .collect();
+    if live.is_empty() {
+        return CorpusMergeGate::Clear;
+    }
+    let first_key = live[0].0.clone();
+    let head = head.map(str::trim).filter(|h| !h.is_empty());
+    let Some(head) = head else {
+        // AC2: an artifact on file + an unreadable head = the gate cannot show
+        // the recorded verdict does not cover the commit about to land.
+        return CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr} has a recorded review verdict ({first_key}) but its current head could \
+                 not be read, so the merge fails closed. {}",
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        };
+    };
+    match rv::reconcile_artifacts_for_sha(live.iter().map(|(_, b)| b.as_str()), head) {
+        Ok(Some(kind)) if kind.approves() => CorpusMergeGate::Clear,
+        Ok(Some(kind)) => {
+            // A blocker recorded against this exact head — the definite case
+            // the mirrors are armed from, whatever producer wrote the file.
+            let blocking = live.iter().find_map(|(key, body)| {
+                rv::parse_recorded_verdict(body)
+                    .filter(|v| {
+                        v.kind.blocks_done()
+                            && v.reviewed_sha
+                                .as_deref()
+                                .is_some_and(|s| rv::same_reviewed_sha(s, head))
+                    })
+                    .map(|v| (key.clone(), v))
+            });
+            let (key, raw, recorded_by) = match blocking {
+                Some((key, v)) => (key, v.raw.clone(), v.recorded_by.clone()),
+                None => (
+                    first_key.clone(),
+                    kind.canonical().unwrap_or("request-changes").to_string(),
+                    None,
+                ),
+            };
+            let message = format!(
+                "PR-{pr} has an outstanding {raw} verdict for {key} at its current head {} — \
+                 the verdict corpus holds the merge regardless of which producer wrote the \
+                 artifact. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &key)
+            );
+            CorpusMergeGate::Refuse {
+                message,
+                arm: Some(CorpusArm {
+                    key,
+                    sha: head.to_string(),
+                    verdict_raw: raw,
+                    recorded_by,
+                }),
+            }
+        }
+        // Verdict evidence exists but nothing cleanly approves this head: a
+        // refusal left at an older sha (a head move alone does not lift the
+        // hold) or an approval recorded at the OLD rejected sha (parent AC3).
+        Ok(None) => CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
+                 head {} — a head move alone does not lift a recorded refusal, and an approval \
+                 at an older commit is not evidence this head was reviewed. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        },
+        Err(message) => CorpusMergeGate::Refuse {
+            message: format!(
+                "PR-{pr}'s verdict corpus cannot be reconciled at its current head {}: {message} \
+                 — a human must resolve the conflicting recordings before this merges. {}",
+                rv::short_sha(head),
+                corpus_release_hint(pr, &first_key)
+            ),
+            arm: None,
+        },
+    }
+}
+
+/// Gather the `(key, body)` pairs the gate judges: the PR-keyed record plus
+/// each spec hint, under each root (a worktree and the main clone can both
+/// hold `.aida/review-verdicts/`); a file reachable under two roots is read
+/// once. `Err` = an artifact exists but could not be read — AC2 fails closed.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn corpus_gate_bodies(
+    roots: &[&Path],
+    pr: u64,
+    spec_hints: &[String],
+) -> Result<Vec<(String, String)>, String> {
+    let mut keys: Vec<String> = Vec::new();
+    if pr > 0 {
+        keys.push(format!("PR-{pr}"));
+    }
+    for id in spec_hints {
+        let id = id.trim().to_ascii_uppercase();
+        if !id.is_empty() && !keys.contains(&id) {
+            keys.push(id);
+        }
+    }
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let mut out = Vec::new();
+    for root in roots {
+        for key in &keys {
+            let path = crate::review_verdict::verdict_path(root, key);
+            if std::fs::symlink_metadata(&path).is_err() {
+                continue;
+            }
+            let canon = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            if seen.contains(&canon) {
+                continue;
+            }
+            seen.push(canon);
+            match std::fs::read_to_string(&path) {
+                Ok(body) => out.push((key.clone(), body)),
+                Err(e) => {
+                    return Err(format!(
+                        "verdict artifact {} exists but could not be read ({e})",
+                        path.display()
+                    ))
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The chokepoint entry every `Forge::merge_change` implementation calls.
+/// `head` is resolved lazily — a PR with no verdict artifacts pays no forge
+/// read. On a definite at-head refusal the mirrors are refreshed best-effort
+/// from the gate's own `CorpusArm` (never from a second predicate), and the
+/// refusal stands whether or not the mirrors landed.
+// trace:BUG-1774 | ai:claude
+pub(crate) fn enforce_corpus_gate_before_merge(
+    project_root: &Path,
+    pr: u64,
+    spec_hints: &[String],
+    head: impl FnOnce() -> Option<String>,
+) -> anyhow::Result<()> {
+    let main_root = crate::main_worktree_root_from(project_root);
+    let mut roots: Vec<&Path> = vec![project_root];
+    if main_root != project_root {
+        roots.push(main_root.as_path());
+    }
+    let bodies = match corpus_gate_bodies(&roots, pr, spec_hints) {
+        Ok(bodies) => bodies,
+        Err(why) => anyhow::bail!(
+            "PR-{pr} was not merged: {why} — the merge fails closed on an unreadable verdict \
+             artifact. Restore or repair the file, then merge again."
+        ),
+    };
+    if bodies.is_empty() {
+        return Ok(());
+    }
+    let head = head();
+    match corpus_merge_gate(pr, &bodies, head.as_deref()) {
+        CorpusMergeGate::Clear => Ok(()),
+        CorpusMergeGate::Refuse { message, arm } => {
+            if let Some(arm) = arm.filter(|_| pr > 0) {
+                arm_corpus_mirrors(project_root, pr, &arm);
+            }
+            anyhow::bail!(message)
+        }
+    }
+}
+
+/// Refresh the marker + label mirrors from the gate's definite at-head
+/// refusal. Best-effort: a mirror failure is reported, never escalated — the
+/// chokepoint refusal already stands. `write_typed_hold` composes with any
+/// existing marker, so this programmatic Rework write cannot displace a
+/// stricter hold (a Recusal stays primary — BUG-1691).
+// trace:BUG-1774 | ai:claude
+fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
+    let reason = format!(
+        "{} for {} at {}",
+        arm.verdict_raw,
+        arm.key,
+        crate::review_verdict::short_sha(&arm.sha)
+    );
+    let mut hold = typed_hold(pr, HoldReasonKind::Rework, &reason, Some(arm.sha.clone()));
+    hold.verdict_ref = Some(VerdictRef::new(
+        &arm.key,
+        Some(pr),
+        Some(arm.sha.clone()),
+        arm.recorded_by.clone(),
+    ));
+    if !arm.key.starts_with("PR-") {
+        hold.spec = Some(arm.key.clone());
+    }
+    hold.release_condition = Some(format!(
+        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head; then a human ships it",
+        arm.key
+    ));
+    if let Err(err) = write_typed_hold(project_root, &hold) {
+        eprintln!(
+            "  warning: could not mirror the corpus refusal into PR-{pr}'s merge-hold marker \
+             ({err}) — the chokepoint refusal stands on the verdict corpus alone"
+        );
+        return;
+    }
+    if let Err(err) = sync_label(project_root, pr, true) {
+        eprintln!(
+            "  warning: merge-hold label not applied on PR-{pr}: {err} — the local merge \
+             chokepoint remains armed; run `aida merge-hold list --fix`"
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-1582 acceptance 1: with a hold armed, the next-action line names
+    // `aida merge-hold clear` BEFORE `aida pr ship` (no circular hints).
+    // trace:TASK-1582.ac14557d | ai:antigravity
+    #[test]
+    fn task_1582_release_met_next_action_names_clear_before_ship() {
+        let line = release_met_next_action(2386, "TASK-1", "abc1234");
+        let clear = line
+            .find("`aida merge-hold clear 2386`")
+            .unwrap_or_else(|| panic!("no clear step: {line}"));
+        let ship = line
+            .find("`aida pr ship 2386`")
+            .unwrap_or_else(|| panic!("no ship step: {line}"));
+        assert!(clear < ship, "clear must come first: {line}");
+        assert!(line.contains("APPROVED for TASK-1 at abc1234"), "{line}");
+        assert!(line.contains("still armed"), "{line}");
+        assert!(line.contains("pins the merge to abc1234"), "{line}");
+        assert!(!line.contains("may now `aida pr ship"), "{line}");
+    }
+
+    #[cfg(unix)]
+    fn shell_args(script: String) -> Vec<String> {
+        vec!["-c".into(), script]
+    }
+
+    #[cfg(unix)]
+    fn kill_if_alive(pid: libc::pid_t) {
+        // SAFETY: signal 0 only probes the child pid; SIGKILL is limited to
+        // the pid started by this test.
+        if unsafe { libc::kill(pid, 0) } == 0 {
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+    }
+
+    #[cfg(unix)]
+    struct ChildPidGuard(libc::pid_t);
+
+    #[cfg(unix)]
+    impl Drop for ChildPidGuard {
+        fn drop(&mut self) {
+            kill_if_alive(self.0);
+        }
+    }
+
+    // The definition probe intentionally has a distinct bounded runner from
+    // hold placement; timeout coverage keeps the doctor call from hanging.
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_times_out_near_its_injected_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let timeout = std::time::Duration::from_millis(200);
+        let started = std::time::Instant::now();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("sleep 30".into()),
+            timeout,
+        );
+        let elapsed = started.elapsed();
+        assert!(result.is_err(), "expected timeout, got {result:?}");
+        assert_eq!(
+            result.unwrap_err(),
+            format!("timed out after {}s", timeout.as_secs())
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "call took {elapsed:?}"
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pidfile = dir.path().join("grandchild.pid");
+        let script = format!("sleep 30 & echo $! > '{}' ; wait", pidfile.display());
+        let timeout = std::time::Duration::from_millis(200);
+        let result =
+            run_forge_cli_stdout_bounded_with(dir.path(), "sh", &shell_args(script), timeout);
+        assert!(result.is_err(), "expected timeout, got {result:?}");
+        let pid: libc::pid_t = std::fs::read_to_string(pidfile)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let _child_guard = ChildPidGuard(pid);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            // SAFETY: signal 0 only probes whether the test grandchild exists.
+            if unsafe { libc::kill(pid, 0) } == -1
+                && std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH)
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "grandchild {pid} survived timeout"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_returns_stdout_without_waiting_for_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let timeout = std::time::Duration::from_secs(5);
+        let started = std::time::Instant::now();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("printf hello".into()),
+            timeout,
+        );
+        let elapsed = started.elapsed();
+        assert_eq!(result.unwrap(), (true, "hello".into()));
+        assert!(elapsed < timeout / 2, "call took {elapsed:?}");
+    }
+
+    // Unlike run_forge_cli_stdout (used for hold placement), this diagnostic
+    // probe returns stderr on failure so LabelDefinitions::Unknown keeps gh's
+    // actionable error text instead of becoming Unknown("").
+    // trace:BUG-1747 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn forge_definition_probe_returns_stderr_for_failing_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = run_forge_cli_stdout_bounded_with(
+            dir.path(),
+            "sh",
+            &shell_args("echo OUT; echo ERR >&2; exit 3".into()),
+            std::time::Duration::from_secs(5),
+        )
+        .unwrap();
+        assert!(!result.0);
+        assert!(result.1.contains("ERR"), "{}", result.1);
+        assert!(!result.1.contains("OUT"), "{}", result.1);
+    }
+
+    // trace:BUG-1693 | ai:codex
+    #[test]
+    fn unrecorded_manual_marker_removal_is_detected_but_recorded_clear_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let record = typed_hold(4321, HoldReasonKind::Supervision, "fixture", None);
+        write_typed_hold(root, &record).unwrap();
+        let mut placed = crate::events::Event::new(
+            None,
+            "",
+            crate::events::EventKind::MergeHoldChanged {
+                pr: 4321,
+                placed: true,
+                reason: Some("fixture".into()),
+            },
+        );
+        std::fs::remove_file(hold_path(root, 4321)).unwrap();
+        assert_eq!(unrecorded_marker_removals(root), vec![4321]);
+        assert!(read_hold(root, 4321).is_some());
+
+        record_clearance(root, &record, &PrincipalIdentity::human("joe")).unwrap();
+        placed.kind = crate::events::EventKind::MergeHoldChanged {
+            pr: 4321,
+            placed: false,
+            reason: Some("fixture cleared".into()),
+        };
+        crate::events::emit(root, &placed);
+        assert!(unrecorded_marker_removals(root).is_empty());
+    }
+
+    // BUG-1693: `read_hold` gained a SECOND meaning — it now answers `Some`
+    // for a PR with no marker at all when AIDA recorded placing one. Every
+    // caller reads that as "held", which is the fail-closed behaviour we want
+    // at the merge chokepoint (forge.rs refuses the merge). Pin both halves of
+    // that invariant, and pin that a clearance recorded by the human-gated
+    // path is what re-opens the PR — otherwise a tampered PR is unmergeable
+    // through AIDA forever.
+    // trace:BUG-1693 | ai:claude
+    #[test]
+    fn tampered_hold_reads_as_held_until_a_clearance_is_recorded() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let record = typed_hold(8801, HoldReasonKind::Supervision, "supervised spec", None);
+        write_typed_hold(root, &record).unwrap();
+        std::fs::remove_file(hold_path(root, 8801)).unwrap();
+
+        // Fail closed: the merge chokepoint must still see a hold, and it must
+        // say WHY, not repeat the deleted marker's reason as if it were read.
+        assert_eq!(
+            read_hold(root, 8801).as_deref(),
+            Some(MARKER_MISSING_REASON)
+        );
+
+        // …but the synthetic value must not masquerade as a hold RECORD:
+        // `list_holds` walks the marker directory, so a deleted marker has no
+        // entry and cannot be reported as a live hold with a real reason.
+        assert!(
+            list_holds(root).iter().all(|(pr, _)| *pr != 8801),
+            "a missing marker must not appear as a live hold record"
+        );
+        assert!(read_hold_record(root, 8801).is_none());
+
+        // The human-gated clearance is the door back out. After it, the PR
+        // reads unheld and the tampering report stops.
+        record_clearance(
+            root,
+            &typed_hold(8801, HoldReasonKind::Unknown, MARKER_MISSING_REASON, None),
+            &PrincipalIdentity::human("joe"),
+        )
+        .unwrap();
+        assert!(unrecorded_marker_removals(root).is_empty());
+        assert!(read_hold(root, 8801).is_none());
+    }
 
     // STORY-1165: the label mirror must route to the right forge CLI — gh for
     // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
@@ -1904,8 +2997,12 @@ mod tests {
         let (cli, args) = sync_label_command(&gh, 42, true).unwrap();
         assert_eq!(cli, "gh");
         assert!(
-            args.contains(&"--add-label".to_string()) && args.contains(&HOLD_LABEL.to_string())
+            args.contains(&"--add-label".to_string())
+                && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
         );
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--remove-label" && w[1] == HOLD_CLEARED_LABEL));
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "o/r"),
             "{args:?}"
@@ -1915,7 +3012,13 @@ mod tests {
         let (cli, args) = sync_label_command(&gl, 42, true).unwrap();
         assert_eq!(cli, "glab");
         assert!(args.contains(&"mr".to_string()) && args.contains(&"update".to_string()));
-        assert!(args.contains(&"--label".to_string()) && args.contains(&HOLD_LABEL.to_string()));
+        assert!(
+            args.contains(&"--label".to_string())
+                && args.contains(&format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}"))
+        );
+        assert!(args
+            .windows(2)
+            .any(|w| w[0] == "--unlabel" && w[1] == HOLD_CLEARED_LABEL));
         assert!(
             args.windows(2).any(|w| w[0] == "-R" && w[1] == "g/sub/p"),
             "{args:?}"
@@ -1926,6 +3029,9 @@ mod tests {
             args.contains(&"--unlabel".to_string()),
             "unheld → remove the label"
         );
+        assert!(args.contains(&HOLD_LABEL.to_string()));
+        assert!(args.contains(&"--label".to_string()));
+        assert!(args.contains(&HOLD_CLEARED_LABEL.to_string()));
 
         let none = PinnedRepo {
             kind: ForgeKind::None,
@@ -1936,6 +3042,268 @@ mod tests {
             sync_label_command(&none, 42, true).is_none(),
             "pure-git has no forge to label"
         );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn held_github_label_update_is_one_atomic_comma_list() {
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let (_, args) = sync_label_command(&repo, 9, true).unwrap();
+        // An undefined member of the comma list exits 1 and applies neither label,
+        // so provisioning must cover all three definitions before any hold is placed.
+        assert_eq!(
+            args[args.iter().position(|arg| arg == "--add-label").unwrap() + 1],
+            format!("{HOLD_LABEL},{HOLD_RECORDED_LABEL}")
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_sync_failure_classification_matches_forge_diagnostics() {
+        assert_eq!(
+            classify_label_sync_failure(
+                "'aida:merge-hold-cleared' not found",
+                &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]
+            ),
+            LabelSyncError::DefinitionMissing {
+                names: vec![HOLD_CLEARED_LABEL.into()],
+                detail: "'aida:merge-hold-cleared' not found".into()
+            }
+        );
+        assert!(matches!(
+            classify_label_sync_failure("HTTP 502", &[HOLD_LABEL]),
+            LabelSyncError::Other(_)
+        ));
+        assert_eq!(
+            classify_label_sync_failure(
+                "'aida:merge-hold' not found and 'aida:merge-hold-recorded' not found",
+                &[HOLD_LABEL, HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]
+            ),
+            LabelSyncError::DefinitionMissing {
+                names: vec![HOLD_LABEL.into(), HOLD_RECORDED_LABEL.into()],
+                detail: "'aida:merge-hold' not found and 'aida:merge-hold-recorded' not found"
+                    .into()
+            }
+        );
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_definition_failure_skips_retry_but_transient_retries() {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["remote", "add", "origin", "git@github.com:o/r.git"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        let definition_calls = std::cell::Cell::new(0);
+        let err = sync_label_with(dir.path(), 42, true, |_, _, _| {
+            definition_calls.set(definition_calls.get() + 1);
+            Ok((false, "'aida:merge-hold-cleared' not found".into()))
+        })
+        .unwrap_err();
+        assert_eq!(definition_calls.get(), 1);
+        assert!(err.is_definition_missing());
+        let transient_calls = std::cell::Cell::new(0);
+        let _ = sync_label_with(dir.path(), 43, false, |_, _, _| {
+            transient_calls.set(transient_calls.get() + 1);
+            Ok((false, "HTTP 502".into()))
+        });
+        assert_eq!(transient_calls.get(), 2);
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn label_definition_failure_keeps_the_local_hold_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["remote", "add", "origin", "git@github.com:o/r.git"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(44, HoldReasonKind::Supervision, "test", None),
+        )
+        .unwrap();
+        let err = sync_label_with(dir.path(), 44, true, |_, _, _| {
+            Ok((false, "'aida:merge-hold-cleared' not found".into()))
+        })
+        .unwrap_err();
+        assert!(hold_path(dir.path(), 44).exists());
+        assert!(read_hold(dir.path(), 44).is_some());
+        assert!(matches!(
+            read_label_state(dir.path(), 44),
+            LabelState::Unsynced(_)
+        ));
+        assert!(err.is_definition_missing());
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn merge_hold_label_create_argv_covers_registry_with_force_and_metadata() {
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        for label in MERGE_HOLD_LABELS {
+            let (cli, args) = create_label_command(&repo, label);
+            assert_eq!(cli, "gh");
+            assert_eq!(args[0..3], ["label", "create", label.name]);
+            assert!(args
+                .windows(2)
+                .any(|w| w == ["-R", repo.repo_arg().as_str()]));
+            assert!(args.windows(2).any(|w| w == ["--color", label.color]));
+            assert!(args
+                .windows(2)
+                .any(|w| w == ["--description", label.description]));
+            assert!(args.contains(&"--force".into()));
+        }
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn repo_label_definition_probe_maps_output_without_treating_failures_as_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let all = serde_json::to_string(
+            &MERGE_HOLD_LABELS
+                .iter()
+                .map(|l| serde_json::json!({"name": l.name}))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let LabelDefinitions::Read { missing, .. } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, all.clone())))
+        else {
+            panic!("expected read")
+        };
+        assert!(missing.is_empty());
+        let partial = format!(r#"[{{"name":"{}"}}]"#, HOLD_LABEL);
+        let LabelDefinitions::Read { missing, .. } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, partial.clone())))
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+        assert!(matches!(
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((false, String::new()))),
+            LabelDefinitions::Unknown(_)
+        ));
+        assert!(matches!(
+            label_definitions_with(dir.path(), &repo, |_, _, _| Ok((true, "not json".into()))),
+            LabelDefinitions::Unknown(_)
+        ));
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn github_probe_does_not_treat_longer_labels_as_the_base_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
+        let only_long_names =
+            r#"[{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}]"#;
+        let LabelDefinitions::Read { present, missing } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| {
+                Ok((true, only_long_names.into()))
+            })
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_LABEL]);
+        assert_eq!(present, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+    }
+
+    // trace:BUG-1747 | ai:codex
+    #[test]
+    fn gitlab_probe_does_not_treat_longer_labels_as_the_base_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = pin(crate::forge::ForgeKind::GitLab, "git@gitlab.com:o/r.git");
+        let only_long_names = "aida:merge-hold-recorded\naida:merge-hold-cleared\n";
+        let LabelDefinitions::Read { present, missing } =
+            label_definitions_with(dir.path(), &repo, |_, _, _| {
+                Ok((true, only_long_names.into()))
+            })
+        else {
+            panic!("expected read")
+        };
+        assert_eq!(missing, vec![HOLD_LABEL]);
+        assert_eq!(present, vec![HOLD_RECORDED_LABEL, HOLD_CLEARED_LABEL]);
+    }
+
+    // trace:BUG-1693 | ai:codex
+    #[test]
+    fn a_second_hold_drops_the_stale_clearance_so_manual_label_removal_cannot_release() {
+        use crate::forge::ForgeKind;
+        use std::collections::BTreeSet;
+
+        fn apply_label_args(labels: &mut BTreeSet<String>, argv: &[String]) {
+            let mut index = 0;
+            while index + 1 < argv.len() {
+                let add = match argv[index].as_str() {
+                    "--add-label" | "--label" => true,
+                    "--remove-label" | "--unlabel" => false,
+                    _ => {
+                        index += 1;
+                        continue;
+                    }
+                };
+                for label in argv[index + 1].split(',') {
+                    if add {
+                        labels.insert(label.to_string());
+                    } else {
+                        labels.remove(label);
+                    }
+                }
+                index += 2;
+            }
+        }
+
+        fn run_sequence(kind: ForgeKind) {
+            let repo_origin = match kind {
+                ForgeKind::GitHub => "git@github.com:o/r.git",
+                ForgeKind::GitLab => "https://gitlab.com/g/sub/p.git",
+                ForgeKind::None => unreachable!(),
+            };
+            let repo = pin(kind, repo_origin);
+            let mut labels = BTreeSet::new();
+            for held in [true, false, true] {
+                let (_, args) = sync_label_command(&repo, 42, held).unwrap();
+                apply_label_args(&mut labels, &args);
+            }
+            labels.remove(HOLD_LABEL);
+
+            // tests/test_merge_hold_gate.sh case
+            // 'aida:merge-hold-recorded|1|dropping the active label by hand leaves history without clearance'
+            // proves the shipped gate fails on this set.
+            assert_eq!(labels, BTreeSet::from([HOLD_RECORDED_LABEL.to_string()]));
+        }
+
+        run_sequence(ForgeKind::GitHub);
+        run_sequence(ForgeKind::GitLab);
     }
 
     // TASK-1455: the pin comes from origin; enterprise / self-managed hosts
@@ -2076,7 +3444,7 @@ mod tests {
             panic!("an unpinned forge call must never be made")
         })
         .unwrap_err();
-        assert!(err.contains("unpinned"), "{err}");
+        assert!(format!("{err}").contains("unpinned"), "{err}");
         assert!(matches!(read_label_state(root, 5), LabelState::Unsynced(_)));
     }
 
@@ -2236,6 +3604,67 @@ mod tests {
             "floor, then forge read, then record"
         );
         assert!(clear.contains("merge_hold::LABEL_ONLY_REASON"));
+        // BUG-1693: a marker deleted by hand leaves AIDA fail-closed on that
+        // PR forever unless `merge-hold clear` can RECORD the release. Pin the
+        // door itself, not merely a mention of it: whitespace-normalised so
+        // `cargo fmt` cannot break the assertion, and ordered before the
+        // "nothing to clear" early return a missing marker would otherwise
+        // take. trace:BUG-1693 | ai:claude
+        let squashed = clear.split_whitespace().collect::<Vec<_>>().join(" ");
+        let door = squashed
+            .find(
+                "if let Some((record, actor)) = &tampering_record { \
+                 merge_hold::record_clearance(&root, record, actor)?; }",
+            )
+            .expect("clear must RECORD a clearance for a hold whose marker went missing");
+        let no_hold = squashed
+            .find("No merge-hold on PR #{pr}")
+            .expect("the no-hold early return must remain inspectable");
+        assert!(
+            door < no_hold,
+            "the tampering clearance must be recorded before the no-hold early return"
+        );
+    }
+
+    // BUG-1693 AC1: `merge-hold list` must SURFACE a tampered PR, and the
+    // "nothing to see here" early return must not swallow it. The render is a
+    // thin loop over `unrecorded_marker_removals` (tested above), so the one
+    // place a regression could still mislead an operator is the empty-state
+    // conjunct: drop it and the command prints TAMPERING and then claims "No
+    // active merge-holds." in the same breath. Pin both, whitespace-normalised
+    // so `cargo fmt` cannot break the assertion.
+    // trace:BUG-1693 | ai:claude
+    #[test]
+    fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
+        let lib_source = include_str!("lib.rs");
+        let list = lib_source
+            .split("crate::cli::MergeHoldAction::List { json, fix } =>")
+            .nth(1)
+            .and_then(|body| body.split("crate::cli::MergeHoldAction::Add {").next())
+            .expect("list handler must remain inspectable");
+        let squashed = list.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        let render = squashed
+            .find("for pr in &unrecorded_removals {")
+            .expect("list must RENDER the unrecorded marker removals it computed");
+        assert!(
+            squashed[render..].contains("TAMPERING"),
+            "the tampering render must name the condition in the operator's words"
+        );
+
+        let empty = squashed
+            .find(
+                "if live.is_empty() && stale.is_empty() && label_only.is_empty() \
+                   && unrecorded_removals.is_empty() { println!(\"No active merge-holds.\");",
+            )
+            .expect(
+                "the empty-state early return must count unrecorded marker removals, \
+                 or list prints TAMPERING and then claims there are no holds",
+            );
+        assert!(
+            render < empty,
+            "the tampering line must be rendered before the empty-state early return"
+        );
     }
 
     // BUG-1541: state words parse per forge; anything unrecognised is Unknown
@@ -2732,7 +4161,7 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(calls.get(), 2, "one retry");
-        assert!(err.contains("502"), "{err}");
+        assert!(format!("{err}").contains("502"), "{err}");
         assert_eq!(
             read_label_state(root, 7),
             LabelState::Unsynced("gh: HTTP 502 bad gateway".to_string())
@@ -2777,6 +4206,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         };
         write_typed_hold(dir.path(), &record).unwrap();
         record_label_state(dir.path(), 2023, &LabelState::Synced).unwrap();
@@ -2818,6 +4248,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         };
         assert!(write_typed_hold(dir.path(), &record).is_err());
         std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
@@ -2835,6 +4266,20 @@ mod tests {
         assert!(held.legacy);
         assert_eq!(held.reason_kind, HoldReasonKind::Supervision);
         assert!(held.recused_principals.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn legacy_detail_is_preserved_when_absorbed_by_rework() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy_detail = "I wrote this; another reader is needed";
+        write_hold(dir.path(), 8, legacy_detail).unwrap();
+        let rework = typed_hold(8, HoldReasonKind::Rework, "changes requested", None);
+        write_typed_hold(dir.path(), &rework).unwrap();
+        let got = read_hold_record(dir.path(), 8).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Rework);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Supervision);
+        assert_eq!(got.absorbed[0].detail, legacy_detail);
     }
 
     fn recused_record() -> MergeHoldRecord {
@@ -2983,7 +4428,10 @@ mod tests {
 
     #[test]
     fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
-        let lib_source = include_str!("lib.rs");
+        // Normalise CRLF (Windows autocrlf checkout) so the column-0
+        // closing-brace split below still finds the body end.
+        // trace:BUG-1556 | ai:claude
+        let lib_source = include_str!("lib.rs").replace("\r\n", "\n");
         let awaiting = lib_source
             .split("fn collect_awaiting_report_inner(")
             .nth(1)
@@ -3007,6 +4455,15 @@ mod tests {
         assert!(
             awaiting.contains("awaiting_you::project_held_pr"),
             "every non-recusal held PR must be projected, not dropped"
+        );
+        // BUG-1773: a refusal recorded outside `aida review record` arms no
+        // marker, so the corpus arm is the only thing that surfaces it. It is
+        // part of the same read-only contract as the forbidden list above —
+        // it derives the hold and writes neither marker nor label.
+        // trace:BUG-1773 | ai:claude
+        assert!(
+            awaiting.contains("awaiting_you::corpus_held_prs"),
+            "a refusal with no hold marker must still reach `held_prs`"
         );
         let handler = lib_source
             .split("fn handle_merge_hold(")
@@ -3064,5 +4521,178 @@ mod tests {
             .path()
             .join(".aida/agent-briefs/codex/PR-44-def.md")
             .exists());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn a_rework_hold_never_displaces_a_recusal_hold() {
+        let dir = tempfile::tempdir().unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        let mut rework = typed_hold(
+            42,
+            HoldReasonKind::Rework,
+            "CHANGES REQUESTED for BUG-1 at abc1234",
+            Some("abc1234-full".into()),
+        );
+        rework.spec = Some("BUG-1".into());
+        write_typed_hold(dir.path(), &rework).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.recused_principals, recusal.recused_principals);
+        assert_eq!(got.target_head_sha.as_deref(), Some("head-a"));
+        assert_eq!(got.absorbed.len(), 1);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Rework);
+        assert_eq!(got.absorbed[0].detail, rework.detail);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn recusal_written_after_rework_is_primary_and_absorbs_rework() {
+        let dir = tempfile::tempdir().unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(
+                42,
+                HoldReasonKind::Rework,
+                "changes",
+                Some("new-head".into()),
+            ),
+        )
+        .unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.recused_principals, recusal.recused_principals);
+        assert_eq!(got.target_head_sha.as_deref(), Some("head-a"));
+        assert_eq!(
+            got.absorbed
+                .iter()
+                .map(|a| a.reason_kind)
+                .collect::<Vec<_>>(),
+            vec![HoldReasonKind::Rework]
+        );
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn same_kind_refresh_unions_existing_absorbed_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let recusal = recused_record();
+        write_typed_hold(dir.path(), &recusal).unwrap();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes", None),
+        )
+        .unwrap();
+        let mut refreshed = recused_record();
+        refreshed.label_state = Some("synced".into());
+        write_typed_hold(dir.path(), &refreshed).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Recusal);
+        assert_eq!(got.label_state.as_deref(), Some("synced"));
+        assert_eq!(got.absorbed.len(), 1);
+        assert_eq!(got.absorbed[0].reason_kind, HoldReasonKind::Rework);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn composition_is_flat_bounded_and_unique_by_kind() {
+        let mut record = typed_hold(42, HoldReasonKind::Supervision, "supervision", None);
+        for (kind, detail) in [
+            (HoldReasonKind::Rework, "rework"),
+            (HoldReasonKind::Decision, "decision"),
+            (HoldReasonKind::Rework, "rework refreshed"),
+        ] {
+            record = match compose_holds(&record, &typed_hold(42, kind, detail, None)) {
+                Composed::Placed(r) | Composed::Preserved(r) => r,
+            };
+        }
+        assert_eq!(record.reason_kind, HoldReasonKind::Decision);
+        assert!(record.absorbed.len() <= 3);
+        let mut kinds = record
+            .absorbed
+            .iter()
+            .map(|a| a.reason_kind)
+            .collect::<Vec<_>>();
+        kinds.sort_by_key(|k| k.strictness());
+        kinds.dedup();
+        assert_eq!(kinds.len(), record.absorbed.len());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn composition_rejects_invalid_recusal_and_accepts_valid_existing_recusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut invalid = recused_record();
+        invalid.recused_principals.clear();
+        assert!(write_typed_hold(dir.path(), &invalid).is_err());
+        write_typed_hold(dir.path(), &recused_record()).unwrap();
+        assert!(write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes", None)
+        )
+        .is_ok());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn hand_replace_discards_recusal_but_default_hand_add_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        write_typed_hold(dir.path(), &recused_record()).unwrap();
+        let rework = typed_hold(42, HoldReasonKind::Rework, "manual rework", None);
+        assert!(place_hand_hold(dir.path(), &rework, false).is_err());
+        place_hand_hold(dir.path(), &rework, true).unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.reason_kind, HoldReasonKind::Rework);
+        assert!(got.absorbed.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn old_typed_markers_without_absorbed_still_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = typed_hold(42, HoldReasonKind::Supervision, "old marker", None);
+        let mut json = serde_json::to_value(record).unwrap();
+        json.as_object_mut().unwrap().remove("absorbed");
+        std::fs::create_dir_all(holds_dir(dir.path())).unwrap();
+        std::fs::write(
+            hold_path(dir.path(), 42),
+            serde_json::to_vec(&json).unwrap(),
+        )
+        .unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert!(got.absorbed.is_empty());
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn preserving_rework_write_does_not_reconcile_existing_recusal_route() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut recusal = recused_record();
+        recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
+        recusal.routing_state = HoldRoutingState::Routed;
+        write_marker(dir.path(), &recusal, false).unwrap();
+        let expected_route = recusal.routed_to.clone();
+        write_typed_hold(
+            dir.path(),
+            &typed_hold(42, HoldReasonKind::Rework, "changes requested", None),
+        )
+        .unwrap();
+        let got = read_hold_record(dir.path(), 42).unwrap();
+        assert_eq!(got.routed_to, expected_route);
+        assert_eq!(got.routing_state, HoldRoutingState::Routed);
+        assert_ne!(got.routing_state, HoldRoutingState::NoIndependentReader);
+    }
+
+    // trace:BUG-1691 | ai:codex
+    #[test]
+    fn preserving_path_still_rejects_invalid_recusal_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        write_marker(dir.path(), &recused_record(), false).unwrap();
+        let mut invalid = recused_record();
+        invalid.recused_principals.clear();
+        assert!(write_typed_hold(dir.path(), &invalid).is_err());
     }
 }

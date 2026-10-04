@@ -926,7 +926,7 @@ pub(crate) fn enqueue_groomed_for(
             if !already {
                 let adds = vec![tag.clone()];
                 let removes: Vec<String> = Vec::new();
-                let changed = apply_tag_deltas(&mut slot.tags, &adds, &removes);
+                let changed = apply_tag_deltas(&mut slot.tags, &adds, &removes)?;
                 if changed {
                     slot.modified_at = Utc::now();
                     storage
@@ -1414,6 +1414,7 @@ mod tests {
             tags: t,
             weight: None,
             origin: None,
+            filed_at: None,
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),

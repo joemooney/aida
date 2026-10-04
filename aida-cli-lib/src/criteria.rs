@@ -75,6 +75,15 @@ pub(crate) fn handle_criteria_command(
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         print_human_report(&report);
+        // STORY-1386: the pre-implementation red run, when a drain recorded one.
+        // trace:STORY-1386 | ai:claude
+        let red_root = crate::main_worktree_root_from(project_root);
+        if let Some(record) = crate::criteria_red_run::load_record(&red_root, display) {
+            println!("Red run before implementation ({}):", record.recorded_at);
+            for line in crate::criteria_red_run::summary_lines(&record) {
+                println!("  {line}");
+            }
+        }
     }
     Ok(())
 }

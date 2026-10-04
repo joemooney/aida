@@ -1,7 +1,7 @@
 //! Codex prompt bodies (`~/.codex/prompts/*.md`) generated from the same
 //! embedded command masters that back `.claude/commands/`.
 //!
-//! `.codex/skills/` (project-local skill bodies) and `.codex/config.toml`
+//! `.agents/skills/` (project-local skill bodies) and `.codex/config.toml`
 //! (MCP registration) already ship at init; current Codex interactive sessions
 //! discover those skills through `/skills` or `$aida-*`, not through arbitrary
 //! `/aida-*` slash-command files. This module keeps the legacy prompt-body
@@ -34,6 +34,13 @@ pub const CODEX_NONPORTABLE_COMMANDS: &[(&str, &str)] = &[
     (
         "aida-solo",
         "drives Claude Code hooks and the Agent-tool subagent fan-out",
+    ),
+    // trace:STORY-1474 | ai:claude
+    // trace:STORY-1475 | ai:claude
+    (
+        "aida-orchestrate",
+        "drives the Agent-tool subagent fan-out and SendMessage review loops; \
+         Codex gets the vendor-neutral `.agents/skills/aida-orchestrate` skill instead",
     ),
     (
         "aida-burndown",

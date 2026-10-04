@@ -1,3 +1,5 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 //! `aida-tui` — the AIDA terminal-UI shell (EPIC-26).
 //!
 //! AIDA is CLI-only today: Claude Code is the outer shell, and acting on
@@ -178,6 +180,12 @@ pub fn run(opts: TuiOptions) -> Result<()> {
 fn ensure_project_context(cwd: &Path) -> Result<PathBuf> {
     let mut dir = Some(cwd);
     while let Some(d) = dir {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(d) {
+            break;
+        }
         if d.join(".git").exists() || d.join(".aida").join("config.toml").is_file() {
             return Ok(d.to_path_buf());
         }

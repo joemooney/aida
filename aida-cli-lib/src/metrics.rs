@@ -598,6 +598,7 @@ mod tests {
             }],
             total_ms: 5000,
             drafted_bug: None,
+            failure_comment: None,
             binary_sha: sha.map(|s| s.to_string()),
             auto_rebase: rebases
                 .into_iter()
@@ -621,6 +622,7 @@ mod tests {
             binary_sha: None,
             role: None,
             scope: None,
+            schedule_source: None,
         }
     }
 

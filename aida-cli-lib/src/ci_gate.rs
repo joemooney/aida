@@ -616,6 +616,9 @@ mod tests {
         row_reads: std::cell::Cell<usize>,
     }
     impl crate::forge::Forge for FakeForge {
+        fn authenticated_user_login(&self) -> anyhow::Result<String> {
+            Ok("fake-user".into())
+        }
         fn change_metadata(
             &self,
             _: u64,
@@ -692,6 +695,10 @@ mod tests {
             unimplemented!()
         }
         fn close_change(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        // trace:BUG-1690 | ai:claude
+        fn mark_change_ready(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
             unimplemented!()
         }
         fn checkout_change(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {

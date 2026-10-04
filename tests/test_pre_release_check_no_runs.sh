@@ -122,6 +122,8 @@ pass "empty array → dispatch_and_watch invoked 'gh workflow run'"
 info "runs-exist fixture consumes the row normally (no regression)"
 
 # Recent green run (created 1h ago) → script should reuse it and exit 0.
+# trace:BUG-1750 | ai:codex
+# portable-fallback: BSD date uses -v for relative dates.
 created_at=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
             || date -u -v-1H +%Y-%m-%dT%H:%M:%SZ)
 RUNS_FIXTURE="$TEST_DIR/runs.json"

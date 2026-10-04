@@ -73,6 +73,37 @@ counter crosses 3. The threshold isn't load-bearing — promote earlier if
 the third sighting clarifies the fix-shape, or wait longer if you still
 don't know what to ask for.
 
+### Work or gate?
+
+At the threshold there are two destinations, and the recur nudge names
+both. Promoting to **work** fixes this instance. Promoting to a **gate**
+stops the class. Choose the gate destination when a class keeps coming
+back after instance fixes:
+
+```
+aida findings promote <ID> --to gate --detectable mechanical|agent|none
+```
+
+The screening answer is recorded on the finding as `gate-decision:<answer>`:
+
+- **`mechanical`**: a violation can be recognised without judgement. This
+  files a gate TASK (rung 1-3) for the class.
+- **`agent`**: only an agent could recognise it. This files a gate TASK
+  (rung 4). The gate's verdict is heuristic and must not silently block.
+- **`none`**: the class stays prose, and its recurrence is accepted as a
+  known cost. No task is filed. Later recurrences report this decision
+  instead of asking the question again.
+
+The gate TASK is filed Approved and queued only when you have advisor and
+dispatch authority. Otherwise it is filed as a draft for the advisor to
+approve and queue. Re-running with `--force` reuses the existing gate TASK
+rather than filing a second one.
+
+A gated finding carries `gated-by:<ID>`, so a later `aida findings recur`
+reports that the gate did not stop the class. Answering "no gate" is a
+normal outcome. The point is that the question gets asked once, when the
+evidence is in hand.
+
 ## Dismissal
 
 Observations decay. Dismiss (`aida findings dismiss <ID> --reason

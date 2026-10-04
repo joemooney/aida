@@ -7,6 +7,10 @@
 #[cfg(feature = "native")]
 mod cache;
 #[cfg(feature = "native")]
+mod cache_lock;
+#[cfg(feature = "native")]
+pub mod cache_refresh;
+#[cfg(feature = "native")]
 mod cached_git_backend;
 #[cfg(feature = "native")]
 mod git_backend;
@@ -14,8 +18,16 @@ mod git_backend;
 mod migration;
 #[cfg(feature = "postgres")]
 mod postgres_backend;
+// trace:TASK-1527 | ai:claude
+#[cfg(feature = "native")]
+pub mod refresh_request;
+// trace:TASK-1527 | ai:claude
+#[cfg(feature = "native")]
+pub mod refresh_worker;
 #[cfg(feature = "native")]
 mod sqlite_backend;
+#[cfg(feature = "native")]
+mod store_lock;
 mod traits;
 #[cfg(feature = "native")]
 mod yaml_backend;
@@ -28,9 +40,15 @@ pub use cache::{
     SortOrder, StatusDivergence,
 };
 #[cfg(feature = "native")]
+pub use cache_lock::{
+    cache_sidecar_path, classify_lock_owner, observe_cache_lock, observe_lock_info_file,
+    reclaim_dead_lock_info, shared_cache_path, stray_cache_lock_info_path, CacheLockObservation,
+    LockInfoReclaim, LockOwnerState,
+};
+#[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]
-pub use git_backend::GitBackend;
+pub use git_backend::{BulkAtomicReport, GitBackend, StoreConflictError};
 // BUG-675: the queue-user case-fold resolver, exposed so the aida-cli statusline
 // `queue_depth` path can resolve identity IDENTICALLY to `aida queue list`.
 #[cfg(feature = "native")]

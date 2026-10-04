@@ -135,6 +135,60 @@ branch-protection required set), GitLab the newest pipeline's jobs (no
 required-check concept, so only the allow-list applies); pure-git has no rows
 and keeps the coarse verdict.
 
+### Spec-authored acceptance commands need a machine-level opt-in (`[review]`)
+
+The reviewer phase's graded review parses a spec's acceptance section and
+treats backticked commands (`cargo test …`, `make …`, `tests/…`) as
+deterministic checks it could run against the PR head. Spec text comes from
+the shared store, so by default those commands are **not executed**: each is
+recorded as *not run*, never counts as machine-verified, and the review
+escalates to the Phase 3 reviewer seat, whose prompt lists them under
+"Needs manual verification" with an instruction not to execute them but to
+judge from the diff and the CI result already observed. A refused command can
+never auto-approve a PR, and its text is never sent to the LLM evaluator. If a
+permitted check also *failed*, the machine verdict stays a rejection and the
+review still goes to the seat, whose prompt names the failed checks as settled
+("this review cannot be an approval") next to the ones to check by hand — so a
+failure never swallows the manual-verification list.
+
+To let a reviewing machine run them, opt in from that machine's own
+`~/.aida/config.toml` — the only trust source. The repo's `.aida/config.toml`
+(branch-local *and* the trusted default-branch copy), the store, env vars and
+CLI flags are ignored on purpose: an unattended-drain PR could otherwise merge
+the opt-in through the very review it switches on. A repo-level value is
+reported as ignored in the verdict summary.
+
+```toml
+[review]
+run_acceptance_commands = true
+# Exact word sequences. A trailing `*` lets the spec author choose the
+# arguments — including arguments that run other programs. A lone "*" runs
+# anything a spec says (explicit full trust).
+acceptance_command_allow = ["cargo test", "cargo clippy --workspace", "make check-templates *"]
+```
+
+Matching is whole-word (`cargo test` does not match `cargo testx`), a command
+containing `` ; & | $ ` < > ( ) \ ' " `` or a control character is refused
+under any entry except `"*"`, and the string that was checked is the string
+that runs. Anything malformed — wrong types, an empty allowlist, an entry
+containing a refused character (checked before surrounding whitespace is
+trimmed, so a stray carriage return denies too) — denies everything for that
+review and says so once on stderr. `aida config show` renders the effective
+value; there is no setter verb and no env var can enable it.
+
+**Migration.** Installs that relied on auto-run executable checks will now see
+those reviews escalate to the reviewer seat instead of auto-approving or
+auto-rejecting. Add the `[review]` block above to `~/.aida/config.toml` on each
+reviewer machine to restore it. Two things to know before you do: the policy
+is read from the home directory resolved for the *reviewing process*. A
+different HOME reads a different policy; when HOME is unset, the platform may
+fall back to the passwd home for the current uid (or deny if no home can be
+resolved). And an allowlist trusts the spec author's *choice* of
+command, not the PR's code — a permitted `cargo test` still executes PR-head
+code (build.rs, Makefile, test bodies), exactly as CI does. Stored
+`.aida/review-verdicts/PR-N-graded.json` records gain `not_run_count` and
+`NotRun` per-criterion results; older records stay readable.
+
 ### Advisory harvest in the drain (`[harvest] gate`)
 
 After the review gates pass and before the merge, the drain runs `aida harvest`
@@ -1185,15 +1239,35 @@ broke, or every spec depends on something missing). The cap **defaults
 to 5**; pass `--max-failures 0` to fall back to the historical "first
 failure stops the batch" semantics. The cap is **per-batch**, not
 per-chain — a `--batches A,B,C` chain has its own independent budget for
-each batch.
+each batch. The same cap applies to a queue-wide `--drain` with no batch.
+
+The drain stops as soon as the Nth shelve lands, before it starts another
+spec: with `--max-failures 1`, the first shelved failure ends the drain
+(exit `3`) and nothing else is dispatched. A member already running in a
+pipelined drain when the budget runs out is not interrupted.
+
+The cap counts shelve **events**, not distinct specs. If a spec shelves, is
+requeued (by a human, an advisor, or an automatic in-drain retry), and shelves
+again in the same drain, it spends the budget twice. A second failure after
+triage is more evidence that something is wrong, and the cap is the drain's
+only automatic circuit breaker: an advisor agent can requeue a shelve that was
+never escalated, so a spec counted only once could otherwise fail without
+limit. The drain summary still lists each spec once, under its final
+disposition. Requeueing a spec never refunds or resets the budget of a
+running drain, and a drain that already stopped on a spent budget stays
+stopped. <!-- trace:STORY-1429 | ai:claude -->
 
 ### Dependency-aware skip
 
-The skip is **free**: it falls out of the existing pickability gate
-(STORY-333). When B is shelved, B is no longer `Completed`, so any
-member with `BlockedBy → B` is reported as `UnsatisfiedBlocker` by
-`pickability` and silently dropped by `resolve_batch_members` on the next
-head-pickup call. The summary surfaces both the skipped member and why
+The skip falls out of the pickability gate (STORY-333). When B is
+shelved, B is no longer `Completed`, so any member with `BlockedBy → B`
+is reported as `UnsatisfiedBlocker` by `pickability` and dropped on the
+next head pickup. Both the batch resolver and the queue-wide `--drain`
+head resolver apply this gate, and they re-read the store on every pick,
+so a blocker shelved by the previous member is seen immediately. Only
+`Completed` satisfies a `BlockedBy` edge: `Done`, `Needs Attention`, or a
+pushed branch do not. An edge whose target cannot be resolved also counts
+as blocked. The summary surfaces both the skipped member and why
 ("D (blocked-by B (Needs Attention))") so the operator can see the
 cascade at a glance. Today's declaration path is
 `aida rel add D B --type blocked-by`; STORY-1 of EPIC-28 will add an
@@ -1209,6 +1283,23 @@ relationship at file-time.
 | **Drained with shelved members (EPIC-28)** | **`2`** |
 | **Hard failure — un-shelvable phase fail, build / env / internal (TASK-1054)** | **`3`** |
 | `--max-tokens` / `--max-iterations` / `--max-runtime` cap stop | `7` |
+| Stopped by SIGTERM (systemd `RuntimeMaxSec` / `OOMPolicy=stop`, `aida drain stop --now`, a manual kill) | `143` |
+
+**SIGTERM.** The drain catches SIGTERM: the first one writes the cooperative
+stop request (no further head is picked up) and stamps `interrupted_at` /
+`interrupted_reason = "sigterm"` on every lease this drain created (an
+*interrupted* lease, not an abandoned one). It then waits up to
+`AIDA_DRAIN_TERM_GRACE_SECS` (default 30, at most 60) for the in-flight
+phase to land, holding the drain lock the whole time so no other driver can
+take it while this one may still be integrating on `main`; a second SIGTERM
+or the end of that window releases the lock and forces the exit with `143`.
+`aida drain stop --now` therefore never removes the lock file under a live
+drain: it waits (bounded) for the pid to exit and otherwise leaves the lock
+to the drain to release. `aida ps` reads the mark: a marked lease with no live process and
+a clean worktree shows as `stopped` (worktree intact; resume with the usual
+`aida queue work <spec>`) rather than as a dead agent. Without a signal
+nothing changes. Unix only; on Windows the stop paths are unchanged
+(next-tick reap). <!-- trace:TASK-1518 | ai:claude -->
 
 Exit `2` is the EPIC-28 signal: "the drain did its job — independents shipped,
 failures parked — but you have triage to do." Scripts that wrap a batch
@@ -1228,14 +1319,42 @@ The same table is the doc-comment on `DRIVE_EXIT_CLEAN` / `DRIVE_EXIT_SHELVED` /
 ### Triage path
 
 ```bash
-aida findings list                       # show both punts and failures
+aida rework                              # triage every parked spec, one key each
+aida rework TASK-99                      # requeue one spec (to Approved, back on the queue)
+aida findings list                       # list punts and failures, with the requeue hint
 aida show TASK-99                        # detail on a shelved spec
-aida edit TASK-99 --status approved      # fix-and-re-queue
 aida edit TASK-99 --status rejected      # drop (was wrong direction)
 ```
 
-Triaging a spec out of `NeedsAttention` clears both `attention_reason`
-and `failure_reason`. The punt ledger entry stays — it's history.
+Bare `aida rework` at a terminal walks the parked specs. Each one shows what
+a requeue would do before you take it: the resulting status, the queue it
+lands on, any dependency it will still wait on, and whether a `needs-human`
+escalation keeps it parked. Then it takes one key: `[r]` requeue, `[s]` skip,
+`[o]` show, `[q]` quit. When the spec has an open decision, `[r]` is not
+offered; `[d]` hands that one spec to `aida decide` and then comes back to it.
+The resulting status is never a flag you pass, so it cannot be wrong. Without
+a terminal, `aida rework` prints the requeue command for each parked spec and
+exits 0. `aida findings list` never prompts; bare `aida findings` offers the
+loop when specs are parked.
+
+The drain does not requeue triaged specs on its own. The decision to resume
+belongs to someone who can see the findings: a human at a terminal, or the
+advisor seat. Only a human at a terminal can resume a spec an advisor
+escalated with `needs-human`. A requeued spec is Approved and back on its
+queue route. A running drain picks it up on its next head pick, and the
+requeue says whether a drain is running (it never starts one). Requeue does
+not bypass the dependency gate.
+
+Every way out of `NeedsAttention` (`aida rework`, `aida edit --status`, the
+`queue_rework` MCP tool, the re-drive supervisor) goes through one
+transition, applied to that one spec. The status is read again just before
+the single-spec write, so a spec that moved in the meantime is left alone. It clears `attention_reason`,
+`failure_reason` and the drain's parking tag, writes one audit note that
+carries the triage reason, and records a `SpecRequeued` event. `aida rework`,
+the MCP tool and `aida edit --status` refuse while another session holds a
+live claim on the spec, `--force` included, and they refuse when a claim that
+could be on the spec cannot be read. The punt
+ledger entry stays; it's history. <!-- trace:STORY-1429 | ai:claude -->
 
 ## Seat jobs — periodic duties per seat (STORY-1226)
 
@@ -1256,6 +1375,220 @@ execution, `aida schedule install`, and cold-booting a headless seat for an
 overdue seat job (at most once per hour per seat) are the scheduler tick's
 business — STORY-1218 — which consults this same registry. Full reference:
 `docs/cli/03-work-autonomy.md` (`aida schedule`).
+
+## Night shift — `aida shift` (STORY-1218)
+
+The night shift keeps drain waves moving when no seat is awake. It is a
+deterministic, LLM-free check (`aida shift tick`) registered as the
+`night-shift` substrate job of `aida schedule tick`, so it runs on whichever
+scheduler driver this repo has: a systemd user timer (`aida shift install
+--systemd-user`, Linux; fires 1 minute after it is started, 2 minutes after
+boot, then 10 minutes after each tick finishes) or a crontab entry (`aida
+shift install --cron`; every 15 minutes, which caps the job's own
+`every = "10m"`). It is **off unless enabled for this clone**, and the switch
+never lives in committed config.
+
+### Scheduler driver: systemd timer or crontab
+
+Each repo should have exactly one driver. `aida shift install --systemd-user`
+(or `aida schedule install-systemd`) writes
+`~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, enables the timer
+and checks `systemctl --user is-enabled`; only after that check passes does it
+remove this repo's crontab lines, including old entries written before the
+marker comment existed. It prints each removed line. Commented-out lines and
+other repos' lines are never touched. `--cron` (or `aida schedule
+install-cron`) works the other way round: it writes the crontab entry, reads
+it back, and only then disables this repo's timer. If a step fails after the
+new driver is in place, both drivers remain. That is harmless, because the
+tick lock stops two ticks overlapping, and `aida doctor` reports it. The
+install never leaves the repo with no driver.
+
+Unit details worth knowing:
+
+- `KillMode=process`: the wave the tick launches stays in the tick service's
+  cgroup, and without this setting systemd would kill the wave when the tick
+  exits. With it, the journal logs a line like `Unit process <pid> (aida)
+  remains running after unit stopped` or `Found left-over process <pid>
+  (aida) in control group while starting unit` for a running wave. That is
+  expected and not an error.
+- No memory or CPU limits are set, because they would also limit the wave.
+  `TimeoutStartSec=15min` stops a stuck tick.
+- Removing the systemd driver only disables the timer. A tick that is running
+  finishes, and a wave is never killed. A unit file is deleted only if it
+  contains aida's marker comment, and a file with the same name that aida did
+  not write is never overwritten.
+- If linger is off for your user, the timer stops when you log out. The
+  installer tells you to run `loginctl enable-linger`; it never uses sudo.
+- Output goes to the journal:
+  `journalctl --user -u aida-tick-<hash>.service`. See the next run with
+  `systemctl --user list-timers`.
+- Installing either driver needs a person at a terminal who answers yes, as
+  `aida shift enable` does.
+
+What one tick does, in order:
+
+1. Takes `.aida/shift.lock` (a second concurrent tick is a no-op).
+2. Reaps finished sessions (the `aida session reap --yes` predicate; a live
+   process is never touched).
+3. Settles the previous shift wave: when its pid is dead, a `QueueDrained`
+   after the launch with shipped + shelved > 0 is progress; anything else,
+   including no `QueueDrained` at all, is zero progress.
+   <!-- trace:TASK-1492 | ai:claude -->
+   A breaker trip is also sent to the operator through `aida notify` (rule
+   `shift-breaker`).
+4. **Re-drive (opt-in, off by default).** Only when this clone's local layer
+   sets `redrive = true` (see "Re-drive" below). Re-queued specs go to the
+   head of the queue and join this tick's wave.
+5. Evaluates every guard (see `aida shift tick --dry-run`); any failure means
+   no launch and exit 0.
+6. Records the launch intent in `.aida/shift-state.json`, tags the next
+   explicit-`drain` queue slice `batch:shift-YYYYMMDD-HHMM` (replacing any
+   older shift tag on those specs), spawns one detached
+   `aida queue work --batch … --auto-complete --no-human=both --escalate-blocks
+   --role implementer --max 6 --max-iterations 6 --max-failures 2
+   --max-tokens T --max-runtime 3h` in its own session with its output in
+   `.aida/shift-wave-<stamp>.log`, and records the pid. A tick killed between
+   tagging and spawning leaves an intent the next tick reuses.
+7. **Mail latency.** For each known mail recipient, the age of the oldest
+   unread message (the same local + canonical mailbox read and read-watermarks
+   as the `mail.oldest_unread_age` schedule predicate). A recipient is known
+   when it is a seat or role in the agent registry, a team roster member
+   (`registry/team.toml`) or an active work session's owner or role. Mail to
+   any other address (a typo, a stray number, a file name) never pages; the
+   tick only counts it as ignored. Above `[shift] mail_latency`
+   (default `30m`) the operator is notified through `aida notify` (rule
+   `mail-latency`), once per episode per recipient; the episode re-arms when
+   that recipient's oldest unread age drops back under the threshold. One
+   notification names at most five recipients, then "+N more". It
+   never writes to the mailbox or to a chat. `[notify]`'s own `min_interval`
+   and quiet hours still apply: an episode opens only when the message was
+   sent or queued for the end of quiet hours, so a message `min_interval`
+   dropped is retried on a later check. With no `[notify] command` configured
+   nothing is sent and no episode is opened. The notify command may run for
+   at most 15s, less when the tick deadline is closer; a command still
+   running then is killed and logged to `.aida/notify.log`. The command runs
+   in its own process group, and on Linux that whole group is killed when the
+   command exits, so a background child it starts (`cmd &`) does not outlive
+   it; a notify helper that must keep running has to detach with `setsid`.
+   <!-- trace:BUG-1623 | ai:claude -->
+   Skipped past the tick deadline.
+8. Emits one `ShiftTick` event only when it acted or its refusing-guard set
+   changed; it names re-queued specs (`redriven`), capped parks
+   (`reclassified`), mail escalations (`mail_escalated`) and a re-drive held
+   because an attempt could not be recorded (`redrive_held`). It wakes a
+   supervisor only for a breaker trip, an escalation or a `redrive_held` (a capped park also
+   emits its own `ReclassifiedNeedsHuman`, which does wake one).
+
+### Re-drive (opt-in)
+<!-- trace:TASK-1492 | ai:claude -->
+
+The tick can re-drive transient parks itself, the same decision `aida
+supervise` makes, but it is **off by default** (ADR-26): enabling the shift
+does not enable it, and `aida shift tick --dry-run` prints `re-drive: off
+(ADR-26 default)`. Turn it on for this clone only after watching real parks,
+by adding `redrive = true` next to `enabled = true` under this repo's
+`[repo."<path>"]` table in `~/.aida/shift-local.toml`. A `redrive` key in the
+committed `.aida/config.toml` is ignored.
+
+When on, and only while no drain is running (no live lock in this clone, no
+other clone draining, no shift wave still alive) and the no-progress breaker
+is closed:
+
+- It considers only parks whose spec has an explicit `execution_mode =
+  drain`, is not keystone-class and has no live merge hold. A park with an
+  attention reason, a `needs-human` tag, or a non-transient failure
+  (`ci-red`, `request-changes`, …) is left for a human.
+- It keeps the ADR-26 cap: at most 3 supervised re-drives per spec, waiting
+  2m / 8m / 30m before each, counted from the `SpecReDriven` events in
+  `.aida/events.jsonl` **and** its rotated archive `.aida/events.jsonl.1`,
+  so a rotation never resets the count. At most `[shift]
+  max_redrives_per_tick` (default 3) per tick.
+- Limits of that count: the event stream is **per clone** (it is not in the
+  substrate), so two clones that both turn re-drive on each count their own
+  attempts, and a spec can be re-driven up to 3 times from each. Only one
+  archive generation is kept (`events.jsonl` + `.1`), so a park that stays
+  parked through two rotations of the stream loses its older attempts. Turn
+  re-drive on in one clone per repository.
+- The attempt is recorded first: `SpecReDriven` is appended **before** the
+  spec leaves `NeedsAttention`. If that append fails (full disk, a read-only
+  or replaced `events.jsonl`), the spec stays parked, nothing further is
+  re-queued that tick, and the tick reports `held: attempt-record` with the
+  reason (also in the `ShiftTick` event's `redrive_held`, which wakes a
+  supervisor). If the record lands but the spec moves before the status
+  change, the attempt still counts: the cap is reached sooner, never later.
+- A re-driven spec goes back to Approved (`SpecReDriven`, `SpecRequeued`)
+  and is put at the **head** of the implementer queue, oldest-parked first,
+  so the wave actually sees it. It is never force-claimed; a spec that cannot
+  be claimed without force parks again for a human.
+- A spec at the cap is tagged `needs-human`, `ReclassifiedNeedsHuman` is
+  emitted and a cap finding is filed, so it never sits silently parked.
+- `redrive-evidence` fails closed — no re-drive, no reclassification that
+  tick — when `AIDA_EVENTS_DISABLE` is set in the tick's environment or the
+  event stream cannot be read. A held re-drive never blocks the wave launch.
+
+`aida shift tick --dry-run` lists every transient park with its attempt count
+and what the tick would do with it.
+
+Safety floors that hold in every configuration:
+
+- Never launches over a live drain lock, in this clone or another one (the
+  shared drain claim on `aida-store`). A stale lock is reported and left for
+  the wave's own acquire to reclaim.
+- Only explicit `execution_mode = drain` specs are selected; drive, guided,
+  operator and decide specs, specs with no mode, keystone-class specs and
+  specs under a merge hold are never launched. A configured `[shift] batch`
+  with any such member refuses, naming it.
+- Never passes `--force-claim`, `--steal` or `--force`; the wave's environment
+  drops `AIDA_DRAIN_FORCE`, `AIDA_DRAIN_BORROW`, `AIDA_DRAIN_LOCK_STALE_SECS`,
+  `AIDA_EVENTS_DISABLE` and `AIDA_SCHEDULE_CHILD`. The tick never sets
+  `AIDA_NO_HUMAN_ACKNOWLEDGED`; it refuses until `aida no-human acknowledge`
+  has been run.
+- Budget: refuses at or above 80% of the daily token budget (the runaway-seat
+  watchdog's, 6B by default), and refuses when the watchdog's aggregates are
+  missing, more than an hour old, degraded or unknown, or blind to the wave's
+  vendor (Codex spend is not measured; a local
+  `allow_uncovered_vendors = ["codex"]` overrides that one case). Each wave is
+  also capped by `--max-tokens`, `--max-iterations` and `--max-runtime`.
+- Circuit breakers in `.aida/shift-state.json`: at most 8 waves per 24h; two
+  consecutive zero-progress waves stop launches until `aida shift resume` or a
+  change to the queue; a spec that rode two shift waves in 24h without
+  finishing is excluded and reported once. An unreadable state file blocks
+  launches and fails the job.
+- Load, memory and disk headroom must be readable and within bounds.
+
+`max_failures` defaults to 2 for shift waves. That is a deliberate choice,
+not a measured one: the SPIKE-82 window never ended a wave by exhausting its
+failure cap. Re-derive it from `ShiftTick` / `QueueDrained` outcomes after a
+few shift nights.
+
+### Runbook
+
+- [ ] Groom the implementer queue: set `execution_mode = drain` explicitly on
+  every spec that may run unattended; leave everything else in another mode.
+- [ ] `aida no-human acknowledge` (once per machine).
+- [ ] Confirm the `watchdog` job is enabled and has run in the last hour
+  (`aida schedule status`); the shift refuses without its evidence.
+- [ ] `aida shift install --systemd-user` (Linux) or `aida shift install
+  --cron` at your own terminal. It enables the shift and installs that
+  driver in one step, and removes this repo's other driver after the new one
+  is verified. It refuses in an agent session or without a TTY, and asks y/N.
+  It writes `~/.aida/shift-local.toml` for this clone and registers the
+  `night-shift` job. If a driver is already installed, `aida shift enable`
+  alone does the enabling part. `aida shift status` names the driver, and
+  says "both installed" if there are two.
+- [ ] **Preflight:** `aida shift tick --dry-run`. Read every `FAIL` line, the
+  exact wave command and the specs it would include. It writes nothing.
+- [ ] Optional: configure `[notify] command` (`aida notify test`) so mail
+  latency and a breaker trip reach you. Optional, and only after watching real
+  parks: `redrive = true` in the local layer (see "Re-drive").
+- [ ] In the morning: `aida shift status`, `aida history events --kind
+  shift-tick`, then triage shelves and escalations as usual. The tick never
+  merges, never clears a merge hold and never approves work — held PRs wait
+  for the morning gate.
+- [ ] `aida shift disable` to stop. A wave already running finishes its
+  current spec; stop it the usual way if it must end now.
+
+Not in this cut: headless cold-boot of overdue seat jobs.
 
 ## Limits of this cut
 

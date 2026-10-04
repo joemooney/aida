@@ -161,6 +161,7 @@ fn tiers_from_file(path: &Path, vendor: &str) -> Option<AgentModelTiers> {
 ///      worktree can actually see; without it the project knob silently missed
 ///      worktrees and phases fell back to claude);
 ///   3. global `~/.aida/agents.toml` — the machine-wide default.
+///
 /// Absent everywhere is `None` (callers keep their built-in default).
 // trace:BUG-704 | ai:claude
 pub fn resolve_default_vendor_from(
@@ -278,7 +279,7 @@ pub fn next_model_tier(current: &str, tiers: &[String]) -> Option<String> {
 /// a recognized `[agents] vendor`.
 #[cfg(feature = "native")]
 pub fn resolve_default_vendor(project_root: &Path) -> Option<String> {
-    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
     let project_config = project_root.join(".aida").join("config.toml");
     let project_agents = project_root.join(".aida").join("agents.toml");
     resolve_default_vendor_from(
@@ -292,7 +293,7 @@ pub fn resolve_default_vendor(project_root: &Path) -> Option<String> {
 // trace:STORY-1003 | ai:codex
 #[cfg(feature = "native")]
 pub fn resolve_vendor_model(project_root: &Path, vendor: &str) -> Option<String> {
-    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
     let project_config = project_root.join(".aida").join("config.toml");
     let project_agents = project_root.join(".aida").join("agents.toml");
     resolve_vendor_model_from(
@@ -311,7 +312,7 @@ pub fn resolve_agent_tuning(
     vendor: &str,
     seat: AgentSeat,
 ) -> ResolvedAgentTuning {
-    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
     let project_config = project_root.join(".aida").join("config.toml");
     let project_agents = project_root.join(".aida").join("agents.toml");
     resolve_agent_tuning_from(
@@ -327,7 +328,7 @@ pub fn resolve_agent_tuning(
 // trace:STORY-1033 | ai:codex
 #[cfg(feature = "native")]
 pub fn resolve_agent_model_tiers(project_root: &Path, vendor: &str) -> AgentModelTiers {
-    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let global = crate::home::home_dir().map(|h| h.join(".aida").join("agents.toml"));
     let project_config = project_root.join(".aida").join("config.toml");
     let project_agents = project_root.join(".aida").join("agents.toml");
     resolve_agent_model_tiers_from(

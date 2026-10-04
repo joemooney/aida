@@ -160,7 +160,15 @@ fn files_in_range(repo: &Path, range: &str) -> Vec<String> {
     Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args(["log", "--name-only", "--pretty=format:", range])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "--name-only",
+            "--pretty=format:",
+            "--end-of-options",
+            range,
+            "--",
+        ])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -179,7 +187,11 @@ fn files_in_range(repo: &Path, range: &str) -> Vec<String> {
 }
 
 fn count_range(repo: &Path, range: &str) -> Result<u32, DetectError> {
-    let s = git(repo, &["rev-list", "--count", range])?;
+    // trace:BUG-1622 | ai:claude
+    let s = git(
+        repo,
+        &["rev-list", "--count", "--end-of-options", range, "--"],
+    )?;
     s.parse()
         .map_err(|_| DetectError::Git(format!("could not parse commit count from '{s}'")))
 }
@@ -201,6 +213,16 @@ pub fn detect(
 
     // Resolve the upstream ref we measure against.
     let upstream = match branch_override {
+        // A dash-led ref would reach `git fetch` as an option (e.g.
+        // `--upload-pack=<cmd>`), so refuse it outright.
+        // trace:BUG-1622 | ai:claude
+        Some(b) if b.trim_start().starts_with('-') => {
+            return Err(DetectError::Git(format!(
+                "invalid --branch value `{}`: it starts with `-`, so git would read it as \
+                 an option; give a git ref instead",
+                b.trim()
+            )));
+        }
         Some(b) => b.to_string(),
         None => git(
             repo,
@@ -215,7 +237,8 @@ pub fn detect(
     let mut fetched = false;
     if fetch {
         if let Some((remote, remote_branch)) = upstream.split_once('/') {
-            if git_ok(repo, &["fetch", remote, remote_branch]) {
+            // trace:BUG-1622 | ai:claude
+            if git_ok(repo, &["fetch", "--end-of-options", remote, remote_branch]) {
                 fetched = true;
             }
         }

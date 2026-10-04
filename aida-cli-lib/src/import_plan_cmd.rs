@@ -152,6 +152,16 @@ pub(crate) fn handle_import_plan_command(
     req.modified_at = now;
     backend.update_requirement(&req)?;
 
+    // STORY-1480: the import IS the planning-phase record — the timeline's
+    // planning marker for specs planned outside a drain. Unverified here;
+    // `aida plan verify` records the verified companion.
+    // trace:STORY-1480 | ai:claude
+    crate::events::emit_interactive_lifecycle(
+        &main_root,
+        &[spec_display.clone()],
+        &crate::events::EventKind::PlanRecorded { verified: false },
+    );
+
     println!(
         "Imported plan to {} (pinned to {}).",
         dest_rel, spec_display

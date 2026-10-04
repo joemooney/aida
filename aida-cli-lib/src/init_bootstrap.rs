@@ -10,6 +10,7 @@
 //! clone. Each step no-ops when already done, so a failed run is re-runnable.
 // trace:STORY-780 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::io::IsTerminal;
@@ -207,7 +208,7 @@ fn run_in(dir: &Path, program: &str, args: &[&str]) -> Result<()> {
     let status = std::process::Command::new(program)
         .args(args)
         .current_dir(dir)
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("could not launch `{program}`"))?;
     if !status.success() {
         bail!("`{program} {}` failed in {}", args.join(" "), dir.display());
@@ -401,7 +402,11 @@ fn emit_enter_dir(plan_dir: &Path) {
     let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();
     if crate::shell_eval::marker_has_cap(wrapper.as_deref(), crate::shell_eval::INIT_CD_CAP) {
         let _eval = crate::shell_eval::EvalBlock::open_with(true);
-        println!("cd '{}'", abs.display());
+        // Eval'd by the wrapper: quote the path. trace:BUG-1624 | ai:claude
+        println!(
+            "cd '{}'",
+            crate::sh_single_quote(&abs.display().to_string())
+        );
     } else {
         println!("      cd {}", plan_dir.display());
     }

@@ -1,5 +1,27 @@
 use super::*;
 use aida_core::{Relationship, RelationshipType};
+use clap::Parser;
+
+#[test]
+fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
+    for flag in ["--comments", "--no-comments"] {
+        let cli = Cli::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
+        match cli.command {
+            Command::Show {
+                comments,
+                no_comments,
+                ..
+            } => {
+                assert_eq!(comments, flag == "--comments");
+                assert_eq!(no_comments, flag == "--no-comments");
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+    assert!(
+        Cli::try_parse_from(["aida", "show", "TASK-1", "--comments", "--no-comments"]).is_err()
+    );
+}
 
 /// BUG-453: headless_log_len returns the byte length of the session's JSONL
 /// log (matched by `-<session_id>.jsonl` suffix) and reflects growth — the

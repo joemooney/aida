@@ -25,6 +25,8 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **Gotchas.** It refuses to initialize *over a workspace of nested git repos* (it would capture the whole tree) — that's a feature, not a bug; use `--sibling` for that shape. Non-interactive `init` never prompts (so it's CI-safe), which means the first-machine permission-posture prompt is silently skipped — fine, it defaults to the faithful posture.
 
+**Outside a project.** Run from a directory that isn't inside an AIDA project, `add`, `list`, `edit` and the other store commands refuse with setup guidance instead of guessing a store. A legacy `default_project` entry in the old project registry (`~/.aida.config` / `~/.requirements.config`) is no longer used implicitly, because it could point at an unrelated project. To target a store on purpose, pass `--file <path>` or `-p <project>`, or set `AIDA_STORE` or `REQ_DB_NAME`.
+
 **Chains with** — followed by `aida add` (your first spec) and, if the repo has no remote, an offer to wire one. Once a day later, `aida doctor` checks the init stayed healthy.
 
 ---
@@ -46,13 +48,13 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--status approved` — see "don't reach for it when." Legitimate when *you are* the disposing authority and this capture is genuinely blessed.
 - `--prefix` — override the ID prefix (e.g. `SEC`, `PERF`). Rarely needed; the type-derived prefix is usually right.
 
-**Gotchas.** The positional title and `--title` both exist; if you pass both, `--title` wins. Tags are comma-separated; if you mean to *add* a tag to an existing spec later, that's `edit --add-tag`, not `edit --tags` (which *replaces*).
+**Gotchas.** The positional title and `--title` both exist; if you pass both, `--title` wins. Tags are comma-separated, and a tag may not contain whitespace — `--tags "a b"` is refused with the comma form it meant, because a space-separated value would be stored as one tag that *renders identically* to the two it looks like. If you mean to *add* a tag to an existing spec later, that's `edit --add-tag`, not `edit --tags` (which *replaces*).
 
 **Chains with** — the returned SPEC-ID is what you then `trace:` in code, reference in a commit `(SPEC-ID)` trailer, and feed to `edit` / `queue add` / `show`. **File the spec first, then write the trace** — guessing the next ID is off-by-one.
 
 ---
 
-### `aida list`
+### `aida list` (alias `aida ls`)
 
 **One line** — the everyday "what's in the graph" view.
 
@@ -65,10 +67,13 @@ The commands you touch on day one and then every day after: `init` once, then `a
 **Key options (rationale only).**
 - the positional `[STATUS]` — `aida list open` / `closed` are aliases (`open` = Draft/Approved/Planned/InProgress/NeedsAttention). The fastest way to "what's live."
 - `--tags 'prefix:*'` — the trailing-`*` prefix-glob is how you query a whole namespace (`aida list --tags 'aida:queue:*'`). Without it you're matching an exact tag.
+- `--status shelved` / `--status needs-decision` — two **lenses over the parked set**, not statuses. Everything paused sits at the single `needs-attention` status, which conflates two different asks: *a run hit a wall* (shelved — it carries a failure reason, triage it with `aida findings`) and *a human has to choose* (needs-decision — it carries an attention reason, answer it with `aida human`). Filtering by lens is how you get one queue instead of both. They compose in a comma set (`--status shelved,approved`), which keeps the Approved rows and narrows the parked ones.
+- `--status deferred` — the **deferred shelf**, which is a view flag rather than a status: `aida defer` parks a spec as primed/conditional work with a revisit trigger and deliberately leaves its status alone, so there is no status to filter on. The token is a spelling of `--deferred`, and because the two axes are independent it composes as an AND (`--status deferred,approved` = deferred work that is also Approved). A deferred spec reports `Deferred (<trigger>)` from `aida show` rather than the status it was deferred out of; its stored status is unchanged and readable as `stored_status`, and `aida undefer` restores it.
 - `--all` vs `--archived` — `--all` is *both* archived and live; `--archived` is *only* archived (for auditing the archive itself). They're different questions.
 - `--sync` — pull the store from origin before listing. Opt-in because the fast local path is the common case; reach for it when collaborating or when another machine/session may have written.
 - `--parent <ID>` — "what's still open under this EPIC" — composes with the other filters, the everyday rollup query.
 - `--no-scope` — bypass your role's scope filter. Needed when a subsystem-scoped role is hiding specs you actually want to see.
+- `--sort <ORDER>` — `modified` (default, freshest-first), `heft` (most graph-connected first), `weight` (heaviest user-set numeric weight first), `created` (newest-created first), or `completed` (most-recently-completed first — specs that were never `Completed` sort deterministically last).
 
 **Gotchas.** Archived ≠ a status — it's a *view flag* orthogonal to status, so a freshly-Completed spec is still visible (not archived) until someone archives it. If a queued spec is mysteriously absent from `list`, check whether it got archived (it'll still show in `queue list`, which ignores the archive flag — that split surprises people). Also note the default view says **nothing** about how many archived or deferred specs it is hiding — you asked for open work, so you get open work. The tiers are always one flag away (`--archived`, `--deferred`, `--all`, each of which prints its own count); if you want the running hidden-count footer back on every listing, set `[list] show_hidden_hints = true` in `.aida/config.toml`.
 

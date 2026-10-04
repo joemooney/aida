@@ -165,7 +165,9 @@ fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
         tmp.path(),
         "PR-2024",
         Some("request-changes"),
-        Some("abc123"),
+        // A verdict keeps an unresolvable sha only when it is a commit ID
+        // (7+ hex digits). trace:BUG-1622 | ai:claude
+        Some("abc1234"),
         Some("bug-1432-work"),
         Some("the rework still has a blocking defect"),
         &["fix the unchanged-head path".to_string()],
@@ -176,7 +178,7 @@ fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
     let verdict = blocking_rework_verdict(tmp.path(), "BUG-1432", 2024)
         .expect("a PR-keyed blocking verdict must arm the rework guard");
     assert!(verdict.kind.blocks_done());
-    assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc123"));
+    assert_eq!(verdict.reviewed_sha.as_deref(), Some("abc1234"));
 }
 
 // A non-blocking PR-keyed verdict must NOT arm the guard. The positive case

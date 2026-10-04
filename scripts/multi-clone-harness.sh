@@ -1167,6 +1167,8 @@ case_MU-512() {
     local store_a="$CLONE_A/.aida-store" stem claim_file old_hb
     stem="$(echo "$id" | tr '[:upper:]' '[:lower:]')"
     claim_file="$(find_lease_claim_file "$store_a" "$stem")"
+    # trace:BUG-1750 | ai:codex
+    # portable-fallback: BSD date uses -v for relative dates.
     old_hb="$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-2H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)"
     age_claim_file "$claim_file" "$old_hb" 60
     push_store_A

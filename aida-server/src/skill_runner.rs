@@ -869,10 +869,11 @@ async fn handle_create_requirement(
 
     drop(store);
 
-    if let Err(e) = server.backend.save(&*server.store.read().await) {
+    // trace:BUG-1612 | ai:claude — conflict = 409 + reload.
+    if let Err(e) = server.save_current().await {
         return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": format!("Failed to save: {}", e) })),
+            e.http_status(),
+            Json(serde_json::json!({ "error": e.message() })),
         ));
     }
     server.mark_saved().await;

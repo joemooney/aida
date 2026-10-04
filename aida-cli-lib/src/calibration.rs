@@ -266,29 +266,23 @@ pub fn filter(records: &[CalibrationRecord], filter: &CalibrationFilter) -> Vec<
         .collect()
 }
 
-/// Parse a `--since` window of the form `<N>{d,h,w,m}` (days, hours, weeks,
-/// minutes). `None` on a missing window; `Err` on a malformed one.
+/// Parse a `--since` window into a lookback duration using the shared
+/// time-bound grammar: a relative duration (`7d`, `12h`, `2w`, `30m`,
+/// `24 hours ago`), an ISO date (local midnight), a zone-less ISO datetime
+/// (local time), or RFC3339. `Err` on a malformed value.
+// trace:TASK-1509 | ai:claude
 pub fn parse_since(s: &str) -> Result<ChronoDuration, String> {
-    let s = s.trim();
-    if s.is_empty() {
-        return Err("empty --since window".to_string());
-    }
-    let (num_str, unit) = s.split_at(s.len() - 1);
-    let n: i64 = num_str
-        .parse()
-        .map_err(|_| format!("invalid --since window `{s}` — expected e.g. `7d`, `24h`"))?;
-    let dur = match unit {
-        "d" => ChronoDuration::days(n),
-        "h" => ChronoDuration::hours(n),
-        "w" => ChronoDuration::weeks(n),
-        "m" => ChronoDuration::minutes(n),
-        _ => {
-            return Err(format!(
-                "invalid --since unit `{unit}` in `{s}` — expected d/h/w/m"
-            ));
-        }
-    };
-    Ok(dur)
+    parse_since_at(s, Utc::now(), &chrono::Local)
+}
+
+/// [`parse_since`] against an explicit `now` and timezone, for tests.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_since_at<Tz: chrono::TimeZone>(
+    s: &str,
+    now: chrono::DateTime<Utc>,
+    tz: &Tz,
+) -> Result<ChronoDuration, String> {
+    crate::queue_cmd::parse_lookback_at(s, "--since", now, tz).map_err(|e| e.to_string())
 }
 
 /// Rolling-metric stats over the last `n` records (default 50 in the CLI),

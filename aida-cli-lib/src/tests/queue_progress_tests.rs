@@ -80,6 +80,94 @@ fn parse_since_accepts_rfc3339() {
     assert_eq!(ts.format("%Y-%m-%d").to_string(), "2026-05-01");
 }
 
+/// A fixed, non-UTC offset for deterministic bare-date tests: UTC-7
+/// (e.g. US Pacific standard time). Catches the regression a bare date
+/// used to have: resolving to UTC midnight and silently shifting the
+/// window by the caller's offset.
+// trace:TASK-1502 | ai:claude
+fn fixed_local_offset_utc_minus_7() -> chrono::FixedOffset {
+    chrono::FixedOffset::west_opt(7 * 3600).unwrap()
+}
+
+#[test]
+fn parse_since_accepts_bare_iso_date_as_local_midnight() {
+    // `aida history --since 2026-05-01` (no time component) resolves to
+    // LOCAL midnight, not UTC midnight: on UTC-7 that's
+    // 2026-05-01T07:00:00Z, not 2026-05-01T00:00:00Z.
+    let offset = fixed_local_offset_utc_minus_7();
+    let ts = parse_since_arg_at("2026-05-01", chrono::Utc::now(), &offset).unwrap();
+    assert_eq!(ts.to_rfc3339(), "2026-05-01T07:00:00+00:00");
+
+    // And on UTC itself, local midnight == UTC midnight (the pre-fix
+    // behavior was only wrong away from UTC+0).
+    let ts_utc = parse_since_arg_at(
+        "2026-05-01",
+        chrono::Utc::now(),
+        &chrono::FixedOffset::east_opt(0).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ts_utc.format("%Y-%m-%d %H:%M:%S").to_string(),
+        "2026-05-01 00:00:00"
+    );
+}
+
+#[test]
+fn parse_since_honors_an_explicit_rfc3339_zone_exactly() {
+    // TASK-1502 review: an explicit zone in the input must never be
+    // reinterpreted against the local zone — only a BARE date (no zone) is
+    // local-midnight. The zone here is deliberately different from
+    // the input's `+05:00` to prove it's ignored for this branch.
+    let offset = fixed_local_offset_utc_minus_7();
+    let ts = parse_since_arg_at("2026-05-01T00:00:00+05:00", chrono::Utc::now(), &offset).unwrap();
+    assert_eq!(ts.to_rfc3339(), "2026-04-30T19:00:00+00:00");
+}
+
+#[test]
+fn parse_since_accepts_relative_weeks_with_injected_now() {
+    // trace:TASK-1502 | ai:claude
+    let now = chrono::DateTime::parse_from_rfc3339("2026-09-25T12:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let two_weeks = parse_since_arg_at("2w", now, &fixed_local_offset_utc_minus_7()).unwrap();
+    assert_eq!(two_weeks.format("%Y-%m-%d").to_string(), "2026-09-11");
+}
+
+#[test]
+fn parse_since_at_is_deterministic_across_every_unit() {
+    // TASK-1502: every unit, with an injected `now` so the test never
+    // flakes against the wall clock. Relative units ignore the zone
+    // entirely (they're computed straight off `now`), so a non-UTC offset
+    // here doubles as proof of that.
+    let now = chrono::DateTime::parse_from_rfc3339("2026-09-25T12:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let offset = fixed_local_offset_utc_minus_7();
+    assert_eq!(
+        parse_since_arg_at("30m", now, &offset).unwrap(),
+        now - chrono::Duration::minutes(30)
+    );
+    assert_eq!(
+        parse_since_arg_at("5h", now, &offset).unwrap(),
+        now - chrono::Duration::hours(5)
+    );
+    assert_eq!(
+        parse_since_arg_at("7d", now, &offset).unwrap(),
+        now - chrono::Duration::days(7)
+    );
+    assert_eq!(
+        parse_since_arg_at("2w", now, &offset).unwrap(),
+        now - chrono::Duration::weeks(2)
+    );
+}
+
+#[test]
+fn parse_since_rejects_unknown_unit() {
+    // trace:TASK-1502 | ai:claude
+    assert!(parse_since_arg("5y").is_err());
+    assert!(parse_since_arg("3q").is_err());
+}
+
 #[test]
 fn parse_since_rejects_garbage() {
     // trace:TASK-232 | ai:claude

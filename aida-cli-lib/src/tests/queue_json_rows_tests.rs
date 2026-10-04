@@ -36,6 +36,7 @@ fn summary(
         execution_mode: None,
         weight: None,
         origin: None,
+        completed_at: None, // trace:TASK-1474 | ai:claude
         yaml_path: String::new(),
     }
 }
@@ -97,6 +98,33 @@ fn drops_entries_with_no_matching_summary() {
     let rows = queue_json_rows(&entries, &summaries);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["spec_id"], "BUG-9-001");
+}
+
+// BUG-1795: the requirement-backed filters used by the JSON and TOON fast
+// emitters agree on membership, including a batch that has no members.
+#[test]
+fn fast_queue_filter_predicate_applies_batch_tag_prefix_and_scope() {
+    let mut req = aida_core::Requirement::new("filtered item".into(), String::new());
+    req.spec_id = Some("TASK-1795-1".into());
+    req.status = aida_core::RequirementStatus::Approved;
+    req.tags.insert("batch:wave-a".into());
+    req.tags.insert("release:ready".into());
+    let mut item = entry(req.id, Some("implementer"));
+    item.for_scope = Some("wave-a".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+
+    let matches = |batch, tag, prefix, scope| {
+        crate::queue_cmd::queue_list_matches_requested_filters(
+            &item, &store, scope, batch, tag, prefix, None, false,
+        )
+    };
+    assert!(matches(Some("wave-a"), None, None, None));
+    assert!(!matches(Some("does-not-exist"), None, None, None));
+    assert!(matches(None, Some("release:ready"), None, None));
+    assert!(matches(None, None, Some("release:"), None));
+    assert!(matches(None, None, None, Some("wave-a")));
+    assert!(!matches(None, None, None, Some("wave-b")));
 }
 
 #[test]

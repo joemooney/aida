@@ -128,8 +128,9 @@ impl AiClient {
         }
 
         // Check home directory npm global
-        if let Ok(home) = std::env::var("HOME") {
-            let npm_global = PathBuf::from(home).join(".npm-global/bin/claude");
+        // trace:TASK-1513 | ai:claude
+        if let Some(home) = crate::home::home_dir() {
+            let npm_global = home.join(".npm-global/bin/claude");
             if npm_global.exists() {
                 return Some(npm_global);
             }

@@ -146,6 +146,19 @@ pub(crate) fn build_team_view(store_root: &Path, our_clone: &str) -> Vec<TeamMem
     // One read of the coordination tree; bucket claims by canonical clone path.
     let mut claims = crate::coordination::list_claims(store_root);
     claims.extend(crate::coordination::list_lock_claims(store_root));
+    // BUG-1764: `active_claims` is a promise the field name makes, and this
+    // reader kept it for claims whose holder was long gone — nothing here
+    // applied an expiry predicate. Drop the stale ones before bucketing so a
+    // roster row reports what a peer actually holds now. The staleness verdict
+    // is shared with `aida session leases` / `aida status`, so the three
+    // surfaces can never disagree about who holds what.
+    // trace:BUG-1764 | ai:claude
+    let claims = crate::coordination::partition_claims(
+        claims,
+        chrono::Utc::now(),
+        &crate::coordination::hostname(),
+    )
+    .0;
 
     registry
         .nodes
@@ -536,5 +549,85 @@ mod tests {
         let mut r = NodeRegistry::default();
         r.nodes.push(node("1", None));
         assert!(is_team_context(&r, "/home/joe/ai/aida"));
+    }
+
+    // ── BUG-1764: `active_claims` must not keep dead claims ────────────────
+
+    /// Write a session-lease claim into a temp store's coordination tree.
+    /// `heartbeat` drives the staleness verdict (`ttl_secs = 1800`).
+    ///
+    /// Serializes the real `Claim` struct rather than hand-writing TOML: a
+    /// hand-written `clone_path = "{path}"` is a TOML *basic* string, so a
+    /// Windows path's backslashes would be read as escape sequences. Using the
+    /// struct also keeps the fixture faithful to what the production writer
+    /// emits, so a field added later cannot silently diverge.
+    // trace:BUG-1764 | ai:claude
+    fn write_claim(store: &Path, scope: &str, clone_path: &str, heartbeat: &str) {
+        let dir = store.join("coordination").join("leases");
+        std::fs::create_dir_all(&dir).unwrap();
+        let claim = crate::coordination::Claim {
+            scope: scope.to_string(),
+            node_id: "9".to_string(),
+            clone_path: clone_path.to_string(),
+            host: "somewhere-else".to_string(),
+            pid: 4242,
+            pid_start_time: None,
+            agent: "implementer".to_string(),
+            started_at: heartbeat.to_string(),
+            heartbeat_at: heartbeat.to_string(),
+            ttl_secs: 1800,
+            process_backed: false,
+            review_verb: false,
+            authorized_by: None,
+        };
+        // The filename stem only has to be unique per scope: `list_claims`
+        // reads every `*.toml` in the tree and takes the scope from the record.
+        std::fs::write(
+            dir.join(format!("{}.toml", scope.to_lowercase())),
+            toml::to_string(&claim).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// The roster row for a peer clone must report only claims that peer still
+    /// holds. Before BUG-1764 this reader applied no expiry predicate at all,
+    /// so a claim written once stayed in a field named `active_claims` forever.
+    ///
+    /// This is a wiring fixture, not a predicate fixture: the predicate has its
+    /// own tests in `coordination`. What it pins is that THIS reader calls it —
+    /// `print_status_coordination_section` is proof that a reader of
+    /// `list_claims` can be missed, since BUG-1764's own triage acquitted it.
+    // trace:BUG-1764 | ai:claude
+    #[test]
+    fn bug_1764_team_view_drops_stale_claims() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path();
+        let peer = "/home/joe.mooney/ai/aida";
+        let mut registry = NodeRegistry::default();
+        registry.nodes.push(node("9", Some(peer)));
+        let reg_path = store.join("registry/nodes.toml");
+        std::fs::create_dir_all(reg_path.parent().unwrap()).unwrap();
+        registry.save(&reg_path).unwrap();
+
+        // One genuinely fresh claim, one long past its own 1800s TTL.
+        write_claim(store, "FRESH-1", peer, &Utc::now().to_rfc3339());
+        write_claim(store, "ANCIENT-1", peer, "2026-06-16T12:00:00+00:00");
+
+        let view = build_team_view(store, "/home/joe/ai/aida");
+        let peer_row = view
+            .iter()
+            .find(|m| m.entry.id == "9")
+            .expect("the peer roster row must be present");
+        assert!(
+            peer_row.active_claims.contains(&"FRESH-1".to_string()),
+            "a fresh claim must still be reported: {:?}",
+            peer_row.active_claims
+        );
+        assert!(
+            !peer_row.active_claims.contains(&"ANCIENT-1".to_string()),
+            "a claim ~3.5 months past its 1800s TTL must NOT be reported as \
+             active: {:?}",
+            peer_row.active_claims
+        );
     }
 }

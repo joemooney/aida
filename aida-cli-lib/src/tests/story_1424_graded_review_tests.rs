@@ -2,11 +2,20 @@
 //
 // trace:STORY-1424 | ai:antigravity
 
+// Every call passes an explicit permissive policy so the STORY-1424 semantics
+// under test are unchanged by the STORY-1476 trusted-config gate.
+// trace:STORY-1476 | ai:claude
+// Imports only the unix-gated executable-criterion tests use.
+// trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 use crate::evaluator::{EvaluatorError, MockEvaluator};
+#[cfg(unix)]
+use crate::graded_review::CriterionStatus;
 use crate::graded_review::{
     execute_graded_review, generate_graded_reviewer_prompt, parse_acceptance_criteria,
-    CriterionKind, CriterionStatus,
+    AcceptanceCommandPolicy, CriterionKind,
 };
+#[cfg(unix)]
 use crate::review_verdict::VerdictKind;
 use std::path::Path;
 
@@ -44,9 +53,14 @@ Some overview of the feature.
     }
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_pure_executable_pass() {
-    let desc = "## Acceptance\n- [ ] `true`\n- [ ] `echo hello`\n";
+    // One command must be non-trivial: an all-trivial set escalates instead
+    // of auto-approving. trace:BUG-1668 | ai:claude
+    let desc = "## Acceptance\n- [ ] `true`\n- [ ] `git --version`\n";
     let cwd = Path::new(".");
     let verdict = execute_graded_review(
         "TASK-100",
@@ -56,6 +70,7 @@ fn test_graded_review_pure_executable_pass() {
         "abc1234",
         cwd,
         None,
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -67,12 +82,24 @@ fn test_graded_review_pure_executable_pass() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_executable_failure_veto() {
     let desc = "## Acceptance\n- [ ] `true`\n- [ ] `false`\n- Prose criterion\n";
     let cwd = Path::new(".");
-    let verdict =
-        execute_graded_review("TASK-101", "Failing Task", desc, "", "abc1234", cwd, None).unwrap();
+    let verdict = execute_graded_review(
+        "TASK-101",
+        "Failing Task",
+        desc,
+        "",
+        "abc1234",
+        cwd,
+        None,
+        &AcceptanceCommandPolicy::permissive(),
+    )
+    .unwrap();
 
     assert_eq!(verdict.verdict_kind, format!("{:?}", VerdictKind::Rejected));
     assert_eq!(verdict.machine_verified_count, 2);
@@ -80,6 +107,9 @@ fn test_graded_review_executable_failure_veto() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_jev_fast_pass() {
     let desc = "## Acceptance\n- [ ] `true`\n- High quality error handling and clear docs\n";
@@ -94,6 +124,7 @@ fn test_graded_review_mixed_jev_fast_pass() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -111,6 +142,9 @@ fn test_graded_review_mixed_jev_fast_pass() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_high_probability_low_confidence_escalates() {
     let desc = "## Acceptance\n- [ ] `true`\n- Clear operational behavior\n";
@@ -123,6 +157,7 @@ fn test_high_probability_low_confidence_escalates() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
     assert_eq!(verdict.overall_verdict, "escalated");
@@ -133,6 +168,9 @@ fn test_high_probability_low_confidence_escalates() {
     assert!(prompt.contains("Clear operational behavior"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_low_probability_low_confidence_remains_phase3_residual() {
     let desc = "## Acceptance\n- [ ] `true`\n- Safe rollback behavior\n";
@@ -145,6 +183,7 @@ fn test_low_probability_low_confidence_remains_phase3_residual() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -158,6 +197,9 @@ fn test_low_probability_low_confidence_remains_phase3_residual() {
     assert!(prompt.contains("Safe rollback behavior"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
     let desc = "## Acceptance\n- [ ] `true`\n- First prose criterion\n- Second prose criterion\n";
@@ -174,6 +216,7 @@ fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
         "abc1234",
         Path::new("."),
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
     assert_eq!(verdict.overall_verdict, "request-changes");
@@ -181,6 +224,9 @@ fn test_fast_fail_probability_and_confidence_belong_to_same_criterion() {
     assert!(verdict.summary.contains("confidence=0.95"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_jev_fast_fail() {
     let desc = "## Acceptance\n- [ ] `true`\n- Proper error handling\n";
@@ -195,6 +241,7 @@ fn test_graded_review_mixed_jev_fast_fail() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -209,6 +256,9 @@ fn test_graded_review_mixed_jev_fast_fail() {
     assert!(!verdict.escalated_to_seat);
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_mixed_escalation_zone() {
     let desc = "## Acceptance\n- [ ] `true`\n- Tasteful ergonomics\n";
@@ -224,6 +274,7 @@ fn test_graded_review_mixed_escalation_zone() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -239,6 +290,9 @@ fn test_graded_review_mixed_escalation_zone() {
     assert!(prompt.contains("Tasteful ergonomics"));
 }
 
+// Runs an executable criterion via `bash -c`; unix-only (on Windows the
+// spawn fails closed to Rejected, per PRIN-5). trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn test_graded_review_fail_closed_on_evaluator_error() {
     let desc = "## Acceptance\n- [ ] `true`\n- Residual prose\n";
@@ -254,6 +308,7 @@ fn test_graded_review_fail_closed_on_evaluator_error() {
         "abc1234",
         cwd,
         Some(&mock),
+        &AcceptanceCommandPolicy::permissive(),
     )
     .unwrap();
 
@@ -268,8 +323,17 @@ fn test_graded_review_pure_prose_spec() {
     let cwd = Path::new(".");
 
     // Without evaluator, pure prose spec escalates to Phase 3 conversational reviewer
-    let verdict =
-        execute_graded_review("STORY-200", "Prose Story", desc, "", "abc1234", cwd, None).unwrap();
+    let verdict = execute_graded_review(
+        "STORY-200",
+        "Prose Story",
+        desc,
+        "",
+        "abc1234",
+        cwd,
+        None,
+        &AcceptanceCommandPolicy::permissive(),
+    )
+    .unwrap();
 
     assert_eq!(verdict.machine_verified_count, 0);
     assert_eq!(verdict.prose_count, 2);

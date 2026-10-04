@@ -248,15 +248,18 @@ fn enter_shell_payload_cd_then_sources_session_env() {
     let tree = tempfile::tempdir().unwrap();
     let aida_dir = tree.path().join(".aida");
     std::fs::create_dir_all(&aida_dir).unwrap();
-    std::fs::write(
-        aida_dir.join("session-env.sh"),
-        "export CARGO_TARGET_DIR='/tmp/aida/target'\n",
-    )
-    .unwrap();
+    // A tempdir target, absolute on every OS (a `/tmp/...` literal has no
+    // drive on Windows, so the absolute-path filter drops it).
+    // trace:BUG-1648 | ai:claude
+    let export = format!(
+        "export CARGO_TARGET_DIR='{}'\n",
+        tree.path().join("target").display()
+    );
+    std::fs::write(aida_dir.join("session-env.sh"), &export).unwrap();
 
     let payload = enter_shell_payload(tree.path(), "STORY-742", None);
     assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
-    assert!(payload.contains("export CARGO_TARGET_DIR='/tmp/aida/target'\n"));
+    assert!(payload.contains(&export), "{payload}");
     // TASK-1160: the payload also splices the ambient worktree PS1 segment.
     assert!(payload.contains("export AIDA_WT_PS1_PREFIX='(wt:STORY-742) '\n"));
     assert!(payload.contains("export PS1=\"$AIDA_WT_PS1_PREFIX$PS1\"\n"));

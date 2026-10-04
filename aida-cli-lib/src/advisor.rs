@@ -253,7 +253,7 @@ fn advisor_home_dir() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
         return Some(PathBuf::from(home));
     }
-    dirs::home_dir()
+    crate::home_dir()
 }
 
 /// Read the registration if it exists and parses. Returns `None` (not Err)
@@ -879,30 +879,9 @@ max_source_size_mb = 50
         );
     }
 
-    fn with_env_vars(keys: &[(&str, Option<&str>)], f: impl FnOnce()) {
-        // BUG-697: serialise on the ONE shared process-global env lock, not a
-        // module-local mutex — env swaps under different locks still data-race.
-        let _guard = crate::test_env::env_lock();
-        let prior: Vec<(&str, Option<std::ffi::OsString>)> = keys
-            .iter()
-            .map(|(key, _)| (*key, std::env::var_os(key)))
-            .collect();
-        // SAFETY: serialised by ENV_LOCK so no other test mutates these keys.
-        for (key, value) in keys {
-            match value {
-                Some(value) => unsafe { std::env::set_var(key, value) },
-                None => unsafe { std::env::remove_var(key) },
-            }
-        }
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        for (key, value) in prior {
-            match value {
-                Some(value) => unsafe { std::env::set_var(key, value) },
-                None => unsafe { std::env::remove_var(key) },
-            }
-        }
-        if let Err(p) = result {
-            std::panic::resume_unwind(p);
-        }
+    fn with_env_vars(keys: &[(&'static str, Option<&str>)], f: impl FnOnce()) {
+        // BUG-697 / TASK-1532: route through EnvVarsGuard. trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarsGuard::apply(keys);
+        f();
     }
 }

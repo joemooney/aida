@@ -198,6 +198,7 @@ fn auto_flips_to_newer_debug_exact_over_older_release_ancestor() {
     let (pick, reason) = auto_select_dev_profile(
         Some(cand(100, ShaMatch::Ancestor)),
         Some(cand(200, ShaMatch::Exact)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Debug);
@@ -211,6 +212,7 @@ fn auto_breaks_same_sha_class_tie_by_freshest_not_release() {
     let (pick, _) = auto_select_dev_profile(
         Some(cand(100, ShaMatch::Exact)),
         Some(cand(200, ShaMatch::Exact)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Debug);
@@ -219,6 +221,7 @@ fn auto_breaks_same_sha_class_tie_by_freshest_not_release() {
     let (pick, _) = auto_select_dev_profile(
         Some(cand(200, ShaMatch::Exact)),
         Some(cand(100, ShaMatch::Exact)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Release);
@@ -232,6 +235,7 @@ fn auto_prefers_exact_even_when_alternate_is_newer_but_weaker() {
     let (pick, reason) = auto_select_dev_profile(
         Some(cand(100, ShaMatch::Exact)),
         Some(cand(999, ShaMatch::Ancestor)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Release);
@@ -245,6 +249,7 @@ fn auto_recency_fallback_when_neither_matches() {
     let (pick, reason) = auto_select_dev_profile(
         Some(cand(100, ShaMatch::Unrelated)),
         Some(cand(200, ShaMatch::Unknown)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Debug);
@@ -261,6 +266,7 @@ fn auto_exact_mtime_tie_falls_to_release() {
     let (pick, _) = auto_select_dev_profile(
         Some(cand(t, ShaMatch::Exact)),
         Some(cand(t, ShaMatch::Exact)),
+        None,
     )
     .unwrap();
     assert_eq!(pick, DevProfile::Release);
@@ -268,18 +274,20 @@ fn auto_exact_mtime_tie_falls_to_release() {
 
 #[test]
 fn auto_only_one_build_present() {
-    let (pick, reason) = auto_select_dev_profile(None, Some(cand(100, ShaMatch::Unknown))).unwrap();
+    let (pick, reason) =
+        auto_select_dev_profile(None, Some(cand(100, ShaMatch::Unknown)), None).unwrap();
     assert_eq!(pick, DevProfile::Debug);
     assert_eq!(reason, BinarySelectionReason::OnlyOne);
 
-    let (pick, reason) = auto_select_dev_profile(Some(cand(100, ShaMatch::Unknown)), None).unwrap();
+    let (pick, reason) =
+        auto_select_dev_profile(Some(cand(100, ShaMatch::Unknown)), None, None).unwrap();
     assert_eq!(pick, DevProfile::Release);
     assert_eq!(reason, BinarySelectionReason::OnlyOne);
 }
 
 #[test]
 fn auto_no_build_present_is_none() {
-    assert!(auto_select_dev_profile(None, None).is_none());
+    assert!(auto_select_dev_profile(None, None, None).is_none());
 }
 
 // ---- TASK-1158: bare-activate default is the release profile ----

@@ -30,6 +30,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `overlay::ci_style` |
 | `pr_cmd::pr_fetch_failure_message` |
 | `pr_ship::classify_gh_pr_checks_registration` |
+| `project_capabilities::gh_auth_status` |
 | `remote_create::gitlab_release_body_exists` |
 | `status_context::collect_pr_facts_uncached` |
 | `terminal_cmd::run_terminator_command` |

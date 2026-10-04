@@ -74,6 +74,13 @@ fn collect_queue_snapshot_pulls_in_progress_past_display_budget_with_lease() {
     use chrono::TimeZone;
     use tempfile::tempdir;
 
+    // Both this fixture and `collect_queue_snapshot` resolve the queue owner
+    // through `current_user_id` (AIDA_USER / USER). Pin it under the shared
+    // env lock for the whole test so a parallel test that swaps AIDA_USER
+    // cannot split the writes and the read across two identities.
+    // trace:BUG-1666 | ai:claude
+    let _user = crate::test_env::pin_queue_user();
+
     let dir = tempdir().unwrap();
     let project_root = dir.path();
     let store_root = project_root.join("store");

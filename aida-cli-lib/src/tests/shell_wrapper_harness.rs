@@ -15,6 +15,7 @@
 //! failure.
 // trace:TASK-1174 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::sync::OnceLock;
 
 /// Can we actually run this shell? Probed by executing a no-op script rather
@@ -25,7 +26,7 @@ fn shell_runs(shell: &str) -> bool {
     std::process::Command::new(shell)
         .args(shell_args(shell))
         .arg("exit 0")
-        .output()
+        .output_retrying_etxtbsy()
         .map(|out| out.status.success())
         .unwrap_or(false)
 }
@@ -73,12 +74,7 @@ pub(crate) fn wrapper_shells() -> &'static [&'static str] {
 pub(crate) fn run_wrapper_in(shell: &str, stub: &str, body: &str) -> (String, String, Option<i32>) {
     let dir = tempfile::tempdir().unwrap();
     let bin = dir.path().join("aida");
-    std::fs::write(&bin, stub).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    crate::test_exec::write_executable(&bin, stub);
     let script = format!(
         "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
         path = dir.path().display(),
@@ -88,7 +84,7 @@ pub(crate) fn run_wrapper_in(shell: &str, stub: &str, body: &str) -> (String, St
     let out = std::process::Command::new(shell)
         .args(shell_args(shell))
         .arg(&script)
-        .output()
+        .output_retrying_etxtbsy()
         .unwrap_or_else(|e| panic!("{shell} available: {e}"));
     (
         String::from_utf8_lossy(&out.stdout).to_string(),

@@ -201,6 +201,21 @@ fn all_review_history_helpers_reject_noncanonical_marker_placement() {
     assert_eq!(review_round_from_comments(&comments), 1);
 }
 
+/// Clear the env tiers the queue-work prompt and plan resolvers read
+/// (`AIDA_SESSION_ROLE`, the agent-gate pair, `AIDA_REVIEW_ROUND`) and hold
+/// the shared env lock for the guard's lifetime. A test that only READS these
+/// through the code under test still races the tests in this file that set
+/// them, so it must hold this for its whole body; restored on drop.
+// trace:BUG-1666 | ai:claude
+fn quiet_queue_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_AGENT_GATE_NAME", None),
+        ("AIDA_AGENT_GATE_ROLE", None),
+        ("AIDA_REVIEW_ROUND", None),
+    ])
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
@@ -420,6 +435,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-944".to_string(),
@@ -428,6 +444,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -451,6 +468,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             deferred: true,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1208".to_string(),
@@ -459,6 +477,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             deferred: false,
             execution_mode: None,
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -483,6 +502,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             tags: ["release workflow meta-task aida:release".to_string()]
                 .into_iter()
                 .collect(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1126".to_string(),
@@ -491,6 +511,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -516,6 +537,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Guided),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1121".to_string(),
@@ -524,6 +546,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Operator),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1122".to_string(),
@@ -532,6 +555,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Decide),
             tags: Default::default(),
+            blocked: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1123".to_string(),
@@ -540,6 +564,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
             tags: Default::default(),
+            blocked: None,
         },
     ];
 
@@ -568,7 +593,9 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
 // trace:BUG-862 | ai:claude
 #[test]
 fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
-    let _guard = crate::test_env::env_lock();
+    // The guard holds the shared env lock for the whole test and restores the
+    // ambient role on drop (also on a failed assert). trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
     for (seat, expect) in [
         ("advisor", "implementer"),
         ("human", "implementer"),
@@ -576,20 +603,20 @@ fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
         ("reviewer", "reviewer"),
         ("implementer", "implementer"),
     ] {
-        std::env::set_var("AIDA_SESSION_ROLE", seat);
+        env.reset(seat);
         assert_eq!(
             effective_auto_complete_role(None),
             expect,
             "session role {seat}"
         );
     }
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    env.reset("advisor");
     assert_eq!(
         effective_auto_complete_role(Some("reviewer")),
         "reviewer",
         "explicit override beats the dispatch-seat mapping"
     );
-    std::env::remove_var("AIDA_SESSION_ROLE");
+    env.reset_unset();
     assert_eq!(effective_auto_complete_role(None), "implementer");
 }
 
@@ -770,6 +797,8 @@ fn implementer_lease(scope: &str) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
@@ -1037,6 +1066,7 @@ fn orchestrated_reviewer_can_pick_current_implementer_routed_spec() {
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
     assert_eq!(
@@ -1047,24 +1077,17 @@ fn prompt_reviewer_pr_passes_number() {
 
 #[test]
 fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
-    let _guard = crate::test_env::env_lock();
-    let old_name = std::env::var("AIDA_AGENT_GATE_NAME").ok();
-    let old_role = std::env::var("AIDA_AGENT_GATE_ROLE").ok();
-    std::env::set_var("AIDA_AGENT_GATE_NAME", "security-review");
-    std::env::set_var("AIDA_AGENT_GATE_ROLE", "security-reviewer");
+    // trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_GATE_NAME", Some("security-review")),
+        ("AIDA_AGENT_GATE_ROLE", Some("security-reviewer")),
+        ("AIDA_REVIEW_ROUND", None),
+    ]);
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
 
     let prompt = derive_queue_work_prompt(&plan, "security-reviewer", false, false, None);
 
-    match old_name {
-        Some(v) => std::env::set_var("AIDA_AGENT_GATE_NAME", v),
-        None => std::env::remove_var("AIDA_AGENT_GATE_NAME"),
-    }
-    match old_role {
-        Some(v) => std::env::set_var("AIDA_AGENT_GATE_ROLE", v),
-        None => std::env::remove_var("AIDA_AGENT_GATE_ROLE"),
-    }
     assert!(prompt.starts_with("/aida-review --pr 11"), "{prompt}");
     assert!(prompt.contains("Agent gate: security-review"), "{prompt}");
     assert!(prompt.contains("Gate role: security-reviewer"), "{prompt}");
@@ -1073,6 +1096,7 @@ fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
 /// Reviewer role + non-PR scope → bare `/aida-review`.
 #[test]
 fn prompt_reviewer_non_pr_is_bare() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1084,6 +1108,7 @@ fn prompt_reviewer_non_pr_is_bare() {
 /// Implementer + item mode → `/aida-pickup <ID>` (focus directive).
 #[test]
 fn prompt_implementer_item_passes_focus() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1103,6 +1128,7 @@ fn prompt_implementer_item_passes_focus() {
 /// receive the research/report contract instead of treating it as code work.
 #[test]
 fn prompt_spike_item_names_research_lane_and_report_contract() {
+    let _env = quiet_queue_env();
     let e = resolved("SPIKE-82", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1125,8 +1151,8 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
 // trace:STORY-1226 | ai:claude
 #[test]
 fn pickup_prompt_leads_with_due_jobs_for_role() {
-    let _guard = crate::test_env::env_lock();
-    std::env::remove_var("AIDA_AGENT_GATE_NAME");
+    // trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::unset("AIDA_AGENT_GATE_NAME");
     let e = resolved("TASK-1226", entry(Uuid::now_v7(), Some("advisor"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1168,9 +1194,8 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
     // Nothing due → unchanged.
     assert_eq!(prepend_due_jobs(base.clone(), ""), base);
     // An agent gate never gets the block.
-    std::env::set_var("AIDA_AGENT_GATE_NAME", "security");
+    env.reset("security");
     assert_eq!(prepend_due_jobs(base.clone(), &block), base);
-    std::env::remove_var("AIDA_AGENT_GATE_NAME");
 }
 
 /// BUG-814: a rework pickup with a blocking review verdict must lead with the
@@ -1179,6 +1204,7 @@ fn pickup_prompt_leads_with_due_jobs_for_role() {
 // trace:BUG-814 | ai:codex
 #[test]
 fn prompt_implementer_item_leads_with_review_findings() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-814", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1260,6 +1286,7 @@ fn rework_findings_lookup_ignores_lone_unrelated_blocking_verdict() {
 // point so the skill skips its own confirm). trace:TASK-86 | ai:claude
 #[test]
 fn prompt_implementer_cluster_is_auto_first() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1274,6 +1301,7 @@ fn prompt_implementer_cluster_is_auto_first() {
 // trace:TASK-86 | ai:claude
 #[test]
 fn prompt_implementer_head_is_auto_first() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
     assert_eq!(
@@ -1286,6 +1314,7 @@ fn prompt_implementer_head_is_auto_first() {
 /// item focus, so the session writes a plan instead of implementing.
 #[test]
 fn prompt_plan_only_runs_aida_plan() {
+    let _env = quiet_queue_env();
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1305,6 +1334,7 @@ fn prompt_plan_only_runs_aida_plan() {
 /// structured decision dialog) with the spec focus, not /aida-pickup.
 #[test]
 fn prompt_guided_runs_guided_implement() {
+    let _env = quiet_queue_env();
     let e = resolved("STORY-7", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = QueueWorkPlan {
         mode: QueueWorkMode::Item,
@@ -1619,6 +1649,8 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
@@ -2561,6 +2593,7 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
 
 #[test]
 fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
+    let _env = quiet_queue_env();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let backend = aida_core::GitBackend::new(&root).unwrap();
@@ -2614,10 +2647,9 @@ fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
 #[test]
 fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     // BUG-1195: this test mutates AIDA_SESSION_ROLE — serialize with the other
-    // env-mutating tests instead of racing them.
-    let _guard = crate::test_env::env_lock();
-    let prior_role = std::env::var("AIDA_SESSION_ROLE").ok();
-    std::env::remove_var("AIDA_SESSION_ROLE");
+    // env-mutating tests instead of racing them. The guard also restores the
+    // ambient role on drop, even on a failed assert. trace:BUG-1666 | ai:claude
+    let _env = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let backend = aida_core::GitBackend::new(&root).unwrap();
@@ -2688,9 +2720,6 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     let entries = storage.queue_list("test-user", false).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
-    if let Some(role) = prior_role {
-        std::env::set_var("AIDA_SESSION_ROLE", role);
-    }
 }
 
 fn queue_review_story(storage: &Storage, root: &std::path::Path) {
@@ -2751,6 +2780,7 @@ fn queued_review_story_for_pr_detects_queued_story() {
 // PR→backing-spec into an implementer pickup. trace:STORY-501 | ai:claude
 #[test]
 fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
+    let _env = quiet_queue_env();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
@@ -2782,13 +2812,12 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
 /// reviewer route regardless of that env role, so the story is found.
 #[test]
 fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env_role() {
-    let _guard = crate::test_env::env_lock();
+    // trace:BUG-1666 | ai:claude
+    let mut env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
     queue_review_story(&storage, &root);
-    let prev = std::env::var_os("AIDA_SESSION_ROLE");
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
     let plan = resolve_queue_work_plan(
         &storage,
         "role:implementer",
@@ -2810,10 +2839,8 @@ fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env
         false,
         None,
     );
-    match prev {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
+    // The rest of the test runs with no session role, still under the lock.
+    env.reset_unset();
     let plan = plan.expect("PR-N resolves through the reviewer route for another user");
     assert!(plan.review_target.is_some());
     assert_eq!(plan.anchor_display, "STORY-901");
@@ -2836,6 +2863,98 @@ fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env
     .to_string();
     assert!(err.contains("no queued review story for PR-999"), "{err}");
     assert!(err.contains("none is a review story"), "{err}");
+}
+
+/// BUG-1817: reviewer hand-offs are visible across queue identities, and
+/// legacy duplicates resolve deterministically instead of blocking launch.
+#[test]
+fn review_pickup_cross_user_duplicates_choose_canonical_story() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let storage = Storage::new(&root);
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let mut newer =
+        aida_core::Requirement::new("Review PR-457: duplicate".to_string(), String::new());
+    newer.spec_id = Some("STORY-902".to_string());
+    newer.status = RequirementStatus::Approved;
+    let mut canonical =
+        aida_core::Requirement::new("Review PR-457: canonical".to_string(), String::new());
+    canonical.spec_id = Some("STORY-901".to_string());
+    canonical.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store
+        .requirements
+        .extend([newer.clone(), canonical.clone()]);
+    backend.save(&store).unwrap();
+    for (user, req) in [("producer-a", newer), ("producer-b", canonical)] {
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: user.into(),
+                requirement_id: req.id,
+                position: 0,
+                added_by: user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("reviewer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+
+    let plan = resolve_queue_work_plan(
+        &storage,
+        "ordinary-user",
+        Some("PR-457"),
+        None,
+        false,
+        false,
+        false,
+        None,
+    )
+    .expect("cross-user duplicate review stories should resolve");
+    assert_eq!(plan.anchor_display, "STORY-901");
+    assert_eq!(plan.review_target, Some((ReviewForge::GitHub, 457)));
+}
+
+/// BUG-1817: GitHub PR and GitLab MR stories share the same selector policy.
+#[test]
+fn canonical_review_story_is_forge_symmetric() {
+    let mut pr = aida_core::Requirement::new("Review PR-8: github".into(), String::new());
+    pr.spec_id = Some("STORY-8".into());
+    pr.status = RequirementStatus::Approved;
+    let mut mr = aida_core::Requirement::new("Review MR-8: gitlab".into(), String::new());
+    mr.spec_id = Some("STORY-9".into());
+    mr.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.extend([pr, mr]);
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitHub, 8, None, None)
+            .unwrap()
+            .display_id(),
+        "STORY-8"
+    );
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitLab, 8, None, None)
+            .unwrap()
+            .display_id(),
+        "STORY-9"
+    );
+
+    let mut duplicate =
+        aida_core::Requirement::new("Review PR-8: persisted retry".into(), String::new());
+    duplicate.spec_id = Some("STORY-10".into());
+    duplicate.status = RequirementStatus::Approved;
+    store.requirements.push(duplicate);
+    assert_eq!(
+        canonical_review_story(&store, ReviewForge::GitHub, 8, None, Some("STORY-10"))
+            .unwrap()
+            .display_id(),
+        "STORY-10",
+        "a persisted canonical choice must win on retry"
+    );
 }
 
 /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure
@@ -3331,5 +3450,383 @@ fn closed_refusal_does_not_count_as_outstanding() {
         crate::queue_cmd::queue_fresh_pickup_policy(&r, &store, false, Some(root)),
         crate::queue_cmd::QueueFreshPickup::AwaitingMerge,
         "a CLOSED refusal must not resurrect as rework"
+    );
+}
+
+// --- BUG-1608: queue-wide drain honours BlockedBy + the failure budget -------
+
+/// BUG-1608 fixture: a real git-backed store with `STORY-52` (prerequisite,
+/// status `prereq_status`), `NFR-56` (Approved, `BlockedBy → STORY-52`), and
+/// optionally an independent Approved `TASK-60`, all queued for the
+/// implementer in that order.
+fn bug_1608_fixture(
+    prereq_status: RequirementStatus,
+    with_independent: bool,
+) -> (tempfile::TempDir, Storage) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+
+    let mut prereq = Requirement::new("prerequisite".to_string(), String::new());
+    prereq.spec_id = Some("STORY-52".to_string());
+    prereq.status = prereq_status;
+    let mut dependent = Requirement::new("dependent".to_string(), String::new());
+    dependent.spec_id = Some("NFR-56".to_string());
+    dependent.status = RequirementStatus::Approved;
+    dependent.relationships.push(Relationship {
+        rel_type: aida_core::RelationshipType::BlockedBy,
+        target_id: prereq.id,
+        created_at: None,
+        created_by: None,
+    });
+    let mut reqs = vec![prereq, dependent];
+    if with_independent {
+        let mut independent = Requirement::new("independent".to_string(), String::new());
+        independent.spec_id = Some("TASK-60".to_string());
+        independent.status = RequirementStatus::Approved;
+        reqs.push(independent);
+    }
+    let ids: Vec<Uuid> = reqs.iter().map(|r| r.id).collect();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements = reqs;
+    backend.save(&store).unwrap();
+    for (i, id) in ids.into_iter().enumerate() {
+        storage
+            .queue_add(QueueEntry {
+                user_id: "u".into(),
+                requirement_id: id,
+                position: 1000 * (i as i64 + 1),
+                added_by: "u".into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("implementer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+    (dir, storage)
+}
+
+fn bug_1608_set_status(storage: &Storage, spec: &str, status: RequirementStatus) {
+    storage
+        .update_atomically(|s| {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some(spec))
+            {
+                r.status = status.clone();
+            }
+        })
+        .unwrap();
+}
+
+fn bug_1608_real_driver(storage: &Storage) -> RealNextNDriver<'_> {
+    RealNextNDriver {
+        storage,
+        user_id: "u".to_string(),
+        role_override: Some("implementer".to_string()),
+        variant: auto_complete::AutoCompleteVariant::Full,
+        json: true,
+        permission_mode: None,
+        no_human: None,
+        escalate_mode: auto_complete::EscalateMode::Blocks,
+        steal: false,
+        force_claim: false,
+        allow_stale_base: false,
+        no_auto_rebase: false,
+        token_meter: None,
+        role_skipped: Vec::new(),
+        seen_role_skips: std::collections::HashSet::new(),
+        pipeline_depth: 1,
+        pipelined_children: std::collections::HashMap::new(),
+        pipelined_result_paths: std::collections::HashMap::new(),
+        next_pipelined_handle: 1,
+    }
+}
+
+/// Drives the REAL queue-wide head resolver ([`RealNextNDriver::next_head`])
+/// and simulates each member's lifecycle as real status transitions in the
+/// store: `shelve` specs go In Progress → Needs Attention (a phase-2 shelve),
+/// everything else In Progress → Completed.
+struct Bug1608Driver<'a> {
+    real: RealNextNDriver<'a>,
+    shelve: Vec<&'static str>,
+    runs: Vec<String>,
+}
+
+impl auto_complete::BatchDriver for Bug1608Driver<'_> {
+    fn next_head(&mut self) -> Option<String> {
+        self.real.next_head()
+    }
+
+    fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        self.runs.push(spec.to_string());
+        let storage = self.real.storage;
+        bug_1608_set_status(storage, spec, RequirementStatus::InProgress);
+        if self.shelve.contains(&spec) {
+            bug_1608_set_status(storage, spec, RequirementStatus::NeedsAttention);
+            let mut result = auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+            result.shelved_reason = Some(aida_core::FailureReason {
+                phase: "ci".to_string(),
+                phase_index: 2,
+                kind: "failed".to_string(),
+                detail: "no usable origin".to_string(),
+                recovery_hint: None,
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            });
+            return result;
+        }
+        bug_1608_set_status(storage, spec, RequirementStatus::Completed);
+        auto_complete::OrchestrationResult::ok()
+    }
+}
+
+fn bug_1608_drain(
+    storage: &Storage,
+    shelve: Vec<&'static str>,
+    max_failures: Option<usize>,
+) -> (auto_complete::BatchDrainResult, Vec<String>) {
+    let mut driver = Bug1608Driver {
+        real: bug_1608_real_driver(storage),
+        shelve,
+        runs: Vec::new(),
+    };
+    let mut result = auto_complete::drain_batch(&mut driver, Some(99), max_failures);
+    // Same composition `handle_auto_complete_next_n` performs.
+    result.skipped.extend(driver.real.role_skipped);
+    (result, driver.runs)
+}
+
+/// BUG-1608 acceptance (the observed incident): queue-wide drain with
+/// `--max-failures 1`, STORY-52 shelves in phase 2 — the drain stops before a
+/// second launch; NFR-56 (BlockedBy STORY-52) is never started.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_queue_wide_drain_max_failures_one_stops_after_first_shelve() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (result, runs) = bug_1608_drain(&storage, vec!["STORY-52"], Some(1));
+    assert_eq!(runs, vec!["STORY-52"], "no second spec may launch");
+    assert_eq!(result.shelved, vec!["STORY-52"]);
+    assert_eq!(result.exit_code, auto_complete::DRIVE_EXIT_HARD_FAIL);
+    assert!(matches!(
+        result.outcome,
+        auto_complete::BatchDrainOutcome::Failed(auto_complete::Phase::Ci)
+    ));
+}
+
+/// BUG-1608: with budget to spare, the dependent of a shelved spec is skipped
+/// (and reported with its blocker) in the same drain, while independent work
+/// continues.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_dependent_of_shelved_spec_is_skipped_in_same_drain() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (result, runs) = bug_1608_drain(&storage, vec!["STORY-52"], Some(5));
+    assert_eq!(runs, vec!["STORY-52", "TASK-60"]);
+    assert!(!runs.iter().any(|s| s == "NFR-56"));
+    assert_eq!(result.shelved, vec!["STORY-52"]);
+    assert_eq!(result.shipped, vec!["TASK-60"]);
+    assert_eq!(
+        result.skipped,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Needs Attention)".to_string()
+        )]
+    );
+    assert_eq!(result.exit_code, auto_complete::DRIVE_EXIT_SHELVED);
+}
+
+/// BUG-1608: Done is not Completed — a dependent of a Done prerequisite (e.g.
+/// merged-pending-verification, or a pushed branch) is not pickable, through
+/// either the queue-wide resolver or the single-head pickup.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_dependent_of_done_but_not_completed_prereq_is_not_picked() {
+    let _env = quiet_queue_env();
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Done, false);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "NFR-56 must not be picked: {pick:?}");
+    assert_eq!(
+        blocked,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Done)".to_string()
+        )]
+    );
+    let err = resolve_auto_complete_head(&storage, "u", Some("implementer"))
+        .expect_err("single-head pickup must refuse the blocked dependent");
+    assert!(err.to_string().contains("nothing to drive"), "{err}");
+
+    // Positive control: once the prerequisite is Completed, the edge is met.
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("NFR-56".to_string()));
+    assert!(blocked.is_empty());
+}
+
+/// BUG-1608 / PRIN-5: a `BlockedBy` edge whose target cannot be resolved
+/// (dangling — dependency state unknown) fails closed: not picked.
+// trace:BUG-1608 | ai:claude
+#[test]
+fn bug_1608_unknown_dependency_state_fails_closed() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    storage
+        .update_atomically(|s| {
+            if let Some(r) = s
+                .requirements
+                .iter_mut()
+                .find(|r| r.spec_id.as_deref() == Some("NFR-56"))
+            {
+                r.relationships[0].target_id = Uuid::now_v7();
+            }
+        })
+        .unwrap();
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "unknown dependency must not be picked");
+    assert_eq!(blocked.len(), 1);
+    assert_eq!(blocked[0].0, "NFR-56");
+}
+
+/// TASK-1490: the drain preview's member list must apply the same
+/// `aida_core::pickability::pickability()` verdict dispatch uses (BUG-1608),
+/// not a status-only view. NFR-56 (Approved, `BlockedBy → STORY-52` while
+/// STORY-52 is only Approved, not Completed) must not appear as a preview
+/// member — it must show up as skipped, with its blocker — even though
+/// `next 99` has ample room and NFR-56's status alone is drivable.
+// trace:TASK-1490 | ai:claude
+#[test]
+fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
+    let (_dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(
+        member_ids,
+        vec!["STORY-52", "TASK-60"],
+        "the blocked dependent NFR-56 must not be listed as a member: {member_ids:?}"
+    );
+    assert_eq!(
+        skipped,
+        vec![(
+            "NFR-56".to_string(),
+            "blocked-by STORY-52 (Approved)".to_string()
+        )],
+        "NFR-56 must be reported skipped, with its blocker"
+    );
+
+    // Positive control: once the prerequisite is Completed, the dependent
+    // becomes a member and drops out of skipped. STORY-52 itself is no
+    // longer status-drivable once Completed, so it drops off the preview too
+    // — the same status filter `auto_complete_head_drivable` always applied.
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    let (members, skipped) =
+        crate::queue_cmd::drain_preview_head_members(&storage, "u", Some("implementer"), 99)
+            .expect("preview resolves");
+    let member_ids: Vec<&str> = members.iter().map(|(id, _, _)| id.as_str()).collect();
+    assert_eq!(member_ids, vec!["NFR-56", "TASK-60"]);
+    assert!(skipped.is_empty());
+}
+
+/// STORY-1429: a spec requeued out of NeedsAttention re-enters the REAL
+/// queue-wide drain head on the very next pick (the resolver re-reads the
+/// store), with no drain restart.
+// trace:STORY-1429 | ai:claude
+#[test]
+fn requeued_spec_reenters_queue_wide_drain_head() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
+    // Anchor the cache-path walk-up to this tempdir (BUG-1598).
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::NeedsAttention);
+    let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(
+        pick.map(|p| p.spec),
+        Some("TASK-60".to_string()),
+        "a parked spec is not the head"
+    );
+
+    handle_queue_rework(
+        &storage,
+        "STORY-52",
+        false,
+        None,
+        false,
+        None,
+        Some("triaged"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("u"),
+    )
+    .unwrap();
+
+    let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
+}
+
+/// STORY-1429: requeue does not bypass the dependency gate. A requeued
+/// dependent whose prerequisite is not Completed is still skipped by the
+/// BlockedBy gate, and its requeue preview said so before it was taken.
+// trace:STORY-1429 | ai:claude
+#[test]
+fn requeued_dependent_still_skipped_by_blocked_by_gate() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    bug_1608_set_status(&storage, "NFR-56", RequirementStatus::NeedsAttention);
+
+    let store = storage.load().unwrap();
+    let nfr = store.get_requirement_by_spec_id("NFR-56").unwrap();
+    let preview = crate::requeue::requeue_preview(nfr, Some(&store), Some("implementer"), true);
+    assert!(preview.offerable());
+    assert_eq!(
+        preview.waits_on.as_deref(),
+        Some("STORY-52 (Approved)"),
+        "the preview names the unmet dependency"
+    );
+
+    handle_queue_rework(
+        &storage,
+        "NFR-56",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("u"),
+    )
+    .unwrap();
+    let store = storage.load().unwrap();
+    assert_eq!(
+        store.get_requirement_by_spec_id("NFR-56").unwrap().status,
+        RequirementStatus::Approved
+    );
+
+    let (pick, _role, blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert_eq!(pick.map(|p| p.spec), Some("STORY-52".to_string()));
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::InProgress);
+    let (pick, _role, blocked_after) = resolve_next_n_head(&storage, "u", Some("implementer"));
+    assert!(pick.is_none(), "the requeued dependent must not be picked");
+    assert!(
+        blocked
+            .iter()
+            .chain(blocked_after.iter())
+            .any(|(id, reason)| id == "NFR-56" && reason.starts_with("blocked-by STORY-52")),
+        "{blocked:?} {blocked_after:?}"
     );
 }

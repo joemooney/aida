@@ -27,6 +27,8 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 
@@ -139,6 +141,9 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: Some("wip".into()),
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
+            untracked_only: false,
         },
         |_| None,
         |_| None,
@@ -164,19 +169,20 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
     assert!(d.hint.is_none());
 }
 
-/// TASK-152: when the same live pid has both a harness-worktree lease role
-/// and a transcript role, `aida ps` displays the transcript role because the
-/// lease role here is the harness's generic Agent-tool placeholder
-/// (`tail_cmd::HARNESS_AGENT_TYPE`, "general-purpose") — it names no real
-/// role, so it carries no information worth defending. The original lease
-/// role remains present for structured provenance (`lease_role`). Restored
-/// after the BUG-1521 strict-review PROXY DECISION: a REAL recorded lease
-/// role is authoritative (see `ps_real_lease_role_beats_derived_jsonl_role`
-/// below), but the placeholder itself is not real and must not mask a
-/// derived signal that actually names the role.
-// trace:TASK-152 trace:BUG-1521 | ai:claude
+/// BUG-1681 supersedes TASK-152's expectation for this shape. The fixture is
+/// an Agent-tool subagent lease: the placeholder agent type as its recorded
+/// role, and the PARENT claude process as its pid (a subagent executes inside
+/// that process — BUG-752), whose cwd is the parent project root rather than
+/// the isolation worktree. The transcript that pid resolves is therefore the
+/// HOST session's, so displaying its role made every fan-out row wear the
+/// parent's identity (`advisor` for an advisor-led fan-out). The row now says
+/// what it is — a subagent — while the recorded placeholder stays visible as
+/// provenance (`lease_role`). A REAL recorded role is still authoritative
+/// (`ps_real_lease_role_beats_derived_jsonl_role`), and the per-lease manifest
+/// join still outranks the generic label (TASK-153, below).
+// trace:TASK-152 trace:BUG-1521 trace:BUG-1681 | ai:claude
 #[test]
-fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
+fn ps_placeholder_lease_role_never_inherits_the_host_transcript_role() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = tmp.path().join("repo");
     let wt = tmp.path().join(".claude/worktrees/agent-abc123");
@@ -211,7 +217,12 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, Some(std::process::id()));
-    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+    // trace:BUG-1681 | ai:claude
+    assert_eq!(
+        rows[0].role.as_deref(),
+        Some("subagent"),
+        "a subagent row must not borrow the host session's role"
+    );
     assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
 }
 
@@ -383,6 +394,9 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: Some("wip: half-done".into()),
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
+            untracked_only: false,
         },
         |_| None,
         |_| None,
@@ -430,6 +444,9 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             dirty: true,
             ahead_of_main: 0,
             last_commit_subject: None,
+            // trace:BUG-1656 | ai:claude
+            dirty_newest_mtime_age_secs: None,
+            untracked_only: false,
         },
         |_| None,
         |_| None,
@@ -614,6 +631,7 @@ fn ps_summary(
         execution_mode: None,
         weight: None,
         origin: None,
+        completed_at: None, // trace:TASK-1474 | ai:claude
         yaml_path: String::new(),
     }
 }
@@ -1241,6 +1259,14 @@ fn ps_orphan_likely_fanout_matrix() {
 /// TASK-1064: a LIVE generic `harness-worktree` lease (an advisor Agent-tool
 /// fan-out) is detected as an active fan-out; a spec-scoped lease (even live)
 /// is NOT — only the generic non-spec-linked harness scope counts.
+///
+/// BUG-1681 renamed the predicate `live_fanout_harness_lease` (bool) to
+/// `ps_live_fanout_leases`, which returns the matching leases instead of
+/// collapsing them to "some fan-out is alive somewhere". TASK-1064's selection
+/// rule is unchanged and still pinned here; the returned IDENTITY is asserted
+/// too, because that is what lets attribution be matched per spec rather than
+/// applied to every flag-only row (see `bug_1681_ps_reporting_tests`).
+// trace:TASK-1064 trace:BUG-1681 | ai:claude
 #[test]
 fn live_fanout_harness_lease_detects_generic_harness_only() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1252,21 +1278,33 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
         worktree_lease::HARNESS_WORKTREE_SCOPE,
         tmp.path().to_path_buf(),
     );
+    // BUG-1740: the live process backing the lease must be a WORKER, not the
+    // reporting session — a fixture pinned to `std::process::id()` asserted
+    // exactly the self-corroboration this predicate now refuses.
+    // trace:BUG-1740 | ai:claude
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // A pid that is not in this process's ancestor chain: a real worker.
+        pid: 424_242,
         cwd: tmp.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,
     }];
-    assert!(
-        live_fanout_harness_lease(&[harness.clone()], &live, now),
+    let caller = [std::process::id()];
+    // The returned leases borrow the slice, so it must outlive the call.
+    let harness_leases = [harness.clone()];
+    let found = ps_live_fanout_leases(&harness_leases, &live, now, &caller);
+    assert_eq!(
+        found.len(),
+        1,
         "a live harness-worktree lease must read as an active fan-out"
     );
+    // trace:BUG-1681 | ai:claude — the lease itself, not merely a count.
+    assert_eq!(found[0].id, harness.id);
 
     // A live SPEC-scoped lease is not a fan-out (it backs its own spec).
     let spec_lease = ps_lease("sess-spec", "STORY-7", tmp.path().to_path_buf());
     assert!(
-        !live_fanout_harness_lease(&[spec_lease], &live, now),
+        ps_live_fanout_leases(&[spec_lease], &live, now, &caller).is_empty(),
         "a spec-scoped lease is not a generic fan-out lease"
     );
 
@@ -1277,7 +1315,7 @@ fn live_fanout_harness_lease_detects_generic_harness_only() {
         std::path::PathBuf::from("/nonexistent/aida-fanout-dead"),
     );
     assert!(
-        !live_fanout_harness_lease(&[dead_harness], &[], now),
+        ps_live_fanout_leases(&[dead_harness], &[], now, &caller).is_empty(),
         "a dead harness lease is not an active fan-out"
     );
 }
@@ -1593,7 +1631,15 @@ fn mark_lease_manual_enter_round_trips_and_preserves_foreign_keys() {
 /// TASK-152/TASK-153/`ps_real_lease_role_beats_derived_jsonl_role`/
 /// `ps_placeholder_lease_role_loses_to_manifest_role_over_jsonl_role` tests
 /// each cover one link of.
-// trace:BUG-1521 | ai:claude
+/// BUG-1681 changes the LABEL this last resort shows, not the invariant the
+/// test defends. BUG-1521's invariant is twofold — the row is never left
+/// roleless, and the recorded placeholder survives as provenance — and both
+/// still hold below. What changes is that the displayed role is now the
+/// generic `subagent` rather than the harness's internal placeholder
+/// (`general-purpose`), because this lease shape IS an Agent-tool subagent and
+/// BUG-1681 acceptance #3 asks the row to say so. The placeholder is still
+/// readable in `lease_role`, so nothing is lost.
+// trace:BUG-1521 trace:BUG-1681 | ai:claude
 #[test]
 fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1623,11 +1669,20 @@ fn ps_placeholder_lease_role_is_the_last_resort_when_nothing_else_resolves() {
     );
 
     assert_eq!(rows.len(), 1);
+    // BUG-1521's invariant: the row is NOT left roleless when nothing else
+    // resolves. trace:BUG-1521 | ai:claude
+    assert!(
+        rows[0].role.is_some(),
+        "the row must not be left roleless when no other signal resolves"
+    );
+    // BUG-1681: and what it falls back to names the row's own kind rather than
+    // the harness's internal placeholder. trace:BUG-1681 | ai:claude
     assert_eq!(
         rows[0].role.as_deref(),
-        Some(tail_cmd::HARNESS_AGENT_TYPE),
-        "the placeholder is shown when no other signal resolves a role"
+        Some("subagent"),
+        "the generic subagent label is the last resort, not the internal placeholder"
     );
+    // The placeholder survives as provenance either way. trace:BUG-1521 | ai:claude
     assert_eq!(
         rows[0].lease_role.as_deref(),
         Some(tail_cmd::HARNESS_AGENT_TYPE)

@@ -174,7 +174,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
             });
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "spec": disp,
                 "status": status_label,
                 "status_lens": status_display::needs_attention_lens(req).map(|lens| lens.label()),
@@ -403,6 +403,9 @@ pub(crate) fn handle_status_command_distributed(
         // cache reads only, so the fast path stays sub-second.
         // trace:STORY-1415 | ai:claude
         crate::mass_change::print_status_line(&drain_root);
+        // STORY-1218: one night-shift line, only when this clone enabled it.
+        // trace:STORY-1218 | ai:claude
+        crate::shift::print_status_line(&drain_root);
         let snap = collect_fast_status_snapshot(&project_root);
         // TASK-964: AGENT-MODE renders the token-efficient TOON snapshot; the
         // human TTY path keeps the byte-identical emoji/rule snapshot.
@@ -464,6 +467,8 @@ pub(crate) fn handle_status_command_distributed(
     }) {
         let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
         print_live_drain_status_line(&drain_root);
+        // trace:STORY-1218 | ai:claude
+        crate::shift::print_status_line(&drain_root);
     }
 
     // STORY-385: `--cleanup` focuses on the "Needs attention" section.
@@ -473,7 +478,7 @@ pub(crate) fn handle_status_command_distributed(
     if cleanup {
         let report = collect_cleanup_report(&project_root, &store);
         if json {
-            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+            println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
         } else {
             let stdout = std::io::stdout();
             let _ = report.render(verbose, stdout.lock());
@@ -515,7 +520,7 @@ pub(crate) fn handle_status_command_distributed(
     if awaiting {
         let report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
         if json {
-            println!("{}", serde_json::to_string_pretty(&report.to_json())?);
+            println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
         } else if report.is_empty() {
             // Echo a quiet all-clear so `aida status --awaiting` doesn't
             // silently exit with nothing on stdout — the focus-mode user
@@ -585,6 +590,8 @@ pub(crate) fn handle_status_command_distributed(
         print_status_pr_section(&user_ctx, false);
     }
     print_status_queue_section(&user_ctx, false);
+    // trace:TASK-1522 | ai:antigravity
+    crate::intent_capture::print_status_intent_capture_line(&project_root);
 
     // TASK-648 (ADR-3): surface the draft-inbox depth. Drafts are untriaged
     // intake awaiting an advisor disposition (keep → queue / backlog → archive
@@ -1060,6 +1067,7 @@ fn collect_absence_change_digest(
     let opts = history::HistoryOpts {
         limit: 250,
         max_commits: 2_000,
+        max_commits_explicit: false,
         events_mode: true,
         id_filter: None,
         type_filter: None,
@@ -1068,6 +1076,9 @@ fn collect_absence_change_digest(
         until: None,
         status_changes_only: false,
         shipped_only: false,
+        to_status: None,
+        from_status: None,
+        opened_only: false,
         comments_only: false,
         oneline: false,
         archived_specs: std::collections::HashSet::new(),
@@ -1076,10 +1087,10 @@ fn collect_absence_change_digest(
         deferred_only_specs: None,
         exclude_meta: true,
     };
-    let Ok(events) = history::collect_event_records(store_path, &opts) else {
+    let Ok(records) = history::collect_event_records(store_path, &opts) else {
         return AbsenceChangeDigest::default();
     };
-    summarize_absence_events(&events)
+    summarize_absence_events(&records.events)
 }
 
 fn summarize_absence_events(events: &[history::HistoryEventRecord]) -> AbsenceChangeDigest {
@@ -1475,7 +1486,7 @@ pub(crate) fn print_scaffolding_freshness(
     store: &aida_core::models::RequirementsStore,
     db_path: &std::path::Path,
 ) {
-    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+    use aida_core::scaffolding::Scaffolder;
 
     // BUG-43: drive the scaffolder with the *actual* store and the
     // *actual* db_path, matching how init/scaffold-apply construct the
@@ -1483,7 +1494,9 @@ pub(crate) fn print_scaffolding_freshness(
     // db_path-derived data (`database_filename()`) into its content, so
     // any mismatch on either input falsely reports drift on a fresh
     // init. trace:BUG-43 | ai:claude
-    let config = ScaffoldConfig::default();
+    // The Codex/Antigravity packs follow the saved agent selection.
+    // trace:BUG-1639 | ai:claude
+    let config = crate::init_cmd::scaffold_config_for_project(project_root);
     let mut scaffolder =
         Scaffolder::with_database(project_root.to_path_buf(), config, db_path.to_path_buf());
     let preview = scaffolder.preview(store);
@@ -1601,7 +1614,7 @@ pub(crate) fn handle_status_command(
     store_path_override: Option<&std::path::Path>,
     storage: &Storage,
 ) -> Result<()> {
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
     let project_root = std::env::current_dir()?;
 
     println!("{}", "─── Project ───".bold());

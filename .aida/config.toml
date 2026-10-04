@@ -20,12 +20,11 @@ workflow_hints = true
 enabled = false
 
 # STORY-760: store-sync fan-out. This project mirrors to a personal GitLab
-# (gitlab.joemooney.com) alongside github `origin`. Listing it here makes every
-# `aida db sync --push` push the store to BOTH hubs, so a clone can't silently
-# leave one behind. Best-effort: while the store is mid-reconcile (BUG-700
-# employer-content scrub), the gitlab leg will WARN as non-fast-forward — that is
-# expected and self-heals once the histories are reconciled. Check drift anytime
-# with `aida remote status`.
+# (gitlab.joemooney.com) alongside GitHub `origin`. Store fan-out runs from
+# `aida db sync --push`, `aida pull`, `aida remote mirror-sync`, and the
+# `hub-mirror-sync` scheduled cadence below. Each path pushes by fast-forward
+# only; a non-fast-forward mirror is reported for deliberate reconciliation.
+# Check drift anytime with `aida remote status`.
 [store.sync]
 mirror_remotes = ["gitlab"]
 
@@ -127,6 +126,16 @@ informational_workflows = ["Cross-platform*"]
 [performance.budgets]
 show = { budget_ms = 1000, ceiling_ms = 5000 }
 
+# STORY-1484 slice C: pick up an orphaned cache refresh request. Scaffold
+# entry (see `schedule_section()` in aida-cli-lib/src/init_cmd.rs), enabled
+# here as in the scaffold: a silent no-op when no request is pending.
+# trace:TASK-1527 | ai:claude
+[[schedule.jobs]]
+name = "cache-refresh-tick"
+command = "cache refresh --if-requested"
+every = "15m"
+enabled = true
+
 [[schedule.jobs]]
 name = "performance-guard"
 command = "doctor check performance --fail-on-findings"
@@ -136,7 +145,7 @@ enabled = true
 [[schedule.jobs]]
 name = "performance-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:performance-guard"]
 prompt = "A performance budget was breached. Use the routed trip evidence and its matching entry at .aida-store/schedule/performance-guard.yaml to confirm the budget in force, then decide: real regression, or a budget that needs changing deliberately."
 enabled = true
 
@@ -176,10 +185,20 @@ command = "doctor check remote-drift --fail-on-findings"
 every = "6h"
 enabled = true
 
+# BUG-1746: retry mirror fan-out hourly, strictly more often than the 6h drift
+# guard, giving about six recovery attempts before escalation. There is no
+# hub-mirror-sync-route: transient hub failures must not route to a seat; the
+# 6h hub-drift-guard remains the escalation path for persistent drift.
+[[schedule.jobs]]
+name = "hub-mirror-sync"
+command = "remote mirror-sync"
+every = "1h"
+enabled = true
+
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:hub-drift-guard"]
 prompt = "A tracked branch (main or aida-store) differs across hubs. Use the routed trip evidence and `aida remote status` to reconcile — never force-push a shared branch."
 enabled = true
 
@@ -218,8 +237,8 @@ enabled = true
 [[schedule.jobs]]
 name = "disk-headroom-guard-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
-prompt = "Free disk space dropped below the configured floor. Reclaim space (stale worktrees via `aida session reap`, `cargo clean`) or raise [doctor.disk_headroom] min_free_gib deliberately."
+on = ["CronJobFailed:disk-headroom-guard"]
+prompt = "Free disk space dropped below the configured floor. Reclaim stale worktree build caches with `aida worktree reclaim` (dry run by default; `--apply` deletes), remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
 enabled = true
 
 # STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
@@ -254,6 +273,40 @@ enabled = true
 [[schedule.jobs]]
 name = "watchdog-route"
 seats = ["advisor"]
-on = ["CronJobFailed"]
+on = ["CronJobFailed:watchdog"]
 prompt = "A seat tripped the runaway-seat watchdog. Use the routed trip evidence (session, rule, measured value, threshold) to stop the tick or loop that is waking it, or hand off and restart a seat past its context ceiling. Never answer by adding another poll."
 enabled = true
+
+[[schedule.jobs]]
+name = "night-shift"
+command = "shift tick"
+every = "10m"
+enabled = true
+
+# Effort-balance intent-capture target (TASK-1522): advisory floor on the
+# share of newly completed specs with at least one traced test criterion.
+# Reported by `aida criteria coverage` and `aida status`; not enforced.
+#
+# [capture]
+# criterion_test_floor_pct = 50
+
+
+# Worktree placement (BUG-1700 / TASK-1561). Every AIDA-minted worktree — pooled
+# or not, from `aida session start`, `aida queue work`, pickup's fallback, or the
+# orchestrator — lands under this ONE directory instead of as a sibling of the
+# project root. The value is RELATIVE, which `worktree_placement_path`
+# (aida-core/src/worktree_pool.rs) resolves against the project root, so this
+# resolves to ../aida-worktrees beside the checkout; an absolute value would be
+# used as given, but relative keeps a clone elsewhere sensible instead of
+# pointing at this host's paths. The directory need not exist — `git worktree
+# add` creates it.
+#
+# Why it is set here: the historical sibling layout scattered worktrees directly
+# into the checkout's parent, so the folder-trust grant that lets an agent launch
+# in them had to cover that whole parent — ~140 unrelated directories on this
+# host (`aida doctor` discloses the breadth; see BUG-1744). Nesting them under
+# one directory lets a single narrow grant cover all of them. Forward-only:
+# worktrees created before this was set are not moved and keep working.
+# trace:TASK-1563 | ai:claude
+[worktree_pool]
+worktree_parent = "../aida-worktrees"

@@ -111,6 +111,55 @@ fn resolve_body_with_reader(
     Ok(content)
 }
 
+/// Append a marker-bearing comment to a spec, or — when one carrying the same
+/// signature is already there — bump that one's recurrence counter in place.
+///
+/// The quiet counterpart of [`add_comment_cli`]: it prints nothing, because its
+/// caller is the drain, whose stdout may be a `--json` document. Returns the
+/// comment's id either way, so the caller can point at it.
+// trace:TASK-1564 | ai:claude
+pub(crate) fn bump_or_add_marked_comment(
+    storage: &Storage,
+    req_id: &str,
+    signature: &str,
+    body: &str,
+    author: &str,
+    latest_at: &str,
+) -> Result<Uuid> {
+    let mut store = storage.load()?;
+    let id = parse_requirement_id(req_id, &store)?;
+    let req = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.id == id)
+        .context("Requirement not found")?;
+
+    let existing = req
+        .comments
+        .iter_mut()
+        .find(|c| crate::drain_failure_note::matches_signature(&c.content, signature));
+    let comment_id = match existing {
+        Some(note) => {
+            note.content = crate::drain_failure_note::increment_auto_failure_attempts(
+                &note.content,
+                latest_at,
+            );
+            note.touch();
+            note.id
+        }
+        None => {
+            let comment = Comment::new(author.to_string(), body.to_string())
+                .with_session_id(resolve_current_session_id());
+            let comment_id = comment.id;
+            req.add_comment(comment);
+            comment_id
+        }
+    };
+
+    storage.save(&store)?;
+    Ok(comment_id)
+}
+
 #[cfg(test)]
 mod task_190_tests {
     use super::{resolve_body, resolve_body_with_reader};

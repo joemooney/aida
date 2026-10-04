@@ -17,12 +17,15 @@ fn reapable_facts() -> ReapFacts {
         spec_finished: true,
         process_exited: true,
         locked: false,
+        head_on_branch: true,
+        branch_checked_out_elsewhere: None,
         worktree: AgentWorktreeFacts {
             dirty: false,
             ancestor_of_main: true,
             pr_merged: false,
             unique_unmerged_commits: 0,
             content_fully_landed: false,
+            spec_trailer_on_main: false,
         },
     }
 }

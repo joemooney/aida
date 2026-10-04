@@ -95,6 +95,9 @@ struct JobConfig {
     #[serde(default, alias = "every")]
     interval: Option<String>,
     /// Event kinds (serialized `event` tag names) that make the job due.
+    /// A job-carrying event may name its source job after a colon —
+    /// `"CronJobFailed:disk-headroom-guard"` fires only on that job's
+    /// failure; a bare `"CronJobFailed"` still matches every job's failure.
     #[serde(default)]
     on: Vec<String>,
     /// Typed predicate over the substrate snapshot.
@@ -155,6 +158,78 @@ impl JobSource {
     }
 }
 
+/// One validated `on` entry: an event kind, optionally bound to the job that
+/// produced the event (`CronJobFailed:<job>`). Unbound keeps the original
+/// meaning — any event of that kind — so existing configs behave as before.
+// trace:BUG-1655 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EventTrigger {
+    kind: String,
+    job: Option<String>,
+}
+
+/// Event kinds that carry a `job` field and so accept a `:<job>` binding.
+// trace:BUG-1655 | ai:claude
+const JOB_BOUND_EVENTS: &[&str] = &["CronJobFailed", "CronJobFired"];
+
+impl EventTrigger {
+    fn parse(job_name: &str, raw: &str) -> Result<Self> {
+        let (kind, job) = match raw.split_once(':') {
+            Some((kind, job)) => (kind.trim(), Some(job.trim())),
+            None => (raw.trim(), None),
+        };
+        if !EventKind::known_names().contains(&kind) {
+            anyhow::bail!(
+                "scheduled job '{job_name}': unknown event '{kind}' in `on`; valid events: {}",
+                EventKind::known_names().join(", ")
+            );
+        }
+        let job = match job {
+            None => None,
+            Some("") => anyhow::bail!(
+                "scheduled job '{job_name}': `on = [\"{raw}\"]` names no job after the colon; \
+                 write `{kind}:<job-name>` or drop the colon to match every job"
+            ),
+            Some(j) if !JOB_BOUND_EVENTS.contains(&kind) => anyhow::bail!(
+                "scheduled job '{job_name}': event '{kind}' has no source job, so `{kind}:{j}` \
+                 cannot be bound; only {} accept `:<job-name>`",
+                JOB_BOUND_EVENTS.join(", ")
+            ),
+            Some(j) => Some(j.to_string()),
+        };
+        Ok(Self {
+            kind: kind.to_string(),
+            job,
+        })
+    }
+
+    /// Does `ev` satisfy this trigger? The kind must match and, when bound,
+    /// the event's source job must be the bound job.
+    fn matches(&self, ev: &EventKind) -> bool {
+        if self.kind != ev.name() {
+            return false;
+        }
+        let Some(want) = &self.job else {
+            return true;
+        };
+        match ev {
+            EventKind::CronJobFailed { job, .. } | EventKind::CronJobFired { job, .. } => {
+                job == want
+            }
+            _ => false,
+        }
+    }
+}
+
+impl std::fmt::Display for EventTrigger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.job {
+            Some(job) => write!(f, "{}:{job}", self.kind),
+            None => f.write_str(&self.kind),
+        }
+    }
+}
+
 /// A validated registry entry.
 // trace:STORY-1226 | ai:claude
 #[derive(Debug, Clone)]
@@ -165,12 +240,17 @@ pub(crate) struct Task {
     command: Option<ScheduledCommand>,
     pub prompt: Option<String>,
     interval: Option<Duration>,
-    on: Vec<String>,
+    on: Vec<EventTrigger>,
     when: Option<Expr>,
     when_raw: Option<String>,
     quiet_hours: Option<QuietHours>,
     enabled: bool,
     pub source: JobSource,
+    /// Why this job cannot run (e.g. its `on` binds to a job that is not in
+    /// the registry). Such a job is loaded disabled so every other job keeps
+    /// running; tick and `schedule status` surface the reason.
+    // trace:BUG-1655 | ai:claude
+    problem: Option<String>,
 }
 
 impl Task {
@@ -190,7 +270,8 @@ impl Task {
             parts.push(format!("every {}", format_duration(i)));
         }
         if !self.on.is_empty() {
-            parts.push(format!("on {}", self.on.join(",")));
+            let on: Vec<String> = self.on.iter().map(ToString::to_string).collect();
+            parts.push(format!("on {}", on.join(",")));
         }
         if let Some(w) = &self.when_raw {
             parts.push(format!("when {w}"));
@@ -314,6 +395,22 @@ impl DueJob {
         let mut line = format!("{} ({}, {}) → {}", self.name, self.reason, last, what);
         if let Some(failure) = &self.failure {
             line.push_str(&format!("\n  trip evidence: {}", failure.trip_id));
+            // trace:BUG-1655 | ai:claude
+            if let Some(error) = &failure.error {
+                let source = failure.job.as_deref().unwrap_or("the job");
+                if error.starts_with(TIMEOUT_EXIT_PREFIX) {
+                    line.push_str(&format!(
+                        "\n  {source} timed out before reporting — this is not a finding: {error}"
+                    ));
+                } else if error.starts_with(SPAWN_FAILED_EXIT_PREFIX) {
+                    // trace:TASK-1535 | ai:codex
+                    line.push_str(&format!(
+                        "\n  {source} could not be spawned — this is not a finding: {error}"
+                    ));
+                } else {
+                    line.push_str(&format!("\n  {source} failed: {error}"));
+                }
+            }
             for audit in &failure.performance {
                 let ceiling = audit.ceiling_ms.map_or_else(
                     || "n/a".to_string(),
@@ -371,8 +468,17 @@ pub(crate) fn handle_schedule_command(
         }
         MaintenanceScheduleCommand::Done { job, note } => done(project_root, job, note.as_deref())?,
         MaintenanceScheduleCommand::EmitCron => emit_cron(project_root)?,
-        MaintenanceScheduleCommand::InstallCron => install_cron_command(project_root)?,
+        MaintenanceScheduleCommand::InstallCron => {
+            install_driver_command(project_root, crate::schedule_driver::Driver::Cron)?
+        }
         MaintenanceScheduleCommand::UninstallCron => uninstall_cron_command(project_root)?,
+        // trace:TASK-1491 | ai:claude
+        MaintenanceScheduleCommand::InstallSystemd => {
+            install_driver_command(project_root, crate::schedule_driver::Driver::Systemd)?
+        }
+        MaintenanceScheduleCommand::UninstallSystemd => {
+            crate::schedule_driver::uninstall_systemd_command(project_root)?
+        }
     }
     Ok(())
 }
@@ -480,14 +586,12 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
         .map(parse_duration)
         .transpose()
         .with_context(|| format!("invalid interval for scheduled job '{name}'"))?;
-    for kind_name in &job.on {
-        if !EventKind::known_names().contains(&kind_name.as_str()) {
-            anyhow::bail!(
-                "scheduled job '{name}': unknown event '{kind_name}' in `on`; valid events: {}",
-                EventKind::known_names().join(", ")
-            );
-        }
-    }
+    // trace:BUG-1655 | ai:claude
+    let on = job
+        .on
+        .iter()
+        .map(|raw| EventTrigger::parse(&name, raw))
+        .collect::<Result<Vec<_>>>()?;
     let when = job
         .when
         .as_deref()
@@ -514,7 +618,7 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
         command,
         prompt: job.prompt,
         interval,
-        on: job.on,
+        on,
         when,
         when_raw: job.when,
         quiet_hours: job
@@ -524,6 +628,7 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
             .transpose()?,
         enabled: job.enabled,
         source,
+        problem: None,
     })
 }
 
@@ -550,13 +655,81 @@ fn merge_registries(
     }
 }
 
-fn global_home() -> Option<PathBuf> {
+pub(crate) fn global_home() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("AIDA_HOME") {
         if !p.is_empty() {
-            return Some(PathBuf::from(p));
+            let p = PathBuf::from(p);
+            // trace:BUG-1642 | ai:claude
+            #[cfg(test)]
+            crate::test_home::assert_hermetic(&p);
+            return Some(p);
         }
     }
-    dirs::home_dir()
+    crate::home_dir()
+}
+
+/// Cap on `~/.aida/schedule-tick.log`, the machine-global log the installed
+/// cron entry redirects its stdout/stderr into (`>> ~/.aida/schedule-tick.log
+/// 2>&1`). Half a megabyte is generous for a plain-text tick log (a tick
+/// prints at most a few short lines) while bounding the worst case: a
+/// misconfigured entry failing identically every 15 minutes, forever.
+// trace:BUG-1600 | ai:claude
+const GLOBAL_SCHEDULE_LOG_MAX_BYTES: u64 = 512 * 1024;
+
+fn global_schedule_log_path() -> Option<PathBuf> {
+    global_home().map(|h| h.join(".aida").join("schedule-tick.log"))
+}
+
+/// Truncate `~/.aida/schedule-tick.log` in place once it exceeds
+/// [`GLOBAL_SCHEDULE_LOG_MAX_BYTES`], keeping its newest half (from a line
+/// boundary) and dropping the rest. Best-effort: any I/O error is swallowed,
+/// same as the rest of this module's logging — a scheduler tick must never
+/// fail because its own housekeeping couldn't run.
+///
+/// Truncates the SAME inode with `File::set_len` rather than replacing the
+/// path (e.g. `aida_core::write_atomic`'s temp-file-plus-rename). The
+/// installed cron entry has this exact file open for append (`>>`,
+/// `O_APPEND`) for the lifetime of the `aida` process this function runs
+/// inside — its own stdout/stderr ARE that fd. `O_APPEND` recomputes the
+/// write offset from the file's current size on every write, so truncating
+/// the same inode here is safely picked up by that fd's next write. A
+/// rename would instead point the path at a new inode while the inherited
+/// fd kept writing into the old, now-unlinked one — this process's own
+/// output would silently vanish from the path anyone else reads.
+// trace:BUG-1600 | ai:claude
+fn bound_global_schedule_log() {
+    let Some(path) = global_schedule_log_path() else {
+        return;
+    };
+    let Ok(meta) = std::fs::metadata(&path) else {
+        return;
+    };
+    if meta.len() <= GLOBAL_SCHEDULE_LOG_MAX_BYTES {
+        return;
+    }
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let keep_bytes = (GLOBAL_SCHEDULE_LOG_MAX_BYTES / 2) as usize;
+    let keep_from = body.len().saturating_sub(keep_bytes);
+    let tail = match body.as_bytes()[keep_from..]
+        .iter()
+        .position(|&b| b == b'\n')
+    {
+        Some(idx) => &body[keep_from + idx + 1..],
+        None => "",
+    };
+    let dropped = body.len() - tail.len();
+    let new_body = format!(
+        "[{}] --- schedule-tick.log truncated: dropped {dropped} older byte(s), cap is {GLOBAL_SCHEDULE_LOG_MAX_BYTES} bytes (a repeated tick failure may be flooding this file — see `aida schedule status` / `aida doctor`) ---\n{tail}",
+        Utc::now().to_rfc3339(),
+    );
+    if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(&path) {
+        use std::io::{Seek, SeekFrom, Write};
+        if file.set_len(0).is_ok() && file.seek(SeekFrom::Start(0)).is_ok() {
+            let _ = file.write_all(new_body.as_bytes());
+        }
+    }
 }
 
 /// The merged registry (project + global). `None` when neither layer
@@ -568,7 +741,42 @@ fn load_registry(project_root: &Path) -> Result<Option<LoadedScheduleConfig>> {
         Some(home) => load_global_config(&home)?,
         None => None,
     };
-    Ok(merge_registries(project, global))
+    let mut merged = merge_registries(project, global);
+    if let Some(config) = merged.as_mut() {
+        disable_unknown_bindings(config);
+    }
+    Ok(merged)
+}
+
+/// A `CronJobFailed:<job>` binding must name a job in the merged registry
+/// (enabled or not). A route whose binding names no such job (a typo, or a
+/// guard removed) is loaded DISABLED with a `problem`, rather than failing
+/// the whole registry: one bad route must not stop the watchdog or the other
+/// guards. Malformed syntax is still a hard load error (see `EventTrigger`).
+// trace:BUG-1655 | ai:claude
+fn disable_unknown_bindings(config: &mut LoadedScheduleConfig) {
+    let names: BTreeSet<String> = config.tasks.iter().map(|t| t.name.clone()).collect();
+    for task in &mut config.tasks {
+        // trace:TASK-1535 | ai:codex
+        if !task.enabled {
+            continue;
+        }
+        let missing: Vec<String> = task
+            .on
+            .iter()
+            .filter(|t| t.job.as_ref().is_some_and(|j| !names.contains(j)))
+            .map(ToString::to_string)
+            .collect();
+        if missing.is_empty() {
+            continue;
+        }
+        task.enabled = false;
+        task.problem = Some(format!(
+            "`on` names a job that is not in the schedule registry ({}); \
+             fix the job name after the colon — this job will not run until then",
+            missing.join(", ")
+        ));
+    }
 }
 
 fn store_root(project_root: &Path) -> PathBuf {
@@ -592,6 +800,18 @@ fn tick(
             "schedule tick: another tick is already running".to_string()
         ]);
     };
+    // BUG-1600: cap the machine-global `~/.aida/schedule-tick.log` before
+    // this process's own stdout/stderr add to it. That file is shared by
+    // every project's installed cron entry, appended via shell `>>`, and
+    // this codebase's only periodic (non-hook) driver — a persistently
+    // failing entry (the `--format json` bug this fix removes, or any
+    // future misconfiguration) would otherwise flood it forever. Skipped
+    // for hook ticks: the hook redirects its own output to `/dev/null` and
+    // is meant to stay minimal/network-free.
+    // trace:BUG-1600 | ai:claude
+    if !hook {
+        bound_global_schedule_log();
+    }
     // BUG-1291: the full scheduler tick owns the bounded orphan-review
     // backstop. Hook ticks stay network-free; explicit/timer ticks inspect the
     // bounded forge list even when no user schedule registry exists.
@@ -726,6 +946,10 @@ where
 
     for task in &config.tasks {
         if !task.enabled || task.kind == JobKind::FiresTask {
+            // trace:TASK-1535 | ai:codex
+            if let Some(problem) = &task.problem {
+                lines.push(format!("schedule tick: {} skipped: {problem}", task.name));
+            }
             continue;
         }
         if hook && task.command.as_ref().is_some_and(|c| !c.hook_allowed) {
@@ -766,17 +990,20 @@ where
             let mut due_failure: Option<schedule_ledger::RoutedFailure> = None;
             let scan: &[Event] = if continue_on { &[] } else { events };
             for ev in scan {
-                if !task.on.iter().any(|k| k == ev.kind.name()) {
+                // trace:BUG-1655 | ai:claude
+                let Some(trigger) = task.on.iter().find(|t| t.matches(&ev.kind)) else {
                     continue;
-                }
+                };
                 if cursor.is_some_and(|c| ev.ts <= c) {
                     continue;
                 }
                 if newest.is_none_or(|n| ev.ts > n) {
                     newest = Some(ev.ts);
-                    kind_hit = Some(ev.kind.name().to_string());
+                    kind_hit = Some(trigger.to_string());
                     due_failure = match &ev.kind {
                         EventKind::CronJobFailed {
+                            job,
+                            error,
                             trip_id: Some(trip_id),
                             performance,
                             ..
@@ -787,6 +1014,9 @@ where
                                 .take(schedule_ledger::MAX_PERFORMANCE_AUDITS)
                                 .cloned()
                                 .collect(),
+                            // trace:BUG-1655 | ai:claude
+                            job: Some(job.clone()),
+                            error: Some(error.clone()).filter(|e| !e.is_empty()),
                         }),
                         _ => None,
                     };
@@ -1067,6 +1297,8 @@ struct StatusRow {
     next_due: String,
     due_reason: Option<String>,
     source: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    problem: Option<String>,
 }
 
 fn effective_last_run(
@@ -1122,7 +1354,10 @@ fn status_row(
         _ => None,
     };
     let reason = due_reason(task, ledger, local, now);
-    let status = if !task.enabled {
+    let status = if task.problem.is_some() {
+        // trace:BUG-1655 | ai:claude
+        "invalid"
+    } else if !task.enabled {
         "disabled"
     } else if task.kind == JobKind::FiresTask {
         "legacy"
@@ -1158,6 +1393,7 @@ fn status_row(
         }),
         due_reason: reason,
         source: task.source.as_str(),
+        problem: task.problem.clone(),
     }
 }
 
@@ -1196,6 +1432,7 @@ fn legacy_tasks(project_root: &Path) -> Vec<Task> {
             quiet_hours: None,
             enabled: s.enabled,
             source: JobSource::Legacy,
+            problem: None,
         })
         .collect()
 }
@@ -1236,6 +1473,14 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
             row.last_run,
             row.next_due,
             row.command
+        );
+    }
+    // trace:BUG-1655 | ai:claude
+    for row in rows.iter().filter(|r| r.problem.is_some()) {
+        println!(
+            "\nwarning: {} is not running: {}",
+            row.name,
+            row.problem.as_deref().unwrap_or_default()
         );
     }
     if rows.iter().any(|r| r.kind == "fires_task") {
@@ -1462,19 +1707,39 @@ pub(crate) fn tick_cron_marker(project_root: &Path) -> String {
     format!("aida-schedule-tick:{}", canon.display())
 }
 
-/// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
-/// is unit-testable without touching `std::env::current_exe`. Errors when
-/// any path component contains `%`: cron's OWN parser (before `/bin/sh`
-/// ever sees the line, and regardless of shell quoting) turns an unescaped
-/// `%` in the command field into a literal newline plus stdin redirection —
-/// see crontab(5). That would silently corrupt this entry (both the `cd`
-/// target and the trailing marker comment, which cron scans the same way),
-/// and escaping it consistently would require re-escaping the same way on
-/// every later read-back comparison against `tick_cron_marker`. Rejecting
-/// outright is simpler and auditable for a character that should never
-/// legitimately appear in an install path.
+/// The one `aida schedule tick` invocation every driver runs, built once and
+/// rendered by both [`build_tick_cron_line`] and
+/// `schedule_driver::build_systemd_units`, so the argv, the PATH, the working
+/// directory and the marker cannot drift between the two drivers (BUG-1600:
+/// the drift that shipped was an unsupported `--format json`). The invoker
+/// tag (`AIDA_SCHEDULE_INVOKER=cron|systemd`) is the only per-driver part.
+// trace:TASK-1491 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TickInvocation {
+    /// Canonical repo path: the `cd` target / `WorkingDirectory=`.
+    pub repo: String,
+    /// Absolute `aida` binary.
+    pub exe: String,
+    /// `PATH` value: the binary's directory first, then the system dirs.
+    pub path_env: String,
+    /// Arguments after the binary. Exactly `schedule tick`, never a format flag.
+    pub args: [&'static str; 2],
+    /// `aida-schedule-tick:<canon repo>`, carried by every driver artifact.
+    pub marker: String,
+}
+
+/// Build the shared [`TickInvocation`]. Errors when any path contains `%`:
+/// cron's OWN parser (before `/bin/sh` ever sees the line, and regardless of
+/// shell quoting) turns an unescaped `%` in the command field into a literal
+/// newline plus stdin redirection — see crontab(5) — and systemd expands `%`
+/// as a unit specifier in `ExecStart=`/`WorkingDirectory=`/`Environment=`.
+/// Either would silently corrupt the entry and every later read-back
+/// comparison against the marker. A line break is refused for the same
+/// reason: both formats are line-oriented. Rejecting outright is simpler and
+/// auditable for characters that should never appear in an install path.
 // trace:STORY-1463 | ai:claude
-pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<String> {
+// trace:TASK-1491 | ai:claude
+pub(crate) fn tick_invocation(repo: &Path, aida_exe: &Path) -> Result<TickInvocation> {
     let repo_str = repo.display().to_string();
     let aida_exe_str = aida_exe.display().to_string();
     let bin_dir = aida_exe
@@ -1488,28 +1753,86 @@ pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<Strin
     ] {
         if value.contains('%') {
             anyhow::bail!(
-                "cannot build a scheduler-tick crontab entry: {label} '{value}' contains '%', \
+                "cannot build a scheduler-tick driver entry: {label} '{value}' contains '%', \
                  which cron's own parser treats as a literal newline in the command field \
-                 (crontab(5)) — rename the path to avoid '%' and retry"
+                 (crontab(5)) and systemd expands as a unit specifier — rename the path to \
+                 avoid '%' and retry"
+            );
+        }
+        if value.contains(['\n', '\r']) {
+            anyhow::bail!(
+                "cannot build a scheduler-tick driver entry: {label} {value:?} contains a line \
+                 break — rename the path and retry"
             );
         }
     }
-    let path_assignment = format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin");
-    Ok(format!(
-        "*/15 * * * * cd {} && PATH={} {} schedule tick --format json >> ~/.aida/schedule-tick.log 2>&1 # {}",
-        shell_quote(&repo_str),
-        shell_quote(&path_assignment),
-        shell_quote(&aida_exe_str),
-        tick_cron_marker(repo),
-    ))
+    // systemd strips trailing whitespace from a unit value (the tick would
+    // `cd` into a sibling path, and our marker would never match again) and
+    // a trailing backslash continues the line into the next directive.
+    for (label, value) in [
+        ("repo path", repo_str.as_str()),
+        ("aida binary path", aida_exe_str.as_str()),
+    ] {
+        if value.ends_with(char::is_whitespace) || value.ends_with('\\') {
+            anyhow::bail!(
+                "cannot build a scheduler-tick driver entry: {label} {value:?} ends in \
+                 whitespace or a backslash, which a systemd unit cannot hold — rename the path \
+                 and retry"
+            );
+        }
+    }
+    Ok(TickInvocation {
+        path_env: format!("{bin_dir}:/usr/local/bin:/usr/bin:/bin"),
+        repo: repo_str,
+        exe: aida_exe_str,
+        // BUG-1600: `schedule tick` has no `--json`/`--format json` projection
+        // (see docs/cli-format-json-audit.md, BUG-1502's capability gate) — it
+        // only ever prints human/TOON lines. A prior version of the cron
+        // builder added `--format json` believing cron needed a
+        // machine-readable log; nothing ever parsed it, and every tick from an
+        // installed entry failed before dispatch.
+        // trace:BUG-1600 | ai:claude
+        args: ["schedule", "tick"],
+        marker: tick_cron_marker(repo),
+    })
+}
+
+/// Pure line-builder, split out from [`tick_cron_line`] so the exact shape
+/// is unit-testable without touching `std::env::current_exe`. Renders the
+/// shared [`tick_invocation`]; see there for the `%` refusal.
+// trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
+pub(crate) fn build_tick_cron_line(repo: &Path, aida_exe: &Path) -> Result<String> {
+    Ok(render_tick_cron_line(&tick_invocation(repo, aida_exe)?))
+}
+
+/// Render the crontab line for an already-built [`TickInvocation`].
+// trace:TASK-1491 | ai:claude
+pub(crate) fn render_tick_cron_line(inv: &TickInvocation) -> String {
+    // `AIDA_SCHEDULE_INVOKER=cron` tags every event this invocation records
+    // so scheduler telemetry can tell a cron-driven tick apart from the
+    // per-turn hook (`--hook`, which is self-identifying), a systemd timer,
+    // or a manual run. Plain `schedule tick` output goes to
+    // `schedule-tick.log`, which a human or `aida doctor` reads.
+    // trace:BUG-1600 | ai:claude
+    format!(
+        "*/15 * * * * cd {} && PATH={} AIDA_SCHEDULE_INVOKER=cron {} {} >> ~/.aida/schedule-tick.log 2>&1 # {}",
+        shell_quote(&inv.repo),
+        shell_quote(&inv.path_env),
+        shell_quote(&inv.exe),
+        inv.args.join(" "),
+        inv.marker,
+    )
 }
 
 /// The crontab entry that drives `aida schedule tick` for `project_root`
 /// every 15 minutes: an absolute `aida` path and an explicit `PATH` (cron's
 /// own PATH is minimal), `cd`'d into the repo, logging to
 /// `~/.aida/schedule-tick.log`. This is the reference shape from STORY-1463
-/// (the line an operator had to hand-install before this existed).
+/// (the line an operator had to hand-install before this existed). No
+/// `--format`/`--json` flag — `schedule tick` has no JSON projection.
 // trace:STORY-1463 | ai:claude
+// trace:BUG-1600 | ai:claude
 pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
     let repo = project_root
         .canonicalize()
@@ -1525,7 +1848,7 @@ pub(crate) fn tick_cron_line(project_root: &Path) -> Result<String> {
 /// `crontab` binary missing, a permission error, …) is `Err` so the caller
 /// can report "unknown" rather than misreading it as "no entry installed".
 // trace:STORY-1463 | ai:claude
-fn read_crontab() -> Result<Option<String>> {
+pub(crate) fn read_crontab() -> Result<Option<String>> {
     let output = match ProcessCommand::new("crontab").arg("-l").output() {
         Ok(o) => o,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -1546,7 +1869,7 @@ fn read_crontab() -> Result<Option<String>> {
     );
 }
 
-fn write_crontab(body: &str) -> Result<()> {
+pub(crate) fn write_crontab(body: &str) -> Result<()> {
     use std::io::Write;
     let mut child = ProcessCommand::new("crontab")
         .arg("-")
@@ -1566,6 +1889,16 @@ fn write_crontab(body: &str) -> Result<()> {
     Ok(())
 }
 
+/// Whether `line` is entirely a crontab comment: its first non-whitespace
+/// character is `#`. Cron treats such a line as inert — it never runs —
+/// so neither the marker match nor the legacy-line match may fire on it: a
+/// user who deliberately commented out their tick entry (marked or legacy)
+/// must never have it silently reactivated by `install-cron`.
+// trace:BUG-1605 | ai:claude
+fn line_is_commented_out(line: &str) -> bool {
+    line.trim_start().starts_with('#')
+}
+
 /// Whether `line` carries exactly this marker as its trailing `# <marker>`
 /// comment — never a bare substring match. A substring match on the marker
 /// (or on the whole crontab body) wrongly matches a repo whose path is a
@@ -1574,24 +1907,169 @@ fn write_crontab(body: &str) -> Result<()> {
 /// must never touch `/x/aida-web`'s entry (or vice versa). Anchoring on the
 /// trailing `# marker` token — the exact shape `build_tick_cron_line`
 /// writes — rules that out.
+///
+/// BUG-1605: a commented-out line (`# */15 * * * * cd ... # <marker>`) is
+/// NOT a marker match even though its trailing bytes still end with
+/// `# <marker>` — the whole line is inert, and matching it would let
+/// `crontab_after_install` "repair" a deliberately-disabled entry back to
+/// active.
 // trace:STORY-1463 | ai:claude
-fn line_has_marker(line: &str, marker: &str) -> bool {
-    line.trim_end().ends_with(&format!("# {marker}"))
+// trace:BUG-1605 | ai:claude
+pub(crate) fn line_has_marker(line: &str, marker: &str) -> bool {
+    !line_is_commented_out(line) && line.trim_end().ends_with(&format!("# {marker}"))
 }
 
-/// Pure: the new crontab body after installing `line` (marked by `marker`),
-/// or `None` when `marker` is already present (idempotent no-op). Appends —
-/// never rewrites or reorders whatever `crontab -l` already printed.
+/// The repo path a marker was built for (`tick_cron_marker`'s inverse):
+/// strips the fixed `aida-schedule-tick:` prefix. `None` for a malformed
+/// marker, which a caller treats as "no legacy repair target" — the marker
+/// shape is this module's own invariant, not user input.
+// trace:BUG-1605 | ai:claude
+fn repo_from_marker(marker: &str) -> Option<&str> {
+    marker.strip_prefix("aida-schedule-tick:")
+}
+
+/// Whether `tok` (whitespace-split, optionally `'`/`"`-quoted) looks like an
+/// `aida` binary invocation: the bare name, or a path ending in `/aida`.
+// trace:BUG-1605 | ai:claude
+fn is_aida_binary_token(tok: &str) -> bool {
+    let bare = tok.trim_matches(|c| c == '\'' || c == '"');
+    bare == "aida" || bare.ends_with("/aida")
+}
+
+/// Whether `line` is a legacy, pre-marker AIDA tick line for `repo`: older
+/// installs (before STORY-1463's marker) wrote `cd <repo> && ... aida
+/// schedule tick ...` with no trailing `# <marker>` comment, so
+/// `line_has_marker` never recognised them as this repo's own entry and
+/// `install-cron` appended a second, correctly-marked line instead of
+/// repairing the first — both then ran (BUG-1605).
+///
+/// Requires, in order: `cd <repo>` — unquoted or `'`/`"`-quoted, with a
+/// leading space and a trailing ` &&` so a repo whose path is a strict
+/// PREFIX of another's can never match (same guard `line_has_marker`
+/// documents for the marker itself: `/x/aida` must not match `/x/aida-web`'s
+/// line) — then, anywhere after it, an `aida` binary token immediately
+/// followed by `schedule tick` (further flags, e.g. the old `--format
+/// json`, may follow). Callers check `line_has_marker` first; a line that
+/// already carries this repo's marker is the MARKED case, not legacy.
+///
+/// BUG-1605: a commented-out legacy line (`# */15 * * * * cd <repo> && ...`)
+/// is NOT a legacy match — same reasoning as `line_has_marker`'s comment
+/// guard: the line is inert, and a user who disabled it deliberately must
+/// not have it silently reactivated.
+// trace:BUG-1605 | ai:claude
+fn line_is_legacy_tick_line(line: &str, repo: &str) -> bool {
+    if line_is_commented_out(line) {
+        return false;
+    }
+    let rest = ["", "'", "\""].iter().find_map(|q| {
+        let needle = format!(" cd {q}{repo}{q} &&");
+        line.find(&needle).map(|pos| &line[pos + needle.len()..])
+    });
+    let Some(rest) = rest else {
+        return false;
+    };
+    let tokens: Vec<&str> = rest.split_whitespace().collect();
+    tokens
+        .windows(3)
+        .any(|w| is_aida_binary_token(w[0]) && w[1] == "schedule" && w[2] == "tick")
+}
+
+/// Every line index in `existing` that is an ACTIVE (not commented-out)
+/// legacy tick line for `repo`, and is not already the marked line at
+/// `marked_pos` — in document order. There can be more than one: a repo
+/// may have accumulated several unmarked entries across old installs before
+/// the marker convention existed.
+// trace:BUG-1605 | ai:claude
+fn legacy_tick_line_positions(lines: &[&str], repo: &str, marked_pos: Option<usize>) -> Vec<usize> {
+    lines
+        .iter()
+        .enumerate()
+        .filter(|&(i, l)| Some(i) != marked_pos && line_is_legacy_tick_line(l, repo))
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Whether `existing` already carries a tick entry for this repo — the
+/// current marked shape or a legacy pre-marker line — so
+/// `crontab_after_install` returning `Some(...)` is a repair rather than a
+/// fresh append.
+// trace:BUG-1605 | ai:claude
+pub(crate) fn crontab_has_repair_target(existing: &str, marker: &str) -> bool {
+    let repo = repo_from_marker(marker);
+    existing
+        .lines()
+        .any(|l| line_has_marker(l, marker) || repo.is_some_and(|r| line_is_legacy_tick_line(l, r)))
+}
+
+/// Pure: the new crontab body after installing `line` (marked by `marker`).
+/// `None` when `marker` is already present with byte-identical content —
+/// true idempotent no-op. When the marker is present but the line's content
+/// has drifted (BUG-1600: an old build installed `schedule tick --format
+/// json`, which fails every tick), the stale line is REPLACED in place
+/// rather than left alone — `aida init`'s offer and `aida schedule
+/// install-cron` are the "run this again to pick up a fix" affordance, so a
+/// previously-installed entry must self-repair the next time either runs.
+///
+/// BUG-1605: every ACTIVE (not commented-out) legacy, pre-marker line for
+/// this repo (`legacy_tick_line_positions`) is repaired the same way —
+/// collapsed into the current marked `line`, not appended alongside. A repo
+/// can carry more than one such line (several old installs stacked up
+/// before the marker convention existed); ALL of them are folded into the
+/// one kept line, so exactly one correct, active entry remains. A
+/// commented-out line — marked or legacy — is inert and is never touched:
+/// a user who deliberately disabled their tick entry keeps it disabled.
+///
+/// Never reorders whatever `crontab -l` already printed; a repo with
+/// neither an active marked nor an active legacy line is still appended,
+/// never inserted elsewhere (this covers "no entry at all" and "every
+/// candidate line is commented out" alike). Every other line — another
+/// repo's, or an unrelated user line, commented or not — passes through
+/// byte-for-byte.
 // trace:STORY-1463 | ai:claude
+// trace:BUG-1600 | ai:claude
+// trace:BUG-1605 | ai:claude
 pub(crate) fn crontab_after_install(existing: &str, marker: &str, line: &str) -> Option<String> {
-    if existing.lines().any(|l| line_has_marker(l, marker)) {
-        return None;
-    }
-    let mut body = existing.to_string();
-    if !body.is_empty() && !body.ends_with('\n') {
+    let lines: Vec<&str> = existing.lines().collect();
+    let marked_pos = lines.iter().position(|l| line_has_marker(l, marker));
+    let legacy_positions = match repo_from_marker(marker) {
+        Some(repo) => legacy_tick_line_positions(&lines, repo, marked_pos),
+        None => Vec::new(),
+    };
+
+    if marked_pos.is_none() && legacy_positions.is_empty() {
+        let mut body = existing.to_string();
+        if !body.is_empty() && !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push_str(line);
         body.push('\n');
+        return Some(body);
     }
-    body.push_str(line);
+    if legacy_positions.is_empty() {
+        if let Some(pos) = marked_pos {
+            if lines[pos] == line {
+                return None;
+            }
+        }
+    }
+
+    // Keep exactly one line: the marked line's slot when there was one,
+    // else the first legacy line's slot. Drop every other legacy line.
+    // Order of every other (unrelated) line is preserved.
+    let keep_pos = marked_pos.unwrap_or_else(|| legacy_positions[0]);
+    let drop: BTreeSet<usize> = legacy_positions
+        .iter()
+        .copied()
+        .filter(|&i| i != keep_pos)
+        .collect();
+    let mut repaired = Vec::with_capacity(lines.len());
+    for (i, l) in lines.into_iter().enumerate() {
+        if drop.contains(&i) {
+            continue;
+        }
+        repaired.push(if i == keep_pos { line } else { l });
+    }
+    let mut body = repaired.join("\n");
     body.push('\n');
     Some(body)
 }
@@ -1614,27 +2092,59 @@ pub(crate) fn crontab_after_uninstall(existing: &str, marker: &str) -> Option<St
     Some(body)
 }
 
-/// Install this repo's tick entry into the user's crontab. Idempotent
-/// (`Ok(false)` when already installed). Windows has no crontab — callers
-/// print `tick_cron_line` and the manual next step instead of calling this.
-// trace:STORY-1463 | ai:claude
-pub(crate) fn install_tick_cron(project_root: &Path) -> Result<bool> {
-    if cfg!(windows) {
-        anyhow::bail!(
-            "cron install is not supported on Windows — add this line to Task Scheduler by hand:\n  {}",
-            tick_cron_line(project_root)?
-        );
-    }
-    let marker = tick_cron_marker(project_root);
-    let line = tick_cron_line(project_root)?;
-    let existing = read_crontab()?.unwrap_or_default();
-    match crontab_after_install(&existing, &marker, &line) {
-        None => Ok(false),
-        Some(body) => {
-            write_crontab(&body)?;
-            Ok(true)
+/// Pure: the crontab body after switching this repo to another driver
+/// (advisor A13b). Removes every ACTIVE line that is this repo's marked
+/// entry ([`line_has_marker`]) or an active legacy, pre-marker tick line for
+/// it ([`line_is_legacy_tick_line`], the BUG-1605 predicates) — and nothing
+/// else. Commented-out lines (marked or legacy), another repo's lines
+/// (including a repo whose path is a strict prefix of this one) and
+/// unrelated user lines come through byte-for-byte, line endings and a
+/// missing final newline included. Returns the new body and every removed
+/// line (for the caller to print), or `None` when nothing matched.
+///
+/// Differs from [`crontab_after_uninstall`], which removes only MARKED
+/// lines: a driver switch must not leave an old unmarked entry ticking
+/// alongside the new driver.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn crontab_after_driver_switch(
+    existing: &str,
+    marker: &str,
+) -> Option<(String, Vec<String>)> {
+    let repo = repo_from_marker(marker);
+    let mut body = String::with_capacity(existing.len());
+    let mut removed = Vec::new();
+    for raw in existing.split_inclusive('\n') {
+        let line = raw.trim_end_matches(['\n', '\r']);
+        let ours = line_has_marker(line, marker)
+            || repo.is_some_and(|r| line_is_legacy_tick_line(line, r));
+        if ours {
+            removed.push(line.to_string());
+        } else {
+            body.push_str(raw);
         }
     }
+    if removed.is_empty() {
+        None
+    } else {
+        Some((body, removed))
+    }
+}
+
+/// What [`install_tick_cron`] did. BUG-1600: a plain bool collapsed "wasn't
+/// there, now is" and "was there but stale (e.g. the old `--format json`
+/// flag), now fixed" into the same `Ok(true)` — the CLI printed "Installed"
+/// for a repair too, which reads as a no-op to an operator re-running the
+/// command to pick up a fix. Distinguishing the three lets the caller say so.
+// trace:BUG-1600 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DriverInstallOutcome {
+    /// No entry existed for this repo; one was appended.
+    Installed,
+    /// An entry existed and already matched the current reference shape.
+    AlreadyUpToDate,
+    /// An entry existed with stale content (e.g. an old unsupported flag)
+    /// and was rewritten in place.
+    Repaired,
 }
 
 /// Remove this repo's tick entry from the user's crontab (found via its
@@ -1687,14 +2197,6 @@ pub(crate) fn classify_cron_driver(
         Ok(_) => CronDriverStatus::Missing,
         Err(reason) => CronDriverStatus::Unknown(reason),
     }
-}
-
-fn cron_driver_status(project_root: &Path) -> CronDriverStatus {
-    if cfg!(windows) {
-        return CronDriverStatus::Unknown("no crontab on Windows".to_string());
-    }
-    let marker = tick_cron_marker(project_root);
-    classify_cron_driver(read_crontab().map_err(|e| e.to_string()), &marker)
 }
 
 /// How many enabled SUBSTRATE jobs this repo's merged registry declares
@@ -1760,36 +2262,69 @@ pub(crate) fn overdue_substrate_jobs(project_root: &Path) -> Result<Vec<OverdueS
 }
 
 /// Pure assembly of the `scheduler-driver` doctor findings from
-/// already-computed evidence — no I/O, fully unit-testable.
+/// already-computed evidence — no I/O, fully unit-testable. Systemd-aware
+/// (TASK-1491): a repo driven only by its systemd timer is not driverless,
+/// and a repo with BOTH drivers installed is flagged — harmless under the
+/// tick lock, but each driver ticks, and one should be removed.
 // trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
 pub(crate) fn build_scheduler_driver_findings(
     enabled_substrate_jobs: usize,
-    cron_status: CronDriverStatus,
+    status: &crate::schedule_driver::DriverStatus,
     overdue: &[OverdueSubstrateJob],
     now: DateTime<Utc>,
 ) -> Vec<crate::DoctorFinding> {
+    use crate::schedule_driver::SystemdDriverStatus;
     let mut out = Vec::new();
-    if enabled_substrate_jobs > 0 {
-        match cron_status {
-            CronDriverStatus::Installed => {}
-            CronDriverStatus::Missing => out.push(crate::DoctorFinding {
+    if status.both_installed() {
+        out.push(crate::DoctorFinding {
+            category: "scheduler-driver".to_string(),
+            id: "scheduler-tick-dual-driver".to_string(),
+            summary: "both a crontab entry and a systemd user timer run `aida schedule tick` for \
+                      this repo; the tick lock keeps them from overlapping, but keep only one"
+                .to_string(),
+            action: "aida schedule uninstall-cron".to_string(),
+            safe_heal: false,
+        });
+    }
+    let install_action = match status.systemd {
+        SystemdDriverStatus::Unsupported => "aida schedule install-cron",
+        _ => "aida schedule install-systemd",
+    };
+    if enabled_substrate_jobs > 0 && !status.any_installed() {
+        // PRIN-5: when either driver's state is unreadable and none is
+        // confirmed installed, the answer is "unknown", never "none".
+        let unknown = status.unknown_reasons();
+        if unknown.is_empty() {
+            let systemd_note = match &status.systemd {
+                SystemdDriverStatus::Disabled => {
+                    " (this repo's systemd timer exists but is disabled)"
+                }
+                SystemdDriverStatus::Stopped => {
+                    " (this repo's systemd timer is enabled but not running)"
+                }
+                _ => "",
+            };
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-not-installed".to_string(),
                 summary: format!(
-                    "{enabled_substrate_jobs} enabled substrate scheduler job(s) registered, but nothing invokes `aida schedule tick` for this repo — they will never run"
+                    "{enabled_substrate_jobs} enabled substrate scheduler job(s) registered, but nothing invokes `aida schedule tick` for this repo — they will never run{systemd_note}"
                 ),
-                action: "aida schedule install-cron".to_string(),
+                action: install_action.to_string(),
                 safe_heal: false,
-            }),
-            CronDriverStatus::Unknown(reason) => out.push(crate::DoctorFinding {
+            });
+        } else {
+            out.push(crate::DoctorFinding {
                 category: "scheduler-driver".to_string(),
                 id: "scheduler-tick-driver-unknown".to_string(),
                 summary: format!(
-                    "cannot confirm whether a scheduler driver is installed for this repo ({reason}) — status unknown, not ok"
+                    "cannot confirm whether a scheduler driver is installed for this repo ({}) — status unknown, not ok",
+                    unknown.join("; ")
                 ),
-                action: "aida schedule install-cron".to_string(),
+                action: install_action.to_string(),
                 safe_heal: false,
-            }),
+            });
         }
     }
     if !overdue.is_empty() {
@@ -1819,41 +2354,167 @@ pub(crate) fn build_scheduler_driver_findings(
     out
 }
 
-/// `aida doctor` entry point: evidence-gated so a repo with no registered
-/// jobs never shells out to `crontab` at all.
+/// PURE: whether doctor reads the drivers at all. A repo with no registered
+/// jobs, nothing overdue and no timer file of ours never shells out to
+/// `crontab` or `systemctl`; a timer file alone (a file read) is enough
+/// evidence to look, so a dual-driver setup is flagged even with no jobs.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn scheduler_driver_check_needed(
+    enabled_substrate_jobs: usize,
+    any_overdue: bool,
+    systemd_timer_file_present: bool,
+) -> bool {
+    enabled_substrate_jobs > 0 || any_overdue || systemd_timer_file_present
+}
+
+/// Doctor: an enabled `*-route` seat job whose `on` holds a bare
+/// `CronJobFailed` fires on EVERY substrate job's failure, so one guard trip
+/// wakes every route with the wrong evidence. Hint to bind it to its guard.
+// trace:BUG-1655 | ai:claude
+pub(crate) fn build_unbound_route_findings(tasks: &[Task]) -> Vec<crate::DoctorFinding> {
+    let names: BTreeSet<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
+    tasks
+        .iter()
+        .filter(|t| t.enabled && t.name.ends_with("-route"))
+        .filter(|t| {
+            t.on.iter()
+                .any(|trigger| trigger.kind == "CronJobFailed" && trigger.job.is_none())
+        })
+        .map(|t| {
+            let guard = t.name.trim_end_matches("-route");
+            // trace:TASK-1535 | ai:codex
+            let action = if names.contains(guard) {
+                format!(
+                    "bind it to its guard in .aida/config.toml: on = [\"CronJobFailed:{guard}\"]"
+                )
+            } else {
+                "bind it to the job it guards in .aida/config.toml".to_string()
+            };
+            crate::DoctorFinding {
+                category: "scheduler-driver".to_string(),
+                id: format!("schedule-route-unbound:{}", t.name),
+                summary: format!(
+                    "scheduled job '{}' fires on ANY job's failure (`on = [\"CronJobFailed\"]`), \
+                     so another guard's trip wakes it with the wrong evidence",
+                    t.name
+                ),
+                action,
+                safe_heal: false,
+            }
+        })
+        .collect()
+}
+
+// trace:TASK-1535 | ai:codex
+pub(crate) fn build_invalid_route_findings(tasks: &[Task]) -> Vec<crate::DoctorFinding> {
+    tasks
+        .iter()
+        .filter(|t| t.problem.is_some())
+        .map(|t| crate::DoctorFinding {
+            category: "scheduler-driver".to_string(),
+            id: format!("schedule-route-invalid:{}", t.name),
+            summary: format!(
+                "scheduled job '{}' is disabled because its bound job is missing from the schedule registry: {}",
+                t.name,
+                t.problem.as_deref().unwrap_or_default()
+            ),
+            action: "correct the bound job name or add the job it guards in .aida/config.toml"
+                .to_string(),
+            safe_heal: false,
+        })
+        .collect()
+}
+
+/// `aida doctor` entry point, evidence-gated by
+/// [`scheduler_driver_check_needed`].
 // trace:STORY-1463 | ai:claude
+// trace:TASK-1491 | ai:claude
 pub(crate) fn scheduler_driver_doctor_findings(
     project_root: &Path,
 ) -> Result<Vec<crate::DoctorFinding>> {
     let enabled = enabled_substrate_job_count(project_root)?;
     let overdue = overdue_substrate_jobs(project_root)?;
-    if enabled == 0 && overdue.is_empty() {
-        return Ok(Vec::new());
+    // Only read the timer file when nothing else already asks for a look.
+    let timer_file = enabled == 0
+        && overdue.is_empty()
+        && crate::schedule_driver::systemd_timer_file_present_for(project_root);
+    // trace:BUG-1655 | ai:claude
+    let mut out = load_registry(project_root)?
+        .map(|c| {
+            // trace:TASK-1535 | ai:codex
+            let mut findings = build_unbound_route_findings(&c.tasks);
+            findings.extend(build_invalid_route_findings(&c.tasks));
+            findings
+        })
+        .unwrap_or_default();
+    if !scheduler_driver_check_needed(enabled, !overdue.is_empty(), timer_file) {
+        return Ok(out);
     }
-    let cron_status = cron_driver_status(project_root);
-    Ok(build_scheduler_driver_findings(
+    let status = crate::schedule_driver::driver_status(project_root);
+    out.extend(build_scheduler_driver_findings(
         enabled,
-        cron_status,
+        &status,
         &overdue,
         Utc::now(),
-    ))
+    ));
+    // TASK-1517: an unattended wave's memory ceiling only exists if the user
+    // manager can enforce it. Read only where the systemd timer of this repo
+    // actually exists, so a cron-driven or timer-less repo never looks; the
+    // finding is report-only and never stops a wave.
+    // trace:TASK-1517 | ai:claude
+    if wave_limit_delegation_check_needed(&status.systemd) {
+        out.extend(crate::schedule_driver::build_wave_limit_findings(
+            &crate::schedule_driver::real_wave_limit_delegation(),
+        ));
+    }
+    Ok(out)
 }
 
-/// `aida schedule install-cron` / the `aida init` TTY offer.
+/// PURE: whether the wave-limit delegation check reads anything at all. Only
+/// a repo whose systemd timer exists can launch a wave in a transient unit,
+/// so nowhere else is there a limit to enforce.
+// trace:TASK-1517 | ai:claude
+pub(crate) fn wave_limit_delegation_check_needed(
+    systemd: &crate::schedule_driver::SystemdDriverStatus,
+) -> bool {
+    use crate::schedule_driver::SystemdDriverStatus;
+    matches!(
+        systemd,
+        SystemdDriverStatus::Installed
+            | SystemdDriverStatus::Disabled
+            | SystemdDriverStatus::Stopped
+    )
+}
+
+/// `aida schedule install-cron` / `install-systemd`. Gated like `aida shift
+/// enable` (a human at a TTY answering yes): a driver starts unattended
+/// scheduled runs. Installing one driver removes this repo's other one, but
+/// only after the new one is verified (A13a).
 // trace:STORY-1463 | ai:claude
-fn install_cron_command(project_root: &Path) -> Result<()> {
+// trace:TASK-1491 | ai:claude
+fn install_driver_command(
+    project_root: &Path,
+    driver: crate::schedule_driver::Driver,
+) -> Result<()> {
+    use crate::schedule_driver::Driver;
     if cfg!(windows) {
-        println!("Windows has no crontab. Add this line to Task Scheduler instead:");
+        println!("Windows has no crontab or systemd. Add this line to Task Scheduler instead:");
         println!("  {}", tick_cron_line(project_root)?);
         return Ok(());
     }
-    match install_tick_cron(project_root) {
-        Ok(true) => println!("Installed the scheduler tick crontab entry for this repo."),
-        Ok(false) => {
-            println!("Already installed — this repo's tick entry is already in your crontab.")
-        }
-        Err(e) => return Err(e),
-    }
+    let command = match driver {
+        Driver::Cron => "aida schedule install-cron",
+        Driver::Systemd => "aida schedule install-systemd",
+    };
+    crate::schedule_driver::with_real_operator(|op| {
+        crate::schedule_driver::install_driver_command(
+            project_root,
+            command,
+            driver,
+            op,
+            &mut crate::schedule_driver::RealDriverHost,
+        )
+    })?;
     Ok(())
 }
 
@@ -1872,6 +2533,16 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// PURE: whether `aida init` may offer the crontab install. The same floor
+/// as `aida schedule install-cron` (`driver_gate_refusal`: a human at an
+/// interactive stdin, outside agent output mode), plus a terminal stdout to
+/// show the question on.
+// trace:TASK-1491 | ai:claude
+pub(crate) fn init_tick_offer_allowed(stdin_tty: bool, stdout_tty: bool, agent_mode: bool) -> bool {
+    stdout_tty
+        && crate::schedule_driver::driver_gate_refusal("aida init", stdin_tty, agent_mode).is_none()
+}
+
 /// STORY-1463: at a TTY, offer to install the crontab entry that drives
 /// `aida schedule tick` for this repo. Default answer is **no** — writing to
 /// the operator's crontab is a real system side effect that should be an
@@ -1880,7 +2551,11 @@ fn uninstall_cron_command(project_root: &Path) -> Result<()> {
 // trace:STORY-1463 | ai:claude
 pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
     use std::io::IsTerminal;
-    if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+    if !init_tick_offer_allowed(
+        std::io::stdin().is_terminal(),
+        std::io::stdout().is_terminal(),
+        crate::agent_output_mode(),
+    ) {
         return;
     }
     let line = match tick_cron_line(project_root) {
@@ -1908,10 +2583,25 @@ pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
         );
         return;
     }
-    match install_tick_cron(project_root) {
-        Ok(true) => println!("  Installed."),
-        Ok(false) => println!("  Already installed."),
-        Err(e) => eprintln!("  Note: scheduler tick was not installed: {e}"),
+    // TASK-1491: the same verified switch as `install-cron`, so a systemd
+    // timer for this repo is removed once the entry is confirmed.
+    let result = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {
+        crate::schedule_driver::switch_driver(
+            &mut crate::schedule_driver::RealDriverHost,
+            &inv,
+            crate::schedule_driver::Driver::Cron,
+        )
+    });
+    match result.map(|r| r.outcome) {
+        Ok(DriverInstallOutcome::Installed) => println!("  Installed."),
+        Ok(DriverInstallOutcome::AlreadyUpToDate) => println!("  Already installed."),
+        // trace:BUG-1600 | ai:claude
+        Ok(DriverInstallOutcome::Repaired) => {
+            println!(
+                "  Repaired — the installed entry was running an older, unsupported invocation."
+            )
+        }
+        Err(e) => eprintln!("  Note: scheduler tick was not installed: {e:#}"),
     }
 }
 
@@ -1937,23 +2627,11 @@ pub(crate) fn collect_snapshot(
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks =
             crate::mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-        let mut unread = 0i64;
-        let mut oldest: Option<i64> = None;
-        for m in &merged {
-            if m.deleted || m.retracted || m.archived {
-                continue;
-            }
-            let aida_core::mailbox::Recipient::Agent(to) = &m.to else {
-                continue;
-            };
-            let seen = watermarks.get(to).copied().unwrap_or(0);
-            if m.timestamp > seen {
-                unread += 1;
-                if oldest.is_none_or(|o| m.timestamp < o) {
-                    oldest = Some(m.timestamp);
-                }
-            }
-        }
+        // trace:TASK-1492 | ai:claude — the same per-recipient read the night
+        // shift's mail-latency escalation uses.
+        let per_recipient = crate::mailbox_store::unread_by_recipient(&merged, &watermarks);
+        let unread: i64 = per_recipient.values().map(|u| u.count).sum();
+        let oldest: Option<i64> = per_recipient.values().map(|u| u.oldest_ts).min();
         snap.mail_unread = unread;
         snap.mail_oldest_unread_age_secs = oldest
             .map(|ts| ((now.timestamp_millis() - ts) / 1000).max(0))
@@ -2068,6 +2746,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 display: "cache verify",
                 args: &["cache", "verify"],
                 hook_allowed: true,
+            },
+        ),
+        // TASK-1527: retire an orphaned cache refresh request. A silent no-op
+        // without a pending request; when one pends it refreshes the cache
+        // inline, which can take seconds — timer-tick territory, not a
+        // per-prompt hook's.
+        // trace:TASK-1527 | ai:claude
+        (
+            &["cache refresh --if-requested"],
+            ScheduledCommand {
+                display: "cache refresh --if-requested",
+                args: &["cache", "refresh", "--if-requested"],
+                hook_allowed: false,
             },
         ),
         (
@@ -2213,7 +2904,47 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
+        // which seat made the store writes; keep it off the per-turn hook path.
+        // trace:BUG-1746 | ai:codex
+        (
+            &["remote mirror-sync"],
+            ScheduledCommand {
+                display: "remote mirror-sync",
+                args: &["remote", "mirror-sync", "--json"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1218: the night-shift tick. Never on the per-turn hook path:
+        // a hook must not be able to launch a drain. The tick itself is a
+        // no-op unless this clone's local layer enables it.
+        // trace:STORY-1218 | ai:claude
+        (
+            &["shift tick"],
+            ScheduledCommand {
+                display: "shift tick",
+                args: &["shift", "tick"],
+                hook_allowed: false,
+            },
+        ),
     ]
+}
+
+/// STORY-1218: every registered job (project + global layer) whose command
+/// is `command`, as `(name, enabled)`. Used by the night-shift guards (is the
+/// watchdog job running?) and by `aida shift enable` (is the tick job
+/// registered?). A registry that fails to parse reads as no jobs.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn jobs_running_command(project_root: &Path, command: &str) -> Vec<(String, bool)> {
+    let Ok(Some(config)) = load_registry(project_root) else {
+        return Vec::new();
+    };
+    config
+        .tasks
+        .iter()
+        .filter(|t| t.command.as_ref().is_some_and(|c| c.display == command))
+        .map(|t| (t.name.clone(), t.enabled))
+        .collect()
 }
 
 fn parse_scheduled_command(s: &str) -> Result<ScheduledCommand> {
@@ -2248,6 +2979,15 @@ fn valid_commands() -> Vec<&'static str> {
 /// skips network-touching jobs — see `tick`'s `hook` flag).
 const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
+/// Exit status a killed-at-timeout (or unspawnable) scheduled child reports.
+const TIMEOUT_EXIT_STATUS: i32 = 124;
+/// How a timed-out run's `CronJobFailed.error` starts, so a routed failure
+/// can say "did not finish" instead of presenting it as a finding.
+// trace:BUG-1655 | ai:claude
+const TIMEOUT_EXIT_PREFIX: &str = "exit 124: timed out:";
+// trace:TASK-1535 | ai:codex
+const SPAWN_FAILED_EXIT_PREFIX: &str = "exit 124: could not be spawned:";
+
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
     let mut cmd = ProcessCommand::new(crate::aida_exe_path());
     cmd.args(command.args);
@@ -2275,25 +3015,31 @@ fn run_with_kill_timeout(
         // there to answer — same convention as the other unattended git legs
         // (`fetch --code-only`).
         .env("GIT_TERMINAL_PROMPT", "0");
-    // BUG-1288's `command_output_with_timeout`: a portable kill-on-timeout
-    // wait, reused rather than reimplemented. `None` (spawn failure OR
-    // timeout) maps to exit 124 (the conventional `timeout(1)` sentinel) —
+    // BUG-1288's bounded runner: a portable kill-on-timeout wait, reused
+    // rather than reimplemented. Spawn failure and timeout both map to exit
+    // 124 (the conventional `timeout(1)` sentinel) —
     // non-zero, so the existing tick machinery records it as a FAILURE
     // (`record_outcome_local`/`failure_trip`), never as ok. PRIN-5: a result
     // we could not observe must never be reported as the ok/success case.
-    match crate::command_output_with_timeout(cmd, timeout) {
-        Some(output) => TaskOutcome {
+    // trace:TASK-1535 | ai:codex
+    match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(output) => TaskOutcome {
             status: output.status.code().unwrap_or(1),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
             stderr: String::from_utf8_lossy(&output.stderr).to_string(),
         },
-        None => TaskOutcome {
-            status: 124,
+        crate::BoundedCommandOutput::TimedOut => TaskOutcome {
+            status: TIMEOUT_EXIT_STATUS,
             stdout: String::new(),
             stderr: format!(
-                "{display} did not complete within {}s (killed) or could not be spawned",
+                "timed out: {display} did not complete within {}s (killed)",
                 timeout.as_secs()
             ),
+        },
+        crate::BoundedCommandOutput::SpawnFailed => TaskOutcome {
+            status: TIMEOUT_EXIT_STATUS,
+            stdout: String::new(),
+            stderr: format!("could not be spawned: {display}"),
         },
     }
 }
@@ -2440,6 +3186,53 @@ fn failure_trip(
         performance,
         audit_error,
     })
+}
+
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_performance_argv() -> &'static [&'static str] {
+    command_table()
+        .iter()
+        .find(|(key, _)| *key == ["doctor check performance --fail-on-findings"])
+        .map(|(_, command)| command.args)
+        .expect("performance failure command is registered")
+}
+
+// trace:BUG-1745 | ai:codex
+#[cfg(test)]
+pub(super) fn bug_1745_failure_trip(
+    stdout: String,
+    status: i32,
+) -> Option<schedule_ledger::FailureTrip> {
+    let command = command_table()
+        .iter()
+        .find(|(key, _)| *key == ["doctor check performance --fail-on-findings"])
+        .map(|(_, command)| command.clone())
+        .expect("performance failure command is registered");
+    let task = Task {
+        name: "bug-1745-test".into(),
+        kind: JobKind::Substrate,
+        seats: Vec::new(),
+        command: Some(command),
+        prompt: None,
+        interval: None,
+        on: Vec::new(),
+        when: None,
+        when_raw: None,
+        quiet_hours: None,
+        enabled: true,
+        source: JobSource::Project,
+        problem: None,
+    };
+    failure_trip(
+        &task,
+        Utc::now(),
+        &TaskOutcome {
+            status,
+            stdout,
+            stderr: String::new(),
+        },
+    )
 }
 
 fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
@@ -2646,6 +3439,7 @@ mod tests {
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
+            problem: None,
         }
     }
 
@@ -2657,12 +3451,16 @@ mod tests {
             command: None,
             prompt: Some(format!("do {name}")),
             interval: interval.map(|i| parse_duration(i).unwrap()),
-            on: on.iter().map(|s| s.to_string()).collect(),
+            on: on
+                .iter()
+                .map(|s| EventTrigger::parse(name, s).unwrap())
+                .collect(),
             when: None,
             when_raw: None,
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
+            problem: None,
         }
     }
 
@@ -2692,6 +3490,171 @@ mod tests {
             Some(raw) => build_config(raw, JobSource::Project),
             None => Ok(None),
         }
+    }
+
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_mirror_sync_is_scheduled_but_hook_forbidden() {
+        let cmd = parse_scheduled_command("remote mirror-sync").unwrap();
+        assert_eq!(cmd.display, "remote mirror-sync");
+        assert_eq!(cmd.args, &["remote", "mirror-sync", "--json"]);
+        assert!(!cmd.hook_allowed, "mirror sync makes a network call");
+        assert!(!cmd.args.contains(&"--force") && !cmd.args.contains(&"-f"));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        tick_with_executor(
+            tmp.path(),
+            config(vec![task("hub-mirror-sync", "1h", "remote mirror-sync")]),
+            &mut state,
+            at(12),
+            true,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+        assert!(
+            seen.borrow().is_empty(),
+            "hook ticks must skip network jobs"
+        );
+    }
+
+    // This pins the cadence trigger itself: command allowlisting alone must
+    // not cause a run when the project has no enabled cadence registration.
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_cadence_dispatches_only_when_registered_and_enabled() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let parsed = load_config(repo_root).unwrap().unwrap();
+        let registered: Vec<Task> = parsed
+            .tasks
+            .into_iter()
+            .filter(|t| t.name == "hub-mirror-sync")
+            .collect();
+        assert_eq!(registered.len(), 1, "repo must register the mirror cadence");
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        tick_with_executor(
+            tmp.path(),
+            config(registered),
+            &mut state,
+            at(12),
+            false,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+        assert_eq!(&*seen.borrow(), &["remote mirror-sync"]);
+
+        for tasks in [
+            Vec::new(),
+            vec![{
+                let mut disabled = task("hub-mirror-sync", "1h", "remote mirror-sync");
+                disabled.enabled = false;
+                disabled
+            }],
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut state = ScheduleState::default();
+            let seen = Rc::new(RefCell::new(Vec::new()));
+            tick_with_executor(
+                tmp.path(),
+                config(tasks),
+                &mut state,
+                at(12),
+                false,
+                ok_exec(Rc::clone(&seen)),
+            )
+            .unwrap();
+            assert!(
+                seen.borrow().is_empty(),
+                "absent or disabled cadence must not dispatch"
+            );
+        }
+    }
+
+    // trace:BUG-1746 | ai:codex
+    #[test]
+    fn bug_1746_mirror_sync_failure_does_not_wake_unrelated_guard_routes() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let parsed = load_config(repo_root).unwrap().unwrap();
+        assert!(
+            build_unbound_route_findings(&parsed.tasks).is_empty(),
+            "repo route jobs must all be bound to their guard"
+        );
+        let route_names = [
+            "hub-drift-guard-route",
+            "disk-headroom-guard-route",
+            "performance-guard-route",
+            "watchdog-route",
+        ];
+        let routes: Vec<Task> = parsed
+            .tasks
+            .into_iter()
+            .filter(|t| route_names.contains(&t.name.as_str()))
+            .collect();
+        assert_eq!(
+            routes.len(),
+            4,
+            "all four repository route jobs are in fixture"
+        );
+
+        // The fake executor models an unreachable/rejecting mirror; tick must
+        // persist the failure as CronJobFailed under the cadence job's name.
+        let tmp = tempfile::tempdir().unwrap();
+        let mut run_state = ScheduleState::default();
+        tick_with_executor(
+            tmp.path(),
+            config(vec![task("hub-mirror-sync", "1h", "remote mirror-sync")]),
+            &mut run_state,
+            at(12),
+            false,
+            |_root, _cmd| {
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: String::new(),
+                    stderr: "mirror unavailable".into(),
+                })
+            },
+        )
+        .unwrap();
+        let events = events::read_all(tmp.path());
+        assert!(
+            events.iter().any(|event| matches!(
+                &event.kind,
+                EventKind::CronJobFailed { job, error, .. }
+                    if job == "hub-mirror-sync" && error.contains("mirror unavailable")
+            )),
+            "failed cadence run must emit its own CronJobFailed: {events:?}"
+        );
+
+        bug_1655_route(tmp.path(), routes, &events);
+        let store = store_root(tmp.path());
+        let due: Vec<_> = route_names
+            .iter()
+            .filter(|name| {
+                schedule_ledger::load(&store, name).is_some_and(|l| l.due_since.is_some())
+            })
+            .collect();
+        assert!(
+            due.is_empty(),
+            "transient mirror outage must not route guard jobs: {due:?}"
+        );
+    }
+
+    // trace:STORY-1218 | ai:claude
+    #[test]
+    fn schedule_command_table_shift_tick_not_hook_allowed() {
+        let cmd = parse_scheduled_command("shift tick").unwrap();
+        assert_eq!(cmd.args, &["shift", "tick"]);
+        assert!(
+            !cmd.hook_allowed,
+            "a per-turn hook tick must never be able to launch a drain"
+        );
     }
 
     #[test]
@@ -2953,6 +3916,7 @@ mod tests {
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
+            problem: None,
         };
         let mut state = ScheduleState::default();
         let lines = run_with_executor(
@@ -3063,11 +4027,11 @@ mod tests {
         assert_eq!(schedule_ledger::load_all(&store).len(), 3);
     }
 
+    // trace:TASK-1532 | ai:agy
     #[test]
     fn min_gap_suppresses_recent_tick() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
@@ -3089,9 +4053,95 @@ enabled = true
         };
         save_state(tmp.path(), &state).unwrap();
         let lines = tick(tmp.path(), false, None).unwrap();
-        std::env::remove_var("AIDA_HOME");
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("suppressed by min-gap"));
+    }
+
+    // BUG-1600: `~/.aida/schedule-tick.log` must never grow without bound —
+    // a stale/misconfigured cron entry that fails identically every 15
+    // minutes must not flood it forever.
+    // trace:BUG-1600 | ai:claude
+    #[test]
+    fn bound_global_schedule_log_leaves_small_file_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        std::fs::write(&log, "small content\n").unwrap();
+
+        bound_global_schedule_log();
+
+        let body = std::fs::read_to_string(&log).unwrap();
+        assert_eq!(body, "small content\n", "well under the cap → untouched");
+    }
+
+    #[test]
+    fn bound_global_schedule_log_truncates_when_over_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        // The exact repeated-failure shape BUG-1600 produced: the same
+        // error line, over and over, forever.
+        let line = "error: `aida schedule tick --format json` is unsupported\n";
+        let repeats = (GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100;
+        let big = line.repeat(repeats);
+        std::fs::write(&log, &big).unwrap();
+        let before_len = std::fs::metadata(&log).unwrap().len();
+        assert!(
+            before_len > GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "test setup sanity"
+        );
+
+        bound_global_schedule_log();
+
+        let after = std::fs::read_to_string(&log).unwrap();
+        assert!(
+            (after.len() as u64) <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "must be at/under the cap after truncation: {} bytes",
+            after.len()
+        );
+        assert!(
+            after.contains("truncated"),
+            "must leave evidence that truncation happened: {after}"
+        );
+        // The newest content (the tail of the repeated line) must survive —
+        // truncation drops the OLDEST bytes, not the newest.
+        assert!(
+            after.trim_end().ends_with(line.trim_end()),
+            "must keep the newest lines: {after}"
+        );
+    }
+
+    #[test]
+    fn tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        let log = tmp.path().join(".aida").join("schedule-tick.log");
+        let line = "error: unsupported\n";
+        let big = line.repeat((GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100);
+        let big_len = big.len() as u64;
+
+        // A HOOK tick (the per-turn invoker) leaves the log alone — it's
+        // meant to stay minimal, and the installed hook script redirects
+        // its own output to /dev/null anyway.
+        std::fs::write(&log, &big).unwrap();
+        let _ = tick(tmp.path(), true, None).unwrap();
+        let after_hook = std::fs::metadata(&log).unwrap().len();
+        assert_eq!(
+            after_hook, big_len,
+            "a hook tick must not touch the global log"
+        );
+
+        // A timer/cron-shaped tick (hook = false — the shape the installed
+        // crontab entry uses) bounds it.
+        let _ = tick(tmp.path(), false, None).unwrap();
+        let after_timer = std::fs::metadata(&log).unwrap().len();
+        assert!(
+            after_timer <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
+            "a non-hook (timer/cron) tick must bound the log: {after_timer} bytes"
+        );
     }
 
     #[test]
@@ -3745,7 +4795,7 @@ every = "1h"
         ];
         let mut job = task("capture-sweep", "24h", "queue gc");
         job.interval = None;
-        job.on = vec!["PrMerged".to_string()];
+        job.on = vec![EventTrigger::parse("t", "PrMerged").unwrap()];
         let run = |state: &mut ScheduleState, now, events: &[Event]| {
             tick_core(
                 tmp.path(),
@@ -3821,7 +4871,7 @@ every = "1h"
         ];
         let mut on_reap = task("queue-gc", "24h", "queue gc");
         on_reap.interval = None;
-        on_reap.on = vec!["PrMerged".to_string()];
+        on_reap.on = vec![EventTrigger::parse("t", "PrMerged").unwrap()];
         let run = |state: &mut ScheduleState, now, events: &[Event]| {
             tick_core(
                 tmp.path(),
@@ -4115,8 +5165,7 @@ every = "1h"
     #[test]
     fn due_seat_jobs_reads_registry_and_ledger_file_only() {
         let tmp = tempfile::tempdir().unwrap();
-        let _guard = crate::test_env::env_lock();
-        std::env::set_var("AIDA_HOME", tmp.path());
+        let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
@@ -4166,7 +5215,6 @@ enabled = true
         assert_eq!(due[0].reason, "on QueueDrained");
         // No seat filter → both.
         assert_eq!(due_seat_jobs(tmp.path(), None).len(), 2);
-        std::env::remove_var("AIDA_HOME");
     }
 
     // trace:STORY-1226 | ai:claude
@@ -4207,5 +5255,550 @@ enabled = true
         assert!(load_global_config(tempfile::tempdir().unwrap().path())
             .unwrap()
             .is_none());
+    }
+
+    /// STORY-1423 criterion 3 (THE TRIGGER): a dogfood regression test over
+    /// this repo's OWN `.aida/config.toml`, not a fixture. `aida schedule
+    /// list` reporting both jobs enabled was a point-in-time observation
+    /// (2026-09-21, PR #2062); nothing stopped a later config edit from
+    /// silently disabling or deleting either entry and letting the gate go
+    /// dark again — exactly the "commented example is a trigger for nobody"
+    /// defect this spec exists to close, recurring one layer out. Reads the
+    /// real file via `CARGO_MANIFEST_DIR` so this fails the moment the
+    /// dogfood surface regresses.
+    // trace:STORY-1423 | ai:claude
+    #[test]
+    fn this_repo_keeps_the_performance_guard_pair_registered_and_enabled() {
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("aida-cli-lib has a workspace parent");
+        let cfg = load_config(repo_root)
+            .unwrap()
+            .expect("this repo's .aida/config.toml must declare a [schedule] section");
+
+        let guard = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "performance-guard")
+            .expect("the performance-guard substrate job must stay registered in this repo");
+        assert_eq!(guard.kind, JobKind::Substrate);
+        assert!(
+            guard.enabled,
+            "performance-guard must stay enabled — a disabled entry is a trigger for nobody"
+        );
+
+        let route = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "performance-guard-route")
+            .expect("the performance-guard-route seat job must stay registered in this repo");
+        assert_eq!(route.kind, JobKind::Seat);
+        assert!(
+            route.enabled,
+            "performance-guard-route must stay enabled so a trip still reaches a seat"
+        );
+    }
+
+    // ---- a guard's failure routes only to its own route job ----
+    // trace:BUG-1655 | ai:claude
+
+    const DISK: &str = "doctor check disk-headroom --fail-on-findings";
+    const DRIFT: &str = "doctor check remote-drift --fail-on-findings";
+
+    /// Run both guards once at `at(12)`; only the disk guard fails with
+    /// `status`. Returns the events the tick emitted.
+    fn bug_1655_trip_disk_guard(root: &Path, status: i32, stderr: &str) -> Vec<Event> {
+        let mut state = ScheduleState::default();
+        let stderr = stderr.to_string();
+        tick_with_executor(
+            root,
+            config(vec![
+                task("disk-headroom-guard", "30m", DISK),
+                task("hub-drift-guard", "6h", DRIFT),
+            ]),
+            &mut state,
+            at(12),
+            false,
+            move |_root, cmd| {
+                Ok(TaskOutcome {
+                    status: if cmd.display == DISK { status } else { 0 },
+                    stdout: String::new(),
+                    stderr: if cmd.display == DISK {
+                        stderr.clone()
+                    } else {
+                        String::new()
+                    },
+                })
+            },
+        )
+        .unwrap();
+        events::read_all(root)
+    }
+
+    /// Route every event through `routes` with cursors set before the trip.
+    fn bug_1655_route(root: &Path, routes: Vec<Task>, events: &[Event]) {
+        let mut state = ScheduleState::default();
+        for r in &routes {
+            state.tasks.insert(
+                r.name.clone(),
+                TaskState {
+                    last_seen_event_ts: Some(at(11)),
+                    ..Default::default()
+                },
+            );
+        }
+        tick_core(
+            root,
+            config(routes),
+            &mut state,
+            at(13),
+            false,
+            |_root, _cmd| unreachable!("route jobs are never executed"),
+            |_| Snapshot::default(),
+            events,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn bug_1655_only_the_failing_guards_route_comes_due_with_its_own_evidence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let events = bug_1655_trip_disk_guard(tmp.path(), 1, "free 12 GiB below floor 60 GiB");
+        let failures: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                EventKind::CronJobFailed { job, .. } => Some(job.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(failures, vec!["disk-headroom-guard"]);
+
+        bug_1655_route(
+            tmp.path(),
+            vec![
+                seat_task(
+                    "disk-headroom-guard-route",
+                    &["advisor"],
+                    None,
+                    &["CronJobFailed:disk-headroom-guard"],
+                ),
+                seat_task(
+                    "hub-drift-guard-route",
+                    &["advisor"],
+                    None,
+                    &["CronJobFailed:hub-drift-guard"],
+                ),
+            ],
+            &events,
+        );
+
+        let store = store_root(tmp.path());
+        let disk = schedule_ledger::load(&store, "disk-headroom-guard-route").unwrap();
+        assert!(disk.due_since.is_some(), "the tripped guard's route is due");
+        assert_eq!(
+            disk.due_reason.as_deref(),
+            Some("on CronJobFailed:disk-headroom-guard")
+        );
+        let failure = disk.due_failure.expect("routed evidence");
+        assert!(
+            failure.trip_id.starts_with("disk-headroom-guard@"),
+            "{}",
+            failure.trip_id
+        );
+        assert_eq!(failure.job.as_deref(), Some("disk-headroom-guard"));
+        assert_eq!(
+            failure.error.as_deref(),
+            Some("exit 1: free 12 GiB below floor 60 GiB")
+        );
+
+        let drift = schedule_ledger::load(&store, "hub-drift-guard-route");
+        assert!(
+            drift
+                .as_ref()
+                .is_none_or(|l| l.due_since.is_none() && l.due_failure.is_none()),
+            "a clean guard's route must not wake on another guard's trip: {drift:?}"
+        );
+    }
+
+    #[test]
+    fn bug_1655_unbound_trigger_keeps_matching_any_job_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let events = bug_1655_trip_disk_guard(tmp.path(), 1, "below floor");
+        bug_1655_route(
+            tmp.path(),
+            vec![seat_task(
+                "legacy-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed"],
+            )],
+            &events,
+        );
+        let legacy = schedule_ledger::load(&store_root(tmp.path()), "legacy-route").unwrap();
+        assert!(
+            legacy.due_since.is_some(),
+            "an unbound trigger is unchanged"
+        );
+        assert_eq!(
+            legacy.due_failure.and_then(|f| f.job).as_deref(),
+            Some("disk-headroom-guard")
+        );
+    }
+
+    #[test]
+    fn bug_1655_timeout_is_labelled_as_not_a_finding() {
+        let tmp = tempfile::tempdir().unwrap();
+        let events = bug_1655_trip_disk_guard(
+            tmp.path(),
+            TIMEOUT_EXIT_STATUS,
+            "timed out: doctor check disk-headroom did not complete within 120s (killed)",
+        );
+        bug_1655_route(
+            tmp.path(),
+            vec![seat_task(
+                "disk-headroom-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed:disk-headroom-guard"],
+            )],
+            &events,
+        );
+        let ledger =
+            schedule_ledger::load(&store_root(tmp.path()), "disk-headroom-guard-route").unwrap();
+        let due = DueJob {
+            name: "disk-headroom-guard-route".into(),
+            kind: JobKind::Seat,
+            seats: vec!["advisor".into()],
+            schedule: "on CronJobFailed:disk-headroom-guard".into(),
+            reason: ledger.due_reason.clone().unwrap(),
+            prompt: Some("reclaim space".into()),
+            command: None,
+            last_run: None,
+            last_by: None,
+            due_since: ledger.due_since,
+            failure: ledger.due_failure.clone(),
+        };
+        let line = due.line(at(14));
+        assert!(
+            line.contains("disk-headroom-guard timed out before reporting — this is not a finding"),
+            "{line}"
+        );
+
+        // A real finding reads as a failure, not a timeout.
+        let mut finding = due.clone();
+        finding.failure.as_mut().unwrap().error = Some("exit 1: below floor".into());
+        let line = finding.line(at(14));
+        assert!(
+            line.contains("disk-headroom-guard failed: exit 1: below floor"),
+            "{line}"
+        );
+        assert!(!line.contains("timed out"), "{line}");
+    }
+
+    #[test]
+    fn bug_1655_trigger_binding_is_validated_at_load() {
+        assert!(EventTrigger::parse("r", "CronJobFailed:").is_err());
+        assert!(EventTrigger::parse("r", "PrMerged:some-job").is_err());
+        assert!(EventTrigger::parse("r", "NoSuchEvent:x").is_err());
+        let t = EventTrigger::parse("r", "CronJobFailed:guard").unwrap();
+        assert_eq!(t.to_string(), "CronJobFailed:guard");
+
+        let known = parse_project(
+            r#"
+[[schedule.jobs]]
+name = "guard"
+command = "doctor"
+every = "6h"
+enabled = true
+
+[[schedule.jobs]]
+name = "guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed:guard"]
+prompt = "look"
+enabled = true
+"#,
+        )
+        .unwrap()
+        .unwrap();
+        let mut known = known;
+        disable_unknown_bindings(&mut known);
+        assert!(known.tasks.iter().all(|t| t.enabled && t.problem.is_none()));
+        assert_eq!(known.tasks[1].schedule_summary(), "on CronJobFailed:guard");
+    }
+
+    /// A binding to a job that is not in the registry disables ONLY that
+    /// route (with a reason tick and status surface); every other job still
+    /// loads and runs.
+    #[test]
+    fn bug_1655_unknown_bound_job_disables_only_that_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            r#"
+[[schedule.jobs]]
+name = "watchdog"
+command = "doctor"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "watchdog-route"
+seats = ["advisor"]
+on = ["CronJobFailed:watchdog"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
+name = "guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed:gaurd"]
+prompt = "look"
+enabled = true
+"#,
+        )
+        .unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let loaded = {
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            load_registry(tmp.path())
+        };
+        let mut cfg = loaded
+            .expect("one bad route must not fail the registry")
+            .unwrap();
+        let by_name = |cfg: &LoadedScheduleConfig, n: &str| {
+            cfg.tasks.iter().find(|t| t.name == n).cloned().unwrap()
+        };
+        let bad = by_name(&cfg, "guard-route");
+        assert!(!bad.enabled);
+        let problem = bad.problem.clone().unwrap();
+        assert!(problem.contains("CronJobFailed:gaurd"), "{problem}");
+        assert!(by_name(&cfg, "watchdog").enabled);
+        assert!(by_name(&cfg, "watchdog-route").enabled);
+
+        let row = status_row(&bad, None, None, at(12));
+        assert_eq!(row.status, "invalid");
+        assert_eq!(row.problem.as_deref(), Some(problem.as_str()));
+
+        cfg.tasks.retain(|t| t.name != "watchdog-route");
+        let mut state = ScheduleState::default();
+        let ran = std::cell::Cell::new(0);
+        let lines = tick_with_executor(tmp.path(), cfg, &mut state, at(12), false, |_r, _c| {
+            ran.set(ran.get() + 1);
+            Ok(TaskOutcome {
+                status: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        })
+        .unwrap();
+        assert_eq!(ran.get(), 1, "the watchdog still runs: {lines:?}");
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("schedule tick: guard-route skipped:")),
+            "{lines:?}"
+        );
+    }
+
+    /// Every scaffolded `<guard>-route` binds its `on` to `<guard>`, so no
+    /// route wakes on another guard's failure. (This repo's own config is
+    /// switched separately, once the installed binary understands bindings.)
+    #[test]
+    fn bug_1655_every_guard_route_binds_to_its_own_guard() {
+        for (label, body) in [("scaffold", crate::init_cmd::init_schedule_config_section())] {
+            let lines: Vec<&str> = body
+                .lines()
+                .map(|l| l.trim().trim_start_matches('#').trim())
+                .collect();
+            let mut routes = 0;
+            for (i, line) in lines.iter().enumerate() {
+                let Some(route) = line
+                    .strip_prefix("name = \"")
+                    .and_then(|r| r.strip_suffix("-route\""))
+                else {
+                    continue;
+                };
+                routes += 1;
+                let on = lines[i..]
+                    .iter()
+                    .find(|l| l.starts_with("on = "))
+                    .unwrap_or_else(|| panic!("{label}: {route}-route has no `on`"));
+                assert_eq!(
+                    *on,
+                    format!("on = [\"CronJobFailed:{route}\"]"),
+                    "{label}: {route}-route must bind to its own guard"
+                );
+            }
+            assert!(
+                routes >= 4,
+                "{label}: expected the guard routes, found {routes}"
+            );
+        }
+    }
+
+    #[test]
+    fn bug_1655_doctor_flags_an_enabled_route_with_an_unbound_trigger() {
+        let mut disabled = seat_task("old-guard-route", &["advisor"], None, &["CronJobFailed"]);
+        disabled.enabled = false;
+        let tasks = vec![
+            task("disk-headroom-guard", "1h", "doctor"),
+            seat_task(
+                "disk-headroom-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed"],
+            ),
+            seat_task(
+                "watchdog-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed:watchdog"],
+            ),
+            seat_task("any-failure-notice", &["advisor"], None, &["CronJobFailed"]),
+            disabled,
+        ];
+        let findings = build_unbound_route_findings(&tasks);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(
+            findings[0].id,
+            "schedule-route-unbound:disk-headroom-guard-route"
+        );
+        assert!(
+            findings[0]
+                .action
+                .contains("on = [\"CronJobFailed:disk-headroom-guard\"]"),
+            "{}",
+            findings[0].action
+        );
+    }
+
+    // trace:TASK-1535 | ai:codex
+    #[test]
+    fn task_1535_doctor_finds_invalid_route_and_only_suggests_known_guard() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            r#"
+[[schedule.jobs]]
+name = "known-guard"
+command = "doctor"
+every = "1h"
+enabled = false
+
+[[schedule.jobs]]
+name = "known-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
+name = "orphan-route"
+seats = ["advisor"]
+on = ["CronJobFailed"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
+name = "renamed-route"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
+name = "failure-notice"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = true
+
+[[schedule.jobs]]
+name = "user-disabled-route"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = false
+
+[[schedule.jobs]]
+name = "user-disabled-notice"
+seats = ["advisor"]
+on = ["CronJobFailed:missing-guard"]
+prompt = "look"
+enabled = false
+"#,
+        )
+        .unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let (findings, cfg) = {
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            let findings = scheduler_driver_doctor_findings(tmp.path()).unwrap();
+            let cfg = load_registry(tmp.path()).unwrap().unwrap();
+            (findings, cfg)
+        };
+        let find = |id: &str| findings.iter().find(|f| f.id == id).unwrap();
+        assert!(find("schedule-route-invalid:renamed-route")
+            .summary
+            .contains("missing-guard"));
+        let failure_notice = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "failure-notice")
+            .unwrap();
+        assert!(!failure_notice.enabled);
+        assert!(failure_notice
+            .problem
+            .as_deref()
+            .unwrap()
+            .contains("missing-guard"));
+        assert!(find("schedule-route-invalid:failure-notice")
+            .summary
+            .contains("missing-guard"));
+        assert!(find("schedule-route-unbound:known-guard-route")
+            .action
+            .contains("CronJobFailed:known-guard"));
+        let orphan = &find("schedule-route-unbound:orphan-route").action;
+        assert!(orphan.contains("bind it to the job it guards"), "{orphan}");
+        assert!(!orphan.contains("CronJobFailed:orphan"), "{orphan}");
+        assert!(!findings.iter().any(|f| f.id.contains("user-disabled")));
+        let user_disabled_notice = cfg
+            .tasks
+            .iter()
+            .find(|t| t.name == "user-disabled-notice")
+            .unwrap();
+        assert!(!user_disabled_notice.enabled);
+        assert!(user_disabled_notice.problem.is_none());
+
+        let mut state = ScheduleState::default();
+        let lines = tick_with_executor(tmp.path(), cfg, &mut state, at(12), false, |_r, _c| {
+            panic!("no substrate job should run")
+        })
+        .unwrap();
+        assert!(lines.iter().any(|l| l.contains("renamed-route skipped")));
+        assert!(lines.iter().any(|l| l.contains("failure-notice skipped")));
+        assert!(!lines
+            .iter()
+            .any(|l| l.contains("user-disabled-route skipped")));
+        assert!(!lines
+            .iter()
+            .any(|l| l.contains("user-disabled-notice skipped")));
+    }
+
+    #[test]
+    fn task_1535_spawn_failure_is_not_labelled_timeout() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cmd = ProcessCommand::new(tmp.path().join("no-such-command"));
+        let outcome = run_with_kill_timeout(
+            cmd,
+            "missing",
+            tmp.path(),
+            std::time::Duration::from_millis(50),
+        );
+        assert_eq!(outcome.status, 124);
+        assert!(outcome.stderr.starts_with("could not be spawned:"));
+        assert!(!outcome.stderr.contains("timed out"));
     }
 }

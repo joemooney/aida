@@ -7,6 +7,7 @@
 //!
 //! trace:STORY-1052 | ai:codex
 
+use crate::process_retry::RetryEtxtbsy;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
@@ -66,6 +67,7 @@ pub(crate) fn handle_supervise_command(
                 backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
                 max: *max,
                 json: *json,
+                floors: None,
             };
             crate::supervisor::handle_supervise_command(backend, project_root, opts)
         }
@@ -87,6 +89,16 @@ pub(crate) fn handle_supervise_command(
 }
 
 fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<()> {
+    if let Some(line) = nudge_pass(backend, store_path)? {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+/// One nudge pass. Returns the one-line outcome for the caller to print
+/// (`None` when nothing was due), so `watch --json` can keep it off stdout.
+// trace:BUG-1623 | ai:claude
+fn nudge_pass(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Result<Option<String>> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
@@ -102,7 +114,7 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
     let body = std::fs::read_to_string(events::events_path(project_root)).unwrap_or_default();
     let stuck = stuck_items_from_events(&body, &titles);
     if stuck.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     let state_path = nudge_state_path(project_root);
@@ -110,17 +122,17 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
     let now_ms = Utc::now().timestamp_millis();
     let due = due_stuck_items(&stuck, &state, now_ms, DEFAULT_MIN_INTERVAL_MS);
     if due.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
 
     if let Some(advisor) = live_advisor_recipient(project_root) {
         send_advisor_nudge(project_root, &advisor, &due)?;
         record_nudged(&mut state, &due, now_ms);
         write_nudge_state(&state_path, &state)?;
-        println!(
+        Ok(Some(format!(
             "nudged {advisor} about {} transiently parked spec(s)",
             due.len()
-        );
+        )))
     } else {
         let message = format_operator_notification(&due);
         let outcome = notify::send_direct(
@@ -132,21 +144,20 @@ fn handle_supervise_nudge(backend: &aida_core::CachedGitBackend, store_path: &Pa
         if outcome.configured {
             record_nudged(&mut state, &due, now_ms);
             write_nudge_state(&state_path, &state)?;
-            println!(
+            Ok(Some(format!(
                 "operator notified about {} transiently parked spec(s) (sent {}, suppressed {}, pending {})",
                 due.len(),
                 outcome.sent,
                 outcome.suppressed,
                 outcome.pending
-            );
+            )))
         } else {
-            println!(
+            Ok(Some(format!(
                 "no live advisor and [notify].command is unset; {} transiently parked spec(s) need attention",
                 due.len()
-            );
+            )))
         }
     }
-    Ok(())
 }
 
 fn display_id(req: &aida_core::Requirement) -> Option<String> {
@@ -364,6 +375,15 @@ struct WatchReport {
     drift: Vec<String>,
     /// Children queued this pass (only populated under --execute).
     realigned: Vec<String>,
+    /// The re-drive reflex's one-line outcome (the night shift's step).
+    // trace:BUG-1621 | ai:claude
+    redrive: String,
+    /// Parks re-queued this pass (only under --execute with re-drive on).
+    redriven: Vec<String>,
+    /// Parks reclassified to needs-human at the ADR-26 cap this pass.
+    reclassified: Vec<String>,
+    /// Per-park decisions, including every floor refusal.
+    redrive_plan: Vec<crate::supervisor::SuperviseDecision>,
 }
 
 fn handle_supervise_watch(
@@ -421,6 +441,74 @@ fn run_watch_pass(
     execute: bool,
     json: bool,
 ) -> Result<()> {
+    let queued = queued_spec_ids();
+    let report = watch_pass_core(
+        backend,
+        project_root,
+        objective,
+        execute,
+        &queued,
+        &mut queue_add_implementer,
+    )?;
+
+    emit_pass_output(
+        &report,
+        execute,
+        json,
+        &mut || nudge_pass(backend, store_path).ok().flatten(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    )?;
+
+    // Surface only human-decision items.
+    if !json {
+        print_awaiting_surface();
+    }
+    Ok(())
+}
+
+/// Print one pass's report, then run the nudge reflex (only under
+/// --execute: it sends a real mailbox message / notification, so a dry run
+/// has no side effects). With --json the nudge line goes to `err`, so `out`
+/// stays exactly one JSON document per pass.
+// trace:BUG-1623 | ai:claude
+fn emit_pass_output(
+    report: &WatchReport,
+    execute: bool,
+    json: bool,
+    nudge: &mut dyn FnMut() -> Option<String>,
+    out: &mut dyn std::io::Write,
+    err: &mut dyn std::io::Write,
+) -> Result<()> {
+    if json {
+        writeln!(out, "{}", serde_json::to_string(report)?)?;
+    } else {
+        print_watch_report(report, execute);
+    }
+    if execute {
+        if let Some(line) = nudge() {
+            if json {
+                writeln!(err, "{line}")?;
+            } else {
+                writeln!(out, "{line}")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// One watch pass without its subprocess reads and its output: realign
+/// (through `queue_add`) and the re-drive reflex. `execute = false` is a
+/// dry run that writes nothing. Split out so tests drive the real wiring.
+// trace:BUG-1621 | ai:claude
+fn watch_pass_core(
+    backend: &aida_core::CachedGitBackend,
+    project_root: &Path,
+    objective: &str,
+    execute: bool,
+    queued: &std::collections::HashSet<String>,
+    queue_add: &mut dyn FnMut(&str) -> bool,
+) -> Result<WatchReport> {
     use aida_core::models::{RelationshipType, RequirementStatus};
 
     let store = backend.load()?;
@@ -457,54 +545,55 @@ fn run_watch_pass(
         .count();
 
     // Drift = Approved, not archived, not deferred, not already queued.
-    let queued = queued_spec_ids();
-    let drift = compute_drift(&children, &queued);
+    let drift = compute_drift(&children, queued);
 
     // Realign: queue each drifted child for the implementer (idempotent — the
     // Approved filter + queue-add dupe tolerance keep it safe to re-run).
     let mut realigned: Vec<String> = Vec::new();
     if execute {
         for spec in &drift {
-            if queue_add_implementer(spec) {
+            if queue_add(spec) {
                 realigned.push(spec.clone());
             }
         }
     }
 
-    let report = WatchReport {
-        objective: obj_display.clone(),
+    // The re-drive reflex runs through the night shift's own re-drive step
+    // (BUG-1621): the same per-clone opt-in (ADR-26 default off), guards,
+    // floors, attempt-recorded-first requeue and cap branch as the tick. It
+    // only re-queues; the next drain wave picks the specs up, so this pass
+    // never launches a drive and never forces a claim. A failure is reported
+    // and never stops the rest of the pass.
+    // trace:BUG-1621 | ai:claude
+    let redrive = crate::shift::run_redrive_pass(project_root, backend, !execute);
+    let (redrive_line, redriven, reclassified, redrive_plan) = match redrive {
+        Ok(r) => {
+            let mut line = r.redrive;
+            let failing: Vec<&str> = r
+                .redrive_guards
+                .iter()
+                .filter(|g| !g.pass)
+                .map(|g| g.detail.as_str())
+                .collect();
+            if !failing.is_empty() {
+                line.push_str(&format!(" ({})", failing.join("; ")));
+            }
+            (line, r.redriven, r.reclassified, r.redrive_plan)
+        }
+        Err(e) => (format!("error: {e:#}"), Vec::new(), Vec::new(), Vec::new()),
+    };
+
+    Ok(WatchReport {
+        objective: obj_display,
         total_children: total,
         done_children: done,
-        drift: drift.clone(),
-        realigned: realigned.clone(),
-    };
-
-    if json {
-        println!("{}", serde_json::to_string(&report)?);
-    } else {
-        print_watch_report(&report, execute);
-    }
-
-    // Compose the shipped reflexes: redrive transient parks, nudge advisor stalls.
-    let redrive_opts = crate::supervisor::SuperviseOpts {
-        execute,
-        max_attempts: crate::supervisor::DEFAULT_MAX_ATTEMPTS,
-        backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
-        max: None,
-        json,
-    };
-    let _ = crate::supervisor::handle_supervise_command(backend, project_root, redrive_opts);
-    // Nudge sends a real mailbox message / notification, so it only fires under
-    // --execute; a dry-run pass has no side effects.
-    if execute {
-        let _ = handle_supervise_nudge(backend, store_path);
-    }
-
-    // Surface only human-decision items.
-    if !json {
-        print_awaiting_surface();
-    }
-    Ok(())
+        drift,
+        realigned,
+        redrive: redrive_line,
+        redriven,
+        reclassified,
+        redrive_plan,
+    })
 }
 
 fn print_watch_report(report: &WatchReport, execute: bool) {
@@ -528,6 +617,8 @@ fn print_watch_report(report: &WatchReport, execute: bool) {
             report.drift.join(", ")
         );
     }
+    // trace:BUG-1621 | ai:claude
+    println!("  re-drive: {}", report.redrive);
 }
 
 /// Whether a child type is realignable — i.e. buildable work an implementer
@@ -589,7 +680,7 @@ fn queued_spec_ids() -> std::collections::HashSet<String> {
     let exe = crate::aida_exe_path();
     let Ok(out) = std::process::Command::new(exe)
         .args(["queue", "list", "--json"])
-        .output()
+        .output_retrying_etxtbsy()
     else {
         return set;
     };
@@ -644,7 +735,7 @@ fn queue_add_implementer(spec: &str) -> bool {
     let exe = crate::aida_exe_path();
     std::process::Command::new(exe)
         .args(["queue", "add", spec, "--for", "implementer", "--no-scope"])
-        .output()
+        .output_retrying_etxtbsy()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -652,7 +743,10 @@ fn queue_add_implementer(spec: &str) -> bool {
 /// Print the `aida awaiting` human-decision surface (best-effort).
 fn print_awaiting_surface() {
     let exe = crate::aida_exe_path();
-    if let Ok(out) = std::process::Command::new(exe).args(["awaiting"]).output() {
+    if let Ok(out) = std::process::Command::new(exe)
+        .args(["awaiting"])
+        .output_retrying_etxtbsy()
+    {
         let text = String::from_utf8_lossy(&out.stdout);
         if !text.trim().is_empty() {
             print!("{text}");
@@ -667,3 +761,7 @@ mod story_1052_supervise_nudge_tests;
 #[cfg(test)]
 #[path = "tests/story_1096_supervise_watch_tests.rs"]
 mod story_1096_supervise_watch_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1621_watch_redrive_tests.rs"]
+mod bug_1621_watch_redrive_tests;

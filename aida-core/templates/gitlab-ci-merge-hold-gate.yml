@@ -2,17 +2,24 @@
 # (BUG-1167 / ADR-37 Layer 2, for GitLab). STORY-1165.
 #
 # Include this job in a GitLab project's `.gitlab-ci.yml`. It FAILS a
-# merge-request pipeline while the MR carries the `aida:merge-hold` label — which
-# AIDA applies to a supervised (drive/guided/operator/decide/unset) MR via
-# `merge_hold::sync_label` (glab mr update --label) — and passes otherwise.
+# merge-request pipeline while the MR carries the `aida:merge-hold` label.
+# AIDA also preserves `aida:merge-hold-recorded` across clearance and adds
+# `aida:merge-hold-cleared` through the human-gated clear path. Removing only
+# the active label therefore cannot release a previously held MR.
+# Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
+# the most recent hold has a recorded clearance; this makes label-only gate logic sound.
 #
 # To make it un-bypassable (the point of Layer 2), turn on the project's
 # "Pipelines must succeed" merge check (Settings → Merge requests), so a labelled
 # MR cannot merge — not even a raw `glab mr merge` or a UI merge — until a
-# human/advisor clears the hold (removes the label, e.g. `aida merge-hold clear`).
+# human/advisor clears the hold using `aida merge-hold clear`.
 # An unlabelled (drain-mode) MR passes in seconds, so drain auto-merge is
 # preserved. The job is trivial (label inspection only, no build) so it never
 # stalls a pipeline.
+#
+# The `script:` block below is the shipped artifact that AIDA's own
+# tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
+# against this file rather than against a copy of it. Keep the gate logic here.
 #
 # Include it, don't copy the body, so upstream fixes flow:
 #   include:
@@ -32,8 +39,17 @@ aida-merge-hold-gate:
     - if: '$CI_MERGE_REQUEST_IID' # only on merge-request pipelines
   script:
     - |
-      if printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr ',' '\n' | grep -qx 'aida:merge-hold'; then
-        echo "This MR carries 'aida:merge-hold' — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Clear the hold (aida merge-hold clear <iid>, or remove the label after review) to let the merge proceed."
+      has_label() { printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr ',' '\n' | grep -Fqx "$1"; }
+      if has_label aida:merge-hold; then
+        echo "This MR has an active merge-hold; only the human-gated aida merge-hold clear path can release it."
         exit 1
       fi
-      echo "No supervised merge-hold label present — gate passes."
+      if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then
+        echo "This MR was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
+        exit 1
+      fi
+      if has_label aida:merge-hold-cleared && ! has_label aida:merge-hold-recorded; then
+        echo "Clearance label has no matching recorded hold."
+        exit 1
+      fi
+      echo "Merge-hold gate passes: no active hold, or a recorded clearance exists."

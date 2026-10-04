@@ -5,6 +5,7 @@
 //! `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use std::path::Path;
 
@@ -271,7 +272,7 @@ pub(crate) fn advance_dispatch(
             let backend = advance_backend(store_path)?;
             if let Err(e) = handle_review_spec(
                 &backend, store_path, display, /* no_agent */ false,
-                /* allow_stale_base */ false,
+                /* allow_stale_base */ false, /* target_branch */ None,
             ) {
                 eprintln!(
                     "  {} review of {} did not complete: {}",
@@ -344,7 +345,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display, "--zen"]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display, "--zen"])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
         }
         AdvanceAction::Decision => {
@@ -360,7 +364,10 @@ pub(crate) fn advance_dispatch(
             if let Some(root) = &project_root {
                 cmd.current_dir(root);
             }
-            let status = cmd.args(["queue", "work", display]).status();
+            // trace:BUG-1735 | ai:claude
+            let status = cmd
+                .args(["queue", "work", display])
+                .status_retrying_etxtbsy();
             advance_report_status(status, display);
             println!(
                 "  {} tip: {} drains every ready item at once.",
@@ -390,16 +397,11 @@ pub(crate) fn advance_dispatch(
                 );
                 return Ok(());
             }
-            let old = req.status.to_string();
+            // BUG-1637: through the one shared history helper, under the
+            // caller (same identity this path used before). trace:BUG-1637 | ai:claude
+            let old = req.status.clone();
             req.set_status_from_str("Approved");
-            req.record_change(
-                current_user_id(None),
-                vec![aida_core::Requirement::field_change(
-                    "status",
-                    old,
-                    "Approved".to_string(),
-                )],
-            );
+            aida_core::conflict::record_status_transition(&mut req, &current_user_id(None), &old);
             req.modified_at = chrono::Utc::now();
             backend.update_requirement(&req)?;
             println!(
@@ -450,15 +452,14 @@ pub(crate) fn advance_dispatch(
                     );
                     return Ok(());
                 }
-                let old = req.status.to_string();
+                // BUG-1637: through the one shared history helper, under the
+                // caller (same identity this path used before). trace:BUG-1637 | ai:claude
+                let old = req.status.clone();
                 req.set_status_from_str("Rejected");
-                req.record_change(
-                    current_user_id(None),
-                    vec![aida_core::Requirement::field_change(
-                        "status",
-                        old,
-                        "Rejected".to_string(),
-                    )],
+                aida_core::conflict::record_status_transition(
+                    &mut req,
+                    &current_user_id(None),
+                    &old,
                 );
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
@@ -536,13 +537,12 @@ pub(crate) fn advance_dispatch(
                 "",
                 "queue-done",
                 |req, prior| {
-                    req.record_change(
-                        current_user_id(None),
-                        vec![aida_core::Requirement::field_change(
-                            "status",
-                            prior.to_string(),
-                            "Completed".to_string(),
-                        )],
+                    // BUG-1637: through the one shared history helper, under
+                    // the caller. trace:BUG-1637 | ai:claude
+                    aida_core::conflict::record_status_transition(
+                        req,
+                        &current_user_id(None),
+                        prior,
                     );
                     req.modified_at = chrono::Utc::now();
                     backend.update_requirement(req)?;
@@ -770,7 +770,7 @@ fn print_queue_mutation_destination(
     if output_format_is_json() {
         println!(
             "{}",
-            serde_json::to_string_pretty(&queue_mutation_destination_json(
+            crate::cache_output::json_pretty(&queue_mutation_destination_json(
                 action, spec_id, title, details
             ))?
         );
@@ -1135,6 +1135,42 @@ pub(crate) fn unsatisfied_blocker_facts(
         .collect()
 }
 
+/// Whether the AUTHORITATIVE object behind a queue entry is still dead
+/// (archived or terminal). `get_requirement` on the cached backend reads the
+/// spec's YAML object, not the cache row, so a spec reopened after the cache
+/// snapshot was taken reads as live. A missing or unreadable object is not
+/// provably dead, so the entry is kept (deleted specs are `queue prune
+/// --orphaned`'s job).
+// trace:BUG-1664 | ai:claude
+pub(crate) fn queue_target_still_dead(
+    backend: &aida_core::CachedGitBackend,
+    requirement_id: &uuid::Uuid,
+) -> bool {
+    match backend.get_requirement(requirement_id) {
+        Ok(Some(req)) => req.archived || is_terminal_status_str(&format!("{:?}", req.status)),
+        _ => false,
+    }
+}
+
+/// Split the cache-selected dead queue entries into those whose authoritative
+/// spec is still dead and a count of those that no longer are. The candidates
+/// come from the cache projection, which a read may serve from a stale
+/// snapshot (a live foreign cache writer skips the catch-up), so a destructive
+/// sweep re-checks every candidate before removing it.
+// trace:BUG-1664 | ai:claude
+pub(crate) fn revalidate_dead_queue_entries<'a>(
+    backend: &aida_core::CachedGitBackend,
+    candidates: Vec<&'a aida_core::models::QueueEntry>,
+) -> (Vec<&'a aida_core::models::QueueEntry>, usize) {
+    let total = candidates.len();
+    let still_dead: Vec<_> = candidates
+        .into_iter()
+        .filter(|e| queue_target_still_dead(backend, &e.requirement_id))
+        .collect();
+    let skipped = total - still_dead.len();
+    (still_dead, skipped)
+}
+
 /// TASK-1052: opportunistic queue self-heal on read. Drops dead routed entries
 /// (archived/Completed/Rejected targets) from the user's local queue so the
 /// underlying queue stays clean, not just the view. Cheap — reuses the
@@ -1153,21 +1189,32 @@ pub(crate) fn opportunistic_queue_gc(
         Ok(e) if !e.is_empty() => e,
         _ => return 0,
     };
-    let summaries = match advance_backend(store_path)
-        .and_then(|b| b.list_summaries(&queue_dead_target_summary_filter()))
-    {
+    let Ok(backend) = advance_backend(store_path) else {
+        return 0;
+    };
+    // cache-tolerant-read: selection only — each candidate's target spec YAML
+    // object is re-read inside the store write lock, right before the removal
+    // (`queue_remove_many_if`).
+    // trace:BUG-1671 | ai:claude
+    let summaries = match backend.list_summaries(&queue_dead_target_summary_filter()) {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    let dead: Vec<uuid::Uuid> = dead_queue_entries(&entries, &summaries, None)
+    let candidates = dead_queue_entries(&entries, &summaries, None);
+    let dead: Vec<uuid::Uuid> = revalidate_dead_queue_entries(&backend, candidates)
+        .0
         .iter()
         .map(|e| e.requirement_id)
         .collect();
     if dead.is_empty() {
         return 0;
     }
+    crate::sweep_test_hook::fire(store_path);
+    // BUG-1671: the pass above runs outside the store lock, so a reopen could
+    // land between it and the queue write. Re-check each candidate under the
+    // lock the reopen itself needs. trace:BUG-1671 | ai:claude
     storage
-        .queue_remove_many(user_id, &dead)
+        .queue_remove_many_if(user_id, &dead, &|id| queue_target_still_dead(&backend, id))
         .map(|removed| removed.len())
         .unwrap_or(0)
 }
@@ -1357,6 +1404,88 @@ pub(crate) fn queue_list_json_requested(json_flag: bool, format: Option<OutputFo
     json_flag || matches!(format, Some(OutputFormat::Json))
 }
 
+// Apply the queue-list filters whose source of truth is the requirement store
+// before the cache-fast JSON and TOON emitters project rows. Keep these rules
+// aligned with the human path below. trace:BUG-1795 | ai:codex
+pub(crate) fn queue_list_matches_requested_filters(
+    entry: &aida_core::QueueEntry,
+    store: &aida_core::RequirementsStore,
+    scope_filter: Option<&str>,
+    batch_filter: Option<&str>,
+    tag_filter: Option<&str>,
+    tag_prefix_filter: Option<&str>,
+    role_scope: Option<&(Vec<String>, Option<String>)>,
+    include_terminal: bool,
+) -> bool {
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| r.id == entry.requirement_id);
+    if let Some(req) = req {
+        if req.archived || (!include_terminal && is_terminal_status(&req.status)) {
+            return false;
+        }
+    }
+    if let Some(raw) = scope_filter {
+        let wants: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        if wants.iter().any(|w| w.eq_ignore_ascii_case("none")) {
+            if entry.for_scope.is_some() {
+                return false;
+            }
+        } else {
+            let explicit = entry
+                .for_scope
+                .as_deref()
+                .is_some_and(|fs| wants.iter().any(|w| w.eq_ignore_ascii_case(fs)));
+            let derived = req
+                .and_then(|req| derive_parent_epic_label(req, store))
+                .is_some_and(|label| wants.iter().any(|w| w.eq_ignore_ascii_case(&label)));
+            if !explicit && !derived {
+                return false;
+            }
+        }
+    }
+    if let Some((tags, status)) = role_scope {
+        if let Some(req) = req {
+            if status.as_deref().is_some_and(|want| {
+                !format!("{}", req.status).eq_ignore_ascii_case(want)
+                    && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+            }) {
+                return false;
+            }
+            if tags.iter().any(|tag| !req.tags.iter().any(|t| t == tag)) {
+                return false;
+            }
+        } else if !tags.is_empty() || status.is_some() {
+            return false;
+        }
+    }
+    if let Some(name) = batch_filter {
+        let Some(req) = req else { return false };
+        let want = format!("batch:{}", normalize_batch_name(name));
+        if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
+            return false;
+        }
+    }
+    if let Some(want) = tag_filter {
+        let Some(req) = req else { return false };
+        if !tag_matches_exact(&req.tags, want) {
+            return false;
+        }
+    }
+    if let Some(prefix) = tag_prefix_filter {
+        let Some(req) = req else { return false };
+        if !tag_matches_prefix(&req.tags, prefix) {
+            return false;
+        }
+    }
+    true
+}
+
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
 /// than the legacy full YAML load.
@@ -1445,7 +1574,7 @@ pub(crate) fn handle_queue_command(
             // Read-only; renders its own view and returns early so it never
             // perturbs the per-identity default path below. Title resolution
             // reuses the SQLite cache summaries (BUG-618's pattern) rather than
-            // a slow `storage.load()` full YAML scan. trace:STORY-672
+            // a slow `storage.load_for_read()` full YAML scan. trace:STORY-672
             if *all_users {
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&queue_dead_target_summary_filter())?;
@@ -1468,12 +1597,12 @@ pub(crate) fn handle_queue_command(
             // role/scope display refinement. trace:BUG-616 | ai:claude
             //
             // BUG-618: resolve titles via the SQLite cache (`list_summaries`,
-            // the same path `aida list` uses, ~0.2s) instead of `storage.load()`
+            // the same path `aida list` uses, ~0.2s) instead of `storage.load_for_read()`
             // — the legacy full YAML/git scan that cost ~1s on the cockpit
             // paint. `RequirementSummary` carries id/spec_id/agreed_id/title/
             // status, everything the JSON shape needs. trace:BUG-618 | ai:claude
             if queue_list_json_requested(*json, output_format_override()) {
-                let raw = if *global {
+                let mut raw = if *global {
                     Vec::new()
                 } else {
                     queue_role_fallback::queue_list_with_role_fallback(
@@ -1483,6 +1612,35 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                let filter_store = if scope_filter.is_some()
+                    || batch_filter.is_some()
+                    || tag_filter.is_some()
+                    || tag_prefix_filter.is_some()
+                    || (!*all && !*no_scope && active_role_scope().is_some())
+                {
+                    Some(storage.load_for_read()?)
+                } else {
+                    None
+                };
+                if let Some(full_store) = &filter_store {
+                    let role_scope = if *all || *no_scope {
+                        None
+                    } else {
+                        active_role_scope()
+                    };
+                    raw.retain(|entry| {
+                        queue_list_matches_requested_filters(
+                            entry,
+                            full_store,
+                            scope_filter.as_deref(),
+                            batch_filter.as_deref(),
+                            tag_filter.as_deref(),
+                            tag_prefix_filter.as_deref(),
+                            role_scope.as_ref(),
+                            *include_terminal || *include_completed,
+                        )
+                    });
+                }
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
                 let mut rows = queue_json_rows(&raw, &summaries);
@@ -1496,7 +1654,7 @@ pub(crate) fn handle_queue_command(
                     .any(|e| e.for_role.as_deref() == Some("reviewer"))
                 {
                     if let Ok(project_root) = find_project_root() {
-                        if let Ok(full_store) = storage.load() {
+                        if let Ok(full_store) = storage.load_for_read() {
                             let leases = list_leases(&project_root);
                             for entry in raw
                                 .iter()
@@ -1551,7 +1709,7 @@ pub(crate) fn handle_queue_command(
             // header, instead of the human grouped/Done-awaiting-merge view. The
             // human TTY path drops through unchanged. trace:TASK-964
             if agent_output_mode() {
-                let raw = if *global {
+                let mut raw = if *global {
                     Vec::new()
                 } else {
                     queue_role_fallback::queue_list_with_role_fallback(
@@ -1561,6 +1719,35 @@ pub(crate) fn handle_queue_command(
                         *include_completed,
                     )?
                 };
+                let filter_store = if scope_filter.is_some()
+                    || batch_filter.is_some()
+                    || tag_filter.is_some()
+                    || tag_prefix_filter.is_some()
+                    || (!*all && !*no_scope && active_role_scope().is_some())
+                {
+                    Some(storage.load_for_read()?)
+                } else {
+                    None
+                };
+                if let Some(full_store) = &filter_store {
+                    let role_scope = if *all || *no_scope {
+                        None
+                    } else {
+                        active_role_scope()
+                    };
+                    raw.retain(|entry| {
+                        queue_list_matches_requested_filters(
+                            entry,
+                            full_store,
+                            scope_filter.as_deref(),
+                            batch_filter.as_deref(),
+                            tag_filter.as_deref(),
+                            tag_prefix_filter.as_deref(),
+                            role_scope.as_ref(),
+                            *include_terminal || *include_completed,
+                        )
+                    });
+                }
                 // BUG-1513: `queue_list_with_role_fallback` deliberately passes
                 // the CALLER'S OWN entries through unfiltered (it widens the
                 // caller's own queue with peers' role-routed additions, per
@@ -1596,7 +1783,7 @@ pub(crate) fn handle_queue_command(
                     .any(|e| e.for_role.as_deref() == Some("reviewer"))
                 {
                     find_project_root().ok().and_then(|root| {
-                        storage.load().ok().map(|full_store| {
+                        storage.load_for_read().ok().map(|full_store| {
                             let leases = list_leases(&root);
                             (root, full_store, leases)
                         })
@@ -1795,29 +1982,6 @@ pub(crate) fn handle_queue_command(
             // trace:TASK-46 | ai:claude
             let mut hidden_terminal_count: usize = 0;
 
-            // TASK-52: parse --scope <CSV>. `none` (case-insensitive) is
-            // a sentinel meaning "entries with no for_scope set". Any
-            // other token (or comma-separated list) matches against
-            // explicit `for_scope` AND the auto-derived parent EPIC
-            // label from TASK-44 (so the displayed chip and the filter
-            // agree). trace:TASK-52 | ai:claude
-            #[derive(Debug, Clone)]
-            enum ScopeFilterKind {
-                Match(Vec<String>),
-                NoScope,
-            }
-            let scope_filter_parsed: Option<ScopeFilterKind> = scope_filter.as_deref().map(|raw| {
-                let parts: Vec<String> = raw
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                if parts.iter().any(|p| p.eq_ignore_ascii_case("none")) {
-                    ScopeFilterKind::NoScope
-                } else {
-                    ScopeFilterKind::Match(parts)
-                }
-            });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| {
@@ -1859,94 +2023,16 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or(true)
                 })
                 .filter(|e| {
-                    // TASK-52: --scope filter. Matches explicit
-                    // for_scope first, then the auto-derived parent
-                    // EPIC label so the displayed chip and the filter
-                    // agree. trace:TASK-52 | ai:claude
-                    let Some(ref kind) = scope_filter_parsed else {
-                        return true;
-                    };
-                    match kind {
-                        ScopeFilterKind::NoScope => e.for_scope.is_none(),
-                        ScopeFilterKind::Match(wants) => {
-                            if let Some(ref fs) = e.for_scope {
-                                if wants.iter().any(|w| w.eq_ignore_ascii_case(fs)) {
-                                    return true;
-                                }
-                            }
-                            // Fall through to derived parent-EPIC label.
-                            let Some(req) =
-                                store.requirements.iter().find(|r| r.id == e.requirement_id)
-                            else {
-                                return false;
-                            };
-                            if let Some(derived) = derive_parent_epic_label(req, &store) {
-                                wants.iter().any(|w| w.eq_ignore_ascii_case(&derived))
-                            } else {
-                                false
-                            }
-                        }
-                    }
-                })
-                .filter(|e| {
-                    let Some((scope_tags, scope_status)) = &scope else {
-                        return true;
-                    };
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    if let Some(want) = scope_status {
-                        if !format!("{}", req.status).eq_ignore_ascii_case(want)
-                            && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
-                        {
-                            return false;
-                        }
-                    }
-                    for tag in scope_tags {
-                        if !req.tags.iter().any(|t| t == tag) {
-                            return false;
-                        }
-                    }
-                    true
-                })
-                .filter(|e| {
-                    // TASK-229: --batch NAME filter. Match entries whose
-                    // requirement carries the `batch:NAME` tag.
-                    // Case-insensitive match. trace:TASK-229 | ai:claude
-                    let Some(name) = batch_filter.as_deref() else {
-                        return true;
-                    };
-                    let want = format!("batch:{}", name);
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return false;
-                    };
-                    req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want))
-                })
-                .filter(|e| {
-                    // TASK-238: --tag exact-match filter (case-insensitive).
-                    let Some(want) = tag_filter.as_deref() else {
-                        return true;
-                    };
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == e.requirement_id)
-                        .map(|req| tag_matches_exact(&req.tags, want))
-                        .unwrap_or(false)
-                })
-                .filter(|e| {
-                    // TASK-238: --tag-prefix filter (case-insensitive).
-                    let Some(prefix) = tag_prefix_filter.as_deref() else {
-                        return true;
-                    };
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| r.id == e.requirement_id)
-                        .map(|req| tag_matches_prefix(&req.tags, prefix))
-                        .unwrap_or(false)
+                    queue_list_matches_requested_filters(
+                        e,
+                        &store,
+                        scope_filter.as_deref(),
+                        batch_filter.as_deref(),
+                        tag_filter.as_deref(),
+                        tag_prefix_filter.as_deref(),
+                        scope.as_ref(),
+                        *include_terminal,
+                    )
                 })
                 .collect();
 
@@ -3426,7 +3512,8 @@ pub(crate) fn handle_queue_command(
                 let project_root = project_root.canonicalize().unwrap_or(project_root);
                 let project_name = global_queue::project_name_for(&project_root);
                 let position = if *top {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.first().map(|e| e.position - 1000).unwrap_or(1000)
                 } else {
                     i64::MAX
@@ -3434,7 +3521,8 @@ pub(crate) fn handle_queue_command(
                 // Resolve i64::MAX to actual max+1000 inline (the local queue
                 // path delegates this to the backend; we do it here ourselves).
                 let position = if position == i64::MAX {
-                    let existing = global_queue::load(&role).unwrap_or_default();
+                    // trace:BUG-1682 | ai:codex
+                    let existing = global_queue::load(&role)?;
                     existing.iter().map(|e| e.position).max().unwrap_or(0) + 1000
                 } else {
                     position
@@ -3612,7 +3700,8 @@ pub(crate) fn handle_queue_command(
                 // only, so `aida queue remove --global FR-1` would miss an
                 // entry cached under the legacy spec_id form `FR-1-042`.
                 // trace:BUG-83 | ai:claude
-                let entries = global_queue::load(&role).unwrap_or_default();
+                // trace:BUG-1682 | ai:codex
+                let entries = global_queue::load(&role)?;
                 let target = entries.iter().find(|e| {
                     e.spec_id
                         .as_deref()
@@ -4192,9 +4281,30 @@ pub(crate) fn handle_queue_command(
         } => {
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
-            let summaries =
-                advance_backend(store_path)?.list_summaries(&queue_dead_target_summary_filter())?;
-            let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
+            let gc_backend = advance_backend(store_path)?;
+            // cache-tolerant-read: selection only — each candidate's YAML
+            // object is re-read inside the store write lock, right before the
+            // removal.
+            // trace:BUG-1671 | ai:claude
+            let summaries = gc_backend.list_summaries(&queue_dead_target_summary_filter())?;
+            // BUG-1664: the summaries may be a stale snapshot; keep only the
+            // candidates whose authoritative spec is still dead.
+            // trace:BUG-1664 | ai:claude
+            let (dead, revived) = revalidate_dead_queue_entries(
+                &gc_backend,
+                dead_queue_entries(&entries, &summaries, r#for.as_deref()),
+            );
+            if revived > 0 {
+                println!(
+                    "  {}",
+                    format!(
+                        "kept {revived} entr{} whose spec changed since the cached view \
+                         (no longer closed or archived)",
+                        if revived == 1 { "y" } else { "ies" }
+                    )
+                    .dimmed()
+                );
+            }
             let dead_ids: std::collections::HashSet<Uuid> =
                 dead.iter().map(|e| e.requirement_id).collect();
 
@@ -4303,18 +4413,34 @@ pub(crate) fn handle_queue_command(
                         .copied()
                         .chain(merged_dead.iter().copied())
                         .collect();
+                    // BUG-1671: the revalidation above ran outside the store
+                    // lock, so re-take the decision under it, right before the
+                    // removal. Only the target-spec rule's candidates are
+                    // re-read: a BUG-1512 review row is dead because its PR
+                    // merged, which no store write can revive.
+                    // trace:BUG-1671 | ai:claude
+                    let still_dead = |id: &Uuid| {
+                        !dead_ids.contains(id) || queue_target_still_dead(&gc_backend, id)
+                    };
+                    crate::sweep_test_hook::fire(store_path);
                     let removed = if r#for.is_none() {
                         let ids: Vec<Uuid> = all_dead.iter().map(|e| e.requirement_id).collect();
-                        storage.queue_remove_many(&user_id, &ids)?.len()
+                        storage
+                            .queue_remove_many_if(&user_id, &ids, &still_dead)?
+                            .len()
                     } else {
+                        let mut removed = 0usize;
                         for e in &all_dead {
-                            storage.queue_remove_for_role(
+                            if storage.queue_remove_for_role_if(
                                 &user_id,
                                 &e.requirement_id,
                                 r#for.as_deref(),
-                            )?;
+                                &still_dead,
+                            )? {
+                                removed += 1;
+                            }
                         }
-                        all_dead.len()
+                        removed
                     };
                     println!(
                         "{} Removed {} dead queue entr{}",
@@ -4885,6 +5011,24 @@ pub(crate) fn handle_queue_command(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
 
+            // BUG-1611: the lifecycle guard runs first, before any other gate
+            // or side effect. `queue done` from Draft / NeedsAttention needs
+            // the approval authority the lifecycle guard names; a closed spec
+            // (Rejected / Completed / Superseded) is refused outright because
+            // `queue done` is not a reopen verb. `--force` does not bypass
+            // this: it overrides evidence gates, not authority. The drain's
+            // own `queue done` from Approved / In Progress is unaffected.
+            // trace:BUG-1611 | ai:claude
+            if let Some(refusal) =
+                crate::queue_done_lifecycle_refusal(&req.status, has_advisor_authority())
+            {
+                anyhow::bail!(crate::queue_done_lifecycle_refusal_message(
+                    display_id,
+                    &req.status,
+                    refusal
+                ));
+            }
+
             // BUG-1244: fail closed before any lifecycle mutation when a
             // branch names another spec, commit evidence exclusively names
             // other specs, or the since-merge-base range cannot be read.
@@ -4893,11 +5037,15 @@ pub(crate) fn handle_queue_command(
             if let Ok(root) = find_project_root() {
                 if let Some(branch) = current_branch_at(&root) {
                     let commit_evidence = queue_done_commit_evidence(&root, &branch);
+                    // BUG-1629: the same configured prefixes auto-complete
+                    // phase 1 checks with. trace:BUG-1629 | ai:claude
+                    let configured_prefixes = workflow_hints::project_spec_prefixes(&root);
                     match workflow_hints::queue_done_ownership(
                         &branch,
                         display_id,
                         commit_evidence.as_ref(),
                         *force,
+                        &configured_prefixes,
                     ) {
                         workflow_hints::QueueDoneOwnership::Proceed => {}
                         workflow_hints::QueueDoneOwnership::Refuse(reason) => {
@@ -5075,13 +5223,9 @@ pub(crate) fn handle_queue_command(
                                         display_id, &lines,
                                     ),
                                 );
-                                let gate_req_id = req.id;
-                                storage.update_atomically(|s| {
-                                    if let Some(r) =
-                                        s.requirements.iter_mut().find(|r| r.id == gate_req_id)
-                                    {
-                                        r.add_comment(comment);
-                                    }
+                                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                                storage.update_spec_atomically(req, |r| {
+                                    r.add_comment(comment);
                                 })?;
                             } else {
                                 eprintln!(
@@ -5199,16 +5343,19 @@ pub(crate) fn handle_queue_command(
             // does not stack duplicate comments.
             // trace:TASK-1277 | ai:claude
             if let Some((author, body)) = protocol_ledger.take() {
-                let gate_req_id = req.id;
-                storage.update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == gate_req_id) {
-                        if !crate::protocol_gate::ledger_already_recorded(r, &body) {
-                            r.add_comment(aida_core::Comment::new(author, body));
-                        }
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                storage.update_spec_atomically(req, |r| {
+                    if !crate::protocol_gate::ledger_already_recorded(r, &body) {
+                        r.add_comment(aida_core::Comment::new(author, body));
                     }
                 })?;
             }
 
+            // BUG-1611: Draft can no longer reach here without approval
+            // authority (the lifecycle guard above refuses it); the warning
+            // below still flags an authorized Draft and the never-started
+            // Approved / Planned cases. trace:BUG-1611 | ai:claude
+            //
             // BUG-684: `queue done` promotes ANY status straight to Done — a
             // Draft/Approved/Planned spec (never started) flips to Done with a
             // green check, so a typo'd id silently corrupts state. This is
@@ -5258,27 +5405,38 @@ pub(crate) fn handle_queue_command(
             let now = chrono::Utc::now();
             let completer = get_default_author();
             let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Done");
-                    r.modified_at = now;
-                    // Don't clobber prior `summary` / `risk_notes` /
-                    // `test_coverage_notes` if the user / `/aida-pr`
-                    // skill already populated them. We only set the
-                    // fields the queue-done path can know.
-                    let info = r
-                        .implementation_info
-                        .get_or_insert_with(aida_core::ImplementationInfo::default);
-                    info.implemented = true;
-                    info.implemented_at.get_or_insert(now);
-                    if info.implemented_by.is_none() {
-                        info.implemented_by = Some(completer.clone());
-                    }
-                    if let Some(ref tool) = source_tool {
-                        info.source_tool.get_or_insert_with(|| tool.clone());
-                    }
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            storage.update_spec_atomically(req, |r| {
+                // BUG-1637: caller-authored, recorded under the caller.
+                // trace:BUG-1637 | ai:claude
+                let from = r.status.clone();
+                r.set_status_from_str("Done");
+                crate::record_caller_status_transition(r, &from);
+                r.modified_at = now;
+                // Don't clobber prior `summary` / `risk_notes` /
+                // `test_coverage_notes` if the user / `/aida-pr`
+                // skill already populated them. We only set the
+                // fields the queue-done path can know.
+                let info = r
+                    .implementation_info
+                    .get_or_insert_with(aida_core::ImplementationInfo::default);
+                info.implemented = true;
+                info.implemented_at.get_or_insert(now);
+                if info.implemented_by.is_none() {
+                    info.implemented_by = Some(completer.clone());
+                }
+                if let Some(ref tool) = source_tool {
+                    info.source_tool.get_or_insert_with(|| tool.clone());
                 }
             })?;
+            // STORY-1480 / ADR-64: Done is the WORK machine's terminal
+            // state (Completed often lands later via auto-bump on another
+            // clone), so this is the publish that actually carries the
+            // phase evidence. Best-effort; never blocks the flip.
+            // trace:STORY-1480 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                let _ = crate::timing_record::publish(&project_root, &display_id, "queue-done");
+            }
             let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
                 .ok()
                 .filter(|s| !s.trim().is_empty())
@@ -5362,7 +5520,7 @@ pub(crate) fn handle_queue_command(
             // trace:STORY-542 | ai:claude
             if let Err(e) = capture_interface_changes(
                 storage,
-                req_id,
+                req,
                 display_id,
                 interface_cli,
                 interface_mcp,
@@ -5386,7 +5544,7 @@ pub(crate) fn handle_queue_command(
             // here never blocks `queue done`. trace:STORY-698 | ai:claude
             if let Err(e) = capture_test_plan(
                 storage,
-                req_id,
+                req,
                 display_id,
                 test_plan,
                 *no_test_plan,
@@ -6075,6 +6233,38 @@ pub(crate) fn handle_queue_command(
                         &drain_lock_command,
                     )?)
                 };
+                // TASK-1518: a stopped wave (systemd RuntimeMaxSec / OOMPolicy=stop,
+                // `aida drain stop --now`, a manual kill) must not leave the lock
+                // and its leases for the next tick to reap. The guard moves into a
+                // shared slot so the SIGTERM handler can release it properly
+                // (heartbeat, shared claim, pid-checked file) and stamp the
+                // in-flight leases before the bounded exit. The handler holds only
+                // a Weak handle, so without a signal the slot behaves exactly like
+                // the plain guard did: dropped at the end of this arm, or left to
+                // the atexit hook on `process::exit`. Advisory install: a failure
+                // to register the handler only means today's kill-then-reap
+                // recovery. trace:TASK-1518 | ai:claude
+                let _drain_guard: crate::drain_signal::GuardSlot =
+                    std::sync::Arc::new(std::sync::Mutex::new(_drain_guard));
+                if !*resume_dry_run {
+                    if let Ok(root) = find_main_worktree_root() {
+                        if let Err(e) =
+                            crate::drain_signal::install(crate::drain_signal::DrainTermContext {
+                                project_root: root,
+                                drain_pid: std::process::id(),
+                                guard: std::sync::Arc::downgrade(&_drain_guard),
+                                grace: crate::drain_signal::grace_from_env(),
+                                term_flag: crate::drain_signal::process_term_flag(),
+                                borrowed: drain_lock::borrow_requested(),
+                            })
+                        {
+                            eprintln!(
+                                "  {} could not install the drain SIGTERM handler ({e:#}); a stopped wave falls back to next-tick reap",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                            );
+                        }
+                    }
+                }
                 // BUG-660: prevent the host from sleeping for the duration of an
                 // unattended drive — a lidded/idle laptop must not suspend
                 // mid-drain. Best-effort (a missing caffeinate / systemd-inhibit
@@ -6565,20 +6755,23 @@ pub(crate) fn handle_queue_command(
                      integrator role, or a live orchestrator)"
                 );
             }
-            handle_queue_rework(
+            // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+            crate::queue_cmd::handle_rework_entry(
                 storage,
-                id,
-                *work,
-                r#for.as_deref(),
-                *tail,
-                status.as_deref(),
-                reason.as_deref(),
-                *resume,
-                *force,
-                *steal,
-                permission_mode.as_deref(),
-                *no_pull,
-                user.as_deref(),
+                id.as_deref(),
+                &crate::queue_cmd::ReworkFlags {
+                    work: *work,
+                    for_role: r#for.as_deref(),
+                    tail: *tail,
+                    status: status.as_deref(),
+                    reason: reason.as_deref(),
+                    resume: *resume,
+                    force: *force,
+                    steal: *steal,
+                    permission_mode: permission_mode.as_deref(),
+                    no_pull: *no_pull,
+                    user: user.as_deref(),
+                },
             )?;
         }
         // STORY-384: failed-phase-1 recovery wizard — inspect state, recommend a
@@ -6812,36 +7005,218 @@ pub(crate) fn status_is_shelved(status: &aida_core::RequirementStatus) -> bool {
     matches!(status, aida_core::RequirementStatus::NeedsAttention)
 }
 
-/// Parse a `--since` value as either an RFC3339 timestamp or a relative
-/// `<N>{d,h,m}` expression (e.g. `2d`, `12h`, `45m`). Returns the
-/// resulting absolute UTC timestamp.
+/// Parse a `--since`/`--until` style time bound into an absolute UTC instant.
+/// Accepted forms, tried in this order:
+///
+/// - RFC3339 (`2026-05-01T10:00:00Z`, `2026-05-01T10:00:00+02:00`): the zone
+///   in the input is honored exactly.
+/// - A bare ISO date (`2026-05-01`): local midnight on that date.
+/// - A zone-less ISO datetime (`2026-05-01T10:00`, `2026-05-01 10:00`,
+///   optionally with seconds): that wall-clock time in the local timezone.
+/// - A compact relative duration `<N>{m,h,d,w}` (`45m`, `12h`, `2d`, `2w`),
+///   or the phrase form `<N> <unit>(s) ago` with unit minute/hour/day/week
+///   (`24 hours ago`, `1 week ago`): that long before now.
+///
+/// Local-time forms use the offset in effect on the requested date, so a
+/// January date and a July date resolve correctly across a DST change. A
+/// local time that falls in a DST gap or overlap is rejected rather than
+/// guessed.
+///
+/// Every time-bound flag in the CLI resolves through this grammar (history,
+/// queue progress, archive, approvals, review/findings classes, status,
+/// digest, doctor, calibration, tail, usage, metrics, mailbox). The list is
+/// enforced by `tests/time_bound_flags_tests.rs`, which walks the clap tree.
+// trace:TASK-1502 | ai:claude
+// trace:TASK-1509 | ai:claude
 pub(crate) fn parse_since_arg(raw: &str) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, chrono::Utc::now(), &chrono::Local)
+}
+
+/// A local wall-clock time that has no single meaning in the local timezone
+/// (it falls in a DST gap or overlap). Kept as a distinct error type so
+/// callers that relabel parse errors can still surface this one verbatim.
+// trace:TASK-1502 | ai:claude
+#[derive(Debug)]
+pub(crate) struct AmbiguousLocalTime(pub String);
+
+impl std::fmt::Display for AmbiguousLocalTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is ambiguous or doesn't exist in the local timezone (a DST \
+             transition); give an explicit offset instead, e.g. RFC3339",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for AmbiguousLocalTime {}
+
+/// Zone-less ISO datetime layouts accepted as local wall-clock time.
+const NAIVE_DATETIME_FORMATS: &[&str] = &[
+    "%Y-%m-%dT%H:%M:%S%.f",
+    "%Y-%m-%dT%H:%M",
+    "%Y-%m-%d %H:%M:%S%.f",
+    "%Y-%m-%d %H:%M",
+];
+
+/// [`parse_since_arg`], but resolves relative durations against an explicit
+/// `now` and local-time forms against an explicit timezone `tz`, instead of
+/// the wall clock and system timezone. Production passes `chrono::Local`;
+/// tests pass a `FixedOffset` or a DST-observing zone for deterministic
+/// output.
+// trace:TASK-1502 | ai:claude
+pub(crate) fn parse_since_arg_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         anyhow::bail!("--since cannot be empty");
     }
-    // Try RFC3339 first.
+    // An explicit zone in the input is always honored exactly.
     if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(trimmed) {
         return Ok(ts.with_timezone(&chrono::Utc));
     }
-    // Relative form: <number><unit>, unit ∈ {d,h,m}
-    // BUG-100: peel the last CHAR rather than the last BYTE so multi-byte
-    // trailing units don't crash the process.
-    let (num_str, unit) = split_last_char(trimmed);
-    let n: i64 = num_str.parse().map_err(|_| {
+    // Local-time forms: resolve against the zone's offset on THAT date, so
+    // a DST gap or overlap is detected instead of silently misapplied.
+    let local = |naive: chrono::NaiveDateTime| -> Result<chrono::DateTime<chrono::Utc>> {
+        tz.from_local_datetime(&naive)
+            .single()
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .ok_or_else(|| anyhow::Error::new(AmbiguousLocalTime(trimmed.to_string())))
+    };
+    if let Ok(d) = chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
+        return local(d.and_time(chrono::NaiveTime::MIN));
+    }
+    for fmt in NAIVE_DATETIME_FORMATS {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(trimmed, fmt) {
+            return local(naive);
+        }
+    }
+    let invalid = || {
         anyhow::anyhow!(
-            "invalid --since value `{}` (try `2d`, `12h`, or RFC3339)",
+            "invalid --since value `{}` (try `2d`, `12h`, `2w`, `24 hours ago`, \
+             an ISO date or datetime, or RFC3339)",
             raw
         )
-    })?;
-    let now = chrono::Utc::now();
-    let delta = match unit {
-        "d" => chrono::Duration::days(n),
-        "h" => chrono::Duration::hours(n),
-        "m" => chrono::Duration::minutes(n),
-        _ => anyhow::bail!("invalid --since unit `{}` — use d/h/m or RFC3339", unit),
     };
-    Ok(now - delta)
+    // Phrase form: `<N> <unit>(s) ago`, kept for callers of the old
+    // git-approxidate-backed history flags.
+    let words: Vec<&str> = trimmed.split_whitespace().collect();
+    let (num_str, unit) = if let [n, unit, ago] = words.as_slice() {
+        if !ago.eq_ignore_ascii_case("ago") {
+            return Err(invalid());
+        }
+        let unit = unit.to_ascii_lowercase();
+        let unit = match unit.strip_suffix('s').unwrap_or(&unit) {
+            "minute" => "m",
+            "hour" => "h",
+            "day" => "d",
+            "week" => "w",
+            _ => return Err(invalid()),
+        };
+        (*n, unit)
+    } else {
+        // Compact form: <number><unit>, unit ∈ {m,h,d,w}.
+        // BUG-100: peel the last CHAR rather than the last BYTE so
+        // multi-byte trailing units don't crash the process.
+        split_last_char(trimmed)
+    };
+    let n: i64 = num_str.parse().map_err(|_| invalid())?;
+    // Checked arithmetic: a huge count is refused, never a panic.
+    // trace:TASK-1509 | ai:claude
+    let delta = match unit {
+        "d" => chrono::Duration::try_days(n),
+        "h" => chrono::Duration::try_hours(n),
+        "m" => chrono::Duration::try_minutes(n),
+        "w" => chrono::Duration::try_weeks(n),
+        _ => anyhow::bail!(
+            "invalid --since unit `{}`: use m/h/d/w, `<N> <unit>s ago`, an ISO \
+             date or datetime, or RFC3339",
+            unit
+        ),
+    };
+    delta
+        .and_then(|d| now.checked_sub_signed(d))
+        .ok_or_else(|| anyhow::Error::new(TimeBoundOutOfRange(trimmed.to_string())))
+}
+
+/// A relative duration too large to resolve to a representable instant
+/// (e.g. `99999999999999d`). Kept as a distinct error type, like
+/// [`AmbiguousLocalTime`], so callers surface it verbatim instead of
+/// retrying the value as something else.
+// trace:TASK-1509 | ai:claude
+#[derive(Debug)]
+pub(crate) struct TimeBoundOutOfRange(pub String);
+
+impl std::fmt::Display for TimeBoundOutOfRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is out of range: the duration reaches too far back to \
+             resolve to a date",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for TimeBoundOutOfRange {}
+
+/// True when a [`parse_since_arg_at`] error is a definitive answer about a
+/// value that does match the grammar (a DST gap/overlap, or an out-of-range
+/// duration), rather than "not this grammar". Callers with a fallback (git
+/// ref, tail-only units) must report these instead of retrying the value.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn is_definitive_time_bound_error(e: &anyhow::Error) -> bool {
+    e.is::<AmbiguousLocalTime>() || e.is::<TimeBoundOutOfRange>()
+}
+
+/// [`parse_since_arg_at`] with an error labeled for the flag that produced
+/// it (`parse_since_arg_at`'s own message always says `--since`, which would
+/// misname a bad `--until` or `--older-than`). A DST gap/overlap error is kept
+/// verbatim so the caller learns why the value was refused; so is an
+/// out-of-range duration.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_time_bound_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::DateTime<chrono::Utc>> {
+    parse_since_arg_at(raw, now, tz).map_err(|e| {
+        if is_definitive_time_bound_error(&e) {
+            return anyhow::anyhow!("invalid {flag} value: {e}");
+        }
+        anyhow::anyhow!(
+            "invalid {flag} value `{raw}` — expected a relative duration \
+             (e.g. `5h`, `7d`, `30m`, `2w`, `24 hours ago`), an ISO date \
+             (`2026-05-01`, local midnight), a zone-less ISO datetime \
+             (`2026-05-01T10:00`, local time), or RFC3339"
+        )
+    })
+}
+
+/// A time bound expressed as a lookback: how far before `now` the bound
+/// resolved by [`parse_time_bound_at`] lies. For the commands whose filters
+/// take a window length rather than an instant (usage, metrics, calibration,
+/// mailbox archive). A bound in the future yields a negative duration.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback_at<Tz: chrono::TimeZone>(
+    raw: &str,
+    flag: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    tz: &Tz,
+) -> Result<chrono::Duration> {
+    let at = parse_time_bound_at(raw, flag, now, tz)?;
+    Ok(now.signed_duration_since(at))
+}
+
+/// [`parse_lookback_at`] against the wall clock and the system timezone.
+// trace:TASK-1509 | ai:claude
+pub(crate) fn parse_lookback(raw: &str, flag: &str) -> Result<chrono::Duration> {
+    parse_lookback_at(raw, flag, chrono::Utc::now(), &chrono::Local)
 }
 
 pub(crate) fn handle_queue_progress(
@@ -6881,7 +7256,7 @@ pub(crate) fn handle_queue_progress(
     let empty_progress_json = |note: &str| -> Result<()> {
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": 0,
                 "in_progress": 0,
                 "done": 0,
@@ -7133,7 +7508,7 @@ pub(crate) fn handle_queue_progress(
             .into();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!({
+            crate::cache_output::json_pretty(&serde_json::json!({
                 "queued": remaining,
                 "in_progress": working,
                 "done": in_flight,
@@ -7270,33 +7645,407 @@ pub(crate) fn handle_queue_progress(
 #[path = "tests/queue_progress_tests.rs"]
 mod queue_progress_tests;
 
+// trace:TASK-1509 | ai:claude
+#[cfg(test)]
+#[path = "tests/time_bound_flags_tests.rs"]
+mod time_bound_flags_tests;
+
 /// trace:BUG-225 | ai:claude
 #[cfg(test)]
 #[path = "tests/headless_hint_tests.rs"]
 mod headless_hint_tests;
 
-/// TASK-1311: a full-store save deliberately preserves an on-disk
-/// `failure_reason` the caller did not load (BUG-756), so clearing it inside
-/// `update_atomically` does not stick on the git-canonical store. Clear it with
-/// a targeted write instead, the path `aida edit` uses. Best-effort: a spec
-/// still carrying a stale FailureReason is only a display artifact (it is no
-/// longer NeedsAttention, so neither the drain nor `aida findings list` reads
-/// it), never a reason to fail the requeue.
-// trace:TASK-1311 | ai:claude
-pub(crate) fn clear_failure_reason_targeted(storage: &Storage, spec_id: &str) {
-    let store_path = storage.path();
-    if !store_path.is_dir() {
-        return;
+/// The project root whose `.aida/` holds the leases, drain lock and event
+/// log for `storage`: the store's parent directory, falling back to the
+/// discovered project root.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn requeue_project_root(storage: &Storage) -> std::path::PathBuf {
+    storage
+        .path()
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| find_project_root().ok())
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+}
+
+/// The queue route (`for_role`) the spec currently holds on any queue, if
+/// any. Rework keeps this route, so the requeue preview names it.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn current_queue_route(storage: &Storage, req_id: uuid::Uuid) -> Option<String> {
+    let users = storage.queue_users().ok()?;
+    users.into_iter().find_map(|u| {
+        storage
+            .queue_list(&u, true)
+            .ok()?
+            .into_iter()
+            .find(|e| e.requirement_id == req_id)
+            .and_then(|e| e.for_role)
+            .filter(|r| !r.trim().is_empty())
+            .map(|r| canonical_role_name(&r))
+    })
+}
+
+/// Whether a drain is running, as far as the drain lock can say.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DrainRunning {
+    Yes,
+    No,
+    CannotTell,
+}
+
+/// Read the drain lock for a definite answer. A missing lock, or one whose
+/// process is dead, is a definite "no". A lock file that exists but cannot be
+/// read or parsed is "cannot tell".
+// trace:STORY-1429 | ai:claude
+pub(crate) fn drain_running(project_root: &Path) -> DrainRunning {
+    let path = crate::drain_lock::drain_lock_path(project_root);
+    match std::fs::metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return DrainRunning::No,
+        Err(_) => return DrainRunning::CannotTell,
+        Ok(_) => {}
     }
-    let Ok(backend) = advance_backend(store_path) else {
-        return;
-    };
-    if let Ok(Some(mut r)) = backend.get_requirement_by_spec_id(spec_id) {
-        if r.failure_reason.is_some() {
-            r.failure_reason = None;
-            let _ = backend.update_requirement(&r);
+    match crate::drain_lock::probe_lock(project_root) {
+        crate::drain_lock::LockStatus::Running(_) => DrainRunning::Yes,
+        crate::drain_lock::LockStatus::Stale(_) => DrainRunning::No,
+        // The file exists but did not parse.
+        crate::drain_lock::LockStatus::None => DrainRunning::CannotTell,
+    }
+}
+
+/// The one line a requeue prints about the drain that will pick the spec up.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn drain_running_notice(project_root: &Path) -> String {
+    match drain_running(project_root) {
+        DrainRunning::Yes => {
+            "a drain is running; it picks this spec up on its next head".to_string()
+        }
+        DrainRunning::No => "no drain is running; start one with `aida drain start`".to_string(),
+        DrainRunning::CannotTell => {
+            "cannot tell whether a drain is running (the drain lock is unreadable); check \
+             with `aida drain status`"
+                .to_string()
         }
     }
+}
+
+/// The flags `aida rework` / `aida queue rework` accept. Only `--tail` and
+/// `--user` make sense without a spec ID; the rest act on one spec.
+// trace:STORY-1429 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ReworkFlags<'a> {
+    pub work: bool,
+    pub for_role: Option<&'a str>,
+    pub tail: bool,
+    pub status: Option<&'a str>,
+    pub reason: Option<&'a str>,
+    pub resume: bool,
+    pub force: bool,
+    pub steal: bool,
+    pub permission_mode: Option<&'a str>,
+    pub no_pull: bool,
+    pub user: Option<&'a str>,
+}
+
+impl ReworkFlags<'_> {
+    /// The spec-scoped flags that were passed, as their CLI spellings.
+    pub(crate) fn spec_scoped(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.work {
+            v.push("--work");
+        }
+        if self.for_role.is_some() {
+            v.push("--for");
+        }
+        if self.status.is_some() {
+            v.push("--status");
+        }
+        if self.reason.is_some() {
+            v.push("--reason");
+        }
+        if self.resume {
+            v.push("--resume");
+        }
+        if self.force {
+            v.push("--force");
+        }
+        if self.steal {
+            v.push("--steal");
+        }
+        if self.permission_mode.is_some() {
+            v.push("--permission-mode");
+        }
+        if self.no_pull {
+            v.push("--no-pull");
+        }
+        v
+    }
+}
+
+/// `aida rework [ID]` / `aida queue rework [ID]`. With an ID, the one-spec
+/// rework. Without one, the triage loop over the NeedsAttention parks: at a
+/// terminal it asks one keystroke per spec; without a terminal it prints the
+/// requeue hints and exits 0, so agents keep the command form. A spec-scoped
+/// flag without an ID is a usage error.
+// trace:STORY-1429 | ai:claude
+pub(crate) fn handle_rework_entry(
+    storage: &Storage,
+    id: Option<&str>,
+    flags: &ReworkFlags<'_>,
+) -> Result<()> {
+    if let Some(id) = id {
+        return handle_queue_rework(
+            storage,
+            id,
+            flags.work,
+            flags.for_role,
+            flags.tail,
+            flags.status,
+            flags.reason,
+            flags.resume,
+            flags.force,
+            flags.steal,
+            flags.permission_mode,
+            flags.no_pull,
+            flags.user,
+        );
+    }
+    let scoped = flags.spec_scoped();
+    if !scoped.is_empty() {
+        anyhow::bail!(
+            "{} {} a spec: pass its ID (`aida rework <ID> {}`), or run bare `aida rework` to \
+             triage the parked specs one keystroke each",
+            scoped.join(", "),
+            if scoped.len() == 1 {
+                "acts on"
+            } else {
+                "act on"
+            },
+            scoped.join(" ")
+        );
+    }
+    use std::io::IsTerminal;
+    let tty = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let stdin = std::io::stdin();
+    let mut input = stdin.lock();
+    rework_triage_loop(
+        storage,
+        tty,
+        flags.tail,
+        flags.user,
+        crate::requeue::caller_may_clear_escalation(),
+        &mut input,
+        &mut |spec| run_aida_interactive(&["decide", spec]),
+        &mut |spec| run_aida_interactive(&["show", spec]),
+    )
+}
+
+/// Run `aida <args>` with the terminal attached (the `[d]` and `[o]` keys).
+fn run_aida_interactive(args: &[&str]) -> Result<()> {
+    let status = std::process::Command::new(crate::aida_exe_path())
+        .args(args)
+        .status_retrying_etxtbsy()?;
+    anyhow::ensure!(status.success(), "`aida {}` failed", args.join(" "));
+    Ok(())
+}
+
+/// Every spec parked in NeedsAttention, most recently parked first (the
+/// `aida findings list` order).
+// trace:STORY-1429 | ai:claude
+pub(crate) fn needs_attention_parks(store: &aida_core::RequirementsStore) -> Vec<Requirement> {
+    let mut parks: Vec<Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| r.status == RequirementStatus::NeedsAttention && !r.archived)
+        .cloned()
+        .collect();
+    parks.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    parks
+}
+
+/// The BUG-1213 loop guard's write: return the spec to NeedsAttention after
+/// identical review findings recurred.
+///
+/// BUG-1632: the guard's decision is automated even when a person ran `queue
+/// rework`, so the transition is recorded under
+/// [`aida_core::conflict::LOOP_GUARD_AUTHOR`], which the BUG-1625 merge guard
+/// recognizes.
+// trace:BUG-1213 trace:BUG-1632 | ai:claude
+///
+/// BUG-1637: like the shelve and the MCP punt, it refuses to leave a terminal
+/// status, and the check runs on the copy read inside the atomic write, so a
+/// spec completed between the status read and the park stays Completed.
+/// Returns whether it parked the spec.
+// trace:BUG-1637 | ai:claude
+pub(crate) fn loop_guard_park(r: &mut Requirement) -> bool {
+    if aida_core::conflict::is_terminal_status(&r.status) {
+        return false;
+    }
+    aida_core::conflict::set_status_recorded(
+        r,
+        RequirementStatus::NeedsAttention,
+        aida_core::conflict::LOOP_GUARD_AUTHOR,
+    );
+    r.modified_at = chrono::Utc::now();
+    true
+}
+
+/// One line saying why a spec is parked: the shelve's failure, the punt, or
+/// the escalation.
+fn park_reason_line(r: &Requirement) -> String {
+    if let Some(fr) = &r.failure_reason {
+        let detail = fr.detail.lines().next().unwrap_or("").trim();
+        return format!("shelved {}/{}: {detail}", fr.phase, fr.kind);
+    }
+    if let Some(a) = &r.attention_reason {
+        let detail = a.detail.lines().next().unwrap_or("").trim();
+        return format!("punted ({}): {detail}", a.category);
+    }
+    if r.tags.iter().any(|t| t.eq_ignore_ascii_case("needs-human")) {
+        return "escalated to a human".to_string();
+    }
+    "parked with no recorded reason".to_string()
+}
+
+/// The triage loop body, with its input and the `[d]`/`[o]` hand-offs
+/// injected so it can be driven without a terminal.
+///
+/// Keys: `[r]` requeue (shown only when the preview says it is offerable),
+/// `[s]` skip, `[o]` show the spec, `[d]` answer its open decision (only when
+/// one is pending; returns to the same spec afterwards), `[q]` quit. `[r]`
+/// runs the same one-spec rework as `aida rework <ID>` with no status flag,
+/// so the resulting status is the preview's by construction.
+// trace:STORY-1429 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rework_triage_loop(
+    storage: &Storage,
+    tty: bool,
+    tail: bool,
+    user: Option<&str>,
+    clear_escalation: bool,
+    input: &mut dyn std::io::BufRead,
+    decide: &mut dyn FnMut(&str) -> Result<()>,
+    show: &mut dyn FnMut(&str) -> Result<()>,
+) -> Result<()> {
+    use crate::requeue::{requeue_hint, requeue_preview, NotOfferable};
+    use std::io::Write;
+    let store = storage.load()?;
+    let parks = needs_attention_parks(&store);
+    if parks.is_empty() {
+        println!("{}", "Nothing is parked in Needs Attention.".dimmed());
+        return Ok(());
+    }
+    if !tty {
+        // No terminal: never prompt. Print the command form for each park.
+        println!(
+            "{}",
+            format!("Parked in Needs Attention ({})", parks.len()).bold()
+        );
+        for r in &parks {
+            let did = r.display_id();
+            let route = current_queue_route(storage, r.id);
+            let preview = requeue_preview(r, Some(&store), route.as_deref(), clear_escalation);
+            println!("  {:<14} {}", did, park_reason_line(r));
+            println!("  {:<14} {}", "", requeue_hint(&did, &preview).dimmed());
+        }
+        println!(
+            "{}",
+            "Run `aida rework` at a terminal to triage them one keystroke each.".dimmed()
+        );
+        return Ok(());
+    }
+
+    let total = parks.len();
+    let (mut requeued, mut skipped) = (0usize, 0usize);
+    'specs: for (i, park) in parks.iter().enumerate() {
+        let did = park.display_id();
+        let mut current = park.clone();
+        loop {
+            let fresh_store = storage.load()?;
+            if let Some(r) = fresh_store.requirements.iter().find(|r| r.id == park.id) {
+                current = r.clone();
+            }
+            let route = current_queue_route(storage, current.id);
+            let preview = requeue_preview(
+                &current,
+                Some(&fresh_store),
+                route.as_deref(),
+                clear_escalation,
+            );
+            if matches!(preview.not_offerable, Some(NotOfferable::NotParked(_))) {
+                println!(
+                    "  {} {did} is {} now; nothing to triage",
+                    "·".dimmed(),
+                    current.status
+                );
+                continue 'specs;
+            }
+            println!();
+            println!(
+                "{} {} {}",
+                format!("[{}/{}]", i + 1, total).dimmed(),
+                did.bold(),
+                current.title
+            );
+            println!("  {}", park_reason_line(&current));
+            let pending = matches!(preview.not_offerable, Some(NotOfferable::PendingDecision));
+            let mut keys = Vec::new();
+            if preview.offerable() {
+                keys.push(format!("[r] requeue {}", preview.summary()));
+            } else {
+                println!("  {}", requeue_hint(&did, &preview).dimmed());
+            }
+            if pending {
+                keys.push("[d] decide".to_string());
+            }
+            keys.push("[s] skip".to_string());
+            keys.push("[o] show".to_string());
+            keys.push("[q] quit".to_string());
+            print!("  {} > ", keys.join("   "));
+            std::io::stdout().flush()?;
+            let mut line = String::new();
+            if input.read_line(&mut line)? == 0 {
+                println!();
+                break 'specs;
+            }
+            match line.trim().to_ascii_lowercase().as_str() {
+                "r" if preview.offerable() => {
+                    match handle_queue_rework(
+                        storage, &did, false, None, tail, None, None, false, false, false, None,
+                        false, user,
+                    ) {
+                        Ok(()) => requeued += 1,
+                        Err(e) => println!("  {} {e}", "error:".red()),
+                    }
+                    continue 'specs;
+                }
+                "d" if pending => {
+                    if let Err(e) = decide(&did) {
+                        println!("  {} {e}", "error:".red());
+                    }
+                    // Back to the same spec with its preview recomputed.
+                }
+                "o" => {
+                    if let Err(e) = show(&did) {
+                        println!("  {} {e}", "error:".red());
+                    }
+                }
+                "s" | "" => {
+                    skipped += 1;
+                    continue 'specs;
+                }
+                "q" => break 'specs,
+                other => println!("  {} unknown key `{other}`", "·".dimmed()),
+            }
+        }
+    }
+    println!();
+    println!(
+        "{} {requeued} requeued, {skipped} skipped.",
+        "Done.".green().bold()
+    );
+    Ok(())
 }
 
 /// TASK-218: shared implementation backing both `aida queue rework SPEC`
@@ -7383,6 +8132,25 @@ pub(crate) fn handle_queue_rework(
             display_id
         );
     }
+    // STORY-1429: the lease gate. Moving a NeedsAttention or InProgress spec
+    // while another session holds a LIVE lease on it would reset work that
+    // session owns, so it refuses under every flag, `--force` included
+    // (`--force` keeps its meaning: the Completed/Rejected guard above). An
+    // unknown lease state refuses too. Runs before any write.
+    // trace:STORY-1429 | ai:claude
+    let flips = target_status.as_ref().is_some_and(|t| t != &current_status);
+    if flips
+        && matches!(
+            current_status,
+            RequirementStatus::NeedsAttention | RequirementStatus::InProgress
+        )
+    {
+        let root = requeue_project_root(storage);
+        let check = crate::requeue_lease_gate(&root, &[spec_id.as_str(), display_id.as_str()]);
+        if let Some(msg) = check.refusal(&display_id) {
+            anyhow::bail!(msg);
+        }
+    }
     if matches!(current_status, RequirementStatus::InProgress) && !force {
         if work {
             eprintln!(
@@ -7441,54 +8209,101 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
-    // Status flip (if any). update_atomically works for both SQLite and
-    // git-canonical paths; queue done uses the same approach.
+    // Status flip (if any). STORY-1429: the target was computed from a status
+    // read before this point, so the write re-checks it (compare-and-swap)
+    // and changes nothing when the spec moved in between. Leaving
+    // NeedsAttention goes through the one
+    // owner, `requeue::return_to_flight`, which also clears the shelve
+    // markers and writes the single audit note that carries `--reason`.
+    // trace:STORY-1429 trace:TASK-1311 | ai:claude
+    let mut reason_recorded = false;
+    let mut left_attention = false;
     if let Some(ref new_status) = target_status {
         if new_status != &current_status {
-            let new_status = new_status.clone();
-            let now = chrono::Utc::now();
-            // TASK-1311: leaving NeedsAttention returns the spec to flight the
-            // same way `aida edit --status` does: clear the punt / shelve
-            // metadata and the machine-written `needs-human` parking tag, and
-            // record why it came back. Without this the requeued spec kept a
-            // parking tag and the drain never picked it up again.
-            // trace:TASK-1311 | ai:claude
-            let leaving_attention = current_status == RequirementStatus::NeedsAttention
-                && new_status != RequirementStatus::NeedsAttention;
-            let mut cleared = crate::requeue::ClearedMarkers::default();
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str(&format!("{:?}", new_status));
-                    r.modified_at = now;
-                    if leaving_attention {
-                        // Only a human at a terminal may undo the advisor's
-                        // escalation to a human. trace:TASK-1311 | ai:claude
-                        cleared = crate::requeue::clear_shelve_markers(
-                            r,
-                            crate::requeue::caller_may_clear_escalation(),
+            if current_status == RequirementStatus::NeedsAttention {
+                let ctx = crate::requeue::ReturnCtx {
+                    via: "`aida queue rework`".to_string(),
+                    via_slug: "queue-rework",
+                    author: get_default_author(),
+                    // Only a human at a terminal may undo the advisor's
+                    // escalation to a human. trace:TASK-1311 | ai:claude
+                    clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                    reason: reason.map(str::to_string),
+                    automated: false, // trace:BUG-1632 | ai:claude
+                };
+                let (outcome, _) = crate::requeue::return_to_flight_in_storage(
+                    storage,
+                    req_id,
+                    &current_status,
+                    new_status,
+                    &ctx,
+                )?;
+                match &outcome {
+                    crate::requeue::ReturnOutcome::Returned { cleared, .. } => {
+                        reason_recorded = true;
+                        left_attention = true;
+                        crate::requeue::emit_requeued(
+                            &requeue_project_root(storage),
+                            &display_id,
+                            &ctx,
+                            &outcome,
                         );
-                        let note = cleared.audit_note(
-                            "`aida queue rework`",
-                            &new_status.to_string(),
-                            reason,
-                        );
-                        r.add_comment(aida_core::Comment::new(get_default_author(), note));
+                        if !cleared.removed_tags.is_empty() {
+                            println!(
+                                "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                                "·".dimmed(),
+                                cleared.removed_tags.join(", ")
+                            );
+                        }
+                        if let Some(w) =
+                            crate::requeue::kept_escalation_warning(&display_id, cleared)
+                        {
+                            println!(
+                                "  {} {w}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                            );
+                        }
+                    }
+                    crate::requeue::ReturnOutcome::AlreadyInFlight { .. } => {
+                        if let Some(msg) = crate::requeue::unchanged_message(&display_id, &outcome)
+                        {
+                            println!("  {} {msg}", "·".dimmed());
+                        }
+                        return Ok(());
+                    }
+                    _ => {
+                        let msg = crate::requeue::unchanged_message(&display_id, &outcome)
+                            .unwrap_or_default();
+                        anyhow::bail!(msg);
                     }
                 }
-            })?;
-            if leaving_attention {
-                clear_failure_reason_targeted(storage, &spec_id);
-                if !cleared.removed_tags.is_empty() {
-                    println!(
-                        "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
-                        "·".dimmed(),
-                        cleared.removed_tags.join(", ")
-                    );
-                }
-                if let Some(w) = crate::requeue::kept_escalation_warning(&display_id, &cleared) {
-                    println!(
-                        "  {} {w}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+            } else {
+                let new_status = new_status.clone();
+                let now = chrono::Utc::now();
+                let mut moved_to: Option<RequirementStatus> = None;
+                // Per-spec compare-and-swap under the store write lock; the
+                // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
+                storage.update_spec_atomically(req, |r| {
+                    if r.status != current_status {
+                        moved_to = Some(r.status.clone());
+                        return;
+                    }
+                    r.set_status_from_str(&format!("{:?}", new_status));
+                    // BUG-1637: the rework that does not start from
+                    // NeedsAttention is a caller-authored status write.
+                    // trace:BUG-1637 | ai:claude
+                    crate::record_caller_status_transition(r, &current_status);
+                    r.modified_at = now;
+                    // TASK-1477: `queue rework` can reopen a Completed spec
+                    // (Completed -> InProgress is `rework_smart_target`'s
+                    // default) — clear the stale completed_at so the next
+                    // completion stamps a fresh date. trace:TASK-1477 | ai:claude
+                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                })?;
+                if let Some(actual) = moved_to {
+                    anyhow::bail!(
+                        "{display_id} moved from {current_status} to {actual} while this command \
+                         ran; nothing was changed. Re-check it with `aida show {display_id}`"
                     );
                 }
             }
@@ -7505,17 +8320,24 @@ pub(crate) fn handle_queue_rework(
     }
 
     // Optional audit comment. Mirrors `aida comment add` path so the
-    // entry shows up in `aida show <spec>` history.
-    if let Some(reason_text) = reason {
+    // entry shows up in `aida show <spec>` history. STORY-1429: when the
+    // spec left NeedsAttention the reason is already in the audit note, so
+    // it is not written a second time.
+    if let Some(reason_text) = reason.filter(|_| !reason_recorded) {
         let author = get_default_author();
         let comment = aida_core::Comment::new(author, reason_text.to_string());
-        storage.update_atomically(|s| {
-            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                r.add_comment(comment);
-            }
+        // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+        storage.update_spec_atomically(req, |r| {
+            r.add_comment(comment);
         })?;
         println!(
             "  {} reason captured as comment ({} chars)",
+            "·".dimmed(),
+            reason_text.chars().count()
+        );
+    } else if let Some(reason_text) = reason {
+        println!(
+            "  {} reason captured in the audit note ({} chars)",
             "·".dimmed(),
             reason_text.chars().count()
         );
@@ -7533,12 +8355,11 @@ pub(crate) fn handle_queue_rework(
             // exists somewhere in history". A → B → A is progress, not a loop.
             // trace:BUG-1213 | ai:claude
             let mut recurred = false;
-            storage.update_atomically(|s| {
-                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    recurred = findings_recur_consecutively(&r.comments, &block);
-                    if !recurred {
-                        r.add_comment(comment);
-                    }
+            // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+            storage.update_spec_atomically(req, |r| {
+                recurred = findings_recur_consecutively(&r.comments, &block);
+                if !recurred {
+                    r.add_comment(comment);
                 }
             })?;
             if !recurred {
@@ -7548,12 +8369,23 @@ pub(crate) fn handle_queue_rework(
                 // request-changes shelves. A third blind requeue is a loop, so
                 // return the spec to NeedsAttention and route an explicit
                 // advisor finding + brief instead.
-                storage.update_atomically(|s| {
-                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                        r.status = RequirementStatus::NeedsAttention;
-                        r.modified_at = chrono::Utc::now();
-                    }
-                })?;
+                // Per-spec compare-and-swap, no whole-store write. trace:BUG-1612 | ai:claude
+                // BUG-1632: the loop guard's decision is automated even when a
+                // person ran `queue rework`, so it records the transition under
+                // an automated author the BUG-1625 merge guard recognizes.
+                // trace:BUG-1632 | ai:claude
+                // BUG-1637: a spec that reached a terminal status meanwhile is
+                // left alone, and there is no loop left to escalate.
+                // trace:BUG-1637 | ai:claude
+                let mut parked = false;
+                storage.update_spec_atomically(req, |r| parked = loop_guard_park(r))?;
+                if !parked {
+                    println!(
+                        "  {} {display_id} reached a final status meanwhile; left it as it is",
+                        "·".dimmed()
+                    );
+                    return Ok(());
+                }
                 let note = format!(
                     "Identical reviewer findings recurred twice for {display_id}; do not \
                      requeue a third implementer round until an advisor chooses a different \
@@ -7579,12 +8411,12 @@ pub(crate) fn handle_queue_rework(
                         "--tags",
                         "loop-guard,review-recurrence",
                     ])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(finding.success(), "could not file repeated-review finding");
                 let brief = std::process::Command::new(&exe)
                     .current_dir(&root)
                     .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
-                    .status()?;
+                    .status_retrying_etxtbsy()?;
                 anyhow::ensure!(
                     brief.success(),
                     "could not write repeated-review advisor brief"
@@ -7724,6 +8556,17 @@ pub(crate) fn handle_queue_rework(
         true,
     );
     print_queue_mutation_destination("rework", &display_id, Some(&title), &summary, &details)?;
+
+    // STORY-1429: a requeued park re-enters a running drain on its next head
+    // pick. Say whether one is running only when the drain lock answers
+    // definitely; never launch one. trace:STORY-1429 | ai:claude
+    if left_attention && !work {
+        println!(
+            "  {} {}",
+            "·".dimmed(),
+            drain_running_notice(&requeue_project_root(storage))
+        );
+    }
 
     // Optional --work chain. We don't run this in a sub-process — call
     // `handle_queue_work` directly with the same storage handle so any
@@ -7875,6 +8718,114 @@ pub(crate) fn queue_work_plan_wants_pr_head_branch(plan: &QueueWorkPlan) -> bool
                 "In Progress" | "InProgress" | "Done"
             )
         })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PreclaimDecision {
+    Proceed,
+    Refuse(String),
+}
+
+/// BUG-1763: what the pre-claim branch arm knows about the spec's existing
+/// local branch. BUG-1761's branch arm refused on *any* existing branch, but
+/// this repository retains merged spec branches locally (761 of them as of
+/// 2026-10-01 — `gh pr merge --delete-branch` removes only the remote), so
+/// the refusal fired on re-pickup of almost every shipped spec. Only an
+/// **unmerged** branch is a real collision; re-picking up a spec whose work
+/// merged months ago (a follow-on fix, a revert, a rework) is legitimate.
+///
+/// Merged-ness is resolved through the forge (`gh pr list --head <branch>
+/// --state merged`), never via `git merge-base --is-ancestor`: this
+/// repository squash-merges, so an ancestry test reports NO for every
+/// squash-merged branch and would classify all of them as unmerged —
+/// leaving the over-broad refusal in place while appearing to fix it.
+///
+/// `MergeStateUnknown` is deliberately distinct from `Unmerged`: a forge
+/// lookup failure means "cannot tell", not "unmerged", and refusing on it
+/// would let a network blip block every offline pickup — the same trap
+/// BUG-1761 avoided in the PR arm.
+// trace:BUG-1763 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreclaimBranchState {
+    /// No local branch for the spec — the branch arm has nothing to say.
+    Absent,
+    /// Branch exists and the forge confirmed a MERGED PR with it as head.
+    Merged,
+    /// Branch exists and the forge answered cleanly that no merged PR has
+    /// it as head — the one true collision class.
+    Unmerged,
+    /// Branch exists but the forge could not answer (gh missing, failed,
+    /// unreachable). Fail open.
+    MergeStateUnknown,
+}
+
+/// BUG-1763: resolve the branch arm's state, invoking `merged_probe` (the
+/// forge lookup) **only** when the branch actually exists — an ordinary
+/// pickup of a spec with no local branch pays no `gh` call beyond the PR
+/// arm it already paid before this bug.
+// trace:BUG-1763 | ai:claude
+pub(crate) fn preclaim_branch_state(
+    branch_exists: bool,
+    merged_probe: impl FnOnce() -> crate::PrLookup,
+) -> PreclaimBranchState {
+    if !branch_exists {
+        return PreclaimBranchState::Absent;
+    }
+    match merged_probe() {
+        crate::PrLookup::Found(_) => PreclaimBranchState::Merged,
+        crate::PrLookup::NoOpenPr => PreclaimBranchState::Unmerged,
+        crate::PrLookup::GhMissing
+        | crate::PrLookup::GhFailed(_)
+        | crate::PrLookup::GhUnreachable(_) => PreclaimBranchState::MergeStateUnknown,
+    }
+}
+
+/// BUG-1761: the pre-claim collision decision for `aida queue work <SPEC>`.
+///
+/// The command used to signal "someone is already on this spec" only as a
+/// branch-name suffix. It had the information and discarded it: it had to
+/// check that `bug-1819` existed in order to pick `bug-1819-2`, so at that
+/// moment it knew a branch for the spec existed — and it bumped the status,
+/// took a lease and minted a worktree anyway, next to an open PR another
+/// agent was actively implementing.
+///
+/// Pure by design, in the shape of `dup_pickup_recheck`: the caller runs the
+/// forge and branch probes and passes primitives in, so the whole truth table
+/// is unit-testable without a forge. Ordering matters — an open PR is the more
+/// specific and more actionable collision, so it is reported in preference to
+/// the branch that PR is built on.
+///
+/// `branch_state` must already encode forge ignorance: a merged-PR lookup
+/// failure arrives as [`PreclaimBranchState::MergeStateUnknown`], never as
+/// `Unmerged`. A lookup failure means "cannot tell", not "no PR", and
+/// refusing on it would let a network blip block every pickup on the machine.
+///
+/// BUG-1763 narrowed the branch arm: only an **unmerged** branch refuses.
+/// A merged local branch is the normal residue of this repo's retention
+/// policy and must not block re-pickup.
+// trace:BUG-1761 | ai:codex
+// trace:BUG-1763 | ai:claude
+pub(crate) fn preclaim_collision_check(
+    spec_display: &str,
+    open_pr: Option<(u64, &str, &str)>,
+    branch: &str,
+    branch_state: PreclaimBranchState,
+    bypass: bool,
+) -> PreclaimDecision {
+    if bypass {
+        return PreclaimDecision::Proceed;
+    }
+    if let Some((number, title, url)) = open_pr {
+        return PreclaimDecision::Refuse(format!(
+            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display} --from-pr`, or take it over deliberately with `--force-claim`.",
+        ));
+    }
+    if branch_state == PreclaimBranchState::Unmerged {
+        return PreclaimDecision::Refuse(format!(
+            "Branch `{branch}` exists, no open PR was found for it, and the forge reports no merged PR with it as head — it looks like unfinished work. `queue work` will not silently allocate `{branch}-2`. Use `--force-claim` to resume suffix allocation, pass `--branch <name>` to choose deliberately, or delete the stale branch."
+        ));
+    }
+    PreclaimDecision::Proceed
 }
 
 fn rework_pr_head_branch_override(
@@ -8341,7 +9292,14 @@ pub(crate) fn resolve_queue_work_plan(
     // Composes with STORY-66/STORY-90 (auto-queue at PR-create) which
     // produce these stories. trace:TASK-85 | ai:claude
     if let Some((forge, n)) = parse_review_scope(arg) {
-        let matches: Vec<aida_core::QueueEntry> = entries
+        // Auto-queue writes under the producer's queue identity. Reviewers may
+        // run under a role-scoped or ordinary identity, so resolve PR/MR
+        // hand-offs from every queue file using the same reviewer-route
+        // semantics as the writer. trace:BUG-1817 | ai:codex
+        let review_entries = queue_role_fallback::queue_entries_routed_to_role(
+            storage, "reviewer", /* include_completed */ false,
+        )?;
+        let matches: Vec<aida_core::QueueEntry> = review_entries
             .iter()
             .filter(|e| {
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
@@ -8369,16 +9327,39 @@ pub(crate) fn resolve_queue_work_plan(
                 // classifier the review-envelope guard uses.
                 let why =
                     crate::classify_review_story_lookup(&entries, &store, forge, n).describe();
+                let identities = storage.queue_users().unwrap_or_default();
+                let searched = if identities.is_empty() {
+                    "no persisted queue identities".to_string()
+                } else {
+                    format!(
+                        "queue identities [{}] for role reviewer",
+                        identities.join(", ")
+                    )
+                };
                 anyhow::bail!(
-                    "no queued review story for {} ({}) — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) after searching {}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
                     why,
+                    searched,
                     n,
                     n
                 );
             }
-            1 => {
-                let entry = matches.into_iter().next().unwrap();
+            _ => {
+                // Legacy retries may have left duplicates. Select the same
+                // stable canonical story every time instead of blocking phase
+                // 3; auto-queue will stop creating new duplicates.
+                let persisted = find_main_worktree_root()
+                    .ok()
+                    .and_then(|root| drain_state::DrainState::read(&root))
+                    .and_then(|state| state.review_spec);
+                let canonical =
+                    canonical_review_story(&store, forge, n, None, persisted.as_deref())
+                        .and_then(|req| matches.iter().find(|e| e.requirement_id == req.id))
+                        .or_else(|| matches.iter().min_by_key(|e| e.requirement_id))
+                        .cloned()
+                        .expect("non-empty matches");
+                let entry = canonical;
                 let req = store
                     .requirements
                     .iter()
@@ -8408,26 +9389,6 @@ pub(crate) fn resolve_queue_work_plan(
                     anchor_display,
                     anchor_title: req.title.clone(),
                 });
-            }
-            _ => {
-                let label = format_review_label(forge, n);
-                let mut msg = format!(
-                    "{} matches {} queued review stories — pass the specific spec_id instead:",
-                    label,
-                    matches.len()
-                );
-                for e in &matches {
-                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    {
-                        let id = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or("?");
-                        msg.push_str(&format!("\n  · {} — {}", id, req.title));
-                    }
-                }
-                anyhow::bail!(msg);
             }
         }
     }
@@ -9198,6 +10159,16 @@ pub(crate) fn append_untraced_criteria_prompt_block(
     if let Some(block) = crate::criteria_gate::reviewer_prompt_block(&reports) {
         prompt.push_str(&block);
     }
+    // STORY-1386: cite the pre-implementation red run recorded at phase 1.
+    // trace:STORY-1386 | ai:claude
+    let red_root = crate::main_worktree_root_from(project_root);
+    let records: Vec<_> = reports
+        .iter()
+        .filter_map(|(display, _)| crate::criteria_red_run::load_record(&red_root, display))
+        .collect();
+    if let Some(block) = crate::criteria_red_run::reviewer_prompt_block(&records) {
+        prompt.push_str(&block);
+    }
 }
 
 // trace:BUG-1063 | ai:codex
@@ -9221,6 +10192,9 @@ fn headless_waiting_rule_suffix(role: &str) -> String {
     )
 }
 
+// trace:TASK-1581 | ai:antigravity — test-only: the production caller derives
+// the real rework round and calls `derive_queue_work_prompt_with_round`.
+#[cfg(test)]
 pub(crate) fn derive_queue_work_prompt(
     plan: &QueueWorkPlan,
     role: &str,
@@ -9228,7 +10202,7 @@ pub(crate) fn derive_queue_work_prompt(
     guided: bool,
     review_findings: Option<&str>,
 ) -> String {
-    // Tests and non-rework callers: the first rework is round 2 by definition.
+    // Tests only: the first rework is round 2 by definition.
     derive_queue_work_prompt_with_round(plan, role, plan_only, guided, review_findings, 2)
 }
 
@@ -9334,6 +10308,25 @@ pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usi
         .filter(|comment| crate::review_verdict::is_findings_block(&comment.content))
         .count()
         + 1
+}
+
+/// STORY-281 / TASK-480: whether the reviewer pre-flight checks
+/// (stale-base, intermediate-only) apply to this queue-work plan, and if
+/// so, the PR/MR number to check against.
+///
+/// BUG-1609: this used to be inlined at each call site as a match on
+/// `Some((ReviewForge::GitHub, pr_n))`, which silently skipped every GitLab
+/// MR — not because the checks themselves are GitHub-only
+/// (`preflight_stale_base_check` / `preflight_intermediate_only_check` read
+/// metadata through the forge-routed `fetch_change_info_via_forge`,
+/// GitLab-safe since STORY-621 slice 2), but because the call sites never
+/// reached them for GitLab. Pulling the predicate out to a named,
+/// independently-testable function makes "any forge with a review target,
+/// not just GitHub" a pinned invariant instead of an inlined pattern that
+/// can silently narrow again.
+// trace:BUG-1609 | ai:claude
+pub(crate) fn reviewer_preflight_pr_n(review_target: Option<(ReviewForge, u64)>) -> Option<u64> {
+    review_target.map(|(_, n)| n)
 }
 
 // BUG-1213: keep durable-history round derivation on the same path used to
@@ -9487,7 +10480,7 @@ pub(crate) fn rework_findings_block_for_spec(
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
 /// headless launch deferred by `--no-launch`. Built from
-/// `session::claude_headless_args` — the exact argv `exec_claude_headless`
+/// `session::claude_headless_args_with_posture` — the exact argv `exec_claude_headless`
 /// feeds to `claude` — so the printed hint can never drift from the real
 /// launch (correct flag order, `--session-id` included, prompt last).
 /// STORY-278: prefix `AIDA_HEADLESS=1` so the copy-paste hint also sets
@@ -9944,7 +10937,9 @@ pub(crate) fn handle_queue_work(
     if contained {
         std::env::set_var("AIDA_CONTAINED", "1");
     }
-    let (permission_mode, permission_mode_origin) = if contained {
+    let explicit_permission_mode = permission_mode.is_some();
+    let mut bypass_prompt_declined = false;
+    let (mut permission_mode, permission_mode_origin) = if contained {
         (Some("dontAsk".to_string()), "contained sandbox")
     } else {
         resolve_queue_work_permission_mode(
@@ -9955,6 +10950,26 @@ pub(crate) fn handle_queue_work(
             plan_only,
         )
     };
+    // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
+    // orchestrated children already passed dispatch authority and must not hang.
+    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+        let orchestrated = project_root_for_config
+            .as_deref()
+            .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
+        if !orchestrated {
+            if let Some(root) = project_root_for_config.as_deref() {
+                let mut argv = vec![
+                    "--permission-mode".to_string(),
+                    "bypassPermissions".to_string(),
+                ];
+                crate::gate_agent_bypass(root, vendor, &mut argv, false, explicit_permission_mode)?;
+                if !argv.iter().any(|a| a == "bypassPermissions") {
+                    permission_mode = None;
+                    bypass_prompt_declined = true;
+                }
+            }
+        }
+    }
     if permission_mode.is_none() && !contained {
         maybe_show_faithful_launcher_notice();
     }
@@ -10077,22 +11092,29 @@ pub(crate) fn handle_queue_work(
         }
     }
 
-    // STORY-281: reviewer pre-flight stale-base check. Fires only when
-    // the resolved scope is a GitHub PR AND the inferred role is the
-    // reviewer — every other pickup (implementer, dialog, architect,
-    // GitLab MR) skips this branch. The check is also no-op'd when the
-    // pickup is `--no-launch` (no reviewer session about to run) and
-    // when the user passed `--list-sessions` (already exited above).
+    // STORY-281: reviewer pre-flight stale-base check. Fires whenever the
+    // resolved scope is ANY forge's PR/MR AND the inferred role is the
+    // reviewer — every other pickup (implementer, dialog, architect) skips
+    // this branch. The check is also no-op'd when the pickup is
+    // `--no-launch` (no reviewer session about to run) and when the user
+    // passed `--list-sessions` (already exited above).
+    //
+    // BUG-1609: this used to match only `(ReviewForge::GitHub, pr_n)`, so a
+    // GitLab MR silently skipped the check entirely — not because the check
+    // itself was GitHub-only (`preflight_stale_base_check` reads metadata
+    // through the forge-routed `fetch_change_info_via_forge`, GitLab-safe
+    // since STORY-621 slice 2), but because this call site never reached it
+    // for GitLab. trace:BUG-1609 | ai:claude
     //
     // Behaviour mirrors the orchestrator's phase-3 pre-flight:
     //   Current        → silent proceed
     //   StaleNoOverlap → warning, proceed
     //   StaleOverlap   → refuse (anyhow::bail!) unless allow_stale_base
-    //   Err (gh / fetch) → warning, proceed (never block on transient infra)
+    //   Err (gh/glab / fetch) → warning, proceed (never block on transient infra)
     //
     // trace:STORY-281 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 match preflight_stale_base_check(root, pr_n) {
                     Ok(pr_rebase::StaleBaseOutcome::Current) => {}
@@ -10134,12 +11156,17 @@ pub(crate) fn handle_queue_work(
 
     // TASK-480: reviewer pre-flight intermediate-only check. Sibling
     // substrate-as-bouncer gate to the STORY-281 stale-base refusal
-    // above — same scoping (reviewer + GitHub PR + launching). Refuses a
-    // PR whose diff is exclusively intermediate/generated paths (build
-    // outputs, gitignored files, lockfiles with no source change)
+    // above — same scoping (reviewer + any forge's PR/MR + launching).
+    // Refuses a PR/MR whose diff is exclusively intermediate/generated paths
+    // (build outputs, gitignored files, lockfiles with no source change)
     // because such a fix is not reproducible. The check is a
     // PROGRAMMATIC GATE here, not skill-template instruction text
     // (BUG-280-class lesson). Fails open on infra error.
+    //
+    // BUG-1609: was gated on `ReviewForge::GitHub` like its stale-base
+    // sibling above, so GitLab MRs never ran it even though
+    // `preflight_intermediate_only_check` is itself forge-routed.
+    // trace:BUG-1609 | ai:claude
     //
     //   Clean                   → silent proceed
     //   SourcePlusIntermediate  → warning, proceed (flag-but-allow)
@@ -10147,7 +11174,7 @@ pub(crate) fn handle_queue_work(
     //
     // trace:TASK-480 | ai:claude
     if !no_launch && role == "reviewer" {
-        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+        if let Some(pr_n) = reviewer_preflight_pr_n(plan.review_target) {
             if let Some(root) = project_root_for_config.as_deref() {
                 let allow = allow_intermediate_only
                     || std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
@@ -10223,7 +11250,16 @@ pub(crate) fn handle_queue_work(
         format!(
             "{} {}",
             permission_mode.as_deref().unwrap_or("native").cyan(),
-            format!("({})", permission_mode_origin).dimmed()
+            format!(
+                "({}{})",
+                permission_mode_origin,
+                if bypass_prompt_declined {
+                    "; prompt declined; native"
+                } else {
+                    ""
+                }
+            )
+            .dimmed()
         ),
     );
     line("skill", prompt.cyan().to_string());
@@ -10341,16 +11377,11 @@ pub(crate) fn handle_queue_work(
             // the bare slug rather than failing a read-only preview.
             resolve_session_branch(&project_root, &slug, "auto").unwrap_or_else(|_| slug.clone())
         };
-        let repo_name = project_root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("project");
+        // trace:BUG-1628 | ai:claude — the shared pickup resolver.
         let worktree_path = match path_override {
             Some(p) => std::path::PathBuf::from(p),
-            None => project_root
-                .parent()
-                .map(|parent| parent.join(format!("{}-{}", repo_name, slug)))
-                .unwrap_or_else(|| std::path::PathBuf::from(format!("{}-{}", repo_name, slug))),
+            None => pickup_worktree_path(&project_root, &slug)
+                .unwrap_or_else(|_| std::path::PathBuf::from(&slug)),
         };
         let executable = session::resolve_agent_program(launch_vendor.program());
         dry_line("branch", branch.cyan().to_string());
@@ -10784,6 +11815,78 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    // BUG-1761: the suffix allocator already knows when the spec branch is
+    // occupied; expose that collision before claiming status, lease, or tree.
+    // trace:BUG-1761 | ai:codex
+    let preclaim_orchestrator_corroborated = {
+        let root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        orchestrator::detect(&root).is_orchestrated()
+    };
+    let preclaim_review_session = plan.review_target.is_some()
+        || role == "reviewer"
+        || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
+    let preclaim_bypass = force_claim
+        || queue_work_plan_wants_pr_head_branch(&plan)
+        || preclaim_review_session
+        || preclaim_orchestrator_corroborated
+        || resume.is_some()
+        || branch_override.is_some();
+    if !preclaim_bypass {
+        let (open_pr, branch_probe_allowed) =
+            match crate::detect_open_pr_for_spec_via_forge(&project_root, &plan.scope) {
+                crate::PrLookup::Found(info) => (Some(info), false),
+                crate::PrLookup::NoOpenPr => (None, true),
+                // Forge failures mean unknown, not "no PR". Skip the branch
+                // refusal too, so an offline or gh-less pickup proceeds.
+                crate::PrLookup::GhMissing
+                | crate::PrLookup::GhFailed(_)
+                | crate::PrLookup::GhUnreachable(_) => (None, false),
+            };
+        let branch = slugify(&plan.scope);
+        let branch_exists =
+            branch_probe_allowed && crate::branch_exists_anywhere(&project_root, &branch);
+        // BUG-1763: an existing branch only collides when it is UNMERGED.
+        // Merged-ness comes from the forge (`gh pr list --head <branch>
+        // --state merged`) — never from a git ancestry test, which reports
+        // NO for every squash-merged branch. The probe runs only when the
+        // branch exists, and a probe failure fails open.
+        // trace:BUG-1763 | ai:claude
+        let branch_state = preclaim_branch_state(branch_exists, || {
+            crate::detect_merged_pr_for_branch_via_forge(&project_root, &branch)
+        });
+        if let PreclaimDecision::Refuse(msg) = preclaim_collision_check(
+            &plan.scope,
+            open_pr
+                .as_ref()
+                .map(|info| (info.number, info.title.as_str(), info.url.as_str())),
+            &branch,
+            branch_state,
+            preclaim_bypass,
+        ) {
+            anyhow::bail!("{}", msg);
+        };
+    }
+
+    // BUG-1607: preflight the resolved launch vendor BEFORE `session_start`
+    // below mints a lease/worktree — both vendor SUPPORT (an interactive
+    // launch refuses Agy; this used to be checked only after session_start,
+    // at the `launch_vendor == Agy && !no_human` bail further down, leaving
+    // an orphaned lease/worktree behind exactly like the bug this fixes) and
+    // binary reachability (`launch_vendor` above, via
+    // `resolve_enabled_headless_vendor`, only checks the `[agents] enabled`
+    // config, not whether the binary is installed — the observed failure:
+    // `vendor: codex` resolved correctly, then the launch itself hardcoded
+    // `claude`, or on a genuinely codex-only machine `codex` was never
+    // installed). `--no-launch` is exempt: it deliberately defers the
+    // launch, so neither check should block the setup-only prep.
+    // trace:BUG-1607 | ai:claude
+    if !no_launch {
+        session::preflight_launch_vendor(launch_vendor, !no_human)?;
+    }
+
     // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
     // logic the rest of this command runs against). session_start reads
     // it to record the lease's role field when --role isn't passed; we
@@ -10860,6 +11963,18 @@ pub(crate) fn handle_queue_work(
                 plan.scope
             )
         })?;
+
+    // STORY-1386: opt-in pre-implementation red run, in this lane's own
+    // freshly created worktree and BEFORE the implementer agent launches.
+    // `lane_is_fresh` skips a lane already carrying commits (retry/rework).
+    // trace:STORY-1386 | ai:claude
+    if role == "implementer" && plan.review_target.is_none() {
+        crate::criteria_red_run::after_lane_created(
+            &project_root,
+            &lease.worktree_path,
+            &plan.anchor_display,
+        );
+    }
 
     // TASK-99: warn (don't auto-pull) when the base the new worktree forked
     // from is behind origin/main. Closes the visibility half of the
@@ -11003,15 +12118,18 @@ pub(crate) fn handle_queue_work(
             "  {}",
             format!("cd {}", lease.worktree_path.display()).cyan()
         );
+        // Never point at a raw `source` of the worktree's session-env file (a
+        // branch can commit it); the eval'd enter applies the filtered env.
+        // trace:BUG-1627 | ai:claude
         eprintln!(
             "  {}    {}",
-            "source .aida/session-env.sh".cyan(),
-            "# share parent's cargo target/".dimmed()
+            format!("aida worktree enter {}", lease.scope).cyan(),
+            "# cd in + warm build cache (filtered session env)".dimmed()
         );
         if no_human {
             // STORY-263: mirror the headless launch the non-`--no-launch`
             // path would have run. BUG-225: render it from
-            // `claude_headless_args` (via `headless_launch_hint`) so the
+            // `claude_headless_args_with_posture` (via `headless_launch_hint`) so the
             // copy-pasteable command can't drift from `exec_claude_headless`
             // — same flag order, `--session-id` included, prompt last.
             // STORY-278: helper also prefixes `AIDA_HEADLESS=1` to match
@@ -11143,6 +12261,7 @@ pub(crate) fn handle_queue_work(
             quiet,
             &verdict_path,
             contained,
+            launch_vendor,
         );
     }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
@@ -11174,13 +12293,16 @@ pub(crate) fn handle_queue_work(
         );
         return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
     }
-    if launch_vendor == session::HeadlessVendor::Agy && !no_human {
-        anyhow::bail!(
-            "interactive queue work does not support vendor `agy` yet. Recovery: re-run with \
-             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor codex`, \
-             or use `--no-launch`."
-        );
-    }
+    // BUG-1607: an interactive Agy launch is now refused by
+    // `preflight_launch_vendor` above, BEFORE `session_start` minted the
+    // lease/worktree this function is already holding by this point — so
+    // `launch_vendor == Agy && !no_human` can no longer reach here. No
+    // per-arm Agy handling needed below either: `match launch` only spawns
+    // Claude.
+    debug_assert!(
+        !(launch_vendor == session::HeadlessVendor::Agy && !no_human),
+        "BUG-1607: preflight_launch_vendor must refuse an interactive Agy launch before this point"
+    );
     match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11352,9 +12474,16 @@ pub(crate) fn run_standalone_reviewer(
     quiet: bool,
     verdict_path: &std::path::Path,
     contained: bool,
+    // BUG-1607: the ALREADY-RESOLVED launch vendor (flag > `[agents]` config >
+    // default, filtered to an enabled+installed profile — the same contract
+    // `handle_queue_work` resolves for the implementer path). Every arm below
+    // reuses this value instead of re-deriving or hardcoding `claude`, so a
+    // codex-routed standalone reviewer actually launches `codex`.
+    // trace:BUG-1607 | ai:claude
+    launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
-    // Spawn claude, wait, and capture the headless JSONL log path (None
-    // for an interactive review — there is no stream-json log).
+    // Spawn the resolved vendor, wait, and capture the headless JSONL log
+    // path (None for an interactive review — there is no stream-json log).
     let (status, log_path): (std::process::ExitStatus, Option<std::path::PathBuf>) = match launch {
         QueueWorkLaunch::Resume(id) => {
             if no_human {
@@ -11391,6 +12520,23 @@ pub(crate) fn run_standalone_reviewer(
                 )?;
                 (status, Some(log_path))
             } else {
+                // BUG-1607: `handle_queue_work` already refuses a
+                // non-Claude `--resume` before minting the launch decision
+                // (headless resume currently only supports the Claude
+                // session model), so `launch_vendor` here is guaranteed
+                // Claude. Guard it anyway — this function is unit-tested
+                // directly, so the invariant must hold even when this arm
+                // is reached without going through that outer gate.
+                // trace:BUG-1607 | ai:claude
+                if launch_vendor != session::HeadlessVendor::Claude {
+                    anyhow::bail!(
+                        "resuming an interactive reviewer session currently supports only the \
+                         Claude session model, but the resolved launch vendor is `{}`. \
+                         Recovery: start a fresh `{}` reviewer instead of `--resume`.",
+                        launch_vendor.as_str(),
+                        launch_vendor.as_str()
+                    );
+                }
                 eprintln!(
                     "{} {}",
                     crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -11412,7 +12558,6 @@ pub(crate) fn run_standalone_reviewer(
         }
         QueueWorkLaunch::Fresh(id) => {
             if no_human {
-                let launch_vendor = session::resolve_enabled_headless_vendor(project_root)?;
                 let log_path = project_root
                     .join(".aida")
                     .join("headless-logs")
@@ -11458,26 +12603,47 @@ pub(crate) fn run_standalone_reviewer(
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "launching claude reviewer in {} ({}, prompt `{}`)",
-                        worktree.display(),
-                        claude_posture_display(permission_mode, contained),
-                        prompt
-                    )
-                    .cyan()
-                );
-                let status = session::spawn_claude_session(
+                // BUG-1607: build the launch plan through the ONE shared
+                // resolver instead of hardcoding `claude` — this was the
+                // actual bug: the resolver upstream correctly printed
+                // `vendor: codex`, but this arm always spawned `claude`
+                // regardless, failing after the lease + worktree already
+                // existed. trace:BUG-1607 | ai:claude
+                let plan = session::interactive_reviewer_launch_plan(
+                    launch_vendor,
                     permission_mode,
                     name.as_deref(),
                     prompt,
                     &id,
                     contained,
                 )?;
+                let posture = match launch_vendor {
+                    session::HeadlessVendor::Claude => {
+                        claude_posture_display(permission_mode, contained)
+                    }
+                    session::HeadlessVendor::Codex | session::HeadlessVendor::Agy => {
+                        if permission_mode == Some("bypassPermissions") {
+                            "bypass".to_string()
+                        } else {
+                            "native".to_string()
+                        }
+                    }
+                };
+                eprintln!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
+                    format!(
+                        "launching {} reviewer in {} ({}, prompt `{}`)",
+                        launch_vendor.as_str(),
+                        worktree.display(),
+                        posture,
+                        prompt
+                    )
+                    .cyan()
+                );
+                let status = session::spawn_reviewer_launch_plan(&plan)?;
                 (status, None)
             }
         }
@@ -11604,6 +12770,13 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) deferred: bool,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
     pub(crate) tags: std::collections::HashSet<String>,
+    /// BUG-1608: the STORY-333 pickability verdict, resolved against the
+    /// store at candidate-build time. `Some(label)` (e.g. `blocked-by STORY-52
+    /// (Needs Attention)`) means the head picker must skip it; `None` means
+    /// pickable. Built fresh on every head resolution, so a blocker shelved
+    /// earlier in the same drain is seen.
+    // trace:BUG-1608 | ai:claude
+    pub(crate) blocked: Option<String>,
 }
 
 impl AutoCompleteHeadCandidate {
@@ -11624,6 +12797,9 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) deferred_skipped: Vec<String>,
     pub(crate) guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)>,
     pub(crate) release_skipped: Vec<String>,
+    /// BUG-1608: drivable-status candidates skipped because the pickability
+    /// gate refused them — `(id, reason label)`, e.g. an unmet `BlockedBy`.
+    pub(crate) blocked_skipped: Vec<(String, String)>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -11671,6 +12847,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let mut deferred_skipped = Vec::new();
     let mut guided_or_operator_skipped = Vec::new();
     let mut release_skipped = Vec::new();
+    let mut blocked_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -11698,6 +12875,16 @@ pub(crate) fn pick_auto_complete_head_for_role(
             continue;
         }
         if auto_complete_head_drivable(&candidate.status) {
+            // BUG-1608: an Approved/Planned status is necessary but not
+            // sufficient — a `BlockedBy` dependent stays unpickable until its
+            // prerequisite is Completed (Done, NeedsAttention, a pushed branch
+            // do not count). The queue-wide drain previously checked status
+            // only, so it launched NFR-56 right after its blocker STORY-52
+            // shelved. trace:BUG-1608 | ai:claude
+            if let Some(reason) = &candidate.blocked {
+                blocked_skipped.push((candidate.id.clone(), reason.clone()));
+                continue;
+            }
             return Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
@@ -11705,6 +12892,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 deferred_skipped,
                 guided_or_operator_skipped,
                 release_skipped,
+                blocked_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -11741,21 +12929,33 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     deferred: r.deferred,
                     execution_mode: r.execution_mode,
                     tags: r.tags.clone(),
+                    // BUG-1608: PRIN-5 fail closed — `pickability` treats a
+                    // dangling or non-Completed `BlockedBy` target as blocked,
+                    // so unknown dependency state never reads as pickable.
+                    // trace:BUG-1608 | ai:claude
+                    blocked: match aida_core::pickability::pickability(r, &store) {
+                        aida_core::pickability::Pickability::Pickable => None,
+                        aida_core::pickability::Pickability::Blocked(reason) => {
+                            Some(aida_core::pickability::pickability_reason_label(&reason))
+                        }
+                    },
                 })
         })
         .collect())
 }
 
-/// Build the `(display_id, status)` candidate list for the active role's
-/// queue in pickup order (queue position ascending, same as `aida queue
-/// next`) — the shared input to [`pick_auto_complete_head`] for both
-/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
-/// trace:TASK-292 TASK-293 | ai:claude
-pub(crate) fn auto_complete_head_candidates(
+/// Build the `(display_id, status, blocked)` candidate list for the active
+/// role's queue in pickup order (queue position ascending, same as `aida
+/// queue next`) — the shared input to [`auto_complete_head_candidates`]
+/// (status only, for [`pick_auto_complete_head`]) and, since TASK-1490, to
+/// the drain preview and drain-state member list, both of which need the
+/// carried BUG-1608 pickability verdict rather than the status alone.
+// trace:TASK-292 TASK-293 TASK-1490 | ai:claude
+pub(crate) fn auto_complete_head_candidates_with_blocked(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> Result<Vec<(String, RequirementStatus)>> {
+) -> Result<Vec<(String, RequirementStatus, Option<String>)>> {
     let effective_role = effective_auto_complete_role(role_override);
     Ok(
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
@@ -11778,7 +12978,30 @@ pub(crate) fn auto_complete_head_candidates(
                     .map(|r| canonical_role_name(r) == effective_role)
                     .unwrap_or(true)
             })
-            .map(|candidate| (candidate.id, candidate.status))
+            .map(|candidate| (candidate.id, candidate.status, candidate.blocked))
+            .collect(),
+    )
+}
+
+/// Build the `(display_id, status)` candidate list for the active role's
+/// queue in pickup order (queue position ascending, same as `aida queue
+/// next`) — the shared input to [`pick_auto_complete_head`] for both
+/// single-head pickup (TASK-292) and the `nextN` drain (TASK-293).
+///
+/// This view drops the BUG-1608 pickability verdict; a caller that must
+/// distinguish a blocked dependent from a merely undrivable status (the
+/// drain preview and drain-state member list, TASK-1490) should call
+/// [`auto_complete_head_candidates_with_blocked`] instead.
+/// trace:TASK-292 TASK-293 | ai:claude
+pub(crate) fn auto_complete_head_candidates(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<Vec<(String, RequirementStatus)>> {
+    Ok(
+        auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?
+            .into_iter()
+            .map(|(id, status, _blocked)| (id, status))
             .collect(),
     )
 }
@@ -11802,6 +13025,10 @@ pub(crate) fn resolve_auto_complete_head(
         Some(pick) => {
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
+            }
+            // trace:BUG-1608 | ai:claude
+            for (id, reason) in &pick.blocked_skipped {
+                eprintln!("skipped {id} — {reason}");
             }
             for id in &pick.deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
@@ -11924,6 +13151,20 @@ pub(crate) fn resolve_auto_complete_head(
                     "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
                 );
             }
+            // BUG-1608: name every drivable-status item the dependency gate
+            // held back, with its blocker, so the refusal is never silent.
+            // trace:BUG-1608 | ai:claude
+            for candidate in candidates.iter().filter(|c| {
+                c.for_role
+                    .as_deref()
+                    .map(|r| canonical_role_name(r) == role_label)
+                    .unwrap_or(true)
+                    && auto_complete_head_drivable(&c.status)
+            }) {
+                if let Some(reason) = &candidate.blocked {
+                    eprintln!("skipped {} — {reason}", candidate.id);
+                }
+            }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
             // drive, without dumping a long stale list.
@@ -11957,7 +13198,7 @@ pub(crate) fn resolve_auto_complete_head(
             } else {
                 anyhow::bail!(
                     "no drivable item in the queue for {role_label}; nothing to drive — \
-                     {} queued item{} in-flight or terminal: {detail}{suffix}",
+                     {} queued item{} in-flight, terminal, or blocked: {detail}{suffix}",
                     skipped.len(),
                     if skipped.len() == 1 { "" } else { "s" },
                 )
@@ -12017,9 +13258,11 @@ fn preview_queue_work_drain(
 
     if let NextKeyword::Count(n) = next_kw {
         let limit = n.max(1);
-        let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+        let (members, skipped) =
+            drain_preview_head_members(storage, user_id, role_override, limit)?;
         println!("  target: next {limit}");
         print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+        print_drain_preview_skipped(&skipped);
         return Ok(());
     }
 
@@ -12053,23 +13296,37 @@ fn preview_queue_work_drain(
     }
 
     let limit = max.unwrap_or(99).max(1);
-    let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+    let (members, skipped) = drain_preview_head_members(storage, user_id, role_override, limit)?;
     println!("  target: queue head");
     print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+    print_drain_preview_skipped(&skipped);
     Ok(())
 }
 
-fn drain_preview_head_members(
+/// Drivable head-of-queue members for the drain preview, alongside the
+/// dependents skipped to reach them. TASK-1490: applies the same
+/// `aida_core::pickability::pickability()` verdict the real drain gates
+/// dispatch on (BUG-1608), so a `BlockedBy` dependent that the drain would
+/// skip is reported as skipped here too, rather than listed as a member the
+/// preview implies would run.
+// trace:TASK-1490 | ai:claude
+pub(crate) fn drain_preview_head_members(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
     limit: usize,
-) -> Result<Vec<(String, String, String)>> {
-    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
+) -> Result<(Vec<(String, String, String)>, Vec<(String, String)>)> {
+    let candidates = auto_complete_head_candidates_with_blocked(storage, user_id, role_override)?;
     let store = storage.load()?;
     let mut members = Vec::new();
-    for (id, status) in candidates {
+    let mut skipped = Vec::new();
+    for (id, status, blocked) in candidates {
         if !auto_complete_head_drivable(&status) {
+            continue;
+        }
+        // trace:TASK-1490 | ai:claude
+        if let Some(reason) = blocked {
+            skipped.push((id, reason));
             continue;
         }
         let title = store
@@ -12081,7 +13338,7 @@ fn drain_preview_head_members(
             break;
         }
     }
-    Ok(members)
+    Ok((members, skipped))
 }
 
 fn print_drain_preview_members<I>(label: &str, members: I, max: Option<usize>)
@@ -12107,6 +13364,28 @@ where
         };
         println!("    {:>2}. {} [{}]{}", i + 1, id, status, title_suffix);
     }
+}
+
+/// Report the `BlockedBy` dependents a drain preview skipped to reach its
+/// member list — the same `(spec, reason)` shape and wording the real
+/// drain's post-run summary uses for its skipped list (see
+/// `emit_next_n_drain_summary`), so the preview never implies a blocked
+/// dependent would run.
+// trace:TASK-1490 | ai:claude
+fn print_drain_preview_skipped(skipped: &[(String, String)]) {
+    if skipped.is_empty() {
+        return;
+    }
+    let kn = skipped.len();
+    let render: Vec<String> = skipped
+        .iter()
+        .map(|(spec, reason)| format!("{spec} ({reason})"))
+        .collect();
+    println!(
+        "  {kn} dependent spec{} skipped: {}",
+        if kn == 1 { "" } else { "s" },
+        render.join(", ")
+    );
 }
 
 /// When an autonomous head pickup finds nothing for the selected role, name
@@ -12178,6 +13457,32 @@ fn auto_complete_sibling_role_hint(
 /// out to `aida` subcommands (`queue work --from-pr`, `pull`, `session end`,
 /// `queue add`) and `git` / `gh` rather than reimplementing them.
 /// trace:STORY-384 | ai:claude
+/// `aida queue recover`'s push of the spec branch to origin. The branch can
+/// come from a lease or the forge, so a dash-led name is refused and
+/// options end before it. `Ok(false)` is a push git itself rejected.
+// trace:BUG-1622 trace:BUG-1624 | ai:claude
+pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Result<bool> {
+    crate::git_arg_guard::reject_option_like("branch", branch)?;
+    let args = [
+        "push",
+        "-u",
+        crate::git_arg_guard::END_OF_OPTIONS,
+        "origin",
+        branch,
+    ];
+    println!(
+        "  {} git {}",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
+        args.join(" ")
+    );
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .status()?;
+    Ok(status.success())
+}
+
 pub(crate) fn handle_queue_recover(
     storage: &Storage,
     user_id: &str,
@@ -12368,7 +13673,7 @@ pub(crate) fn handle_queue_recover(
         std::process::Command::new(&aida)
             .current_dir(&project_root)
             .args(args)
-            .status()
+            .status_retrying_etxtbsy()
     };
     let run_git =
         |args: &[&str], cwd: &std::path::Path| -> std::io::Result<std::process::ExitStatus> {
@@ -12442,8 +13747,8 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             }
-            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
-            if !push_st.success() {
+            // trace:BUG-1622 trace:BUG-1624 | ai:claude
+            if !recover_push_branch(&probe_repo, b)? {
                 eprintln!(
                     "{} push failed — resolve manually, then re-run `aida queue recover {}`.",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
@@ -12488,8 +13793,8 @@ pub(crate) fn handle_queue_recover(
                 );
                 return Ok(());
             };
-            let push_st = run_git(&["push", "-u", "origin", b], &probe_repo)?;
-            if !push_st.success() {
+            // trace:BUG-1622 trace:BUG-1624 | ai:claude
+            if !recover_push_branch(&probe_repo, b)? {
                 eprintln!(
                     "{} push failed — resolve manually.",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
@@ -12997,8 +14302,10 @@ pub(crate) fn handle_queue_integrate(
     let _drain_guard = if dry_run {
         None
     } else {
+        // Linked worktrees share the main checkout's merge authority.
+        // trace:BUG-1683 | ai:codex
         Some(drain_lock::acquire_drain_lock(
-            &project_root,
+            &find_main_worktree_root()?,
             "queue integrate",
         )?)
     };
@@ -13335,7 +14642,7 @@ pub(crate) fn handle_queue_integrate(
                         let status = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(integrate::promotion_rebase_args(pr, &parent_sha))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match status {
                             Ok(s) if s.success() => {
                                 // The child now forks straight from the default
@@ -13773,7 +15080,7 @@ pub(crate) fn handle_queue_integrate(
                         let rb = std::process::Command::new(&aida)
                             .current_dir(drive_cwd)
                             .args(build_integrate_rebase_args(pr))
-                            .status();
+                            .status_retrying_etxtbsy();
                         match rb {
                             Ok(s) if s.success() => {
                                 println!(
@@ -13844,7 +15151,7 @@ pub(crate) fn handle_queue_integrate(
                 // before the parent loop finishes. trace:BUG-748 | ai:codex
                 .env("AIDA_DRAIN_BORROW", "1")
                 .args(integrate::drive_args(pr_num, integrate_headless))
-                .status();
+                .status_retrying_etxtbsy();
             match status {
                 Ok(s) if s.success() => {
                     integrated_total += 1;

@@ -167,7 +167,7 @@ For each document:
 
 ```bash
 # Check if mentioned file paths exist
-grep -oP '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
+grep -oE '`[a-zA-Z0-9_./-]+\.(rs|ts|yaml|toml|sh|json)`' docs/*.md | while read match; do
   file=$(echo "$match" | cut -d: -f2 | tr -d '`')
   [ ! -f "$file" ] && echo "BROKEN PATH: $match"
 done
@@ -205,7 +205,7 @@ For every issue found:
 
 Save the report as `docs/review-report.md` with this structure:
 
-```markdown
+````markdown
 # Documentation Review Report
 
 Generated: YYYY-MM-DD
@@ -242,7 +242,7 @@ Issues found: N (N critical, N important, N minor)
 - AIDA ships 15 Claude Code skills
 + AIDA ships 21 Claude Code skills
 ```
-```
+````
 
 ### Step 6: Apply Fixes (Optional)
 

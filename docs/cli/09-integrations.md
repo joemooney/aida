@@ -48,6 +48,8 @@ AIDA's defensible value isn't the CLI — it's the **requirement graph** sitting
 
 These three follow the **same shape**: a `config` step to wire credentials, a `test` to prove the connection, then `list`/`show` to read the foreign tracker, and push/pull/sync verbs to move issues across the boundary. Treat them as *bridges*, not mirrors — AIDA's graph stays the source of truth, and these verbs reconcile it against an external board you already use. (Note the asymmetry across the three: GitHub and Jira have `push`/`pull`/`sync`; GitLab leans on `refresh`/`poll` for *change detection* rather than a one-shot `push`.)
 
+A `pull` writes into the distributed store like any other node, so the specs it creates get this clone's node-scoped id (`<type>-<node>-<seq>`), not a short id — run `aida db merge-gate` to collapse it to the agreed short form, same as any other node-issued id.
+
 ### `aida github`
 
 **One line** — bridge AIDA requirements to and from GitHub Issues.

@@ -10,11 +10,13 @@
 //! bumps `last_active_at`, and `classify_status` flips Busy → Idle once that
 //! timestamp is older than the configurable `[agent_registry]
 //! busy_threshold_secs` (default 30s). An active Live session lease covering
-//! the agent's worktree pins the entry to Busy regardless of recency, so a
-//! parked-but-running agent attached to scope still reads as occupied.
+//! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
+//! recent descendant work from a finished seat.
 
+use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 
+use aida_core::liveness::ProcTree;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -263,6 +265,8 @@ pub(crate) struct AgentClassifyContext {
     pub(crate) now: DateTime<Utc>,
     pub(crate) threshold_secs: u64,
     pub(crate) live_lease_worktrees: Vec<PathBuf>,
+    pub(crate) proc_tree: Option<ProcTree>,
+    pub(crate) work_grace_secs: u64,
 }
 
 impl AgentClassifyContext {
@@ -275,7 +279,16 @@ impl AgentClassifyContext {
             now,
             threshold_secs,
             live_lease_worktrees,
+            proc_tree: None,
+            work_grace_secs: 10,
         }
+    }
+
+    // trace:BUG-1704 | ai:codex
+    pub(crate) fn with_work_probe(mut self, tree: ProcTree, grace_secs: u64) -> Self {
+        self.proc_tree = Some(tree);
+        self.work_grace_secs = grace_secs;
+        self
     }
 }
 
@@ -284,9 +297,24 @@ impl AgentClassifyContext {
 /// busy/idle behaviour for free; missing file / section / keys all fall
 /// through to defaults — a config error never blocks `aida status`.
 /// trace:STORY-435 | ai:claude
+///
+/// TRUST DOCTRINE for `.aida/config.toml` (BUG-1723 decision, 2026-10-02):
+/// the file is worktree-resident and committable, so any branch can ship its
+/// own copy. A value read from the branch-local copy may therefore only tune
+/// POLICY — timeouts, thresholds, role lists, display preferences. It may
+/// NOT select an executable, a shell command, or a credential: those must
+/// come from the running binary, from outside the worktree, or from the
+/// trusted default-branch copy via `crate::trusted_config` (TASK-969).
+/// This is the same doctrine BUG-1624 established for `.aida/session-env.sh`.
+/// Every section/key read from the branch-local copy is enumerated and
+/// classified in `scripts/config-trust.toml`, enforced by the guard in
+/// `tests/bug_1723_config_trust_tests.rs` — a new key fails that guard until
+/// it is classified there.
+// trace:BUG-1723 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     pub(crate) busy_threshold_secs: u64,
+    pub(crate) work_grace_secs: u64,
     pub(crate) singleton_roles: Vec<String>,
 }
 
@@ -294,6 +322,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             busy_threshold_secs: 30,
+            work_grace_secs: 10,
             singleton_roles: vec![
                 "advisor".to_string(),
                 "product".to_string(),
@@ -323,6 +352,10 @@ impl Config {
                 }
             } else if key == "singleton_roles" {
                 cfg.singleton_roles = parse_csv_words(&val);
+            } else if key == "work_grace_secs" {
+                if let Ok(n) = val.parse::<u64>() {
+                    cfg.work_grace_secs = n;
+                }
             }
         }
         cfg
@@ -1579,10 +1612,9 @@ pub(crate) fn view_kind(agent: &AgentRegistryView) -> &'static str {
     }
 }
 
-// STORY-435 busy/idle: freshness signal from the MCP heartbeat. The lease-
-// correlation branch deliberately keeps a parked-but-running agent attached
-// to a Live lease as Busy — an idle process still "occupies" active scope
-// from an operator's POV. trace:STORY-435 | ai:claude
+// STORY-435 heartbeat freshness plus BUG-1704 live-lease work evidence.
+// A covered process stays Busy when its subtree shows recent sustained work;
+// missing evidence preserves the Busy result. trace:STORY-435 | ai:claude
 fn classify_status(
     entry: &AgentRegistryEntry,
     pid_alive: bool,
@@ -1599,9 +1631,115 @@ fn classify_status(
         return AgentStatus::Busy;
     }
     if covers(&ctx.live_lease_worktrees, &entry.worktree_path) {
-        return AgentStatus::Busy;
+        match ctx.proc_tree.as_ref() {
+            None => return AgentStatus::Busy,
+            Some(tree) if seat_has_own_work(tree, entry.pid, elapsed, ctx.work_grace_secs) => {
+                return AgentStatus::Busy
+            }
+            Some(_) => {}
+        }
     }
     AgentStatus::Idle
+}
+
+// trace:BUG-1704 | ai:codex
+fn seat_has_own_work(
+    tree: &ProcTree,
+    seat_pid: u32,
+    secs_since_heartbeat: i64,
+    grace_secs: u64,
+) -> bool {
+    // If a heartbeat lands during a long build, the heartbeat can move past build start and
+    // clause 2 can exclude that build. Tool calls are sequential, so this is accepted in practice.
+    let Some(summary) = tree.descendant_age_summary(seat_pid) else {
+        return true;
+    };
+    // BUG-1727 AC1: an unsampleable descendant is the same class of evidence gap as a
+    // missing root — the probe could not see — so it resolves the same way, toward Busy.
+    // A false Idle gets a working seat stopped; a false Busy only delays a reap.
+    // trace:BUG-1727 | ai:claude
+    if summary.unsampled > 0 {
+        return true;
+    }
+    if secs_since_heartbeat <= grace_secs.min(i64::MAX as u64) as i64 {
+        return true;
+    }
+    ages_show_work(
+        &summary.ages,
+        secs_since_heartbeat,
+        grace_secs.min(i64::MAX as u64) as i64,
+    )
+}
+
+// trace:BUG-1704 | ai:codex
+fn ages_show_work(descendant_ages: &[i64], secs_since_heartbeat: i64, grace_secs: i64) -> bool {
+    if secs_since_heartbeat <= grace_secs {
+        return false;
+    }
+    descendant_ages
+        .iter()
+        // The grace bound excludes momentary statusline/hook children.
+        // Without it, a finished seat can flap Busy on those short-lived processes.
+        // Its cost: a child younger than the grace window is not counted, so a seat can
+        // read Idle for up to `work_grace_secs` after a delayed spawn. That is BUG-1727.
+        // The upper bound is not a threshold on the child's age.
+        // `age < secs_since_heartbeat` means `(now - child_start) < (now - heartbeat)`.
+        // Cancel `now` on both sides and it becomes `child_start > heartbeat`.
+        // That asks whether the child started after this seat's last heartbeat.
+        // Time passing cannot change that ordering, so a long-running build stays Busy.
+        // This holds while it runs provided no heartbeat landed after it started.
+        // A later heartbeat can exclude it; that is BUG-1726. Its consequence, stated
+        // rather than left to the bug id: a seat that launched a build DETACHED and then
+        // kept making tool calls moves its heartbeat past the build's start, so the build
+        // stops counting and the seat reads Idle while it still runs. The build is
+        // STRANDED, not killed — `agent_stop` hands `terminate_pids_with_grace` the matched
+        // registry rows' own pids and nothing else; that function signals each pid in the slice
+        // (no negative pgid, no descendant walk), so the child is
+        // reparented to init and completes ownerless, holding a cargo slot with no seat
+        // left to read its result. trace:BUG-1726 | ai:claude
+        .any(|age| *age >= grace_secs && *age < secs_since_heartbeat)
+}
+
+/// Accumulated CPU seconds for `pid`, via `ps -o time=`.
+///
+/// BUG-1701 AC5: a dispatched seat that has FINISHED its turn looks identical to one still
+/// working — same pid, same registry row, and `classify_status` calls it `busy` whenever a live
+/// lease covers its worktree, which for the main worktree is always. On 2026-09-27 three seats
+/// reported `busy` after 48-88 minutes idle. The tell was CPU consumed: 3-46 SECONDS across
+/// hours. Reporting that number lets a caller judge without attaching to the PTY.
+///
+/// Deliberately NOT used to reclassify: cumulative CPU cannot distinguish "finished" from
+/// "blocked on a long build", and flipping the latter to `idle` would invite an orchestrator to
+/// stop a working seat. A classification fix needs a CPU DELTA between two samples. BUG-1704 instead uses an age-window descendant rule.
+// trace:BUG-1701 | ai:claude
+pub(crate) fn process_cpu_secs(pid: u32) -> Option<i64> {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "time=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    parse_ps_cpu_time(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// Parse `ps -o time=`: `MM:SS`, `HH:MM:SS`, or `DD-HH:MM:SS`. Pure, so the shapes are tested
+/// without spawning `ps`.
+// trace:BUG-1701 | ai:claude
+fn parse_ps_cpu_time(raw: &str) -> Option<i64> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let (days, clock) = match raw.split_once('-') {
+        Some((d, rest)) => (d.trim().parse::<i64>().ok()?, rest),
+        None => (0, raw),
+    };
+    let mut parts = clock.split(':').rev();
+    let secs: i64 = parts.next()?.trim().parse().ok()?;
+    let mins: i64 = parts.next().unwrap_or("0").trim().parse().ok()?;
+    let hours: i64 = parts.next().unwrap_or("0").trim().parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(days * 86_400 + hours * 3_600 + mins * 60 + secs)
 }
 
 pub(crate) fn elapsed_secs_clamped(now: DateTime<Utc>, at: DateTime<Utc>) -> i64 {
@@ -1864,7 +2002,7 @@ pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
             .args(args)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status();
+            .status_retrying_etxtbsy();
         return;
     }
     match terminal.emulator.as_deref() {
@@ -1936,7 +2074,7 @@ fn current_native_title(terminal: &TerminalIdentity) -> Option<String> {
 fn command_output_trim(program: &str, args: &[&str]) -> Option<String> {
     let output = std::process::Command::new(program)
         .args(args)
-        .output()
+        .output_retrying_etxtbsy()
         .ok()?;
     if !output.status.success() {
         return None;
@@ -2424,6 +2562,24 @@ mod tests {
     }
 
     // STORY-435: fresh activity (within threshold) → Busy.
+    /// BUG-1701 AC5: the CPU figure that distinguishes a finished seat from a working one.
+    // trace:BUG-1701 | ai:claude
+    #[test]
+    fn parse_ps_cpu_time_covers_every_ps_shape() {
+        assert_eq!(parse_ps_cpu_time("00:00"), Some(0));
+        // The observed stranded seats: 12s and 46s of CPU across hours.
+        assert_eq!(parse_ps_cpu_time("00:12"), Some(12));
+        assert_eq!(parse_ps_cpu_time("00:00:46"), Some(46));
+        assert_eq!(parse_ps_cpu_time("01:02:03"), Some(3723));
+        assert_eq!(parse_ps_cpu_time(" 2-03:04:05 "), Some(183_845));
+        // Unavailable or unparseable stays None rather than guessing zero, which would read as
+        // "definitely idle".
+        assert_eq!(parse_ps_cpu_time(""), None);
+        assert_eq!(parse_ps_cpu_time("   "), None);
+        assert_eq!(parse_ps_cpu_time("not-a-time"), None);
+        assert_eq!(parse_ps_cpu_time("1:2:3:4"), None);
+    }
+
     #[test]
     fn classify_status_fresh_activity_is_busy() {
         let now = Utc::now();
@@ -2488,12 +2644,159 @@ mod tests {
     }
 
     // STORY-435: stale activity but a Live lease covers the worktree → Busy.
+    //
+    // BUG-1727 AC5: pinned in the shape production uses. The only caller that passes a
+    // non-empty lease list also attaches a work probe (`lib.rs` builds the context with
+    // `.with_work_probe(..)`), so a `proc_tree: None` context can never reach the lease arm
+    // in the CLI: every other call site passes `Vec::new()` and `covers` is false for an
+    // empty list. Asserting STORY-435 through `Some(..)` keeps this test on the live path.
+    // The `None` fallback arm is covered by `classify_status_live_lease_without_proc_tree_is_busy`.
+    // trace:STORY-435 | ai:claude
     #[test]
     fn classify_status_live_lease_is_busy_despite_stale_activity() {
         let now = Utc::now();
         let e = entry_with(42, now - Duration::minutes(5));
-        let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+        // The lease path comes from the entry itself, so no tmp-path literal is duplicated.
+        let c = ctx(now, 30, vec![e.worktree_path.clone()]).with_work_probe(bug1704_tree(120), 10);
         assert_eq!(classify_status(&e, true, &c), AgentStatus::Busy);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_counts_a_descendant_inside_the_window() {
+        assert!(ages_show_work(&[120], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_ignores_session_long_service_children() {
+        assert!(!ages_show_work(&[3600], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_ignores_momentary_hook_children() {
+        assert!(!ages_show_work(&[2], 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_is_false_when_grace_window_is_empty() {
+        assert!(!ages_show_work(&[7], 10, 10));
+        assert!(!ages_show_work(&[7], 5, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn ages_show_work_is_time_invariant_for_a_child_started_after_the_heartbeat() {
+        for (secs_since_heartbeat, age) in [
+            (120, 110),
+            (1_200, 1_190),
+            (36_000, 35_990),
+            (360_000, 359_990),
+        ] {
+            assert!(ages_show_work(&[age], secs_since_heartbeat, 10));
+        }
+
+        // This is BUG-1726's shape: heartbeat after child start excludes it, intentionally.
+        for (secs_since_heartbeat, age) in [(600, 601), (36_000, 36_001)] {
+            assert!(!ages_show_work(&[age], secs_since_heartbeat, 10));
+        }
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn seat_has_own_work_is_true_when_seat_pid_is_absent_from_snapshot() {
+        assert!(seat_has_own_work(
+            &ProcTree::from_nodes(vec![]),
+            42,
+            600,
+            10
+        ));
+    }
+
+    /// BUG-1727 AC3: the grace floor's cost, pinned rather than assumed. A child younger
+    /// than `grace_secs` is not counted, so the seat reads Idle while that child runs —
+    /// and the window closes on its own. Both halves use the SAME heartbeat staleness and
+    /// the SAME child; only its age advances, which is what makes this a self-heal and not
+    /// two unrelated cases.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn ages_show_work_self_heals_when_a_young_child_reaches_the_grace_floor() {
+        assert!(!ages_show_work(&[5], 31, 10));
+        assert!(ages_show_work(&[10], 31, 10));
+    }
+
+    /// BUG-1727 AC1 + AC2: a live descendant the probe could not age reads Busy, the same
+    /// way a missing root does. Without the unsampled count this tree yields an empty age
+    /// list, indistinguishable from a seat with no children at all, and reads Idle.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn seat_has_own_work_is_true_when_a_descendant_cannot_be_aged() {
+        let tree = ProcTree::from_nodes(vec![
+            aida_core::liveness::ProcNode {
+                pid: 42,
+                ppid: None,
+                age_secs: Some(700),
+            },
+            aida_core::liveness::ProcNode {
+                pid: 50,
+                ppid: Some(42),
+                age_secs: None,
+            },
+        ]);
+        assert!(seat_has_own_work(&tree, 42, 600, 10));
+    }
+
+    /// …and the fail-safe stays narrow: a fully sampled subtree with nothing in the work
+    /// window still reads Idle, so AC1 did not turn every covered seat Busy.
+    // trace:BUG-1727 | ai:claude
+    #[test]
+    fn seat_has_own_work_is_false_when_a_sampled_subtree_shows_no_work() {
+        assert!(!seat_has_own_work(&bug1704_tree(3600), 42, 600, 10));
+    }
+
+    // trace:BUG-1704 | ai:codex
+    fn bug1704_tree(child_age: i64) -> ProcTree {
+        ProcTree::from_nodes(vec![
+            aida_core::liveness::ProcNode {
+                pid: 42,
+                ppid: None,
+                age_secs: Some(700),
+            },
+            aida_core::liveness::ProcNode {
+                pid: 50,
+                ppid: Some(42),
+                age_secs: Some(700),
+            },
+            aida_core::liveness::ProcNode {
+                pid: 51,
+                ppid: Some(50),
+                age_secs: Some(child_age),
+            },
+        ])
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn classify_status_live_lease_without_proc_tree_is_busy() {
+        let now = Utc::now();
+        let entry = entry_with(42, now - Duration::minutes(5));
+        // The lease path comes from the entry itself: the rule under test is "a live lease
+        // covers this seat's worktree", so duplicating a literal here would add a non-portable
+        // tmp path for no gain. trace:BUG-1704 | ai:claude
+        let ctx = ctx(now, 30, vec![entry.worktree_path.clone()]);
+        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Busy);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn classify_status_live_lease_with_quiet_subtree_is_idle() {
+        let now = Utc::now();
+        let entry = entry_with(42, now - Duration::minutes(5));
+        let ctx =
+            ctx(now, 30, vec![entry.worktree_path.clone()]).with_work_probe(bug1704_tree(3600), 10);
+        assert_eq!(classify_status(&entry, true, &ctx), AgentStatus::Idle);
     }
 
     // STORY-435: lease worktree that's an ancestor of the agent worktree
@@ -2898,6 +3201,7 @@ mod tests {
         let cfg = Config::from_toml_str("");
         assert_eq!(cfg, Config::default());
         assert_eq!(cfg.busy_threshold_secs, 30);
+        assert_eq!(cfg.work_grace_secs, 10);
 
         let cfg = Config::from_toml_str("[other]\nfoo = 1\n");
         assert_eq!(cfg.busy_threshold_secs, 30);
@@ -2907,6 +3211,14 @@ mod tests {
     fn config_parses_busy_threshold_secs() {
         let cfg = Config::from_toml_str("[agent_registry]\nbusy_threshold_secs = 90\n");
         assert_eq!(cfg.busy_threshold_secs, 90);
+    }
+
+    // trace:BUG-1704 | ai:codex
+    #[test]
+    fn config_parses_work_grace_secs() {
+        let cfg = Config::from_toml_str("[agent_registry]\nwork_grace_secs = 25\n");
+        assert_eq!(cfg.work_grace_secs, 25);
+        assert_eq!(Config::default().work_grace_secs, 10);
     }
 
     #[test]

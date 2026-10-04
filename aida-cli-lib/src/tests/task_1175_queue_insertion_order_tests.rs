@@ -10,41 +10,15 @@
 //
 // trace:TASK-1175 | ai:claude
 
-use std::sync::{Mutex, MutexGuard, OnceLock};
-
 use crate::burndown::ReadyOrder;
 use crate::{all_queued_added_at, resolved_burndown_ready_order};
 
-/// `AIDA_BURNDOWN_ORDER` is process-global, so the env-touching tests in this
-/// file serialize on one lock and restore the prior value on the way out.
-fn env_guard() -> MutexGuard<'static, ()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-}
-
-struct OrderEnv(Option<String>);
-
-impl OrderEnv {
-    fn set(value: Option<&str>) -> Self {
-        let prior = std::env::var("AIDA_BURNDOWN_ORDER").ok();
-        match value {
-            Some(v) => std::env::set_var("AIDA_BURNDOWN_ORDER", v),
-            None => std::env::remove_var("AIDA_BURNDOWN_ORDER"),
-        }
-        Self(prior)
-    }
-}
-
-impl Drop for OrderEnv {
-    fn drop(&mut self) {
-        match &self.0 {
-            Some(v) => std::env::set_var("AIDA_BURNDOWN_ORDER", v),
-            None => std::env::remove_var("AIDA_BURNDOWN_ORDER"),
-        }
-    }
-}
+// `AIDA_BURNDOWN_ORDER` is process-global, so the env-touching tests in this
+// file hold the crate-wide env lock (via the `test_env` guards) for their
+// whole body and restore the prior value on the way out. A file-local mutex
+// would only serialise these tests against each other, not against every
+// other env-mutating test in the process. trace:BUG-1666 | ai:claude
+use crate::test_env::{EnvVarGuard, EnvVarsGuard};
 
 fn write_queue(root: &std::path::Path, user: &str, body: &str) {
     let dir = root.join(".aida-store/registry/queues");
@@ -133,7 +107,7 @@ fn a_missing_or_unparseable_queue_dir_yields_an_empty_map_not_an_error() {
 
 #[test]
 fn ready_order_ladder_puts_the_env_override_above_project_config() {
-    let _lock = env_guard();
+    let mut env = EnvVarGuard::unset("AIDA_BURNDOWN_ORDER");
     let tmp = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     std::fs::write(
@@ -143,38 +117,30 @@ fn ready_order_ladder_puts_the_env_override_above_project_config() {
     .unwrap();
 
     // Config alone.
-    {
-        let _env = OrderEnv::set(None);
-        assert_eq!(resolved_burndown_ready_order(tmp.path()), ReadyOrder::Queue);
-    }
+    assert_eq!(resolved_burndown_ready_order(tmp.path()), ReadyOrder::Queue);
     // `--order priority` (exported as the env var) wins over the config.
-    {
-        let _env = OrderEnv::set(Some("priority"));
-        assert_eq!(
-            resolved_burndown_ready_order(tmp.path()),
-            ReadyOrder::Priority
-        );
-    }
+    env.reset("priority");
+    assert_eq!(
+        resolved_burndown_ready_order(tmp.path()),
+        ReadyOrder::Priority
+    );
     // A typo in the env tier falls THROUGH to the config rather than failing.
-    {
-        let _env = OrderEnv::set(Some("prioritise"));
-        assert_eq!(resolved_burndown_ready_order(tmp.path()), ReadyOrder::Queue);
-    }
+    env.reset("prioritise");
+    assert_eq!(resolved_burndown_ready_order(tmp.path()), ReadyOrder::Queue);
 }
 
 #[test]
 fn ready_order_defaults_to_priority_with_no_config_and_no_env() {
-    let _lock = env_guard();
-    let _env = OrderEnv::set(None);
     let tmp = tempfile::tempdir().unwrap();
     // No project config, and the machine-global one is rooted at $HOME — point
     // it at the empty temp dir so the read can only reach the built-in default.
-    let prior_home = std::env::var("AIDA_HOME").ok();
-    std::env::set_var("AIDA_HOME", tmp.path());
-    let resolved = resolved_burndown_ready_order(tmp.path());
-    match prior_home {
-        Some(h) => std::env::set_var("AIDA_HOME", h),
-        None => std::env::remove_var("AIDA_HOME"),
-    }
-    assert_eq!(resolved, ReadyOrder::Priority);
+    let home = tmp.path().to_str().expect("utf-8 temp path").to_string();
+    let _env = EnvVarsGuard::apply(&[
+        ("AIDA_BURNDOWN_ORDER", None),
+        ("AIDA_HOME", Some(home.as_str())),
+    ]);
+    assert_eq!(
+        resolved_burndown_ready_order(tmp.path()),
+        ReadyOrder::Priority
+    );
 }

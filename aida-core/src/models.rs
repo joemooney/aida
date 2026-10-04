@@ -605,6 +605,20 @@ impl ExecutionMode {
             ExecutionMode::Decide => None,
         }
     }
+
+    /// Whether a spec in this mode may be dispatched WITHOUT a human in the
+    /// loop. Only `Drain` (auto through merge) and `Drive` (auto through CI)
+    /// qualify. `Guided` is an interactive keystone dialog, `Operator` is work
+    /// the human does, and `Decide` is a block rather than a harness — fanning
+    /// any of those out unattended defeats the reason the mode exists.
+    ///
+    /// Expressed over [`ladder_rank`] so the two cannot drift: ranks 0-1 are the
+    /// autonomous rungs, everything above needs a seat, and `Decide`'s `None`
+    /// is never autonomous.
+    // trace:BUG-1717 | ai:claude
+    pub fn is_autonomous(self) -> bool {
+        matches!(self.ladder_rank(), Some(0 | 1))
+    }
 }
 
 impl fmt::Display for ExecutionMode {
@@ -634,6 +648,114 @@ impl std::str::FromStr for ExecutionMode {
                 "unknown execution mode `{other}` (expected: drain, drive, guided, operator, decide)"
             )),
         }
+    }
+}
+
+/// Filing provenance stamped on a requirement at creation (CR-8): which code
+/// state and which tooling a spec was filed against, so "is this still
+/// present?" has a SHA to diff or bisect from, and a spec filed by a stale
+/// binary can be told apart from one filed against current code.
+///
+/// Every field is best-effort and omitted when it cannot be detected (no git
+/// repo, detached HEAD, unknown agent). Public-repo hygiene: no hostname,
+/// absolute path, or email is ever recorded. The branch NAME is recorded
+/// verbatim — it is a code fact that travels with the commits anyway.
+///
+/// Forward-compatible: unknown keys are ignored on read, so later fields (the
+/// originating prompt, STORY-1468) can be added here without breaking older
+/// binaries.
+// trace:CR-8 | ai:claude
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct FilingProvenance {
+    /// HEAD of the CODE repo the spec was filed from (full SHA; not the
+    /// `aida-store` branch).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_sha: Option<String>,
+    /// Checked-out branch; omitted on a detached HEAD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// Whether the working tree had uncommitted changes to tracked files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty: Option<bool>,
+    /// Package version of the filing `aida` binary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aida_version: Option<String>,
+    /// Git SHA the filing `aida` binary was built from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aida_build_sha: Option<String>,
+    /// Filing agent vendor (`claude` / `codex` / `antigravity` …), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+    /// Filing session id, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+    // Reserved: STORY-1468 (deferred) adds the originating prompt here as
+    // another optional, serde-default field.
+}
+
+impl FilingProvenance {
+    /// True when no field was detected — such a stamp is not worth writing.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+
+    /// True when the filing binary's build SHA and the code HEAD are both
+    /// known and differ (neither is a prefix of the other): the spec was filed
+    /// by a binary that did not match the checked-out code. Only meaningful in
+    /// the aida repo itself, where the code IS the binary's source.
+    pub fn build_diverges_from_code(&self) -> bool {
+        match (self.aida_build_sha.as_deref(), self.code_sha.as_deref()) {
+            (Some(b), Some(c)) if !b.is_empty() && !c.is_empty() && b != "unknown" => {
+                !(c.starts_with(b) || b.starts_with(c))
+            }
+            _ => false,
+        }
+    }
+
+    /// One-line compact rendering for `aida show`, e.g.
+    /// `abc1234 (feat/x, dirty) · aida 0.9.3 (def5678) · codex`.
+    pub fn summary_line(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(sha) = self.code_sha.as_deref() {
+            let short: String = sha.chars().take(7).collect();
+            let mut qual: Vec<String> = Vec::new();
+            if let Some(b) = self.branch.as_deref() {
+                qual.push(b.to_string());
+            }
+            if self.dirty == Some(true) {
+                qual.push("dirty".to_string());
+            }
+            if qual.is_empty() {
+                parts.push(short);
+            } else {
+                parts.push(format!("{short} ({})", qual.join(", ")));
+            }
+        }
+        match (self.aida_version.as_deref(), self.aida_build_sha.as_deref()) {
+            (Some(v), Some(b)) => {
+                let short: String = b.chars().take(7).collect();
+                parts.push(format!("aida {v} ({short})"));
+            }
+            (Some(v), None) => parts.push(format!("aida {v}")),
+            (None, Some(b)) => {
+                let short: String = b.chars().take(7).collect();
+                parts.push(format!("aida ({short})"));
+            }
+            (None, None) => {}
+        }
+        match (self.vendor.as_deref(), self.session.as_deref()) {
+            (Some(v), Some(s)) => {
+                let short: String = s.chars().take(8).collect();
+                parts.push(format!("{v} session {short}"));
+            }
+            (Some(v), None) => parts.push(v.to_string()),
+            (None, Some(s)) => {
+                let short: String = s.chars().take(8).collect();
+                parts.push(format!("session {short}"));
+            }
+            (None, None) => {}
+        }
+        parts.join(" · ")
     }
 }
 
@@ -1145,6 +1267,41 @@ impl RelationshipType {
             }
             "supersedes" | "replaces" => RelationshipType::Supersedes,
             _ => RelationshipType::Custom(s.to_string()),
+        }
+    }
+
+    /// Parse a relationship-type string as fresh command input — `aida rel
+    /// add --type`, `aida rel remove --type`, and the MCP `relationship_type`
+    /// tool parameter. The single shared parser for those three surfaces
+    /// (BUG-1602): before this they each hand-rolled their own alias table
+    /// and drifted, so a typed `rel remove --type verified_by` or
+    /// `--type depends-on` silently matched nothing even though `rel add`
+    /// (or MCP) accepted the same spelling.
+    ///
+    /// A strict superset of [`RelationshipType::from_str`], adding
+    /// input-only conveniences: `related`/`relates-to`/`relates_to`/
+    /// `relatesto` for [`RelationshipType::References`], `depends-on`/
+    /// `depends_on`/`dependson` for [`RelationshipType::BlockedBy`],
+    /// `replaced_by`/`replacedby` alongside `from_str`'s existing
+    /// `replaced-by` for [`RelationshipType::SupersededBy`], and
+    /// `duplicate-of`/`duplicate_of`/`duplicateof` alongside `from_str`'s
+    /// existing `duplicate` for [`RelationshipType::Duplicate`] (BUG-1604).
+    ///
+    /// Deliberately NOT folded into `from_str`, which also backs
+    /// `Deserialize` for stored data: `related` names an existing legacy
+    /// `Custom("related")` edge (BUG-1471), so `from_str` keeps it as
+    /// `Custom` to avoid silently reclassifying anything already on disk.
+    /// This parser is for interpreting what an operator or agent just typed,
+    /// never for reading back a stored relationship type.
+    // trace:BUG-1602 | ai:claude
+    // trace:BUG-1604 | ai:claude
+    pub fn parse_relationship_type(s: &str) -> Self {
+        match s.trim().to_lowercase().as_str() {
+            "related" | "relates-to" | "relates_to" | "relatesto" => RelationshipType::References,
+            "depends-on" | "depends_on" | "dependson" => RelationshipType::BlockedBy,
+            "replaced_by" | "replacedby" => RelationshipType::SupersededBy,
+            "duplicate-of" | "duplicate_of" | "duplicateof" => RelationshipType::Duplicate,
+            other => Self::from_str(other),
         }
     }
 
@@ -4187,6 +4344,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<Origin>,
 
+    // trace:CR-8 | ai:claude
+    /// Filing provenance: the code state and tooling this spec was filed
+    /// against (code HEAD SHA, branch, dirty flag, aida version + build SHA,
+    /// filing agent/session). WRITE-ONCE — stamped at creation, never changed
+    /// by edits (the store write paths preserve the on-disk value). Every
+    /// sub-field is best-effort. `None` = filed before provenance existed;
+    /// existing stores round-trip unchanged. Optional, serde-default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filed_at: Option<FilingProvenance>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4448,6 +4615,8 @@ impl Requirement {
             execution_mode: None,
             // trace:STORY-634 | ai:claude
             origin: None,
+            // trace:CR-8 | ai:claude
+            filed_at: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
@@ -4979,6 +5148,186 @@ pub struct RequirementsStore {
     #[serde(skip)]
     #[ts(skip)]
     pub dispenser: Option<DispenserHandle>,
+
+    /// Load snapshot from a git-canonical backend: every object file that was
+    /// on disk when this store was loaded (parseable or not), keyed by object
+    /// id, with a fingerprint of the file's content at that moment.
+    ///
+    /// A whole-store `save()` uses it as a per-spec compare-and-swap: it
+    /// deletes an absent object ONLY when it is listed here unchanged (the
+    /// caller loaded it and then removed it), and it skips writing a spec
+    /// whose file changed on disk since the load (a concurrent edit it would
+    /// otherwise revert). Each successful save refreshes it for the objects it
+    /// wrote, created and deleted, so one loaded store can be saved repeatedly.
+    /// `None` (a store not loaded from a git store) deletes nothing.
+    /// Runtime-only; never serialized.
+    // trace:BUG-1612 | ai:claude
+    #[serde(skip)]
+    #[ts(skip)]
+    pub loaded_objects: Option<LoadSnapshot>,
+
+    /// Set by [`RequirementsStore::reset_id_counters`]: this store lowered or
+    /// removed ID counters on purpose (an ID-format migration renumbers every
+    /// spec from 1). A git-store save normally merges counters as the maximum
+    /// of disk and caller, so a lowered counter would silently be raised back;
+    /// while this is set, a save instead treats the counters like any other
+    /// store-level field: the caller's values are written when only this
+    /// caller changed them since its load, and a concurrent counter change is
+    /// a conflict. A successful git-store save or `update_atomically`
+    /// clears it, so the store goes back to max-merging its counters.
+    /// Runtime-only; never serialized.
+    // trace:BUG-1641 | ai:claude
+    #[serde(skip)]
+    #[ts(skip)]
+    pub id_counters_reset: CounterResetFlag,
+}
+
+/// The runtime marker behind [`RequirementsStore::id_counters_reset`].
+/// Interior-mutable so a save through `&RequirementsStore` can clear it once
+/// the reset is on disk; a clone copies the current value.
+// trace:BUG-1641 | ai:claude
+#[derive(Default)]
+pub struct CounterResetFlag(std::sync::atomic::AtomicBool);
+
+impl CounterResetFlag {
+    /// Whether the counters were reset on purpose and not yet saved.
+    pub fn is_set(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Mark the counters as reset on purpose.
+    pub fn set(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Clear the marker (the reset has been saved).
+    pub fn clear(&self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+impl Clone for CounterResetFlag {
+    fn clone(&self) -> Self {
+        Self(std::sync::atomic::AtomicBool::new(self.is_set()))
+    }
+}
+
+impl std::fmt::Debug for CounterResetFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CounterResetFlag({})", self.is_set())
+    }
+}
+
+/// Load snapshot of a git-canonical store, per object id:
+/// - the DISK fingerprint: the object file's text as last loaded or written
+///   through this store (detects a concurrent edit on disk);
+/// - the CALLER baseline: the fingerprint of this store's in-memory copy as of
+///   that load or save (detects whether this caller touched the spec since).
+///   The two differ when a save writes more than the in-memory copy (filing
+///   provenance stamped on create, fields preserved from disk).
+///
+/// Interior-mutable so `save(&store)` can refresh it after a write; a clone is
+/// a deep copy, so two clones of one store never share (and corrupt) each
+/// other's view of what is on disk.
+///
+/// It also holds the caller's metadata baseline: the store-level fields
+/// (`metadata.yaml`) as of the load or last save, so a whole-store save can
+/// tell which store-level fields THIS caller changed and merge them over the
+/// current disk copy instead of writing its whole in-memory metadata back.
+// trace:BUG-1612 trace:BUG-1613 | ai:claude
+#[derive(Default)]
+pub struct LoadSnapshot {
+    objects: std::sync::Mutex<std::collections::BTreeMap<String, SnapshotEntry>>,
+    metadata: std::sync::Mutex<Option<serde_yaml::Value>>,
+}
+
+/// One object's entry in a [`LoadSnapshot`].
+// trace:BUG-1612 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnapshotEntry {
+    /// Fingerprint of the object file's text.
+    pub disk: u64,
+    /// Fingerprint of the in-memory copy; `None` = same as the disk text
+    /// (a fresh load, where the copy was parsed from that text).
+    pub caller: Option<u64>,
+}
+
+impl LoadSnapshot {
+    /// A snapshot fresh from a load: object id -> disk fingerprint.
+    pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
+        Self {
+            objects: std::sync::Mutex::new(
+                map.into_iter()
+                    .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
+                    .collect(),
+            ),
+            metadata: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn map(&self) -> std::sync::MutexGuard<'_, std::collections::BTreeMap<String, SnapshotEntry>> {
+        self.objects
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn meta(&self) -> std::sync::MutexGuard<'_, Option<serde_yaml::Value>> {
+        self.metadata
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Disk fingerprint recorded for `id`, if the store saw that object.
+    pub fn disk(&self, id: &str) -> Option<u64> {
+        self.map().get(id).map(|e| e.disk)
+    }
+
+    /// Caller baseline for `id`: the in-memory copy's fingerprint as of the
+    /// last load or save.
+    pub fn baseline(&self, id: &str) -> Option<u64> {
+        self.map().get(id).map(|e| e.caller.unwrap_or(e.disk))
+    }
+
+    /// Record that `id` now holds content with disk fingerprint `disk`, and
+    /// the in-memory copy has fingerprint `caller`.
+    pub fn record(&self, id: &str, disk: u64, caller: u64) {
+        let caller = (caller != disk).then_some(caller);
+        self.map()
+            .insert(id.to_string(), SnapshotEntry { disk, caller });
+    }
+
+    /// Record that `id` no longer exists.
+    pub fn remove(&self, id: &str) {
+        self.map().remove(id);
+    }
+
+    /// The caller's store-level metadata baseline (as of the load or last
+    /// save), serialized; `None` when the snapshot never recorded one.
+    // trace:BUG-1613 | ai:claude
+    pub fn metadata_baseline(&self) -> Option<serde_yaml::Value> {
+        self.meta().clone()
+    }
+
+    /// Record the caller's store-level metadata baseline.
+    // trace:BUG-1613 | ai:claude
+    pub fn record_metadata(&self, metadata: serde_yaml::Value) {
+        *self.meta() = Some(metadata);
+    }
+}
+
+impl Clone for LoadSnapshot {
+    fn clone(&self) -> Self {
+        Self {
+            objects: std::sync::Mutex::new(self.map().clone()),
+            metadata: std::sync::Mutex::new(self.meta().clone()),
+        }
+    }
+}
+
+impl std::fmt::Debug for LoadSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LoadSnapshot({} objects)", self.map().len())
+    }
 }
 
 /// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.
@@ -5056,7 +5405,22 @@ impl RequirementsStore {
             store_version: 1,
             migrated_to: None,
             dispenser: None,
+            loaded_objects: None,
+            id_counters_reset: CounterResetFlag::default(),
         }
+    }
+
+    /// Reset the spec ID counters to their initial state (the global counter
+    /// to 1, every per-prefix counter removed) and mark the reset as
+    /// intentional, so a later save writes the lowered counters instead of
+    /// keeping the higher ones already on disk. Only for renumbering every
+    /// spec (an ID-format migration); new IDs may then reuse numbers that old
+    /// references still mention.
+    // trace:BUG-1641 | ai:claude
+    pub fn reset_id_counters(&mut self) {
+        self.next_spec_number = 1;
+        self.prefix_counters.clear();
+        self.id_counters_reset.set();
     }
 
     /// Gets the type definition for a requirement type
@@ -6205,9 +6569,9 @@ impl RequirementsStore {
     /// This will regenerate all IDs based on the current configuration
     /// Requirements with prefix_override will use their override prefix
     pub fn migrate_to_new_id_format(&mut self) {
-        // Reset counters
-        self.next_spec_number = 1;
-        self.prefix_counters.clear();
+        // Reset counters (an explicit reset a save honours).
+        // trace:BUG-1641 | ai:claude
+        self.reset_id_counters();
 
         // Clear all spec_ids first
         for req in &mut self.requirements {
@@ -6392,9 +6756,9 @@ impl RequirementsStore {
         self.id_config.numbering = new_numbering;
         self.id_config.digits = new_digits;
 
-        // Reset counters for fresh numbering
-        self.next_spec_number = 1;
-        self.prefix_counters.clear();
+        // Reset counters for fresh numbering (an explicit reset a save
+        // honours). trace:BUG-1641 | ai:claude
+        self.reset_id_counters();
 
         // Collect requirement data for migration (to avoid borrow issues)
         let req_data: ReqIdData = self
@@ -8793,6 +9157,39 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
             assert_eq!(name, "implements");
         } else {
             panic!("Expected Custom variant");
+        }
+    }
+
+    // BUG-1604: `duplicate-of` (and its `_`/no-separator siblings) alongside
+    // `from_str`'s existing `duplicate`, in the same alias-family style as
+    // `depends-on` -> BlockedBy and `replaced_by` -> SupersededBy.
+    // trace:BUG-1604 | ai:claude
+    #[test]
+    fn test_parse_relationship_type_duplicate_of_aliases() {
+        for spelling in [
+            "duplicate-of",
+            "duplicate_of",
+            "duplicateof",
+            "Duplicate-Of",
+        ] {
+            assert_eq!(
+                RelationshipType::parse_relationship_type(spelling),
+                RelationshipType::Duplicate,
+                "{spelling} should parse to Duplicate"
+            );
+        }
+        // The bare word still works too (falls through to from_str).
+        assert_eq!(
+            RelationshipType::parse_relationship_type("duplicate"),
+            RelationshipType::Duplicate
+        );
+        // `from_str` (the Deserialize-backing parser) deliberately does NOT
+        // gain this alias, matching the existing `related` precedent: it
+        // must not silently reclassify an already-stored Custom edge.
+        if let RelationshipType::Custom(name) = RelationshipType::from_str("duplicate-of") {
+            assert_eq!(name, "duplicate-of");
+        } else {
+            panic!("from_str(\"duplicate-of\") should stay Custom");
         }
     }
 

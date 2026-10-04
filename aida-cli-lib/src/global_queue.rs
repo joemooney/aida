@@ -11,8 +11,10 @@
 //!
 //! trace:FR-1-012 | ai:claude
 
+use aida_core::{read_atomic, write_atomic};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -50,7 +52,7 @@ pub struct GlobalQueueEntry {
 /// Path to the global queue file for the given role. Creates `~/.aida/queue/`
 /// if it doesn't exist.
 pub fn queue_path(role: &str) -> Result<PathBuf> {
-    let home = dirs::home_dir().context("Cannot determine home directory for global queue")?;
+    let home = crate::home_dir().context("Cannot determine home directory for global queue")?;
     let dir = home.join(".aida").join("queue");
     std::fs::create_dir_all(&dir).with_context(|| {
         format!(
@@ -61,43 +63,134 @@ pub fn queue_path(role: &str) -> Result<PathBuf> {
     Ok(dir.join(format!("{}.yaml", role)))
 }
 
+// trace:BUG-1682 | ai:codex
 pub fn load(role: &str) -> Result<Vec<GlobalQueueEntry>> {
-    let path = queue_path(role)?;
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = std::fs::read_to_string(&path)?;
-    Ok(serde_yaml::from_str(&content).unwrap_or_default())
+    read_queue(&queue_path(role)?, role)
 }
 
-pub fn save(role: &str, entries: &[GlobalQueueEntry]) -> Result<()> {
-    let path = queue_path(role)?;
-    let yaml = serde_yaml::to_string(entries)?;
-    std::fs::write(&path, yaml)?;
-    Ok(())
+// Only a final NotFound initializes a queue. In particular, an empty/null
+// YAML document must not silently turn a damaged queue into an empty one.
+// trace:BUG-1682 | ai:codex
+fn read_queue(path: &Path, role: &str) -> Result<Vec<GlobalQueueEntry>> {
+    let context = || {
+        format!(
+            "Failed to read global queue for role {role} at {}",
+            path.display()
+        )
+    };
+    let content = match read_atomic(path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(context),
+    };
+    let document: serde_yaml::Value = serde_yaml::from_str(&content).with_context(context)?;
+    anyhow::ensure!(
+        document.is_sequence(),
+        "{}: expected a YAML sequence",
+        context()
+    );
+    serde_yaml::from_value(document).with_context(context)
+}
+
+// A permanent sidecar protects the complete read/modify/publish interval.
+// Closing the descriptor releases the lock on every return or unwind. Never
+// unlink it: a contender could otherwise lock a different inode. This is
+// blocking, advisory coordination of cooperating writers, not fsync durability
+// or transactional placement of positions computed by callers.
+// trace:BUG-1682 | ai:codex
+struct QueueMutation {
+    path: PathBuf,
+    role: String,
+    _lock: std::fs::File,
+}
+
+// trace:BUG-1682 | ai:codex
+impl QueueMutation {
+    fn acquire(role: &str) -> Result<Self> {
+        let path = queue_path(role)?;
+        let sidecar = path.with_extension("lock");
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&sidecar)
+            .with_context(|| {
+                format!(
+                    "Failed to open global queue lock for role {role} at {}",
+                    sidecar.display()
+                )
+            })?;
+        #[cfg(test)]
+        tests::observe("before_lock", &path);
+        lock.lock_exclusive().with_context(|| {
+            format!(
+                "Failed to lock global queue for role {role} at {}",
+                sidecar.display()
+            )
+        })?;
+        #[cfg(test)]
+        tests::observe("after_lock", &path);
+        Ok(Self {
+            path,
+            role: role.to_owned(),
+            _lock: lock,
+        })
+    }
+
+    fn load(&self) -> Result<Vec<GlobalQueueEntry>> {
+        read_queue(&self.path, &self.role)
+    }
+
+    // No public snapshot-save escape hatch: publishing requires this guard.
+    fn save(&self, entries: &[GlobalQueueEntry]) -> Result<()> {
+        let yaml = serde_yaml::to_string(entries).with_context(|| {
+            format!(
+                "Failed to serialize global queue for role {} at {}",
+                self.role,
+                self.path.display()
+            )
+        })?;
+        #[cfg(test)]
+        tests::observe("before_publish", &self.path);
+        write_atomic(&self.path, yaml).with_context(|| {
+            format!(
+                "Failed to write global queue for role {} at {}",
+                self.role,
+                self.path.display()
+            )
+        })?;
+        #[cfg(test)]
+        tests::observe("after_publish", &self.path);
+        Ok(())
+    }
 }
 
 /// Upsert an entry. Two entries match when their (requirement_id, project_root)
 /// pair matches — same requirement in different projects is allowed (and would
 /// be unusual but valid).
+// trace:BUG-1682 | ai:codex
 pub fn add(role: &str, entry: GlobalQueueEntry) -> Result<()> {
-    let mut entries = load(role)?;
+    let mutation = QueueMutation::acquire(role)?;
+    let mut entries = mutation.load()?;
     entries.retain(|e| {
         !(e.requirement_id == entry.requirement_id && e.project_root == entry.project_root)
     });
     entries.push(entry);
     entries.sort_by_key(|e| e.position);
-    save(role, &entries)
+    mutation.save(&entries)
 }
 
 /// Remove an entry by requirement id (optionally scoped to a specific project).
 /// Returns true if at least one entry was removed.
+// trace:BUG-1682 | ai:codex
 pub fn remove(
     role: &str,
     requirement_id: &uuid::Uuid,
     project_root: Option<&Path>,
 ) -> Result<bool> {
-    let mut entries = load(role)?;
+    let mutation = QueueMutation::acquire(role)?;
+    let mut entries = mutation.load()?;
     let before = entries.len();
     entries.retain(|e| {
         if e.requirement_id != *requirement_id {
@@ -110,7 +203,7 @@ pub fn remove(
     });
     let removed = entries.len() != before;
     if removed {
-        save(role, &entries)?;
+        mutation.save(&entries)?;
     }
     Ok(removed)
 }
@@ -123,3 +216,7 @@ pub fn project_name_for(root: &Path) -> String {
         .map(|s| s.to_string())
         .unwrap_or_else(|| root.display().to_string())
 }
+
+#[cfg(test)]
+#[path = "tests/bug_1682_global_queue_tests.rs"]
+mod tests;

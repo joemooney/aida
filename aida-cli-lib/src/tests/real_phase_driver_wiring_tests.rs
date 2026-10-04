@@ -2,13 +2,14 @@ use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
     dispatched_branch_head_sha, ensure_implementer_branch_pushed, find_orchestrated_lease,
-    head_commit_message, headless_log_is_zero_bytes, lease_path, list_leases,
-    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
-    parse_agent_gates_from_config, prepare_orchestrated_lease_receipt,
-    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
-    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
-    watchdog_failure_with_committed_work, AgentGateOnFail, RealPhaseDriver, SessionLease,
-    ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
+    head_commit_message, headless_launch_log_evidence, lease_path, list_leases,
+    missing_implementer_worktree_push_gate, orchestrated_lease_receipt_path,
+    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    prepare_orchestrated_lease_receipt, publish_orchestrated_lease_receipt_from_env,
+    pushed_branch_commits_ahead_default, read_commits_in_range, resolve_shelve_gate_range,
+    try_open_orchestrator_pr_for_no_pr_worktree, verified_phase2_branch,
+    watchdog_failure_with_committed_work, AgentGateOnFail, PrCreditMatch, RealPhaseDriver,
+    SessionLease, ShelveAttribution, ORCHESTRATED_LEASE_RECEIPT_ENV,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
@@ -18,6 +19,63 @@ use aida_core::{
 use chrono::{DateTime, Utc};
 use std::process::Command;
 use uuid::Uuid;
+
+fn phase2_metadata(head_ref: &str, head_sha: &str) -> crate::forge::ChangeMetadata {
+    crate::forge::ChangeMetadata {
+        state: crate::forge::ChangeState::Open,
+        title: "fix: regression (BUG-1818)".to_string(),
+        author: Some("tester".to_string()),
+        merged_at: None,
+        base_ref: "main".to_string(),
+        head_ref: head_ref.to_string(),
+        head_sha: head_sha.to_string(),
+        is_draft: false,
+        is_cross_repository: false,
+        head_repo: None,
+    }
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_uses_the_forge_source_branch_not_the_local_staging_branch() {
+    let metadata = phase2_metadata("bug-138", "abc123456789");
+    let branch = verified_phase2_branch(
+        138,
+        "abc123456789",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap();
+    assert_eq!(branch, "bug-138");
+}
+
+// trace:BUG-1818 | ai:codex
+#[test]
+fn bug_1818_phase2_binding_refuses_an_exact_head_mismatch_with_evidence() {
+    let metadata = phase2_metadata("bug-138", "new-head");
+    let failure = verified_phase2_branch(
+        138,
+        "produced-head",
+        &metadata,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .unwrap_err();
+    assert!(failure.reason.contains("138"));
+    assert!(failure.reason.contains("produced-head"));
+    assert!(failure.reason.contains("new-head"));
+
+    let prefix_only = phase2_metadata("bug-138", "abcdef0123456789");
+    assert!(verified_phase2_branch(
+        138,
+        "abcdef0",
+        &prefix_only,
+        PrCreditMatch::Dispatched,
+        "BUG-138",
+    )
+    .is_err());
+}
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -121,7 +179,13 @@ fn publish_fixture_receipt(
     claude_id: &str,
     lease: &SessionLease,
 ) -> std::path::PathBuf {
-    let _guard = crate::test_env::env_lock();
+    // NOTE: no outer `env_lock()` here. `EnvVarGuard` below acquires the same
+    // non-reentrant ENV_LOCK, so holding it across this whole helper would
+    // self-deadlock every caller. Nothing above that guard touches process env
+    // -- `prepare_orchestrated_lease_receipt` only writes the tempdir and the
+    // child `Command`'s own env -- so the lock is only needed for the window
+    // where `publish_orchestrated_lease_receipt_from_env` reads it.
+    // trace:TASK-1532 | ai:claude
     let mut child = Command::new("true");
     let receipt = prepare_orchestrated_lease_receipt(&mut child, root, claude_id);
     assert!(receipt.parent().unwrap().is_dir());
@@ -134,13 +198,11 @@ fn publish_fixture_receipt(
         .expect("phase child inherits the receipt path");
     assert_eq!(std::path::PathBuf::from(&inherited), receipt);
 
-    let previous = std::env::var_os(ORCHESTRATED_LEASE_RECEIPT_ENV);
-    std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
-    let result = publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease);
-    match previous {
-        Some(value) => std::env::set_var(ORCHESTRATED_LEASE_RECEIPT_ENV, value),
-        None => std::env::remove_var(ORCHESTRATED_LEASE_RECEIPT_ENV),
-    }
+    let result = {
+        // trace:TASK-1532 | ai:agy
+        let _guard = crate::test_env::EnvVarGuard::set(ORCHESTRATED_LEASE_RECEIPT_ENV, &inherited);
+        publish_orchestrated_lease_receipt_from_env(Some(claude_id), lease)
+    };
     result.unwrap();
     assert!(
         receipt.is_file(),
@@ -173,19 +235,8 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
 
 fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
     let path = root.join("gh");
-    write_executable(&path, body);
+    crate::test_exec::write_executable(&path, body);
     path
-}
-
-fn write_executable(path: &std::path::Path, body: &str) {
-    std::fs::write(&path, body).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&path, perms).unwrap();
-    }
 }
 
 #[test]
@@ -516,6 +567,45 @@ fn phase2_push_guard_failure_leaves_worktree_intact_and_ahead() {
     assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "1");
 }
 
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_accepts_removed_worktree_when_published_heads_match() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, Some("abc123"), Some("ABC123"))
+        .unwrap();
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_without_remote_evidence() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(&gone, "bug-1823", 2317, None, Some("abc123"))
+        .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("origin branch `bug-1823`"));
+    assert!(err.reason.contains("could not be verified as published"));
+}
+
+// trace:BUG-1823 | ai:codex
+#[test]
+fn phase2_push_guard_refuses_removed_worktree_when_published_heads_differ() {
+    let root = tempfile::tempdir().unwrap();
+    let gone = root.path().join("removed-implementer");
+    let err = missing_implementer_worktree_push_gate(
+        &gone,
+        "bug-1823",
+        2317,
+        Some("local-head"),
+        Some("pr-head"),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind, FailureKind::CiUnavailable);
+    assert!(err.reason.contains("local-head"));
+    assert!(err.reason.contains("pr-head"));
+}
+
 #[test]
 fn orchestrator_pr_body_names_orchestrator_opened_fallback() {
     let (title, body) = orchestrator_pr_title_and_body(
@@ -670,7 +760,7 @@ fn phase1_nonzero_implementer_exit_with_open_pr_still_proceeds() {
     git(&root, &["checkout", "-q", "-b", branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -892,9 +982,11 @@ fn discover_lease_n_candidates_unmatched_id_ignores_unrelated_leases() {
     let err = d
         .discover_orchestrated_lease("no-such-claude-id")
         .unwrap_err();
+    // BUG-1629: no lease and no receipt means nothing started, so the
+    // failure must not suggest `--resume`. trace:BUG-1629 | ai:claude
     assert!(
-        err.reason.contains("--resume"),
-        "N-candidate failure should suggest bare --resume; got {:?}",
+        !err.reason.contains("--resume") && err.reason.contains("nothing to resume"),
+        "N-candidate failure must say there is nothing to resume; got {:?}",
         err.reason
     );
     assert!(
@@ -981,7 +1073,7 @@ fn headless_implementer_empty_launch_retries_and_releases_leases() {
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     let stub = root.join("aida-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1030,12 +1122,7 @@ EOF
 printf '%s\n' "$sid" >> .aida/attempts
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
 
     let mut d = driver(root, "BUG-826");
     d.aida_exe = stub;
@@ -1077,10 +1164,13 @@ fn empty_launch_release_removes_the_matching_lease() {
     )
     .unwrap();
 
-    assert!(headless_log_is_zero_bytes(root, session_id));
+    assert_eq!(
+        headless_launch_log_evidence(root, session_id),
+        Some(super::EmptyLaunchLog::ZeroBytes)
+    );
     let mut d = driver(root, "BUG-826");
     let stub = root.join("aida-session-end-stub");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         r#"#!/usr/bin/env bash
 set -eu
@@ -1091,12 +1181,7 @@ if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
 fi
 exit 1
 "#,
-    )
-    .unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&stub, permissions).unwrap();
+    );
     d.aida_exe = stub;
     d.release_empty_launch_lease(session_id);
     assert!(
@@ -1106,6 +1191,185 @@ exit 1
     assert!(
         list_leases(root).is_empty(),
         "released empty launch must not leave a scope-blocking lease"
+    );
+    // BUG-1716: the parent must FORGET the released lease. Leaving the field
+    // set made the TASK-133 compensation read "lease acquired ⇒ work may
+    // exist" and skip the pre-bump status restore, stranding the never-started
+    // spec NeedsAttention. trace:BUG-1716 | ai:claude
+    assert!(
+        d.implementer_lease.is_none(),
+        "a successfully released empty-launch lease must clear implementer_lease \
+         so the TASK-133 compensation can restore the spec's pre-bump status"
+    );
+    assert!(d.implementer_worktree.is_none());
+}
+
+/// BUG-1716 (control): when the auto-release FAILS, the lease fields must stay
+/// set — a real lease survives on disk and the BUG-479 restore probe should
+/// keep refusing the status restore for it.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn failed_empty_launch_release_keeps_the_lease_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let session_id = "cccccccc-3333-7000-8000-000000000000";
+    mint_lease(root, "019e4444-stuck", "bug-1716-branch", Some(session_id));
+
+    let mut d = driver(root, "BUG-1716");
+    let stub = root.join("aida-session-end-fails-stub");
+    crate::test_exec::write_executable(&stub, "#!/usr/bin/env bash\nexit 1\n");
+    d.aida_exe = stub;
+    d.release_empty_launch_lease(session_id);
+    assert_eq!(
+        d.implementer_lease.as_deref(),
+        Some("019e4444-stuck"),
+        "a failed auto-release leaves a real lease on disk; the field must say so"
+    );
+}
+
+/// BUG-1716: a vendor that rejects its own launch (an argv/usage error) exits
+/// non-zero WITHOUT ever creating the session log. That must take the same
+/// empty-launch lane as BUG-826's zero-byte log — bounded launch retries, the
+/// empty lease released, a terminal `LaunchNoOutput` — and must NOT fall
+/// through to the work-failure path that classified the TASK-204 incident as
+/// `tool-exit`, burned the STORY-975 transient budget (attempt 3/3), and
+/// parked the spec NeedsAttention. The stub mimics the real child: it claims
+/// a lease, then dies before any log exists.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn headless_implementer_missing_log_launch_is_classified_never_started() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let stub = root.join("aida-stub");
+    crate::test_exec::write_executable(
+        &stub,
+        r#"#!/usr/bin/env bash
+set -eu
+if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
+  lease="${3:-}"
+  rm -f ".aida/sessions/${lease}.toml" ".aida/sessions/${lease}.manifest.toml"
+  exit 0
+fi
+spec=""
+sid=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "work" ]; then
+    spec="$arg"
+    prev=""
+    continue
+  fi
+  if [ "$prev" = "--session-id" ]; then
+    sid="$arg"
+    prev=""
+    continue
+  fi
+  prev="$arg"
+done
+lease="lease-${sid//-/}"
+worktree="$PWD/worktrees/$lease"
+mkdir -p .aida/sessions "$worktree"
+cat > ".aida/sessions/${lease}.toml" <<EOF
+id = "$lease"
+scope = "$spec"
+slug = "bug-1716"
+owner = "test"
+worktree_path = "$worktree"
+branch = "bug-1716-stub"
+started_at = "2026-09-03T00:00:00Z"
+hostname = "test"
+EOF
+cat > ".aida/sessions/${lease}.manifest.toml" <<EOF
+session_id = "$lease"
+planned_at = "2026-09-03T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+printf '%s\n' "$sid" >> .aida/attempts
+exit 1
+"#,
+    );
+
+    let mut d = driver(root, "BUG-1716");
+    d.aida_exe = stub;
+    d.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    d.drain_tuning.no_progress = std::time::Duration::ZERO;
+    d.drain_tuning.ceiling = std::time::Duration::ZERO;
+
+    let err = d.run_implementer().unwrap_err();
+    assert_eq!(
+        err.kind,
+        crate::auto_complete::FailureKind::LaunchNoOutput,
+        "a never-created session log is a launch failure, not implementer work \
+         that failed: {}",
+        err.reason
+    );
+    assert!(
+        err.reason.contains("never started"),
+        "the failure must say the agent never started: {}",
+        err.reason
+    );
+    let attempts = std::fs::read_to_string(root.join(".aida/attempts")).unwrap();
+    assert_eq!(
+        attempts.lines().count(),
+        3,
+        "the empty-launch schedule retries twice before failing"
+    );
+    assert!(
+        list_leases(root).is_empty(),
+        "the never-started launch must leave no surviving lease"
+    );
+    assert!(
+        d.implementer_lease.is_none(),
+        "the TASK-133 compensation gate must see no acquired lease, so the spec \
+         is restored to its pre-bump status instead of staying NeedsAttention"
+    );
+}
+
+/// BUG-1716: the session-lease evidence for the missing-log arm, on a real
+/// repo. A lease branch ahead of the default branch is real work
+/// (`Some(true)` — the failure falls through to substrate verification); a
+/// branch at the default tip is a claimed-but-workless lease (`Some(false)`
+/// — the TASK-204 empty-launch shape); no lease at all is `None` — the
+/// BUG-1629/BUG-1769 lost-child recovery owns that, never this lane.
+// trace:BUG-1716 | ai:claude
+#[cfg(unix)]
+#[test]
+fn session_commits_probe_reads_the_lease_branch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "aida@example.invalid"]);
+    git(root, &["config", "user.name", "AIDA Test"]);
+    write_commit(root, "base.txt", "base\n", "chore: base");
+    git(root, &["branch", "at-default-tip"]);
+    git(root, &["checkout", "-q", "-b", "ahead-branch"]);
+    write_commit(root, "work.txt", "work\n", "feat: work");
+    git(root, &["checkout", "-q", "main"]);
+
+    let ahead_sid = "dddddddd-4444-7000-8000-000000000001";
+    let tip_sid = "dddddddd-4444-7000-8000-000000000002";
+    mint_lease(root, "019e5555-ahead", "ahead-branch", Some(ahead_sid));
+    mint_lease(root, "019e5555-attip", "at-default-tip", Some(tip_sid));
+
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, ahead_sid),
+        Some(true),
+        "a lease branch ahead of the default branch is real work"
+    );
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, tip_sid),
+        Some(false),
+        "a lease branch at the default tip is a claimed-but-workless lease"
+    );
+    assert_eq!(
+        crate::orchestrated_session_lease_evidence(root, "no-such-session"),
+        None,
+        "no lease for the session routes to the lost-child recovery, not this lane"
     );
 }
 
@@ -1152,9 +1416,8 @@ fn repo_with_pushed_branch_ahead_of_origin_default(
 /// can run to COMPLETION instead of stopping at the forge boundary.
 #[cfg(unix)]
 fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1164,11 +1427,7 @@ fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::Pa
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1264,9 +1523,8 @@ fn fake_gh_with_existing_open_pr(
     existing_pr: u64,
     branch: &str,
 ) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("fake-gh-existing-pr");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &path,
         format!(
             "#!/usr/bin/env bash\n\
@@ -1277,11 +1535,7 @@ fn fake_gh_with_existing_open_pr(
              esac\n\
              exit 1\n"
         ),
-    )
-    .unwrap();
-    let mut perms = std::fs::metadata(&path).unwrap().permissions();
-    perms.set_mode(0o755);
-    std::fs::set_permissions(&path, perms).unwrap();
+    );
     path
 }
 
@@ -1541,7 +1795,7 @@ fn phase1_refuses_when_implementer_ends_on_another_specs_branch() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail
@@ -1897,6 +2151,9 @@ fn rework_no_op_fires_even_when_pr_number_is_none_this_round() {
     assert_eq!(failure.kind, FailureKind::ReworkNoOp);
 }
 
+// Uses a bash-script fake `gh`, which Windows cannot execute.
+// trace:BUG-1556 | ai:claude
+#[cfg(unix)]
 #[test]
 fn rework_no_op_catches_phase_done_pr_bound_to_another_specs_pr() {
     // TASK-1449 AC3 / the BUG-1527 shape: this round's own `phase_done_pr`
@@ -2229,7 +2486,7 @@ fn phase1_reports_attribution_unknown_for_a_trailerless_rename_not_a_swap() {
     git(&root, &["checkout", "-q", "-b", dispatched_branch]);
 
     let fake_aida = tmp.path().join("aida");
-    write_executable(
+    crate::test_exec::write_executable(
         &fake_aida,
         r#"#!/usr/bin/env bash
 set -euo pipefail

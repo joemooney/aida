@@ -18,6 +18,7 @@
 //! never around it). The probe itself never writes to the spec.
 // trace:TASK-1248 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -153,6 +154,7 @@ pub(crate) fn divergence_to_candidates(
                     }
                 ),
                 rationale: format!(
+                    // toml-ok: a log rationale, not a TOML writer.
                     "reconstitution probe verdict = {:?} for {}{}",
                     m.verdict,
                     m.real_test,
@@ -819,7 +821,7 @@ fn aida_stdout(project_root: &Path, args: &[&str]) -> String {
         .current_dir(project_root)
         .args(args)
         .env("AIDA_OUTPUT_FORMAT", "human")
-        .output()
+        .output_retrying_etxtbsy()
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
@@ -1468,11 +1470,9 @@ pub(crate) fn handle_reconstitute_command(
     Ok(())
 }
 
+// trace:TASK-1513 | ai:claude
 fn dirs_home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
-        .unwrap_or_else(std::env::temp_dir)
+    crate::home_dir().unwrap_or_else(std::env::temp_dir)
 }
 
 /// Remove expired scratch runs, then retain at most `keep` of the newest

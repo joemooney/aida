@@ -110,6 +110,10 @@ pub trait DatabaseBackend: Send + Sync {
 
     /// Loads the entire requirements store from the database
     fn load(&self) -> Result<RequirementsStore>;
+    // trace:TASK-1514 | ai:antigravity
+    fn load_for_read(&self) -> Result<RequirementsStore> {
+        self.load()
+    }
 
     /// Saves the entire requirements store to the database
     fn save(&self, store: &RequirementsStore) -> Result<()>;
@@ -125,6 +129,37 @@ pub trait DatabaseBackend: Send + Sync {
         update_fn(&mut store);
         self.save(&store)?;
         Ok(store)
+    }
+
+    /// Atomically update ONE requirement: re-read it under the backend's write
+    /// lock, apply `update_fn` to it, and write only that requirement.
+    ///
+    /// `target` names the requirement: its `id` is the identity that must
+    /// match, and its `spec_id` locates the object on git stores without a
+    /// whole-store scan. Returns the updated requirement, or `None` when it no
+    /// longer exists (the closure is then not run). The closure must not
+    /// change the requirement's `id` or `spec_id`.
+    ///
+    /// The default goes through [`Self::update_atomically`]; the git backends
+    /// override it with a targeted per-spec compare-and-swap.
+    // trace:BUG-1612 | ai:claude
+    fn update_spec_atomically<F>(
+        &self,
+        target: &Requirement,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+        Self: Sized,
+    {
+        let mut updated = None;
+        self.update_atomically(|store| {
+            if let Some(r) = store.requirements.iter_mut().find(|r| r.id == target.id) {
+                update_fn(r);
+                updated = Some(r.clone());
+            }
+        })?;
+        Ok(updated)
     }
 
     // =========================================================================
@@ -168,7 +203,27 @@ pub trait DatabaseBackend: Send + Sync {
         Ok(store.get_requirement_unambiguous(id)?.cloned())
     }
 
+    /// [`Self::get_requirement_unambiguous`] for a READ-ONLY caller (`aida
+    /// show`, `aida comment list`, the history filter). A cache-backed store
+    /// may answer from its last committed snapshot while another process is
+    /// writing the cache, instead of refreshing first; a write path must use
+    /// [`Self::get_requirement_unambiguous`], which never skips the refresh.
+    // trace:BUG-1670 | ai:claude
+    fn get_requirement_unambiguous_for_read(&self, id: &str) -> Result<Option<Requirement>> {
+        self.get_requirement_unambiguous(id)
+    }
+
     /// Lists all requirements (non-archived by default)
+    fn list_requirements_for_read(&self, include_archived: bool) -> Result<Vec<Requirement>> {
+        let store = self.load_for_read()?;
+        Ok(store
+            .requirements
+            .iter()
+            .filter(|r| include_archived || !r.archived)
+            .cloned()
+            .collect())
+    }
+
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
         let store = self.load()?;
         Ok(store
@@ -497,6 +552,49 @@ pub trait DatabaseBackend: Send + Sync {
     // trace:TASK-1052 | ai:claude
     fn queue_remove_many(&self, _user_id: &str, _ids: &[Uuid]) -> Result<Vec<QueueEntry>> {
         Ok(Vec::new())
+    }
+
+    /// [`Self::queue_remove_many`] with the "is this entry still dead?"
+    /// decision taken INSIDE the store write lock, immediately before the
+    /// removal.
+    ///
+    /// A queue-GC sweep decides an entry is dead by reading its target spec,
+    /// which is a separate read from the queue write that follows. Between the
+    /// two, a writer can reopen the spec — and the sweep then drops a live
+    /// entry. Evaluating `still_dead` under the lock closes that window: a
+    /// reopen must take the same lock to write the spec object, so it either
+    /// lands before the re-check (and the entry is kept) or after the removal.
+    ///
+    /// The default implementation has no store lock to take, so it filters and
+    /// delegates.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_many_if(
+        &self,
+        user_id: &str,
+        ids: &[Uuid],
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<Vec<QueueEntry>> {
+        let live: Vec<Uuid> = ids.iter().copied().filter(|id| still_dead(id)).collect();
+        self.queue_remove_many(user_id, &live)
+    }
+
+    /// [`Self::queue_remove_for_role`] guarded the way
+    /// [`Self::queue_remove_many_if`] guards the bulk removal: the decision is
+    /// re-taken immediately before the write, under the store write lock where
+    /// the backend has one. Returns whether the entry was removed.
+    // trace:BUG-1671 | ai:claude
+    fn queue_remove_for_role_if(
+        &self,
+        user_id: &str,
+        requirement_id: &Uuid,
+        role: Option<&str>,
+        still_dead: &dyn Fn(&Uuid) -> bool,
+    ) -> Result<bool> {
+        if !still_dead(requirement_id) {
+            return Ok(false);
+        }
+        self.queue_remove_for_role(user_id, requirement_id, role)?;
+        Ok(true)
     }
 
     // =========================================================================

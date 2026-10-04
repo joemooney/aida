@@ -8,14 +8,32 @@
 //! trace:EPIC-1-001 | ai:claude
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
+pub use super::cache_lock::{cache_lock_info_path, read_cache_lock_info, CacheLockInfo};
+use super::cache_lock::{
+    clear_dead_owner_lock_info_at, enrich_cache_lock_error, observe_lock_info_file,
+    remove_lock_info_at, touch_own_lock_info_at, write_lock_info_at,
+};
 use crate::models::{Relationship, RelationshipType, Requirement, RequirementsStore};
 use std::collections::{HashMap, HashSet};
+
+static FALLBACK_NOTE_EMITTED: AtomicBool = AtomicBool::new(false);
+
+fn note_cache_fallback(original: &Path, fallback: &Path) {
+    if !FALLBACK_NOTE_EMITTED.swap(true, Ordering::Relaxed) {
+        eprintln!(
+            "note: the AIDA cache at {} is not writable; using a private fallback cache at {}",
+            original.display(),
+            fallback.display()
+        );
+    }
+}
 
 /// Lightweight projection of a Requirement, sourced from the cache rather
 /// than from canonical YAML. Contains just the fields needed for list /
@@ -80,6 +98,12 @@ pub struct RequirementSummary {
     /// projected from the canonical YAML `origin` field; None = single-repo.
     // trace:STORY-634 | ai:claude
     pub origin: Option<String>,
+    /// The real completion timestamp (STORY-86's `completed_at`, stamped by
+    /// the Done->Completed auto-bump), projected from the canonical YAML so
+    /// `aida list --sort completed` orders on actual completion time instead
+    /// of the `modified_at` stand-in. None when not yet completed.
+    // trace:TASK-1474 | ai:claude
+    pub completed_at: Option<String>,
     pub yaml_path: String,
 }
 
@@ -367,6 +391,18 @@ pub enum SortOrder {
     /// modified_at DESC; unweighted rows sort last).
     // trace:FR-283 | ai:claude
     WeightDesc,
+    /// Newest-created first by `created_at` DESC.
+    // trace:TASK-1464 | ai:claude
+    CreatedDesc,
+    /// Most-recently-completed first, ordered on the real `completed_at`
+    /// timestamp (STORY-86, stamped by the Done->Completed auto-bump) rather
+    /// than `modified_at` — so a post-completion edit (a tag or comment) no
+    /// longer reorders the list. A `Completed` row that predates STORY-86 (no
+    /// stamped `completed_at`) falls back to `modified_at`, same as
+    /// `digest.rs`'s D7 rule. Rows with neither (not Completed) sort last
+    /// (SQLite orders NULLs last in DESC). Ties broken by `modified_at` DESC.
+    // trace:TASK-1464 trace:TASK-1474 | ai:claude
+    CompletedDesc,
 }
 
 /// Filter passed to cache list queries. All fields are AND'd together;
@@ -508,11 +544,18 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // the canonical YAML `origin` field — the multi-repo repo/component dimension,
 // ADR-12) so `aida list --fields ...,origin` reads the cache.
 // trace:STORY-634 | ai:claude
-const SCHEMA_VERSION: &str = "14";
+// TASK-1474: bumped to "15" when the `completed_at` column was added
+// (projection of the canonical YAML `completed_at` field — STORY-86's
+// Done->Completed auto-bump timestamp) so `aida list --sort completed` orders
+// on the real completion time instead of the `modified_at` stand-in.
+// trace:TASK-1474 | ai:claude
+const SCHEMA_VERSION: &str = "15";
 
 const META_KEY_SCHEMA_VERSION: &str = "schema_version";
 const META_KEY_SOURCE_HEAD_SHA: &str = "source_head_sha";
 const META_KEY_BUILT_AT: &str = "built_at";
+// trace:TASK-1527 | ai:claude
+const META_KEY_LAST_FULL_REBUILD_MS: &str = "last_full_rebuild_ms";
 const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 6400, 12800];
 
 // BUG-681: a SHORT bounded retry ladder used only on advisory, skippable read
@@ -524,6 +567,69 @@ const DEFAULT_CACHE_RETRY_DELAYS_MS: &[u64] = &[100, 200, 400, 800, 1600, 3200, 
 // prompt. Scoped to the notice path ONLY — normal reads/writes keep the full
 // resilient ladder. trace:BUG-681
 const FAST_FAIL_CACHE_RETRY_DELAYS_MS: &[u64] = &[50, 100];
+
+// trace:TASK-1526 | ai:codex
+fn refresh_head_reached(conn: &Connection, target: &str, store_path: &Path) -> Result<bool> {
+    let recorded: Option<String> = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(recorded.is_some_and(|head| {
+        if head == target {
+            return true;
+        }
+        // A previous future snapshot after a force-push must be rebuilt;
+        // "past target" is safe only on the current store lineage.
+        let current = crate::git_ops::head_sha(store_path).unwrap_or_default();
+        !target.is_empty()
+            && !head.is_empty()
+            && !current.is_empty()
+            && crate::git_ops::is_ancestor(store_path, target, &head).unwrap_or(false)
+            && crate::git_ops::is_ancestor(store_path, &head, &current).unwrap_or(false)
+    }))
+}
+
+// One-attempt policy is separate from the legacy advisory 150ms open policy.
+// trace:TASK-1526 | ai:codex
+thread_local! {
+    static READ_REFRESH_ATTEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static HOLDING_WRITE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+// trace:TASK-1526 | ai:codex
+pub(super) fn holding_write() -> bool {
+    HOLDING_WRITE.with(|n| n.get() > 0)
+}
+
+// trace:TASK-1526 | ai:codex
+pub(super) struct ReadRefreshAttempt(bool);
+impl ReadRefreshAttempt {
+    pub(super) fn new() -> Self {
+        Self(READ_REFRESH_ATTEMPT.with(|c| c.replace(true)))
+    }
+}
+impl Drop for ReadRefreshAttempt {
+    fn drop(&mut self) {
+        READ_REFRESH_ATTEMPT.with(|c| c.set(self.0));
+    }
+}
+
+// trace:TASK-1526 | ai:codex
+struct HoldingWrite;
+impl HoldingWrite {
+    fn new() -> Self {
+        HOLDING_WRITE.with(|n| n.set(n.get() + 1));
+        Self
+    }
+}
+impl Drop for HoldingWrite {
+    fn drop(&mut self) {
+        HOLDING_WRITE.with(|n| n.set(n.get() - 1));
+    }
+}
 
 thread_local! {
     // Armed by the `aida awaiting --notice` path before the cache is opened, so
@@ -550,86 +656,22 @@ pub fn fast_fail_cache_enabled() -> bool {
     FAST_FAIL_CACHE.with(|c| c.get())
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
-pub struct CacheLockInfo {
-    pub pid: u32,
-    pub command: String,
-    pub started_at: String,
-    pub user: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-}
-
-impl CacheLockInfo {
-    fn current() -> Self {
-        let command = std::env::args().collect::<Vec<_>>().join(" ");
-        Self {
-            pid: std::process::id(),
-            command,
-            started_at: chrono::Utc::now().to_rfc3339(),
-            user: current_user(),
-            session_id: std::env::var("AIDA_SESSION_ID")
-                .ok()
-                .filter(|s| !s.is_empty()),
-        }
-    }
-
-    pub fn started_at_utc(&self) -> Option<chrono::DateTime<chrono::Utc>> {
-        chrono::DateTime::parse_from_rfc3339(&self.started_at)
-            .ok()
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-    }
-}
-
-pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
-    cache_path.with_file_name(format!(
-        "{}.lock-info",
-        cache_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("cache.db")
-    ))
-}
-
-pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> {
-    let path = cache_lock_info_path(cache_path);
-    if !path.exists() {
-        return Ok(None);
-    }
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("Failed to read cache lock info at {}", path.display()))?;
-    let info = serde_json::from_str(&body)
-        .with_context(|| format!("Failed to parse cache lock info at {}", path.display()))?;
-    Ok(Some(info))
-}
-
-/// True when the cache write-lock is currently held by a DIFFERENT, still-alive
-/// process (it is mid rebuild/write). Read paths consult this so they serve the
-/// last-good committed snapshot instead of contending for the write lock through
-/// the ~25s retry ladder (BUG-664). A lock-info from THIS process, or from a
-/// dead pid (crashed writer), returns false — so a stale lock never wedges
-/// readers and a single process never defers to itself.
-// trace:BUG-664
-pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
-    match read_cache_lock_info(cache_path) {
-        Ok(Some(info)) => info.pid != std::process::id() && pid_is_alive(info.pid),
-        _ => false,
-    }
-}
-
-/// True when `pid` is a live process. Delegates to the one canonical probe
-/// (`liveness::pid_is_alive`: `kill(pid, 0)` on Unix, a single-pid sysinfo
-/// refresh elsewhere). The previous local copy returned `true` for every pid
-/// on non-Unix, so a crashed writer's stale lock file wedged Windows readers
-/// forever (and the dead-pid test asserted the opposite).
-// trace:BUG-664 trace:BUG-1021 | ai:claude
-fn pid_is_alive(pid: u32) -> bool {
-    crate::liveness::pid_is_alive(pid)
-}
-
-fn open_connection_with_retry(path: &Path) -> Result<Connection> {
-    match open_connection_inner(path) {
+// BUG-1644: `lock_info_path` is the sidecar `Cache::open` resolved once from
+// the shared cache location; the open's retry ladder observes that same file.
+// trace:BUG-1644 | ai:claude
+fn open_connection_with_retry(path: &Path, lock_info_path: &Path) -> Result<Connection> {
+    match open_connection_inner(path, lock_info_path) {
         Ok(conn) => Ok(conn),
+        // trace:BUG-1752 | ai:codex
+        // In a linked worktree the cache may be readable but its parent
+        // directory is not writable, so SQLite cannot initialize WAL shared
+        // memory through a read-write handle. Fall back to a read-only handle.
+        Err(err) if is_cache_unwritable_error(&err) && path.exists() => {
+            let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .with_context(|| format!("the AIDA cache at {} is not writable; could not open its readable snapshot: {err}", path.display()))?;
+            conn.busy_timeout(Duration::ZERO)?;
+            Ok(conn)
+        }
         // BUG-683: a corrupt / non-sqlite `.aida/cache.db` is a no-escape
         // dead-end — every cache-backed read fails, and even `aida cache
         // rebuild` re-opens the same corrupt file first and fails. The cache is
@@ -648,7 +690,7 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
             // permissions problem masquerading past the corruption class), fall
             // back to an actionable message rather than the misleading
             // WAL-mode wording.
-            open_connection_inner(path).map_err(|second| {
+            open_connection_inner(path, lock_info_path).map_err(|second| {
                 if is_sqlite_corruption_error(&second) {
                     anyhow::anyhow!(
                         "cache database is unreadable (corrupt?) — delete it to \
@@ -670,17 +712,24 @@ fn open_connection_with_retry(path: &Path) -> Result<Connection> {
 /// the corruption self-heal (BUG-683) can retry the whole open after deleting a
 /// corrupt file.
 // trace:STORY-580 | ai:codex
-fn open_connection_inner(path: &Path) -> Result<Connection> {
-    with_cache_retry(path, "open cache", || {
+fn open_connection_inner(path: &Path, lock_info_path: &Path) -> Result<Connection> {
+    with_cache_retry_observed(lock_info_path, "open cache", false, || {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open cache at {:?}", path))?;
         // AIDA owns retry/backoff timing; rusqlite's default busy handler can
         // otherwise block inside a single attempt and hide the lock holder.
         conn.busy_timeout(Duration::from_millis(0))?;
         // trace:STORY-580 | ai:codex
-        let journal_mode: String = conn
-            .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
-            .context("Failed to enable WAL journal mode for cache")?;
+        // trace:BUG-1752 | ai:codex
+        // Asking SQLite to set WAL again still attempts a directory write on
+        // read-only databases. Read first so an existing WAL snapshot opens.
+        let current_mode: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+        let journal_mode = if current_mode.eq_ignore_ascii_case("wal") {
+            current_mode
+        } else {
+            conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+                .context("Failed to enable WAL journal mode for cache")?
+        };
         if !journal_mode.eq_ignore_ascii_case("wal") {
             anyhow::bail!("cache did not enter WAL journal mode: {journal_mode}");
         }
@@ -710,6 +759,20 @@ fn is_sqlite_corruption_error(err: &anyhow::Error) -> bool {
     })
 }
 
+// trace:BUG-1752 | ai:codex
+pub(super) fn is_cache_unwritable_error(err: &anyhow::Error) -> bool {
+    use std::io::ErrorKind;
+    err.chain().any(|cause| {
+        if let Some(sqlite) = cause.downcast_ref::<rusqlite::Error>() {
+            return matches!(sqlite, rusqlite::Error::SqliteFailure(code, _)
+                if matches!(code.code, rusqlite::ErrorCode::ReadOnly | rusqlite::ErrorCode::CannotOpen));
+        }
+        cause.downcast_ref::<std::io::Error>().is_some_and(|io| {
+            io.kind() == ErrorKind::PermissionDenied || io.raw_os_error() == Some(30)
+        })
+    })
+}
+
 /// Delete a corrupt cache file and its WAL/SHM sidecars so the next open
 /// recreates a fresh, empty database. Best-effort: a failed removal falls
 /// through and the re-open surfaces the actionable message.
@@ -722,31 +785,96 @@ fn remove_corrupt_cache_files(path: &Path) {
     }
 }
 
-fn with_cache_write<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
+/// Run a cache write under the lock-info sidecar.
+///
+/// TASK-1484: the sidecar is claimed before the write (first writer wins, as
+/// before). After the write SUCCEEDS, this process has provably acquired the
+/// SQLite write lock, so a sidecar still naming a DEAD owner (a crashed or
+/// interrupted `aida schedule tick --hook`, say) is orphaned metadata and is
+/// removed with a compare-and-delete. A live or undeterminable owner's sidecar
+/// is never touched.
+// trace:TASK-1484 | ai:claude
+//
+// BUG-1644: `lock_info_path` is the sidecar resolved ONCE (at `Cache::open`)
+// from the shared cache location, and every step (claim, heartbeat, contention
+// observation, dead-owner cleanup, release) uses that one path, so a symlink
+// changing mid-write cannot leak this process's record at a second location.
+// trace:BUG-1644 | ai:claude
+fn with_cache_write<T, F>(
+    cache_path: &Path,
+    lock_info_path: &Path,
+    action: &str,
+    read_only: bool,
+    f: F,
+) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
-    write_cache_lock_info(cache_path)?;
-    let result = with_cache_retry(cache_path, action, f);
-    remove_cache_lock_info(cache_path);
+    if read_only {
+        return Err(anyhow::Error::new(CacheReadOnly {
+            path: cache_path.to_path_buf(),
+        })
+        .context(cache_read_only_guidance(cache_path)));
+    }
+    let _holding_write = HoldingWrite::new();
+    let claimed = write_lock_info_at(lock_info_path, cache_path, action)?;
+    let result = with_cache_retry_observed(lock_info_path, action, claimed, f);
+    if result.is_ok() {
+        clear_dead_owner_lock_info_at(lock_info_path);
+    }
+    remove_lock_info_at(lock_info_path);
     result
 }
 
-fn with_cache_retry<T, F>(cache_path: &Path, action: &str, mut f: F) -> Result<T>
+#[cfg(test)]
+fn with_cache_retry<T, F>(cache_path: &Path, action: &str, f: F) -> Result<T>
+where
+    F: FnMut() -> Result<T>,
+{
+    with_cache_retry_observed(&cache_lock_info_path(cache_path), action, false, f)
+}
+
+/// The bounded retry ladder. When the retries are exhausted, the recorded
+/// lock owner is observed once so the terminal error can say whether this was
+/// live contention, stale metadata from a dead owner (SQLite held by an
+/// unrecorded process), or no recorded owner at all. A dead owner does NOT
+/// shortcut the ladder: SQLite is still the arbiter, so the probe stays
+/// bounded and identical. When `owns_sidecar`, the sidecar's heartbeat and
+/// phase are refreshed on each wait.
+// trace:TASK-1484 | ai:claude
+fn with_cache_retry_observed<T, F>(
+    lock_info_path: &Path,
+    action: &str,
+    owns_sidecar: bool,
+    mut f: F,
+) -> Result<T>
 where
     F: FnMut() -> Result<T>,
 {
     let delays = cache_retry_delays();
     let mut attempts = 0usize;
     loop {
+        #[cfg(test)]
+        if holding_write() {
+            super::cache_refresh::test_count("write_attempt");
+        }
         match f() {
             Ok(value) => return Ok(value),
             Err(err) if is_sqlite_lock_error(&err) && attempts < delays.len() => {
+                if owns_sidecar {
+                    touch_own_lock_info_at(
+                        lock_info_path,
+                        &format!("waiting for sqlite lock: {action} (retry {})", attempts + 1),
+                    );
+                }
+                #[cfg(test)]
+                super::cache_refresh::test_count("retry_sleep");
                 std::thread::sleep(delays[attempts]);
                 attempts += 1;
             }
             Err(err) if is_sqlite_lock_error(&err) => {
-                return Err(enrich_cache_lock_error(cache_path, action, err));
+                let observation = observe_lock_info_file(lock_info_path).ok().flatten();
+                return Err(enrich_cache_lock_error(action, observation.as_ref(), err));
             }
             Err(err) => return Err(err),
         }
@@ -754,6 +882,10 @@ where
 }
 
 fn cache_retry_delays() -> Vec<Duration> {
+    // trace:TASK-1526 | ai:codex
+    if READ_REFRESH_ATTEMPT.with(|c| c.get()) {
+        return Vec::new();
+    }
     // BUG-681: on the advisory notice path, collapse to the short bounded ladder
     // so a lock-contended open/read fails fast (~150ms) rather than blocking on
     // the full ~25s exponential backoff. An explicit AIDA_CACHE_RETRY_COUNT=0
@@ -813,6 +945,18 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
     })
 }
 
+/// True when `err` is a cache write-lock failure: a raw SQLite busy/locked
+/// error, or the owner-enriched error the retry ladder returns once it is
+/// exhausted. Strict refresh propagates it without escalation; a tolerant
+/// incremental winner can serve a labelled compatible snapshot after one attempt.
+// trace:TASK-1515 | ai:claude
+pub(crate) fn is_cache_lock_error(err: &anyhow::Error) -> bool {
+    is_sqlite_lock_error(err)
+        || err
+            .chain()
+            .any(|cause| cause.is::<super::cache_lock::CacheLockExhausted>())
+}
+
 /// True when a cache operation hit SQLite schema drift that can be healed by
 /// dropping and rebuilding the rebuildable projection from the git store.
 // trace:BUG-1097 | ai:codex
@@ -826,96 +970,163 @@ pub fn is_cache_schema_drift_error(err: &anyhow::Error) -> bool {
     })
 }
 
-fn enrich_cache_lock_error(cache_path: &Path, action: &str, err: anyhow::Error) -> anyhow::Error {
-    match read_cache_lock_info(cache_path) {
-        Ok(Some(info)) if info.pid != std::process::id() => anyhow::anyhow!(
-            "database is locked while trying to {action} by pid={} ({}) held since {} ({} ago). \
-             Try again or check that process. If it's stuck, run `aida doctor heal stale-locks`.\ncaused by: {}",
-            info.pid,
-            if info.command.trim().is_empty() {
-                "unknown command"
-            } else {
-                info.command.as_str()
-            },
-            info.started_at,
-            humanize_cache_lock_age(&info),
-            err
-        ),
-        _ => anyhow::anyhow!(
-            "database is locked while trying to {action}. \
-             Try again. If this persists, run `aida doctor heal stale-locks`.\ncaused by: {}",
-            err
-        ),
+/// The row operations of an incremental refresh, bound to the ONE open write
+/// transaction of [`Cache::apply_incremental`]. Nothing done through this
+/// handle is visible to other connections until the whole refresh, including
+/// its head-SHA stamp, commits.
+// trace:TASK-1515 | ai:claude
+pub(crate) struct CacheTx<'a> {
+    conn: &'a Connection,
+}
+
+impl CacheTx<'_> {
+    pub(crate) fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
+        upsert_requirement_on(self.conn, req)
+    }
+
+    pub(crate) fn delete_requirement(&self, id: &Uuid) -> Result<()> {
+        delete_requirement_on(self.conn, id)
+    }
+
+    pub(crate) fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
+        uuid_for_spec_id_on(self.conn, spec_id)
+    }
+
+    pub(crate) fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
+        spec_id_for_uuid_on(self.conn, id)
+    }
+
+    pub(crate) fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
+        ancestor_epic_ids_on(self.conn, id)
+    }
+
+    pub(crate) fn recompute_epic_status_from_hierarchy(
+        &self,
+        epic_id: &Uuid,
+        stored_status: &crate::models::RequirementStatus,
+    ) -> Result<()> {
+        match epic_status_to_stamp(self.conn, epic_id, stored_status) {
+            Some(status) => set_epic_status_on(self.conn, epic_id, &status),
+            None => Ok(()),
+        }
     }
 }
 
-fn humanize_cache_lock_age(info: &CacheLockInfo) -> String {
-    let Some(started_at) = info.started_at_utc() else {
-        return "unknown age".to_string();
-    };
-    let secs = chrono::Utc::now()
-        .signed_duration_since(started_at)
-        .num_seconds()
-        .max(0);
-    if secs < 60 {
-        format!("{secs}s")
-    } else if secs < 3600 {
-        format!("{}m {}s", secs / 60, secs % 60)
-    } else {
-        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
-    }
+// trace:TASK-1526 | ai:codex
+#[derive(Debug, thiserror::Error)]
+#[error("the cache schema changed; a compatible projection is required")]
+pub(crate) struct CacheSchemaChanged;
+
+#[derive(Debug, thiserror::Error)]
+#[error("the AIDA cache at {path} is not writable")]
+pub(crate) struct CacheReadOnly {
+    pub path: PathBuf,
 }
 
-fn write_cache_lock_info(cache_path: &Path) -> Result<()> {
-    use std::io::Write;
-
-    let path = cache_lock_info_path(cache_path);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "Failed to create cache lock-info parent {}",
-                parent.display()
-            )
-        })?;
-    }
-    let body = serde_json::to_string_pretty(&CacheLockInfo::current())?;
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-    {
-        Ok(mut file) => file
-            .write_all(body.as_bytes())
-            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        Err(err) => Err(err)
-            .with_context(|| format!("Failed to write cache lock info at {}", path.display())),
-    }
+pub(super) fn cache_read_only_guidance(path: &Path) -> String {
+    format!("the AIDA cache at {} is not writable, so it cannot be migrated or rebuilt (reads still work). This usually means a sandboxed agent is running in a linked worktree whose cache is symlinked into the main checkout. Grant write access to the main checkout's .aida directory (codex: --add-dir <main>/.aida) or run the command from the main checkout", path.display())
 }
 
-fn remove_cache_lock_info(cache_path: &Path) {
-    let path = cache_lock_info_path(cache_path);
-    let Ok(body) = std::fs::read_to_string(&path) else {
-        return;
-    };
-    let Ok(info) = serde_json::from_str::<CacheLockInfo>(&body) else {
-        return;
-    };
-    if info.pid == std::process::id() {
-        let _ = std::fs::remove_file(path);
-    }
-}
-
-fn current_user() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string())
+pub(super) fn is_cache_read_only_error(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<CacheReadOnly>().is_some()
 }
 
 pub struct Cache {
     conn: Mutex<Connection>,
     path: PathBuf,
     lock_info_path: PathBuf,
+    /// TASK-1515: `open()` found a schema migration was needed while the
+    /// existing tables still held rows. The drop is deferred into the next
+    /// rebuild's single transaction, so a concurrent reader keeps seeing the
+    /// old committed tables until the rebuilt ones commit, never empty tables.
+    /// While set, the recorded head SHA is reported as absent (the cache is
+    /// stale), so the next freshness check does a full rebuild.
+    // trace:TASK-1515 | ai:claude
+    migration_pending: AtomicBool,
+    usable_snapshot: AtomicBool,
+    read_only: bool,
+}
+
+// trace:BUG-1752 | ai:codex
+// Probe actual filesystem writes once per handle; permission bits do not account for mounts/sandboxes.
+fn probe_cache_writable(path: &Path, lock_info_path: &Path) -> bool {
+    static NEXT_PROBE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    fn probe_dir(dir: &Path) -> bool {
+        use std::io::Write;
+        let n = NEXT_PROBE.fetch_add(1, Ordering::Relaxed);
+        let probe = dir.join(format!(".aida-write-probe-{}-{n}", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(mut f) => {
+                let result = f.write_all(b"probe").is_ok();
+                drop(f);
+                let _ = std::fs::remove_file(probe);
+                result
+            }
+            Err(_) => false,
+        }
+    }
+    let lock_dir = lock_info_path.parent().unwrap_or_else(|| Path::new("."));
+    let db_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    probe_dir(lock_dir)
+        && probe_dir(db_dir)
+        && (!path.exists() || std::fs::OpenOptions::new().append(true).open(path).is_ok())
+}
+
+// trace:BUG-1752 | ai:codex
+fn fallback_cache_candidates(original: &Path) -> Vec<PathBuf> {
+    use sha2::{Digest, Sha256};
+    let canonical = if let Ok(path) = std::fs::canonicalize(original) {
+        path
+    } else {
+        let Some(parent) = original.parent() else {
+            return Vec::new();
+        };
+        let Ok(parent) = std::fs::canonicalize(parent) else {
+            return Vec::new();
+        };
+        let Some(name) = original.file_name() else {
+            return Vec::new();
+        };
+        parent.join(name)
+    };
+    let digest = format!(
+        "{:x}",
+        Sha256::digest(canonical.to_string_lossy().as_bytes())
+    );
+    let bases = if let Some(dir) = std::env::var_os("AIDA_CACHE_FALLBACK_DIR") {
+        vec![PathBuf::from(dir)]
+    } else {
+        let Some(home) = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| crate::home::home_dir().map(|h| h.join(".cache")))
+        else {
+            return Vec::new();
+        };
+        vec![
+            {
+                let Some(parent) = original.parent() else {
+                    return Vec::new();
+                };
+                parent.join("cache-fallback")
+            },
+            home.join("aida/unwritable-cache-fallback"),
+        ]
+    };
+    bases.into_iter().map(|base| base.join(&digest)).collect()
+}
+
+fn prepare_fallback_cache_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
 }
 
 impl Cache {
@@ -927,13 +1138,59 @@ impl Cache {
     /// schema. `CREATE TABLE IF NOT EXISTS` doesn't add new columns to an
     /// existing table; dropping forces a clean rebuild from git on the next
     /// stale-check. The cache is rebuildable by definition, so this is safe.
+    ///
+    /// TASK-1515: when the old tables still hold rows, the drop is not done
+    /// here but inside the next rebuild's single transaction (see
+    /// [`Cache::migration_pending`]), so concurrent readers never see empty
+    /// tables; empty tables are migrated here in one transaction.
+    ///
+    /// TASK-1478: the version comparison is ORDERED, not `!=`. A dev build and
+    /// an older installed `aida` alternating on one project used to full-rebuild
+    /// the cache the other one just wrote, every single open. An on-disk stamp
+    /// OLDER than this binary's still migrates (unchanged). An on-disk stamp
+    /// NEWER than this binary's is left alone as long as every column THIS
+    /// binary reads/writes is present (the BUG-627 `PRAGMA table_info` drift
+    /// check, reused) — an older binary only ever touches its own columns, so a
+    /// newer-but-additive schema is safe to read/write in place. A newer stamp
+    /// that IS missing a needed column still migrates (drift wins over version
+    /// order). The stamp itself is never downgraded: after any non-dropping
+    /// open the recorded version is the max of what was on disk and this
+    /// binary's own version, so an older binary opening a healthy newer cache
+    /// can't make the newer binary think ITS cache needs rebuilding next.
+    // trace:TASK-1478 | ai:claude
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
+        Self::open_at(path, true)
+    }
+
+    fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create cache parent dir: {:?}", parent))?;
         }
-        let conn = open_connection_with_retry(&path)?;
+        // BUG-1644: resolve the shared lock-info sidecar once for this handle.
+        // trace:BUG-1644 | ai:claude
+        let lock_info_path = cache_lock_info_path(&path);
+        let read_only = !probe_cache_writable(&path, &lock_info_path);
+        let conn = match open_connection_with_retry(&path, &lock_info_path) {
+            Ok(conn) => conn,
+            Err(err) if read_only && allow_fallback => {
+                for fallback_dir in fallback_cache_candidates(&path) {
+                    if prepare_fallback_cache_dir(&fallback_dir).is_err() {
+                        continue;
+                    }
+                    let fallback = fallback_dir.join("cache.db");
+                    if let Ok(cache) = Self::open_at(fallback.clone(), false) {
+                        if !cache.read_only {
+                            note_cache_fallback(&path, &fallback);
+                            return Ok(cache);
+                        }
+                    }
+                }
+                return Err(err.context(cache_read_only_guidance(&path)));
+            }
+            Err(err) => return Err(err),
+        };
         // Check the recorded schema version BEFORE applying the schema —
         // if the table doesn't exist yet, the meta read silently returns
         // None which falls through to "no migration needed".
@@ -959,10 +1216,16 @@ impl Cache {
         // columns, don't trust the meta) makes the cache self-heal: drop +
         // rebuild-from-git on next read, regardless of the version stamp or
         // HEAD-SHA freshness.
-        let version_mismatch = on_disk_version
-            .as_deref()
-            .map(|v| v != SCHEMA_VERSION)
-            .unwrap_or(false);
+        //
+        // TASK-1478: `SCHEMA_VERSION` is a plain integer string ("15"), so
+        // compare numerically and ORDER the mismatch instead of just `!=`.
+        // Only a stamp OLDER than this binary (or an unparsable/bogus stamp,
+        // which is indistinguishable from "needs migration") forces the drop
+        // here; a NEWER stamp is handled below by the drift check alone.
+        let on_disk_version_num: Option<u64> =
+            on_disk_version.as_deref().and_then(|v| v.parse().ok());
+        let current_version_num = current_schema_version_num();
+        let version_older = schema_stamp_is_older(on_disk_version.as_deref());
         // BUG-757 / TASK-1185: a torn/partial migration can leave one expected
         // cache table present while another is entirely absent (for example
         // `requirements_cache` present but `requirements_fts` absent, or only
@@ -971,8 +1234,7 @@ impl Cache {
         // partial table set as structural drift: drop + reapply + invalidate the
         // head SHA, same as a missing column.
         // trace:BUG-757 trace:TASK-1185 | ai:codex
-        let schema_drifted =
-            fts_schema_drifted(&conn) || cache_schema_drifted(&conn) || cache_tables_partial(&conn);
+        let schema_drifted = schema_structurally_drifted(&conn);
         // BUG-664: a PURE READER must not take the cache write-lock on open. The
         // old open unconditionally re-applied the schema AND re-stamped the
         // schema-version meta on every open — both write transactions. With
@@ -984,52 +1246,182 @@ impl Cache {
         // create/migrate so the steady-state open is read-only. WAL then lets the
         // reader serve the last-good committed snapshot with zero contention.
         let tables_present = cache_tables_present(&conn);
-        let needs_schema_apply = version_mismatch || schema_drifted || !tables_present;
-        if version_mismatch || schema_drifted {
-            // Drop the cache tables — the next stale-check will rebuild
-            // from git. `cache_meta` survives so the source HEAD SHA
-            // tracking continues to work after the rebuild stamps it.
-            with_cache_write(&path, "drop cache tables for schema migration", || {
-                conn.execute_batch(
-                    // BUG-764: hierarchy_edges must drop too — `CREATE TABLE IF
-                    // NOT EXISTS` can't add the author_id column to a v12 table.
-                    "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;
-                     DROP TABLE IF EXISTS hierarchy_edges;",
-                )
-                .context("Failed to drop cache tables for schema migration")
-            })?;
+        if read_only && !tables_present && allow_fallback {
+            for fallback_dir in fallback_cache_candidates(&path) {
+                if prepare_fallback_cache_dir(&fallback_dir).is_err() {
+                    continue;
+                }
+                let fallback = fallback_dir.join("cache.db");
+                if let Ok(cache) = Self::open_at(fallback.clone(), false) {
+                    if !cache.read_only {
+                        note_cache_fallback(&path, &fallback);
+                        return Ok(cache);
+                    }
+                }
+            }
         }
-        if needs_schema_apply {
-            with_cache_write(&path, "apply cache schema", || {
-                conn.execute_batch(SCHEMA_SQL)
-                    .context("Failed to apply cache schema")
-            })?;
+        // TASK-1478: a NEWER-but-healthy stamp (version_older false, no drift)
+        // does NOT force a migration drop — that's the whole point of the
+        // fix. Only "this binary is behind" or "the columns don't match what
+        // this binary needs" triggers the drop, regardless of which way the
+        // version numbers point.
+        let needs_migration_drop = version_older || schema_drifted;
+        // TASK-1515: a migration drop used to commit HERE, on its own, and the
+        // rebuild that refilled the tables committed later (often in another
+        // call). Between the two, every concurrent reader saw committed EMPTY
+        // tables: the one window in which the live WAL cache was genuinely
+        // unreadable. Now:
+        // - the existing tables hold rows: DEFER the drop. Nothing is written
+        //   here; the drop, schema apply, refill and stamps all commit in the
+        //   next rebuild's single transaction (see `rebuild_projection`).
+        //   Readers keep the old committed tables until then. The on-disk
+        //   stamp/drift is left untouched, so any other process opening the
+        //   cache re-detects the same pending migration.
+        // - the tables are already empty (or absent): there is nothing a
+        //   reader could lose, so migrate now, as ONE transaction (drop,
+        //   apply, stamp the version, clear the head SHA).
+        // trace:TASK-1515 | ai:claude
+        let mut migration_pending = false;
+        if needs_migration_drop {
+            if read_only || projection_has_rows(&conn) {
+                migration_pending = true;
+            } else {
+                let outcome = with_cache_write(
+                    &path,
+                    &lock_info_path,
+                    "migrate empty cache schema",
+                    read_only,
+                    || {
+                        let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                        // Re-check under the write lock: another process may
+                        // have migrated, or rebuilt rows into the old tables,
+                        // since the unlocked probe above.
+                        if !schema_migration_needed(&tx) {
+                            return Ok(EmptyMigration::NoLongerNeeded);
+                        }
+                        if projection_has_rows(&tx) {
+                            return Ok(EmptyMigration::NowHasRows);
+                        }
+                        // BUG-764: hierarchy_edges must drop too — `CREATE TABLE
+                        // IF NOT EXISTS` can't add the author_id column to a v12
+                        // table.
+                        tx.execute_batch(DROP_PROJECTION_SQL)
+                            .context("Failed to drop cache tables for schema migration")?;
+                        tx.execute_batch(SCHEMA_SQL)
+                            .context("Failed to apply cache schema")?;
+                        set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+                        // The head SHA no longer describes the (empty) tables.
+                        tx.execute(
+                            "DELETE FROM cache_meta WHERE key = ?1",
+                            params![META_KEY_SOURCE_HEAD_SHA],
+                        )?;
+                        tx.commit()?;
+                        Ok(EmptyMigration::Migrated)
+                    },
+                );
+                let outcome = match outcome {
+                    Ok(value) => value,
+                    // The tables may be readable even when lock metadata or a
+                    // migration write cannot be created. Keep their committed
+                    // contents and stamp unchanged; a later writer retries.
+                    Err(err)
+                        if read_only
+                            || is_cache_read_only_error(&err)
+                            || is_cache_unwritable_error(&err) =>
+                    {
+                        EmptyMigration::NowHasRows
+                    }
+                    Err(err) => return Err(err),
+                };
+                migration_pending = outcome == EmptyMigration::NowHasRows;
+            }
+        } else if !tables_present && read_only {
+            migration_pending = true;
+        } else if !tables_present {
+            with_cache_write(
+                &path,
+                &lock_info_path,
+                "apply cache schema",
+                read_only,
+                || {
+                    conn.execute_batch(SCHEMA_SQL)
+                        .context("Failed to apply cache schema")
+                },
+            )?;
         }
         let cache = Cache {
             conn: Mutex::new(conn),
-            lock_info_path: cache_lock_info_path(&path),
+            lock_info_path,
             path,
+            migration_pending: AtomicBool::new(migration_pending),
+            usable_snapshot: AtomicBool::new(tables_present),
+            read_only,
         };
-        // Only stamp the schema version when it is not already current — an
+        // Only stamp the schema version when it needs to change — an
         // unconditional `INSERT … ON CONFLICT DO UPDATE` always takes the write
-        // lock (BUG-664). A fresh cache (None) or a migrated one (mismatch) needs
-        // the stamp; a current cache must not write here.
-        if on_disk_version.as_deref() != Some(SCHEMA_VERSION) {
-            cache.set_meta(META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
-        }
-        // After a schema-version bump (or a structural-drift drop, BUG-485)
-        // the head SHA is no longer valid for the (now-empty) cache tables —
-        // delete it so `is_stale` returns true (None → stale) and the next
-        // read triggers a rebuild.
-        if version_mismatch || schema_drifted {
-            let conn = cache.conn.lock().unwrap();
-            conn.execute(
-                "DELETE FROM cache_meta WHERE key = ?1",
-                params![META_KEY_SOURCE_HEAD_SHA],
-            )?;
+        // lock (BUG-664). A fresh cache (None) needs the stamp; a current cache
+        // must not write here. A migration stamps inside its own transaction
+        // (the empty-table path above, or the deferred rebuild), never here.
+        //
+        // TASK-1478: never DOWNGRADE the stamp. On the steady-state open
+        // (tables left untouched) the stamp is the max of what was on disk
+        // and this binary's version, so an older binary opening a healthy
+        // newer cache leaves the newer binary's higher stamp in place instead
+        // of clobbering it back down (which would make the newer binary
+        // rebuild its own healthy cache on its next open).
+        if !needs_migration_drop && !read_only {
+            let target_version: String = on_disk_version_num
+                .map(|v| v.max(current_version_num))
+                .unwrap_or(current_version_num)
+                .to_string();
+            if on_disk_version.as_deref() != Some(target_version.as_str()) {
+                cache.set_meta(META_KEY_SCHEMA_VERSION, &target_version)?;
+            }
         }
         Ok(cache)
+    }
+
+    // Read-only connection, pinned before reading either metadata or rows.
+    // Closing it releases the transaction, including on every error path.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn read_snapshot(&self) -> Result<Self> {
+        let conn =
+            Connection::open_with_flags(&self.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        conn.busy_timeout(std::time::Duration::ZERO)?;
+        conn.execute_batch("BEGIN DEFERRED")?;
+        // A stale version stamp alone does not make the committed projection
+        // unreadable. Preserve it until a writer can perform the migration.
+        // Structural drift is handled by the authoritative backend fallback.
+        if schema_structurally_drifted(&conn) {
+            self.migration_pending.store(true, Ordering::SeqCst);
+            return Err(CacheSchemaChanged.into());
+        }
+        Ok(Self {
+            conn: Mutex::new(conn),
+            path: self.path.clone(),
+            lock_info_path: self.lock_info_path.clone(),
+            migration_pending: AtomicBool::new(false),
+            usable_snapshot: AtomicBool::new(true),
+            read_only: self.read_only,
+        })
+    }
+
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn has_usable_snapshot(&self) -> bool {
+        self.usable_snapshot.load(Ordering::SeqCst)
+    }
+
+    // Another process can finish a pending migration while this handle waits.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn recheck_migration(&self) -> bool {
+        if self.migration_pending() && !schema_migration_needed(&self.conn.lock().unwrap()) {
+            self.migration_pending.store(false, Ordering::SeqCst);
+        }
+        self.migration_pending()
+    }
+
+    pub(crate) fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     pub fn path(&self) -> &Path {
@@ -1044,14 +1436,13 @@ impl Cache {
 
     fn set_meta(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "set cache metadata", || {
-            conn.execute(
-                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                params![key, value],
-            )?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "set cache metadata",
+            self.read_only,
+            || set_meta_on(&conn, key, value),
+        )?;
         Ok(())
     }
 
@@ -1067,8 +1458,29 @@ impl Cache {
         Ok(r)
     }
 
+    /// The store HEAD the cached rows were built from. `None` (stale) while a
+    /// schema migration is pending: the recorded SHA still describes the old
+    /// tables a concurrent reader may be using, but not a projection THIS
+    /// binary can serve, so the next freshness check must full-rebuild.
+    ///
+    /// The pending state lives only in this process (derived at open from an
+    /// older on-disk `schema_version` stamp). Code that reads
+    /// `cache_meta.source_head_sha` directly, and older binaries, do not see
+    /// it: they may take the old-schema rows as fresh, so they must query
+    /// only columns every schema version has (today: `id` and `spec_id`).
+    // trace:TASK-1515 | ai:claude
     pub fn source_head_sha(&self) -> Result<Option<String>> {
+        if self.migration_pending() {
+            return Ok(None);
+        }
         self.get_meta(META_KEY_SOURCE_HEAD_SHA)
+    }
+
+    /// True when `open()` deferred a schema migration into the next rebuild
+    /// transaction (the old tables still hold rows other readers may use).
+    // trace:TASK-1515 | ai:claude
+    pub fn migration_pending(&self) -> bool {
+        self.migration_pending.load(Ordering::SeqCst)
     }
 
     pub fn set_source_head_sha(&self, sha: &str) -> Result<()> {
@@ -1077,6 +1489,15 @@ impl Cache {
 
     pub fn built_at(&self) -> Result<Option<String>> {
         self.get_meta(META_KEY_BUILT_AT)
+    }
+
+    /// Duration of the last full rebuild, if one has run on this cache file.
+    /// Sizes the detached refresh worker's runtime cap (TASK-1527).
+    // trace:TASK-1527 | ai:claude
+    pub fn last_full_rebuild_ms(&self) -> Result<Option<u64>> {
+        Ok(self
+            .get_meta(META_KEY_LAST_FULL_REBUILD_MS)?
+            .and_then(|s| s.parse().ok()))
     }
 
     /// Cache is stale when the recorded source HEAD SHA differs from the
@@ -1093,17 +1514,25 @@ impl Cache {
     /// Wipe all cached rows. Schema and meta survive. Use before a rebuild.
     pub fn truncate(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "truncate cache", || {
-            // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
-            // the DELETEs so truncate stays a valid recovery verb even when a
-            // torn migration left a table missing — the DELETE would otherwise
-            // error with `no such table: requirements_fts` before anything
-            // could heal.
-            // trace:BUG-757 | ai:claude
-            conn.execute_batch(SCHEMA_SQL)?;
-            conn.execute_batch("DELETE FROM requirements_cache; DELETE FROM requirements_fts;")?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "truncate cache",
+            self.read_only,
+            || {
+                // BUG-757: re-apply the idempotent (`IF NOT EXISTS`) schema before
+                // the DELETEs so truncate stays a valid recovery verb even when a
+                // torn migration left a table missing — the DELETE would otherwise
+                // error with `no such table: requirements_fts` before anything
+                // could heal.
+                // trace:BUG-757 | ai:claude
+                conn.execute_batch(SCHEMA_SQL)?;
+                conn.execute_batch(
+                    "DELETE FROM requirements_cache; DELETE FROM requirements_fts;",
+                )?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 
@@ -1115,6 +1544,28 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
+        self.rebuild_projection(store, source_head_sha, false, None)
+    }
+
+    /// The one rebuild transaction. TASK-1515: the rows, the hierarchy edges,
+    /// and the `source_head_sha`, `built_at` and `schema_version` stamps all
+    /// commit together (they used to be four transactions), so a concurrent
+    /// reader never sees rows from HEAD B labelled with HEAD A. When
+    /// `force_drop` is set, or `open()` deferred a migration, the projection
+    /// tables are dropped and recreated INSIDE the same transaction: a reader
+    /// sees either the old tables or the fully rebuilt ones, never empty ones.
+    // trace:TASK-1515 | ai:claude
+    fn rebuild_projection(
+        &self,
+        store: &RequirementsStore,
+        source_head_sha: &str,
+        force_drop: bool,
+        refresh_store: Option<&Path>,
+    ) -> Result<usize> {
+        // The detached refresh worker's runtime cap is sized from the last
+        // full rebuild, so each rebuild records its own duration (TASK-1527).
+        // trace:TASK-1527 | ai:claude
+        let rebuild_started = std::time::Instant::now();
         // STORY-632: degree/heft is a pure function of the WHOLE relationship
         // graph, so compute it once over the full store before the row inserts.
         // trace:STORY-632 | ai:claude
@@ -1166,39 +1617,116 @@ impl Cache {
         }
         let count = {
             let conn = self.conn.lock().unwrap();
-            with_cache_write(&self.path, "rebuild cache", || {
-                let tx = conn.unchecked_transaction()?;
-                // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
-                // the DELETEs so `aida cache rebuild` is always a valid
-                // recovery verb — a torn migration that left a table missing
-                // used to make even the rebuild error (`no such table:
-                // requirements_fts`) before it could recreate anything.
-                // trace:BUG-757 | ai:claude
-                tx.execute_batch(SCHEMA_SQL)?;
-                tx.execute_batch(
+            let migration_pending = self.migration_pending();
+            with_cache_write(
+                &self.path,
+                &self.lock_info_path,
+                "rebuild cache",
+                self.read_only,
+                || {
+                    // TASK-1515: IMMEDIATE takes the write lock at BEGIN, so a
+                    // contended rebuild fails (and enters the unchanged retry
+                    // ladder) before doing any work, never mid-transaction.
+                    let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                    // The pending flag was probed at open, without the lock. If
+                    // another process has since completed the migration, skip the
+                    // redundant drop (the refill below is the same either way).
+                    // trace:TASK-1515 | ai:claude
+                    // The flock is an optimization; SQLite serializes this check
+                    // with the rows, including on filesystems with incoherent flock.
+                    // trace:TASK-1526 | ai:codex
+                    if let Some(store_path) = refresh_store {
+                        if !schema_migration_needed(&tx)
+                            && refresh_head_reached(&tx, source_head_sha, store_path)?
+                        {
+                            return Ok(tx.query_row(
+                                "SELECT COUNT(*) FROM requirements_cache",
+                                [],
+                                |r| r.get(0),
+                            )?);
+                        }
+                    }
+                    let drop_first =
+                        force_drop || (migration_pending && schema_migration_needed(&tx));
+                    if drop_first {
+                        tx.execute_batch(DROP_PROJECTION_SQL).context(
+                            if force_drop && !(migration_pending && schema_migration_needed(&tx)) {
+                                "Failed to drop cache tables for forced rebuild"
+                            } else {
+                                "Failed to drop cache tables for schema migration"
+                            },
+                        )?;
+                    }
+                    // BUG-757: apply the idempotent (`IF NOT EXISTS`) schema before
+                    // the DELETEs so `aida cache rebuild` is always a valid
+                    // recovery verb — a torn migration that left a table missing
+                    // used to make even the rebuild error (`no such table:
+                    // requirements_fts`) before it could recreate anything.
+                    // trace:BUG-757 | ai:claude
+                    tx.execute_batch(SCHEMA_SQL)?;
+                    tx.execute_batch(
                     "DELETE FROM requirements_cache; DELETE FROM requirements_fts; DELETE FROM hierarchy_edges;",
                 )?;
-                let mut count = 0usize;
-                for req in &store.requirements {
-                    let d = degrees.get(&req.id).copied().unwrap_or_default();
-                    let status_override = epic_status.get(&req.id).map(String::as_str);
-                    insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
-                    count += 1;
-                }
-                for (parent, child, author) in &hierarchy_edges {
-                    tx.execute(
-                        "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
+                    let mut count = 0usize;
+                    for req in &store.requirements {
+                        let d = degrees.get(&req.id).copied().unwrap_or_default();
+                        let status_override = epic_status.get(&req.id).map(String::as_str);
+                        insert_one(&tx, req, d, blocked.contains(&req.id), status_override)?;
+                        count += 1;
+                    }
+                    for (parent, child, author) in &hierarchy_edges {
+                        tx.execute(
+                            "INSERT OR IGNORE INTO hierarchy_edges (parent_id, child_id, author_id)
                          VALUES (?1, ?2, ?3)",
-                        params![parent.to_string(), child.to_string(), author.to_string()],
+                            params![parent.to_string(), child.to_string(), author.to_string()],
+                        )?;
+                    }
+                    // TASK-1515: stamp freshness in the SAME transaction as the rows.
+                    set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, source_head_sha)?;
+                    set_meta_on(&tx, META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+                    // trace:TASK-1527 | ai:claude
+                    set_meta_on(
+                        &tx,
+                        META_KEY_LAST_FULL_REBUILD_MS,
+                        &rebuild_started.elapsed().as_millis().to_string(),
                     )?;
-                }
-                tx.commit()?;
-                Ok(count)
-            })?
+                    // TASK-1478: a full rebuild just regenerated EVERY row via THIS
+                    // binary's own `insert_one`, so the projected data now IS exactly
+                    // this binary's schema — unlike `Cache::open`'s steady-state path
+                    // (which touches no rows), the max-of-two/no-downgrade rule does not
+                    // apply here. Stamp unconditionally, even if that LOWERS the
+                    // version: an older binary rebuilding a cache a newer binary had
+                    // stamped higher must leave behind an OLDER stamp, precisely so the
+                    // newer binary's next `open()` sees `version_older = true` and does
+                    // its own migration-drop-and-refill — restoring the columns the
+                    // older binary's rebuild just left NULL (see the comment on
+                    // `insert_one`). Without this, that refill would depend on some
+                    // unrelated future version bump instead of firing exactly once,
+                    // right after the older binary's rebuild — not on every subsequent
+                    // alternating open (a plain open leaves a healthy, non-dropped cache
+                    // stamp alone; only an actual rebuild changes it).
+                    set_meta_on(&tx, META_KEY_SCHEMA_VERSION, SCHEMA_VERSION)?;
+                    tx.commit()?;
+                    Ok(count)
+                },
+            )?
         };
-        self.set_source_head_sha(source_head_sha)?;
-        self.set_meta(META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
+        // The deferred migration (if any) committed with the rebuild.
+        self.migration_pending.store(false, Ordering::SeqCst);
+        self.usable_snapshot.store(true, Ordering::SeqCst);
         Ok(count)
+    }
+
+    // Only freshness-driven rebuilds skip a projection another process has
+    // already committed. Explicit `cache rebuild` remains an unconditional repair.
+    // trace:TASK-1526 | ai:codex
+    pub(crate) fn rebuild_for_refresh(
+        &self,
+        store: &RequirementsStore,
+        head: &str,
+        store_path: &Path,
+    ) -> Result<usize> {
+        self.rebuild_projection(store, head, false, Some(store_path))
     }
 
     /// Force a schema reset before rebuilding from the authoritative store.
@@ -1216,21 +1744,58 @@ impl Cache {
         store: &RequirementsStore,
         source_head_sha: &str,
     ) -> Result<usize> {
-        {
-            let conn = self.conn.lock().unwrap();
-            with_cache_write(&self.path, "reset cache schema after drift", || {
-                conn.execute_batch(
-                    "DROP TABLE IF EXISTS requirements_cache;
-                     DROP TABLE IF EXISTS requirements_fts;
-                     DROP TABLE IF EXISTS hierarchy_edges;",
-                )
-                .context("Failed to reset cache schema after drift")?;
-                conn.execute_batch(SCHEMA_SQL)
-                    .context("Failed to reapply cache schema after drift")?;
-                Ok(())
-            })?;
+        // TASK-1515: the drop now commits with the refill, not before it.
+        // trace:TASK-1515 | ai:claude
+        self.rebuild_projection(store, source_head_sha, true, None)
+    }
+
+    /// Apply an incremental refresh to `to_head` as ONE write transaction.
+    ///
+    /// `apply` performs every changed row through the [`CacheTx`] handle and
+    /// returns `Ok(true)` when it applied them all; the `source_head_sha`
+    /// stamp is then written and everything commits together. `Ok(false)`
+    /// (the refresh declined) or `Err` rolls the whole transaction back, so
+    /// the cache is left exactly at its previous committed HEAD: a
+    /// concurrent reader never sees rows from `to_head` labelled with the old
+    /// HEAD, nor half of a refresh. The write runs under `with_cache_write`,
+    /// so a lock error re-runs `apply` from the start through the unchanged
+    /// retry ladder. Declines immediately while a schema migration is
+    /// pending (only a full rebuild may apply it).
+    // trace:TASK-1515 | ai:claude
+    pub(crate) fn apply_incremental<F>(
+        &self,
+        to_head: &str,
+        store_path: &Path,
+        mut apply: F,
+    ) -> Result<bool>
+    where
+        F: FnMut(&CacheTx<'_>) -> Result<bool>,
+    {
+        if self.migration_pending() {
+            return Ok(false);
         }
-        self.rebuild_from_store(store, source_head_sha)
+        let conn = self.conn.lock().unwrap();
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "refresh cache incrementally",
+            self.read_only,
+            || {
+                let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
+                // trace:TASK-1526 | ai:codex
+                if refresh_head_reached(&tx, to_head, store_path)? {
+                    return Ok(true);
+                }
+                let applied = apply(&CacheTx { conn: &tx })?;
+                if !applied {
+                    // Dropping `tx` rolls back every row change.
+                    return Ok(false);
+                }
+                set_meta_on(&tx, META_KEY_SOURCE_HEAD_SHA, to_head)?;
+                tx.commit()?;
+                Ok(true)
+            },
+        )
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
@@ -1253,52 +1818,13 @@ impl Cache {
     /// the same contract as the inbound-degree axis. trace:TASK-902 | ai:claude
     pub fn upsert_requirement(&self, req: &Requirement) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "upsert cached requirement", || {
-            // Preserve the inbound axis recorded by the last full rebuild.
-            let prior_in: u32 = conn
-                .query_row(
-                    "SELECT in_degree FROM requirements_cache WHERE id = ?1",
-                    params![req.id.to_string()],
-                    |row| row.get::<_, i64>(0),
-                )
-                .ok()
-                .map(|v| v.max(0) as u32)
-                .unwrap_or(0);
-            let (out_degree, out_heft) = own_outbound(&req.relationships);
-            // Heft over inbound edges isn't recoverable from a single row's
-            // state, so approximate the inbound contribution as 1-per-edge
-            // (the modal weight) plus the exact outbound heft. The next rebuild
-            // replaces this with the exact type-weighted value.
-            let degrees = Degrees {
-                in_degree: prior_in,
-                out_degree,
-                heft: out_heft + prior_in,
-            };
-            // TASK-902: recompute THIS row's blocked flag from its BlockedBy
-            // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
-            // any BlockedBy target that isn't Completed (or is unresolvable in the
-            // cache) leaves the row blocked. trace:TASK-902 | ai:claude
-            let blocked = blocked_from_cache(&conn, req);
-            delete_one_uncommitted(&conn, &req.id)?;
-            // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
-            // the inbound-degree axis, an edge recorded on the OTHER endpoint
-            // (a child carrying `Parent -> this`) is only re-derived on a full
-            // rebuild — same rebuildable-projection contract. delete_one_uncommitted
-            // already cleared this row's outbound edges above. Written BEFORE the
-            // epic override is derived so the rollup walks this row's CURRENT
-            // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
-            insert_edges(&conn, req)?;
-            // BUG-626: if the upserted row is an EPIC, its status is the derived
-            // rollup of its children — resolved through the materialized
-            // hierarchy edges (BUG-764), so child-authored edges count too. A
-            // non-epic projects its stored status (None). Propagating a child's
-            // status flip UP to its parent epic is handled by the backend
-            // wrapper; here we only freshen the epic's own row when the epic
-            // itself is the thing being written. trace:BUG-626 | ai:claude
-            let epic_override = epic_status_override_from_cache(&conn, req);
-            insert_one(&conn, req, degrees, blocked, epic_override.as_deref())?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "upsert cached requirement",
+            self.read_only,
+            || upsert_requirement_on(&conn, req),
+        )?;
         Ok(())
     }
 
@@ -1330,28 +1856,16 @@ impl Cache {
         stored_status: &crate::models::RequirementStatus,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let status_str = if crate::rollup::is_terminal_epic_status(stored_status) {
-            // BUG-768: a force-closed epic is stamped BACK to its stored
-            // terminal status — the row may still carry a stale derived
-            // override from before the close, so skipping the write would
-            // leave the reopened value in place.
-            format!("{stored_status:?}")
-        } else {
-            let rollup = epic_rollup_from_hierarchy(&conn, epic_id);
-            let Some(derived) = crate::rollup::derive_epic_status_from_rollup(&rollup) else {
-                // Only-rejected (or otherwise indeterminate) children: keep the
-                // stored status already in the row.
-                return Ok(());
-            };
-            format!("{derived:?}")
+        let Some(status_str) = epic_status_to_stamp(&conn, epic_id, stored_status) else {
+            return Ok(());
         };
-        with_cache_write(&self.path, "recompute epic status", || {
-            conn.execute(
-                "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
-                params![status_str, epic_id.to_string()],
-            )?;
-            Ok(())
-        })?;
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "recompute epic status",
+            self.read_only,
+            || set_epic_status_on(&conn, epic_id, &status_str),
+        )?;
         Ok(())
     }
 
@@ -1364,42 +1878,19 @@ impl Cache {
     // trace:BUG-764 | ai:claude
     pub fn ancestor_epic_ids(&self, id: &Uuid) -> Result<Vec<Uuid>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "WITH RECURSIVE ancestors(id) AS (
-                 SELECT ?1
-                 UNION
-                 SELECT e.parent_id
-                   FROM hierarchy_edges e
-                   JOIN ancestors a ON e.child_id = a.id
-             )
-             SELECT rc.id
-               FROM requirements_cache rc
-               JOIN ancestors a ON rc.id = a.id
-              WHERE rc.id <> ?1 AND rc.req_type = 'Epic'",
-        )?;
-        let rows = stmt
-            .query_map(params![id.to_string()], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<String>>>()?;
-        Ok(rows
-            .into_iter()
-            .filter_map(|s| Uuid::parse_str(&s).ok())
-            .collect())
+        ancestor_epic_ids_on(&conn, id)
     }
 
     /// Single-row delete called after a write-through git delete succeeds.
     pub fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        with_cache_write(&self.path, "delete cached requirement", || {
-            delete_one_uncommitted(&conn, id)?;
-            // BUG-764: the row is GONE, so every hierarchy edge touching it is
-            // dead whichever endpoint authored it — purge beyond the
-            // author-scoped delete above.
-            conn.execute(
-                "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
-                params![id.to_string()],
-            )?;
-            Ok(())
-        })
+        with_cache_write(
+            &self.path,
+            &self.lock_info_path,
+            "delete cached requirement",
+            self.read_only,
+            || delete_requirement_on(&conn, id),
+        )
     }
 
     // ----------------------------------------------------------------- query
@@ -1413,7 +1904,7 @@ impl Cache {
                     owner, feature, req_type, tags_json, created_at, modified_at,
                     archived, archived_at, deferred, deferred_at, deferred_until,
                     in_degree, out_degree, heft, yaml_path, assignee, blocked,
-                    has_pending_decision, execution_mode, weight, origin
+                    has_pending_decision, execution_mode, weight, origin, completed_at
              FROM requirements_cache WHERE 1=1",
         );
         let mut args: Vec<String> = Vec::new();
@@ -1562,6 +2053,18 @@ impl Cache {
             SortOrder::HeftDesc => sql.push_str(" ORDER BY heft DESC, modified_at DESC"),
             // trace:FR-283 | ai:claude — NULL (unset) weights sort last in DESC.
             SortOrder::WeightDesc => sql.push_str(" ORDER BY weight DESC, modified_at DESC"),
+            // trace:TASK-1464 | ai:claude
+            SortOrder::CreatedDesc => sql.push_str(" ORDER BY created_at DESC"),
+            // trace:TASK-1474 | ai:claude — order on the real `completed_at`
+            // timestamp (STORY-86); a Completed row that predates STORY-86
+            // (completed_at never stamped) falls back to modified_at, same as
+            // digest.rs's D7 rule, so an old completed spec doesn't drop to
+            // the bottom just because the cache predates the field. Rows with
+            // neither (not Completed) are NULL and sort last in DESC order.
+            // Ties broken by modified_at DESC.
+            SortOrder::CompletedDesc => sql.push_str(
+                " ORDER BY COALESCE(completed_at, CASE WHEN status = 'Completed' THEN modified_at ELSE NULL END) DESC, modified_at DESC",
+            ),
         }
         if let Some(n) = filter.limit {
             sql.push_str(&format!(" LIMIT {}", n));
@@ -1618,7 +2121,7 @@ impl Cache {
                           c.archived_at, c.deferred, c.deferred_at, c.deferred_until,
                           c.in_degree, c.out_degree, c.heft, c.yaml_path, c.assignee,
                           c.blocked, c.has_pending_decision, c.execution_mode, c.weight,
-                          c.origin
+                          c.origin, c.completed_at
                    FROM requirements_fts
                    JOIN requirements_cache c ON c.id = requirements_fts.id
                    WHERE requirements_fts MATCH ?{archive_clause}{defer_clause}
@@ -1688,15 +2191,7 @@ impl Cache {
     // trace:BUG-634 | ai:claude
     pub fn spec_id_for_uuid(&self, id: &Uuid) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
-        let spec_id = conn
-            .query_row(
-                "SELECT spec_id FROM requirements_cache WHERE id = ?1",
-                params![id.to_string()],
-                |row| row.get::<_, Option<String>>(0),
-            )
-            .optional()?
-            .flatten();
-        Ok(spec_id)
+        spec_id_for_uuid_on(&conn, id)
     }
 
     /// Cache-backed spec-id collision scan: every `(spec_id, uuid, title)` row
@@ -1809,17 +2304,7 @@ impl Cache {
     // trace:BUG-636
     pub fn uuid_for_spec_id(&self, spec_id: &str) -> Result<Option<Uuid>> {
         let conn = self.conn.lock().unwrap();
-        let id_str: Option<String> = conn
-            .query_row(
-                "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
-                params![spec_id],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()?;
-        match id_str {
-            Some(s) => Ok(Uuid::parse_str(&s).ok()),
-            None => Ok(None),
-        }
+        uuid_for_spec_id_on(&conn, spec_id)
     }
 
     /// The FULL transitive descendant id-set of `root` — the root itself plus
@@ -1917,6 +2402,8 @@ const CACHE_REQUIRED_COLUMNS: &[&str] = &[
     "weight",
     // trace:STORY-634 | ai:claude
     "origin",
+    // trace:TASK-1474 | ai:claude
+    "completed_at",
     "yaml_path",
 ];
 
@@ -1934,6 +2421,93 @@ const EXPECTED_CACHE_TABLES: &[&str] = &[
     "hierarchy_edges",
     "cache_meta",
 ];
+
+/// The projection tables a schema migration drops and recreates. `cache_meta`
+/// survives so the head-SHA and version stamps keep their keys.
+// trace:BUG-764 trace:TASK-1515 | ai:claude
+const DROP_PROJECTION_SQL: &str = "DROP TABLE IF EXISTS requirements_cache;
+     DROP TABLE IF EXISTS requirements_fts;
+     DROP TABLE IF EXISTS hierarchy_edges;";
+
+/// Outcome of `Cache::open`'s empty-table migration transaction.
+// trace:TASK-1515 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmptyMigration {
+    /// Dropped, re-applied and stamped in one transaction.
+    Migrated,
+    /// Another process finished the migration first; nothing to do.
+    NoLongerNeeded,
+    /// Another process refilled the old tables first; defer the drop to the
+    /// rebuild transaction like any cache with rows.
+    NowHasRows,
+}
+
+fn current_schema_version_num() -> u64 {
+    SCHEMA_VERSION
+        .parse()
+        .expect("SCHEMA_VERSION must be a plain integer")
+}
+
+/// TASK-1478: `SCHEMA_VERSION` is a plain integer string, so compare
+/// numerically and ORDER the mismatch. Only a stamp OLDER than this binary
+/// (or an unparsable/bogus stamp, indistinguishable from "needs migration")
+/// forces a migration; a NEWER stamp is handled by the drift check alone.
+// trace:TASK-1478 trace:TASK-1515 | ai:claude
+fn schema_stamp_is_older(stamp: Option<&str>) -> bool {
+    match stamp {
+        Some(v) => match v.parse::<u64>() {
+            Ok(n) => n < current_schema_version_num(),
+            Err(_) => true,
+        },
+        None => false,
+    }
+}
+
+/// BUG-485 / BUG-627 / BUG-757: a drifted FTS table, a drifted cache table,
+/// or a partial table set all need a drop + re-apply.
+// trace:TASK-1515 | ai:claude
+fn schema_structurally_drifted(conn: &Connection) -> bool {
+    fts_schema_drifted(conn) || cache_schema_drifted(conn) || cache_tables_partial(conn)
+}
+
+/// The same migration decision `Cache::open` makes, re-evaluated on `conn`
+/// (used under the write lock to re-check an unlocked probe).
+// trace:TASK-1515 | ai:claude
+fn schema_migration_needed(conn: &Connection) -> bool {
+    let stamp: Option<String> = conn
+        .query_row(
+            "SELECT value FROM cache_meta WHERE key = ?1",
+            params![META_KEY_SCHEMA_VERSION],
+            |row| row.get::<_, String>(0),
+        )
+        .ok();
+    schema_stamp_is_older(stamp.as_deref()) || schema_structurally_drifted(conn)
+}
+
+/// True when `requirements_cache` exists and holds at least one row, i.e. a
+/// concurrent reader currently has something to lose if the tables were
+/// dropped ahead of the rebuild.
+// trace:TASK-1515 | ai:claude
+fn projection_has_rows(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM requirements_cache)",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|v| v != 0)
+    .unwrap_or(false)
+}
+
+/// Upsert one `cache_meta` key on `conn` (which may be an open transaction).
+// trace:TASK-1515 | ai:claude
+fn set_meta_on(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![key, value],
+    )?;
+    Ok(())
+}
 
 /// Count of `EXPECTED_CACHE_TABLES` that exist on disk. Read-only
 /// `sqlite_master` lookups (no write lock). FTS5 virtual tables are listed in
@@ -2180,7 +2754,19 @@ fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str, req_t
 /// whole-graph-fact pattern as `compute_blocked`) lands in the cache so the
 /// cache-backed `aida list` filters and displays the derived epic status without
 /// re-loading the full store. `None` projects the stored status verbatim.
-// trace:BUG-626 | ai:claude
+///
+/// TASK-1478: this INSERT's column list is fixed at compile time by whichever
+/// binary is running. An OLDER binary — one that predates a column a newer
+/// binary added (e.g. `completed_at`, STORY-86/TASK-1474) — simply doesn't
+/// name that column here, so SQLite defaults it (NULL, since the column has
+/// no `DEFAULT`) for every row it writes, whether via a single-row upsert or a
+/// full `rebuild_from_store`. That's accepted rather than guarded against:
+/// the cache is a rebuildable projection, never canonical, so a stale/NULL
+/// derived column self-heals the next time a binary that knows the column
+/// runs a rebuild (see `rebuild_from_store`'s schema-version re-stamp below,
+/// which is what makes that rebuild actually happen instead of the newer
+/// binary trusting a stamp an older rebuild left behind).
+// trace:BUG-626 trace:TASK-1478 | ai:claude
 fn insert_one(
     conn: &Connection,
     req: &Requirement,
@@ -2222,8 +2808,8 @@ fn insert_one(
             owner, feature, req_type, tags_json, created_at, modified_at,
             archived, archived_at, deferred, deferred_at, deferred_until,
             in_degree, out_degree, heft, blocked, yaml_path, assignee,
-            has_pending_decision, execution_mode, weight, origin
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+            has_pending_decision, execution_mode, weight, origin, completed_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
         params![
             req.id.to_string(),
             req.spec_id,
@@ -2259,6 +2845,13 @@ fn insert_one(
             req.weight.map(|w| w as f64),
             // trace:STORY-634 | ai:claude — NULL when single-repo.
             req.origin.as_ref().map(|o| o.to_string()),
+            // trace:TASK-1474 | ai:claude — the real completion timestamp
+            // (STORY-86), stamped by the Done->Completed auto-bump. NULL when
+            // not yet completed, or when completed before STORY-86 shipped.
+            req.implementation_info
+                .as_ref()
+                .and_then(|i| i.completed_at)
+                .map(|t| t.to_rfc3339()),
         ],
     )?;
 
@@ -2327,7 +2920,154 @@ fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
         weight: row.get(26)?,
         // trace:STORY-634 | ai:claude — column index 27, nullable TEXT.
         origin: row.get(27)?,
+        // trace:TASK-1474 | ai:claude — column index 28, nullable TEXT.
+        completed_at: row.get(28)?,
     })
+}
+
+/// The single-row upsert on `conn` (a plain connection or an open
+/// transaction). See [`Cache::upsert_requirement`].
+// trace:TASK-1515 | ai:claude
+fn upsert_requirement_on(conn: &Connection, req: &Requirement) -> Result<()> {
+    // Preserve the inbound axis recorded by the last full rebuild.
+    let prior_in: u32 = conn
+        .query_row(
+            "SELECT in_degree FROM requirements_cache WHERE id = ?1",
+            params![req.id.to_string()],
+            |row| row.get::<_, i64>(0),
+        )
+        .ok()
+        .map(|v| v.max(0) as u32)
+        .unwrap_or(0);
+    let (out_degree, out_heft) = own_outbound(&req.relationships);
+    // Heft over inbound edges isn't recoverable from a single row's
+    // state, so approximate the inbound contribution as 1-per-edge
+    // (the modal weight) plus the exact outbound heft. The next rebuild
+    // replaces this with the exact type-weighted value.
+    let degrees = Degrees {
+        in_degree: prior_in,
+        out_degree,
+        heft: out_heft + prior_in,
+    };
+    // TASK-902: recompute THIS row's blocked flag from its BlockedBy
+    // targets' cached statuses. Mirrors pickability::blocked_by_incomplete:
+    // any BlockedBy target that isn't Completed (or is unresolvable in the
+    // cache) leaves the row blocked. trace:TASK-902 | ai:claude
+    let blocked = blocked_from_cache(conn, req);
+    delete_one_uncommitted(conn, &req.id)?;
+    // TASK-955: refresh THIS spec's own outbound hierarchy edges. Like
+    // the inbound-degree axis, an edge recorded on the OTHER endpoint
+    // (a child carrying `Parent -> this`) is only re-derived on a full
+    // rebuild — same rebuildable-projection contract. delete_one_uncommitted
+    // already cleared this row's outbound edges above. Written BEFORE the
+    // epic override is derived so the rollup walks this row's CURRENT
+    // edges, not the pre-write set. trace:TASK-955 trace:BUG-764
+    insert_edges(conn, req)?;
+    // BUG-626: if the upserted row is an EPIC, its status is the derived
+    // rollup of its children — resolved through the materialized
+    // hierarchy edges (BUG-764), so child-authored edges count too. A
+    // non-epic projects its stored status (None). Propagating a child's
+    // status flip UP to its parent epic is handled by the backend
+    // wrapper; here we only freshen the epic's own row when the epic
+    // itself is the thing being written. trace:BUG-626 | ai:claude
+    let epic_override = epic_status_override_from_cache(conn, req);
+    insert_one(conn, req, degrees, blocked, epic_override.as_deref())?;
+    Ok(())
+}
+
+/// The status to stamp on an epic's row, or `None` to keep the row as is.
+/// See [`Cache::recompute_epic_status_from_hierarchy`].
+// trace:BUG-626 trace:BUG-764 trace:BUG-768 trace:TASK-1515 | ai:claude
+fn epic_status_to_stamp(
+    conn: &Connection,
+    epic_id: &Uuid,
+    stored_status: &crate::models::RequirementStatus,
+) -> Option<String> {
+    if crate::rollup::is_terminal_epic_status(stored_status) {
+        // BUG-768: a force-closed epic is stamped BACK to its stored
+        // terminal status — the row may still carry a stale derived
+        // override from before the close, so skipping the write would
+        // leave the reopened value in place.
+        return Some(format!("{stored_status:?}"));
+    }
+    let rollup = epic_rollup_from_hierarchy(conn, epic_id);
+    // Only-rejected (or otherwise indeterminate) children: keep the stored
+    // status already in the row.
+    crate::rollup::derive_epic_status_from_rollup(&rollup).map(|derived| format!("{derived:?}"))
+}
+
+// trace:TASK-1515 | ai:claude
+fn set_epic_status_on(conn: &Connection, epic_id: &Uuid, status: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE requirements_cache SET status = ?1 WHERE id = ?2",
+        params![status, epic_id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// See [`Cache::ancestor_epic_ids`].
+// trace:BUG-764 trace:TASK-1515 | ai:claude
+fn ancestor_epic_ids_on(conn: &Connection, id: &Uuid) -> Result<Vec<Uuid>> {
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE ancestors(id) AS (
+             SELECT ?1
+             UNION
+             SELECT e.parent_id
+               FROM hierarchy_edges e
+               JOIN ancestors a ON e.child_id = a.id
+         )
+         SELECT rc.id
+           FROM requirements_cache rc
+           JOIN ancestors a ON rc.id = a.id
+          WHERE rc.id <> ?1 AND rc.req_type = 'Epic'",
+    )?;
+    let rows = stmt
+        .query_map(params![id.to_string()], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|s| Uuid::parse_str(&s).ok())
+        .collect())
+}
+
+/// See [`Cache::delete_requirement`].
+// trace:TASK-1515 | ai:claude
+fn delete_requirement_on(conn: &Connection, id: &Uuid) -> Result<()> {
+    delete_one_uncommitted(conn, id)?;
+    // BUG-764: the row is GONE, so every hierarchy edge touching it is dead
+    // whichever endpoint authored it — purge beyond the author-scoped delete
+    // above.
+    conn.execute(
+        "DELETE FROM hierarchy_edges WHERE parent_id = ?1 OR child_id = ?1",
+        params![id.to_string()],
+    )?;
+    Ok(())
+}
+
+/// See [`Cache::spec_id_for_uuid`].
+// trace:BUG-634 trace:TASK-1515 | ai:claude
+fn spec_id_for_uuid_on(conn: &Connection, id: &Uuid) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT spec_id FROM requirements_cache WHERE id = ?1",
+            params![id.to_string()],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+/// See [`Cache::uuid_for_spec_id`].
+// trace:BUG-636 trace:TASK-1515 | ai:claude
+fn uuid_for_spec_id_on(conn: &Connection, spec_id: &str) -> Result<Option<Uuid>> {
+    let id_str: Option<String> = conn
+        .query_row(
+            "SELECT id FROM requirements_cache WHERE spec_id = ?1 COLLATE NOCASE",
+            params![spec_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    Ok(id_str.and_then(|s| Uuid::parse_str(&s).ok()))
 }
 
 fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
@@ -2421,15 +3161,15 @@ fn yaml_path_for(req: &Requirement) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::cache_lock::{
+        foreign_writer_holds_lock, observe_cache_lock, remove_cache_lock_info,
+        write_cache_lock_info,
+    };
     use super::*;
-    use crate::models::{RequirementPriority, RequirementStatus, RequirementType};
-    use std::sync::{Mutex as StdMutex, OnceLock};
+    use crate::models::{
+        ImplementationInfo, RequirementPriority, RequirementStatus, RequirementType,
+    };
     use tempfile::tempdir;
-
-    fn env_lock() -> &'static StdMutex<()> {
-        static LOCK: OnceLock<StdMutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| StdMutex::new(()))
-    }
 
     fn sample_req(spec_id: &str, title: &str) -> Requirement {
         let mut r = Requirement::new(title.into(), "desc".into());
@@ -2565,7 +3305,12 @@ mod tests {
             dep_blocks_only,
         ]);
 
-        cache.rebuild_from_store(&store, "head").unwrap();
+        let expected_rows = store.requirements.len();
+        assert_eq!(
+            cache.rebuild_from_store(&store, "head").unwrap(),
+            expected_rows
+        );
+        assert_eq!(cache.requirement_count().unwrap(), expected_rows);
 
         // Ground truth: the edge-walk over the full store.
         let expected = compute_blocked(&store);
@@ -2826,6 +3571,207 @@ mod tests {
         // Lonely (heft 0) must be last; the two heft-3 specs lead.
         assert_eq!(rows.last().unwrap().spec_id.as_deref(), Some("LONE-1"));
         assert!(rows[0].heft >= rows[2].heft);
+    }
+
+    /// TASK-1464: `--sort created` orders newest-created first, independent
+    /// of `modified_at`.
+    // trace:TASK-1464 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_created() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut older = sample_req("FR-1-010", "older");
+        older.created_at = "2025-01-01T00:00:00Z".parse().unwrap();
+        older.modified_at = "2026-06-01T00:00:00Z".parse().unwrap(); // freshest modified, oldest created
+
+        let mut newer = sample_req("FR-1-011", "newer");
+        newer.created_at = "2026-01-01T00:00:00Z".parse().unwrap();
+        newer.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(older);
+        store.requirements.push(newer);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CreatedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-011", "FR-1-010"],
+            "created DESC must order by created_at, not modified_at"
+        );
+    }
+
+    /// TASK-1464: `--sort completed` orders the most-recently-completed spec
+    /// first; specs with no completion date (not `Completed`) sort last,
+    /// deterministically, regardless of their `modified_at`.
+    // trace:TASK-1464 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_completed_with_missing_dates_last() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut completed_old = sample_req("FR-1-020", "completed old");
+        completed_old.status = RequirementStatus::Completed;
+        completed_old.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut completed_new = sample_req("FR-1-021", "completed new");
+        completed_new.status = RequirementStatus::Completed;
+        completed_new.modified_at = "2026-06-01T00:00:00Z".parse().unwrap();
+
+        // In-progress, never completed — but touched MOST recently. Must
+        // still sort after both Completed rows.
+        let mut in_progress = sample_req("FR-1-022", "still open");
+        in_progress.status = RequirementStatus::InProgress;
+        in_progress.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(completed_old);
+        store.requirements.push(completed_new);
+        store.requirements.push(in_progress);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-021", "FR-1-020", "FR-1-022"],
+            "most-recently-completed first; the never-completed row sorts last despite being freshest-modified"
+        );
+    }
+
+    /// TASK-1474: `--sort completed` must order on the real `completed_at`
+    /// timestamp (STORY-86), not `modified_at` — even when the two disagree.
+    // trace:TASK-1474 | ai:claude
+    #[test]
+    fn list_summaries_sorts_by_real_completed_at_not_modified_at() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Completed EARLIER (real completion date) but touched MOST recently
+        // afterward (e.g. a tag edit) — modified_at is freshest, completed_at
+        // is oldest. Must sort AFTER the other completed row.
+        let mut edited_after_completion = sample_req("FR-1-030", "completed then edited");
+        edited_after_completion.status = RequirementStatus::Completed;
+        edited_after_completion.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-01-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        edited_after_completion.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+
+        // Completed LATER (real completion date) but never touched again —
+        // modified_at is oldest of the two, completed_at is newest. Must
+        // sort FIRST despite the stale modified_at.
+        let mut completed_recently = sample_req("FR-1-031", "completed recently");
+        completed_recently.status = RequirementStatus::Completed;
+        completed_recently.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-06-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        completed_recently.modified_at = "2026-06-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(edited_after_completion);
+        store.requirements.push(completed_recently);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let rows = cache
+            .list_summaries(&ListFilter {
+                archive: ArchiveFilter::Both,
+                defer: DeferFilter::Both,
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .unwrap();
+        let order: Vec<&str> = rows.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+        assert_eq!(
+            order,
+            ["FR-1-031", "FR-1-030"],
+            "completed DESC must order by the real completed_at, not modified_at"
+        );
+        assert_eq!(
+            rows[0].completed_at.as_deref(),
+            Some("2026-06-01T00:00:00+00:00")
+        );
+    }
+
+    /// TASK-1474: a post-completion edit (e.g. a tag or comment add, which
+    /// bumps `modified_at` but leaves `completed_at` untouched) must NOT
+    /// reorder the `--sort completed` view.
+    // trace:TASK-1474 | ai:claude
+    #[test]
+    fn post_completion_edit_does_not_reorder_completed_sort() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut older = sample_req("FR-1-040", "completed first");
+        older.status = RequirementStatus::Completed;
+        older.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-01-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        older.modified_at = "2026-01-01T00:00:00Z".parse().unwrap();
+
+        let mut newer = sample_req("FR-1-041", "completed second");
+        newer.status = RequirementStatus::Completed;
+        newer.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-02-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        newer.modified_at = "2026-02-01T00:00:00Z".parse().unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(older.clone());
+        store.requirements.push(newer);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let filter = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            sort: SortOrder::CompletedDesc,
+            ..Default::default()
+        };
+        let before: Vec<String> = cache
+            .list_summaries(&filter)
+            .unwrap()
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        assert_eq!(before, ["FR-1-041", "FR-1-040"]);
+
+        // Simulate a post-completion edit on the OLDER-completed spec (e.g.
+        // `aida edit FR-1-040 --add-tag foo`): modified_at jumps to the
+        // present, far past `newer`'s modified_at, but completed_at is
+        // unchanged.
+        older.modified_at = "2026-09-01T00:00:00Z".parse().unwrap();
+        older.tags.insert("foo".into());
+        cache.upsert_requirement(&older).unwrap();
+
+        let after: Vec<String> = cache
+            .list_summaries(&filter)
+            .unwrap()
+            .iter()
+            .filter_map(|r| r.spec_id.clone())
+            .collect();
+        assert_eq!(
+            after, before,
+            "a post-completion edit must not reorder the completed-sort view"
+        );
     }
 
     #[test]
@@ -3786,6 +4732,336 @@ mod tests {
         assert_eq!(rows[0].spec_id.as_deref(), Some("BUG-627"));
     }
 
+    // TASK-1478: a stored version OLDER than this binary's still migrates
+    // (unchanged behavior). Build a fully healthy CURRENT-shaped cache, but
+    // stamp its version one below `SCHEMA_VERSION` — the pre-fix `!=` check
+    // and the new ordered check must agree here: drop + rebuild + re-stamp to
+    // the binary's own (higher) version + invalidate the head SHA.
+    #[test]
+    fn older_stored_version_migrates_and_bumps_stamp_to_current() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let older = (current - 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, older],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "oldhead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "an older stamp must still migration-drop, invalidating the head SHA"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "post-migration stamp must be this binary's own (higher) version"
+        );
+    }
+
+    // TASK-1478: the core fix. A stored version NEWER than this binary's — the
+    // shape a newer dev build already migrated to — must NOT be dropped and
+    // rebuilt by an older binary as long as every column this binary needs is
+    // present. Before the fix this alternated full rebuilds between a dev
+    // binary and an installed one on every open.
+    #[test]
+    fn newer_stored_version_with_no_drift_is_left_alone() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "futurehead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert_eq!(
+            cache.source_head_sha().unwrap().as_deref(),
+            Some("futurehead"),
+            "a newer, column-complete stamp must not be migration-dropped — the \
+             head SHA (only cleared by a drop) must survive untouched"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(newer.as_str()),
+            "an older binary opening a healthy newer cache must NOT downgrade \
+             the stamp — the newer binary would then think its own cache needs \
+             rebuilding on its next open"
+        );
+    }
+
+    // TASK-1478: drift beats version order. A stored version NEWER than this
+    // binary's, but missing a column this binary needs (the `blocked` column,
+    // same drifted shape as BUG-627), must still migrate — and the stamp
+    // written afterward is THIS binary's own version, not the (now-incorrect)
+    // newer one the drop just discarded.
+    #[test]
+    fn newer_stored_version_missing_required_column_still_migrates() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            // Simulate a newer schema that is nonetheless missing a column this
+            // binary requires (the drift the BUG-627 PRAGMA check exists for).
+            // The index on `blocked` must go first — SQLite refuses to drop a
+            // column an index still references.
+            conn.execute_batch(
+                "DROP INDEX idx_cache_blocked;
+                 ALTER TABLE requirements_cache DROP COLUMN blocked;",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "futurehead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "a newer-but-drifted stamp must still migration-drop, invalidating \
+             the head SHA"
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "the drop rebuilds with THIS binary's schema, so the stamp must \
+             reflect that — not the higher number the drop just discarded"
+        );
+        // The rebuilt table must actually have the column back and be usable.
+        assert!(!cache_schema_drifted(&cache.conn.lock().unwrap()));
+    }
+
+    // TASK-1478 (review follow-up): a full rebuild must stamp its OWN version
+    // unconditionally — even DOWNGRADING a higher pre-existing stamp — or an
+    // older binary's rebuild (which writes rows without a column a newer
+    // binary added) leaves the newer stamp in place, and the newer binary's
+    // next `open()` sees "stamp already current" and never re-migrates to
+    // refill the column: the column is then silently wrong across the whole
+    // store. Walks the full scenario: (1) a newer stamp is on disk, (2) an
+    // older binary's rebuild downgrades it to its own version, (3) that
+    // downgrade is what lets a genuinely newer binary detect on its next
+    // open that it must re-migrate — proven by
+    // `older_stored_version_migrates_and_bumps_stamp_to_current`, whose setup
+    // is exactly the post-step-2 state this test produces (a stamp older
+    // than `SCHEMA_VERSION`) — while a SAME-version reopen right after step 2
+    // is confirmed here to be a steady-state no-op, so the fix doesn't loop
+    // on every alternation.
+    #[test]
+    fn rebuild_from_store_downgrades_a_newer_stamp_so_a_later_open_can_remigrate() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let current: u64 = SCHEMA_VERSION.parse().unwrap();
+        let newer = (current + 1).to_string();
+
+        // Step 1: a newer stamp is already on disk, as if a newer binary had
+        // built this cache. Healthy, column-complete schema — the "left
+        // alone" shape from `newer_stored_version_with_no_drift_is_left_alone`.
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(SCHEMA_SQL).unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, newer],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "fromnewerbinary"],
+            )
+            .unwrap();
+        }
+
+        // Opening with this (older, relative to `newer`) binary must leave
+        // the stamp and head SHA untouched.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert_eq!(
+            cache.source_head_sha().unwrap().as_deref(),
+            Some("fromnewerbinary")
+        );
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(newer.as_str())
+        );
+
+        // Step 2: this (older) binary does a full rebuild — the operation
+        // the bug report is about. It must downgrade the stamp to ITS OWN
+        // version rather than leaving `newer` in place.
+        let mut store = RequirementsStore::new();
+        store
+            .requirements
+            .push(sample_req("TASK-1478", "older binary rebuild"));
+        cache.rebuild_from_store(&store, "olderrebuildsha").unwrap();
+        assert_eq!(
+            cache.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION),
+            "a full rebuild must always stamp its OWN version, even \
+             downgrading a higher pre-existing stamp — otherwise a newer \
+             binary would trust the stale-but-higher stamp and never \
+             re-migrate to refill the column the older rebuild left NULL"
+        );
+
+        // Step 3: re-opening with the SAME binary right after must be a
+        // steady-state no-op, not another rebuild loop — the stamp now
+        // matches this binary's own version exactly.
+        let head_after_rebuild = cache.source_head_sha().unwrap();
+        let cache2 = Cache::open(&cache_path).unwrap();
+        assert_eq!(cache2.source_head_sha().unwrap(), head_after_rebuild);
+        assert_eq!(
+            cache2.get_meta(META_KEY_SCHEMA_VERSION).unwrap().as_deref(),
+            Some(SCHEMA_VERSION)
+        );
+        // A genuinely newer binary opening THIS post-step-2 state (a stamp
+        // strictly older than its own SCHEMA_VERSION) is exactly the
+        // scenario `older_stored_version_migrates_and_bumps_stamp_to_current`
+        // proves migrates + re-stamps + invalidates the head SHA.
+    }
+
+    #[test]
+    fn old_schema_cache_missing_completed_at_column_self_heals_on_open() {
+        // TASK-1474: a cache whose `requirements_cache` table predates the
+        // `completed_at` column must drop + rebuild on open rather than
+        // hard-erroring with `table requirements_cache has no column named
+        // completed_at` — same BUG-627 self-heal contract as `blocked`,
+        // `origin`, etc. The on-disk schema_version is stamped CURRENT and a
+        // head SHA is recorded, so only the structural column check catches
+        // this (a version/SHA check alone would report FRESH).
+        // trace:BUG-627 trace:TASK-1474 | ai:claude
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                 CREATE TABLE requirements_cache (
+                     id TEXT PRIMARY KEY NOT NULL,
+                     spec_id TEXT,
+                     agreed_id TEXT,
+                     title TEXT NOT NULL,
+                     description TEXT NOT NULL DEFAULT '',
+                     status TEXT NOT NULL,
+                     priority TEXT NOT NULL,
+                     owner TEXT NOT NULL DEFAULT '',
+                     assignee TEXT,
+                     feature TEXT NOT NULL DEFAULT '',
+                     req_type TEXT NOT NULL,
+                     tags_json TEXT NOT NULL DEFAULT '[]',
+                     created_at TEXT NOT NULL,
+                     modified_at TEXT NOT NULL,
+                     archived INTEGER NOT NULL DEFAULT 0,
+                     archived_at TEXT,
+                     deferred INTEGER NOT NULL DEFAULT 0,
+                     deferred_at TEXT,
+                     deferred_until TEXT,
+                     in_degree INTEGER NOT NULL DEFAULT 0,
+                     out_degree INTEGER NOT NULL DEFAULT 0,
+                     heft INTEGER NOT NULL DEFAULT 0,
+                     blocked INTEGER NOT NULL DEFAULT 0,
+                     has_pending_decision INTEGER NOT NULL DEFAULT 0,
+                     execution_mode TEXT,
+                     weight REAL,
+                     origin TEXT,
+                     -- NOTE: no `completed_at` column — pre-TASK-1474 shape.
+                     yaml_path TEXT NOT NULL
+                 );
+                 CREATE VIRTUAL TABLE requirements_fts USING fts5(
+                     id UNINDEXED, spec_id, agreed_id, title, description, external_refs,
+                     tokenize = 'porter unicode61'
+                 );
+                 CREATE TABLE hierarchy_edges (
+                     parent_id TEXT NOT NULL,
+                     child_id TEXT NOT NULL,
+                     author_id TEXT NOT NULL DEFAULT '',
+                     PRIMARY KEY (parent_id, child_id, author_id)
+                 );",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            // Stamp a head SHA so a naive open would think the cache is fresh.
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        // Open with the current binary — must self-heal (drop the drifted
+        // table) and clear the stamped head SHA so the next read rebuilds.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        // A rebuild that writes the `completed_at` column must now succeed
+        // (would have hard-errored against the old table).
+        let mut req = sample_req("TASK-1474", "completed_at drift heals");
+        req.status = RequirementStatus::Completed;
+        req.implementation_info = Some(ImplementationInfo {
+            completed_at: Some("2026-09-01T00:00:00Z".parse().unwrap()),
+            ..Default::default()
+        });
+        let mut store = RequirementsStore::new();
+        store.requirements.push(req);
+        cache
+            .rebuild_from_store(&store, "newhead")
+            .expect("rebuild against the healed cache schema must succeed");
+
+        // A `--sort completed` query touching the new column must succeed
+        // and reflect the real completed_at value, not error.
+        let rows = cache
+            .list_summaries(&ListFilter {
+                sort: SortOrder::CompletedDesc,
+                ..Default::default()
+            })
+            .expect("list reading the `completed_at` column must succeed after self-heal");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id.as_deref(), Some("TASK-1474"));
+        assert_eq!(
+            rows[0].completed_at.as_deref(),
+            Some("2026-09-01T00:00:00+00:00")
+        );
+    }
+
     #[test]
     fn cache_schema_drift_detects_missing_column_only() {
         // trace:BUG-627 — the detector must fire on a drifted (old) cache table
@@ -4072,8 +5348,12 @@ mod tests {
         holder.execute_batch("ROLLBACK").unwrap();
     }
 
-    // BUG-664: read paths consult `foreign_writer_holds_lock` to decide whether
-    // to serve the last-good snapshot instead of contending for the write lock.
+    // BUG-664 originally had read paths consult `foreign_writer_holds_lock` to
+    // serve the last-good snapshot instead of contending for the write lock.
+    // TASK-1526 deleted that sidecar-based stale shortcut: the sidecar is a
+    // diagnostic and never authorizes stale serving, so the helper survives only
+    // as a test oracle for owner classification. No production read path calls it.
+    // trace:TASK-1526 | ai:claude
     #[test]
     fn foreign_writer_holds_lock_only_for_live_foreign_pid() {
         let dir = tempdir().unwrap();
@@ -4090,6 +5370,7 @@ mod tests {
                 started_at: chrono::Utc::now().to_rfc3339(),
                 user: "test".to_string(),
                 session_id: None,
+                ..Default::default()
             };
             std::fs::write(&lock_path, serde_json::to_string(&info).unwrap()).unwrap();
         };
@@ -4151,11 +5432,13 @@ mod tests {
         writer.execute_batch("ROLLBACK").unwrap();
     }
 
+    // trace:TASK-1532 | ai:agy
     #[test]
     fn default_cache_retry_budget_is_patient_enough_for_schema_contention() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         let delays = cache_retry_delays()
             .into_iter()
@@ -4171,13 +5454,12 @@ mod tests {
 
     #[test]
     fn cache_retry_count_zero_keeps_empty_retry_budget() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", Some("0")),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         assert!(cache_retry_delays().is_empty());
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
     }
 
     // BUG-681: on the advisory `aida awaiting --notice` path, the retry ladder
@@ -4186,9 +5468,10 @@ mod tests {
     // UserPromptSubmit hook timeout. Normal (unarmed) reads keep the full ladder.
     #[test]
     fn fast_fail_cache_mode_uses_short_bounded_ladder() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         // Off by default → the full, patient production ladder.
         assert!(!fast_fail_cache_enabled());
@@ -4209,9 +5492,9 @@ mod tests {
         );
 
         // An explicit AIDA_CACHE_RETRY_COUNT=0 still disables retries entirely.
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        env.set_key("AIDA_CACHE_RETRY_COUNT", "0");
         assert!(cache_retry_delays().is_empty());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
+        env.unset_key("AIDA_CACHE_RETRY_COUNT");
 
         // Restore the thread-local so a reused test thread is unaffected.
         set_fast_fail_cache(prior);
@@ -4226,9 +5509,10 @@ mod tests {
     // it, the notice-path short ladder gives up in a fraction of a second.
     #[test]
     fn fast_fail_cache_retry_bails_fast_on_persistent_lock() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CACHE_RETRY_COUNT", None),
+            ("AIDA_CACHE_RETRY_MS", None),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -4262,17 +5546,122 @@ mod tests {
         );
     }
 
+    // TASK-1484: fixtures for the lock-info lifecycle through real cache writes.
+    // trace:TASK-1484 | ai:claude
+    fn write_lock_fixture(cache_path: &Path, pid: u32, identity: Option<&str>) -> PathBuf {
+        let path = cache_lock_info_path(cache_path);
+        let info = CacheLockInfo {
+            pid,
+            command: "aida schedule tick --hook".to_string(),
+            started_at: (chrono::Utc::now() - chrono::Duration::minutes(30)).to_rfc3339(),
+            user: "tester".to_string(),
+            pid_start_identity: identity.map(str::to_string),
+            expected_duration_secs: Some(60),
+            ..Default::default()
+        };
+        std::fs::write(&path, serde_json::to_string(&info).unwrap()).unwrap();
+        path
+    }
+
+    #[test]
+    fn interrupted_tick_dead_owner_metadata_is_cleared_after_acquisition() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 0x7fff_fffe, None);
+        // Fresh cache: open applies the schema under with_cache_write.
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            !path.exists(),
+            "a dead owner's lock-info must be removed after a successful write"
+        );
+        cache.truncate().unwrap();
+        assert!(!path.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn reused_pid_metadata_is_cleared_after_acquisition() {
+        // pid 1 is alive, but this recorded start identity cannot be its own.
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 1, Some("linux-starttime:18446744073709551615"));
+        drop(Cache::open(&cache_path).unwrap());
+        assert!(
+            !path.exists(),
+            "PID reuse must mark the recorded owner dead"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn live_owner_metadata_survives_writes_even_past_deadline() {
+        // pid 1 is always alive; a legacy (identity-less) record is PID-only.
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let path = write_lock_fixture(&cache_path, 1, None);
+        let cache = Cache::open(&cache_path).unwrap();
+        cache.truncate().unwrap();
+        assert!(
+            path.exists(),
+            "a live owner's lock-info must never be deleted"
+        );
+        let obs = observe_cache_lock(&cache_path).unwrap().unwrap();
+        assert!(obs.owner.presumed_alive());
+        assert!(
+            obs.overrun_note().is_some(),
+            "overrun is reported, not acted on"
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sqlite_contention_with_dead_owner_metadata_is_reported_then_cleaned() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "1"),
+            ("AIDA_CACHE_RETRY_MS", "1"),
+        ]);
+
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+        let cache = Cache::open(&cache_path).unwrap();
+        let path = write_lock_fixture(&cache_path, 0x7fff_fffe, None);
+
+        let holder = Connection::open(&cache_path).unwrap();
+        holder.execute_batch("BEGIN EXCLUSIVE").unwrap();
+        let err = cache.truncate().expect_err("sqlite lock is held");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("stale metadata"), "{msg}");
+        assert!(msg.contains("no longer running"), "{msg}");
+        assert!(path.exists(), "not cleaned before acquisition");
+        holder.execute_batch("ROLLBACK").unwrap();
+        drop(holder);
+
+        cache.truncate().unwrap();
+        assert!(!path.exists(), "cleaned after the next successful write");
+    }
+
     #[test]
     fn cache_lock_info_round_trips_sidecar_path() {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
-        write_cache_lock_info(&cache_path).unwrap();
+        write_cache_lock_info(&cache_path, "test").unwrap();
 
         let info = read_cache_lock_info(&cache_path)
             .unwrap()
             .expect("lock info should exist");
         assert_eq!(info.pid, std::process::id());
         assert!(!info.started_at.is_empty());
+        // TASK-1484: richer metadata is recorded on write.
+        assert_eq!(info.kind.as_deref(), Some("cache-write"));
+        assert_eq!(info.phase.as_deref(), Some("test"));
+        assert!(info.soft_deadline_utc().is_some());
+        assert!(info.heartbeat_at_utc().is_some());
+        #[cfg(target_os = "linux")]
+        assert!(info.pid_start_identity.is_some());
+        assert_eq!(
+            super::super::cache_lock::classify_lock_owner(&info),
+            super::super::cache_lock::LockOwnerState::Current
+        );
         assert_eq!(
             cache_lock_info_path(&cache_path),
             dir.path().join("cache.db.lock-info")
@@ -4293,6 +5682,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
@@ -4304,9 +5694,10 @@ mod tests {
 
     #[test]
     fn cache_open_retries_sqlite_lock_then_succeeds() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "3");
-        std::env::set_var("AIDA_CACHE_RETRY_MS", "50,200,500");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "3"),
+            ("AIDA_CACHE_RETRY_MS", "50,200,500"),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -4327,15 +5718,11 @@ mod tests {
             !cache_lock_info_path(&cache_path).exists(),
             "successful write should remove sidecar"
         );
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 
     #[test]
     fn cache_retry_count_zero_fails_fast_with_lock_holder_hint() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "0");
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_CACHE_RETRY_COUNT", "0");
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -4346,6 +5733,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
@@ -4369,15 +5757,14 @@ mod tests {
         assert!(msg.contains("pid="), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
     }
 
     #[test]
     fn cache_retry_exhaustion_keeps_lock_holder_hint() {
-        let _guard = env_lock().lock().unwrap_or_else(|err| err.into_inner());
-        std::env::set_var("AIDA_CACHE_RETRY_COUNT", "2");
-        std::env::set_var("AIDA_CACHE_RETRY_MS", "1");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_CACHE_RETRY_COUNT", "2"),
+            ("AIDA_CACHE_RETRY_MS", "1"),
+        ]);
 
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("cache.db");
@@ -4388,6 +5775,7 @@ mod tests {
             started_at: chrono::Utc::now().to_rfc3339(),
             user: "tester".to_string(),
             session_id: None,
+            ..Default::default()
         };
         std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
 
@@ -4413,9 +5801,6 @@ mod tests {
         assert!(msg.contains("aida queue work"), "{msg}");
         assert!(msg.contains("aida doctor heal stale-locks"), "{msg}");
         remove_cache_lock_info(&cache_path);
-
-        std::env::remove_var("AIDA_CACHE_RETRY_COUNT");
-        std::env::remove_var("AIDA_CACHE_RETRY_MS");
     }
 
     // The cache projects an EPIC's status as the read-only rollup of its
@@ -5180,6 +6565,101 @@ mod tests {
         );
     }
 
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn old_stamp_in_unwritable_cache_with_live_wal_keeps_committed_rows() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("BUG-1752", "readable"));
+        cache.rebuild_from_store(&store, "head").unwrap();
+        let old = (current_schema_version_num() - 1).to_string();
+        cache.set_meta(META_KEY_SCHEMA_VERSION, &old).unwrap();
+        drop(cache);
+
+        // Keep WAL shared memory live across chmod. A WAL reader can only
+        // attach to a read-only directory when another connection owns -shm.
+        let wal_keeper = Connection::open(&path).unwrap();
+        wal_keeper
+            .execute_batch("BEGIN DEFERRED; SELECT * FROM cache_meta;")
+            .unwrap();
+
+        let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
+        let result = (|| {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode & !0o222))?;
+            std::fs::set_permissions(
+                dir.path(),
+                std::fs::Permissions::from_mode(dir_mode & !0o222),
+            )?;
+            let cache = Cache::open(&path).context("reopen read-only cache")?;
+            let snapshot = cache.read_snapshot().context("pin read-only snapshot")?;
+            let rows = snapshot
+                .list_summaries(&ListFilter::default())
+                .context("query read-only snapshot")?;
+            anyhow::ensure!(rows
+                .iter()
+                .any(|row| row.spec_id.as_deref() == Some("BUG-1752")));
+            anyhow::ensure!(cache.migration_pending());
+            let stamp: String = snapshot.get_meta(META_KEY_SCHEMA_VERSION)?.unwrap();
+            anyhow::ensure!(
+                stamp == old,
+                "read-only open must preserve the on-disk stamp"
+            );
+            drop(snapshot);
+            drop(cache);
+            drop(wal_keeper);
+            Ok::<_, anyhow::Error>(())
+        })();
+        // Restore permissions even when an assertion fails, so the tempdir can
+        // always be removed cleanly.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode)).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(dir_mode)).unwrap();
+        result.unwrap();
+    }
+
+    // trace:BUG-1752 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn empty_old_stamp_in_unwritable_cache_with_live_wal_defers_migration() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        drop(Cache::open(&path).unwrap());
+        let old = (current_schema_version_num() - 1).to_string();
+        let conn = Connection::open(&path).unwrap();
+        set_meta_on(&conn, META_KEY_SCHEMA_VERSION, &old).unwrap();
+        drop(conn);
+        // The cache handle under test is opened later; this second connection
+        // preserves the live WAL shared-memory region through the chmod.
+        let wal_keeper = Connection::open(&path).unwrap();
+        wal_keeper
+            .execute_batch("BEGIN DEFERRED; SELECT * FROM cache_meta;")
+            .unwrap();
+        let file_mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        let dir_mode = std::fs::metadata(dir.path()).unwrap().permissions().mode();
+        let result = (|| {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode & !0o222))?;
+            std::fs::set_permissions(
+                dir.path(),
+                std::fs::Permissions::from_mode(dir_mode & !0o222),
+            )?;
+            let cache = Cache::open(&path)?;
+            anyhow::ensure!(cache.migration_pending());
+            let got = cache.get_meta(META_KEY_SCHEMA_VERSION)?;
+            anyhow::ensure!(got.as_deref() == Some(old.as_str()));
+            drop(cache);
+            drop(wal_keeper);
+            Ok::<_, anyhow::Error>(())
+        })();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(file_mode)).unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(dir_mode)).unwrap();
+        result.unwrap();
+    }
+
     // BUG-683: a lock-held cache must keep failing as a LOCK (not be deleted as
     // corruption). Hold an exclusive write lock, disable the retry ladder, and
     // assert the file survives and the error is the lock message — never the
@@ -5201,7 +6681,7 @@ mod tests {
         // the file must survive untouched. (No env-var fiddling — that would
         // race sibling tests; the classification is asserted directly by
         // `corruption_detection_excludes_transient_lock_errors`.)
-        let _ = open_connection_with_retry(&cache_path);
+        let _ = open_connection_with_retry(&cache_path, &cache_lock_info_path(&cache_path));
         holder.execute_batch("ROLLBACK").unwrap();
 
         assert!(
@@ -5284,5 +6764,305 @@ mod tests {
             let ids: Vec<&str> = hits.iter().filter_map(|r| r.spec_id.as_deref()).collect();
             assert_eq!(ids, vec!["ADR-3"], "--status {spelling}");
         }
+    }
+
+    /// BUG-1644: a cache write through a sibling worktree's SYMLINKED
+    /// `cache.db` claims the SHARED sidecar beside the main checkout's real
+    /// cache (the path `Cache::open` resolved), never one beside the symlink.
+    /// Built under the canonical temp root (macOS `/var` -> `/private/var`).
+    // trace:BUG-1644 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1644_with_cache_write_claims_shared_sidecar_through_worktree_symlink() {
+        let root = tempdir().unwrap();
+        let base = std::fs::canonicalize(root.path()).unwrap();
+        let main_aida = base.join("main").join(".aida");
+        let wt_aida = base.join("wt-sibling").join(".aida");
+        std::fs::create_dir_all(&main_aida).unwrap();
+        std::fs::create_dir_all(&wt_aida).unwrap();
+        let main_cache = main_aida.join("cache.db");
+        drop(Cache::open(&main_cache).unwrap());
+        let wt_cache = wt_aida.join("cache.db");
+        std::os::unix::fs::symlink(&main_cache, &wt_cache).unwrap();
+
+        let shared_sidecar = main_aida.join("cache.db.lock-info");
+        let worktree_sidecar = wt_aida.join("cache.db.lock-info");
+        let cache = Cache::open(&wt_cache).unwrap();
+        assert_eq!(cache.lock_info_path(), shared_sidecar.as_path());
+
+        let mut ran = false;
+        with_cache_write(
+            cache.path(),
+            cache.lock_info_path(),
+            "bug-1644 test write",
+            cache.is_read_only(),
+            || {
+                ran = true;
+                let info = read_cache_lock_info(&main_cache)?
+                    .expect("the shared sidecar must exist during the write");
+                assert_eq!(info.pid, std::process::id());
+                assert!(
+                    !worktree_sidecar.exists(),
+                    "no sidecar may be written beside the worktree symlink"
+                );
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(ran);
+        // Released at the shared location; nothing leaked beside the symlink.
+        assert!(!shared_sidecar.exists());
+        assert!(!worktree_sidecar.exists());
+    }
+
+    // ---------------------------------------------------------------- TASK-1515
+
+    /// A store whose every row is labelled with its build: titles are
+    /// `<label>-<k>`, so a reader can check that the rows it sees belong to
+    /// the head SHA it sees (`<label>`).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_store(label: &str, n: usize) -> RequirementsStore {
+        let mut store = RequirementsStore::new();
+        for k in 0..n {
+            store.requirements.push(sample_req(
+                &format!("FR-1-{:03}", k + 1),
+                &format!("{label}-{k}"),
+            ));
+        }
+        store
+    }
+
+    /// One read transaction on a SEPARATE connection: the recorded head SHA,
+    /// the cached titles, and the stamped schema version.
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_snapshot(conn: &Connection) -> (Option<String>, Vec<String>, Option<String>) {
+        conn.execute_batch("BEGIN").unwrap();
+        let meta = |key: &str| {
+            conn.query_row(
+                "SELECT value FROM cache_meta WHERE key = ?1",
+                params![key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .unwrap()
+        };
+        let sha = meta(META_KEY_SOURCE_HEAD_SHA);
+        let version = meta(META_KEY_SCHEMA_VERSION);
+        let mut stmt = conn
+            .prepare("SELECT title FROM requirements_cache ORDER BY title")
+            .unwrap();
+        let titles = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        drop(stmt);
+        conn.execute_batch("COMMIT").unwrap();
+        (sha, titles, version)
+    }
+
+    /// Make every write of the `source_head_sha` stamp fail, so a test can
+    /// prove the rows roll back with it (they share one transaction).
+    // trace:TASK-1515 | ai:claude
+    fn task_1515_fail_head_stamp(conn: &Connection, on: bool) {
+        if on {
+            conn.execute_batch(&format!(
+                "CREATE TRIGGER t1515_ins BEFORE INSERT ON cache_meta
+                   WHEN NEW.key = '{META_KEY_SOURCE_HEAD_SHA}'
+                   BEGIN SELECT RAISE(ABORT, 'task-1515 injected stamp failure'); END;
+                 CREATE TRIGGER t1515_upd BEFORE UPDATE ON cache_meta
+                   WHEN NEW.key = '{META_KEY_SOURCE_HEAD_SHA}'
+                   BEGIN SELECT RAISE(ABORT, 'task-1515 injected stamp failure'); END;"
+            ))
+            .unwrap();
+        } else {
+            conn.execute_batch("DROP TRIGGER t1515_ins; DROP TRIGGER t1515_upd;")
+                .unwrap();
+        }
+    }
+
+    // TASK-1515: the rows and the head/built_at/version stamps are ONE
+    // transaction. If the stamp fails, the rows must roll back with it; the
+    // pre-fix code committed the rows first and stamped afterwards, leaving
+    // HEAD-B rows labelled HEAD-A.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_rebuild_rows_roll_back_when_the_stamp_fails() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        cache
+            .rebuild_from_store(&task_1515_store("A", 3), "A")
+            .unwrap();
+        let built_a = cache.built_at().unwrap();
+        let reader = Connection::open(&path).unwrap();
+
+        task_1515_fail_head_stamp(&reader, true);
+        let err = cache
+            .rebuild_from_store(&task_1515_store("B", 5), "B")
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("injected"), "{err:#}");
+
+        let (sha, titles, _) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"], "rows must roll back");
+        assert_eq!(
+            cache.built_at().unwrap(),
+            built_a,
+            "built_at rolls back too"
+        );
+
+        task_1515_fail_head_stamp(&reader, false);
+        cache
+            .rebuild_from_store(&task_1515_store("B", 5), "B")
+            .unwrap();
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("B"));
+        assert_eq!(titles.len(), 5);
+        assert!(titles.iter().all(|t| t.starts_with("B-")));
+        assert_eq!(version.as_deref(), Some(SCHEMA_VERSION));
+    }
+
+    // TASK-1515: an open that needs a schema migration while the old tables
+    // still hold rows must NOT commit the drop. A reader connection held open
+    // across the migration keeps seeing the old rows (never empty tables)
+    // until the drop, schema apply, refill and stamps commit together, and a
+    // failed rebuild leaves the old tables intact.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_migration_drop_commits_with_the_rebuild_for_a_held_reader() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        {
+            let cache = Cache::open(&path).unwrap();
+            cache
+                .rebuild_from_store(&task_1515_store("A", 3), "A")
+                .unwrap();
+        }
+        let older = (current_schema_version_num() - 1).to_string();
+        let reader = Connection::open(&path).unwrap();
+        reader
+            .execute(
+                "UPDATE cache_meta SET value = ?1 WHERE key = ?2",
+                params![older, META_KEY_SCHEMA_VERSION],
+            )
+            .unwrap();
+
+        // A read transaction that stays open across the whole migration.
+        let held = Connection::open(&path).unwrap();
+        held.execute_batch("BEGIN").unwrap();
+        let held_count = |c: &Connection| -> i64 {
+            c.query_row("SELECT COUNT(*) FROM requirements_cache", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(held_count(&held), 3);
+
+        let cache = Cache::open(&path).unwrap();
+        assert!(cache.migration_pending(), "rows present: drop is deferred");
+        assert_eq!(cache.source_head_sha().unwrap(), None, "pending = stale");
+        assert!(cache.is_stale("A").unwrap());
+        // Nothing was committed by the open: a fresh reader transaction still
+        // sees the old rows, the old head and the old stamp.
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"], "never empty tables");
+        assert_eq!(version.as_deref(), Some(older.as_str()));
+        // A second open (another process) re-detects the same migration.
+        assert!(Cache::open(&path).unwrap().migration_pending());
+
+        // A rebuild that fails at its stamp rolls back the drop as well.
+        task_1515_fail_head_stamp(&reader, true);
+        cache
+            .rebuild_from_store(&task_1515_store("B", 4), "B")
+            .unwrap_err();
+        let (sha, titles, version) = task_1515_snapshot(&reader);
+        assert_eq!(sha.as_deref(), Some("A"));
+        assert_eq!(titles, vec!["A-0", "A-1", "A-2"]);
+        assert_eq!(version.as_deref(), Some(older.as_str()));
+        assert!(cache.migration_pending());
+        task_1515_fail_head_stamp(&reader, false);
+
+        cache
+            .rebuild_from_store(&task_1515_store("B", 4), "B")
+            .unwrap();
+        assert!(!cache.migration_pending());
+        assert_eq!(cache.source_head_sha().unwrap().as_deref(), Some("B"));
+        // The held snapshot still sees the old committed rows...
+        assert_eq!(held_count(&held), 3);
+        held.execute_batch("COMMIT").unwrap();
+        // ...and the next one sees the fully rebuilt tables and stamps.
+        let (sha, titles, version) = task_1515_snapshot(&held);
+        assert_eq!(sha.as_deref(), Some("B"));
+        assert_eq!(titles, vec!["B-0", "B-1", "B-2", "B-3"]);
+        assert_eq!(version.as_deref(), Some(SCHEMA_VERSION));
+        assert!(!Cache::open(&path).unwrap().migration_pending());
+    }
+
+    // TASK-1515: a second connection reading continuously while rebuilds
+    // (some of them schema migrations) commit must only ever see a complete
+    // build: never empty tables, never rows of one build labelled with
+    // another build's head SHA, never a partial row set.
+    // trace:TASK-1515 | ai:claude
+    #[test]
+    fn task_1515_concurrent_reader_never_sees_mixed_heads_or_empty_tables() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::Arc;
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let rows_for = |i: usize| 2 + i % 4;
+        {
+            let cache = Cache::open(&path).unwrap();
+            cache
+                .rebuild_from_store(&task_1515_store("g0", rows_for(0)), "g0")
+                .unwrap();
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let reader = {
+            let (path, stop, reads) = (path.clone(), stop.clone(), reads.clone());
+            std::thread::spawn(move || {
+                let conn = Connection::open(&path).unwrap();
+                while !stop.load(Ordering::SeqCst) {
+                    let (sha, titles, _) = task_1515_snapshot(&conn);
+                    let sha = sha.expect("a committed build always carries its head");
+                    let i: usize = sha[1..].parse().unwrap();
+                    assert_eq!(titles.len(), rows_for(i), "partial/empty build {sha}");
+                    assert!(
+                        titles.iter().all(|t| t.starts_with(&format!("{sha}-"))),
+                        "rows from another build labelled {sha}: {titles:?}"
+                    );
+                    reads.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+        };
+        let older = (current_schema_version_num() - 1).to_string();
+        let writer_meta = Connection::open(&path).unwrap();
+        for i in 1..=24 {
+            if i % 3 == 0 {
+                // Force a deferred migration on the next open.
+                writer_meta
+                    .execute(
+                        "UPDATE cache_meta SET value = ?1 WHERE key = ?2",
+                        params![older, META_KEY_SCHEMA_VERSION],
+                    )
+                    .unwrap();
+            }
+            let cache = Cache::open(&path).unwrap();
+            assert_eq!(cache.migration_pending(), i % 3 == 0);
+            let label = format!("g{i}");
+            cache
+                .rebuild_from_store(&task_1515_store(&label, rows_for(i)), &label)
+                .unwrap();
+            // Give the reader a chance to observe this committed build.
+            let seen = reads.load(Ordering::SeqCst);
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while reads.load(Ordering::SeqCst) == seen && std::time::Instant::now() < deadline {
+                std::thread::yield_now();
+            }
+        }
+        stop.store(true, Ordering::SeqCst);
+        reader.join().expect("reader saw an inconsistent snapshot");
+        assert!(reads.load(Ordering::SeqCst) > 0);
     }
 }

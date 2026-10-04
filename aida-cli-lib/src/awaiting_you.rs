@@ -278,6 +278,11 @@ pub(crate) struct OrphanedInProgressItem {
     pub title: String,
     pub abandoned: bool,
     pub since_label: String,
+    /// BUG-1656: the lease's recorded pid is dead but a live harness lease is
+    /// in this repo — an Agent-tool subagent may be working the spec.
+    // trace:BUG-1656 | ai:claude
+    #[serde(default)]
+    pub possibly_subagent: bool,
 }
 
 /// TASK-1454: one LIVE seat confirmed blocked on a human approval gate — the
@@ -333,6 +338,17 @@ pub(crate) enum BlockedReason {
     /// The refusal cannot be pinned to a commit (no sha, a sha too short to
     /// compare, or no known head), so a push cannot be shown to clear it.
     Unverifiable,
+}
+
+impl BlockedReason {
+    /// The wire label shared by `--json` and the agent-mode TOON table.
+    // trace:BUG-1739 | ai:claude
+    pub(crate) fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::AtHead => "at_head",
+            Self::Unverifiable => "unverifiable",
+        }
+    }
 }
 
 /// The ONE row a PR's local review verdicts produce, if any.
@@ -677,6 +693,17 @@ pub(crate) struct ReworkReader<'a> {
 pub(crate) enum StaleApprovalReason {
     Stale,
     Unverifiable,
+}
+
+impl StaleApprovalReason {
+    /// The wire label shared by `--json` and the agent-mode TOON table.
+    // trace:BUG-1739 | ai:claude
+    pub(crate) fn as_wire_str(self) -> &'static str {
+        match self {
+            Self::Stale => "stale",
+            Self::Unverifiable => "unverifiable",
+        }
+    }
 }
 
 /// BUG-1549: one PR whose newest recorded APPROVAL does not provably cover
@@ -1112,6 +1139,129 @@ pub(crate) fn unowned_failing_pr_toon_rows(items: &[UnownedFailingPrItem]) -> Ve
         .collect()
 }
 
+/// BUG-1739: the three-way orphan verdict as one label. The human render and
+/// the agent-mode table read it from here; before this there was exactly one
+/// copy because there was exactly one renderer.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn orphaned_state_label(item: &OrphanedInProgressItem) -> &'static str {
+    if item.possibly_subagent {
+        // BUG-1681: the old wording said only "live harness lease in this repo",
+        // which is what the old predicate actually tested — and why every stale
+        // spec claimed a subagent the moment any fan-out was alive anywhere.
+        // The predicate now requires the subagent to hold THIS worktree; say so.
+        // trace:BUG-1656 | ai:claude
+        // trace:BUG-1681 | ai:claude
+        "possibly worked by a subagent — lease pid dead, a live subagent holds this worktree"
+    } else if item.abandoned {
+        "abandoned — lease died"
+    } else {
+        "not yet started — no lease"
+    }
+}
+
+/// BUG-1739: TOON rows for agent-mode `orphaned_in_progress`. Carries the same
+/// verdict and age the human line gives, plus the `aida ps` next step — an
+/// agent reading this must learn *why* the spec is orphaned, not merely that
+/// the count was non-zero.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn orphaned_in_progress_toon_rows(items: &[OrphanedInProgressItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|o| {
+            vec![
+                o.spec_id.clone(),
+                orphaned_state_label(o).to_string(),
+                o.since_label.clone(),
+                "aida ps".to_string(),
+            ]
+        })
+        .collect()
+}
+
+/// BUG-1739: TOON rows for agent-mode `blocked_seats`.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn blocked_seat_toon_rows(items: &[BlockedSeatItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|b| {
+            vec![
+                b.session_id.clone(),
+                b.spec.clone().unwrap_or_else(|| "-".into()),
+                b.tool.clone().unwrap_or_else(|| "-".into()),
+                b.since_label.clone(),
+            ]
+        })
+        .collect()
+}
+
+/// BUG-1739: TOON rows for agent-mode `pr_attribution_disagreements`.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn pr_attribution_toon_rows(
+    items: &[PrAttributionDisagreementItem],
+) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|d| {
+            vec![
+                d.pr.to_string(),
+                d.lease_spec.clone(),
+                d.trailer_spec.clone(),
+            ]
+        })
+        .collect()
+}
+
+/// BUG-1739: TOON rows for agent-mode `rework_ready`.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn rework_ready_toon_rows(items: &[ReworkReadyItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|r| {
+            vec![
+                r.pr.to_string(),
+                r.spec.clone().unwrap_or_else(|| "-".into()),
+                r.reviewed_sha.clone(),
+                r.head_sha.clone(),
+            ]
+        })
+        .collect()
+}
+
+/// BUG-1739: TOON rows for agent-mode `stale_approvals`. `reason` uses the same
+/// wire strings `to_json` emits, so the two machine surfaces agree.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn stale_approval_toon_rows(items: &[StaleApprovalItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|i| {
+            vec![
+                i.pr.to_string(),
+                i.spec.clone().unwrap_or_else(|| "-".into()),
+                i.reviewed_sha.clone(),
+                i.head_sha.clone(),
+                i.reason.as_wire_str().to_string(),
+            ]
+        })
+        .collect()
+}
+
+/// BUG-1739: TOON rows for agent-mode `blocked_reviews`.
+// trace:BUG-1739 | ai:claude
+pub(crate) fn blocked_review_toon_rows(items: &[BlockedReviewItem]) -> Vec<Vec<String>> {
+    items
+        .iter()
+        .map(|i| {
+            vec![
+                i.pr.to_string(),
+                i.spec.clone().unwrap_or_else(|| "-".into()),
+                i.reviewed_sha.clone(),
+                i.head_sha.clone(),
+                i.reason.as_wire_str().to_string(),
+            ]
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PendingBriefItem {
     pub agent: String,
@@ -1154,12 +1304,19 @@ pub(crate) struct HeldPrItem {
 pub(crate) fn project_held_pr(
     record: &crate::merge_hold::MergeHoldRecord,
     title: &str,
+    approved_at_head: Option<&str>,
 ) -> HeldPrItem {
     use crate::merge_hold::HoldReasonKind;
     let pr = record.pr;
     let action = match record.reason_kind {
         HoldReasonKind::Rework => {
-            "implementer: address the review findings; the hold lifts after approval".to_string()
+            if let Some(head) = approved_at_head {
+                let short = crate::review_verdict::short_sha(head);
+                format!("rework approved at {short}; awaiting human: aida merge-hold clear {pr}")
+            } else {
+                "implementer: address the review findings; the hold lifts after approval"
+                    .to_string()
+            }
         }
         HoldReasonKind::Decision => {
             format!("human decision needed; once decided, `aida merge-hold clear {pr}`")
@@ -1178,6 +1335,88 @@ pub(crate) fn project_held_pr(
         detail: record.detail.clone(),
         action,
     }
+}
+
+/// Project a corpus-derived rework hold (BUG-1773). Presents as `rework` so it
+/// is indistinguishable in shape from a marker-backed rework hold — the reader
+/// should not have to know which producer armed it — but the detail names the
+/// head and the finding count, which is what makes a corpus-derived row
+/// actionable without a marker to read.
+// trace:BUG-1773 | ai:claude
+pub(crate) fn project_corpus_held_pr(
+    pr: u64,
+    title: &str,
+    hold: &crate::review_verdict::CorpusHold,
+) -> HeldPrItem {
+    let short: String = hold.sha.chars().take(12).collect();
+    let detail = match &hold.integrity_error {
+        Some(message) => format!("review verdicts cannot be reconciled at {short}: {message}"),
+        None => {
+            let findings = match hold.findings {
+                0 => "no itemised findings".to_string(),
+                1 => "1 finding".to_string(),
+                n => format!("{n} findings"),
+            };
+            format!(
+                "`{}` recorded at {short} ({findings}); no hold marker — derived from the verdict corpus",
+                hold.verdict_raw
+            )
+        }
+    };
+    HeldPrItem {
+        pr,
+        title: title.to_string(),
+        reason_kind: crate::merge_hold::HoldReasonKind::Rework
+            .as_str()
+            .to_string(),
+        detail,
+        action: "implementer: address the review findings; the hold lifts after approval"
+            .to_string(),
+    }
+}
+
+/// One open PR's resolved inputs for the corpus-derived hold decision
+/// (BUG-1773). The caller does the filesystem and store reads; everything the
+/// decision needs is on this struct, so the decision itself stays pure and the
+/// "no double entry" rule has a test that does not need a repository.
+// trace:BUG-1773 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct CorpusHoldCandidate {
+    pub pr: u64,
+    pub title: String,
+    /// The PR's current head. `None` when the snapshot omitted it — this view
+    /// then holds nothing (it fails OPEN; the merge gate fails closed).
+    pub head_sha: Option<String>,
+    /// Raw verdict artifacts keyed to this PR (`PR-<n>` and the spec).
+    pub bodies: Vec<String>,
+    /// The owning spec is `Completed` — BUG-1529's criterion-4 escape.
+    pub spec_completed: bool,
+    /// A `.aida/merge-holds/PR-<n>` marker already speaks for this PR.
+    pub has_marker_hold: bool,
+}
+
+/// Derive the rework holds the verdict corpus implies, for open PRs that have no
+/// marker of their own. Pure: no filesystem, no network, no clock.
+// trace:BUG-1773 | ai:claude
+pub(crate) fn corpus_held_prs(candidates: &[CorpusHoldCandidate]) -> Vec<HeldPrItem> {
+    candidates
+        .iter()
+        // A marker-backed hold is already projected by `project_held_pr`, and it
+        // carries the richer typed reason. One row per PR, never two.
+        .filter(|candidate| !candidate.has_marker_hold)
+        .filter_map(|candidate| {
+            let hold = crate::review_verdict::corpus_hold_at_head(
+                &candidate.bodies,
+                candidate.head_sha.as_deref(),
+                candidate.spec_completed,
+            )?;
+            Some(project_corpus_held_pr(
+                candidate.pr,
+                &candidate.title,
+                &hold,
+            ))
+        })
+        .collect()
 }
 
 /// Seat-aware projection. Exact stable principal equality is deliberately used:
@@ -1263,6 +1502,15 @@ pub(crate) struct UnshippedWorkItem {
     pub age: String,
     pub recovery: String,
     pub pr_state: String,
+    /// BUG-1756: whether this branch has a remote counterpart (`origin/<name>`
+    /// exists, or the row itself is a remote-only ref). `false` is the single
+    /// most strandable state work can be in — the commits exist on exactly one
+    /// machine — so the render and the recovery hint must distinguish it from
+    /// a pushed-but-no-PR branch (push first vs just open a PR); TASK-1305
+    /// already established that collapsing distinct unshipped states into one
+    /// rendering is a defect.
+    // trace:BUG-1756 | ai:claude
+    pub pushed: bool,
 }
 
 /// BUG-1288: honesty flag for the `unshipped_work` scan itself, distinct from
@@ -1337,54 +1585,374 @@ impl AwaitingReport {
     /// for findings if any + 1 for unread mail + 1 for pending worker
     /// directives + reviewer items + escalations). Drives the `(N)` in
     /// the section header and the empty-report short-circuit.
-    pub fn total(&self) -> usize {
-        self.mergeable_prs.len()
-            + self
-                .recusal_holds
-                .iter()
-                .filter(|h| h.is_actionable_for_current_principal())
-                .count()
-            + self.held_prs.len()
-            + self.unowned_failing_prs.len()
-            + self.pending_briefs.len()
-            + (if self.findings_total > 0 { 1 } else { 0 })
-            + (if self.mail.unread > 0 { 1 } else { 0 })
+    /// BUG-1739: every contributor `total()` counts, paired with the key the
+    /// agent-mode view prints for it. This is the ONE list; `total()` is its
+    /// sum and [`Self::render_agent_view`] must emit something for each key.
+    ///
+    /// The bug this exists to prevent: `total()` and the agent render were
+    /// edited independently for nine contributors, so `awaiting: 6` could be
+    /// printed above eight empty tables with no way to learn what the other
+    /// three were. Three of them were specs stranded In-Progress for 64 hours.
+    ///
+    /// A source-scanning guard was the alternative and is weaker: it proves
+    /// two files mention the same tokens, not that the renderer emits
+    /// anything. Summing this list makes a new contributor *impossible* to add
+    /// without a key, and the correspondence test renders each key's report for
+    /// real and fails when the output does not change.
+    // trace:BUG-1739 | ai:claude
+    pub(crate) fn contributions(&self) -> Vec<(&'static str, usize)> {
+        vec![
+            ("prs", self.mergeable_prs.len()),
+            (
+                "recusal_holds",
+                self.recusal_holds
+                    .iter()
+                    .filter(|h| h.is_actionable_for_current_principal())
+                    .count(),
+            ),
+            ("held_prs", self.held_prs.len()),
+            ("unowned_failing_prs", self.unowned_failing_prs.len()),
+            ("briefs", self.pending_briefs.len()),
+            ("findings", usize::from(self.findings_total > 0)),
+            ("mail_unread", usize::from(self.mail.unread > 0)),
             // trace:BUG-767 | ai:claude — the shared-inbox line is its own row.
-            + (if self.mail.shared_unread > 0 { 1 } else { 0 })
-            + (if self.worker_directives.pending > 0 {
-                1
-            } else {
-                0
-            })
+            (
+                "mail_shared_unread",
+                usize::from(self.mail.shared_unread > 0),
+            ),
+            (
+                "directives_pending",
+                usize::from(self.worker_directives.pending > 0),
+            ),
             // trace:STORY-1226 | ai:claude — due seat jobs are one row.
-            + (if self.cron.due > 0 { 1 } else { 0 })
-            + self.unshipped_work.len()
-            + self.rework_ready.len()
-            + self.stale_approvals.len()
-            + self.blocked_reviews.len()
-            + (if self.nightly_red.is_some() { 1 } else { 0 })
-            + self.reviewer_queue_items.len()
-            // BUG-1508 AC4/AC7: the "actionable N of M routed" summary line.
-            + (if !self.reviewer_queue_items.is_empty() { 1 } else { 0 })
-            + (if self.shelved_total > 0 { 1 } else { 0 })
-            + self.escalations.len()
-            + self.pr_attribution_disagreements.len()
-            + self.orphaned_in_progress.len()
-            // BUG-1288: a truncated unshipped-work scan is its own line
-            // (below) — it must count toward `total()` too, or a quiet-
-            // looking report (0 items found, scan incomplete) would hit the
-            // is_empty() fast path and hide the one honesty signal that
-            // says "not actually verified clean." PRIN-5.
-            + (if self
-                .unshipped_work_scan
-                .is_some_and(|scan| !scan.complete)
-            {
-                1
-            } else {
-                0
-            })
+            ("cron_due", usize::from(self.cron.due > 0)),
+            ("unshipped_work", self.unshipped_work.len()),
+            ("rework_ready", self.rework_ready.len()),
+            ("stale_approvals", self.stale_approvals.len()),
+            ("blocked_reviews", self.blocked_reviews.len()),
+            ("nightly_red", usize::from(self.nightly_red.is_some())),
+            ("reviewer", self.reviewer_queue_items.len()),
+            // BUG-1508 AC4/AC7: the "actionable N of M routed" summary line is
+            // its own row. It is a SCALAR, not a table: agent mode already
+            // printed `reviewer[N]`, so before BUG-1739 this row made the
+            // total exceed the rendered rows by one whenever review was routed.
+            (
+                "reviewer_actionable",
+                usize::from(!self.reviewer_queue_items.is_empty()),
+            ),
+            ("shelved", usize::from(self.shelved_total > 0)),
+            ("escalations", self.escalations.len()),
+            (
+                "pr_attribution_disagreements",
+                self.pr_attribution_disagreements.len(),
+            ),
+            ("orphaned_in_progress", self.orphaned_in_progress.len()),
+            // BUG-1288: a truncated unshipped-work scan is its own line — it
+            // must count toward `total()` too, or a quiet-looking report (0
+            // items found, scan incomplete) would hit the is_empty() fast path
+            // and hide the one honesty signal that says "not actually verified
+            // clean." PRIN-5. Rendered as the `+` suffix on `unshipped:`.
+            (
+                "unshipped_scan_incomplete",
+                usize::from(self.unshipped_work_scan.is_some_and(|scan| !scan.complete)),
+            ),
             // trace:TASK-1454 | ai:claude
-            + self.blocked_seats.len()
+            ("blocked_seats", self.blocked_seats.len()),
+        ]
+    }
+
+    /// Count of *lines* this report will render. Drives the `(N)` in the
+    /// section header and the empty-report short-circuit. The sum of
+    /// [`Self::contributions`] — do not reintroduce a second hand-written
+    /// arithmetic here (BUG-1739).
+    pub fn total(&self) -> usize {
+        self.contributions().iter().map(|(_, n)| n).sum()
+    }
+
+    /// BUG-1739: the agent-mode (TOON) view, as a string so a test can assert
+    /// what it actually emits. It lived inline in the `aida awaiting` command
+    /// arm and could therefore only be tested by reading source as text, which
+    /// is why nine contributors drifted out of it unnoticed.
+    ///
+    /// INVARIANT: every key in [`Self::contributions`] must be observable here.
+    /// `agent_view_renders_every_contribution` proves it by rendering each
+    /// contributor for real. Adding a contributor without an emission fails it.
+    // trace:BUG-1739 | ai:claude
+    pub(crate) fn render_agent_view(&self) -> String {
+        use std::fmt::Write as _;
+        let mut out = String::new();
+        // BUG-695: honor AIDA_AGENT_OUTPUT like `aida integrate`/`ps`/`status` —
+        // emit token-efficient TOON (flat scalars + uniform tables) instead of the
+        // human box-drawing header + status emoji, which waste agent tokens and
+        // ignore the `[ui] glyphs` profile. `--json` above still wins for
+        // structured consumers; the `--notice` compact path returned earlier.
+        // trace:BUG-695 | ai:claude
+        let _ = writeln!(out, "view: awaiting");
+        let _ = writeln!(out, "awaiting: {}", self.total());
+        let _ = writeln!(out, "findings: {}", self.findings_total);
+        let _ = writeln!(out, "mail_unread: {}", self.mail.unread);
+        let _ = writeln!(out, "mail_urgent: {}", self.mail.urgent);
+        // BUG-767: shared role/agent-type inboxes on their own labelled keys —
+        // `mail_unread` stays the operator's own, deterministic count.
+        // trace:BUG-767 | ai:claude
+        let _ = writeln!(out, "mail_shared_unread: {}", self.mail.shared_unread);
+        let _ = writeln!(
+            out,
+            "mail_shared_scope: {}",
+            self.mail.shared_scope.as_deref().unwrap_or("-")
+        );
+        // trace:TASK-1146 | ai:claude
+        let _ = writeln!(
+            out,
+            "directives_pending: {}",
+            self.worker_directives.pending
+        );
+        let _ = writeln!(
+            out,
+            "directives_next: {}",
+            self.worker_directives.next.as_deref().unwrap_or("-")
+        );
+        // BUG-1288: a truncated scan means the count below is a LOWER
+        // BOUND, not the whole answer — the `+` suffix says so instead of
+        // letting an agent read a bare number as exhaustive. PRIN-5.
+        // trace:BUG-1288 | ai:claude
+        let unshipped_suffix = self
+            .unshipped_work_scan
+            .as_ref()
+            .filter(|scan| !scan.complete)
+            .map(|_| "+")
+            .unwrap_or("");
+        let _ = writeln!(
+            out,
+            "unshipped: {}{}",
+            self.unshipped_work.len(),
+            unshipped_suffix
+        );
+        let _ = writeln!(
+            out,
+            "nightly_red: {}",
+            self.nightly_red
+                .as_ref()
+                .map(|n| n.summary.as_str())
+                .unwrap_or("-")
+        );
+        // BUG-1739: three SCALAR contributors `total()` counts that agent mode
+        // printed nothing for. `cron_due` and `shelved` get their own keys in
+        // the `mail_unread`/`directives_pending` idiom; `reviewer_actionable`
+        // is the BUG-1508 AC4/AC7 summary row, which `total()` adds on top of
+        // the `reviewer[N]` table and which therefore made the headline exceed
+        // the rendered rows by one whenever review was routed here.
+        // trace:BUG-1739 | ai:claude
+        let _ = writeln!(out, "cron_due: {}", self.cron.due);
+        let _ = writeln!(out, "shelved: {}", self.shelved_total);
+        let _ = writeln!(
+            out,
+            "reviewer_actionable: {} of {} routed",
+            self.reviewer_actionable_count(),
+            self.reviewer_queue_items.len()
+        );
+        let prs: Vec<Vec<String>> = self
+            .mergeable_prs
+            .iter()
+            .map(|p| {
+                vec![
+                    p.number.to_string(),
+                    p.title.clone(),
+                    // "?" = CI unknown/not-set, matching the codebase convention
+                    // (status_cleanup.rs renders the same column with unwrap_or("?")).
+                    p.ci_rollup.clone().unwrap_or_else(|| "?".to_string()),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw("prs", &["number", "title", "ci"], &prs)
+        );
+        // trace:STORY-1397 | ai:codex
+        let recusal_holds: Vec<Vec<String>> = self
+            .recusal_holds
+            .iter()
+            .map(|h| {
+                vec![
+                    h.pr.to_string(),
+                    h.head_sha.clone().unwrap_or_else(|| "?".into()),
+                    h.state.clone(),
+                    h.relationship.clone(),
+                    h.action.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "recusal_holds",
+                &["pr", "head", "state", "relationship", "action"],
+                &recusal_holds,
+            )
+        );
+        // trace:STORY-1397 | ai:claude
+        let held_prs: Vec<Vec<String>> = self
+            .held_prs
+            .iter()
+            .map(|h| {
+                vec![
+                    h.pr.to_string(),
+                    h.reason_kind.clone(),
+                    h.detail.clone(),
+                    h.action.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "held_prs",
+                &["pr", "reason_kind", "detail", "action"],
+                &held_prs,
+            )
+        );
+        // trace:TASK-192 | ai:codex
+        let broken_prs = unowned_failing_pr_toon_rows(&self.unowned_failing_prs);
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "unowned_failing_prs",
+                &["number", "title", "branch", "action"],
+                &broken_prs,
+            )
+        );
+        let briefs: Vec<Vec<String>> = self
+            .pending_briefs
+            .iter()
+            .map(|b| vec![b.agent.clone(), b.spec_id.clone()])
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw("briefs", &["agent", "spec"], &briefs)
+        );
+        // trace:STORY-1043 | ai:codex
+        let unshipped: Vec<Vec<String>> = self
+            .unshipped_work
+            .iter()
+            .map(|u| {
+                vec![
+                    u.spec_id.clone(),
+                    u.branch.clone(),
+                    u.commits_ahead.to_string(),
+                    u.age.clone(),
+                    u.recovery.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "unshipped_work",
+                &["spec", "branch", "ahead", "age", "recovery"],
+                &unshipped
+            )
+        );
+        let reviewer: Vec<Vec<String>> = self
+            .reviewer_queue_items
+            .iter()
+            .map(|r| vec![r.spec_id.clone(), r.title.clone()])
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw("reviewer", &["spec", "title"], &reviewer)
+        );
+        let escalations: Vec<Vec<String>> = self
+            .escalations
+            .iter()
+            .map(|e| vec![e.spec_id.clone(), e.title.clone()])
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw("escalations", &["spec", "title"], &escalations)
+        );
+        // BUG-1739: the six LIST-shaped contributors `total()` counts that
+        // agent mode never rendered. `orphaned_in_progress` is the one that was
+        // actively hiding work: three specs stranded In-Progress for 45-64
+        // hours in this repository were inside `awaiting:` and printed nowhere,
+        // and three relay sessions in a row failed to diagnose the gap from
+        // this output. Empty tables still print, exactly like `prs[0]` above --
+        // an agent must be able to SEE that a class is empty rather than infer
+        // it from a total that does not add up. PRIN-5.
+        // trace:BUG-1739 | ai:claude
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "orphaned_in_progress",
+                &["spec", "state", "since", "action"],
+                &orphaned_in_progress_toon_rows(&self.orphaned_in_progress),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "blocked_seats",
+                &["session", "spec", "tool", "since"],
+                &blocked_seat_toon_rows(&self.blocked_seats),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "stale_approvals",
+                &["pr", "spec", "reviewed", "head", "reason"],
+                &stale_approval_toon_rows(&self.stale_approvals),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "blocked_reviews",
+                &["pr", "spec", "reviewed", "head", "reason"],
+                &blocked_review_toon_rows(&self.blocked_reviews),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "rework_ready",
+                &["pr", "spec", "reviewed", "head"],
+                &rework_ready_toon_rows(&self.rework_ready),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "pr_attribution_disagreements",
+                &["pr", "lease_spec", "trailer_spec"],
+                &pr_attribution_toon_rows(&self.pr_attribution_disagreements),
+            )
+        );
+        out
+    }
+
+    /// BUG-1508 AC4/AC7: how many routed reviewer items actually need this
+    /// seat's verdict. One classifier, three readers (the human render, the
+    /// agent render, `to_json`) — it was inlined at each before BUG-1739.
+    // trace:BUG-1739 | ai:claude
+    pub(crate) fn reviewer_actionable_count(&self) -> usize {
+        self.reviewer_queue_items
+            .iter()
+            .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+            .count()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1822,9 +2390,17 @@ impl AwaitingReport {
             } else {
                 ""
             };
+            // BUG-1756: a never-pushed branch exists on exactly one machine;
+            // say so instead of rendering it identically to a pushed branch
+            // that merely lacks a PR. trace:BUG-1756 | ai:claude
+            let push_note = if item.pushed {
+                ""
+            } else {
+                ", local-only (never pushed — this machine holds the only copy)"
+            };
             writeln!(
                 w,
-                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                "  🧭 unshipped work{}: {} on `{}` — {} commit{} ahead, age {}, PR {}{} — `{}`",
                 scope_note,
                 item.spec_id.bold(),
                 item.branch,
@@ -1832,6 +2408,7 @@ impl AwaitingReport {
                 if item.commits_ahead == 1 { "" } else { "s" },
                 item.age,
                 item.pr_state,
+                push_note,
                 unshipped_work_recovery_hint(item).cyan(),
             )?;
             budget -= 1;
@@ -1879,11 +2456,7 @@ impl AwaitingReport {
             if budget == 0 {
                 overflow += 1;
             } else {
-                let actionable = self
-                    .reviewer_queue_items
-                    .iter()
-                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
-                    .count();
+                let actionable = self.reviewer_actionable_count();
                 writeln!(
                     w,
                     "  🔎 reviewer: actionable {} of {} routed",
@@ -1927,15 +2500,16 @@ impl AwaitingReport {
                 overflow += 1;
             } else {
                 // TASK-1311: name the one-keystroke requeue next to the
-                // shelved count, with the status it lands in.
-                // trace:TASK-1311 | ai:claude
+                // shelved count, with the status it lands in. STORY-1429:
+                // point at the triage loop, which previews each requeue.
+                // trace:TASK-1311 trace:STORY-1429 | ai:claude
                 writeln!(
                     w,
-                    "  {} {} shelved item{} in rework — `{}` · requeue each with `{}` (to Approved)",
+                    "  {} {} shelved item{} in rework — triage one keystroke each with `{}` (to Approved) · or `{}`",
                     crate::glyph(crate::glyphs::Glyph::Pause).blue(),
                     self.shelved_total,
                     if self.shelved_total == 1 { "" } else { "s" },
-                    "aida findings list".cyan(),
+                    "aida rework".cyan(),
                     crate::requeue::requeue_command("<ID>").cyan(),
                 )?;
                 budget -= 1;
@@ -1962,11 +2536,8 @@ impl AwaitingReport {
                 overflow += 1;
                 continue;
             }
-            let state = if o.abandoned {
-                "abandoned — lease died"
-            } else {
-                "not yet started — no lease"
-            };
+            // trace:BUG-1739 | ai:claude — one classifier, shared with agent mode.
+            let state = orphaned_state_label(o);
             writeln!(
                 w,
                 "  {} orphaned In-Progress: {} — {}, {} — `{}`",
@@ -2056,6 +2627,10 @@ impl AwaitingReport {
                 "commits_ahead": i.commits_ahead,
                 "age": i.age,
                 "pr_state": i.pr_state,
+                // trace:BUG-1756 | ai:claude — false = local-only: the one
+                // machine-durable copy; consumers must not collapse it into
+                // the pushed-no-PR state.
+                "pushed": i.pushed,
                 "recovery": i.recovery,
             })).collect::<Vec<_>>(),
             // BUG-1288: `null` means the scan never ran (the `--notice` fast
@@ -2086,10 +2661,7 @@ impl AwaitingReport {
                     "spec": i.spec,
                     "reviewed_sha": i.reviewed_sha,
                     "head_sha": i.head_sha,
-                    "reason": match i.reason {
-                        BlockedReason::AtHead => "at_head",
-                        BlockedReason::Unverifiable => "unverifiable",
-                    },
+                    "reason": i.reason.as_wire_str(),
                     "recorded_at": i.recorded_at,
                     "age_secs": age.map(|a| a.secs),
                     // Unverifiable: rework-since is unknown, so no overdue claim.
@@ -2104,10 +2676,7 @@ impl AwaitingReport {
                 "spec": i.spec,
                 "reviewed_sha": i.reviewed_sha,
                 "head_sha": i.head_sha,
-                "reason": match i.reason {
-                    StaleApprovalReason::Stale => "stale",
-                    StaleApprovalReason::Unverifiable => "unverifiable",
-                },
+                "reason": i.reason.as_wire_str(),
             })).collect::<Vec<_>>(),
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
@@ -2117,7 +2686,7 @@ impl AwaitingReport {
             // BUG-1508 AC4/AC7: the depth figure that decides reviewer
             // capacity is actionable-of-routed, not a bare routed count.
             "reviewer_actionable_of_routed": {
-                "actionable": self.reviewer_queue_items.iter().filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview).count(),
+                "actionable": self.reviewer_actionable_count(),
                 "routed": self.reviewer_queue_items.len(),
             },
             "shelved_total": self.shelved_total,
@@ -2139,6 +2708,8 @@ impl AwaitingReport {
                 "title": o.title,
                 "abandoned": o.abandoned,
                 "since_label": o.since_label,
+                // trace:BUG-1656 | ai:claude
+                "possibly_subagent": o.possibly_subagent,
             })).collect::<Vec<_>>(),
             // trace:TASK-1454 | ai:claude
             "blocked_seats": self.blocked_seats.iter().map(|b| serde_json::json!({
@@ -2277,11 +2848,7 @@ impl AwaitingReport {
                 // BUG-1508 AC4/AC7: "actionable N of M routed" everywhere
                 // this depth figure is printed, including the compact
                 // per-turn line.
-                let actionable = self
-                    .reviewer_queue_items
-                    .iter()
-                    .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
-                    .count();
+                let actionable = self.reviewer_actionable_count();
                 parts.push(format!(
                     "actionable {} of {} routed",
                     actionable,
@@ -2476,6 +3043,7 @@ mod tests {
             release_condition: None,
             spec: None,
             placed_by: None,
+            absorbed: Vec::new(),
         }
     }
 
@@ -2539,7 +3107,7 @@ mod tests {
             "STORY-1397 is marked guided — merge requires review",
             None,
         );
-        let item = project_held_pr(&record, "route typed recusals");
+        let item = project_held_pr(&record, "route typed recusals", None);
         assert_eq!(item.reason_kind, "supervision");
         assert!(item.action.contains("aida merge-hold clear 2103"));
         let report = AwaitingReport {
@@ -2565,11 +3133,39 @@ mod tests {
     #[test]
     fn each_non_recusal_hold_kind_names_its_own_action() {
         use crate::merge_hold::HoldReasonKind;
-        let action =
-            |kind| project_held_pr(&crate::merge_hold::typed_hold(7, kind, "d", None), "t").action;
+        let action = |kind| {
+            project_held_pr(
+                &crate::merge_hold::typed_hold(7, kind, "d", None),
+                "t",
+                None,
+            )
+            .action
+        };
         assert!(action(HoldReasonKind::Rework).contains("implementer"));
         assert!(action(HoldReasonKind::Decision).contains("human decision"));
         assert!(action(HoldReasonKind::Unknown).contains("unreadable"));
+    }
+
+    // trace:BUG-1788 | ai:antigravity
+    #[test]
+    fn rework_hold_with_approval_flips_action() {
+        use crate::merge_hold::HoldReasonKind;
+        let action_unapproved = project_held_pr(
+            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            "t",
+            None,
+        )
+        .action;
+        assert!(action_unapproved.contains("implementer"));
+
+        let action_approved = project_held_pr(
+            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            "t",
+            Some("48433c6b00000000000000000000000000000000"),
+        )
+        .action;
+        assert!(action_approved.contains("rework approved at 48433c6"));
+        assert!(action_approved.contains("awaiting human: aida merge-hold clear"));
     }
 
     #[test]
@@ -3515,6 +4111,7 @@ mod tests {
                 age: "3h".to_string(),
                 recovery: "aida pr ship story-1043".to_string(),
                 pr_state: "absent".to_string(),
+                pushed: true,
             }],
             ..Default::default()
         };
@@ -3533,6 +4130,47 @@ mod tests {
         let json = r.to_json();
         assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
         assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
+        // trace:BUG-1756 | ai:claude — the push axis reaches consumers.
+        assert_eq!(json["unshipped_work"][0]["pushed"], true);
+        assert!(
+            !s.contains("local-only"),
+            "a pushed branch must not carry the local-only marker:\n{s}"
+        );
+    }
+
+    // BUG-1756 AC1: a never-pushed branch renders DISTINGUISHED from a
+    // pushed-no-PR branch — TASK-1305 established that collapsing distinct
+    // unshipped states into one rendering is a defect; this is the same
+    // principle on the push axis. trace:BUG-1756 | ai:claude
+    #[test]
+    fn local_only_unshipped_work_renders_distinct_from_pushed() {
+        let r = AwaitingReport {
+            unshipped_work: vec![UnshippedWorkItem {
+                spec_id: "BUG-1756".to_string(),
+                branch: "bug-1756-local".to_string(),
+                commits_ahead: 1,
+                age: "26h".to_string(),
+                recovery: "git push -u origin bug-1756-local && aida pr ship bug-1756-local"
+                    .to_string(),
+                pr_state: "absent".to_string(),
+                pushed: false,
+            }],
+            ..Default::default()
+        };
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(
+            s.contains("local-only (never pushed — this machine holds the only copy)"),
+            "the local-only state must be named, not collapsed into pushed-no-PR:\n{s}"
+        );
+        assert!(
+            s.contains("git push -u origin bug-1756-local && aida pr ship bug-1756-local"),
+            "the hint names the push first:\n{s}"
+        );
+
+        let json = r.to_json();
+        assert_eq!(json["unshipped_work"][0]["pushed"], false);
     }
 
     // BUG-1288: a truncated scan with ZERO items found must not render as a
@@ -3584,6 +4222,7 @@ mod tests {
                 age: "3h".to_string(),
                 recovery: "aida pr ship story-1043".to_string(),
                 pr_state: "absent".to_string(),
+                pushed: true,
             }],
             unshipped_work_scan: Some(UnshippedScanStatus {
                 complete: true,
@@ -3611,12 +4250,14 @@ mod tests {
                     title: "crashed session".to_string(),
                     abandoned: true,
                     since_label: "last touched 3h ago".to_string(),
+                    possibly_subagent: false,
                 },
                 OrphanedInProgressItem {
                     spec_id: "TASK-9002".to_string(),
                     title: "never picked up".to_string(),
                     abandoned: false,
                     since_label: "last-touched time unknown".to_string(),
+                    possibly_subagent: false,
                 },
             ],
             ..Default::default()
@@ -3729,6 +4370,7 @@ mod tests {
             age: "2h".to_string(),
             recovery: "aida pr ship story-2001-no-pr".to_string(),
             pr_state: "absent".to_string(),
+            pushed: true,
         };
         let open_pr = UnshippedWorkItem {
             spec_id: "STORY-2002".to_string(),
@@ -3740,6 +4382,7 @@ mod tests {
             // for an already-open PR.
             recovery: "aida pr ship story-2002-open-pr".to_string(),
             pr_state: "open".to_string(),
+            pushed: true,
         };
 
         let r = AwaitingReport {
@@ -4347,6 +4990,396 @@ mod tests {
         out
     }
 
+    // ---- BUG-1739: agent-mode render covers every `total()` contributor ----
+    //
+    // The defect: `total()` and the inline agent render were edited
+    // independently, so nine contributors counted toward `awaiting:` with no
+    // agent-mode output at all. Three specs stranded In-Progress for 64 hours
+    // were inside the headline and printed nowhere, and three relay sessions
+    // in a row could not diagnose it from the output.
+    //
+    // The pin is a TABLE of (contribution key, mutator). One test asserts the
+    // table's keys are exactly `contributions()`'s keys — so a tenth
+    // contributor cannot be added to `total()` without a row here — and the
+    // next renders each mutated report FOR REAL and requires the output to
+    // change. A source-scanning guard would only prove two files mention the
+    // same tokens; this proves the renderer emits something.
+    // trace:BUG-1739 | ai:claude
+
+    /// One populated example per contributor, keyed by its `contributions()`
+    /// key. Each mutator must make exactly its own contributor non-zero.
+    /// A contribution key paired with a mutator that populates exactly that
+    /// contributor.
+    type ContributionFixture = (&'static str, fn(&mut AwaitingReport));
+
+    fn contribution_fixtures() -> Vec<ContributionFixture> {
+        vec![
+            ("prs", |r| {
+                r.mergeable_prs.push(MergeablePrItem {
+                    number: 1,
+                    title: "pr".into(),
+                    head_branch: "b".into(),
+                    ci_rollup: None,
+                    under_review: None,
+                })
+            }),
+            ("recusal_holds", |r| {
+                r.recusal_holds.push(RecusalHoldItem {
+                    pr: 2,
+                    head_sha: Some("abc1234".into()),
+                    recused_principals: vec![],
+                    routed_to: vec![],
+                    state: "held".into(),
+                    // Anything but "recused"/"other-reader" is actionable.
+                    relationship: "author".into(),
+                    action: "route".into(),
+                })
+            }),
+            ("held_prs", |r| {
+                r.held_prs.push(HeldPrItem {
+                    pr: 3,
+                    title: "held".into(),
+                    reason_kind: "rework".into(),
+                    detail: "d".into(),
+                    action: "a".into(),
+                })
+            }),
+            ("unowned_failing_prs", |r| {
+                r.unowned_failing_prs.push(UnownedFailingPrItem {
+                    number: 4,
+                    title: "broken".into(),
+                    head_branch: "b4".into(),
+                    done_spec: None,
+                })
+            }),
+            ("briefs", |r| {
+                r.pending_briefs.push(PendingBriefItem {
+                    agent: "claude".into(),
+                    spec_id: "BUG-1".into(),
+                    path: std::env::temp_dir().join("brief"),
+                })
+            }),
+            ("findings", |r| r.findings_total = 2),
+            ("mail_unread", |r| r.mail.unread = 1),
+            ("mail_shared_unread", |r| r.mail.shared_unread = 1),
+            ("directives_pending", |r| r.worker_directives.pending = 1),
+            ("cron_due", |r| r.cron.due = 1),
+            ("unshipped_work", |r| {
+                r.unshipped_work.push(UnshippedWorkItem {
+                    spec_id: "BUG-2".into(),
+                    branch: "bug-2".into(),
+                    commits_ahead: 3,
+                    age: "2h".into(),
+                    recovery: "aida rebase".into(),
+                    pr_state: "none".into(),
+                    pushed: true,
+                })
+            }),
+            ("rework_ready", |r| {
+                r.rework_ready.push(ReworkReadyItem {
+                    pr: 5,
+                    spec: Some("BUG-3".into()),
+                    reviewed_sha: "aaaaaaa".into(),
+                    head_sha: "bbbbbbb".into(),
+                    inherited_from: None,
+                })
+            }),
+            ("stale_approvals", |r| {
+                r.stale_approvals.push(StaleApprovalItem {
+                    pr: 6,
+                    spec: Some("BUG-4".into()),
+                    reviewed_sha: "ccccccc".into(),
+                    head_sha: "ddddddd".into(),
+                    reason: StaleApprovalReason::Stale,
+                })
+            }),
+            ("blocked_reviews", |r| {
+                r.blocked_reviews.push(BlockedReviewItem {
+                    pr: 7,
+                    spec: Some("BUG-5".into()),
+                    reviewed_sha: "eeeeeee".into(),
+                    head_sha: "fffffff".into(),
+                    reason: BlockedReason::AtHead,
+                    recorded_at: None,
+                })
+            }),
+            ("nightly_red", |r| {
+                r.nightly_red = Some(NightlyRedItem {
+                    summary: "nightly red".into(),
+                    run_id: Some(1),
+                    nights: 2,
+                })
+            }),
+            ("reviewer", |r| {
+                r.reviewer_queue_items.push(reviewer_item(
+                    "BUG-6",
+                    review_verdict::ReviewActionability::NeedsReview,
+                ))
+            }),
+            // Same population as "reviewer": `total()` counts the routed item
+            // AND the BUG-1508 summary line, so this key's own observability is
+            // proven by the dedicated reviewer_actionable test below.
+            ("reviewer_actionable", |r| {
+                r.reviewer_queue_items.push(reviewer_item(
+                    "BUG-7",
+                    review_verdict::ReviewActionability::NeedsReview,
+                ))
+            }),
+            ("shelved", |r| r.shelved_total = 4),
+            ("escalations", |r| {
+                r.escalations.push(EscalationItem {
+                    spec_id: "BUG-8".into(),
+                    title: "escalated".into(),
+                })
+            }),
+            ("pr_attribution_disagreements", |r| {
+                r.pr_attribution_disagreements
+                    .push(PrAttributionDisagreementItem {
+                        pr: 8,
+                        lease_spec: "STORY-1".into(),
+                        trailer_spec: "BUG-9".into(),
+                    })
+            }),
+            ("orphaned_in_progress", |r| {
+                r.orphaned_in_progress.push(OrphanedInProgressItem {
+                    spec_id: "BUG-1688".into(),
+                    title: "stranded".into(),
+                    abandoned: true,
+                    since_label: "64h 15m ago".into(),
+                    possibly_subagent: false,
+                })
+            }),
+            ("unshipped_scan_incomplete", |r| {
+                r.unshipped_work_scan = Some(UnshippedScanStatus {
+                    complete: false,
+                    scanned: 1,
+                    candidates: 14,
+                })
+            }),
+            ("blocked_seats", |r| {
+                r.blocked_seats.push(BlockedSeatItem {
+                    session_id: "01a0f28c".into(),
+                    spec: Some("BUG-10".into()),
+                    tool: Some("Bash".into()),
+                    since_label: "5m".into(),
+                })
+            }),
+        ]
+    }
+
+    /// AC4's structural half: the fixture table and `contributions()` cannot
+    /// drift. Add a contributor to `total()` without a fixture and this fails,
+    /// which is what forces the author into the render test below.
+    #[test]
+    fn contribution_fixtures_cover_every_contribution_key() {
+        let keys: Vec<&str> = AwaitingReport::default()
+            .contributions()
+            .iter()
+            .map(|(k, _)| *k)
+            .collect();
+        let fixture_keys: Vec<&str> = contribution_fixtures().iter().map(|(k, _)| *k).collect();
+        assert_eq!(
+            keys, fixture_keys,
+            "every `contributions()` key needs a fixture (and the same order); \
+             a new contributor must be rendered in agent mode, not just counted"
+        );
+        // Keys are the agent-mode vocabulary — duplicates would make the
+        // correspondence test below vacuous for the shadowed one.
+        let mut sorted = keys.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), keys.len(), "contribution keys must be unique");
+    }
+
+    /// The agent view with the `awaiting:` headline removed. The headline is
+    /// `total()` itself, so ANY contributor changes it — comparing whole
+    /// renders would make the correspondence test below pass on a report whose
+    /// contributor is counted and printed nowhere, which is the exact bug.
+    /// Proven: dropping the `orphaned_in_progress` table left the unstripped
+    /// comparison green.
+    // trace:BUG-1739 | ai:claude
+    fn agent_view_body(report: &AwaitingReport) -> String {
+        report
+            .render_agent_view()
+            .lines()
+            .filter(|l| !l.starts_with("awaiting:"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// AC1/AC3/AC4: a non-zero `total()` is always attributable to something
+    /// agent mode printed. Renders each contributor for real and requires the
+    /// output BELOW the headline to change.
+    #[test]
+    fn agent_view_renders_every_contribution() {
+        let baseline = agent_view_body(&AwaitingReport::default());
+        for (key, populate) in contribution_fixtures() {
+            let mut report = AwaitingReport::default();
+            populate(&mut report);
+            assert!(
+                report.total() > 0,
+                "fixture for `{key}` must make the report non-empty"
+            );
+            assert_ne!(
+                agent_view_body(&report),
+                baseline,
+                "agent mode renders nothing for `{key}` beyond bumping the \
+                 `awaiting:` headline, but `total()` counts it — the headline \
+                 would exceed the visible rows with no way to learn why"
+            );
+        }
+    }
+
+    /// AC3: absence is SHOWN, not inferred — every list-shaped contributor
+    /// prints its `[0]` table on a quiet report, exactly like `prs[0]` did
+    /// before this bug. An agent must be able to learn the whole contributor
+    /// vocabulary from one invocation.
+    #[test]
+    fn agent_view_prints_every_key_even_when_quiet() {
+        let rendered = AwaitingReport::default().render_agent_view();
+        for (key, _) in AwaitingReport::default().contributions() {
+            // The incomplete-scan row is the `+` suffix on `unshipped:`, and
+            // `reviewer_actionable` is a scalar summary; both are asserted by
+            // their own tests rather than by key presence.
+            if key == "unshipped_scan_incomplete" {
+                continue;
+            }
+            assert!(
+                rendered.contains(key),
+                "quiet agent view omits `{key}`:\n{rendered}"
+            );
+        }
+    }
+
+    /// AC2: the orphan table carries the spec id, the reason the human line
+    /// gives, and the `aida ps` next step — not merely a count.
+    #[test]
+    fn agent_view_orphan_table_carries_spec_reason_and_next_step() {
+        let mut report = AwaitingReport::default();
+        report.orphaned_in_progress.push(OrphanedInProgressItem {
+            spec_id: "BUG-1688".into(),
+            title: "stranded".into(),
+            abandoned: true,
+            since_label: "64h 15m ago".into(),
+            possibly_subagent: false,
+        });
+        let rendered = report.render_agent_view();
+        assert!(rendered.contains("orphaned_in_progress[1]"), "{rendered}");
+        assert!(rendered.contains("BUG-1688"), "{rendered}");
+        assert!(rendered.contains("abandoned — lease died"), "{rendered}");
+        assert!(rendered.contains("64h 15m ago"), "{rendered}");
+        assert!(rendered.contains("aida ps"), "{rendered}");
+        // The headline must now reconcile with the rendered row.
+        assert!(rendered.contains("awaiting: 1"), "{rendered}");
+    }
+
+    /// The observed incident, reproduced exactly: findings + nightly red +
+    /// an incomplete scan + three orphans rendered `awaiting: 6` above eight
+    /// empty tables. Every one of the six must now be visible.
+    #[test]
+    fn agent_view_reproduces_and_fixes_the_observed_awaiting_six() {
+        let mut report = AwaitingReport {
+            findings_total: 2,
+            nightly_red: Some(NightlyRedItem {
+                summary: "cross-platform nightly red since 2026-09-23".into(),
+                run_id: Some(36_714_166_342),
+                nights: 8,
+            }),
+            unshipped_work_scan: Some(UnshippedScanStatus {
+                complete: false,
+                scanned: 0,
+                candidates: 14,
+            }),
+            ..Default::default()
+        };
+        for (spec, since) in [
+            ("BUG-1688", "64h 15m ago"),
+            ("BUG-1693", "64h 0m ago"),
+            ("BUG-1695", "45h 45m ago"),
+        ] {
+            report.orphaned_in_progress.push(OrphanedInProgressItem {
+                spec_id: spec.into(),
+                title: "stranded".into(),
+                abandoned: true,
+                since_label: since.into(),
+                possibly_subagent: false,
+            });
+        }
+        assert_eq!(report.total(), 6, "the observed headline");
+        let rendered = report.render_agent_view();
+        assert!(rendered.contains("awaiting: 6"), "{rendered}");
+        assert!(rendered.contains("unshipped: 0+"), "{rendered}");
+        assert!(rendered.contains("orphaned_in_progress[3]"), "{rendered}");
+        for spec in ["BUG-1688", "BUG-1693", "BUG-1695"] {
+            assert!(
+                rendered.contains(spec),
+                "{spec} was counted in `awaiting: 6` and printed nowhere:\n{rendered}"
+            );
+        }
+    }
+
+    /// The reviewer contributor is an OFF-BY-ONE, not a missing table: the
+    /// `reviewer[N]` table always rendered, while `total()` counted N+1.
+    #[test]
+    fn agent_view_reviewer_summary_accounts_for_the_extra_counted_row() {
+        let mut report = AwaitingReport::default();
+        report.reviewer_queue_items.push(reviewer_item(
+            "BUG-6",
+            review_verdict::ReviewActionability::NeedsReview,
+        ));
+        assert_eq!(report.total(), 2, "one routed item plus the summary row");
+        let rendered = report.render_agent_view();
+        assert!(rendered.contains("reviewer[1]"), "{rendered}");
+        assert!(
+            rendered.contains("reviewer_actionable: 1 of 1 routed"),
+            "the second counted row must be visible too:\n{rendered}"
+        );
+    }
+
+    /// AC6's other half: the contributions refactor must not disturb the
+    /// hide-when-empty fast path `total()` drives.
+    #[test]
+    fn empty_report_still_totals_zero_and_hides() {
+        let report = AwaitingReport::default();
+        assert!(report.contributions().iter().all(|(_, n)| *n == 0));
+        assert_eq!(report.total(), 0);
+        assert!(report.is_empty());
+    }
+
+    /// `total()` is the sum of `contributions()` — pinned against a fully
+    /// populated report so the refactor cannot silently drop a term.
+    #[test]
+    fn total_equals_the_sum_of_every_populated_contribution() {
+        let mut report = AwaitingReport::default();
+        for (_, populate) in contribution_fixtures() {
+            populate(&mut report);
+        }
+        let contributions = report.contributions();
+        let summed: usize = contributions.iter().map(|(_, n)| n).sum();
+        assert_eq!(report.total(), summed);
+        // Every contributor populated; `reviewer` carries two items (its own
+        // fixture and `reviewer_actionable`'s), so the total exceeds the
+        // contributor count by exactly one.
+        assert_eq!(
+            report.total(),
+            contributions.len() + 1,
+            "each fixture contributes 1 except `reviewer`, which holds 2 items"
+        );
+    }
+
+    /// The wire labels the agent table prints are the ones `--json` emits —
+    /// two machine surfaces, one vocabulary.
+    #[test]
+    fn reason_wire_labels_match_the_json_surface() {
+        assert_eq!(StaleApprovalReason::Stale.as_wire_str(), "stale");
+        assert_eq!(
+            StaleApprovalReason::Unverifiable.as_wire_str(),
+            "unverifiable"
+        );
+        assert_eq!(BlockedReason::AtHead.as_wire_str(), "at_head");
+        assert_eq!(BlockedReason::Unverifiable.as_wire_str(), "unverifiable");
+    }
+
     fn reviewer_item(
         spec_id: &str,
         state: review_verdict::ReviewActionability,
@@ -4522,6 +5555,7 @@ mod tests {
             age: "1h".to_string(),
             recovery: "aida pr ship story-1".to_string(),
             pr_state: "absent".to_string(),
+            pushed: true,
         };
         let scoped = AwaitingReport {
             unshipped_work: vec![item.clone()],

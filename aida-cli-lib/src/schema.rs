@@ -693,6 +693,17 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
              slug is the canonical join key qualifying the spec's git linkage. None = \
              single-repo store. Set via `aida edit --origin repo[/component]`.",
     },
+    // trace:CR-8 | ai:claude
+    FieldDoc {
+        name: "filed_at",
+        example: "{code_sha: abc1234…, branch: feat/x, dirty: false, aida_version: 0.9.3, aida_build_sha: def5678, vendor: codex}",
+        provenance: Provenance::ReflectionDerived,
+        description:
+            "Filing provenance, stamped once at creation: the code repo's HEAD SHA, branch and \
+             dirty flag, the filing aida version and build SHA, and the filing agent vendor / \
+             session when known. Every sub-field is best-effort and omitted when undetectable. \
+             Write-once: edits never change it. None = filed before provenance existed.",
+    },
     // trace:STORY-776 | ai:claude
     FieldDoc {
         name: "execution_mode",

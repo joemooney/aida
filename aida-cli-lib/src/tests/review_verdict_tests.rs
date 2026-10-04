@@ -1342,9 +1342,7 @@ fn pr_keyed_write_reports_failure_honestly_when_the_directory_is_read_only() {
     );
 
     // Restore write access so TempDir can clean itself up on drop.
-    let mut restore = perms;
-    restore.set_mode(0o755);
-    std::fs::set_permissions(&locked_dir, restore).unwrap();
+    crate::test_exec::mark_executable(&locked_dir);
 
     let err = result
         .expect_err("a write that cannot land must be reported as an error, never as a success");
@@ -1398,9 +1396,7 @@ fn layered_handshake_write_reports_failure_honestly_when_the_directory_is_read_o
 
     let result = write_verdict_object(&path, &obj);
 
-    let mut restore = perms;
-    restore.set_mode(0o755);
-    std::fs::set_permissions(&locked_dir, restore).unwrap();
+    crate::test_exec::mark_executable(&locked_dir);
 
     let err = result.expect_err("a failed layered write must surface as an error");
     assert!(

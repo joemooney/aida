@@ -28,6 +28,8 @@ fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLe
         review_verb: false,
         claim_verb: false,
         manual_enter_at: None,
+        interrupted_at: None,
+        interrupted_reason: None,
     }
 }
 

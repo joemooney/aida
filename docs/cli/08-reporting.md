@@ -20,6 +20,51 @@ Four of these commands look superficially similar — they all "report on the pr
 
 The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics`/`usage` don't read the graph at all — they read the telemetry substrate. `why` is the only one scoped to a single spec.
 
+## Time bounds
+
+Every flag that bounds a window in time takes the same forms, whichever command it is on: `history`, `digest`, `usage` (and `usage unused`), `metrics agent-lift`, `status --activity`, `queue progress`, `approvals`, `review classes` / `findings classes`, `findings calibration`, `autonomy calibration mismatches`, `load calibration`, `archive --older-than`, `mailbox archive` / `mailbox gc --older-than`, `doctor --since`, and `tail` / `drain tail` / `headless tail --since`. <!-- trace:TASK-1509 | ai:claude -->
+
+- **Relative, "that far before now"** — compact `30m`, `12h`, `7d`, `2w` (minutes, hours, days, weeks), or the phrase `<N> <unit>(s) ago` (`24 hours ago`, `1 week ago`).
+- **A bare ISO date** (`2026-05-01`) — **local midnight** on that date, not UTC midnight.
+- **A zone-less ISO datetime** (`2026-05-01T10:00`, `2026-05-01 10:00`) — that local wall-clock time.
+- **RFC3339** (`2026-05-01T10:00:00Z`, `…+02:00`) — the explicit zone wins.
+
+## Merge-hold gate and clearance limits
+
+The required `merge-hold-gate` check uses three forge labels. An active
+`aida:merge-hold` always fails. A persistent `aida:merge-hold-recorded` label
+means the PR was held previously; the check passes after release only when
+`aida:merge-hold-cleared` is also present. `aida merge-hold clear <pr>` keeps
+the existing human-at-an-interactive-terminal floor, writes the local JSON
+clearance record, removes the active label, and adds the clearance label.
+Removing the active label alone, or deleting the local marker alone, cannot
+make this check pass. The same rule is in the GitLab template.
+Run `aida merge-hold labels` to see which definitions exist and
+`aida merge-hold labels --create-missing` to provision them. A hold placed
+while a definition is missing still writes the local marker (Layer 1 holds),
+but `aida merge-hold add` exits non-zero to report that Layer 2 is not armed.
+
+If a marker disappears without a clearance record, AIDA fails closed on that
+PR: `aida merge-hold list` and `aida doctor --category merge-hold-integrity`
+report it as tampering, and every AIDA merge path refuses it. The way out is
+the same human-gated command — `aida merge-hold clear <pr>` run by a human at
+an interactive terminal records who released it and stops the report. There is
+no way to silence the report without leaving that record.
+`aida doctor check merge-hold-integrity` also reports undefined label
+definitions and live holds whose forge label never landed.
+
+These labels and the local clearance file are evidence and a gate, not a
+security boundary against a process with the same OS user and an admin forge
+token. Such a process can edit local files and forge labels directly; it could
+also forge the cleared label. Genuine enforcement against that principal
+requires a protected broker that holds the forge credential outside the reach
+of the agent it is gating; that boundary is not in place today. The
+interactive clearance path remains the supported human release mechanism.
+<!-- trace:BUG-1693 | ai:codex -->
+<!-- doc-intent: the protected-broker boundary named above is designed in BUG-1669, ADR-61 -->
+
+Local forms use the offset in effect on that date, so they stay right across a daylight-saving change; a local time that falls in a daylight-saving gap or overlap is refused rather than guessed. A few commands also accept extra forms of their own: `digest --since` and `doctor --since` take a git tag or ref, and the `tail` family keeps seconds (`30s`, or a bare number meaning seconds) and spelled-out units (`10min`). Flags named `--since`/`--until` that take a git ref, a tag, or a condition rather than a time (`db reconcile-status`, `doc coverage`, `field-study scan`, `changelog`, `defer --until`) are not time bounds and keep their own meaning.
+
 ---
 
 ### `aida status`
@@ -49,24 +94,121 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — the audit trail: what's been touched and how it stands now.
 
-**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Two modes: the default **digest** mode is a per-requirement view sorted by last-touch ("what was I up to last session?"); `aida history events` switches to a **chronological per-event feed** that decodes each commit's YAML diff into one line per change. Digest is cheap and broad; events is slower (it shells out per file per commit) but precise — the mode for inspecting one spec closely.
+**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Four views, from broadest to most detailed:
+- **Digest** (default, no SPEC-ID) — a per-requirement view sorted by last-touch ("what was I up to last session?").
+- **Status progression** (`aida history <SPEC-ID>`, shorthand for `aida history --id <SPEC-ID>`) — that one spec's status transitions in chronological order, oldest first, each with a timestamp and its old→new status. This is the "how did this spec get here?" view. Every output format shows the same transitions: prose at a terminal, a TOON table with one row per transition for agent/piped output, and a JSON document with `--json`. <!-- trace:BUG-1635 | ai:claude -->
+- **Timeline** (`aida history <SPEC-ID> --timeline`) — where that spec's elapsed time actually went, as a chronological list of spans each labelled `work`, `wait` or `unknown`. A different question from the other views: not "what changed" but "how long did each stage take, and how much of the clock is simply unaccounted for". <!-- trace:STORY-1478 | ai:claude -->
+- **Full trail** (`aida history events`, or `--full` after a SPEC-ID) — the complete chronological per-event feed, decoding each commit's YAML diff into one line per change (status transitions, comments, tag edits, field edits, …), newest first. Slower than the other two (it shells out per file per commit) — the mode for a forensic read of one spec, or of everything in a time window.
 
-**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to `<spec-id>`" (`aida history events --id`).
+**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "How did this spec get to where it is?" (`aida history <SPEC-ID>`), "did my ship register?" (`--shipped`), "what got approved / filed this week?" (`--to approved` / `--opened` with `--since 7d`), "what moved this week?" (`--since`), "show me *everything* that happened to `<spec-id>`" (`aida history <SPEC-ID> --full`, same as `aida history events --id`).
 
-**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `aida history events` as a general overview; it's slow by design. Use default digest mode for breadth, `aida history events` only when you're drilling into one spec or one transition type.
+**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `--full`/`events` as a general overview; it's slow by design. Use default digest mode for breadth, a SPEC-ID for one spec's status story, `--full` only when you need the complete trail.
 
 **Key options (rationale only).**
-- `aida history events` — the chronological decode. It's the slow, precise mode; pair it with `--id` (one spec) or `--status-changes`/`--comments` (one event kind) so you're not decoding the whole log.
-- `--shipped` — the "did my ship register?" view: only recent Done→Completed merges, newest first. Distinct from `--all` (a recency-blind dump of every terminal spec) — `--shipped` answers a question, `--all` widens the net.
+- `aida history <SPEC-ID>` — the positional shorthand for `--id <SPEC-ID>`; either form selects the status-progression view for that one spec instead of the digest's single current-state row.
+- `--full` (or the `events` subcommand) — the complete edit/comment trail, not just status changes. Composes after a SPEC-ID: `aida history <spec-id> --full`.
+- Reading the full trail — events are grouped under a `commit <sha>` header. When the feed spans many specs (no SPEC-ID), each header also names the spec, and a commit that touched several specs gets one block per spec, so every event reads with its ID; one spec's `--full` view leaves the ID out because the command already names it. A relationship change names the edge, not just a count:
+
+  ```text
+  commit 8d1c3b40  <story-id>  (2026-09-25 18:55, by joe)
+    relationships: +<story-id> → blocked-by <other-story-id>
+  ```
+
+  `Parent`/`Child` edges read from the spec's side: a parent shows `<story-id> → child <task-id>`, and the child shows `<task-id> → parent <story-id>`. Agent/piped output gets the same feed as a TOON table with an `id` column, and `--json` (same as `--format json`) prints it as JSON in the MCP `history` tool's shape: `count`, `events` (each with its `spec_id`; a relationship event's `detail.edges` lists `from`, `rel_type`, `to` and `target_id`), `window_exhausted`, `source` and `index_tip`. `--oneline` puts the spec ID on every line. <!-- trace:BUG-1631 | ai:claude --> Each JSON event also carries the flat row fields `id` (the spec ID), `ts` (the event time), `author`, `kind`, `from`, `to` and `summary`; `from`/`to` hold the old and new value of a status, priority, title, owner, feature or type change and are `null` for other kinds. Without a SPEC-ID, `--json` implies the full trail. With a SPEC-ID and no `--full`, `--json` prints the status progression instead: the same event rows, oldest first, plus `view`, `id`, `title`, `current_status` and `order`. <!-- trace:BUG-1635 | ai:claude -->
+- `--timeline` — one spec's elapsed time split into spans. It merges three read-only sources: the store's git log for that spec (filing and every status transition, at full timestamp precision) supplies the window and the lifecycle boundaries; the local drain feed (`.aida/events.jsonl` plus its rotated archive) **and the spec's published timing record** (`timings/<TYPE>/<shard>/<ID>.json` on the store branch, written when the spec reaches Done or Completed, so work finished on another machine shows here after `aida pull`) supply phase and park boundaries; <!-- trace:STORY-1480 | ai:claude --> and `gh`, when it is on PATH, supplies pull-request and CI check timestamps for the PRs the spec's own events credit it with (never a PR matched by title). Each span gets an activity and a class — `work` for `implementer`/`ci`/`reviewer`/`merge`/`pull`/`build`, `wait` for `awaiting approval`, `queued`, `parked` and `awaiting merge` — and repeated phases are numbered, so a rework loop reads `implementer #2 (rework)` and `reviewer #2 (re-review)`.
+
+  **What `unknown` means, and why it is loud.** Anything the three sources do not jointly explain becomes its own `unknown` span and its own line in the totals. Nothing is interpolated: reaching `In Progress` is not evidence that anybody was working, a green CI verdict is not evidence that review finished, and a phase whose end was never recorded produces a note rather than a span stretched to the next event. `work + wait + unknown` always equals `elapsed`, so the share of the window that was never instrumented cannot hide inside a neighbouring span. Two sources that disagree with equal authority over the same instant also yield `unknown`, never a winner picked by source order. A spec that is not Completed ends its window at the last boundary any source recorded — not at the current time — and says so.
+
+  Post-merge `pull`/`build` work that runs past the completion transition is listed separately and excluded from the totals, so `elapsed` is never shorter than the spans inside it. Renders human, TOON and JSON; the JSON form is `view: history-timeline` with `schema_version`, `observed_start`/`observed_end`, `endpoint_kind`, `incomplete`, `spans` (each `{activity, class, start, end, duration_s, source, repeat, evidence}`), `totals_s`, `post_completion_spans`, `post_completion_s` and `coverage_notes`. Requires one SPEC-ID, and refuses the windowing and event-selector flags (`--since`, `--until`, `--limit`, `--max-commits`, `--full`, `--oneline`, `--to`, …) rather than printing partial totals that read as complete. A missing `gh`, an auth or network failure, a timeout or a malformed payload leaves the store and event evidence untouched and adds one line to `coverage_notes`; set `AIDA_TIMELINE_NO_FORGE=1` to skip the forge leg outright (offline runs, or when you only want the local evidence). <!-- trace:STORY-1478 | ai:claude -->
+- `--status-changes` / `--comments` — narrow to one event kind. Without a SPEC-ID, either one switches to the per-event feed (as `--shipped` does), so `aida history --status-changes --since 1d` lists each transition as its own row rather than one digest row per spec. Paired with a SPEC-ID and no `--full`, `--comments` swaps the default status-progression view for a comment timeline; paired with `--full`/`events`, either one narrows the complete trail down. Passing both shows either kind (status changes *or* comments), not neither. <!-- trace:BUG-1635 | ai:claude -->
+- `--oneline` — one line per event. Without a SPEC-ID it also switches to the per-event feed, since the digest has no per-event lines to shorten; with a SPEC-ID it shortens the status progression or comment timeline. <!-- trace:BUG-1635 | ai:claude -->
+- `--shipped` — the "did my ship register?" view: only transitions into Completed (merged to the default branch), newest first. Any prior status counts — a merge usually moves a spec straight from In Progress to Completed, older ships went Done → Completed — and a spec reopened and completed again shows each completion. <!-- trace:BUG-1636 | ai:claude --> Distinct from `--all` (a recency-blind dump of every terminal spec) — `--shipped` answers a question, `--all` widens the net. `--shipped` is the same as `--to completed`, so it can't be combined with `--to` or `--opened`.
+- `--to <STATUS>` / `--from <STATUS>` — only status transitions into (`--to`) or out of (`--from`) that status, newest first: `aida history --to approved --since 7d` is what got approved this week, `aida history --from in-progress --to approved` is work bounced back from in progress, and `--from` alone matches any transition leaving that status. Status values take the spellings `aida edit --status` does (`in-progress`, `needs-attention`, any case), plus `accepted` for approved; an unknown status is refused with the valid set, and so is `--from X --to X` (it could never match). None of the three combines with `--kind`, which reads the local event feed rather than spec history. A transition must change the status, so `--to completed` lists exactly what `--shipped` does. <!-- trace:TASK-1512 | ai:claude -->
+- `--opened` (alias `--created`) — only spec-creation events: the specs filed in the window, including specs filed straight at a non-draft status (which `--to draft` would miss, because filing isn't a status transition). `aida history --opened --since 7d` is what was filed this week. <!-- trace:TASK-1512 | ai:claude -->
+- How the event selectors combine: `--to`/`--from`/`--opened` always switch to the per-event feed, like `--shipped`, with or without a SPEC-ID. `--opened` together with `--to`/`--from` (or `--comments`) shows the union — the specs filed *and* the matching transitions. `--to`/`--from` together with `--status-changes` narrow the transitions (`--status-changes --to approved` is just the approvals). All of them compose with `--since`/`--until`/`--limit`/`--type`/`--author`/`--id`/`--oneline`/`--format` and with `--all`/`--archived`/`--deferred`/`--include-meta`. <!-- trace:TASK-1512 | ai:claude -->
 - `--all` vs `--archived`/`--deferred` — `--all` is the everything-escape-hatch (active + archived + deferred, symmetric with `aida list --all`); `--archived`/`--deferred` narrow to *only* that shelf. Default `history` hides archived/deferred but keeps freshly-Completed ships visible.
 - `--kind <KIND>` — reads the local event feed (`.aida/events.jsonl`) instead of the git log, one event kind at a time. `--kind gate-held` is the non-action view: every gate that refused or held (a merge-hold floor, a stale approval, a review in progress, a blocked pickup, a closure hold, an ambiguous id), a count per gate, and the merge-hold floor's refusals beside its releases for the same window, so a rate has its denominator. `--author me` narrows it to what *you* tried and could not, which tells a blocked seat from an idle one.
-- `--max-commits` — bounds how far back it walks the orphan branch. The knob for "this is slow / I only care about recent."
+- `--max-commits` — bounds how far back it walks the orphan branch. The knob for "this is slow / I only care about recent." When you don't set it, the default follows the mode, not the output format: 250 for the digest, a single SPEC-ID, and any query with `--shipped`, `--to`, `--from`, `--opened`, `--status-changes`, `--comments` or `--oneline` (with or without `--json`); `(limit*5).max(50)` for `--full`/`events` and for a bare `--json` with no SPEC-ID and none of those flags. See Gotchas below for what happens when that default runs out.
+- `--since` / `--until` — bound the window. Accepts a relative duration meaning "that far before now", either compact (`30m`, `5h`, `7d`, `2w` — minutes/hours/days/weeks) or as a phrase (`24 hours ago`, `1 week ago`), or an absolute point: a bare ISO date like `2026-05-01` means **local midnight** on that date (not UTC midnight, and not the current time of day); a zone-less ISO datetime (`2026-05-01T10:00` or `2026-05-01 10:00`) is local time; a full RFC3339 timestamp keeps its explicit zone. Local times use the offset in effect on that date, so they stay correct across daylight-saving changes; a local time that falls in a daylight-saving gap or overlap is refused (give an explicit offset instead). Other git date phrases (`yesterday`, `last monday`) are not accepted. <!-- trace:TASK-1502 | ai:claude --> Both flags share the same grammar and compose (`--since 7d --until 5h`); a `--since` that resolves later than `--until` is refused with a clear error rather than silently returning nothing. Human output prints a `Window: …` line showing the resolved bounds in local time, each with the numeric zone offset in effect at that instant (e.g. `2026-05-01 00:00 -0700`), so a relative form — or a bare date's local-midnight resolution — is never ambiguous.
 
-**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline — switch to `aida history events` for an actual chronology. The cache does **not** carry history rows; `history` reads the YAML/git log directly, which is why `events` costs real time.
+**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline. The status-progression view (a SPEC-ID, no `--full`) reads oldest-first — a progression reads forward in time — while the full trail (`--full`/`events`) reads newest-first, matching `git log`; the two views don't share a reading order. **`--id` follows every merged branch**: a spec's view (a SPEC-ID, `--id`, `--full`) includes the commits on a merged side branch that touched the spec, even when the merge kept the other side's version of the file (an `-s ours` merge, for example), so `aida history events --id <SPEC-ID>` shows the same events plain `aida history events` shows for that spec, once both walks reach far enough back. The two count their `--max-commits` window differently: `--id` counts only commits that touched the spec, while plain `events` counts every commit, so under the default window `--id` can reach further back. Earlier releases used git's simplified per-file history there and silently left those side-branch commits out. <!-- trace:BUG-1620 | ai:claude --> The requirements cache does **not** carry history rows. `events` mode, the single-spec views and the MCP `history` tool instead read a separate, rebuildable **history index** (`aida cache rebuild --history`, Ch.10), which fills itself in a little per query and answers only when it can prove it holds the whole answer; otherwise the command reads the store's git log directly, which is slower but gives the same events. When that happens at a human terminal, a dim footer on stderr says the answer came from the full change history, so an unusually slow run has an explanation. The footer is skipped for agent/piped output, and when you switched the index off on purpose with `AIDA_HISTORY_CACHE=0`. <!-- trace:TASK-1508 | ai:claude --> A spec that's real but simply hasn't changed status yet prints a quiet "nothing in this view" note, not an error; an id that never existed at all (typo, or a format that isn't `TYPE-SEQ`) refuses with a clear "not found" error instead of a silent empty view. **A SPEC-ID reads the same in every format**: under agent/piped output (no TTY, or `AIDA_AGENT_OUTPUT` truthy) `aida history <spec-id>` prints a TOON table (`view: history-progression`, `id`, `title`, `current`, `order`, `count`, then one `events` row per transition with `sha`, `when`, `author`, `id`, `kind`, `from`, `to`, `summary`), with the same rows the human view shows. Earlier releases printed a one-row digest there instead, so scripts never saw the transitions. `--format json` prints the progression as JSON; add `--full` for the complete trail in any format. <!-- trace:BUG-1635 | ai:claude --> **A short `events`/`--full`/`--shipped` result can mean "that's everything" or "the window ran out first"** — `events` mode bounds its `git log` walk to `--max-commits` commits (default 250 for `--shipped`/`--to`/`--from`/`--opened`/`--status-changes`/`--comments`/`--oneline`, `(limit*5).max(50)` for a bare `--full` or `--json`) before it even starts decoding, so a spec-sparse stretch of commit history can use up that window before `--limit` events are found, returning fewer than asked for with no obvious sign why. A human terminal gets a one-line notice on stderr when this happens (skipped once you pass `--max-commits` yourself, or once `--limit` was actually met); agent/piped callers and the MCP `history` tool instead get a `window_exhausted` boolean alongside the event array — `true` means widen the walk (`--max-commits <N>`, or narrow with `--since`/`--until`) before trusting the result as complete. The MCP `history` tool also reports `source` (`history-cache` when the history index answered, `git-walk` when the git log was read directly) and `index_tip` (the full store commit an index answer reflects, `null` for `git-walk`); both sources return the same events, so these fields explain speed and freshness, not a different answer. The `Window: …` line is human-output only (suppressed under agent/piped output, matching the rest of the TOON-vs-narrative split).
 
-**Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed an `--id` from `list`/`show` to drill into one spec's life.
+**Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed a SPEC-ID straight from `list`/`show` to see one spec's status story.
 
 ---
+
+#### History layouts and columns
+
+<!-- trace:STORY-1477 | ai:codex -->
+`aida history --since 2h --template '{date:%H:%M} {id} {event}'` prints
+exactly one layout line per event. A value containing `{` is inline; otherwise
+it is a case-sensitive template name. Literal-only strings must be stored as
+named templates in config. `{{` and `}}` escape braces. Custom templates and
+`--fields id,date,event` select the full event feed even for a single SPEC-ID.
+Filters apply first, including `--to`, `--from`, and `--opened`.
+
+Fields/placeholders are `commit,date,author,id,type,priority,title,kind,event,from,to,comment`.
+`commit` is the full SHA; `kind` uses the event ledger names (`status_change`,
+`comments_added`, etc.); `event` is the existing summary. Template dates use
+local time (`{date}` is YYYY-MM-DD HH:MM; `{date:...}` uses validated Chrono
+strftime). The `date` column retains the event's RFC3339 timestamp.
+`title` exists only for Added/Deleted and the new TitleChange value; `priority`
+only for Added and the new PriorityChange value. `comment` is the CommentsAdded
+summary/count, never a body. Other events leave these empty/null. `from`/`to`
+are transition values, including title and priority changes. Nothing is filled
+from today's spec state.
+
+`--fields` preserves caller order in human/TOON columns and JSON `events[]`
+keys, retaining `count`, `window_exhausted`, `source`, and `index_tip`. Unavailable
+values are empty cells or JSON null. It accepts `--full`/`events` and every
+output encoding, but rejects `--oneline`, `--kind`, and `--template`.
+Templates reject `--fields`, `--oneline`, `--full`/`events`, `--kind`, `--json`,
+and explicit TOON/JSON encoding. Pipe capture alone does not prevent a template;
+use `--format human` to override an explicit environment encoding.
+
+Builtins `full` and `oneline` are legacy mode aliases, including headers,
+footers and window selection, byte-identical to their flags when unshadowed.
+`builtin:full` and `builtin:oneline` always bypass shadowing. `compact` and
+`approvals` are ordinary built-in formats; `approvals` does not add a filter
+(use `--to approved`). Unflagged history behavior stays unchanged.
+
+```sh
+aida history --template '{date:%H:%M} {id} {event}' --save-as-template compact
+aida history --template '{id} {from} -> {to}' --to approved --save-as-template project:approvals
+aida history --template project:approvals --to approved
+aida history templates
+aida history templates rm user:compact
+```
+
+User templates live in `~/.aida/config.toml`; project templates in the tracked
+project-root `.aida/config.toml` (the current sibling worktree's file). Both use:
+
+```toml
+[history.templates]
+approvals = "{date:%Y-%m-%d} {id} {event}"
+```
+
+Resolution is user → project → builtin; qualifiers bypass that order. Listing
+shows each scoped name, raw format, and shadowing scope. Template listing and
+removal do not support JSON; `--format json` is refused before config access.
+Save defaults to user; removal requires explicit `user:` or `project:`.
+Builtins are read-only; there is no `global:`. Names use `[A-Za-z][A-Za-z0-9_-]*`, at most 64 ASCII bytes.
+Save requires an inline template on the same run; existing entries in that
+scope require `--force`, which is invalid without save. Validation and successful
+query rendering precede mutation. Project mutations print a commit reminder.
+Unrelated TOML content/comments are preserved; malformed config is an error;
+there is no migration or read-time rewrite. Inline `history = { keep = 1 }`
+tables also support save/overwrite/remove while retaining their other values.
+
+Dates use the feed's existing local minute precision. Formatting does not restore
+discarded seconds or offsets: during an ambiguous local DST hour, wall-clock
+formats still work but offset-dependent directives fail explicitly.
+
+Templates allow up to 4096 bytes, no literal controls/newlines, and rendered
+lines up to 16384 bytes. Substituted controls/newlines are normalized to spaces.
+There are no expressions, environment expansion, recursive expansion, shell
+commands, arbitrary field paths, saved filters, or MCP save/remove operations.
+
 
 ### `aida report`
 
@@ -100,7 +242,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Key options (rationale only).**
 - `--audience customer|team|self|operator` — the single most consequential flag: it sets both the framing *and* SPEC-ID visibility. `customer` strips SPEC-IDs (they're internal breadcrumbs, noise to a user); `operator` is the CLI-surface diff for power-users. Pick the reader.
-- `--since` — the window start, accepting a duration, an ISO date, *or a git tag/ref*. The tag form ("everything since `v0.12.0`") is the release-notes path.
+- `--since` — the window start: any [time bound](#time-bounds) (`7d`, `2w`, `24 hours ago`, an ISO date at local midnight, RFC3339), *or a git tag/ref*. The tag form ("everything since `v0.12.0`") is the release-notes path.
 - `--include-next` / `--include-process` — toggle the forward-looking and memory-pack sections; defaults differ by audience (process is on for team/self, off for customer) so the right reader gets the right depth.
 - `--copy` / `--out` — it's a document you'll paste somewhere, so clipboard and file-write are first-class and compose.
 - `--reset` — clears the cadence marker. `digest` remembers its last window in `.aida/last-digest.toml` and auto-resumes; `--reset` is how you break that chain when the next digest shouldn't continue from here.
@@ -120,14 +262,16 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Reach for it when**
 - bare / `aida usage unused` / `aida usage errors` — surface deprecation candidates (commands nobody runs) and UX-gap candidates (commands that error a lot). The substrate for "what should we cut or fix."
 - `aida usage drains` / `aida usage health` — diagnose the autonomous drain: which phases fail most (`drains` patterns = where to invest orchestrator fixes), recent failures in full, or the deterministic project-health catalog (`health`).
+- `aida usage slowest` / `aida usage events` / `aida usage timeline` — the performance lens, three views over the same per-invocation log: `slowest` ranks command *shapes* by latency (p50/p95/max + count), `events` streams the raw fields (`ts`, `cmd`, `duration_ms`, `exit_code`) for one invocation per row, and `timeline` is the same stream rendered as a dense, scannable one-line-per-invocation feed — local timestamp, compact duration, and a pass/fail mark — sized to eyeball what ran immediately before a slow command.
 
 **Don't reach for it when** — you want the *polished* agent-lift story for a case study or release note (that's `metrics agent-lift`, which presents the same substrate as proof). `usage` is the raw inspection tool; `metrics` is the framed narrative.
 
 **Key options (rationale only).**
 - `aida usage unused` vs `aida usage errors` — the two deprecation/UX signals, mutually exclusive because they answer opposite questions ("never used" vs "used and failing"). Both feed the `/aida-insights` review cadence.
 - `aida usage drains` — the mode-switch to drain telemetry. Without it you're in CLI-usage mode; drain failure/pattern details live under that subcommand, while the deterministic health catalog lives at `aida usage health`.
+- `aida usage timeline` vs `aida usage events` — both walk the same newest-first, `--since`/`--cmd`/`--slower-than`/`--limit`-filtered event stream; they differ only in rendering. `events` prints the raw fields (UTC `ts`, exact `duration_ms`, numeric `exit_code`) for exact-value inspection. `timeline` renders a local timestamp, a compact duration (`245ms`/`26.4s`/`1m05s`), an ellipsized command shape, and a ✓/✗ mark — built for scanning a screenful of recent activity around a slow command, not for reading off exact fields. `--json` on either returns the same `{ts, cmd, duration_ms, exit_code}` shape.
 - `--read-write` — the *trace-read-rate audit*: classify the logged command shapes into graph **reads** (`list`/`show`/`search`/`graph`/`why`/`history`/`queue list`/`rel list`/…) vs graph **writes** (`add`/`edit`/`comment add`/`rel add`/`queue add`/`defer`/`archive`/…), skip plumbing (sync/dev/statusline), and report the read:write ratio over the window. The question it answers: *is the intent graph consulted, or just written?* A ratio ≥ 1 is evidence the typed layer earns its keep; writes ≫ reads would suggest the typing is dead weight. Measures CLI telemetry only — MCP read tools aren't in `usage.jsonl` yet (an MCP read counter is a follow-up).
-- `--json` — machine consumption (`{cmd, count, errors, avg_ms}` per command; `{reads, writes, read_write_ratio, top_reads, top_writes}` under `--read-write`).
+- `--json` — machine consumption (`{cmd, count, errors, avg_ms}` per command; `{reads, writes, read_write_ratio, top_reads, top_writes}` under `--read-write`; `{ts, cmd, duration_ms, exit_code}` per row under `events`/`timeline`).
 
 **Gotchas.** Drain failure/pattern views live under `aida usage drains`, not the default usage view, and the health catalog is `aida usage health`. Telemetry is opt-out (`AIDA_TELEMETRY=0` or `[telemetry] enabled = false`); if the log is empty, telemetry was disabled — the command isn't broken.
 
@@ -139,18 +283,20 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — agent-lift metrics: the *framed proof* that autonomous drains lift load.
 
-**Mental model.** `metrics` reads the same telemetry substrate as `aida usage drains`, but its job is **presentation, not inspection**. The one subcommand, `agent-lift`, computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage drains` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone.
+**Mental model.** `metrics` reads the same telemetry substrate as `aida usage drains`, but its job is **presentation, not inspection**. `agent-lift` computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage drains` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone. `cycle-time` answers a different question — *where does completed work's calendar time actually go?* It rebuilds each requirement completed in the window the way `aida history <ID> --timeline` does (store transitions + the local drain feed, no forge calls) and aggregates: per-activity count/p50/p90/total, the overall work-vs-wait-vs-unknown split, rework signals (CI failure rate, reviewer bounce rate, average implementer passes, shelves with total shelved time), and the slowest items with their dominant span. Items with no usable local data are excluded and counted, with the reason, rather than silently skewing the shares. <!-- trace:STORY-1479 | ai:claude -->
 
 **Reach for it when** — you need to *demonstrate* that the autonomy machinery is working: a case study, a release-notes paragraph, a "look what the drains did this month" writeup.
 
 **Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida drain status` and the phase logs, the diagnostic side. `metrics` summarizes the win; drain inspection dissects the failure.
 
 **Key options (rationale only).**
-- `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
-- `--since <window>` — bound the reporting period (the case-study window).
+- `--markdown` (`agent-lift`) — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
+- `--since <window>` — bound the reporting period; any [time bound](#time-bounds). Default `30d` for `agent-lift`, `7d` for `cycle-time` (which also takes `--until` to close the window).
+- `--type <type>` / `--tags <a,b>` (`cycle-time`) — narrow the aggregate to one requirement type, or to requirements carrying every listed tag — "how long do bugs sit?" vs "how did the observability batch flow?".
+- `--slowest <n>` (`cycle-time`) — how many of the slowest items to list with their dominant span.
 - `--json` — the computed signals for machine consumers.
 
-**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands; you want `aida metrics agent-lift`. It and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*. Pick by whether you're proving or debugging.
+**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands. `agent-lift` and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*; pick by whether you're proving or debugging. `cycle-time`'s work/wait split only reflects what this machine's drain feed witnessed: a requirement completed on another machine is excluded ("no drain events on this machine"), and time no source explains stays visibly `unknown` rather than being folded into a neighbouring bucket.
 
 **Chains with** — the case-study/release-notes companion to `digest` (narrative) and `usage` (diagnostic).
 
@@ -172,6 +318,8 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Gotchas.** Explicit labels in `## Acceptance` are the most stable IDs (`A1.`, `AC3:`, etc.). Unlabeled criteria get content-hash IDs, which are stable across reorder but change when the criterion text changes; label important criteria when tests will trace them for a long time.
 
 **Chains with** — `aida show <ID>` for the contract, then test edits adding criterion-qualified trace comments, then `aida criteria <ID> --json` for a scriptable gap check.
+
+**Project-wide: `aida criteria coverage` (alias `aida criteria gap`).** The capture-coverage report — how well placed the project is to be rebuilt from its store — for a window (`--window-days`, default 90) and for all time, every figure as count/total: (a) commits whose subject ends in a `(SPEC-ID)` trailer; (b) authored work specs (auto-complete failure stubs, Review-PR records and auto-drafted specs excluded) with parseable acceptance criteria; (c) those criteria with at least one trace token attached to a discovered test, using the same attachment rules as `aida criteria <ID>`; plus the raw criterion-level trace token count and (d) the number of `trace:<SPEC>` comments in tracked source (`*.rs *.ts *.tsx *.py *.sh`). Prose, documentation fixtures, and markers on helper functions do not raise (c). Very large `--window-days` values clamp the start to the earliest representable date. `--json` emits the same fields. A project with no traces at all reports `0/N` and exits 0. Each run in an initialised project also writes `.aida/cache/capture-coverage.json` (the figures plus per-spec criterion and traced-test counts, stamped with the commit it was taken at) so cheap surfaces can read the last result without rescanning; a cache from another commit or past its age limit is ignored. The word `gap` is never read as a spec id. **Documented check:** at a pinned commit the figures can be compared with `docs/positioning/spike-86-scripts/report.py coverage` and `corpus.py` for the same window. The script's raw criterion-token pattern matches only `ac` plus hexadecimal labels, while AIDA also matches explicit `A1`/`AC3` style labels; neither raw token count means test coverage. The trailer parser can differ by about one commit in the documented window where it accepts prose after the first ID (`(<spec-id> / <spec-id> slice 1a)`); all-time drift can be larger as such commits accumulate. <!-- trace:STORY-1487 | ai:claude --> <!-- trace:TASK-1546 | ai:codex -->
 
 ---
 
@@ -257,6 +405,48 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits.
 
 **Chains with** — pairs with `aida show <ID>` (the literal contract) and `aida why <ID>` (the stuck-state classifier): `intent` for the *why it exists*, `why` for the *why it's still open*, `show` for the facts.
+
+---
+
+### `aida explain`
+
+<!-- doc-intent: TASK-1470 -->
+
+**One line** — write a plain-language explanation of one spec for a chosen audience, and tell you whether it is still current.
+
+**Mental model.** `explain` extracts a summary, rationale, key constraints, trade-offs, and open questions from the spec body, saves them as a sidecar file at `.aida/expositions/<SPEC-ID>/<audience>.yaml` in the current checkout, and stamps it with a hash of the spec and its immediate neighbors. Later runs reuse the sidecar and mark it STALE when that neighborhood has changed. A quick quality audit checks that critical rules (for example "fail closed") survived the rewrite.
+
+**Reach for it when** — you need to hand a spec to someone who doesn't read AIDA specs every day: an operator, an executive, a new contributor.
+
+**Don't reach for it when** — you want the literal contract (`aida show`) or an AI-written reading of the spec's purpose (`aida intent`). `explain` works offline by default and is extractive, not generative.
+
+**Key options (rationale only).**
+- `--audience` — `operator` (default), `executive`, `implementer`, or `contributor`.
+- `--refresh` — regenerate even when a sidecar exists. A sidecar a human marked as reviewed is kept unless you also pass `--force`.
+- `--force` — overwrite a human-reviewed sidecar.
+- `--json` — the sidecar plus `stale`, `human_reviewed`, and the current neighborhood hash.
+
+**Gotchas.** Sidecars are local to each checkout and are not shared: they sit under the gitignored `.aida/` folder, never in the requirement store, so a linked worktree keeps its own set and nothing is synced to other clones. The audit is offline unless `AIDA_JEV_API_KEY` is set. When it is set, `explain` sends the spec text to TypeSafe AI (`api.typesafe.ai`) for an advisory score. That call is network egress, has a 5-second deadline, and a failure is recorded as "unavailable", never as a pass. See the environment-variables chapter.
+
+**Chains with** — `aida wiki build` renders every spec's explanation into a browsable local site.
+
+---
+
+### `aida wiki`
+
+<!-- doc-intent: TASK-1470 -->
+
+**One line** — build and browse a local HTML site of every spec with its plain-language explanation and a diagram of its immediate neighbors.
+
+**Mental model.** `aida wiki build` writes static pages to `.aida/wiki` (or `--out`): an index with freshness counts and an epic map, plus one page per spec. `aida wiki serve` serves that folder on `127.0.0.1` only (default port 8420, change it with `--port`; there is no option to bind another address). It builds the site first if needed; point it at another folder with `--dir`.
+
+**Reach for it when** — you want to click around the requirement graph in a browser, or show a stakeholder the project without giving them the CLI.
+
+**Don't reach for it when** — you want to share the site over the network. Copy the static folder somewhere instead. The server is deliberately loopback-only.
+
+**Gotchas.** Diagrams use a copy of mermaid bundled into `aida`, so the pages work offline and load nothing from the internet. Rebuild after the store changes; the pages are a snapshot.
+
+**Chains with** — `aida explain <ID> --audience <role>` to create or refresh the explanation a page shows.
 
 ---
 

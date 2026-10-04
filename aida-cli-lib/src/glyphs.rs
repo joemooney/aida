@@ -641,19 +641,20 @@ fn aida_home_dir() -> Option<PathBuf> {
     if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
         return Some(PathBuf::from(home));
     }
-    dirs::home_dir()
+    crate::home_dir()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::MutexGuard;
-
-    // BUG-697: `AIDA_GLYPHS` / `AIDA_TEST_HOME` are process-global. Delegate to
-    // the ONE shared env lock so these swaps can't race a read/swap under any
-    // other test helper (env mutation under different locks still data-races).
-    fn lock() -> MutexGuard<'static, ()> {
-        crate::test_env::env_lock()
+    // BUG-697 / TASK-1532: route env manipulation through EnvVarsGuard.
+    // trace:TASK-1532 | ai:agy
+    fn with_env(glyphs: Option<&str>, home: Option<&Path>) -> crate::test_env::EnvVarsGuard {
+        let home_str = home.and_then(|p| p.to_str());
+        crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_GLYPHS", glyphs),
+            ("AIDA_TEST_HOME", home_str),
+        ])
     }
 
     fn write_config(dir: &Path, glyphs: &str) {
@@ -723,8 +724,7 @@ mod tests {
     /// unicode. This is the env-path guarantee that the raw-literal bug broke.
     #[test]
     fn task1071_ascii_env_renders_fallback_not_raw_unicode_for_info_set() {
-        let _g = lock();
-        std::env::set_var("AIDA_GLYPHS", "ascii");
+        let mut _env = crate::test_env::EnvVarGuard::set("AIDA_GLYPHS", "ascii");
         // Rendered through the active profile resolved from the env.
         assert_eq!(get(Glyph::Info, None), "(i)");
         assert_eq!(get(Glyph::InfoAlt, None), "i");
@@ -745,10 +745,9 @@ mod tests {
             );
         }
         // Round-trip back to unicode so the env override is directional.
-        std::env::set_var("AIDA_GLYPHS", "unicode");
+        _env.reset("unicode");
         assert_eq!(get(Glyph::Info, None), "ⓘ");
         assert_eq!(get(Glyph::IncomingMail, None), "📨");
-        std::env::remove_var("AIDA_GLYPHS");
     }
 
     #[test]
@@ -764,64 +763,49 @@ mod tests {
 
     #[test]
     fn absent_config_defaults_to_unicode() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
         // No config files anywhere.
         assert_eq!(active_profile(Some(proj.path())), GlyphProfile::Unicode);
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn env_wins_over_project_and_user() {
-        let _g = lock();
         let home = tempfile::tempdir().unwrap();
         write_config(home.path(), "unicode");
-        std::env::set_var("AIDA_TEST_HOME", home.path());
         let proj = tempfile::tempdir().unwrap();
         write_config(proj.path(), "unicode");
-        std::env::set_var("AIDA_GLYPHS", "ascii");
+        let _env = with_env(Some("ascii"), Some(home.path()));
         assert_eq!(active_profile(Some(proj.path())), GlyphProfile::Ascii);
-        std::env::remove_var("AIDA_GLYPHS");
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn project_wins_over_user() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
         write_config(home.path(), "unicode");
-        std::env::set_var("AIDA_TEST_HOME", home.path());
         let proj = tempfile::tempdir().unwrap();
         write_config(proj.path(), "ascii");
+        let _env = with_env(None, Some(home.path()));
         assert_eq!(active_profile(Some(proj.path())), GlyphProfile::Ascii);
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn user_config_used_when_no_project_setting() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
         write_config(home.path(), "ascii");
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         // Project dir with no config → falls through to user tier.
         let proj = tempfile::tempdir().unwrap();
         assert_eq!(active_profile(Some(proj.path())), GlyphProfile::Ascii);
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn get_honors_active_profile() {
-        let _g = lock();
-        std::env::set_var("AIDA_GLYPHS", "ascii");
+        let mut _env = crate::test_env::EnvVarGuard::set("AIDA_GLYPHS", "ascii");
         assert_eq!(get(Glyph::Check, None), "[x]");
-        std::env::set_var("AIDA_GLYPHS", "unicode");
+        _env.reset("unicode");
         assert_eq!(get(Glyph::Check, None), "✓");
-        std::env::remove_var("AIDA_GLYPHS");
     }
 
     // ----- Phase 2: custom [glyphs] override table (STORY-629) -----
@@ -857,10 +841,8 @@ mod tests {
 
     #[test]
     fn override_wins_over_profile() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         // Project on the ASCII profile, but custom-override `check`.
         let proj = tempfile::tempdir().unwrap();
         write_config_with_glyphs(proj.path(), "ascii", "check = \"OK\"");
@@ -871,16 +853,12 @@ mod tests {
         // Override beats the ascii profile rendering ("[x]").
         assert_eq!(overrides.render(Glyph::Check, profile), "OK");
         assert_eq!(get_custom(Glyph::Check, Some(proj.path())), "OK");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn unset_symbol_falls_through_to_profile() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         // ASCII profile, override ONLY `check` — `cross` must fall through.
         let proj = tempfile::tempdir().unwrap();
         write_config_with_glyphs(proj.path(), "ascii", "check = \"OK\"");
@@ -892,16 +870,12 @@ mod tests {
         assert_eq!(overrides.get(Glyph::Cross), None);
         assert_eq!(overrides.render(Glyph::Cross, profile), "[ ]");
         assert_eq!(get_custom(Glyph::Cross, Some(proj.path())), "[ ]");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn unset_symbol_falls_through_to_unicode_default() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         // Default (unicode) profile, override only `check`.
         let proj = tempfile::tempdir().unwrap();
         write_config_with_glyphs(proj.path(), "unicode", "check = \"OK\"");
@@ -912,18 +886,14 @@ mod tests {
         assert_eq!(overrides.render(Glyph::Check, profile), "OK");
         // Unset `warning` falls through to the unicode default.
         assert_eq!(overrides.render(Glyph::Warning, profile), "⚠");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn project_override_beats_user_override() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         // User sets check + warning; project overrides ONLY check.
         let home = tempfile::tempdir().unwrap();
         write_config_with_glyphs(home.path(), "unicode", "check = \"USER\"\nwarning = \"UW\"");
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
         write_config_with_glyphs(proj.path(), "unicode", "check = \"PROJ\"");
 
@@ -932,16 +902,12 @@ mod tests {
         assert_eq!(overrides.get(Glyph::Check), Some("PROJ"));
         // User entry survives for a symbol the project didn't override.
         assert_eq!(overrides.get(Glyph::Warning), Some("UW"));
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn absent_glyphs_section_is_phase1_behavior() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         // Only a [ui] section, no [glyphs] — overrides empty, falls to profile.
         let proj = tempfile::tempdir().unwrap();
         write_config(proj.path(), "ascii");
@@ -951,16 +917,12 @@ mod tests {
         let profile = active_profile(Some(proj.path()));
         assert_eq!(overrides.render(Glyph::Check, profile), "[x]");
         assert_eq!(get_custom(Glyph::Check, Some(proj.path())), "[x]");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn unknown_override_key_is_ignored() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
         write_config_with_glyphs(proj.path(), "unicode", "check = \"OK\"\nbogus = \"X\"");
 
@@ -968,8 +930,6 @@ mod tests {
         assert_eq!(overrides.get(Glyph::Check), Some("OK"));
         // Only the valid key landed.
         assert_eq!(overrides.map.len(), 1);
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     // ----- Phase 4: themes + full precedence (STORY-633) -----
@@ -1016,10 +976,8 @@ mod tests {
     /// The headline precedence pin: override > theme > profile > default.
     #[test]
     fn full_precedence_override_beats_theme_beats_profile_beats_default() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
         // Base profile ascii, theme nerd-font (overrides check→✔), and a
         // per-symbol [glyphs] override check→OK.
@@ -1036,16 +994,12 @@ mod tests {
         assert_eq!(resolve_with_theme(Glyph::Arrow, Some(proj.path())), "▸");
         // done: theme bundle entry beats profile.
         assert_eq!(resolve_with_theme(Glyph::Done, Some(proj.path())), "●");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn no_theme_falls_through_to_profile_then_default() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
         // Only a profile, no theme, no overrides.
         write_config_raw(proj.path(), "glyphs = \"ascii\"", None);
@@ -1055,24 +1009,19 @@ mod tests {
         // Empty project → unicode default.
         let bare = tempfile::tempdir().unwrap();
         assert_eq!(resolve_with_theme(Glyph::Check, Some(bare.path())), "✓");
-
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 
     #[test]
     fn project_theme_beats_user_theme() {
-        let _g = lock();
-        std::env::remove_var("AIDA_GLYPHS");
         let home = tempfile::tempdir().unwrap();
-        write_config_raw(home.path(), "theme = \"ascii\"", None);
-        std::env::set_var("AIDA_TEST_HOME", home.path());
+        let _env = with_env(None, Some(home.path()));
         let proj = tempfile::tempdir().unwrap();
+        write_config_raw(home.path(), "theme = \"ascii\"", None);
         write_config_raw(proj.path(), "theme = \"nerd-font\"", None);
 
         assert_eq!(
             active_theme(Some(proj.path())).map(|t| t.name),
             Some("nerd-font")
         );
-        std::env::remove_var("AIDA_TEST_HOME");
     }
 }

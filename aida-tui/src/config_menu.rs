@@ -30,8 +30,8 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
-    TableState, Wrap,
+    Block, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    Table, TableState, Wrap,
 };
 use ratatui::{Frame, Terminal};
 use std::time::Duration;
@@ -89,6 +89,14 @@ pub struct ConfigMenuItem {
     pub explanation: String,
     /// Whether (and how) this knob can be edited from the menu (STORY-669).
     pub edit: EditKind,
+    /// For a `ReadOnly` knob, the operational reason it isn't live-editable
+    /// from the menu (e.g. "security-relevant — edit ~/.aida/agents.toml
+    /// deliberately"), taken directly from the same `CONFIG_KNOBS` registry
+    /// declaration `edit` derives from. `None` for editable knobs, and for a
+    /// read-only knob with no declared reason. Surfaced by the `?` help
+    /// overlay as the item's operational consequence, when available.
+    // trace:STORY-1470 | ai:claude
+    pub read_only_reason: Option<String>,
 }
 
 /// A flattened, navigable row: either a section header or a knob row that
@@ -140,6 +148,10 @@ pub fn run(
     // STORY-677: when editing an Integer knob, an inline text-input overlay is
     // active. `Some((item_index, buffer))` while the prompt is up.
     let mut int_input: Option<(usize, String)> = None;
+    // STORY-1470: the `?` contextual-help modal for the focused row. While
+    // open it captures every key itself — Esc/`?` close it, nothing else
+    // leaks through to navigation or editing.
+    let mut help_open = false;
     loop {
         let table_state_selected = selectable.get(cursor).copied();
         term.draw(|f| {
@@ -150,6 +162,7 @@ pub fn run(
                 table_state_selected,
                 flash.as_deref(),
                 int_input.as_ref(),
+                help_open,
             )
         })?;
 
@@ -162,6 +175,20 @@ pub fn run(
             // crossterm on Windows fires both Press and Release; act on Press
             // only so a single keystroke doesn't move twice.
             if key.kind != KeyEventKind::Press {
+                continue;
+            }
+
+            // STORY-1470: the help overlay swallows every key except the ones
+            // that close it — no navigation or edit key leaks through while
+            // it's up.
+            if help_open {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('?') => help_open = false,
+                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        help_open = false;
+                    }
+                    _ => {}
+                }
                 continue;
             }
 
@@ -224,6 +251,14 @@ pub fn run(
                 KeyCode::End | KeyCode::Char('G') => {
                     flash = None;
                     cursor = last;
+                }
+                // STORY-1470: open the contextual-help overlay for the focused
+                // row. A no-op on an empty list (no selectable row to explain).
+                KeyCode::Char('?') => {
+                    if table_state_selected.is_some() {
+                        flash = None;
+                        help_open = true;
+                    }
                 }
                 // STORY-669/STORY-677: Enter/Space edits the selected knob.
                 // Bool toggles, Enum cycles, Integer opens the inline input.
@@ -364,6 +399,7 @@ fn draw(
     selected_display_idx: Option<usize>,
     flash: Option<&str>,
     int_input: Option<&(usize, String)>,
+    help_open: bool,
 ) {
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -381,6 +417,10 @@ fn draw(
         draw_int_input(f, chunks[3], &items[*i], buf);
     } else {
         draw_footer(f, chunks[3], flash);
+    }
+    // STORY-1470: the help overlay paints last, on top of everything else.
+    if help_open {
+        draw_help_overlay(f, f.area(), items, rows, selected_display_idx);
     }
 }
 
@@ -571,6 +611,8 @@ fn draw_footer(f: &mut Frame, area: Rect, flash: Option<&str>) {
         Span::raw(" move  "),
         Span::styled("Enter/Space", Style::default().fg(Color::Cyan)),
         Span::raw(" toggle/cycle/edit  "),
+        Span::styled("?", Style::default().fg(Color::Cyan)),
+        Span::raw(" help  "),
         Span::styled("PgUp/PgDn", Style::default().fg(Color::Cyan)),
         Span::raw(" page  "),
         Span::styled("g/G", Style::default().fg(Color::Cyan)),
@@ -579,6 +621,144 @@ fn draw_footer(f: &mut Frame, area: Rect, flash: Option<&str>) {
         Span::raw(" quit"),
     ]));
     f.render_widget(footer, area);
+}
+
+/// STORY-1470: the `?` contextual-help modal for the focused row. Centered
+/// over the whole frame so it reads as a distinct overlay rather than another
+/// panel; `Clear` wipes the region first so nothing behind it bleeds through.
+/// A no-op if nothing is selected (an empty item list).
+fn draw_help_overlay(
+    f: &mut Frame,
+    full_area: Rect,
+    items: &[ConfigMenuItem],
+    rows: &[DisplayRow],
+    selected_display_idx: Option<usize>,
+) {
+    let Some(DisplayRow::Item(i)) = selected_display_idx.and_then(|d| rows.get(d)) else {
+        return;
+    };
+    let item = &items[*i];
+    let area = centered_rect(70, 60, full_area);
+
+    f.render_widget(Clear, area);
+
+    let lines: Vec<Line> = help_body_lines(item)
+        .into_iter()
+        .map(|text| {
+            if text.is_empty() {
+                Line::from("")
+            } else if let Some(rest) = text.strip_prefix("Default: ") {
+                Line::from(vec![
+                    Span::styled(
+                        "Default: ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(rest.to_string()),
+                ])
+            } else if let Some(rest) = text.strip_prefix("Current: ") {
+                Line::from(vec![
+                    Span::styled(
+                        "Current: ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(rest.to_string()),
+                ])
+            } else if let Some(rest) = text.strip_prefix("Valid values: ") {
+                Line::from(vec![
+                    Span::styled(
+                        "Valid values: ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(rest.to_string()),
+                ])
+            } else if let Some(rest) = text.strip_prefix("Note: ") {
+                Line::from(vec![
+                    Span::styled(
+                        "Note: ",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(rest.to_string()),
+                ])
+            } else if text.starts_with('[') {
+                Line::from(Span::styled(
+                    text,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ))
+            } else {
+                Line::from(text)
+            }
+        })
+        .collect();
+
+    let para = Paragraph::new(lines).wrap(Wrap { trim: true }).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Help — Esc/? closes "),
+    );
+    f.render_widget(para, area);
+}
+
+/// STORY-1470: the plain-text body of the help overlay for `item` — its
+/// [section] name, description, default, current value + effective scope,
+/// valid values/range (derived from [`EditKind`]), and — when the registry
+/// declared one — the operational consequence that makes a read-only knob
+/// read-only. Kept as plain strings (rather than styled `Line`s) so the
+/// content is directly unit-testable without a terminal; `draw_help_overlay`
+/// applies styling on top by matching each line's label prefix.
+fn help_body_lines(item: &ConfigMenuItem) -> Vec<String> {
+    let mut lines = vec![
+        format!("[{}] {}", item.section, item.name),
+        String::new(),
+        item.explanation.clone(),
+        String::new(),
+        format!("Default: {}", item.default),
+        format!("Current: {}  (source: {})", item.value, item.scope),
+        format!("Valid values: {}", valid_values_text(&item.edit)),
+    ];
+    if let Some(reason) = &item.read_only_reason {
+        lines.push(String::new());
+        lines.push(format!("Note: {reason}"));
+    }
+    lines
+}
+
+/// The valid-values/range description for an [`EditKind`], for the help
+/// overlay.
+// trace:STORY-1470 | ai:claude
+fn valid_values_text(edit: &EditKind) -> String {
+    match edit {
+        EditKind::Bool => "true / false".to_string(),
+        EditKind::Enum(allowed) => allowed.join(" / "),
+        EditKind::Integer { min, max } => format!("integer, {min}..={max}"),
+        EditKind::ReadOnly => "not editable from this menu".to_string(),
+    }
+}
+
+/// A `Rect` of `percent_x` × `percent_y` of `area`, centered within it.
+/// Standard ratatui popup-centering idiom.
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::vertical([
+        Constraint::Percentage((100 - percent_y) / 2),
+        Constraint::Percentage(percent_y),
+        Constraint::Percentage((100 - percent_y) / 2),
+    ])
+    .split(area);
+    Layout::horizontal([
+        Constraint::Percentage((100 - percent_x) / 2),
+        Constraint::Percentage(percent_x),
+        Constraint::Percentage((100 - percent_x) / 2),
+    ])
+    .split(vertical[1])[1]
 }
 
 #[cfg(test)]
@@ -594,6 +774,7 @@ mod tests {
             scope: "default".to_string(),
             explanation: "x".to_string(),
             edit: EditKind::ReadOnly,
+            read_only_reason: None,
         }
     }
 
@@ -828,5 +1009,76 @@ mod tests {
         assert!(!called, "callback must not fire for empty entry");
         assert!(msg.contains("cancelled"), "explains cancel: {msg}");
         assert_eq!(items[0].value, "30", "row unchanged");
+    }
+
+    /// STORY-1470: valid_values_text renders each EditKind into a human range
+    /// description for the help overlay.
+    #[test]
+    fn valid_values_text_covers_every_edit_kind() {
+        assert_eq!(valid_values_text(&EditKind::Bool), "true / false");
+        assert_eq!(
+            valid_values_text(&EditKind::Enum(vec!["a".into(), "b".into()])),
+            "a / b"
+        );
+        assert_eq!(
+            valid_values_text(&EditKind::Integer { min: 7, max: 365 }),
+            "integer, 7..=365"
+        );
+        assert_eq!(
+            valid_values_text(&EditKind::ReadOnly),
+            "not editable from this menu"
+        );
+    }
+
+    /// STORY-1470: the help body covers description, default, current value +
+    /// scope, and valid values — the fields the spec calls out.
+    #[test]
+    fn help_body_covers_description_default_scope_and_valid_values() {
+        let mut it = item("telemetry", "enabled");
+        it.explanation = "Whether usage telemetry is recorded.".to_string();
+        it.default = "true".to_string();
+        it.value = "false".to_string();
+        it.scope = ".aida/config.toml".to_string();
+        it.edit = EditKind::Bool;
+
+        let body = help_body_lines(&it).join("\n");
+        assert!(body.contains("[telemetry] enabled"));
+        assert!(body.contains("Whether usage telemetry is recorded."));
+        assert!(body.contains("Default: true"));
+        assert!(body.contains("Current: false"));
+        assert!(body.contains("source: .aida/config.toml"));
+        assert!(body.contains("Valid values: true / false"));
+        // No reason declared -> no Note line.
+        assert!(!body.contains("Note:"));
+    }
+
+    /// STORY-1470: a declared read-only reason surfaces as the overlay's
+    /// operational-consequence "Note:" line; an item with none omits it.
+    #[test]
+    fn help_body_surfaces_read_only_reason_when_present() {
+        let mut it = item("agents", "bypass");
+        it.read_only_reason =
+            Some("security-relevant — edit ~/.aida/agents.toml deliberately".to_string());
+        let body = help_body_lines(&it).join("\n");
+        assert!(body.contains("Note: security-relevant"));
+
+        let without_reason = item("contained", "enable");
+        assert!(!help_body_lines(&without_reason)
+            .join("\n")
+            .contains("Note:"));
+    }
+
+    /// STORY-1470: centered_rect stays within its parent and is centered.
+    #[test]
+    fn centered_rect_is_within_and_centered_in_parent() {
+        let parent = Rect::new(0, 0, 100, 50);
+        let popup = centered_rect(70, 60, parent);
+        assert!(popup.x >= parent.x);
+        assert!(popup.y >= parent.y);
+        assert!(popup.x + popup.width <= parent.x + parent.width);
+        assert!(popup.y + popup.height <= parent.y + parent.height);
+        // Roughly 70%/60% of a 100x50 parent.
+        assert!((60..=75).contains(&popup.width));
+        assert!((25..=35).contains(&popup.height));
     }
 }

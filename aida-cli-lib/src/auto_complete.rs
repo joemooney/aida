@@ -517,7 +517,16 @@ pub(crate) enum FailureKind {
     /// BUG-826: the headless vendor process exited non-zero after creating a
     /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
     /// the implementer attempted the work and failed.
-    // trace:BUG-826 | ai:codex
+    ///
+    /// BUG-1716 widens it to the never-started sibling: a vendor that rejects
+    /// its own launch (an argv/usage error) exits non-zero WITHOUT creating
+    /// the log at all, corroborated by no commits on the session's lease
+    /// branch. Either shape means no agent ever worked, so this kind spends
+    /// no STORY-975 transient retry (`cause_slug` "environmental" is not in
+    /// `is_transient_retry_cause`), the empty lease is released, and the
+    /// TASK-133 compensation returns the spec to its pre-bump status instead
+    /// of leaving it parked `NeedsAttention`.
+    // trace:BUG-826 trace:BUG-1716 | ai:claude
     LaunchNoOutput,
     /// BUG-1063: a headless phase ended its turn while waiting for a future
     /// notification / monitor / watcher callback. Under headless vendor exec
@@ -1491,10 +1500,28 @@ pub(crate) trait PhaseDriver {
 
     /// BUG-1244: phase 1 must be operating in the target spec's own worktree.
     /// Real drivers validate the lease's live branch; mocks default to valid.
+    /// BUG-1628: `Err` carries a resolver failure (the shared pickup resolver
+    /// could not derive a workspace), reported before any lease is taken.
     // trace:BUG-1244 | ai:codex
-    fn implementer_workspace(&self) -> Option<(String, String)> {
-        None
+    // trace:BUG-1628 | ai:claude
+    fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
+        Ok(None)
     }
+    /// BUG-1628: every requirement-ID prefix the project recognises (built-in,
+    /// custom type, allowed, and in-use prefixes). The phase-1 ownership check
+    /// uses it so a project-defined prefix such as `SPEC` counts as a real
+    /// requirement ID. The target spec's own prefix is always accepted.
+    // trace:BUG-1628 | ai:claude
+    fn known_spec_prefixes(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// BUG-1629: phase 1 hands the workspace it resolved and checked back to
+    /// the driver, which launches exactly that workspace. The driver never
+    /// re-resolves between the check and the launch, so a resolver failure
+    /// or a changed answer in that window cannot launch an unpinned
+    /// implementer (BUG-1244).
+    // trace:BUG-1629 | ai:claude
+    fn pin_implementer_workspace(&mut self, _worktree: &str, _branch: &str) {}
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
@@ -3140,6 +3167,30 @@ fn finish_reconciled(
     }
 }
 
+/// BUG-1628: the phase-1 refusal when the workspace auto-complete resolved
+/// does not belong to the target spec. It names the resolver mismatch — the
+/// workspace disagrees with what `aida queue work <spec>` would pick up — so
+/// the operator is not left reading a generic sibling-workspace refusal.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn phase1_resolver_mismatch_reason(spec: &str, worktree: &str, branch: &str) -> String {
+    format!(
+        "phase 1 workspace resolver mismatch for {spec}: branch `{branch}` (worktree \
+         `{worktree}`) does not name {spec}, so it is not the workspace the pickup \
+         resolver (`aida queue work {spec}`) would use; refused before taking a lease"
+    )
+}
+
+/// BUG-1628: the phase-1 refusal when the shared pickup resolver could not
+/// derive a workspace at all.
+// trace:BUG-1628 | ai:claude
+pub(crate) fn phase1_resolver_failure_reason(spec: &str, err: &str) -> String {
+    format!(
+        "phase 1 workspace resolver failed for {spec}: {err} (auto-complete uses the \
+         same branch/worktree resolver as `aida queue work {spec}`); refused before \
+         taking a lease"
+    )
+}
+
 /// Resolve a phase `Err` through the BUG-241 reconcile step. The orchestrator
 /// asks the driver — via [`PhaseDriver::reconcile_failure`] — whether ground
 /// truth shows the spec shipped despite the missing artifact. If it did, the
@@ -3749,19 +3800,15 @@ pub(crate) fn orchestrate_with_resume(
         // continues) or escalates it (the run ends per `escalate_mode`).
         // trace:STORY-276, STORY-306 | ai:claude
         emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
-        if let Some((worktree, branch)) = driver.implementer_workspace() {
-            if !json {
-                eprintln!(
-                    "  {} phase 1 workspace: {} [{}]",
-                    "↳".cyan(),
-                    worktree,
-                    branch
-                );
-            }
-            if !crate::workflow_hints::branch_belongs_to_spec(&branch, spec) {
+        // BUG-1628: a resolver failure and a resolver mismatch are named as
+        // such, before any lease exists, instead of a generic refusal.
+        // trace:BUG-1628 | ai:claude
+        let workspace = match driver.implementer_workspace() {
+            Ok(workspace) => workspace,
+            Err(err) => {
                 let failure = PhaseFailure::of(
                     FailureKind::Failed,
-                    format!("phase 1 refused sibling workspace `{worktree}` on branch `{branch}` for {spec}"),
+                    phase1_resolver_failure_reason(spec, &err),
                 );
                 return resolve_phase_failure(
                     driver,
@@ -3773,6 +3820,39 @@ pub(crate) fn orchestrate_with_resume(
                     durations,
                 );
             }
+        };
+        if let Some((worktree, branch)) = workspace {
+            if !json {
+                eprintln!(
+                    "  {} phase 1 workspace: {} [{}]",
+                    "↳".cyan(),
+                    worktree,
+                    branch
+                );
+            }
+            let known_prefixes = driver.known_spec_prefixes();
+            if !crate::workflow_hints::branch_belongs_to_spec_with_prefixes(
+                &branch,
+                spec,
+                &known_prefixes,
+            ) {
+                let failure = PhaseFailure::of(
+                    FailureKind::Failed,
+                    phase1_resolver_mismatch_reason(spec, &worktree, &branch),
+                );
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Implementer,
+                    spec,
+                    json,
+                    &start,
+                    &failure,
+                    durations,
+                );
+            }
+            // BUG-1629: the checked value is the launched value.
+            // trace:BUG-1629 | ai:claude
+            driver.pin_implementer_workspace(&worktree, &branch);
         }
         driver.begin_rework_guard();
         // BUG-1522: the rework no-op guard was consulted on only ONE of the
@@ -4756,6 +4836,31 @@ struct InFlightMember {
     handle: PipelinedHandle,
 }
 
+/// BUG-1608: has the `--max-failures` budget been spent? `max_failures = N`
+/// (N ≥ 1) allows exactly N shelves; once the Nth lands the drain must stop
+/// BEFORE it dispatches another spec. The check therefore runs right after a
+/// shelve is recorded, not when the next failure arrives — the old
+/// `shelved + 1 > cap` test only fired on the (N+1)th failure, so a cap of one
+/// let a second spec launch after the first shelve. `0` keeps its documented
+/// meaning ("the first failure stops the drain"): that case never reaches a
+/// shelve, because `shelved + 1 > 0` already routes the first failure to the
+/// hard stop.
+// trace:BUG-1608 | ai:claude
+///
+/// STORY-1429: the count is shelve EVENTS, not distinct shelved specs. A spec
+/// that is requeued and shelves again in the same drain spends the budget
+/// again: a second failure after triage is more evidence that something is
+/// wrong, and the budget is the drain's only automatic circuit breaker. The
+/// `shelved` list still reports FINAL dispositions (BUG-852).
+// trace:STORY-1429 | ai:claude
+fn failure_budget_exhausted(shelve_events: usize, max_failures: Option<usize>) -> bool {
+    max_failures.is_some_and(|cap| shelve_events >= cap)
+}
+
+// why: the drain's disposition buckets are threaded through as separate
+// `&mut` lists (the same shape `forget_batch_disposition` takes); STORY-1429
+// adds the shelve-event counter alongside them.
+#[allow(clippy::too_many_arguments)]
 fn apply_batch_result(
     head: String,
     result: OrchestrationResult,
@@ -4765,15 +4870,33 @@ fn apply_batch_result(
     shelved: &mut Vec<String>,
     skipped: &mut Vec<(String, String)>,
     max_failures: Option<usize>,
+    shelve_events: &mut usize,
 ) -> Option<BatchDrainResult> {
     if result.exit_code != 0 {
         let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+        // STORY-1429: budget counts shelve events. trace:STORY-1429 | ai:claude
         let over_failure_budget = max_failures
-            .map(|cap| shelved.len() + 1 > cap)
+            .map(|cap| *shelve_events + 1 > cap)
             .unwrap_or(false);
         if result.shelved_reason.is_some() && !over_failure_budget {
             forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
-            shelved.push(head);
+            shelved.push(head.clone());
+            *shelve_events += 1;
+            // BUG-1608: the budget is spent the moment the Nth shelve lands —
+            // stop here, before the scheduler launches another member.
+            // trace:BUG-1608 | ai:claude
+            if failure_budget_exhausted(*shelve_events, max_failures) {
+                return Some(BatchDrainResult {
+                    shipped: shipped.clone(),
+                    punted: punted.clone(),
+                    escalated: escalated.clone(),
+                    shelved: shelved.clone(),
+                    skipped: skipped.clone(),
+                    stopped_at: Some(head),
+                    outcome: BatchDrainOutcome::Failed(phase),
+                    exit_code: DRIVE_EXIT_HARD_FAIL,
+                });
+            }
             return None;
         }
         return Some(BatchDrainResult {
@@ -4862,6 +4985,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     let mut escalated = Vec::new();
     let mut shelved = Vec::new();
     let mut skipped = Vec::new();
+    // STORY-1429: monotonic shelve-event count for the failure budget.
+    // trace:STORY-1429 | ai:claude
+    let mut shelve_events = 0usize;
     let mut in_flight: std::collections::VecDeque<InFlightMember> =
         std::collections::VecDeque::new();
     let mut launched = 0usize;
@@ -4936,7 +5062,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                     skipped,
                     stopped_at: None,
                     outcome: BatchDrainOutcome::MaxReached,
-                    exit_code: DRIVE_EXIT_CLEAN,
+                    // A stop that came from SIGTERM is not a clean drain.
+                    // trace:TASK-1518 | ai:claude
+                    exit_code: crate::drain_signal::stop_exit_code(DRIVE_EXIT_CLEAN),
                 };
             }
             let outcome = if shelved.is_empty() && skipped.is_empty() {
@@ -4978,6 +5106,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut shelved,
                 &mut skipped,
                 max_failures,
+                &mut shelve_events,
             ) {
                 return done;
             }
@@ -4993,6 +5122,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             &mut shelved,
             &mut skipped,
             max_failures,
+            &mut shelve_events,
         ) {
             return done;
         }
@@ -5055,6 +5185,10 @@ pub(crate) fn drain_batch_with_caps(
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
     let mut acted = 0usize;
+    // STORY-1429: monotonic shelve-event count for the failure budget; the
+    // `shelved` list keeps reporting final dispositions only.
+    // trace:STORY-1429 | ai:claude
+    let mut shelve_events = 0usize;
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -5097,7 +5231,8 @@ pub(crate) fn drain_batch_with_caps(
                 skipped,
                 stopped_at: None,
                 outcome: BatchDrainOutcome::MaxReached,
-                exit_code: DRIVE_EXIT_CLEAN,
+                // trace:TASK-1518 | ai:claude
+                exit_code: crate::drain_signal::stop_exit_code(DRIVE_EXIT_CLEAN),
             };
         }
         // `--max` bounds how many members the drain *acts on* — shipped,
@@ -5178,7 +5313,7 @@ pub(crate) fn drain_batch_with_caps(
             // back to the historical `Failed` stop.
             // trace:EPIC-28 | ai:claude
             let over_failure_budget = max_failures
-                .map(|cap| shelved.len() + 1 > cap)
+                .map(|cap| shelve_events + 1 > cap)
                 .unwrap_or(false);
             if result.shelved_reason.is_some() && !over_failure_budget {
                 forget_batch_disposition(
@@ -5189,7 +5324,23 @@ pub(crate) fn drain_batch_with_caps(
                     &mut shelved,
                     &mut skipped,
                 );
-                shelved.push(head);
+                shelved.push(head.clone());
+                shelve_events += 1;
+                // BUG-1608: stop as soon as the Nth shelve lands — never pick
+                // (let alone run) another head on a spent failure budget.
+                // trace:BUG-1608 | ai:claude
+                if failure_budget_exhausted(shelve_events, max_failures) {
+                    return BatchDrainResult {
+                        shipped,
+                        punted,
+                        escalated,
+                        shelved,
+                        skipped,
+                        stopped_at: Some(head),
+                        outcome: BatchDrainOutcome::Failed(phase),
+                        exit_code: DRIVE_EXIT_HARD_FAIL,
+                    };
+                }
                 continue;
             }
             return BatchDrainResult {
@@ -6462,6 +6613,12 @@ mod tests {
         /// BUG-1244: selected phase-1 worktree/branch, when a test needs to
         /// exercise the cross-spec isolation gate.
         workspace: Option<(String, String)>,
+        workspace_error: Option<String>,
+        /// BUG-1629: how many times phase 1 asked for the workspace, and the
+        /// workspace it pinned for the launch.
+        // trace:BUG-1629 | ai:claude
+        workspace_resolutions: std::cell::Cell<usize>,
+        pinned_workspace: Option<(String, String)>,
         /// BUG-1244: run-local phase-1 PR marker; `suppress_phase_done_pr`
         /// models the recurrence where branch lookup found a sibling PR but
         /// this run never emitted PhaseDonePr.
@@ -6518,6 +6675,9 @@ mod tests {
                 rework_no_op: false,
                 already_merged: None,
                 workspace: None,
+                workspace_error: None,
+                workspace_resolutions: std::cell::Cell::new(0),
+                pinned_workspace: None,
                 phase_done_pr: None,
                 suppress_phase_done_pr: false,
             }
@@ -6806,8 +6966,16 @@ mod tests {
         fn requires_phase_done_pr(&self) -> bool {
             self.suppress_phase_done_pr
         }
-        fn implementer_workspace(&self) -> Option<(String, String)> {
-            self.workspace.clone()
+        fn implementer_workspace(&self) -> Result<Option<(String, String)>, String> {
+            self.workspace_resolutions
+                .set(self.workspace_resolutions.get() + 1);
+            match &self.workspace_error {
+                Some(err) => Err(err.clone()),
+                None => Ok(self.workspace.clone()),
+            }
+        }
+        fn pin_implementer_workspace(&mut self, worktree: &str, branch: &str) {
+            self.pinned_workspace = Some((worktree.to_string(), branch.to_string()));
         }
         fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
             self.rework_no_op.then(|| {
@@ -7389,6 +7557,134 @@ mod tests {
             .is_some_and(|f| f.reason.contains("story-1221")));
     }
 
+    // BUG-1628: a custom-prefix spec whose workspace came from the shared
+    // pickup resolver (`spec-016`) passes the phase-1 ownership check.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_accepts_custom_prefix_pickup_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-016")
+                .display()
+                .to_string(),
+            "spec-016".to_string(),
+        ));
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_ne!(result.failed_phase, Some(Phase::Implementer));
+        assert!(
+            driver.calls.contains(&Phase::Implementer),
+            "the implementer must run in the spec's own pickup workspace"
+        );
+    }
+
+    // BUG-1629: phase 1 resolves the workspace exactly once and pins the
+    // value it checked, instead of re-resolving before the launch.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_phase_one_resolves_once_and_pins_the_checked_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let checked = (
+            std::env::temp_dir()
+                .join("qci-spec-016")
+                .display()
+                .to_string(),
+            "spec-016".to_string(),
+        );
+        driver.workspace = Some(checked.clone());
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_ne!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(driver.workspace_resolutions.get(), 1);
+        assert_eq!(driver.pinned_workspace, Some(checked));
+    }
+
+    // BUG-1629: a refused workspace is never pinned.
+    // trace:BUG-1629 | ai:claude
+    #[test]
+    fn bug_1629_phase_one_never_pins_a_refused_workspace() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-017")
+                .display()
+                .to_string(),
+            "spec-017".to_string(),
+        ));
+        let _ = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(driver.pinned_workspace, None);
+        assert!(driver.calls.is_empty());
+    }
+
+    // BUG-1628: a mismatched workspace is refused with a message naming the
+    // resolver mismatch, not a generic sibling-workspace refusal.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_mismatch_names_the_resolver() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("qci-spec-017")
+                .display()
+                .to_string(),
+            "spec-017".to_string(),
+        ));
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(driver.calls.is_empty());
+        let reason = &result.failure.as_ref().expect("failure").reason;
+        assert!(reason.contains("resolver mismatch"), "{reason}");
+        assert!(reason.contains("spec-017"), "{reason}");
+        assert!(reason.contains("aida queue work SPEC-016"), "{reason}");
+        assert!(!reason.contains("refused sibling workspace"), "{reason}");
+    }
+
+    // BUG-1628: a resolver failure is reported as such before any lease.
+    // trace:BUG-1628 | ai:claude
+    #[test]
+    fn bug_1628_phase_one_resolver_failure_is_named() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace_error = Some("all 20 candidate branch names are taken".to_string());
+        let result = orchestrate(
+            &mut driver,
+            "SPEC-016",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(driver.calls.is_empty());
+        let reason = &result.failure.as_ref().expect("failure").reason;
+        assert!(reason.contains("resolver failed for SPEC-016"), "{reason}");
+        assert!(
+            reason.contains("candidate branch names are taken"),
+            "{reason}"
+        );
+    }
+
     #[test]
     fn reviewer_refuses_when_this_run_has_no_phase_done_pr() {
         let mut driver = MockPhaseDriver::all_ok();
@@ -7432,6 +7728,12 @@ mod tests {
             "internal",
             // trace:TASK-1459 | ai:claude
             "review-in-progress",
+            // BUG-1629: a refused launch never started anything, and phase 1
+            // already spent its single replacement; the orchestrator's
+            // transient budget must not multiply it.
+            // trace:BUG-1629 | ai:claude
+            "launch-refused",
+            "lost-child-state",
         ] {
             assert!(!is_transient_retry_cause(cause), "{cause}");
         }
@@ -9531,6 +9833,10 @@ mod tests {
             MockPhaseDriver::failing_at_with_kind(Phase::Implementer, FailureKind::LaunchRefused)
                 .recovering_phase1_failure_from_pr(Phase::Ci);
         driver.shelve_succeeds = true;
+        // BUG-1629: a full transient budget must still not retry a refused
+        // launch; `calls` below proves a single implementer run.
+        // trace:BUG-1629 | ai:claude
+        driver.transient_retry_budget = 3;
         let result = orchestrate(
             &mut driver,
             "BUG-1524",
@@ -11153,6 +11459,10 @@ mod tests {
         through_ci_by_spec: std::collections::HashMap<String, OrchestrationResult>,
         finish_by_spec: std::collections::HashMap<String, OrchestrationResult>,
         events: Vec<String>,
+        /// STORY-1429: specs that shelve through CI this many more times; each
+        /// shelve is requeued (put back at the head), as a triage would.
+        reshelve: std::collections::HashMap<String, usize>,
+        handle_spec: std::collections::HashMap<usize, String>,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11165,7 +11475,16 @@ mod tests {
                 through_ci_by_spec: std::collections::HashMap::new(),
                 finish_by_spec: std::collections::HashMap::new(),
                 events: Vec::new(),
+                reshelve: std::collections::HashMap::new(),
+                handle_spec: std::collections::HashMap::new(),
             }
+        }
+
+        /// STORY-1429: `spec` shelves through CI `times` times, and each
+        /// shelve is requeued to the head of the queue.
+        fn shelving_and_requeued(mut self, spec: &str, times: usize) -> Self {
+            self.reshelve.insert(spec.to_string(), times);
+            self
         }
 
         fn shelving_through_ci(mut self, spec: &str, phase: Phase) -> Self {
@@ -11203,19 +11522,37 @@ mod tests {
             self.heads.retain(|h| h != spec);
             let handle = PipelinedHandle(self.next_handle);
             self.next_handle += 1;
-            let result = self
-                .through_ci_by_spec
-                .remove(spec)
-                .unwrap_or_else(ok_result);
+            let result = match self.reshelve.get_mut(spec) {
+                Some(n) if *n > 0 => {
+                    *n -= 1;
+                    shelve_result(Phase::Ci)
+                }
+                _ => self
+                    .through_ci_by_spec
+                    .remove(spec)
+                    .unwrap_or_else(ok_result),
+            };
             self.through_ci_results.insert(handle.0, result);
+            self.handle_spec.insert(handle.0, spec.to_string());
             handle
         }
 
         fn wait_spec_through_ci(&mut self, handle: PipelinedHandle) -> OrchestrationResult {
             self.events.push(format!("wait:{}", handle.0));
-            self.through_ci_results
+            let result = self
+                .through_ci_results
                 .remove(&handle.0)
-                .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci))
+                .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci));
+            // STORY-1429: a shelved spec with a pending requeue goes back to
+            // the head, as `aida rework` would put it.
+            if result.shelved_reason.is_some() {
+                if let Some(spec) = self.handle_spec.get(&handle.0).cloned() {
+                    if self.reshelve.contains_key(&spec) {
+                        self.heads.insert(0, spec);
+                    }
+                }
+            }
+            result
         }
 
         fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult {
@@ -11662,6 +11999,70 @@ mod tests {
         assert_eq!(driver.runs, vec!["STORY-830", "STORY-830"]);
     }
 
+    /// STORY-1429: the failure budget counts shelve EVENTS. A spec that shelves,
+    /// is requeued, and shelves again in the same drain spends the budget
+    /// twice: with `--max-failures 2` the drain stops on the second shelve
+    /// (the canonical hard-fail exit) before touching the next spec, and the
+    /// spec is still listed once in `shelved` (final dispositions, BUG-852).
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_requeued_spec_reshelve_spends_budget_twice() {
+        let mut driver = MockBatchDriver::new(&["STORY-1", "STORY-2"])
+            .shelving_once_then_retry("STORY-1", Phase::Ci)
+            .shelving_once_then_retry("STORY-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(2));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        assert_eq!(result.stopped_at.as_deref(), Some("STORY-1"));
+        assert_eq!(
+            driver.runs,
+            vec!["STORY-1", "STORY-1"],
+            "the spent budget must stop the drain before STORY-2"
+        );
+    }
+
+    /// STORY-1429: the pipelined twin. The re-shelved spec spends the budget
+    /// again, the drain stops, and `shelved` still lists it once.
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_requeued_spec_reshelve_spends_budget_twice() {
+        let mut driver = MockPipelinedBatchDriver::new(&["STORY-1", "STORY-2", "STORY-3"], 2)
+            .shelving_and_requeued("STORY-1", 2);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            Some(2),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        let starts = driver
+            .events
+            .iter()
+            .filter(|e| e.as_str() == "start:STORY-1")
+            .count();
+        assert_eq!(starts, 2, "requeued once, re-run once: {:?}", driver.events);
+    }
+
+    /// STORY-1429: without a cap a re-shelve changes nothing: the drain goes
+    /// on and reports the final disposition once.
+    // trace:STORY-1429 | ai:claude
+    #[test]
+    fn drain_batch_requeued_spec_reshelve_without_cap_reports_once() {
+        let mut driver = MockBatchDriver::new(&["STORY-1", "STORY-2"])
+            .shelving_once_then_retry("STORY-1", Phase::Ci)
+            .shelving("STORY-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.shelved, vec!["STORY-1"]);
+        assert_eq!(result.shipped, vec!["STORY-2"]);
+    }
+
     /// EPIC-28: when a shelving event also makes a downstream member
     /// un-pickable (BlockedBy → shelved), the dependent is skipped — never
     /// run — and shows up in `skipped`, while independents after it still
@@ -11696,8 +12097,10 @@ mod tests {
 
     /// EPIC-28: the `max_failures` safety cap stops the drain when too
     /// many specs shelve in a row — the environment is probably broken.
-    /// `max_failures = 2` means the third shelvable failure flips back
-    /// to the historical `Failed(phase)` stop. trace:EPIC-28 | ai:claude
+    /// BUG-1608: `max_failures = 2` allows exactly two shelves; the drain
+    /// stops the moment the second lands, before it dispatches a third
+    /// member. (It used to dispatch C and only stop on C's failure.)
+    // trace:EPIC-28 trace:BUG-1608 | ai:claude
     #[test]
     fn drain_batch_caps_at_max_failures_and_stops() {
         let mut driver = MockBatchDriver::new(&["A", "B", "C", "D", "E"])
@@ -11705,17 +12108,74 @@ mod tests {
             .shelving("B", Phase::Ci)
             .shelving("C", Phase::Ci);
         let result = drain_batch(&mut driver, None, Some(2));
-        // First two shelve and the drain continues; the third trips the cap.
         assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
-        // TASK-1054: a hard-stop (over the failure budget) is the canonical
+        // TASK-1054: a hard-stop (failure budget spent) is the canonical
         // hard-fail code 3, NOT the CI phase index 2 — which would collide with
         // the EPIC-28 `2 = shelved` sentinel. trace:TASK-1054 | ai:claude
         assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
         assert_eq!(result.shelved, vec!["A", "B"]);
-        assert_eq!(result.stopped_at, Some("C".to_string()));
-        // D and E were never attempted — the cap stops the drain.
-        assert!(!driver.runs.iter().any(|s| s == "D"));
-        assert!(!driver.runs.iter().any(|s| s == "E"));
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        // C, D and E were never attempted — the spent budget stops the drain.
+        assert_eq!(driver.runs, vec!["A", "B"]);
+    }
+
+    /// BUG-1608: `--max-failures 1` — the first shelved failure spends the
+    /// whole budget, so the drain stops before dispatching another spec.
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_max_failures_one_stops_after_first_shelve() {
+        let mut driver =
+            MockBatchDriver::new(&["STORY-52", "TASK-2", "TASK-3"]).shelving("STORY-52", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(1));
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["STORY-52"]);
+        assert_eq!(result.stopped_at, Some("STORY-52".to_string()));
+        assert_eq!(
+            driver.runs,
+            vec!["STORY-52"],
+            "no second spec may launch once the budget of one is spent"
+        );
+    }
+
+    /// BUG-1608: `--max-failures 0` keeps its documented meaning — the first
+    /// failure stops the drain (and is not counted as a tolerated shelve).
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_max_failures_zero_stops_at_first_failure() {
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]).shelving("TASK-1", Phase::Ci);
+        let result = drain_batch(&mut driver, None, Some(0));
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert!(result.shelved.is_empty());
+        assert_eq!(result.stopped_at, Some("TASK-1".to_string()));
+        assert_eq!(driver.runs, vec!["TASK-1"]);
+    }
+
+    /// BUG-1608: the pipelined scheduler honours the same budget — after the
+    /// first shelve with a cap of one it launches nothing further.
+    // trace:BUG-1608 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_max_failures_one_launches_nothing_after_shelve() {
+        let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B", "TASK-C"], 2)
+            .shelving_through_ci("TASK-A", Phase::Ci);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            Some(1),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.shelved, vec!["TASK-A"]);
+        assert!(
+            !driver.events.iter().any(|e| e == "start:TASK-C"),
+            "TASK-C must not launch after the budget is spent: {:?}",
+            driver.events
+        );
     }
 
     /// EPIC-28: regression — a clean drain (nothing shelved, nothing

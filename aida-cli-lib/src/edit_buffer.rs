@@ -138,9 +138,16 @@ fn launch_editor(editor: &str, path: &Path) -> std::io::Result<std::process::Exi
     }
     #[cfg(not(windows))]
     {
+        // The editor value is the operator's own (AIDA_EDITOR / VISUAL /
+        // EDITOR) and stays shell text so `code --wait` works; the buffer
+        // path is passed as a positional parameter, never spliced in, so a
+        // spec id or temp dir holding a quote cannot break out, the same way
+        // git launches `$EDITOR "$@"`. trace:BUG-1624 | ai:claude
         std::process::Command::new("sh")
             .arg("-c")
-            .arg(format!("{} '{}'", editor, path.display()))
+            .arg(format!("{editor} \"$@\""))
+            .arg(editor)
+            .arg(path)
             .status()
     }
 }

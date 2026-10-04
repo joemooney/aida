@@ -1,3 +1,5 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 //! # aida-core — the AIDA engine
 //!
 //! `aida-core` is the requirement-graph engine that every other AIDA crate is
@@ -81,7 +83,9 @@ pub mod dispenser;
 pub mod docs_review;
 // trace:TASK-0417 | ai:claude
 pub mod ears_lint;
+// trace:STORY-1427 | ai:claude
 pub mod export;
+pub mod gates;
 // trace:STORY-476 | ai:claude
 pub mod external_refs;
 pub mod external_tool_output;
@@ -91,6 +95,8 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+// trace:TASK-1513 | ai:claude
+pub mod home;
 // trace:BUG-1535 | ai:claude
 pub mod id_collisions;
 pub mod idle;
@@ -120,6 +126,8 @@ pub mod pickability;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
+pub mod provenance;
+#[cfg(feature = "native")]
 pub mod rebase;
 #[cfg(feature = "native")]
 pub mod registry;
@@ -139,6 +147,9 @@ pub mod team;
 pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod templates;
+// TOML string quoting for hand-built config files. trace:BUG-1649 | ai:claude
+// trace:BUG-1650 | ai:claude
+pub mod toml_quote;
 #[cfg(feature = "native")]
 pub mod user_prefs;
 #[cfg(feature = "native")]
@@ -151,6 +162,18 @@ pub mod worktree_pool_adopt;
 pub mod worktree_pool_destroy;
 pub mod yaml_helpers;
 
+/// The ONE process-wide lock for aida-core tests that mutate the process
+/// environment. `std::env::set_var` is not thread-safe across keys (a
+/// `setenv` can realloc `environ` while another thread reads an unrelated
+/// key, or while a spawned `git` child copies it), so every env-mutating test
+/// in this crate must serialise on the same mutex, not a module-local one.
+// trace:BUG-1666 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// trace:TASK-1532 | ai:agy
+#[cfg(test)]
+pub(crate) mod test_env;
+
 // Re-export commonly used types
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, DraftSpecResponse, EvaluationResponse, EvaluationResult,
@@ -162,11 +185,14 @@ pub use block_allocation::{BlockAllocationConfig, BlockAllocationTypeConfig};
 pub use db::PostgresBackend;
 #[cfg(feature = "native")]
 pub use db::{
-    cache_lock_info_path, compute_blocked, compute_degrees, create_backend, edge_weight,
-    export_to_json, import_from_json, migrate_sqlite_to_yaml, migrate_yaml_to_sqlite,
-    open_or_create, read_cache_lock_info, ArchiveFilter, Cache, CacheLockInfo, CachedGitBackend,
-    DeferFilter, Degrees, GitBackend, ListFilter, RequirementSummary, SortOrder, SqliteBackend,
-    YamlBackend,
+    cache_lock_info_path, cache_sidecar_path, classify_lock_owner, compute_blocked,
+    compute_degrees, create_backend, edge_weight, export_to_json, import_from_json,
+    migrate_sqlite_to_yaml, migrate_yaml_to_sqlite, observe_cache_lock, observe_lock_info_file,
+    open_or_create, read_cache_lock_info, reclaim_dead_lock_info, shared_cache_path,
+    stray_cache_lock_info_path, ArchiveFilter, BulkAtomicReport, Cache, CacheLockInfo,
+    CacheLockObservation, CachedGitBackend, DeferFilter, Degrees, GitBackend, ListFilter,
+    LockInfoReclaim, LockOwnerState, RequirementSummary, SortOrder, SqliteBackend,
+    StoreConflictError, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};
@@ -243,6 +269,8 @@ pub use models::{
     FailureReason,
     FeatureDefinition,
     FieldChange,
+    // Filing provenance (CR-8)
+    FilingProvenance,
     // GitLab integration types
     GitLabIssueLink,
     GitLabLinkType,
@@ -301,7 +329,10 @@ pub use node::{
     NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
 };
 #[cfg(feature = "native")]
-pub use project::{check_migration_status, determine_requirements_path, MigrationCheck};
+pub use project::{
+    check_migration_status, determine_requirements_path, resolve_requirements_path_in,
+    MigrationCheck, NoProjectFound,
+};
 #[cfg(feature = "native")]
 pub use registry::{get_config_dir, get_registry_path, get_templates_dir, Registry};
 #[cfg(feature = "native")]

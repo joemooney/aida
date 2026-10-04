@@ -18,11 +18,6 @@
 //! is reclaimed immediately; a TTL backstop covers any other wedge.
 // trace:STORY-1171 | ai:claude
 
-// The acquire-side API (acquire/MergeLease/DEFAULT_WAIT and its helpers) is
-// exercised by the tests below and lands wired into the merge paths (pr ship +
-// drain, spanning check→merge→pull) in the STORY-1171 follow-up; `status()` is
-// live now via `aida merge-lock`. Allow dead_code until the wiring lands.
-
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -117,21 +112,13 @@ fn parse(body: &str) -> Holder {
     h
 }
 
-/// Is `pid` currently running on THIS machine? `kill(pid, 0)` == 0 (alive) or
-/// EPERM (alive but not ours). ESRCH ⇒ dead. Non-unix cannot probe ⇒ assume
-/// alive so only the TTL backstop reclaims (conservative).
-#[cfg(unix)]
+/// Is `pid` currently running on THIS machine? Routed through the canonical
+/// `aida_core::liveness::pid_is_alive` (BUG-1741) so a defunct (zombie)
+/// holder reads dead instead of pinning the lock until its TTL: same
+/// `kill(pid, 0)`/EPERM semantics on unix, O(1) single-pid probe elsewhere.
+// trace:BUG-1741 | ai:claude
 fn pid_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    // SAFETY: kill with signal 0 performs no signal delivery, only existence/perm check.
-    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-#[cfg(not(unix))]
-fn pid_alive(_pid: u32) -> bool {
-    true
+    aida_core::liveness::pid_is_alive(pid)
 }
 
 /// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid on our host
@@ -152,8 +139,8 @@ fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
     None
 }
 
-/// RAII guard: releasing (explicitly or on drop) removes the lockfile IF we hold
-/// it. A no-op if already released.
+/// RAII guard: dropping it removes the lockfile IF we hold it. Release early
+/// with `drop(lease)`.
 #[must_use = "the merge-lease releases when dropped; hold it across the critical section"]
 #[derive(Debug)]
 pub(crate) struct MergeLease {
@@ -162,10 +149,8 @@ pub(crate) struct MergeLease {
 }
 
 impl MergeLease {
-    /// Explicit release (idempotent). Dropping does the same.
-    pub(crate) fn release(mut self) {
-        self.do_release();
-    }
+    // trace:TASK-1581 | ai:antigravity — the explicit `release(self)` had no
+    // caller; `drop(lease)` is the same operation.
     fn do_release(&mut self) {
         if self.held {
             let _ = std::fs::remove_file(&self.path);
@@ -272,7 +257,7 @@ mod tests {
             "must actually wait the bound"
         );
         // Release → the branch is free again.
-        held.release();
+        drop(held);
         acquire(root, "main", Some(3), "third", Duration::from_millis(300)).unwrap();
     }
 
@@ -311,26 +296,34 @@ mod tests {
         // Fresh timestamp but dead same-host pid → reclaimed immediately (no wait).
         let start = Instant::now();
         let _g = acquire(root, "main", Some(10), "steal", Duration::from_millis(200)).unwrap();
-        assert!(
-            start.elapsed() < Duration::from_millis(150),
-            "dead-pid steal is immediate"
+        // The `unwrap` above carries "reclaimed": a holder not recognised as
+        // stale makes `acquire` spin to its 200ms deadline and return Err. So
+        // this is only the "no wait" signal — and at 150ms against a 200ms
+        // deadline it had 33% margin over a host condition, which is how a
+        // correct steal went red under load. trace:BUG-1731 | ai:claude
+        crate::test_timing::assert_within_budget(
+            start,
+            Duration::from_millis(150),
+            Duration::from_secs(60),
+            "steal of a merge lock held by a dead same-host pid",
         );
     }
 
     #[cfg(not(unix))]
     #[test]
-    fn same_host_bogus_pid_waits_until_ttl_on_non_unix() {
+    fn same_host_live_pid_waits_until_ttl_on_non_unix() {
         // trace:BUG-1184 | ai:codex
+        // trace:BUG-1777 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
-        // Non-Unix cannot probe pids, so a fresh same-host holder is treated
-        // as live even when the pid is bogus.
+        // Non-Unix probes the OS process table, so use this live process to
+        // test the wait path. A bogus PID is correctly reclaimed immediately.
         let h = Holder {
             host: crate::coordination::hostname(),
-            pid: 999_999_999,
+            pid: std::process::id(),
             pr: Some(9),
-            note: "fresh bogus pid".into(),
+            note: "fresh live pid".into(),
             acquired_at: now_secs(),
             ttl_secs: DEFAULT_TTL_SECS,
         };

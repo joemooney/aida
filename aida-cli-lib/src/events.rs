@@ -170,6 +170,32 @@ pub enum EventKind {
         /// Supervised re-drive cap (default 3).
         max: u32,
     },
+    /// A spec left NeedsAttention and went back into flight (Approved, Planned
+    /// or In Progress; dropping it is not a requeue) through one of the
+    /// requeue doors (`aida queue rework`, `aida edit --status`, the
+    /// `queue_rework` MCP tool, or the re-drive supervisor). Distinct from
+    /// [`SpecReDriven`](Self::SpecReDriven), which is the supervisor's attempt
+    /// record and the only kind its attempt count reads: a human requeue must
+    /// neither advance nor reset that count. **Recovery trail.**
+    // trace:STORY-1429 | ai:claude
+    SpecRequeued {
+        /// The door: `queue-rework`, `edit`, `mcp`, or `supervisor`.
+        via: String,
+        /// Who performed it, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actor: Option<String>,
+        /// Status label before, e.g. `Needs Attention`.
+        from: String,
+        /// Status label after, e.g. `Approved`.
+        to: String,
+        /// Parking tags the requeue cleared.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        cleared_tags: Vec<String>,
+        /// Escalation tags kept because no human was at a terminal; the spec
+        /// stays parked until one clears them.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        kept_tags: Vec<String>,
+    },
     /// STORY-1051: the supervisor gave up on a transient park after the cap and
     /// reclassified it to needs-human triage. **Actionable.**
     // trace:STORY-1051 | ai:claude
@@ -383,6 +409,66 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         actor: Option<String>,
     },
+    /// STORY-1218: one night-shift tick that ACTED (launched a wave, reaped,
+    /// found a stale drain lock, tripped a breaker, escalated a spec) or whose
+    /// refusing-guard set changed since the previous tick. A quiet tick emits
+    /// nothing. Actionable only when it carries a breaker trip or an
+    /// escalation — a routine launch is followed by the wave's own
+    /// `QueueDrained`, which is the wake.
+    // trace:STORY-1218 | ai:claude
+    ShiftTick {
+        /// The wave this tick launched, when it launched one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        launched: Option<ShiftLaunch>,
+        /// Finished sessions reaped this tick.
+        #[serde(default)]
+        reaped: usize,
+        /// A drain lock whose pid is dead. The tick leaves the file; the next
+        /// drain stale-reclaims it through the ordinary acquire path.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recovered_stale_pid: Option<u32>,
+        /// Names of the guards that refused a launch this tick.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        refused: Vec<String>,
+        /// Set once when a circuit breaker stops launches.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        breaker: Option<String>,
+        /// Specs excluded from further shift waves and escalated, once each.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        escalated: Vec<String>,
+        /// Transient parks this tick put back in the queue (opt-in re-drive).
+        // trace:TASK-1492 | ai:claude
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        redriven: Vec<String>,
+        /// Transient parks that hit the re-drive cap this tick and were
+        /// reclassified to needs-human (each also emits
+        /// `ReclassifiedNeedsHuman`).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reclassified: Vec<String>,
+        /// Mail recipients whose oldest unread message crossed the latency
+        /// threshold this tick; the operator was notified once per episode.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mail_escalated: Vec<String>,
+        /// Why the re-drive step stopped this tick: a re-drive attempt could
+        /// not be recorded, so nothing further was re-queued (ADR-26 fail
+        /// closed).
+        // trace:TASK-1492 | ai:claude
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        redrive_held: Option<String>,
+    },
+    /// STORY-1480: a plan was recorded for the spec — pinned into
+    /// `docs/plans/` (promote/import) or verified (`aida plan verify` PASS).
+    /// The planning-phase marker the cycle-time timeline was missing: before
+    /// this, planning left no lifecycle event at all, so the stretch between
+    /// filing and the implementer claim always read unknown.
+    /// **Not actionable**: like [`SpecRequeued`](Self::SpecRequeued), it
+    /// records an act a seat already took, not a new decision point.
+    // trace:STORY-1480 | ai:claude
+    PlanRecorded {
+        /// `true` when the plan passed `aida plan verify` (refs checked);
+        /// `false` for a pin/import that recorded the plan without verifying.
+        verified: bool,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -397,6 +483,29 @@ pub enum EventKind {
 pub(crate) struct IneligibleBatchMember {
     pub(crate) spec: String,
     pub(crate) reason: String,
+}
+
+/// The wave a [`EventKind::ShiftTick`] launched.
+// trace:STORY-1218 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShiftLaunch {
+    /// Batch name (without the `batch:` prefix).
+    pub batch: String,
+    /// Member specs, in queue order.
+    pub specs: Vec<String>,
+    /// Pid of the `aida queue work` process; 0 when the wave ran in its own
+    /// unit and had already exited before its pid was read.
+    pub pid: u32,
+    /// The exact argv handed to `aida`.
+    pub argv: Vec<String>,
+    /// The transient systemd unit the wave runs in, when it has one.
+    // trace:TASK-1510 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// Why the wave was launched detached although its own unit was
+    /// wanted, or why its pid is missing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isolation_note: Option<String>,
 }
 
 impl EventKind {
@@ -420,8 +529,20 @@ impl EventKind {
             EventKind::RunStarted
             | EventKind::PhaseEntered { .. }
             | EventKind::SpecReDriven { .. }
+            // STORY-1429: a requeue is a triage act already taken, recorded
+            // for the trail, not a new decision point.
+            | EventKind::SpecRequeued { .. }
+            // STORY-1480: a recorded plan is likewise an act already taken.
+            | EventKind::PlanRecorded { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
+            // STORY-1218: a tick wakes only for what needs a human.
+            EventKind::ShiftTick {
+                breaker,
+                escalated,
+                redrive_held,
+                ..
+            } => breaker.is_some() || !escalated.is_empty() || redrive_held.is_some(),
             // Real decision points — wake the supervisor.
             EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::CiTerminal { .. }
@@ -479,6 +600,7 @@ impl EventKind {
             EventKind::SpecSkipped { .. } => "SpecSkipped",
             EventKind::SpecRetried { .. } => "SpecRetried",
             EventKind::SpecReDriven { .. } => "SpecReDriven",
+            EventKind::SpecRequeued { .. } => "SpecRequeued",
             EventKind::ReclassifiedNeedsHuman { .. } => "ReclassifiedNeedsHuman",
             EventKind::PuntFiled { .. } => "PuntFiled",
             EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
@@ -497,6 +619,8 @@ impl EventKind {
             EventKind::CronJobFailed { .. } => "CronJobFailed",
             EventKind::MailReceived { .. } => "MailReceived",
             EventKind::GateHeld { .. } => "GateHeld",
+            EventKind::ShiftTick { .. } => "ShiftTick",
+            EventKind::PlanRecorded { .. } => "PlanRecorded",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -532,6 +656,9 @@ impl EventKind {
             "DispositionChanged",
             "ExecutionModeChanged",
             "GateHeld",
+            "ShiftTick",
+            "SpecRequeued",
+            "PlanRecorded",
         ]
     }
 }
@@ -645,36 +772,6 @@ pub fn latest_spec_shelved<'a>(events: &'a [Event], spec: &str) -> Option<&'a Ev
     })
 }
 
-/// Return the newest terminal event for `spec`, ignoring later non-terminal
-/// phase telemetry. Legacy streams may return `None`: terminal completion
-/// events were not backfilled when this predicate was introduced.
-// trace:BUG-1286 | ai:codex
-pub fn latest_terminal_for_spec<'a>(events: &'a [Event], spec: &str) -> Option<&'a Event> {
-    events.iter().rev().find(|event| {
-        event
-            .spec
-            .as_deref()
-            .is_some_and(|event_spec| event_spec.eq_ignore_ascii_case(spec))
-            && event.kind.is_terminal()
-    })
-}
-
-/// STORY-1051: the supervisor's re-drive count for `spec` and the timestamp of
-/// its most recent supervised re-drive, both derived from `SpecReDriven`
-/// events. `(0, None)` when the supervisor has never re-driven this spec.
-// trace:STORY-1051 | ai:claude
-pub fn supervisor_redrive_state(project_root: &Path, spec: &str) -> (u32, Option<DateTime<Utc>>) {
-    let mut count = 0u32;
-    let mut last = None;
-    for ev in read_all(project_root) {
-        if ev.spec.as_deref() == Some(spec) && matches!(ev.kind, EventKind::SpecReDriven { .. }) {
-            count += 1;
-            last = Some(ev.ts);
-        }
-    }
-    (count, last)
-}
-
 /// Path to the single rotated archive of the previous run's events — the file
 /// [`rotate_if_oversized`] renames the live stream to when it outgrows the cap.
 /// One generation is kept (each rotation overwrites the prior archive), so
@@ -770,7 +867,7 @@ pub const EVENTS_DISABLE_ENV: &str = "AIDA_EVENTS_DISABLE";
 /// `false`, `no`, `off` (any case) all mean "not disabled", so an accidentally
 /// exported empty var can't silently blind a real drain's supervision stream.
 // trace:BUG-770 | ai:claude
-fn events_disabled() -> bool {
+pub(crate) fn events_disabled() -> bool {
     std::env::var(EVENTS_DISABLE_ENV)
         .map(|v| is_truthy(&v))
         .unwrap_or(false)
@@ -912,6 +1009,26 @@ pub fn emit(project_root: &Path, ev: &Event) {
     let _ = try_emit(project_root, ev);
 }
 
+/// Append one event and REPORT whether it landed: the fail-closed sibling of
+/// [`emit`] for a record a safety cap is counted from (the ADR-26 re-drive
+/// attempt). `Err` with the reason when events are disabled in this process
+/// (nothing would be written) or the append fails (full disk, a read-only or
+/// replaced `events.jsonl`, a permission error).
+// trace:TASK-1492 | ai:claude
+pub fn emit_recorded(project_root: &Path, ev: &Event) -> Result<(), String> {
+    if events_disabled() {
+        return Err(format!(
+            "{EVENTS_DISABLE_ENV} is set in this process, so the event is not recorded"
+        ));
+    }
+    try_emit(project_root, ev).map_err(|e| {
+        format!(
+            "cannot append to {}: {e}",
+            events_path(project_root).display()
+        )
+    })
+}
+
 /// The fallible body of [`emit`]; kept separate so the happy path reads as a
 /// normal `?`-chain while [`emit`] discards the result.
 fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
@@ -991,6 +1108,26 @@ pub fn gate_held_event(
     );
     ev.seat = seat;
     ev
+}
+
+/// STORY-1480: emit one lifecycle event per credited spec from an
+/// interactive (non-drain) surface — empty `run_uuid`, seat stamped from
+/// `AIDA_SESSION_ROLE`. An empty `specs` still emits once with `spec: None`
+/// so the act is never silently dropped (the `emit_ship_pr_merged`
+/// precedent, BUG-1423). Best-effort like every [`emit`].
+// trace:STORY-1480 | ai:claude
+pub(crate) fn emit_interactive_lifecycle(project_root: &Path, specs: &[String], kind: &EventKind) {
+    let seat = active_seat();
+    let targets: Vec<Option<String>> = if specs.is_empty() {
+        vec![None]
+    } else {
+        specs.iter().cloned().map(Some).collect()
+    };
+    for spec in targets {
+        let mut ev = Event::new(spec, "", kind.clone());
+        ev.seat = seat.clone();
+        emit(project_root, &ev);
+    }
 }
 
 /// STORY-1436: record that a gate refused or held. Cheap (one appended line)
@@ -1084,9 +1221,75 @@ pub fn read_all_with_archive(project_root: &Path) -> Vec<Event> {
     out
 }
 
+/// Per-spec supervised re-drive history: `(attempts, last re-drive)` from
+/// `SpecReDriven` events.
+// trace:TASK-1492 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RedriveHistory(std::collections::BTreeMap<String, (u32, Option<DateTime<Utc>>)>);
+
+impl RedriveHistory {
+    /// Fold an oldest-first event stream.
+    pub fn from_events<'a>(events: impl IntoIterator<Item = &'a Event>) -> Self {
+        let mut out = std::collections::BTreeMap::new();
+        for ev in events {
+            let (Some(spec), EventKind::SpecReDriven { .. }) = (&ev.spec, &ev.kind) else {
+                continue;
+            };
+            let slot: &mut (u32, Option<DateTime<Utc>>) = out.entry(spec.clone()).or_default();
+            slot.0 += 1;
+            if slot.1.is_none_or(|t| ev.ts > t) {
+                slot.1 = Some(ev.ts);
+            }
+        }
+        Self(out)
+    }
+
+    /// `(attempts, last re-drive)` for `spec`; `(0, None)` when never re-driven.
+    pub fn get(&self, spec: &str) -> (u32, Option<DateTime<Utc>>) {
+        self.0.get(spec).copied().unwrap_or((0, None))
+    }
+}
+
+/// The re-drive history as an unattended caller must see it (ADR-26 cap
+/// evidence): the rotated archive AND the live stream, so a rotation never
+/// resets the attempt count. Fails closed — `Err` with the reason — when
+/// events are disabled in this process (nothing this process does would be
+/// recorded, so the count cannot be trusted), when a present file cannot be
+/// read, or when neither file exists.
+// trace:TASK-1492 | ai:claude
+pub fn read_redrive_history_strict(project_root: &Path) -> Result<RedriveHistory, String> {
+    if events_disabled() {
+        return Err(format!(
+            "{EVENTS_DISABLE_ENV} is set in this process, so re-drive attempts are not recorded"
+        ));
+    }
+    let mut events = Vec::new();
+    let mut found = false;
+    for path in [events_archive_path(project_root), events_path(project_root)] {
+        match std::fs::read_to_string(&path) {
+            Ok(body) => {
+                found = true;
+                events.extend(
+                    body.lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .filter_map(|l| serde_json::from_str::<Event>(l).ok()),
+                );
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
+        }
+    }
+    if !found {
+        return Err("no event stream (.aida/events.jsonl) to count re-drive attempts from".into());
+    }
+    Ok(RedriveHistory::from_events(&events))
+}
+
 /// Parse a `--since`/`--until` bound: RFC 3339, or a bare `YYYY-MM-DD`
-/// (midnight UTC).
+/// (midnight UTC). Test-only fixture helper now: `aida history --kind` uses
+/// the shared local-time-aware parser instead.
 // trace:STORY-1436 | ai:claude
+#[cfg(test)]
 pub fn parse_time_bound(value: &str) -> Option<DateTime<Utc>> {
     let v = value.trim();
     if let Ok(t) = DateTime::parse_from_rfc3339(v) {
@@ -1799,48 +2002,25 @@ mod tests {
     }
 
     // BUG-1286: terminality is a property of the kind, not the event's
-    // position in an append-only stream.
+    // position in an append-only stream — trailing phase telemetry after a
+    // merge (a build crash, a late PhaseDonePr) must never read as terminal.
+    // trace:BUG-1286 | ai:codex
+    // trace:TASK-1581 | ai:antigravity — asserted on the kind predicate; the
+    // stream-scanning helper it used to go through had no production caller.
     #[test]
-    fn latest_terminal_ignores_trailing_phase_events_and_survives_build_crash() {
-        let phase = |idx: i32, slug: &str| {
-            Event::new(
-                Some("BUG-1286".into()),
-                "run",
-                EventKind::PhaseEntered {
-                    idx,
-                    slug: slug.into(),
-                    vendor: None,
-                    seat: None,
-                    model: None,
-                    effort: None,
-                    attempt: 1,
-                },
-            )
-        };
-        let mut stream = vec![Event::new(
-            Some("BUG-1286".into()),
-            "run",
-            EventKind::PrMerged { pr: 42 },
-        )];
-        stream.push(phase(5, "pull"));
-        stream.push(phase(6, "build"));
-
-        // Crash case: the stream stops after build entered. The merge remains
-        // the newest terminal fact even without a completion record.
-        assert!(matches!(
-            latest_terminal_for_spec(&stream, "bug-1286").map(|e| &e.kind),
-            Some(EventKind::PrMerged { pr: 42 })
-        ));
-
-        stream.push(Event::new(
-            Some("BUG-1286".into()),
-            "run",
-            EventKind::PhaseDonePr { pr: 42 },
-        ));
-        assert!(matches!(
-            latest_terminal_for_spec(&stream, "BUG-1286").map(|e| &e.kind),
-            Some(EventKind::PrMerged { pr: 42 })
-        ));
+    fn trailing_phase_events_are_not_terminal() {
+        assert!(EventKind::PrMerged { pr: 42 }.is_terminal());
+        assert!(!EventKind::PhaseEntered {
+            idx: 6,
+            slug: "build".into(),
+            vendor: None,
+            seat: None,
+            model: None,
+            effort: None,
+            attempt: 1,
+        }
+        .is_terminal());
+        assert!(!EventKind::PhaseDonePr { pr: 42 }.is_terminal());
     }
 
     #[test]
@@ -1873,7 +2053,7 @@ mod tests {
     // STORY-1051: the supervisor's attempt count + backoff come from the event
     // log (ADR-26 fork B), so prove the derivation reads back correctly.
     #[test]
-    fn supervisor_redrive_state_counts_and_timestamps_from_the_log() {
+    fn redrive_history_counts_and_timestamps_from_the_log() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         // Two supervised re-drives of STORY-9, one of a different spec.
@@ -1921,10 +2101,12 @@ mod tests {
             ),
         );
 
-        let (count, last) = supervisor_redrive_state(root, "STORY-9");
+        // trace:TASK-1581 | ai:antigravity — the production fold (TASK-1492).
+        let history = RedriveHistory::from_events(&read_all(root));
+        let (count, last) = history.get("STORY-9");
         assert_eq!(count, 2, "only SpecReDriven for STORY-9 counts");
         assert!(last.is_some(), "last re-drive timestamp is recorded");
-        let (none, ts) = supervisor_redrive_state(root, "STORY-NEVER");
+        let (none, ts) = history.get("STORY-NEVER");
         assert_eq!(none, 0);
         assert!(ts.is_none());
     }
@@ -2274,5 +2456,49 @@ mod tests {
         assert_eq!(DEFAULT_EVENTS_MAX_BYTES, 5 * 1024 * 1024);
         // The env parse tolerates surrounding whitespace.
         assert_eq!("  42  ".trim().parse::<u64>().unwrap(), 42);
+    }
+
+    /// STORY-1480: `PlanRecorded` is a recorded act, not a decision point —
+    /// silent like `SpecRequeued` — and it round-trips with its tag listed
+    /// among the known names so `[schedule] on = [...]` can match it.
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn plan_recorded_is_silent_named_and_roundtrips() {
+        let kind = EventKind::PlanRecorded { verified: true };
+        assert!(!kind.is_actionable());
+        assert!(!kind.is_terminal());
+        assert_eq!(kind.name(), "PlanRecorded");
+        assert!(EventKind::known_names().contains(&"PlanRecorded"));
+        let line =
+            serde_json::to_string(&Event::new(Some("TASK-9".into()), "", kind.clone())).unwrap();
+        let back: Event = serde_json::from_str(&line).unwrap();
+        assert_eq!(back.kind, kind);
+    }
+
+    /// STORY-1480: the interactive-surface emitter fans one event out per
+    /// credited spec with an empty run_uuid, and an empty spec list still
+    /// records the act once with `spec: None` (the ship-merge precedent).
+    // trace:STORY-1480 | ai:claude
+    #[test]
+    fn emit_interactive_lifecycle_fans_out_per_spec_and_never_drops() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        emit_interactive_lifecycle(
+            root,
+            &["TASK-1".to_string(), "TASK-2".to_string()],
+            &EventKind::PhaseDonePr { pr: 7 },
+        );
+        emit_interactive_lifecycle(root, &[], &EventKind::CiTerminal { green: true });
+        let all = read_all(root);
+        assert_eq!(all.len(), 3, "{all:?}");
+        assert!(all.iter().all(|e| e.run_uuid.is_empty()));
+        assert_eq!(all[0].spec.as_deref(), Some("TASK-1"));
+        assert_eq!(all[1].spec.as_deref(), Some("TASK-2"));
+        assert!(
+            matches!(all[0].kind, EventKind::PhaseDonePr { pr: 7 })
+                && matches!(all[1].kind, EventKind::PhaseDonePr { pr: 7 })
+        );
+        assert_eq!(all[2].spec, None, "empty spec list still records the act");
+        assert!(matches!(all[2].kind, EventKind::CiTerminal { green: true }));
     }
 }

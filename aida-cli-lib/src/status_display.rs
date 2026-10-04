@@ -91,6 +91,144 @@ pub(crate) fn needs_attention_lens(
     })
 }
 
+/// The non-stored `--status` lens tokens, paired with the
+/// [`NeedsAttentionLens::palette_key`] each one selects.
+///
+/// `shelved` and `needs-decision` name a DISPLAY lens over the stored
+/// `NeedsAttention` status (STORY-1023), not statuses of their own, so no cache
+/// column can hold them. This table is the single source of truth for which
+/// tokens `aida list --status` accepts beyond the stored set, and the
+/// "Unknown status filter" refusal enumerates it rather than restating it — a
+/// hand-written list is exactly how the accepted set and the refusal drifted
+/// apart until BUG-1771.
+// trace:BUG-1771 | ai:claude
+pub(crate) const LENS_FILTER_TOKENS: &[(&str, &str)] =
+    &[("shelved", "Shelved"), ("needs-decision", "NeedsDecision")];
+
+/// Resolve one `--status` token to the lens palette key it selects, or `None`
+/// when the token names something other than a lens.
+// trace:BUG-1771 | ai:claude
+pub(crate) fn lens_filter_key(token: &str) -> Option<&'static str> {
+    let normalized = normalize(token);
+    LENS_FILTER_TOKENS
+        .iter()
+        .find(|(tok, _)| normalize(tok) == normalized)
+        .map(|(_, key)| *key)
+}
+
+/// The lens tokens, comma-joined for a help/refusal line.
+// trace:BUG-1771 | ai:claude
+pub(crate) fn lens_filter_token_list() -> String {
+    LENS_FILTER_TOKENS
+        .iter()
+        .map(|(tok, _)| *tok)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A VIEW axis a non-stored `--status` token opens, as distinct from a lens
+/// over a stored status.
+///
+/// `deferred` is the one axis today: deferral is STORY-584's view-flag on the
+/// requirement (parallel to `archived`), orthogonal to status, so there is no
+/// stored status to widen a query to the way a parked lens does. The token is
+/// therefore a spelling of `aida list --deferred`, and it is accepted on
+/// `--status` because an orchestrator reaching for "which work is deferred?"
+/// reaches for the status filter first — and got "Unknown status filter
+/// 'deferred'" until BUG-1687.
+// trace:BUG-1687 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ViewFilterAxis {
+    Deferred,
+}
+
+/// The non-stored `--status` tokens that open a view axis.
+///
+/// Read by [`split_status_filter_spec`], by the legacy `list_requirements`
+/// path, and by the "Unknown status filter" refusal — the same single-table
+/// discipline BUG-1771 established for the parked lenses, so the accepted set
+/// and the refusal that enumerates it cannot drift apart.
+// trace:BUG-1687 | ai:claude
+pub(crate) const VIEW_FILTER_TOKENS: &[(&str, ViewFilterAxis)] =
+    &[("deferred", ViewFilterAxis::Deferred)];
+
+/// Resolve one `--status` token to the view axis it opens, or `None` when the
+/// token names something other than a view axis.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn view_filter_axis(token: &str) -> Option<ViewFilterAxis> {
+    let normalized = normalize(token);
+    VIEW_FILTER_TOKENS
+        .iter()
+        .find(|(tok, _)| normalize(tok) == normalized)
+        .map(|(_, axis)| *axis)
+}
+
+/// The view-axis tokens, comma-joined for a help/refusal line.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn view_filter_token_list() -> String {
+    VIEW_FILTER_TOKENS
+        .iter()
+        .map(|(tok, _)| *tok)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What a `--status` filter spec asked for, once its non-stored tokens are
+/// separated from the stored-status ones.
+// trace:BUG-1687 | ai:claude
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct StatusFilterSplit {
+    /// [`NeedsAttentionLens::palette_key`] values the spec named.
+    pub(crate) lens_keys: Vec<&'static str>,
+    /// View axes the spec named.
+    pub(crate) view_axes: Vec<ViewFilterAxis>,
+    /// The stored-status spec left over, or `None` when the caller named
+    /// nothing but non-stored tokens.
+    pub(crate) residual: Option<String>,
+}
+
+/// Split a `--status` filter spec into the lens keys it names, the view axes it
+/// opens, and the residual stored-status spec.
+///
+/// The cache query filters on stored statuses only, so a lens token has to be
+/// widened to `needs-attention` for the query and the returned rows narrowed
+/// again by lens; a view token instead sets its own filter axis and leaves the
+/// status query alone. `residual` is `None` when the spec named non-stored
+/// tokens only. Empty tokens are dropped and surrounding whitespace trimmed,
+/// matching `RequirementStatus::expand_filter_spec` so the two halves of a
+/// mixed spec agree on what counts as a token.
+// trace:BUG-1771 | ai:claude
+// trace:BUG-1687 | ai:claude — view axes joined the lens keys here.
+pub(crate) fn split_status_filter_spec(spec: &str) -> StatusFilterSplit {
+    let mut split = StatusFilterSplit::default();
+    let mut stored: Vec<&str> = Vec::new();
+    for raw in spec.split(',') {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(key) = lens_filter_key(token) {
+            if !split.lens_keys.contains(&key) {
+                split.lens_keys.push(key);
+            }
+            continue;
+        }
+        if let Some(axis) = view_filter_axis(token) {
+            if !split.view_axes.contains(&axis) {
+                split.view_axes.push(axis);
+            }
+            continue;
+        }
+        stored.push(token);
+    }
+    split.residual = if stored.is_empty() {
+        None
+    } else {
+        Some(stored.join(","))
+    };
+    split
+}
+
 /// Collapse a status string to a bare match key: lowercase, with whitespace,
 /// `-` and `_` stripped. Lets "In Progress", "InProgress", "in-progress" and
 /// even a column-padded "Approved   " all resolve to the same arm.
@@ -129,6 +267,9 @@ pub(crate) fn status_glyph_for_profile(
         "needsattention" => Glyph::Blocked,
         "needsdecision" => Glyph::Blocked,
         "shelved" => Glyph::Pause,
+        // trace:BUG-1687 | ai:claude — primed work waiting on a trigger, which
+        // is the hourglass, NOT the ⏸ a mechanically shelved spec wears.
+        "deferred" => Glyph::Hourglass,
         // trace:BUG-781 | ai:claude — the decision-class terminal label.
         "accepted" => Glyph::Accepted,
         // trace:TASK-1176 | ai:claude — adopted, then replaced.
@@ -174,6 +315,9 @@ fn status_glyph_literal(status: &str) -> &'static str {
         "needsdecision" => "⚠",
         // STORY-1023: mechanically parked with a typed recovery path.
         "shelved" => "⏸",
+        // BUG-1687: deferred is PROSPECTIVE — primed, with a recorded revisit
+        // trigger — so it wears the hourglass, not the shelf’s pause.
+        "deferred" => "⏳",
         // trace:BUG-781 | ai:claude — a ratified decision: checked and closed.
         "accepted" => "☑",
         // trace:TASK-1176 | ai:claude — adopted, then replaced: the same box
@@ -210,6 +354,11 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         // STORY-1023: a typed mechanical shelf should stay visible without
         // looking like an operator escalation.
         "shelved" => text.blue(),
+        // BUG-1687: deferred work is parked BY CHOICE with a revisit trigger,
+        // so it reads quieter than any lens that wants a human now — dimmed
+        // blue, in the parked family but visibly not an escalation.
+        // trace:BUG-1687 | ai:claude
+        "deferred" => text.blue().dimmed(),
         // BUG-781: a ratified decision is terminal, so it paints in the closed
         // green family — never the cyan `Approved` wears on a task that has yet
         // to be started. trace:BUG-781 | ai:claude
@@ -256,7 +405,114 @@ pub(crate) fn status_badge(status: &str) -> String {
     format!("{} {}", status_glyph(status), paint_status(status, status))
 }
 
+/// The palette key / display label a DEFERRED spec wears.
+///
+/// Doubles as the key for [`paint_status`] / [`status_glyph`], the way
+/// [`display_status_for_type`]'s `"Accepted"` does.
+// trace:BUG-1687 | ai:claude
+pub(crate) const DEFERRED_LABEL: &str = "Deferred";
+
+/// The agent-surface (`aida show` under AGENT-MODE, `--fields status`) token
+/// for a deferred spec.
+// trace:BUG-1687 | ai:claude
+pub(crate) const DEFERRED_TOKEN: &str = "deferred";
+
+/// Is this spec on the deferred shelf?
+///
+/// Mirrors the cache's own defer predicate (`DEFER_TAG_LIKE` in
+/// `aida-core/src/db/cache.rs`): the STORY-584 flag OR a legacy `deferred:*`
+/// parking tag. The two have to agree or BUG-1687 AC4 fails by construction —
+/// `aida show` would call a spec deferred that `aida list --deferred` does not
+/// return, or the reverse.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn is_deferred(req: &aida_core::models::Requirement) -> bool {
+    req.deferred || req.tags.iter().any(|t| t.starts_with("deferred:"))
+}
+
+/// The revisit trigger to show beside the Deferred label: the explicit
+/// `deferred_until` field first, else the suffix of the first legacy
+/// `deferred:*` tag — the same derivation `print_deferred_triggers` uses for
+/// the `aida list --deferred` footer, so the two surfaces quote one trigger.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn deferred_revisit_trigger(req: &aida_core::models::Requirement) -> Option<String> {
+    if let Some(cond) = req.deferred_until.as_deref() {
+        let cond = cond.trim();
+        if !cond.is_empty() {
+            return Some(cond.to_string());
+        }
+    }
+    // `tags` is a HashSet, so "the first `deferred:*` tag" has no stable
+    // meaning — take the lexicographic minimum instead, or two runs of the same
+    // command could quote different triggers for the same spec.
+    req.tags
+        .iter()
+        .filter_map(|t| t.strip_prefix("deferred:"))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .min()
+        .map(str::to_string)
+}
+
+/// `"Deferred (<revisit trigger>)"` for a deferred spec, `None` otherwise.
+///
+/// Deferral is a VIEW-FLAG orthogonal to status (STORY-584), so nothing is
+/// rewritten on disk and the stored status survives an un-defer untouched —
+/// this is the same display-layer relabel [`display_status_for_type`] performs
+/// for a ratified decision (BUG-781). Until BUG-1687 the stored status showed
+/// through verbatim, so a spec deferred out of `needs-attention` still read as
+/// "someone act now" and misled two agent sessions in one afternoon.
+///
+/// Deliberately NOT a [`NeedsAttentionLens`] variant: a spec can be deferred at
+/// ANY stored status, while that enum is the lens over the stored
+/// `NeedsAttention` one, and BUG-1771 made its variants select `--status`
+/// filters. Folding deferral in there would make `--status shelved` silently
+/// lose a shelved-AND-deferred row.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn deferred_display_label(req: &aida_core::models::Requirement) -> Option<String> {
+    if !is_deferred(req) {
+        return None;
+    }
+    Some(label_with_reason(
+        DEFERRED_LABEL,
+        deferred_revisit_trigger(req).as_deref(),
+    ))
+}
+
+/// `"<glyph> <coloured Deferred (trigger)>"` for a deferred spec, `None`
+/// otherwise — the override every prominent single-status display applies
+/// before falling back to the stored badge.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn deferred_badge(req: &aida_core::models::Requirement) -> Option<String> {
+    deferred_display_label(req).map(|label| {
+        format!(
+            "{} {}",
+            status_glyph(DEFERRED_LABEL),
+            paint_status(&label, DEFERRED_LABEL)
+        )
+    })
+}
+
+/// The badge for one spec's already-resolved display status, with the deferral
+/// override applied. Use this rather than [`status_badge`] wherever the
+/// requirement itself is in hand: a deferred spec must not advertise the status
+/// it was deferred out of.
+// trace:BUG-1687 | ai:claude
+pub(crate) fn spec_status_badge(
+    req: &aida_core::models::Requirement,
+    display_status: &str,
+) -> String {
+    deferred_badge(req).unwrap_or_else(|| status_badge(display_status))
+}
+
 pub(crate) fn parked_status_badge(req: &aida_core::models::Requirement) -> String {
+    // BUG-1687: deferral outranks the parked lens. A spec punted and THEN
+    // deferred carries both an `attention_reason` and the defer flag, and the
+    // honest answer to "what state is this in?" is the later of the two
+    // decisions — nobody is being asked to decide it today.
+    // trace:BUG-1687 | ai:claude
+    if let Some(badge) = deferred_badge(req) {
+        return badge;
+    }
     match needs_attention_lens(req) {
         Some(lens) => {
             let label = lens.label();
@@ -335,6 +591,35 @@ pub(crate) fn flow_glyph(
     } else {
         " "
     }
+}
+
+/// The derived-status disclosure for a per-spec `show` status line, or `None`
+/// when the displayed value needs no annotation.
+///
+/// An epic's displayed status is the read-only rollup of its children
+/// (BUG-626), so it can disagree with the STORED field: nine epics stood in the
+/// advisor's close bucket while `aida show` said `status: completed` with
+/// nothing marking the value as derived, and callers concluded the close
+/// actions were already taken. When the displayed and stored values resolve to
+/// different lifecycle states, return the annotation naming both; when they
+/// agree (every non-epic, and an epic whose rollup matches its stored field) or
+/// either is a custom status outside the lifecycle, return `None` so the line
+/// renders exactly as before.
+// trace:BUG-1767 | ai:claude
+pub(crate) fn derived_status_annotation(
+    effective_status: &str,
+    stored_status: &str,
+) -> Option<String> {
+    use aida_core::lifecycle::State;
+    let eff = State::from_status_str(effective_status)?;
+    let stored = State::from_status_str(stored_status)?;
+    if eff == stored {
+        return None;
+    }
+    Some(format!(
+        "derived from child rollup; stored: {}",
+        crate::help_next::state_token(stored)
+    ))
 }
 
 #[cfg(test)]
@@ -592,5 +877,187 @@ mod tests {
         let painted = paint_status("Approved", "Approved").to_string();
         colored::control::unset_override();
         assert_eq!(painted, "Approved", "expected no escape codes: {painted:?}");
+    }
+
+    /// Every token in the shared table splits out as a lens, with no residual
+    /// left for `expand_filter_spec` to reject. This is the anti-drift guard
+    /// AC3 asks for: adding a row to `LENS_FILTER_TOKENS` without wiring it up
+    /// fails here rather than shipping a token the CLI denies exists.
+    // trace:BUG-1771 | ai:claude
+    #[test]
+    fn every_lens_token_splits_out_as_a_lens() {
+        for (token, key) in LENS_FILTER_TOKENS {
+            let split = split_status_filter_spec(token);
+            assert_eq!(
+                split.lens_keys,
+                vec![*key],
+                "token {token} must select key {key}"
+            );
+            assert!(
+                split.view_axes.is_empty(),
+                "token {token} is a lens, not a view axis"
+            );
+            assert_eq!(split.residual, None, "token {token} must leave no residual");
+        }
+    }
+
+    /// The view-axis twin of the guard above: every row of
+    /// `VIEW_FILTER_TOKENS` splits out as its axis and leaves no residual, so
+    /// adding a token without wiring it up fails here instead of shipping a
+    /// token the CLI denies exists.
+    // trace:BUG-1687 | ai:claude
+    #[test]
+    fn every_view_token_splits_out_as_a_view_axis() {
+        for (token, axis) in VIEW_FILTER_TOKENS {
+            let split = split_status_filter_spec(token);
+            assert_eq!(
+                split.view_axes,
+                vec![*axis],
+                "token {token} must open axis {axis:?}"
+            );
+            assert!(
+                split.lens_keys.is_empty(),
+                "token {token} is a view axis, not a parked lens"
+            );
+            assert_eq!(split.residual, None, "token {token} must leave no residual");
+        }
+    }
+
+    /// The tokens the refusal prints are exactly the tokens the splitter takes.
+    // trace:BUG-1771 | ai:claude
+    // trace:BUG-1687 | ai:claude — now covers the view-axis table too.
+    #[test]
+    fn refusal_token_list_matches_the_accepted_set() {
+        let listed = lens_filter_token_list();
+        for (token, _) in LENS_FILTER_TOKENS {
+            assert!(
+                listed.contains(token),
+                "refusal list {listed:?} omits the accepted token {token}"
+            );
+        }
+        assert_eq!(listed.split(", ").count(), LENS_FILTER_TOKENS.len());
+
+        let views = view_filter_token_list();
+        for (token, _) in VIEW_FILTER_TOKENS {
+            assert!(
+                views.contains(token),
+                "refusal list {views:?} omits the accepted token {token}"
+            );
+        }
+        assert_eq!(views.split(", ").count(), VIEW_FILTER_TOKENS.len());
+    }
+
+    /// Spelling is normalized the way every other status token is, and a
+    /// non-lens token is handed back untouched for the stored expansion.
+    // trace:BUG-1771 | ai:claude
+    #[test]
+    fn split_normalizes_spelling_and_preserves_stored_tokens() {
+        for spelling in [
+            "needs-decision",
+            "needs_decision",
+            "NeedsDecision",
+            " Needs Decision ",
+        ] {
+            let split = split_status_filter_spec(spelling);
+            assert_eq!(
+                (split.lens_keys, split.view_axes, split.residual),
+                (vec!["NeedsDecision"], Vec::new(), None),
+                "{spelling} must resolve to the needs-decision lens"
+            );
+        }
+        let split = split_status_filter_spec("shelved,approved,shelved,,draft");
+        assert_eq!(
+            (split.lens_keys, split.view_axes, split.residual),
+            (
+                vec!["Shelved"],
+                Vec::new(),
+                Some("approved,draft".to_string())
+            ),
+            "a repeated lens dedups, empty tokens drop, stored tokens survive in order"
+        );
+        let split = split_status_filter_spec("draft,approved");
+        assert_eq!(
+            (split.lens_keys, split.view_axes, split.residual),
+            (Vec::new(), Vec::new(), Some("draft,approved".to_string())),
+            "a spec with no lens token must pass through unchanged"
+        );
+    }
+
+    /// A mixed spec keeps all three channels separate: the view axis does not
+    /// eat the lens token or the stored one.
+    // trace:BUG-1687 | ai:claude
+    #[test]
+    fn split_keeps_view_lens_and_stored_tokens_apart() {
+        for spelling in ["deferred", "Deferred", " DEFERRED "] {
+            let split = split_status_filter_spec(spelling);
+            assert_eq!(
+                (split.lens_keys, split.view_axes, split.residual),
+                (Vec::new(), vec![ViewFilterAxis::Deferred], None),
+                "{spelling} must resolve to the deferred view axis"
+            );
+        }
+        let split = split_status_filter_spec("deferred,shelved,approved,deferred");
+        assert_eq!(
+            (split.lens_keys, split.view_axes, split.residual),
+            (
+                vec!["Shelved"],
+                vec![ViewFilterAxis::Deferred],
+                Some("approved".to_string())
+            ),
+            "a repeated view token dedups and the other two channels survive"
+        );
+    }
+
+    /// AC1's display override, at the unit level: a deferred spec stops
+    /// advertising the status it was deferred OUT of, quotes its revisit
+    /// trigger, and leaves the stored status untouched (AC3's precondition).
+    // trace:BUG-1687 | ai:claude
+    #[test]
+    fn deferred_label_overrides_the_stored_status() {
+        let mut req =
+            aida_core::models::Requirement::new("deferred fixture".to_string(), String::new());
+        req.status = aida_core::RequirementStatus::NeedsAttention;
+        assert_eq!(
+            deferred_display_label(&req),
+            None,
+            "a spec that is not deferred must wear no deferred label"
+        );
+
+        req.deferred = true;
+        req.deferred_until = Some("after the stability push".to_string());
+        assert_eq!(
+            deferred_display_label(&req).as_deref(),
+            Some("Deferred (after the stability push)"),
+            "the badge must name the revisit trigger, not the stored status"
+        );
+        assert_eq!(
+            req.status,
+            aida_core::RequirementStatus::NeedsAttention,
+            "the override is presentation-only: the stored status must survive"
+        );
+        let badge = parked_status_badge(&req);
+        assert!(
+            badge.contains("Deferred") && !badge.contains("Needs"),
+            "deferral outranks the parked lens in the badge: {badge:?}"
+        );
+
+        // The legacy `deferred:*` parking tag is the same shelf, and supplies
+        // the trigger when the field is empty — the list filter honours both,
+        // so the label has to as well (AC4).
+        let mut tagged =
+            aida_core::models::Requirement::new("tag-deferred".to_string(), String::new());
+        tagged.status = aida_core::RequirementStatus::Approved;
+        tagged.tags = ["deferred:post-stability".to_string()]
+            .into_iter()
+            .collect();
+        assert_eq!(
+            deferred_display_label(&tagged).as_deref(),
+            Some("Deferred (post-stability)")
+        );
+
+        // No trigger recorded: still deferred, just unqualified.
+        let mut bare = aida_core::models::Requirement::new("bare-defer".to_string(), String::new());
+        bare.deferred = true;
+        assert_eq!(deferred_display_label(&bare).as_deref(), Some("Deferred"));
     }
 }

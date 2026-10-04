@@ -7,7 +7,9 @@
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs docs-build book book-glossary book-serve proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
-        sync-templates check-templates \
+        sync-templates check-templates sync-agent-skills check-agent-skills \
+        install-agent-skill-hooks ensure-agent-skill-hooks \
+        check-ci check-ci-fast check-ci-audit check-ci-list \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -94,12 +96,12 @@ help: ## Show this help message
 # BUILD TARGETS
 #==============================================================================
 
-build: ## Build all packages (debug mode)
+build: ensure-agent-skill-hooks ## Build all packages (debug mode)
 	cargo build --workspace
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-release: ## Build all packages (release mode, optimized)
-	cargo build --workspace --release
+	cargo build --workspace --profile agent
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 # trace:TASK-1154 | ai:claude
@@ -109,13 +111,16 @@ build-release: ## Build all packages (release mode, optimized)
 # build-release: CARGO_INCREMENTAL slightly reduces cross-codegen-unit
 # optimization, so this is for LOCAL iteration, not shipping. Shipped releases
 # build fresh (non-incremental) via CI (.github/workflows/release.yml).
-build-fast: ## Build all packages (release + incremental — for iteration, NOT shipping)
+# sccache rejects incremental compilation, including when configured globally
+# through Cargo's build.rustc-wrapper. Disable the wrapper for this target.
+# trace:BUG-1684 | ai:codex
+build-fast: ensure-agent-skill-hooks ## Build all packages (release + incremental — for iteration, NOT shipping)
 	@if aida dev build-guard --help >/dev/null 2>&1; then \
-		aida dev build-guard release $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
+		aida dev build-guard agent $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
 	else \
 		echo "Note: current aida predates the live-wave build guard; bootstrapping it now."; \
 	fi
-	CARGO_INCREMENTAL=1 cargo build --workspace --release
+	RUSTC_WRAPPER= CARGO_INCREMENTAL=1 cargo build --workspace --profile agent
 	@$(MAKE) --no-print-directory restart-mcp-servers
 
 build-all: build cli-remote ## Build everything including remote features
@@ -312,10 +317,11 @@ proto: ## Regenerate protobuf code
 	@cd aida-cli && cargo build --features remote
 	@echo "Protobuf code regenerated"
 
-proto-check: ## Check if proto files are up to date
-	@echo "Checking proto files..."
-	@diff -q proto/aida.proto aida-server/src/generated/aida.rs > /dev/null 2>&1 || \
-		echo "Warning: Proto files may be out of sync. Run 'make proto'"
+proto-check: ## Check the committed protobuf mirrors match what proto/ generates
+# Was `diff -q proto/aida.proto aida-server/src/generated/aida.rs`, which
+# compared a .proto against a .rs — a predicate that can never match, reported
+# only as a warning, and so could never fail. trace:TASK-1567 | ai:claude
+	@bash scripts/check-generated-proto.sh
 
 #==============================================================================
 # DEVELOPMENT HELPERS
@@ -407,10 +413,88 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 		ln -sf "../../aida-core/templates/commands/$$name" ".claude/commands/$$name"; \
 		echo "  Linked: .claude/commands/$$name -> aida-core/templates/commands/$$name"; \
 	done
+	# trace:TASK-1560 | ai:antigravity
+	@echo "Syncing .aida/discipline/ mirror..."
+	@mkdir -p .aida/discipline
+	@errors=0; \
+	for f in aida-core/templates/.aida/discipline/*.md; do \
+		cp "$$f" ".aida/discipline/$$(basename $$f)"; \
+	done
+	@$(MAKE) --no-print-directory sync-agent-skills
 	@echo "Template sync complete!"
 
+# trace:TASK-1520 | ai:codex
+sync-agent-skills: ## Sync .agents/skills/aida-* from aida-core/templates (regular files, TASK-1520)
+	@echo "Syncing .agents/skills/aida-* (portable pack)..."
+	@cargo run -q -p aida-core --example agent_skill_pack -- sync
+
+# trace:TASK-1520 | ai:codex
+# trace:TASK-1584 | ai:antigravity
+check-agent-skills: ## Check .agents/skills/aida-* for byte drift (TASK-1520)
+	@echo "Checking .aida/discipline/ mirror..."
+	@errors=0; \
+	for f in aida-core/templates/.aida/discipline/*.md; do \
+		target=".aida/discipline/$$(basename $$f)"; \
+		if [ -f "$$target" ]; then \
+			if ! diff -q "$$f" "$$target" > /dev/null 2>&1; then \
+				echo "  CONTENT DIFFERS: $$target and $$f"; \
+				errors=1; \
+			fi; \
+		else \
+			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+	done; \
+	if [ "$$errors" = "1" ]; then \
+		echo ""; \
+		echo "Run 'make sync-templates' to fix issues"; \
+		exit 1; \
+	else \
+		echo "  OK: .aida/discipline mirror is current"; \
+	fi
+	@echo "Checking .agents/skills/aida-* for drift..."
+	@cargo run -q -p aida-core --example agent_skill_pack -- check
+
+# trace:BUG-1760 | ai:codex
+install-agent-skill-hooks: ## Install main-checkout symlink hooks that refresh .agents/skills
+	@bash scripts/install-agent-skill-hooks.sh
+
+# The installer's activation path (BUG-1762): a prerequisite on build /
+# build-fast, because those are the targets every AIDA developer already runs
+# (CLAUDE.md's "Develop AIDA itself"), so the hooks appear without anyone
+# knowing the installer target's name. Chosen over an `aida dev activate` step
+# (the first activate of a setup runs the previously installed, older binary,
+# which would lack the step) and over a CLAUDE.md instruction (a doc line is
+# not a mechanism). --best-effort keeps it quiet and non-fatal: builds run
+# constantly from linked worktrees, where installation must skip, never fail.
+# trace:BUG-1762 | ai:claude
+ensure-agent-skill-hooks:
+	@bash scripts/install-agent-skill-hooks.sh --best-effort
+
+# CI's Build job runs ~36 gates; the check set documented in CLAUDE.md names
+# five of them. Every gate an agent cannot run locally costs a full CI cycle
+# plus a re-push, which on a constrained host is the dominant cost of a fix.
+#
+# These targets run CI's OWN step bodies, read out of .github/workflows/ci.yml,
+# in CI's order, stopping at the first failure. No gate command is duplicated
+# here or in the runner; see scripts/ci-gate-tiers.toml for why.
+# trace:TASK-1555 | ai:claude
+check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
+	@python3 scripts/check-ci-gates.py --tier fast
+
+check-ci: ## Run every CI gate that can run locally, in CI's order (needs a build)
+	@python3 scripts/check-ci-gates.py --tier all
+
+check-ci-audit: ## Fail if a CI gate is unclassified (what keeps the tiers honest)
+	@python3 scripts/check-ci-gates.py --audit
+
+check-ci-list: ## Show which CI gates run locally, which are skipped, and why
+	@python3 scripts/check-ci-gates.py --tier all --list
+
+# trace:TASK-1520 | ai:codex (check-agent-skills is included in this aggregate target)
 check-templates: ## Check if .claude/ templates are properly linked
 	@echo "Checking template symlinks..."
+	@test -f aida-core/templates/hooks/aida-sync-agent-skills.sh || { echo "MISSING: portable-pack hook master"; exit 1; }
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \
@@ -482,6 +566,9 @@ check-templates: ## Check if .claude/ templates are properly linked
 		fi; \
 	else \
 		echo "  MISSING: $$target (run: ln -sf ../../aida-core/templates/plan-template.md docs/plans/_TEMPLATE.md)"; \
+		errors=1; \
+	fi; \
+	if ! $(MAKE) --no-print-directory check-agent-skills; then \
 		errors=1; \
 	fi; \
 	if [ $$errors -eq 1 ]; then \

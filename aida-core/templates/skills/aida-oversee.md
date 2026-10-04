@@ -51,6 +51,13 @@ aida supervise watch --objective <OBJECTIVE>            # dry-run report
 aida supervise watch --objective <OBJECTIVE> --execute  # realign + reflexes
 ```
 
+The re-drive reflex in `--execute` is the night shift's re-drive step: it
+does nothing unless re-drive is turned on for this clone (`redrive = true` in
+the local shift layer, off by default per ADR-26), it keeps every floor (no
+live drain or wave, no tripped breaker, no merge hold, explicit drain mode,
+not keystone, not needs-human), and it only re-queues a transient park for
+the next drain wave. It never launches a drive or forces a claim.
+
 For a continuous watch, add `--interval <secs>` (a single agent turn should run
 one pass and reason about it, not block on a sleep loop — schedule the next pass
 rather than hanging).

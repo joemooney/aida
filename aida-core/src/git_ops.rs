@@ -64,6 +64,37 @@ pub fn is_git_repo(path: &Path) -> bool {
 /// resolves the private exclude file for both main and linked worktrees.
 // trace:BUG-914 | ai:codex
 pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
+    let exclude_path = resolve_exclude_path(worktree)?;
+    append_exclude_entries(
+        &exclude_path,
+        &[
+            ".aida/",
+            ".aida-store",
+            ".aida-store/",
+            ".aida-compete-*.log",
+        ],
+    )
+}
+
+/// Exclude the store's runtime lock files (`.aida/*.lock`, e.g. the store
+/// write lock) from git in a store worktree, so `git add -A` (db sync,
+/// auto-push) can never commit them, even in a store whose `.gitignore`
+/// lacks the pattern. Idempotent; returns whether it wrote anything.
+///
+/// Only this one anchored pattern belongs here. The store is usually a
+/// linked worktree of the PROJECT repo, so `info/exclude` resolves to the
+/// project's shared common dir: anything written here applies to the user's
+/// whole project, not just the store. Store-scoped ignores (the atomic-write
+/// staging files, for example) go in the store's tracked `.gitignore`.
+// trace:BUG-1612 trace:BUG-1677 | ai:claude
+pub fn ensure_store_lock_excluded(store_root: &Path) -> Result<bool> {
+    let exclude_path = resolve_exclude_path(store_root)?;
+    append_exclude_entries(&exclude_path, &[".aida/*.lock"])
+}
+
+/// `git rev-parse --git-path info/exclude`, absolutized.
+// trace:BUG-914 trace:BUG-1612 | ai:claude
+fn resolve_exclude_path(worktree: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
         .current_dir(worktree)
         .args(["rev-parse", "--git-path", "info/exclude"])
@@ -85,26 +116,26 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
     if raw.is_empty() {
         anyhow::bail!("git returned an empty path for info/exclude");
     }
-    let exclude_path = if Path::new(&raw).is_absolute() {
+    Ok(if Path::new(&raw).is_absolute() {
         PathBuf::from(raw)
     } else {
         worktree.join(raw)
-    };
-
-    append_exclude_entries(
-        &exclude_path,
-        &[
-            ".aida/",
-            ".aida-store",
-            ".aida-store/",
-            ".aida-compete-*.log",
-        ],
-    )
+    })
 }
 
 // trace:BUG-914 | ai:codex
 fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool> {
-    let existing = crate::read_atomic(exclude_path).unwrap_or_default();
+    // An absent exclude file is empty; any other read failure is an error,
+    // because this function rewrites the whole file and must never replace a
+    // user's exclude file with only its own entries.
+    // trace:BUG-1677 | ai:claude
+    let existing = match crate::read_atomic(exclude_path) {
+        Ok(existing) => existing,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(e).with_context(|| format!("read {}", exclude_path.display()));
+        }
+    };
     let mut contents = existing.clone();
     let mut changed = false;
     for entry in entries {
@@ -230,7 +261,9 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
 /// Push to the remote. Returns true on success, false if rejected (non-fast-forward).
 pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // external-prose-classifier: git_ops::push
-    let result = git(repo, &["push", remote, branch])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(repo, &["push", "--end-of-options", remote, branch])?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -243,9 +276,34 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     }
 }
 
+/// Refuse a dash-led `value` that git would read as an option. Used where
+/// `--end-of-options` is not honored end to end, e.g. `git pull`, which
+/// forwards its remote and branch to `git fetch` without the marker.
+/// Mirrors `aida-cli-lib`'s `git_arg_guard::reject_option_like`.
+// trace:BUG-1624 | ai:claude
+pub fn reject_option_like(what: &str, value: &str) -> Result<()> {
+    if value.trim_start().starts_with('-') {
+        anyhow::bail!(
+            "invalid {what} value `{}`: it starts with `-`, so git would read it as an option",
+            value.trim()
+        );
+    }
+    Ok(())
+}
+
 /// Pull with rebase from remote.
 pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    let result = git(repo, &["pull", "--rebase", remote, branch])?;
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
+    let result = git(
+        repo,
+        &["pull", "--rebase", "--end-of-options", remote, branch],
+    )?;
     if !result.success {
         // A failed pull may have started a rebase and detached HEAD.  Never
         // leave the managed store in that state: later writers could commit
@@ -294,7 +352,17 @@ pub enum StorePullOutcome {
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
 #[cfg(feature = "native")]
 pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
-    let result = git(repo, &["pull", "--rebase", remote, branch])?;
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
+    let result = git(
+        repo,
+        &["pull", "--rebase", "--end-of-options", remote, branch],
+    )?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -737,7 +805,11 @@ fn merge_in_progress(repo: &Path) -> bool {
 // trace:BUG-714 | ai:claude
 #[cfg(feature = "native")]
 pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullOutcome> {
-    let result = git(repo, &["merge", "--no-ff", "-m", message, ref_])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &["merge", "--no-ff", "-m", message, "--end-of-options", ref_],
+    )?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -946,7 +1018,14 @@ pub fn pick_last_writer(ours: Option<&str>, theirs: Option<&str>) -> (&'static s
     note = "use pull_rebase — bare `git pull` fails on divergent branches without pull.rebase config"
 )]
 pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    let result = git(repo, &["pull", remote, branch])?;
+    // `--end-of-options` only ends `git pull`'s own option parsing: pull
+    // hands the remote and branch to `git fetch` without the marker, so a
+    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
+    // fetch option. Refuse it before git runs; the marker stays for pull's
+    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+    reject_option_like("remote", remote)?;
+    reject_option_like("branch", branch)?;
+    let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);
     }
@@ -1000,8 +1079,53 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
     // 1 when it is not, and 128 on a bad object. Our `git` wrapper only exposes
     // success/failure; non-zero (not-ancestor OR error) both mean "don't trust
     // an incremental diff" → false.
-    let result = git(repo, &["merge-base", "--is-ancestor", ancestor, descendant])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo,
+        &[
+            "merge-base",
+            "--is-ancestor",
+            "--end-of-options",
+            ancestor,
+            descendant,
+        ],
+    )?;
     Ok(result.success)
+}
+
+/// The root commits (commits with no parent) reachable from `rev`, sorted.
+///
+/// A store can carry more than one root after syncs join unrelated
+/// histories, so identity is the whole sorted set, not a single SHA.
+// trace:TASK-1507 | ai:claude
+pub fn root_commits(repo: &Path, rev: &str) -> Result<Vec<String>> {
+    let result = git(repo, &["rev-list", "--max-parents=0", rev])?;
+    if !result.success {
+        anyhow::bail!("git rev-list --max-parents=0 failed: {}", result.stderr);
+    }
+    let mut roots: Vec<String> = result
+        .stdout
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(String::from)
+        .collect();
+    roots.sort();
+    Ok(roots)
+}
+
+/// Number of commits in a revision range such as `A..B`.
+// trace:TASK-1507 | ai:claude
+pub fn rev_list_count(repo: &Path, range: &str) -> Result<usize> {
+    let result = git(repo, &["rev-list", "--count", range])?;
+    if !result.success {
+        anyhow::bail!("git rev-list --count {range} failed: {}", result.stderr);
+    }
+    result
+        .stdout
+        .trim()
+        .parse::<usize>()
+        .with_context(|| format!("unexpected rev-list --count output: {}", result.stdout))
 }
 
 /// List the spec-object YAML files that changed between `from` and `to`,
@@ -1026,6 +1150,8 @@ pub fn changed_object_files(
             "diff",
             "--no-renames",
             "--name-status",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             from,
             to,
             "--",
@@ -1504,7 +1630,11 @@ pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Resul
     // (a manually-deleted dir leaves a dangling registration). trace:BUG-39
     let _ = git(repo_root, &["worktree", "prune"]);
     let path_str = path.to_string_lossy();
-    let result = git(repo_root, &["worktree", "add", "--detach", &path_str, ref_])?;
+    // trace:BUG-1622 | ai:claude
+    let result = git(
+        repo_root,
+        &["worktree", "add", "--detach", "--", &path_str, ref_],
+    )?;
     if !result.success {
         anyhow::bail!(
             "failed to add pool worktree at {}: {}",
@@ -1656,7 +1786,15 @@ pub fn submodule_init_command(worktree_path: &Path) -> String {
 /// the compiled cache that makes the pool *warm* is preserved.
 // trace:STORY-714 trace:BUG-553 | ai:claude
 pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
-    let co = git(worktree_path, &["checkout", "--detach", "--force", ref_])?;
+    // `checkout` and `reset` lack `--end-of-options` support on git 2.43:
+    // refuse a dash-led ref and pin it with a trailing `--`. // trace:BUG-1622 | ai:claude
+    if ref_.trim_start().starts_with('-') {
+        anyhow::bail!("refusing to reset onto `{ref_}`: a ref cannot start with `-`");
+    }
+    let co = git(
+        worktree_path,
+        &["checkout", "--detach", "--force", ref_, "--"],
+    )?;
     if !co.success {
         anyhow::bail!(
             "failed to detach worktree {} onto {}: {}",
@@ -1665,7 +1803,7 @@ pub fn reset_worktree_to(worktree_path: &Path, ref_: &str) -> Result<()> {
             co.stderr
         );
     }
-    let reset = git(worktree_path, &["reset", "--hard", ref_])?;
+    let reset = git(worktree_path, &["reset", "--hard", ref_, "--"])?;
     if !reset.success {
         anyhow::bail!(
             "failed to hard-reset worktree {}: {}",
@@ -1881,9 +2019,11 @@ pub fn worktree_head_sha(worktree_path: &Path) -> Option<String> {
 pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -> Result<()> {
     let path_str = worktree_path.to_string_lossy();
     let mut args: Vec<&str> = vec!["worktree", "remove"];
+    // `--` below keeps a dash-led path a path. trace:BUG-1622 | ai:claude
     if force {
         args.push("--force");
     }
+    args.push("--");
     args.push(&path_str);
     let result = git(repo_root, &args)?;
     if !result.success {
@@ -1893,7 +2033,9 @@ pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -
             result.stderr
         );
     }
-    let _ = git(repo_root, &["worktree", "prune"]);
+    // trace:TASK-1543: do not run repo-wide `git worktree prune` here;
+    // `git worktree remove` already removed this worktree, and a prune would
+    // clear another session's temporarily unavailable worktree registration.
     Ok(())
 }
 
@@ -1914,7 +2056,8 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
 /// metadata want the URL, not just its existence.
 // trace:STORY-781 | ai:claude
 pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
-    let r = git(repo, &["remote", "get-url", remote]).ok()?;
+    // trace:BUG-1622 | ai:claude
+    let r = git(repo, &["remote", "get-url", "--end-of-options", remote]).ok()?;
     if !r.success {
         return None;
     }
@@ -1923,7 +2066,8 @@ pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
 }
 
 pub fn has_remote(repo: &Path, remote: &str) -> bool {
-    git(repo, &["remote", "get-url", remote])
+    // trace:BUG-1622 | ai:claude
+    git(repo, &["remote", "get-url", "--end-of-options", remote])
         .map(|r| r.success)
         .unwrap_or(false)
 }
@@ -1935,7 +2079,8 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
 /// "can't tell" as "not known-empty" and don't take empty-origin-only paths.
 /// trace:TASK-844 | ai:claude
 pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
-    match git(repo, &["ls-remote", "--heads", remote]) {
+    // trace:BUG-1622 | ai:claude
+    match git(repo, &["ls-remote", "--heads", "--end-of-options", remote]) {
         Ok(r) if r.success => r.stdout.trim().is_empty(),
         _ => false,
     }
@@ -1951,6 +2096,8 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
         &[
             "ls-remote",
             "--exit-code",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             remote,
             &format!("refs/heads/{}", branch),
         ],
@@ -1971,7 +2118,13 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
     let r = git(
         repo,
-        &["ls-remote", remote, &format!("refs/heads/{}", branch)],
+        // trace:BUG-1622 | ai:claude
+        &[
+            "ls-remote",
+            "--end-of-options",
+            remote,
+            &format!("refs/heads/{}", branch),
+        ],
     )
     .ok()?;
     if !r.success {
@@ -2019,6 +2172,8 @@ pub fn ahead_behind(repo: &Path, left: &str, right: &str) -> Option<(u32, u32)> 
             "rev-list",
             "--left-right",
             "--count",
+            // trace:BUG-1622 | ai:claude
+            "--end-of-options",
             &format!("{left}...{right}"),
         ],
     )
@@ -2038,7 +2193,9 @@ pub fn ahead_behind(repo: &Path, left: &str, right: &str) -> Option<(u32, u32)> 
 /// trace:EPIC-1-052 Phase 4 | ai:claude
 pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     let refspec = format!("{}:{}", branch, branch);
-    let result = git(repo, &["fetch", remote, &refspec])?;
+    // `--end-of-options` keeps a dash-led remote or branch from reading as
+    // an option. trace:BUG-1622 | ai:claude
+    let result = git(repo, &["fetch", "--end-of-options", remote, &refspec])?;
     if !result.success {
         anyhow::bail!("git fetch {} {} failed: {}", remote, refspec, result.stderr);
     }
@@ -2065,7 +2222,13 @@ pub fn local_branch_exists(repo: &Path, branch: &str) -> bool {
 /// doesn't exist or the working tree can't be switched.
 /// trace:BUG-559 | ai:claude
 pub fn checkout_branch(repo: &Path, branch: &str) -> Result<()> {
-    let result = git(repo, &["checkout", branch])?;
+    // A dash-led branch would read as an option. trace:BUG-1622 | ai:claude
+    if branch.trim_start().starts_with('-') {
+        anyhow::bail!("refusing to check out `{branch}`: a branch name cannot start with `-`");
+    }
+    // `git checkout` has no `--end-of-options` support on git 2.43; the
+    // trailing `--` pins the name as a branch rather than a pathspec.
+    let result = git(repo, &["checkout", branch, "--"])?;
     if !result.success {
         anyhow::bail!("git checkout {} failed: {}", branch, result.stderr);
     }
@@ -2467,19 +2630,19 @@ pub const REDACTED_EMAIL_PLACEHOLDER: &str = "redacted@node.invalid";
 /// Read `[node] public_hostname` / `public_email` from the machine-global
 /// `~/.aida/config.toml` (honoring `AIDA_TEST_HOME` for tests). Returns
 /// `(None, None)` when the file/keys are absent — redaction is strictly
-/// opt-in. `dirs` is an optional dep here, so home is resolved from the
-/// environment to stay feature-gate-free.
+/// opt-in. Home resolution delegates to [`crate::home::home_dir`], which
+/// checks the environment before its platform-specific fallback.
 // trace:BUG-715 | ai:claude
 fn read_public_identity() -> (Option<String>, Option<String>) {
+    // trace:TASK-1513 | ai:claude
     let home = std::env::var_os("AIDA_TEST_HOME")
-        .or_else(|| std::env::var_os("HOME"))
-        .or_else(|| std::env::var_os("USERPROFILE"));
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(crate::home::home_dir);
     let Some(home) = home else {
         return (None, None);
     };
-    let path = std::path::PathBuf::from(home)
-        .join(".aida")
-        .join("config.toml");
+    let path = home.join(".aida").join("config.toml");
     // TASK-346: read_atomic (not bare fs::read_to_string) on a concurrent config
     // path — retries the Windows transient-open race. Enforced by the
     // fs_atomic guard test. trace:BUG-715 | ai:claude
@@ -3590,6 +3753,24 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    // trace:BUG-1677 | ai:claude — an exclude file that exists but cannot be
+    // read must not be treated as empty and overwritten with only our entries.
+    #[test]
+    fn bug_1677_append_exclude_entries_refuses_an_unreadable_exclude_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exclude_path = tmp.path().join("info").join("exclude");
+        std::fs::create_dir_all(&exclude_path).unwrap();
+        let err = append_exclude_entries(&exclude_path, &[".aida/*.lock"]).unwrap_err();
+        assert!(err.to_string().contains("read "), "{err:#}");
+        assert!(exclude_path.is_dir(), "nothing may be written over it");
+        assert!(std::fs::read_dir(&exclude_path).unwrap().next().is_none());
+
+        // The absent case is still the empty file: entries are appended.
+        let fresh = tmp.path().join("fresh").join("exclude");
+        assert!(append_exclude_entries(&fresh, &[".aida/*.lock"]).unwrap());
+        assert_eq!(std::fs::read_to_string(&fresh).unwrap(), ".aida/*.lock\n");
     }
 
     #[test]
@@ -5842,5 +6023,52 @@ mod tests {
         // trace:BUG-1283 | ai:claude
         let restored_blob = git(&second, &["show", "HEAD:shared.yaml"]).unwrap().stdout;
         assert_eq!(restored_blob, "value: local");
+    }
+
+    /// `git pull` forwards its remote and branch to `git fetch` without
+    /// `--end-of-options`, so the pull helpers refuse a dash-led value before
+    /// git runs: an `--upload-pack=<cmd>` payload in either slot runs nothing.
+    // trace:BUG-1624 | ai:claude
+    #[test]
+    #[allow(deprecated)]
+    fn pull_helpers_refuse_option_like_remote_or_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        git(&repo, &["checkout", "-b", "aida-store"]).unwrap();
+        std::fs::write(repo.join("a.yaml"), "a: 1\n").unwrap();
+        add(&repo, &["a.yaml"]).unwrap();
+        commit(&repo, "seed").unwrap();
+        git(&repo, &["remote", "add", "origin", "."]).unwrap();
+        let before = head_sha(&repo).unwrap();
+
+        let payload = "--upload-pack=touch pwned;false";
+        let padded = "  --upload-pack=touch pwned;false";
+        for (remote, branch) in [
+            ("origin", payload),
+            (payload, "aida-store"),
+            ("origin", padded),
+        ] {
+            let errs = vec![
+                pull_rebase(&repo, remote, branch).unwrap_err().to_string(),
+                pull(&repo, remote, branch).unwrap_err().to_string(),
+                #[cfg(feature = "native")]
+                pull_rebase_auto_merge(&repo, remote, branch)
+                    .unwrap_err()
+                    .to_string(),
+            ];
+            for err in errs {
+                assert!(err.contains("starts with `-`"), "{err}");
+            }
+            assert!(
+                !repo.join("pwned").exists(),
+                "git ran the upload-pack payload"
+            );
+        }
+        assert_eq!(head_sha(&repo).unwrap(), before);
+        // An ordinary pull still works.
+        pull_rebase(&repo, "origin", "aida-store").unwrap();
+        assert!(reject_option_like("branch", "main").is_ok());
     }
 }

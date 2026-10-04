@@ -154,6 +154,24 @@ pub fn error_block(summary: &str, help: Option<&str>) -> String {
     out
 }
 
+/// [`error_block`] for an error that carries several ways forward: the same
+/// always-quoted `error:` summary, then a `help[N]:` list with one escaped item
+/// per line. Used when a single suggested command would mislead, e.g. the
+/// no-project refusal, where offering only `aida init` could send an agent off
+/// to initialise a stray project instead of naming the store it meant.
+// trace:TASK-1486 | ai:claude
+pub fn error_block_with_help_list(summary: &str, help: &[String]) -> String {
+    let mut out = scalar_quoted("error", summary);
+    if !help.is_empty() {
+        out.push_str(&format!("\nhelp[{}]:", help.len()));
+        for item in help {
+            out.push_str("\n  - ");
+            out.push_str(&escape(item));
+        }
+    }
+    out
+}
+
 /// A column in a TOON table: a stable field `name` plus a projection from a row
 /// `T` to its cell string. The port of the `toon.ts` `FieldDef`. The wired call
 /// sites use [`table_raw`] (they project through closures that capture per-call

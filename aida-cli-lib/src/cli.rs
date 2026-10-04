@@ -166,10 +166,26 @@ pub enum InternalCommand {
     /// session that is not worktree-scoped.
     // trace:TASK-1178 | ai:claude
     WorktreeScopeGate,
+
+    /// Query effective solo mode for the Claude advisor-code-guard PreToolUse
+    /// hook. Exits 0 when solo mode is active and 1 when it is off; prints
+    /// nothing.
+    // trace:BUG-1748 | ai:codex
+    SoloActive,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
+    /// Inspect or provision the three repository-level merge-hold label definitions.
+    // trace:BUG-1747 | ai:codex
+    Labels {
+        /// Create any definitions that are missing from this repository.
+        #[clap(long)]
+        create_missing: bool,
+        /// Emit one JSON document.
+        #[clap(long)]
+        json: bool,
+    },
     /// List every active merge-hold: marker-backed holds AND holds that exist
     /// only as the `aida:merge-hold` label (shown as `label-only (no marker)`).
     /// Each row is the held PR + the hold reason. A marker whose PR merged or
@@ -265,7 +281,11 @@ pub enum ServerCommand {
 
     /// List requirements from server
     List {
-        /// Filter by status
+        /// Filter by status (exact match on a single stored status; the
+        /// server-side filter accepts no comma sets, aliases, or lenses)
+        // trace:BUG-1771 | ai:claude — the REST filter is an exact match on
+        // the Debug-formatted status, so this surface must not advertise the
+        // local list command's set/alias/lens syntax.
         #[clap(long)]
         status: Option<String>,
 
@@ -529,8 +549,12 @@ pub enum MetricsCommand {
     /// Reads `~/.aida/auto-complete.jsonl` + `~/.aida/usage.jsonl`.
     // trace:STORY-477 | ai:claude
     AgentLift {
-        /// Report over the last N days/hours/minutes (e.g. `30d`, `12h`).
+        /// Report over this window: a relative duration (`30d`, `12h`, `2w`,
+        /// `45m`, or `24 hours ago`), an ISO date (`2026-05-01`, local
+        /// midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local
+        /// time), or RFC3339.
         // trace:STORY-477 | ai:claude
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW", default_value = "30d")]
         since: String,
         /// Emit Markdown — suitable for pasting into release notes or a case
@@ -541,6 +565,42 @@ pub enum MetricsCommand {
         /// Emit a JSON object with the computed signals for machine consumers.
         // trace:STORY-477 | ai:claude
         #[clap(long, conflicts_with = "markdown")]
+        json: bool,
+    },
+    /// Aggregate cycle-time breakdown across every requirement completed in
+    /// the window: per-activity count/p50/p90/total, the overall work vs wait
+    /// vs unknown split, rework signals (CI failure rate, reviewer bounces,
+    /// implementer passes, shelves), and the slowest items with their
+    /// dominant span. Each item's timeline is rebuilt the way `aida history
+    /// <ID> --timeline` builds it, from the store's transitions and the local
+    /// drain feed; forge timestamps are not fetched, so the view stays fast
+    /// and offline. Items with no usable data are excluded and counted, with
+    /// the reason. Renders human, TOON and JSON.
+    // trace:STORY-1479 | ai:claude — plain `//` keeps the marker out of `--help`.
+    CycleTime {
+        /// Aggregate requirements completed since this point: a relative
+        /// duration (`7d`, `12h`, `2w`, `45m`, or `24 hours ago`), an ISO
+        /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or RFC3339.
+        #[clap(long, value_name = "WINDOW", default_value = "7d")]
+        since: String,
+        /// Only requirements completed before this point. Same forms as
+        /// `--since`; rejected if it resolves earlier than `--since`.
+        #[clap(long, value_name = "WINDOW")]
+        until: Option<String>,
+        /// Only requirements of this type (story, task, bug, …).
+        #[clap(long = "type", value_name = "TYPE")]
+        req_type: Option<String>,
+        /// Comma-separated tag filter; a requirement must carry every listed
+        /// tag (case-insensitive).
+        #[clap(long, value_name = "TAGS", value_delimiter = ',')]
+        tags: Vec<String>,
+        /// How many of the slowest requirements to list.
+        #[clap(long, value_name = "N", default_value = "5")]
+        slowest: usize,
+        /// Emit a JSON object with the aggregate breakdown. `--format json`
+        /// is the same.
+        #[clap(long)]
         json: bool,
     },
     /// AI-lift signals over the git commit corpus: trailer coverage over time,
@@ -573,9 +633,11 @@ pub enum FieldStudyCommand {
     /// field-study log. Idempotent — a commit already recorded is skipped.
     // trace:SPIKE-67 | ai:claude
     Scan {
-        /// Git revision range to scan (e.g. `HEAD~200`, a tag, `--since`-style
-        /// rev). Default: the most recent commits up to `--limit`.
+        /// Git revision range to scan (e.g. `HEAD~200`, a tag, `v1.0..HEAD`).
+        /// A value starting with `-` is refused. Default: the most recent
+        /// commits up to `--limit`.
         // trace:SPIKE-67 | ai:claude
+        // trace:BUG-1622 | ai:claude
         #[clap(long, value_name = "REV")]
         since: Option<String>,
         /// Cap how many commits are inspected. Default 200.
@@ -697,8 +759,8 @@ pub enum ScaffoldCommand {
     /// Write legacy Codex prompt bodies to ~/.codex/prompts.
     ///
     /// Current Codex CLI releases do not discover these files as `/aida-*`
-    /// slash commands. For interactive Codex sessions, use scaffolded
-    /// `.codex/skills/` via `/skills` or `$aida-*`, or run the matching
+    /// slash commands. For interactive Codex sessions, use the project's
+    /// `.agents/skills/` via `/skills` or `$aida-*`, or run the matching
     /// `aida ...` CLI verb directly. On Codex >=0.142 this command prints that
     /// warning and skips writing the dead prompt surface.
     // trace:BUG-1095 | ai:codex
@@ -756,7 +818,7 @@ pub enum ScaffoldCommand {
     ///
     /// Per category (see `docs/plans/2026-05-04-scaffold-categorization.md`):
     ///   - **template** (`.claude/skills/*`, `.claude/commands/*`,
-    ///     `.claude/hooks/*`, `.claude/AIDA.md`, `.codex/skills/**`,
+    ///     `.claude/hooks/*`, `.claude/AIDA.md`, `.agents/skills/aida-*/**`,
     ///     `.git/hooks/commit-msg`) — AIDA-owned; drifted files are
     ///     overwritten with the embedded template.
     ///   - **seed** (CLAUDE.md, AGENTS.md) — user-owned post-init;
@@ -900,7 +962,7 @@ pub enum ReviewCommand {
     /// Record `--verdict approved` after a follow-up review to clear it.
     // trace:BUG-775 | ai:claude
     Record {
-        /// Spec the verdict applies to (e.g. TASK-5).
+        /// Spec the verdict applies to.
         spec: String,
 
         /// The verdict: approved, request-changes, or rejected.
@@ -999,7 +1061,9 @@ pub enum ReviewCommand {
     // trace:STORY-1417 | ai:claude
     Classes {
         /// Only count rounds recorded since this point: a relative window
-        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        /// (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         #[clap(long, value_name = "WHEN")]
         since: Option<String>,
 
@@ -1030,8 +1094,18 @@ pub enum ReviewCommand {
         /// Explicit opt-in remediation: hold the PR and park the spec in
         /// Needs Attention. Idempotent — a spec already protected is left
         /// alone, so a second run changes nothing.
-        #[clap(long)]
+        #[clap(long, conflicts_with = "age")]
         fix: bool,
+
+        /// Offline staleness report instead of the (forge-backed) sweep
+        /// above: every spec whose last review verdict still blocks done and
+        /// whose branch — checked against LOCAL git only, no network call —
+        /// shows no newer commit since the reviewed commit. Sorted oldest
+        /// refusal first, each row carrying the measured stall time (or
+        /// "unknown" when it can't be established).
+        // trace:TASK-1423 | ai:claude
+        #[clap(long, conflicts_with = "fix")]
+        age: bool,
     },
 
     /// Turn a temporary review mode on or off, or show its state.
@@ -1130,15 +1204,15 @@ pub enum TriageCommand {
     },
 }
 
-/// Advisor-directed worktree lock (STORY-711 slice 1, generalizes BUG-637).
+/// Advisor-directed worktree lock.
 ///
 /// Binds a worktree to an authorizing advisor by stamping `authorized_by` on
-/// the session lease that covers it (extends the existing lease registry —
-/// no new lock directory). Slice 1 is a MANUAL bouncer: nothing today refuses
+/// the session lease that covers it (it reuses the existing lease registry —
+/// no new lock directory). The lock is a manual check: nothing refuses
 /// automatically on a mismatched lock — an agent (or a script) opts in by
-/// running `aida lock verify` itself and branching on the exit code. The
-/// automatic pre-work gate is slice 2, a separate change.
+/// running `aida lock verify` itself and branching on the exit code.
 // trace:STORY-711 | ai:claude
+// trace:BUG-637 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum LockCommand {
     /// Authorize a worktree: stamp `authorized_by = <advisor>` on the session
@@ -1518,8 +1592,8 @@ pub enum SessionCommand {
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
         /// session matching the current cwd. Also accepts a SPEC-ID
-        /// (e.g. `TASK-489` — treated as `--spec`) or a branch name
-        /// (e.g. `task-489` — treated as `--branch`) when the lease
+        /// (e.g. `TASK-<n>` — treated as `--spec`) or a branch name
+        /// (e.g. `task-<n>` — treated as `--branch`) when the lease
         /// covering cwd isn't the one you want to end.
         // trace:TASK-489 | ai:claude
         id: Option<String>,
@@ -1649,6 +1723,28 @@ pub enum SessionCommand {
         // trace:TASK-345 | ai:claude
         #[clap(long)]
         json: bool,
+        /// Release every CROSS-CLONE lease claim on the shared store that
+        /// the staleness predicate reports dead — past its own `ttl_secs`,
+        /// or (for a process-backed claim on this host) holding a pid whose
+        /// identity no longer matches. Prints scope + reason per release and
+        /// never touches a claim it reports live, so there is no `--force`.
+        /// This is the only supported way to clear one: `aida session end
+        /// --spec` cannot reach a foreign claim (it has no local lease) and
+        /// `aida session reap` requires the spec Done + the branch merged +
+        /// the process exited, so the alternative is deleting
+        /// `.aida-store/coordination/leases/*.toml` by hand. Opt-in by
+        /// design — releasing another clone's claim is a cross-clone
+        /// mutation, so it is never automatic.
+        // trace:BUG-1764 | ai:claude
+        #[clap(long)]
+        prune_stale: bool,
+        /// Skip the y/N confirmation for `--prune-stale`. Required to prune
+        /// non-interactively — a non-terminal stdin errors without it rather
+        /// than silently releasing another clone's claims, the same posture
+        /// `aida session end` takes.
+        // trace:BUG-1764 | ai:claude
+        #[clap(long, short = 'y')]
+        yes: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering
@@ -1679,6 +1775,24 @@ pub enum SessionCommand {
         /// Print the fresh-session vs compact recommendation.
         #[clap(long)]
         check: bool,
+
+        /// Write a seat handoff note from FILE (`-` reads stdin) under
+        /// `.aida/handoff/<seat>/` and update its `latest.md`. The note is
+        /// capped at ~4k tokens because it seeds the next session.
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, value_name = "FILE", conflicts_with_all = ["check", "show"])]
+        write: Option<String>,
+
+        /// Print the seat's latest handoff note (the seed for a fresh session).
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, conflicts_with = "check")]
+        show: bool,
+
+        /// The seat the handoff belongs to (advisor, reviewer, product, ...).
+        /// Defaults to `$AIDA_SESSION_ROLE`.
+        // trace:STORY-1464 | ai:claude
+        #[clap(long, value_name = "SEAT")]
+        seat: Option<String>,
     },
 
     /// Manage the planned-cluster manifest for the active session
@@ -1887,26 +2001,37 @@ pub enum SessionManifestCommand {
 // trace:STORY-90 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
-    /// File the reviewer story for the PR open on the current branch and
-    /// queue it to the `reviewer` role. Idempotent: skips when a
-    /// `Review PR-<n>:` story already exists for the PR. Detects the PR
-    /// via `gh pr list --head <branch>` (so `gh` must be on PATH and
-    /// authenticated).
+    /// File the reviewer story for the change (PR/MR) open on the current
+    /// branch and queue it to the `reviewer` role. Idempotent: skips when a
+    /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it.
+    /// Detects the change through the configured Forge — GitHub via `gh`
+    /// (looks up the branch's open PR), GitLab via `glab` (looks up the
+    /// branch's open MR) — so that provider's CLI must be on PATH and
+    /// authenticated.
     ///
-    /// Intended trigger: `/aida-pr` runs this right after `gh pr create`
-    /// succeeds — the agent already has the PR open, the commit range,
-    /// and the spec list cached, but the auto-queue logic does its own
-    /// gh detection so the call is self-contained.
+    /// Intended trigger: `/aida-pr` runs this right after the change opens
+    /// (`gh pr create` / `glab mr create`) — the agent already has it open,
+    /// the commit range, and the spec list cached, but the auto-queue logic
+    /// does its own forge detection so the call is self-contained.
     ///
     /// `aida session end` also fires this as a backup, so a forgotten
-    /// /aida-pr (or a raw `gh pr create`) still ends up routed to the
-    /// reviewer. The idempotency guard means both firing is fine.
-    // trace:STORY-90 | ai:claude
+    /// /aida-pr (or a raw `gh pr create` / `glab mr create`) still ends up
+    /// routed to the reviewer. The idempotency guard means both firing is
+    /// fine.
+    // trace:STORY-90 trace:BUG-1609 | ai:claude
     AutoQueueReview {
         /// Branch to look up the PR for. Defaults to the current
         /// branch via `git branch --show-current`.
         #[clap(long, value_name = "BRANCH")]
         branch: Option<String>,
+    },
+
+    /// List open PRs/MRs with their mapped spec IDs and rebase status.
+    #[clap(visible_alias = "mr")]
+    List {
+        /// Emit the list as a JSON array.
+        #[clap(long)]
+        json: bool,
     },
 
     /// Rebase a PR onto its base in a temporary worktree, then
@@ -2503,6 +2628,61 @@ pub enum BurndownCommand {
     },
 }
 
+/// The night shift: a scheduler-run tick that launches bounded drain waves
+/// while nobody is at the keyboard. Off unless enabled for this clone.
+// trace:STORY-1218 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum ShiftCommand {
+    /// Run one night-shift check: reap finished sessions, then launch the next
+    /// bounded drain wave only if every safety guard passes. Refusals exit 0.
+    /// Registered as the `night-shift` job of `aida schedule tick`; safe to run
+    /// by hand. Does nothing unless the night shift is enabled for this clone.
+    Tick {
+        /// Print the exact wave command, the specs it would include, every
+        /// guard with its value, and the enable source, then exit without
+        /// writing anything (no tags, no state, no event, no launch).
+        #[clap(long)]
+        dry_run: bool,
+        /// Emit the tick report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Show whether the night shift is on for this clone, where that setting
+    /// lives, which scheduler driver runs it (cron, systemd, or both), the last
+    /// check and wave, and the guard verdicts.
+    Status {
+        /// Emit JSON instead of text.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Turn the night shift on for THIS clone only. The switch is written to
+    /// `~/.aida/shift-local.toml` (keyed by this repo's path), never to the
+    /// committed project config, and the `night-shift` job is registered.
+    /// Needs a human at an interactive terminal and an explicit yes; an agent
+    /// session cannot enable it.
+    Enable,
+    /// Turn the night shift off for this clone.
+    Disable,
+    /// Allow launches again after the night shift stopped itself because
+    /// consecutive waves made no progress. Needs a human at an interactive
+    /// terminal and an explicit yes.
+    Resume,
+    /// Turn the night shift on for this clone AND install the scheduler driver
+    /// that runs it: `--systemd-user` (a systemd user timer, Linux) or
+    /// `--cron` (a crontab entry). Installing one driver removes this repo's
+    /// other one after the new one is verified. Needs a human at an
+    /// interactive terminal and an explicit yes.
+    // trace:TASK-1491 | ai:claude
+    Install {
+        /// Install a systemd user timer (Linux).
+        #[clap(long, conflicts_with = "cron", required_unless_present = "cron")]
+        systemd_user: bool,
+        /// Install a crontab entry.
+        #[clap(long)]
+        cron: bool,
+    },
+}
+
 /// Lightweight supervisor helpers for product/advisor stop-gap loops.
 // trace:STORY-1052 | ai:codex
 #[derive(Subcommand, Debug)]
@@ -2534,13 +2714,24 @@ pub enum SuperviseCommand {
     /// and surface only the items that need a human. Reads the substrate
     /// (events + store + queue) so it is safe to run with no agent awake; it
     /// never drives or merges. Default is a dry-run report; pass --execute to act.
-    // trace:STORY-1096 | ai:claude
+    ///
+    /// The redrive reflex is the night shift's re-drive step. It is off unless
+    /// this clone turns it on (`redrive = true` for this repo in
+    /// ~/.aida/shift-local.toml), keeps the shift's floors, and only puts
+    /// transient parks back in the queue for the next drain wave. An --execute
+    /// pass holds the night-shift lock while it re-drives, and a shift tick that
+    /// fires during that moment is skipped; avoid very short --interval values.
+    // trace:STORY-1096 trace:BUG-1621 trace:BUG-1623 | ai:claude
     Watch {
         /// The objective to keep work aligned to (an epic id). When omitted,
         /// falls back to the `[oversight] objective` config value.
         #[clap(long)]
         objective: Option<String>,
-        /// Actually realign the queue (default is a dry-run report of what it WOULD do).
+        /// Act instead of reporting: realign the queue, re-drive transient
+        /// parks (when re-drive is on for this clone), and nudge the advisor or
+        /// operator about stuck work. Default is a dry-run report of what it
+        /// WOULD do.
+        // trace:BUG-1623 | ai:claude
         #[clap(long)]
         execute: bool,
         /// Repeat the pass every N seconds (default: a single pass then exit).
@@ -2599,7 +2790,7 @@ pub enum DevCommand {
     /// Internal pre-build safety gate used by `make build-fast`.
     #[command(hide = true)]
     BuildGuard {
-        #[clap(value_parser = ["debug", "release"])]
+        #[clap(value_parser = ["debug", "release", "agent"])]
         profile: String,
         #[clap(long)]
         after_wave: bool,
@@ -2667,10 +2858,35 @@ pub enum DevCommand {
 #[derive(Subcommand, Debug)]
 pub enum CacheCommand {
     /// Force a full rebuild of the cache from the git store
-    Rebuild,
+    // trace:TASK-1507 | ai:claude
+    Rebuild {
+        /// Rebuild the history index (used by `aida history`) instead of the requirements cache
+        #[clap(long)]
+        history: bool,
+    },
 
     /// Show cache state (HEAD comparison, requirement count, last build time)
     Status,
+
+    /// Bring the cache current now; worker/scheduler forms drive the detached refresh protocol
+    // trace:TASK-1527 | ai:claude
+    Refresh {
+        /// Run as the detached refresh worker (internal; spawned automatically)
+        #[clap(long, hide = true)]
+        worker: bool,
+
+        /// Refresh only when a pending refresh request exists (for `aida schedule` jobs)
+        #[clap(long)]
+        if_requested: bool,
+
+        /// Explicit store root for the worker (internal; never inferred from the cwd)
+        #[clap(long, hide = true, value_name = "PATH")]
+        store: Option<std::path::PathBuf>,
+
+        /// Explicit cache database path for the worker (internal)
+        #[clap(long, hide = true, value_name = "PATH")]
+        cache: Option<std::path::PathBuf>,
+    },
 
     /// Cross-check every cached status against the git store and report drift
     // trace:BUG-771 | ai:claude
@@ -2685,16 +2901,18 @@ pub enum CacheCommand {
     },
 }
 
-/// Scoped git-worktree management — the EPIC-55 workspace layer, mirroring
-/// `git worktree`. Create-or-enter a per-epic workspace auto-scoped via
-/// `aida focus` (STORY-716), or a per-spec workspace that ALSO takes the
-/// implementer lease so a single spec can be worked by hand in one command,
-/// no agent launched (STORY-742).
+/// Scoped git-worktree management, mirroring `git worktree`. Create-or-enter
+/// a per-epic workspace auto-scoped via `aida focus`, or a per-spec
+/// workspace that ALSO takes the implementer lease so a single spec can be
+/// worked by hand in one command, no agent launched.
 ///
-/// STORY-714's warm-pool surface (`aida worktree pool status`) and tiered
-/// removal (`aida worktree remove`) land as sibling variants under this enum
-/// later — the surface is shaped to leave room for them.
-// trace:STORY-716 trace:STORY-742 | ai:claude
+/// A planned warm-pool surface (`aida worktree pool status`) and tiered
+/// removal (`aida worktree remove`) are expected to land as sibling variants
+/// under this enum later — the surface is shaped to leave room for them.
+// trace:EPIC-55 | ai:claude
+// trace:STORY-716 | ai:claude
+// trace:STORY-742 | ai:claude
+// trace:STORY-714 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum WorktreeCommand {
     /// Create a git worktree off origin/main and auto-scope it via `aida focus`.
@@ -2706,8 +2924,8 @@ pub enum WorktreeCommand {
     /// `git worktree add`). Idempotent: an existing worktree/lease is reported +
     /// its focus re-affirmed, not re-created.
     Add {
-        /// The epic or spec to scope the worktree to (e.g. `EPIC-54`,
-        /// `STORY-88`). Also the basis for the default path slug and branch.
+        /// The epic or spec to scope the worktree to. Also the basis for
+        /// the default path slug and branch.
         #[clap(value_name = "EPIC_OR_SPEC")]
         target: String,
         /// Override the worktree path (default `~/ai/aida-<slug>`).
@@ -2774,6 +2992,48 @@ pub enum WorktreeCommand {
         /// delete their local branches. Still refused in unattended contexts.
         #[clap(long)]
         force: bool,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Reclaim disk by deleting stale `target/` build caches inside this
+    /// repository's worktrees. A `target/` is a cache, never a source of truth
+    /// — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports
+    /// reclaimable bytes and every worktree it held back, and deletes only with
+    /// `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim`
+    /// removes the regenerable cache inside worktrees that are KEPT, which is
+    /// the space `aida session reap` cannot reach and `cargo clean` targets
+    /// wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e.
+    /// the main checkout's live cache, not the stale one). The main checkout's
+    /// `target/` is never a candidate; nor is `.aida-store`, a worktree held by
+    /// a live session, a worktree whose branch has an open PR, or a cache
+    /// touched in the last `--min-age-mins` minutes.
+    // trace:TASK-1562 | ai:claude
+    Reclaim {
+        /// Actually delete. Without this the command only reports.
+        #[clap(long)]
+        apply: bool,
+
+        /// Treat a `target/` touched within this many minutes as a possible
+        /// in-flight build and skip it.
+        #[clap(long, value_name = "MINS", default_value_t = 60)]
+        min_age_mins: u64,
+
+        /// Stop deleting once the filesystem is at or below this used
+        /// percentage, leaving the remaining caches warm.
+        #[clap(long, value_name = "PCT")]
+        target_pct: Option<u8>,
+
+        /// Also reclaim worktrees held by a live session lease.
+        #[clap(long)]
+        include_live: bool,
+
+        /// Also reclaim worktrees whose branch has an open pull request. Also
+        /// waives the fail-safe hold applied when open-PR state cannot be read.
+        #[clap(long)]
+        include_open_prs: bool,
 
         /// Emit machine-readable JSON.
         #[clap(long)]
@@ -3244,7 +3504,10 @@ pub enum MailboxCommand {
         /// Message id to archive. Must already be read by the target inbox.
         message_id: Option<String>,
 
-        /// Sweep read mail older than the given duration (e.g. 30d, 12h).
+        /// Sweep read mail older than this point: a relative duration (`30d`,
+        /// `12h`, `2w`, or `24 hours ago`), an ISO date (`2026-05-01`, local
+        /// midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, conflicts_with = "message_id")]
         older_than: Option<String>,
 
@@ -3260,7 +3523,9 @@ pub enum MailboxCommand {
     /// Maintenance alias for `archive --older-than ... --read-only`.
     // trace:TASK-1211 | ai:codex
     Gc {
-        /// Sweep read mail older than the given duration (default: 30d).
+        /// Sweep read mail older than this point (default: 30d). Same forms
+        /// as `aida mail archive --older-than`.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, default_value = "30d")]
         older_than: String,
 
@@ -3352,15 +3617,32 @@ pub enum RemoteCommand {
 
     /// (plumbing) Fan the refs of an in-flight `git push` out to every mirror
     /// hub. The pre-push hook shim calls this with the pushed remote's name,
-    /// piping through the ref lines git feeds the hook on stdin. No-op unless
-    /// the push targets `origin`; skips the store branch (the store leg fans
-    /// out separately); always exits 0 so a mirror failure never blocks the
-    /// push.
-    // trace:TASK-1097 | ai:claude
+    /// piping through the ref lines git feeds the hook on stdin. Says why it
+    /// skipped when the push does not target `origin` or carries only the
+    /// store branch; exits non-zero when a mirror push fails (the hook shim
+    /// tolerates that, so the origin push is never blocked).
+    // trace:TASK-1097 trace:BUG-1676 | ai:claude
     #[clap(hide = true)]
     MirrorPush {
         /// The remote the triggering push targets (hook argument $1).
         pushed_remote: String,
+        /// Preview mirror updates without changing any mirror remote.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Push origin's tips of the default branch and the spec store to every
+    /// mirror hub, by sha. The pre-push hook only mirrors what this machine
+    /// pushes; a merge performed on the forge and a store push from another
+    /// clone never fire it, so mirrors drift. `aida pull` runs this after a
+    /// successful pull; run it by hand when `aida remote status` shows a hub
+    /// behind. Never force-pushes: a diverged hub is reported and exits
+    /// non-zero.
+    // trace:BUG-1676 | ai:claude
+    MirrorSync {
+        /// Emit machine-readable JSON instead of the report.
+        #[clap(long)]
+        json: bool,
     },
 
     /// Reconcile a diverged spec store across every configured hub: fetch each
@@ -3531,9 +3813,9 @@ pub enum DocCommand {
         audience: Option<String>,
     },
 
-    /// Show docs. If <id> is a Doc spec id (e.g., DOC-3), print the entry's
-    /// full detail. Otherwise treat <id> as a referenced spec and print
-    /// every Doc that mentions it via `--about`.
+    /// Show docs. If <id> is a Doc-type spec id, print the entry's full
+    /// detail. Otherwise treat <id> as a referenced spec and print every
+    /// Doc that mentions it via `--about`.
     Show {
         /// Doc spec id, or any other spec id to walk `--about` references.
         id: String,
@@ -3731,6 +4013,31 @@ pub enum DbCommand {
         /// decides which to keep.
         #[clap(long)]
         repair: bool,
+    },
+
+    /// Repair custom edges that graph traversals do not follow.
+    ///
+    /// Any edge stored as a custom type whose spelling resolves to a
+    /// standard relationship type (for example `related`, `depends-on`,
+    /// `verified_by` or `replaced_by`) is rewritten: when the source already
+    /// has an edge of that standard type to the same target the custom edge
+    /// is deleted, otherwise it is converted in place. Other custom edge
+    /// types (for example `implements` or a `sprint_*` label) are left
+    /// alone. Each changed spec is written with its own store commit, and
+    /// the command refuses to leave a spec holding two edges of the same
+    /// type to one target. Running it again after a successful run changes
+    /// nothing.
+    // trace:TASK-1426 | ai:claude
+    // trace:TASK-1488 | ai:claude
+    MigrateRelatedEdges {
+        /// Report the counts and the per-spec actions without writing
+        /// anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Emit the report as JSON.
+        #[clap(long)]
+        json: bool,
     },
 }
 
@@ -4390,7 +4697,10 @@ pub enum ConfigPermissionsCommand {
     },
 
     /// Apply a named agent permission posture to local or user config files.
+    /// `bypass` must be confirmed by a person at an interactive terminal; it is
+    /// refused when stdin or stdout is not a terminal.
     // trace:STORY-1128 | ai:codex
+    // trace:BUG-1667 | ai:claude
     Set {
         /// Permission posture to write.
         tier: ConfigPermissionTier,
@@ -4595,8 +4905,8 @@ pub enum RelationshipCommand {
     ///   aida rel add <from> <to> --type child
     ///   aida rel add --from <from> --to <to> --type child
     ///
-    /// Cross-store references such as `other-project#STORY-21` are not local
-    /// graph edges; record them in comments until AIDA has a resolver.
+    /// Cross-store references such as `other-project#<SPEC-ID>` are not
+    /// local graph edges; record them in comments until AIDA has a resolver.
     // trace:TASK-487 | ai:claude
     // trace:BUG-790 | ai:codex
     Add {
@@ -6485,7 +6795,9 @@ pub enum QueueCommand {
         #[clap(long, value_name = "NAME", conflicts_with = "session")]
         batch: Option<String>,
         /// Filter items to those modified after this timestamp
-        /// (RFC3339 or `<N>{d,h,m}` ago, e.g. `2d`, `12h`). Useful for
+        /// (RFC3339, an ISO date interpreted as local midnight, a zone-less
+        /// ISO datetime in local time, or `<N>{m,h,d,w}` ago, e.g. `2d`,
+        /// `12h`, `2w`, `24 hours ago`). Useful for
         /// "what changed since yesterday" snapshots when no manifest
         /// or batch tag applies.
         // trace:TASK-232 | ai:claude
@@ -6535,7 +6847,14 @@ pub enum QueueCommand {
     ///   Completed and Rejected additionally require `--force`, since
     ///     re-opening closed work is usually a mistake.
     ///   Reworking an already-InProgress spec WARNS and proceeds; `--force`
-    ///     silences the warning. It is not refused.
+    ///     silences the warning. It is refused only while another session
+    ///     holds a live claim on the spec, and `--force` does not override that.
+    ///
+    /// With no ID, triage the specs parked in Needs Attention: at a terminal,
+    /// each one shows what a requeue would do, then takes one key:
+    /// [r] requeue, [s] skip, [o] show, [d] decide (only when a decision is
+    /// open), [q] quit. Without a terminal it prints the requeue command for
+    /// each parked spec and exits 0.
     ///
     // The doc block above is a TABLE plus a literal three-command sequence;
     // clap reflows doc comments by default, which ran the rows together into
@@ -6545,8 +6864,10 @@ pub enum QueueCommand {
     #[clap(verbatim_doc_comment)]
     // trace:TASK-218 | ai:claude
     Rework {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
+        /// specs one keystroke each.
+        // trace:STORY-1429 | ai:claude
+        id: Option<String>,
         /// Also launch a session for the spec (chains `aida queue work`).
         /// Without this, rework is metadata-only: reset to a claimable status
         /// and queue it. With this, the launched session owns InProgress.
@@ -6953,7 +7274,9 @@ pub enum FindingsCommand {
     // trace:STORY-1417 | ai:claude
     Classes {
         /// Only count rounds recorded since this point: a relative window
-        /// (`30d`, `12h`, `45m`) or an RFC3339 timestamp.
+        /// (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         #[clap(long, value_name = "WHEN")]
         since: Option<String>,
 
@@ -7041,6 +7364,21 @@ pub enum FindingsCommand {
         // trace:TASK-579 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// Destination: `work` (the default — fix this instance) or `gate`
+        /// (gate the whole class). The gate destination is offered once the
+        /// finding's recurrence count reaches the promote threshold.
+        // trace:STORY-1428 | ai:claude
+        #[clap(long = "to", value_name = "DEST", default_value = "work")]
+        to: String,
+
+        /// Gate screening answer, required with `--to gate`: `mechanical`
+        /// (a violation is recognisable without judgement), `agent` (only an
+        /// agent could recognise it; its verdict is advisory), or `none`
+        /// (stays prose — recorded so the question is not re-opened).
+        // trace:STORY-1428 | ai:claude
+        #[clap(long, value_name = "ANSWER")]
+        detectable: Option<String>,
     },
 
     /// Calibration review surface — list cold-boot vs fork-from-live
@@ -7053,8 +7391,10 @@ pub enum FindingsCommand {
         #[clap(subcommand)]
         action: Option<CalibrationAction>,
 
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}` —
-        /// e.g. `7d`, `12h`, `2w`, `30m`.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
 
@@ -7165,9 +7505,11 @@ pub enum CalibrationSubcommand {
     /// recency.
     // trace:STORY-439 | ai:claude
     Mismatches {
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
-        /// — e.g. `7d`, `12h`, `2w`, `30m`. Filters by the newest
-        /// timestamp across the three slots.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or
+        /// RFC3339. Filters by the newest timestamp across the three slots.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Cap the rows printed. Default 50.
@@ -7193,8 +7535,10 @@ pub enum LoadCommand {
     /// Estimate-vs-actual effort deltas. `1d` is 8 work-hours; `1w`
     /// is 5 work-days / 40 work-hours.
     Calibration {
-        /// Restrict to records within the window. Form: `<N>{d,h,w,m}`
-        /// — e.g. `7d`, `12h`, `2w`, `30m`.
+        /// Restrict to records since this point: a relative window (`7d`,
+        /// `12h`, `2w`, `30m`, or `24 hours ago`), an ISO date (`2026-05-01`,
+        /// local midnight), a zone-less ISO datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Group deltas by requirement type.
@@ -7646,11 +7990,14 @@ pub enum HeadlessCommand {
         #[clap(long, short = 'n')]
         no_follow: bool,
 
-        /// Skip entries older than the given duration (e.g. `10m`, `2h`,
-        /// `1d`). Bare integers are interpreted as seconds. Compared
-        /// against `timestamp` fields when the event carries one; events
-        /// without a timestamp (assistant messages, system events) pass
-        /// through unfiltered.
+        /// Skip entries older than this point: a relative duration (`30s`,
+        /// `10m`, `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means
+        /// seconds), an ISO date (`2026-05-01`, local midnight), a zone-less
+        /// ISO datetime (local time), or RFC3339. Compared against
+        /// `timestamp` fields when the event carries one; events without a
+        /// timestamp (assistant messages, system events) pass through
+        /// unfiltered.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
     },
@@ -7764,7 +8111,11 @@ pub enum DrainCommand {
         /// Start from at most the last N lines of what is already in the log.
         #[clap(long, short = 'n', value_name = "N")]
         lines: Option<usize>,
-        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        /// Skip anything older than this: a relative duration (`30s`, `10m`,
+        /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
+        /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
+        /// datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
         /// Print what is already there and exit instead of following.
@@ -7815,8 +8166,11 @@ pub enum UsageCommand {
     /// Rank command shapes by latency, slowest first.
     // trace:STORY-1028 | ai:codex
     Slowest,
-    /// Show commands not used in the last duration.
+    /// Show commands not used since this point: a relative duration (`30d`,
+    /// `2w`, or `24 hours ago`), an ISO date (local midnight), a zone-less
+    /// ISO datetime (local time), or RFC3339.
     // trace:STORY-1028 | ai:codex
+    // trace:TASK-1509 | ai:claude
     Unused {
         #[clap(value_name = "DURATION")]
         duration: String,
@@ -7827,6 +8181,13 @@ pub enum UsageCommand {
     /// Show the raw recent usage event stream.
     // trace:STORY-1028 | ai:codex
     Events,
+    /// Compact one-line-per-invocation timeline: local timestamp, duration,
+    /// command shape, and exit status/failure mark — newest first. The
+    /// scan-first companion to `events` (which prints the full raw fields);
+    /// use this to eyeball what ran immediately before a slow command.
+    /// Honors --since/--cmd/--slower-than/--limit/--json like `events`.
+    // trace:TASK-1481 | ai:claude
+    Timeline,
     /// Show autonomous drain telemetry.
     // trace:STORY-1028 | ai:codex
     Drains {
@@ -7898,7 +8259,25 @@ pub enum UpgradeCommand {
 pub enum HistoryCommand {
     /// Switch to per-event chronological mode.
     // trace:STORY-1028 | ai:codex
-    Events,
+    Events {
+        /// Output structured event JSON.
+        // trace:STORY-1477 | ai:codex — JSON belongs to event views, not management.
+        #[clap(long, conflicts_with = "template")]
+        json: bool,
+    },
+    /// List scoped templates and shadowing; builtins full/oneline are legacy mode aliases.
+    // trace:STORY-1477 | ai:codex
+    Templates {
+        #[clap(subcommand)]
+        cmd: Option<HistoryTemplatesCommand>,
+    },
+}
+
+// trace:STORY-1477 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum HistoryTemplatesCommand {
+    /// Remove exactly user:NAME or project:NAME (explicit scope required).
+    Rm { name: String },
 }
 
 // trace:STORY-248 | ai:claude
@@ -7967,9 +8346,18 @@ pub enum BriefCommand {
 pub enum AgentCommand {
     /// Launch a new agent process.
     ///
-    /// This lane spawns a one-shot agent that does its work, ships a PR, and
-    /// exits. It is NOT the orchestrated pipeline — it does not run CI, the
-    /// reviewer phase, or the merge for you. For a supervised end-to-end drain
+    /// This lane spawns an INTERACTIVE agent in the foreground and BLOCKS until that
+    /// agent's session exits. A vendor TUI does not exit when its turn ends — it returns
+    /// to its prompt — so a seat that has finished its work still holds this command.
+    /// Budget for that: run it where you can leave it, or stop the seat with
+    /// `aida agent stop <name>` once it reports. To tell a finished seat from a working
+    /// one without attaching, read the CPU column in `aida agent status`: seconds of CPU
+    /// across hours of age means the seat is idle at its prompt. Do NOT rely on the
+    /// `status` column for that — it reports `busy` for a seat whose worktree any live
+    /// lease covers, which for the main checkout is effectively always.
+    ///
+    /// It is also NOT the orchestrated pipeline — it does not run CI, the reviewer
+    /// phase, or the merge for you. For a supervised end-to-end drain
     /// (implementer → CI → reviewer → merge → pull), use
     /// `aida queue work <SPEC> --auto-complete` instead.
     // trace:TASK-626 | ai:claude — plain `//` keeps the marker out of `--help`.
@@ -8177,17 +8565,55 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
+
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
 
         /// Initial message to pass to the spawned Claude session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
+
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
@@ -8283,17 +8709,55 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
+
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
 
         /// Initial message to pass to the spawned Codex session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
+
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
@@ -8373,17 +8837,55 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
-        /// Print the resolved launch command and permission posture, then exit without spawning.
+        /// Print the complete resolved launch contract — argv, active role,
+        /// prompt source, launch-context snapshot path, AIDA environment
+        /// inputs, and repository guidance files (AGENTS.md/CLAUDE.md) the
+        /// child would consume — then exit without spawning a process,
+        /// creating a worktree/lease, flipping spec status, or any network
+        /// sync. See also `--show-prompt` (just the initial prompt) and
+        /// `--show-context` (the full launch-context markdown body).
         // trace:TASK-1232 | ai:codex
-        #[clap(long, alias = "print-command")]
+        // trace:TASK-1467 | ai:claude
+        #[clap(
+            long = "no-exec",
+            visible_alias = "noexec",
+            visible_alias = "print-command"
+        )]
         noexec: bool,
+
+        /// Print the exact initial prompt (explicit `--prompt` or the
+        /// auto-generated one) that would be sent, then exit without
+        /// spawning or any other side effect.
+        // trace:TASK-1467 | ai:claude
+        #[clap(long)]
+        show_prompt: bool,
+
+        /// For a launch that actually executes: print launch-time diagnostics
+        /// (resolved vendor/client, role, spec/session/name, working
+        /// directory, prompt source and whether context was injected,
+        /// guidance files discovered, generated child argv with sensitive
+        /// values redacted, process registration, and child exit/result
+        /// information) before/around spawn. Distinct from `--no-exec`,
+        /// which previews and exits without launching; `--verbose` launches.
+        /// Never prints secrets, tokens, full prompt contents, or sensitive
+        /// environment values. Normal (non-verbose) output is unchanged.
+        // trace:TASK-1498 | ai:claude
+        #[clap(long)]
+        verbose: bool,
 
         /// Initial message to pass to the spawned Antigravity session.
         // trace:BUG-1294 | ai:claude
-        #[clap(long, allow_hyphen_values = true)]
+        #[clap(long, allow_hyphen_values = true, conflicts_with = "prompt_file")]
         prompt: Option<String>,
 
-        /// Do not auto-generate an initial message when --spec is supplied.
+        /// Read the initial message from a file instead of the command line. Prefer this from
+        /// orchestrators: a brief passed as `--prompt "$(cat file)"` through a nested shell can
+        /// lose its quoting and silently launch an agent that sits idle at an empty prompt.
+        // trace:BUG-1696 | ai:claude
+        #[clap(long, value_name = "PATH", conflicts_with_all = ["prompt", "no_prompt"])]
+        prompt_file: Option<PathBuf>,
+
+        /// Do not send the automatic role-aware initial message.
         #[clap(long)]
         no_prompt: bool,
 
@@ -8517,6 +9019,43 @@ pub enum MaintenanceScheduleCommand {
     /// never touches another repo's entry.
     // trace:STORY-1463 | ai:claude
     UninstallCron,
+
+    /// Install a systemd user timer that runs `aida schedule tick` for this
+    /// repo (Linux only; idempotent — safe to re-run, and it repairs an older
+    /// unit). The timer is enabled and verified first; only then is this
+    /// repo's crontab entry removed. Needs a human at an interactive terminal
+    /// and an explicit yes. `install-cron` likewise removes this timer.
+    // trace:TASK-1491 | ai:claude
+    InstallSystemd,
+
+    /// Disable and delete this repo's systemd user timer. Only the timer is
+    /// disabled: a tick already running finishes. Unit files that aida did
+    /// not write are left alone. Idempotent.
+    // trace:TASK-1491 | ai:claude
+    UninstallSystemd,
+}
+
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+#[derive(Subcommand, Clone, Debug, PartialEq, Eq)]
+pub enum WikiCommand {
+    /// Build static HTML living wiki projection from canonical specs and exposition sidecars
+    Build {
+        /// Output directory for generated wiki (defaults to .aida/wiki)
+        #[clap(long)]
+        out: Option<PathBuf>,
+    },
+    /// Serve the generated wiki on loopback only (127.0.0.1); it is never
+    /// reachable from the network, and there is no host override.
+    // trace:TASK-1470 | ai:claude
+    Serve {
+        /// Port to bind on 127.0.0.1 (defaults to 8420)
+        #[clap(long, default_value = "8420")]
+        port: u16,
+
+        /// Path to wiki directory (defaults to .aida/wiki)
+        #[clap(long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -8605,7 +9144,8 @@ pub enum Command {
         #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
-        /// Tags for the requirement (comma-separated)
+        /// Tags for the requirement (comma-separated). A tag may not contain
+        /// whitespace: `--tags "a b"` is refused, `--tags a,b` is two tags.
         #[clap(long)]
         tags: Option<String>,
 
@@ -8703,6 +9243,14 @@ pub enum Command {
         // trace:BUG-528 | ai:claude
         #[clap(long = "for", value_name = "ROLE")]
         r#for: Option<String>,
+
+        /// Run named gates from the shipped library over the new spec's text
+        /// before it is filed (comma-separated, e.g. `--gates well-formed`).
+        /// Advisory: findings are printed, the spec is filed regardless.
+        /// Without this flag `aida add` is unchanged. See `aida gate list`.
+        // trace:STORY-1427 | ai:claude
+        #[clap(long, value_name = "NAMES", value_delimiter = ',')]
+        gates: Vec<String>,
     },
 
     /// File a small change into the fasttrack lane in one shot
@@ -8750,6 +9298,8 @@ pub enum Command {
     },
 
     /// List all requirements
+    // trace:TASK-1463 | ai:claude — `aida ls` is a short, discoverable alias.
+    #[clap(visible_alias = "ls")]
     List {
         /// Optional positional shortcut (e.g. `aida list approved`).
         ///
@@ -8792,8 +9342,17 @@ pub enum Command {
         /// Filter by status. Accepts a comma-separated OR set
         /// (`--status draft,approved`) and the `open` / `closed` aliases:
         /// `open` = Draft, Approved, Planned, InProgress, NeedsAttention;
-        /// `closed` = Done, Completed, Rejected.
+        /// `closed` = Done, Completed, Rejected. Three non-stored tokens are
+        /// also accepted: `shelved` and `needs-decision` narrow the parked
+        /// (needs-attention) set, and `deferred` is a spelling of `--deferred`
+        /// — the primed/conditional shelf, which is a view flag rather than a
+        /// status, so it composes as an AND (`--status deferred,approved`).
         // trace:TASK-0415 | ai:claude
+        // trace:BUG-1771 | ai:claude — the two lenses were accepted only by the
+        // legacy centralized listing, so this surface could not name them until
+        // the git-backend path learned them.
+        // trace:BUG-1687 | ai:claude — `deferred` used to be refused here with
+        // a message that denied the token existed.
         #[clap(long)]
         status: Option<String>,
 
@@ -8977,9 +9536,12 @@ pub enum Command {
         /// Order the results. `modified` (default) = freshest first; `heft` =
         /// most graph-connected first (the deterministic in+out-degree weight),
         /// so load-bearing specs surface at the top; `weight` = heaviest
-        /// user-set numeric weight/score first (unweighted specs sort last).
+        /// user-set numeric weight/score first (unweighted specs sort last);
+        /// `created` = newest-created first; `completed` = most-recently-
+        /// completed first (specs with no completion date sort last).
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
+        // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 
@@ -9054,8 +9616,12 @@ pub enum Command {
 
         /// Print comment bodies inline after the description (instead of just
         /// the count). Equivalent to following up with `aida comment list <ID>`.
-        #[clap(long, short = 'c')]
+        #[clap(long, short = 'c', conflicts_with = "no_comments")]
         comments: bool,
+
+        /// Suppress comment bodies (enabled by default for human output).
+        #[clap(long, conflicts_with = "comments")]
+        no_comments: bool,
 
         /// Render an indented hierarchy of <id> and its descendants instead
         /// of the standard detail view. Each row shows status + title.
@@ -9134,12 +9700,14 @@ pub enum Command {
     /// spec comment remains the git-canonical audit source.
     // trace:STORY-1173 | ai:codex
     Approvals {
-        /// Only entries at or after this time. Accepts RFC3339 or relative
-        /// windows like `7d`, `12h`, `45m`.
+        /// Only entries at or after this time. Accepts a relative window
+        /// (`45m`, `12h`, `7d`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or RFC3339.
         #[clap(long)]
         since: Option<String>,
 
-        /// Only entries before this time. Accepts RFC3339 or relative windows.
+        /// Only entries before this time. Same forms as `--since`.
         #[clap(long)]
         until: Option<String>,
 
@@ -9204,14 +9772,24 @@ pub enum Command {
         cmd: Option<GraphCommand>,
     },
 
-    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests.
+    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests,
+    /// or — with `coverage` (alias `gap`) in place of a spec — the project's
+    /// capture-coverage figures: trailer share, criteria share, and the
+    /// criterion-to-test share, each as count/total.
     Criteria {
-        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to inspect.
+        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to
+        /// inspect, or `coverage` / `gap` for the project-wide report.
         spec: String,
 
         /// Emit JSON instead of a human report.
         #[clap(long)]
         json: bool,
+
+        /// Lookback window in days for the project-wide report (the all-time
+        /// figures are always shown alongside). Ignored for a single spec.
+        // trace:STORY-1487 | ai:claude
+        #[clap(long, default_value_t = crate::criteria_coverage::DEFAULT_WINDOW_DAYS, value_name = "DAYS")]
+        window_days: u64,
     },
 
     /// Harvest what a diff established into the spec: a headless agent proposes
@@ -9277,7 +9855,7 @@ pub enum Command {
     /// `edit --status completed` jargon.
     // trace:TASK-727 | ai:claude
     Done {
-        /// The spec to mark done (e.g. TASK-1).
+        /// The spec to mark done.
         spec: String,
     },
 
@@ -9317,7 +9895,8 @@ pub enum Command {
         /// Record the spec that REPLACES this one, as a typed superseded-by
         /// edge (plus the inverse supersedes edge on the successor). Implies
         /// `--status superseded` unless --status says otherwise, so
-        /// `aida edit ADR-3 --superseded-by ADR-7` is the whole move.
+        /// `aida edit <old-spec> --superseded-by <new-spec>` is the whole
+        /// move.
         #[clap(long = "superseded-by", value_name = "SPEC-ID")]
         superseded_by: Option<String>,
 
@@ -9373,7 +9952,8 @@ pub enum Command {
         #[clap(long, allow_hyphen_values = true)]
         feature: Option<String>,
 
-        /// New tags (comma-separated, replaces existing).
+        /// New tags (comma-separated, replaces existing). A tag may not
+        /// contain whitespace: `--tags "a b"` is refused, `--tags a,b` is two.
         /// Use --add-tag/--remove-tag for partial edits that don't clobber.
         #[clap(long)]
         tags: Option<String>,
@@ -9661,8 +10241,12 @@ pub enum Command {
         /// SPEC-ID to archive (mutually exclusive with --older-than).
         id: Option<String>,
 
-        /// Bulk-archive every spec last touched before this duration
-        /// (e.g. `30d`, `12h`, or RFC3339). Pairs with `--status`.
+        /// Bulk-archive every spec last touched before this point: a
+        /// relative duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO
+        /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or RFC3339. Pairs with
+        /// `--status`.
+        // trace:TASK-1509 | ai:claude
         // trace:STORY-441 | ai:claude
         #[clap(long, value_name = "DURATION", conflicts_with = "id")]
         older_than: Option<String>,
@@ -9954,8 +10538,10 @@ pub enum Command {
         // trace:STORY-405 | ai:codex
         #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup", "awaiting"])]
         activity: bool,
-        /// With `--activity`, only show events after this relative duration
-        /// (`30m`, `12h`, `2d`) or RFC3339 timestamp.
+        /// With `--activity`, only show events after this point: a relative
+        /// duration (`30m`, `12h`, `2d`, `2w`, or `24 hours ago`), an ISO
+        /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+        /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
         // trace:STORY-405 | ai:codex
         #[clap(long, requires = "activity")]
         since: Option<String>,
@@ -10142,7 +10728,11 @@ pub enum Command {
         /// Start from at most the last N lines of what is already in the log.
         #[clap(long, short = 'n', value_name = "N")]
         lines: Option<usize>,
-        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        /// Skip anything older than this: a relative duration (`30s`, `10m`,
+        /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
+        /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
+        /// datetime (local time), or RFC3339.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "DURATION")]
         since: Option<String>,
         /// Print what is already there and exit instead of following.
@@ -10341,14 +10931,20 @@ pub enum Command {
     ///
     // trace:STORY-122 | ai:claude
     Usage {
-        /// Show commands used within the last N days. Default 30.
+        /// Show commands used since this point (default `30d`): a relative
+        /// duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO date
+        /// (`2026-05-01`, local midnight), a zone-less ISO datetime (local
+        /// time), or RFC3339.
         // trace:STORY-122 | ai:claude
-        #[clap(long, value_name = "Nd", default_value = "30d")]
+        // trace:TASK-1509 | ai:claude
+        #[clap(long, value_name = "WINDOW", default_value = "30d")]
         since: String,
-        /// Show commands NOT used in the last N days (deprecation
-        /// candidates). Mutually exclusive with --errors.
+        /// Show commands NOT used since this point (deprecation
+        /// candidates). Same forms as `--since`. Mutually exclusive with
+        /// --errors.
         // trace:STORY-122 | ai:claude
-        #[clap(long, value_name = "Nd", conflicts_with = "errors", hide = true)]
+        // trace:TASK-1509 | ai:claude
+        #[clap(long, value_name = "WINDOW", conflicts_with = "errors", hide = true)]
         unused: Option<String>,
         /// Show commands with the highest error rate (`exit_code != 0`
         /// over total invocations). UX-gap candidates.
@@ -10471,8 +11067,11 @@ pub enum Command {
     /// `.aida/last-digest.toml` marker → 24h.
     // trace:STORY-252
     Digest {
-        /// Window start: `Nd`/`Nh`/`Nm` duration, ISO date (`YYYY-MM-DD`), or a
-        /// git tag/ref. Absent: marker's window_end, else last 24h.
+        /// Window start: a relative duration (`7d`, `12h`, `2w`, `30m`, or
+        /// `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a
+        /// zone-less ISO datetime (local time), RFC3339, or a git tag/ref.
+        /// Absent: marker's window_end, else last 24h.
+        // trace:TASK-1509 | ai:claude
         #[clap(long, value_name = "WINDOW")]
         since: Option<String>,
         /// Tailor framing + SPEC-ID visibility for the reader.
@@ -10783,6 +11382,12 @@ pub enum Command {
     #[clap(subcommand)]
     Supervise(SuperviseCommand),
 
+    /// Night shift: launch bounded drain waves from the scheduler while no
+    /// seat is awake, behind fail-closed guards. Off unless enabled per clone.
+    // trace:STORY-1218 | ai:claude
+    #[clap(subcommand)]
+    Shift(ShiftCommand),
+
     /// Robust unattended autonomous-progress: safely drain the approved ready
     /// set from ANYWHERE. Resolves the project explicitly (no cwd/wrong-store
     /// surprises), skips if a drain is already running, and drains via the
@@ -10900,14 +11505,43 @@ pub enum Command {
         json: bool,
     },
 
+    // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
+    /// Generate, audit, and inspect human-friendly spec expositions with freshness,
+    /// bounded drift detection, and human review protection.
+    Explain {
+        /// Requirement ID (UUID or SPEC-ID)
+        spec: String,
+
+        /// Target audience persona (operator, executive, implementer, contributor)
+        #[clap(long, default_value = "operator")]
+        audience: String,
+
+        /// Re-generate exposition even if a sidecar already exists
+        #[clap(long)]
+        refresh: bool,
+
+        /// Override human_reviewed protection and force re-generation
+        #[clap(long)]
+        force: bool,
+
+        /// Machine-readable JSON output
+        #[clap(long)]
+        json: bool,
+    },
+
+    // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+    /// Living project wiki: build browsable hyperlinked HTML projection and serve locally
+    #[clap(subcommand)]
+    Wiki(WikiCommand),
+
     /// Set, show, or clear the current FOCUS — a persistent, per-worktree
     /// context (an epic or spec) that scopes the read commands to that spec's
     /// transitive subtree. The kubectl-namespace / gcloud-config pattern for
     /// AIDA's requirement graph.
     ///
-    ///   aida focus EPIC-55     set the focus to EPIC-55 (+ its subtree)
+    ///   aida focus <EPIC-ID>   set the focus to that epic (+ its subtree)
     ///   aida focus             show the current focus + a progress rollup
-    ///   aida focus clear     drop the focus
+    ///   aida focus clear       drop the focus
     ///
     /// With a focus set, `aida list`, `aida status`, and `aida queue list`
     /// scope to the focused subtree and print a loud header naming it; pass
@@ -11012,12 +11646,16 @@ pub enum Command {
         all: bool,
 
         /// Exempt specs completed before this point from the
-        /// completed-without-commit integrity check (a git ref/tag whose
-        /// commit date is the cutoff, or an ISO date). Quiets noise on
-        /// legacy history predating trace conventions. Falls back to the
-        /// AIDA_DOCTOR_COMPLETED_SINCE env var.
+        /// completed-without-commit integrity check: a relative duration
+        /// (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
+        /// zone-less ISO datetime (local time), RFC3339, or else a git
+        /// ref/tag whose commit date is the cutoff. An invalid value is an
+        /// error. Quiets noise on legacy history predating trace
+        /// conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var.
         // trace:TASK-673 | ai:claude
-        #[clap(long, value_name = "REF_OR_DATE")]
+        // trace:TASK-1509 | ai:claude
+        // trace:BUG-1622 | ai:claude
+        #[clap(long, value_name = "DATE_OR_REF")]
         since: Option<String>,
 
         /// Print the guided, copy-pasteable steps to bring the OS sandbox
@@ -11126,7 +11764,7 @@ pub enum Command {
     /// after a successful merge.
     Ship {
         /// Spec to finish. When omitted, resolved from the current branch
-        /// name (e.g. `story-720-ship` → STORY-720) or the active session
+        /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
         /// lease covering this worktree.
         #[clap(value_name = "SPEC")]
         spec: Option<String>,
@@ -11197,8 +11835,8 @@ pub enum Command {
     // trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:STORY-725 | ai:claude
     Zen {
-        /// An approved SPEC id to drive (e.g. TASK-123), OR a free-text thought
-        /// to draft into a spec and drive. Free text is drafted into a title +
+        /// An approved SPEC id to drive, OR a free-text thought to draft
+        /// into a spec and drive. Free text is drafted into a title +
         /// description + acceptance criteria, filed as a draft, then routed
         /// through the approve-gate before driving.
         #[clap(value_name = "SPEC")]
@@ -11543,6 +12181,21 @@ pub enum Command {
         #[clap(long, hide = true)]
         title: bool,
 
+        /// Merge live fields from a client's stdin JSON payload into the
+        /// AIDA segment: model, context-window usage, activity, and VCS
+        /// branch where the client sends them. `claude` parses Claude
+        /// Code's statusLine JSON; `antigravity` (alias `agy`) parses
+        /// Antigravity's live agent-state JSON. Omit for the default,
+        /// AIDA-only segment — this never reads stdin unless a client is
+        /// named, so plain `aida statusline` is unaffected. When stdin is
+        /// a TTY (no payload piped), or a piped read doesn't finish within
+        /// ~200ms (an open pipe with no data waiting), this degrades to
+        /// the AIDA-only segment rather than blocking. See
+        /// docs/agents/statusline-contract.md.
+        // trace:TASK-1479 | ai:claude
+        #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
+        client: Option<String>,
+
         /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
         /// renders the one-liner (the default, quiet behavior); the
         /// `setup` subcommand prints (or installs) client-appropriate
@@ -11829,6 +12482,16 @@ pub enum Command {
         #[clap(long)]
         allow_stale_base: bool,
 
+        /// Explicit base branch to target when AC-5 offers to open a
+        /// change from a branch with no open PR/MR. Always wins over any
+        /// base saved from a previous offer (`.aida/mr-recovery/<spec>.json`)
+        /// — use this to correct a stuck recovery, e.g. when a GitLab
+        /// project's default branch became the feature branch itself
+        /// because remote `main` was never pushed.
+        // trace:BUG-1610 | ai:claude
+        #[clap(long, value_name = "BRANCH")]
+        target_branch: Option<String>,
+
         #[clap(subcommand)]
         cmd: Option<ReviewCommand>,
     },
@@ -11856,7 +12519,7 @@ pub enum Command {
             .multiple(false)
     ))]
     Init {
-        /// Skip generating agent skills and commands (.claude/*, .codex/skills/*, and .antigravity/skills/*)
+        /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
         // trace:TASK-457 | ai:claude
         #[clap(long)]
         no_skills: bool,
@@ -12266,12 +12929,15 @@ pub enum Command {
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence
     /// (status flip + queue add, with optional `--work` session launch).
+    /// With no ID, triage the specs parked in Needs Attention one keystroke
+    /// each (at a terminal; otherwise it prints the requeue commands).
     /// Mirrors `aida relations` → `aida rel list` discoverability pattern.
     /// See `aida queue rework --help` for the full flag set.
-    // trace:TASK-218 | ai:claude
+    // trace:TASK-218 trace:STORY-1429 | ai:claude
     Rework {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
+        /// specs one keystroke each.
+        id: Option<String>,
         /// Also launch a session for the spec.
         #[clap(long)]
         work: bool,
@@ -12395,21 +13061,70 @@ pub enum Command {
     },
 
     /// Project activity — what's been touched and how it stands now.
-    /// Default mode is a per-requirement digest sorted by last-touch
-    /// time, intended for "what was I up to last session?" Use
-    /// `events` to switch to a chronological per-event feed (slower;
-    /// decodes each commit's YAML diff into status changes, comments
-    /// added, etc.).
+    /// Default mode (no SPEC-ID) is a per-requirement digest sorted by
+    /// last-touch time, intended for "what was I up to last session?" Pass
+    /// a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
+    /// switch to that one spec's status-progression view instead — its
+    /// status transitions in chronological order, each with a timestamp
+    /// and old→new status, in human, TOON and JSON output alike. Add
+    /// `--full` (or the `events` subcommand) for the complete edit/comment
+    /// trail, not just status changes. Per-event flags (`--status-changes`,
+    /// `--comments`, `--oneline`, `--shipped`, `--json`) switch a
+    /// multi-spec query to the events feed. `--to`/`--from <STATUS>`
+    /// select status transitions by target and source status, and
+    /// `--opened` selects the specs filed; they always switch to the
+    /// events feed, like `--shipped`.
     // trace:FR-1-037 | ai:claude
+    // trace:BUG-1635 | ai:claude
+    // trace:TASK-1480 | ai:claude
+    // trace:TASK-1512 | ai:claude
     History {
+        /// SPEC-ID to focus on — shorthand for `--id <SPEC-ID>`.
+        /// `aida history <SPEC-ID>` is equivalent to `aida history --id
+        /// <SPEC-ID>`: it selects that one spec's status-progression view.
+        /// Accepts the same forms as `--id` (SPEC-ID, agreed id, or raw
+        /// UUID). Not combinable with `--id` — pass one or the other.
+        // trace:TASK-1480 | ai:claude
+        #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
+        spec: Option<String>,
+
+        /// Human event layout: a name (user > project > builtin), or inline when it
+        /// contains `{`. Fields: commit,date[:strftime],author,id,type,priority,title,
+        /// kind,event,from,to,comment. Escape {{/}}. Title is Added/Deleted/TitleChange;
+        /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
+        /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
+        // trace:STORY-1477 | ai:codex
+        #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+        template: Option<String>,
+
+        /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
+        /// from,to,comment. Selects the full feed in human/TOON/JSON. Missing values
+        /// are empty cells or JSON null; title/priority/comment are event-local.
+        #[clap(long, global = true, conflicts_with_all = ["oneline", "kind"])]
+        fields: Option<String>,
+
+        /// Save the inline template as [user:|project:]NAME; user is the default.
+        /// Names: [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing.
+        #[clap(long, global = true, requires = "template")]
+        save_as_template: Option<String>,
+
+        /// Overwrite a template in the selected scope (only with --save-as-template).
+        #[clap(long, global = true, requires = "save_as_template")]
+        force: bool,
+
         /// Number of items to show. In digest mode (default) this caps
         /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
         #[clap(long, short = 'n', default_value = "20", global = true)]
         limit: usize,
 
-        /// Walk at most N commits on the orphan branch. Default 250 in
-        /// digest mode (cheap to scan) and 5x --limit in events mode.
+        /// Walk at most N commits on the orphan branch. Default 5x --limit
+        /// (at least 50) for --full/events and a bare --json with no
+        /// SPEC-ID; 250 for the digest, a single SPEC-ID, and any query with
+        /// --shipped, --to, --from, --opened, --status-changes, --comments
+        /// or --oneline (adding --json to those does not change it).
+        // trace:BUG-1635 | ai:claude
+        // trace:TASK-1512 | ai:claude
         #[clap(long, global = true)]
         max_commits: Option<usize>,
 
@@ -12418,17 +13133,31 @@ pub enum Command {
         /// transitions, comments added, tags edited, etc.). Slower than
         /// digest because it shells out to `git show` per file per
         /// commit; useful for inspecting one requirement closely with
-        /// --id, less useful as a general overview.
-        #[clap(long, hide = true)]
+        /// --id, less useful as a general overview. `--full` is the more
+        /// discoverable spelling of the same mode.
+        #[clap(long, hide = true, global = true)]
         events: bool,
+
+        /// The complete edit/event trail — every status change, comment,
+        /// tag edit, and field edit, chronological newest-first.
+        /// Equivalent to the `events` subcommand, but composes naturally
+        /// after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a
+        /// single spec (`--id` / positional SPEC-ID) shows the shorter
+        /// status-progression view instead of the full trail.
+        // trace:TASK-1480 | ai:claude
+        #[clap(long, global = true)]
+        full: bool,
 
         /// Only show entries for this requirement (accepts a SPEC-ID, an
         /// agreed short ID, or the raw UUID `aida show` prints — a UUID
-        /// is resolved to its canonical spec_id; BUG-588). Works both
-        /// before and after the `events` subcommand, e.g. `aida history
-        /// events --id BUG-1474`.
+        /// is resolved to its canonical spec_id). Works both before and
+        /// after the `events` subcommand, e.g. `aida history events --id
+        /// <ID>`. The positional SPEC-ID form (`aida history <SPEC-ID>`)
+        /// is shorthand for this same flag.
+        // trace:BUG-1652 | ai:claude
         // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
         // just before it, matching the documented invocation.
+        // trace:TASK-1480 | ai:claude
         #[clap(long, global = true)]
         id: Option<String>,
 
@@ -12443,15 +13172,30 @@ pub enum Command {
         #[clap(long, global = true)]
         author: Option<String>,
 
-        /// Only show events after this date (ISO 8601, e.g. 2026-05-01).
+        /// Only show events after this point. Accepts a relative duration
+        /// meaning "that far before now" (`30m`, `5h`, `7d`, `2w`, or
+        /// `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a
+        /// zone-less ISO datetime (`2026-05-01T10:00`, local time), or a
+        /// full RFC3339 timestamp. The resolved window prints at the top of
+        /// human output so a relative form is never ambiguous.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         since: Option<String>,
 
-        /// Only show events before this date (ISO 8601).
+        /// Only show events before this point. Same forms as `--since`. Rejected if
+        /// it resolves earlier than `--since`.
+        // trace:TASK-1502 | ai:claude
         #[clap(long, global = true)]
         until: Option<String>,
 
-        /// (events only) filter to status transitions.
+        /// Filter to status-transition events. Without a SPEC-ID this
+        /// implies events mode (one row per transition, not the per-spec
+        /// digest), as --shipped does. For a single spec (`--id` /
+        /// positional SPEC-ID) without `--full`, status transitions are
+        /// already the default view; paired with `--full`/`events` it
+        /// narrows the complete trail down to just the status changes.
+        // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         status_changes: bool,
 
@@ -12464,24 +13208,90 @@ pub enum Command {
         /// window. Honors --since/--until/--limit; `--author me` narrows to
         /// what YOU tried to do and could not.
         // trace:STORY-1436 | ai:claude
-        #[clap(long, global = true, value_name = "KIND")]
+        // trace:TASK-1512 | ai:claude — the event feed has no status
+        // transitions, so the transition/creation selectors conflict.
+        #[clap(
+            long,
+            global = true,
+            value_name = "KIND",
+            conflicts_with_all = ["to", "from", "opened"]
+        )]
         kind: Option<String>,
 
-        /// Only recent Done→Completed ship transitions — the "did my ship
-        /// register?" view. Unlike `--all` (a recency-blind dump of every
-        /// terminal-status spec), this shows just what merged-to-default,
-        /// newest first. Implies events mode; composes with --since/--until/--limit.
+        /// Only transitions into Completed (merged to the default branch),
+        /// from any prior status — the "did my ship register?" view. Unlike
+        /// `--all` (a recency-blind dump of every terminal-status spec), this
+        /// shows just what merged-to-default, newest first. Equivalent to
+        /// `--to completed`, so it cannot be combined with --to or --opened.
+        /// Implies events mode; composes with --since/--until/--limit.
         // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(long, global = true)]
+        // trace:BUG-1636 | ai:claude
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, conflicts_with_all = ["to", "opened"])]
         shipped: bool,
 
-        /// (events only) filter to comment events.
+        /// Only status transitions INTO this status, newest first, e.g.
+        /// `--to approved` for what got approved. Accepts the spellings
+        /// `aida edit --status` does (`in-progress`, `needs-attention`, any
+        /// case) plus `accepted` for approved. With --from, both ends must
+        /// match. Implies events mode (as --shipped does). With
+        /// --status-changes it narrows the transitions; with --comments or
+        /// --opened the result is the union of those events and the
+        /// matching transitions.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, value_name = "STATUS")]
+        to: Option<String>,
+
+        /// Only status transitions OUT OF this status, e.g. `--from
+        /// in-progress --to approved` for work sent back from in progress.
+        /// Alone it matches any transition leaving that status. Same
+        /// spellings and combination rules as --to; implies events mode.
+        /// `--from X --to X` is refused, since a transition always changes
+        /// the status.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, value_name = "STATUS")]
+        from: Option<String>,
+
+        /// Only spec-creation events: the specs filed in the window,
+        /// whatever status they were filed at (a spec filed straight as
+        /// approved is included). Creation is not a status transition, so
+        /// with --to/--from (or --status-changes/--comments) the result is
+        /// the union of both kinds of event. Implies events mode.
+        // trace:TASK-1512 | ai:claude
+        #[clap(long, global = true, visible_alias = "created")]
+        opened: bool,
+
+        /// Filter to comment events. Without a SPEC-ID this implies events
+        /// mode, as --shipped does. For a single spec (`--id` / positional
+        /// SPEC-ID) without `--full`, this switches the status-progression
+        /// view to a comment timeline instead; paired with `--full`/`events`
+        /// it narrows the complete trail to just comments.
+        // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         comments: bool,
 
-        /// (events only) terse one-line-per-event format.
+        /// Terse one-line-per-event format. Applies to the events feed,
+        /// the status-progression view, and the comment timeline alike.
+        /// Without a SPEC-ID it implies events mode: the per-spec digest
+        /// has no per-event lines, so the flag is never silently ignored.
+        // trace:TASK-1480 | ai:claude
+        // trace:BUG-1635 | ai:claude
         #[clap(long, global = true)]
         oneline: bool,
+
+        /// Emit JSON (same shape as the MCP history tool): `count`,
+        /// `events`, `window_exhausted`, `source`, `index_tip`. Each event
+        /// row has `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`
+        /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`).
+        /// Without a SPEC-ID this implies the full event feed; with one
+        /// (and no `--full`) it is the status progression, oldest first,
+        /// adding `view`, `id`, `title`, `current_status`, `order`.
+        /// `--format json` is the same.
+        // trace:BUG-1631 | ai:claude
+        // trace:BUG-1635 | ai:claude
+        #[clap(long, conflicts_with = "template")]
+        json: bool,
 
         /// Include archived AND deferred requirements (everything-escape-hatch).
         /// Symmetric with `aida list --all`. By default `aida history`
@@ -12512,8 +13322,33 @@ pub enum Command {
         #[clap(long, global = true)]
         include_meta: bool,
 
-        /// History view.
+        /// Where one spec's elapsed time actually went: a chronological list
+        /// of spans, each labelled `work`, `wait` or `unknown`, rebuilt from
+        /// the store's status transitions, the local drain feed, and the
+        /// pull-request and CI timestamps when a forge CLI is available.
+        /// Requires one SPEC-ID. Time that no source accounts for is shown as
+        /// its own `unknown` span and counted separately — it is never folded
+        /// into the span beside it, so the totals cannot overstate how much of
+        /// the window was really measured. Renders human, TOON and JSON; the
+        /// windowing and event-selector flags are refused rather than
+        /// silently producing partial totals that read as complete.
+        // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(
+            long,
+            conflicts_with_all = [
+                "full", "events", "status_changes", "comments", "oneline",
+                "shipped", "opened", "to", "from", "kind", "since", "until",
+                "max_commits", "type", "author", "all", "archived", "deferred",
+            ]
+        )]
+        timeline: bool,
+
+        /// History view. `events` switches to the full chronological feed
+        /// (same as `--full`); most day-to-day use never needs it — the
+        /// bare command (digest) or a SPEC-ID (status progression) covers
+        /// it.
         // trace:STORY-1028 | ai:codex
+        // trace:TASK-1480 | ai:claude
         #[clap(subcommand)]
         cmd: Option<HistoryCommand>,
     },
@@ -12528,8 +13363,8 @@ pub enum Command {
     /// every spec of that kind. Read-only and deterministic (no LLM call).
     // trace:TASK-0417 | ai:claude
     Lint {
-        /// SPEC-ID to lint (e.g. `STORY-42`). Omit and pass `--scope` to
-        /// sweep a group of specs.
+        /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
+        /// specs.
         spec: Option<String>,
 
         /// Lint every spec of this kind instead of a single SPEC-ID. One of
@@ -12614,6 +13449,15 @@ pub enum Command {
     // trace:STORY-447 | ai:claude
     #[clap(subcommand)]
     Deps(DepsCommand),
+
+    /// Named discipline gates, invoked on demand instead of carried as prose.
+    /// `aida gate list` shows the shipped library and which lifecycle moment
+    /// each gate is a default for; `aida gate show <name>` prints one gate's
+    /// checklist; `aida gate run <name> <SPEC>` runs its deterministic tier
+    /// over a spec and prints the checklist an agent answers for the rest.
+    // trace:STORY-1427 | ai:claude
+    #[clap(subcommand)]
+    Gate(GateCommand),
 
     /// Generate `CHANGELOG.md` mechanically from git tags + the spec
     /// graph. Walks `v*` tags as release boundaries, scans commits
@@ -13093,6 +13937,43 @@ pub enum SkillCommand {
     },
 }
 
+/// The shipped gate library. Read-only.
+// trace:STORY-1427 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum GateCommand {
+    /// List the shipped gates, their versions, and the lifecycle moment each
+    /// one is a default for.
+    List {
+        /// Only gates that are a default at this moment (e.g. `groom`).
+        #[clap(long, value_name = "MOMENT")]
+        moment: Option<String>,
+
+        /// Emit JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Print one gate's checklist for an agent to follow.
+    Show {
+        /// Gate name, e.g. `well-formed`.
+        name: String,
+    },
+
+    /// Run a gate over a spec: the deterministic tier first, then the
+    /// checklist for what it cannot decide. Advisory; never edits the spec.
+    Run {
+        /// Gate name, e.g. `well-formed`.
+        name: String,
+
+        /// SPEC-ID to judge.
+        spec: String,
+
+        /// Emit the verdict as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 /// Dependency-inference tooling. Read-only: surfaces likely dependency
 /// edges for human confirmation; it never writes the graph itself.
 // trace:STORY-447 | ai:claude
@@ -13457,10 +14338,10 @@ pub enum McpCommand {
     /// drain agent gets AIDA's MCP tools with no hand-editing.
     ///
     /// `aida init` already scaffolds `.codex/config.toml` for a fresh
-    /// project (TASK-0424); this command is for the reverse direction —
-    /// deriving both vendor configs from whatever `.mcp.json` actually says
-    /// today (including a hand-edited command/args/env, or a renamed
-    /// server), and it's the only path that also covers Gemini CLI.
+    /// project; this command is for the reverse direction — deriving both
+    /// vendor configs from whatever `.mcp.json` actually says today
+    /// (including a hand-edited command/args/env, or a renamed server), and
+    /// it's the only path that also covers Gemini CLI.
     ///
     /// Each target file is merged, not clobbered: an existing file without
     /// an aida-shaped entry gets one added; an existing file whose entry
@@ -13469,6 +14350,7 @@ pub enum McpCommand {
     /// `.mcp.json` is absent, or present with no aida server registered,
     /// this reports "nothing to translate" rather than erroring.
     // trace:TASK-1046 | ai:claude
+    // trace:TASK-0424 | ai:claude
     Translate {
         /// Project root directory (defaults to current directory).
         #[clap(long)]
@@ -13627,9 +14509,10 @@ mod tests {
         assert!(Cli::try_parse_from(["aida", "--format", "json", "digest"]).is_ok());
     }
 
-    /// TASK-1055: `--slower-than` accepts a bare number (ms), an explicit `ms`
-    /// suffix, or an `s` suffix (seconds → ms). The help text reads `Nms`,
-    /// which used to reject `500ms` with "invalid digit found in string".
+    // trace:TASK-1055 | ai:claude — `--slower-than` accepts a bare number
+    // (ms), an explicit `ms` suffix, or an `s` suffix (seconds → ms). The
+    // help text reads `Nms`, which used to reject `500ms` with "invalid
+    // digit found in string".
     #[test]
     fn parse_duration_ms_accepts_bare_and_suffixed() {
         assert_eq!(parse_duration_ms("500"), Ok(500));
@@ -13651,13 +14534,15 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
         assert!(matches!(
             cli.command,
-            Command::Remote(RemoteCommand::MirrorPush { pushed_remote })
+            Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
                 if pushed_remote == "origin"
+                    && !dry_run
         ));
     }
 
-    /// TASK-1055: the parser is actually wired onto the clap flag, so
-    /// `usage --slower-than 500ms events` parses to 500 (not a parse error).
+    // trace:TASK-1055 | ai:claude — the parser is actually wired onto the
+    // clap flag, so `usage --slower-than 500ms events` parses to 500 (not a
+    // parse error).
     #[test]
     fn slower_than_flag_accepts_ms_suffix() {
         let cli = Cli::try_parse_from(["aida", "usage", "--slower-than", "500ms", "events"])
@@ -13999,16 +14884,23 @@ mod tests {
         );
     }
 
-    // TASK-287 / BUG-629: a `///` clap doc comment doubles as `--help` text, so
-    // *provenance* on one (a `trace:` marker, or a bare SPEC-ID standing in for
-    // the developer breadcrumb) leaks the id into user-facing output. But a
-    // *descriptive* mention of a SPEC-ID inside prose (e.g. "reuses the
-    // STORY-122 usage log") is legitimate help text, not provenance — BUG-629
-    // tightened the criterion from "any SPEC-ID token" (over-broad; it forced
-    // agents to reword legit prose) down to "provenance only". The discriminator
-    // is `doc_comment_is_provenance_leak`, mirrored verbatim by the fast
-    // grep-based pre-commit hook (TASK-903) so the gate and CI agree. (This
-    // comment uses `//`, not `///`, so it isn't itself scanned.)
+    // TASK-287 / BUG-629 / TASK-1516: a `///` clap doc comment doubles as
+    // `--help` text, so a SPEC-ID on one — provenance (a `trace:` marker, or a
+    // bare SPEC-ID standing in for the developer breadcrumb) OR a *descriptive*
+    // mention inside prose (e.g. "reuses the STORY-122 usage log") — leaks an
+    // internal id into user-facing output either way. BUG-629 had allowed the
+    // prose case (over-correcting the original "any SPEC-ID token" rule); BUG-1652
+    // found ~20 real leaks that carve-out let through, so TASK-1516 removed it —
+    // a SPEC-ID on a `///` line is rejected full stop, with a per-line
+    // `PROSE_SPEC_ID_ALLOWLIST` opt-out for the rare deliberately developer-/
+    // operator-facing case. The discriminator is `doc_comment_is_provenance_leak`.
+    // This stricter prose rule is deliberately CI-only and cli.rs-only: the
+    // pre-commit hook template (TASK-903) ships to every scaffolded project and
+    // scans every `*.rs` file, where ordinary rustdoc legitimately cites a
+    // project's own ids, so the hook keeps the narrower BUG-629 criterion (bare
+    // ids and `trace:` markers only). The two share the id pattern
+    // `SPEC_ID_PATTERN` verbatim. (This comment uses `//`, not `///`, so it
+    // isn't itself scanned.)
     #[test]
     fn source_doc_comments_carry_no_spec_id_provenance() {
         let src = include_str!("cli.rs");
@@ -14023,10 +14915,12 @@ mod tests {
             .collect();
         assert!(
             offenders.is_empty(),
-            "`///` doc comments in cli.rs must not carry SPEC-ID provenance — a \
-             `trace:` marker or a *bare* SPEC-ID (it leaks into `--help`). Move \
-             the id to a `//` trace marker above the item, or reword as prose. A \
-             descriptive prose mention of a SPEC-ID is allowed:\n{}",
+            "`///` doc comments in cli.rs must not carry a SPEC-ID — bare, in a \
+             `trace:` marker, or mentioned in descriptive prose — because clap \
+             pulls `///` into `--help` (TASK-1516). Move the id to a `//` trace \
+             marker above the item, reword the prose without it, or (rare) add \
+             the exact trimmed line to `PROSE_SPEC_ID_ALLOWLIST` when the help \
+             is deliberately developer-/operator-facing:\n{}",
             offenders
                 .iter()
                 .map(|(n, l)| format!("  {n}: {l}"))
@@ -14035,43 +14929,57 @@ mod tests {
         );
     }
 
-    // BUG-629 / TASK-903: the discriminator shared by the CI provenance test
-    // above and the grep-based pre-commit hook. `line` is a `///`-prefixed doc
-    // line (already trimmed). It is a *provenance leak* — and so rejected — when
-    // it carries a `trace:` marker, OR is a *bare* SPEC-ID (the line is
-    // essentially nothing but SPEC-ID token(s) + punctuation, no descriptive
-    // prose words). A descriptive prose mention of a SPEC-ID is NOT a leak.
+    // TASK-1516: exact, trimmed `///` lines that MAY carry a SPEC-ID because the
+    // help they produce is deliberately developer-/operator-facing (not aimed at
+    // an ordinary end user) and reviewed as such. Empty today — TASK-1516's sweep
+    // reworded every prose-embedded id the initial audit found instead of
+    // allowlisting it. Add a line here only for a genuine, reviewed exception;
+    // prefer rewording first.
+    const PROSE_SPEC_ID_ALLOWLIST: &[&str] = &[];
+
+    // BUG-629 / TASK-903 / TASK-1516: the discriminator shared by the CI
+    // provenance test above and the grep-based pre-commit hook. `line` is a
+    // `///`-prefixed doc line (already trimmed). It is a *provenance leak* — and
+    // so rejected — whenever it carries a SPEC-ID at all (bare, `trace:`-marked,
+    // or mentioned in descriptive prose), UNLESS the exact trimmed line is in
+    // `PROSE_SPEC_ID_ALLOWLIST`.
     //
-    // Mirror any change here into aida-core/templates/hooks/aida-pre-commit.sh
-    // and the embedded fallback in aida-core/src/scaffolding/hooks.rs so the
-    // fast gate and CI stay in lockstep.
+    // The hook's `__aida_doc_is_provenance_leak` intentionally does NOT mirror
+    // this prose rule (see the test comment above); only `SPEC_ID_PATTERN` is
+    // shared with it.
     fn doc_comment_is_provenance_leak(line: &str) -> bool {
-        let spec_id =
-            regex::Regex::new(r"\b(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN)-[0-9]+").unwrap();
+        doc_comment_is_provenance_leak_against(line, PROSE_SPEC_ID_ALLOWLIST)
+    }
+
+    // Same discriminator, parameterized on the allowlist so tests can exercise
+    // the carve-out without mutating the shared `PROSE_SPEC_ID_ALLOWLIST` const.
+    // TASK-903 / TASK-1516: the SPEC-ID pattern, byte-for-byte identical to
+    // `SPEC_ID_RE` in aida-core/templates/hooks/aida-pre-commit.sh (same
+    // prefixes, same explicit leading word boundary — POSIX ERE has no `\b`).
+    // The boundary keeps `DEBUG-2` / `SCR-4` from matching as `BUG-2` / `CR-4`.
+    // Change both together; `spec_id_pattern_matches_the_hook_template` checks.
+    const SPEC_ID_PATTERN: &str =
+        r"(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)-[0-9]+";
+
+    fn doc_comment_is_provenance_leak_against(line: &str, allowlist: &[&str]) -> bool {
+        let spec_id = regex::Regex::new(SPEC_ID_PATTERN).unwrap();
         // No SPEC-ID at all → nothing to leak.
         if !spec_id.is_match(line) {
             return false;
         }
-        // A `trace:` marker on a `///` line is always provenance.
-        if line.contains("trace:") {
-            return true;
+        // An explicit, reviewed carve-out for deliberately developer-/
+        // operator-facing help that needs to name a real SPEC-ID.
+        if allowlist.contains(&line.trim()) {
+            return false;
         }
-        // Strip the `///` prefix, then remove every SPEC-ID token. What remains
-        // is the surrounding text. If it still contains alphabetic words, this
-        // is a descriptive mention (prose) — allow. If only punctuation /
-        // whitespace / digits remain, the line is a *bare* SPEC-ID — reject.
-        let body = line.trim_start_matches('/').trim();
-        let residual = spec_id.replace_all(body, " ");
-        let has_prose_word = residual.split_whitespace().any(|tok| {
-            // A "word" is a token with two or more ascii-alphabetic chars, so a
-            // stray "a"/"x" or pure punctuation doesn't count as prose.
-            tok.chars().filter(|c| c.is_ascii_alphabetic()).count() >= 2
-        });
-        !has_prose_word
+        // Any other SPEC-ID on a `///` line — bare, `trace:`-marked, or inside
+        // descriptive prose — leaks into `--help`. Reject.
+        true
     }
 
-    // BUG-629: reject only provenance, allow descriptive prose. Reject and allow
-    // cases use the same discriminator the CI scan and the hook share.
+    // BUG-629 / TASK-1516: every SPEC-ID on a `///` line is rejected — bare,
+    // `trace:`-marked, or embedded in otherwise-legitimate prose — unless the
+    // line is explicitly allowlisted.
     #[test]
     fn doc_comment_provenance_leak_discriminates_provenance_from_prose() {
         // REJECT — trace: marker on a `///` line (the --help-leak trap).
@@ -14085,19 +14993,77 @@ mod tests {
         assert!(doc_comment_is_provenance_leak("/// (STORY-122, TASK-903)"));
         assert!(doc_comment_is_provenance_leak("/// FR-0042"));
 
-        // ALLOW — a descriptive prose mention of a SPEC-ID is legitimate help
-        // text, not provenance.
-        assert!(!doc_comment_is_provenance_leak(
+        // REJECT (TASK-1516) — a descriptive prose mention of a SPEC-ID still
+        // leaks the internal id into `--help`, even though it reads as normal
+        // help text. This is the case BUG-629 used to allow and BUG-1652 found
+        // ~20 real instances of.
+        assert!(doc_comment_is_provenance_leak(
             "/// reuses the STORY-122 usage log"
         ));
-        assert!(!doc_comment_is_provenance_leak(
+        assert!(doc_comment_is_provenance_leak(
             "/// reads the SPIKE-67 field-study log"
         ));
-        assert!(!doc_comment_is_provenance_leak(
+        assert!(doc_comment_is_provenance_leak(
             "/// (e.g. `TASK-489` — treated as `--spec`)"
         ));
+        assert!(doc_comment_is_provenance_leak(
+            "/// Spec the verdict applies to (e.g. TASK-5)."
+        ));
+
+        // REJECT — DOC is a spec prefix too.
+        assert!(doc_comment_is_provenance_leak("/// see DOC-3"));
+
         // ALLOW — no SPEC-ID at all.
         assert!(!doc_comment_is_provenance_leak("/// Mark a spec done"));
+        // ALLOW — an id-shaped substring of a longer word is not a SPEC-ID
+        // (the leading word boundary).
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Log at DEBUG-2 verbosity"
+        ));
+        assert!(!doc_comment_is_provenance_leak(
+            "/// Handles the SCR-4 screen"
+        ));
+    }
+
+    // TASK-903 / TASK-1516: the CI guard and the pre-commit hook template must
+    // share one SPEC-ID pattern so they agree on what counts as an id.
+    #[test]
+    fn spec_id_pattern_matches_the_hook_template() {
+        let hook = include_str!("../../aida-core/templates/hooks/aida-pre-commit.sh");
+        let expected = format!("SPEC_ID_RE='{SPEC_ID_PATTERN}'");
+        assert!(
+            hook.lines().any(|l| l.trim() == expected),
+            "aida-pre-commit.sh must define `{expected}` to stay in lockstep \
+             with the cli.rs guard"
+        );
+    }
+
+    // TASK-1516: an explicitly allowlisted line is excused even though it
+    // carries a SPEC-ID (the reviewed developer-/operator-facing carve-out);
+    // an unlisted line with the same SPEC-ID is still rejected.
+    #[test]
+    fn doc_comment_provenance_leak_honors_the_allowlist() {
+        let allowlist: &[&str] = &["/// deliberately developer-facing: STORY-1"];
+        assert!(!doc_comment_is_provenance_leak_against(
+            "/// deliberately developer-facing: STORY-1",
+            allowlist
+        ));
+        // A different SPEC-ID on an otherwise-identical line is NOT excused —
+        // the allowlist matches the exact trimmed line, not a pattern.
+        assert!(doc_comment_is_provenance_leak_against(
+            "/// deliberately developer-facing: STORY-2",
+            allowlist
+        ));
+        // Leading/trailing whitespace differences still match (line is
+        // trimmed before comparison).
+        assert!(!doc_comment_is_provenance_leak_against(
+            "   /// deliberately developer-facing: STORY-1   ",
+            allowlist
+        ));
+        // The real, shared allowlist is empty today (TASK-1516 reworded every
+        // known occurrence instead of allowlisting it), so nothing is excused
+        // through it right now.
+        assert!(PROSE_SPEC_ID_ALLOWLIST.is_empty());
     }
 
     // trace:TASK-0415 — the positional status shortcut parses into the List
@@ -14511,6 +15477,18 @@ mod tests {
         );
     }
 
+    // trace:TASK-200 | ai:codex
+    #[test]
+    fn agent_new_help_discloses_foreground_blocking_behavior() {
+        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let help = find_subcommand_help(&mut cmd, &["agent", "new"]);
+        let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("BLOCKS until") && flat.contains("does not exit when its turn ends"),
+            "`aida agent new --help` no longer explains the foreground blocking behavior; got:\n{help}"
+        );
+    }
+
     /// Render the long help for a nested subcommand path (e.g. `queue work`).
     // trace:TASK-185 | ai:claude
     fn find_subcommand_help(cmd: &mut clap::Command, path: &[&str]) -> String {
@@ -14557,6 +15535,32 @@ mod tests {
                 ..
             }
         ));
+
+        // TASK-1481: `timeline` is subcommand-only (no legacy `--timeline`
+        // flag), and composes with the shared --cmd/--slower-than/--limit
+        // flags the same way `events` does.
+        let cli = Cli::try_parse_from([
+            "aida",
+            "usage",
+            "--cmd",
+            "queue list",
+            "--slower-than",
+            "500ms",
+            "timeline",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Usage {
+                action: Some(UsageCommand::Timeline),
+                cmd,
+                slower_than,
+                ..
+            } => {
+                assert_eq!(cmd.as_deref(), Some("queue list"));
+                assert_eq!(slower_than, Some(500));
+            }
+            other => panic!("expected Usage{{ action: Timeline, .. }}, got {other:?}"),
+        }
 
         let cli = Cli::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"]).unwrap();
         assert!(matches!(
@@ -14631,11 +15635,29 @@ mod tests {
             Command::Statusline { title: true, .. }
         ));
 
+        // trace:TASK-1479 | ai:claude
+        let cli = Cli::try_parse_from(["aida", "statusline"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: None, .. }
+        ));
+        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "claude"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: Some(ref c), .. } if c == "claude"
+        ));
+        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "agy"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { client: Some(ref c), .. } if c == "agy"
+        ));
+        assert!(Cli::try_parse_from(["aida", "statusline", "--client", "codex"]).is_err());
+
         let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
@@ -14656,7 +15678,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -14667,7 +15689,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 ..
             } if id == "BUG-1474"
@@ -14687,12 +15709,68 @@ mod tests {
         assert!(matches!(
             cli.command,
             Command::History {
-                cmd: Some(HistoryCommand::Events),
+                cmd: Some(HistoryCommand::Events { .. }),
                 id: Some(ref id),
                 status_changes: true,
                 ..
             } if id == "BUG-1474"
         ));
+    }
+
+    // TASK-1480: `aida history <SPEC-ID>` is the positional shorthand for
+    // `aida history --id <SPEC-ID>`. Asserts the alias parses into the
+    // `spec` field, composes with other flags, conflicts with an explicit
+    // `--id`, and doesn't collide with the `events` subcommand.
+    // trace:TASK-1480 | ai:claude
+    #[test]
+    fn history_positional_spec_id_parses() {
+        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                id: None,
+                cmd: None,
+                ..
+            } if s == "TASK-1480"
+        ));
+
+        // Composes with other flags in either order.
+        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480", "--oneline"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                oneline: true,
+                ..
+            } if s == "TASK-1480"
+        ));
+        let cli = Cli::try_parse_from(["aida", "history", "--full", "TASK-1480"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: Some(ref s),
+                full: true,
+                ..
+            } if s == "TASK-1480"
+        ));
+
+        // Bare `events` still resolves to the subcommand, not a spec named
+        // "events" — no real spec id is shaped like that, and the
+        // subcommand keeps priority.
+        let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                spec: None,
+                cmd: Some(HistoryCommand::Events { .. }),
+                ..
+            }
+        ));
+
+        // Passing both the positional and --id is refused, not silently
+        // resolved one way or the other.
+        assert!(Cli::try_parse_from(["aida", "history", "TASK-1480", "--id", "TASK-9"]).is_err());
     }
 
     // trace:TASK-1427 | ai:codex
@@ -14986,14 +16064,44 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
         match cli.command {
             Command::Review {
-                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
                 ..
             } => {
                 assert!(json);
                 assert!(fix);
+                assert!(!age);
             }
             other => panic!("expected review stranded command, got {other:?}"),
         }
+    }
+
+    // trace:TASK-1423 | ai:claude
+    #[test]
+    fn review_stranded_parses_age_flag() {
+        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--age", "--json"]).unwrap();
+        match cli.command {
+            Command::Review {
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
+                ..
+            } => {
+                assert!(json);
+                assert!(!fix);
+                assert!(age);
+            }
+            other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1423 | ai:claude
+    #[test]
+    fn review_stranded_age_and_fix_are_mutually_exclusive() {
+        let err =
+            Cli::try_parse_from(["aida", "review", "stranded", "--age", "--fix"]).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("cannot be used with") || msg.contains("conflicts"),
+            "expected a clear conflict error, got: {msg}"
+        );
     }
 
     // trace:STORY-1415 | ai:claude
@@ -15025,11 +16133,12 @@ mod tests {
         let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
         match cli.command {
             Command::Review {
-                cmd: Some(ReviewCommand::Stranded { json, fix }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
                 ..
             } => {
                 assert!(!json);
                 assert!(!fix, "the sweep must default to read-only");
+                assert!(!age, "the offline staleness report is opt-in");
             }
             other => panic!("expected review stranded command, got {other:?}"),
         }

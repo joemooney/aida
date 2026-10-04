@@ -4,7 +4,9 @@
 //! Shared PR-detection/git helpers stay in `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+use serde::{Deserialize, Serialize};
 
 /// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
@@ -50,6 +52,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
+        PrCommand::List { json } => pr_list_handler(*json),
     }
 }
 
@@ -463,6 +466,11 @@ pub(crate) fn pr_rebase_handler(
         PrRebaseMode::Default
     };
 
+    // trace:BUG-1622 | ai:claude
+    if let Some(sha) = onto_parent {
+        crate::git_arg_guard::reject_option_like("--onto-parent", sha)?;
+    }
+
     let project_root = find_project_root()?;
 
     // ---- Step 1: resolve PR metadata via the forge (STORY-621 Slice 2:
@@ -613,7 +621,14 @@ pub(crate) fn pr_rebase_handler(
         let is_ancestor = std::process::Command::new("git")
             .arg("-C")
             .arg(&wt_path)
-            .args(["merge-base", "--is-ancestor", parent_sha, "HEAD"])
+            // trace:BUG-1622 | ai:claude
+            .args([
+                "merge-base",
+                "--is-ancestor",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+                "HEAD",
+            ])
             .status();
         if !matches!(is_ancestor, Ok(s) if s.success()) {
             cleanup_worktree();
@@ -636,7 +651,14 @@ pub(crate) fn pr_rebase_handler(
         let mut cmd = std::process::Command::new("git");
         cmd.arg("-C").arg(&wt_path);
         match onto_parent {
-            Some(parent_sha) => cmd.args(["rebase", "--onto", &origin_base, parent_sha]),
+            // trace:BUG-1622 | ai:claude
+            Some(parent_sha) => cmd.args([
+                "rebase",
+                "--onto",
+                &origin_base,
+                crate::git_arg_guard::END_OF_OPTIONS,
+                parent_sha,
+            ]),
             None => cmd.args(["rebase", &origin_base]),
         };
         cmd.status()
@@ -1017,23 +1039,22 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
     gh_bin: &std::ffi::OsStr,
 ) -> Result<serde_json::Value> {
     let n_str = n.to_string();
-    let out = std::process::Command::new(gh_bin)
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "view",
-            n_str.as_str(),
-            "--json",
-            "baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
-        ])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-            } else {
-                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-            }
-        })?;
+    let mut command = std::process::Command::new(gh_bin);
+    command.current_dir(project_root).args([
+        "pr",
+        "view",
+        n_str.as_str(),
+        "--json",
+        "baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+    ]);
+    // trace:BUG-1689 | ai:codex
+    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        } else {
+            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+        }
+    })?;
     if !out.status.success() {
         anyhow::bail!(
             "`gh pr view {}` exited {} — {}",
@@ -1286,10 +1307,18 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         .strip_prefix("origin/")
         .unwrap_or(origin_ref.as_str())
         .to_string();
+    // The base comes from the forge (a PR's baseRefName); never let it
+    // read as a git option. trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("PR base branch", &remote_branch)?;
     eprintln!("  step 2: rebasing onto current {origin_ref}");
     let fetch = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["fetch", "origin", &remote_branch])
+        .args([
+            "fetch",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            "origin",
+            &remote_branch,
+        ])
         .status()
         .context("could not invoke `git fetch`")?;
     if !fetch.success() {
@@ -1297,7 +1326,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     }
     let rebase = std::process::Command::new("git")
         .current_dir(&project_root)
-        .args(["rebase", &origin_ref])
+        // trace:BUG-1622 | ai:claude
+        .args(["rebase", crate::git_arg_guard::END_OF_OPTIONS, &origin_ref])
         .status()
         .context("could not invoke `git rebase`")?;
     if !rebase.success() {
@@ -1412,17 +1442,17 @@ pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
 /// to say so.
 // trace:TASK-1416 | ai:claude
 fn finish_ceremony_pr_base(pr: u64) -> Option<String> {
-    std::process::Command::new("gh")
-        .args([
-            "pr",
-            "view",
-            &pr.to_string(),
-            "--json",
-            "baseRefName",
-            "-q",
-            ".baseRefName",
-        ])
-        .output()
+    let mut command = std::process::Command::new("gh");
+    command.args([
+        "pr",
+        "view",
+        &pr.to_string(),
+        "--json",
+        "baseRefName",
+        "-q",
+        ".baseRefName",
+    ]);
+    crate::process_retry::command_output_retrying_etxtbsy(&mut command)
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -2198,6 +2228,16 @@ pub(crate) fn pr_ship_handler(
                 Err(_) => {} // no per-check rows on this forge — keep the coarse verdict
             }
         }
+        // STORY-1480: the ship's CI wait reached a terminal verdict — emit
+        // the same CiTerminal the drain's CI phase emits (empty run_uuid;
+        // specs credited from the branch name), covering interactive ships.
+        // Emitted after the BUG-1180 refinement so a hold/matrix pseudo-red
+        // records as the green it really was. trace:STORY-1480 | ai:claude
+        crate::events::emit_interactive_lifecycle(
+            &main_worktree,
+            &pr_ship::extract_spec_ids_from_text(&ship_branch),
+            &crate::events::EventKind::CiTerminal { green: !ci_failed },
+        );
         if ci_failed {
             let detail = match &ci_result {
                 Err(e) => format!("{e:#}"),
@@ -2754,7 +2794,7 @@ pub(crate) fn pr_ship_handler(
                     std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
                         .arg("pull")
-                        .status()
+                        .status_retrying_etxtbsy()
                         .context("could not invoke `aida pull`")?,
                 )
             }
@@ -2832,31 +2872,37 @@ pub(crate) fn pr_ship_handler(
                     .map(|c| c.starts_with(&lease.worktree_path))
                     .unwrap_or(false);
                 if inside_target {
-                    eprintln!(
-                        "  step 5: lease {} owns this shell's worktree — \
-                         exit this shell, then run `aida session end {}`",
-                        lease.id, lease.id
+                    // TASK-1582: name scope/role/worktree, not just the id.
+                    // trace:TASK-1582 | ai:antigravity
+                    let (line, detail) = pr_ship::step5_inside_worktree_messages(
+                        &lease.id,
+                        &lease.scope,
+                        lease.role.as_deref(),
+                        &lease.worktree_path,
+                        &lease.branch,
                     );
+                    eprintln!("{line}");
                     log_ship_activity(
                         &main_worktree,
                         Some(pr_number),
                         &ShipStep::EndLease,
-                        &StepOutcome::Skipped(format!(
-                            "shell inside lease {} — user must run `aida session end {}` after exiting",
-                            lease.id, lease.id
-                        )),
+                        &StepOutcome::Skipped(detail),
                     );
                 } else {
                     eprintln!(
-                        "  step 5: ending lease {} (worktree {})",
-                        lease.id,
-                        lease.worktree_path.display()
+                        "  step 5: ending {}",
+                        pr_ship::describe_lease_for_step5(
+                            &lease.id,
+                            &lease.scope,
+                            lease.role.as_deref(),
+                            &lease.worktree_path,
+                        )
                     );
                     let aida_bin = pr_ship_post_merge_aida_exe();
                     let end_status = std::process::Command::new(&aida_bin)
                         .current_dir(&main_worktree)
                         .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
-                        .status()
+                        .status_retrying_etxtbsy()
                         .context("could not invoke `aida session end`")?;
                     if !end_status.success() {
                         log_ship_activity(
@@ -2928,9 +2974,8 @@ pub(crate) fn pr_ship_handler(
             );
         }
         eprintln!("  step 6: pruning verified merged agent worktrees");
-        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc(
-            /* yes */ true, /* force */ true, /* json */ false,
-        ) {
+        // trace:BUG-1718 | ai:codex
+        if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc_quiet() {
             eprintln!(
                 "  {} post-merge worktree gc failed or was partially applied: {e:#}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -3205,6 +3250,18 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
             change.url
         );
     }
+    // STORY-1480: a PR opened interactively records the same PhaseDonePr the
+    // drain's implementer phase records, so the timeline's work-done boundary
+    // exists for interactively-shipped specs too. Specs credited from the
+    // head commit's trailers; the feed lives at the MAIN worktree root.
+    // trace:STORY-1480 | ai:claude
+    crate::events::emit_interactive_lifecycle(
+        &main_worktree_root_from(project_root),
+        &extract_spec_ids_from_commit(&commit_msg),
+        &crate::events::EventKind::PhaseDonePr {
+            pr: change.id as u32,
+        },
+    );
     Ok(change.id)
 }
 
@@ -3368,7 +3425,40 @@ pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) ->
         draft: false,
     };
     match crate::forge::forge_for_open_change(probe_repo).open_change(req) {
-        Ok(_) => true,
+        Ok(change) => {
+            // STORY-1480: adopting unshipped work IS the integrate-side
+            // implementer hand-off — before this, such a spec's history
+            // read UnshippedWorkDetected → SpecCompleted with everything
+            // between unknown. Record the adoption pair: the phase entry
+            // (work existed; the adopter is picking it up) and the PR-open
+            // boundary, both with empty run_uuid like every interactive
+            // emit. trace:STORY-1480 | ai:claude
+            let root = main_worktree_root_from(probe_repo);
+            let specs = extract_spec_ids_from_commit(&commit_msg);
+            crate::events::emit_interactive_lifecycle(
+                &root,
+                &specs,
+                &crate::events::EventKind::PhaseEntered {
+                    idx: 1,
+                    slug: "implementer".to_string(),
+                    vendor: None,
+                    seat: None,
+                    model: None,
+                    effort: None,
+                    attempt: 1,
+                },
+            );
+            if change.id != 0 {
+                crate::events::emit_interactive_lifecycle(
+                    &root,
+                    &specs,
+                    &crate::events::EventKind::PhaseDonePr {
+                        pr: change.id as u32,
+                    },
+                );
+            }
+            true
+        }
         Err(e) => {
             eprintln!(
                 "{} auto-open failed: {e:#}",
@@ -3387,10 +3477,21 @@ pub(crate) fn branch_head_commit_message(
     project_root: &std::path::Path,
     branch: &str,
 ) -> Option<String> {
+    // A forge-reported PR head a fork author named. trace:BUG-1622 | ai:claude
+    if crate::git_arg_guard::is_option_like(branch) {
+        return None;
+    }
     for r in [branch.to_string(), format!("origin/{branch}")] {
         let out = std::process::Command::new("git")
             .current_dir(project_root)
-            .args(["log", "-1", "--format=%B", &r])
+            .args([
+                "log",
+                "-1",
+                "--format=%B",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                &r,
+                "--",
+            ])
             .output()
             .ok()?;
         if out.status.success() {
@@ -3456,17 +3557,17 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
     n: u64,
 ) -> Result<PrShipMetadata> {
     let n_str = n.to_string();
-    let out = std::process::Command::new("gh")
+    let mut command = std::process::Command::new("gh");
+    command
         .current_dir(project_root)
-        .args(["pr", "view", &n_str, "--json", "title,body"])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
-            } else {
-                anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
-            }
-        })?;
+        .args(["pr", "view", &n_str, "--json", "title,body"]);
+    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            anyhow::anyhow!("`gh` not on PATH — install from https://cli.github.com/")
+        } else {
+            anyhow::anyhow!("`gh pr view {}` failed to spawn: {}", n, e)
+        }
+    })?;
     if !out.status.success() {
         anyhow::bail!(
             "`gh pr view {}` exited {} — {}",
@@ -4184,6 +4285,217 @@ pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) ->
         .unwrap_or(false)
 }
 
+// ---------------------------------------------------------------------------
+// BUG-1610: pre-MR-creation base check + `--target-branch`-overridable
+// recovery state.
+//
+// A GitLab project whose remote `main` is never pushed lets the FIRST pushed
+// branch become the project's default. `aida review <SPEC>` then offers to
+// open a change from that branch with no explicit base — `glab mr create
+// --source-branch <branch>` (no `--target-branch`) silently targets the
+// project default, i.e. the SAME branch, and GitLab later refuses to merge
+// it ("You must be on a different branch other than <branch>"). Diagnosing
+// this BEFORE offering the create command turns a confusing later `glab`
+// failure into an immediate, actionable refusal naming both branches.
+// trace:BUG-1610 | ai:claude
+
+/// Outcome of checking the intended base before offering to create a
+/// change.
+// trace:BUG-1610 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MrBasePreflight {
+    /// The base exists on the remote and differs from the source — safe to
+    /// offer.
+    Ok,
+    /// `origin` has no `refs/heads/<base>` — the intended base was never
+    /// pushed.
+    MissingRemoteBase,
+    /// The base and the source branch are the same ref.
+    SourceEqualsBase,
+    /// `origin` could not be reached (offline, auth, hung connection), so
+    /// the base could not be verified either way. Fails closed: no offer.
+    OriginUnreachable,
+}
+
+/// Check whether `base` is a safe MR/PR target for `source_branch`: it must
+/// exist on `origin` and must not be the same ref as the source. Only talks
+/// to the remote (`git ls-remote`) — no local fetch required, so it is
+/// correct even against a bare fixture `origin` with nothing fetched yet.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn preflight_mr_base(
+    project_root: &std::path::Path,
+    source_branch: &str,
+    base: &str,
+) -> MrBasePreflight {
+    if base == source_branch {
+        return MrBasePreflight::SourceEqualsBase;
+    }
+    // Bounded the same way as `probe_branch_on_origin` (BUG-257): a hung
+    // HTTPS dial must not freeze `aida review`, and no credential prompt may
+    // block it. `--exit-code` exits 2 only when origin answered and has no
+    // such ref; any other failure means origin was not reached.
+    // trace:BUG-1610 | ai:claude
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .args([
+            "-c",
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=10",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            crate::git_arg_guard::END_OF_OPTIONS, // trace:BUG-1622 | ai:claude
+            "origin",
+            base,
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() && !o.stdout.is_empty() => MrBasePreflight::Ok,
+        Ok(o) if o.status.code() == Some(2) => MrBasePreflight::MissingRemoteBase,
+        _ => MrBasePreflight::OriginUnreachable,
+    }
+}
+
+/// Refusal text for a non-`Ok` [`MrBasePreflight`] — names both branches and
+/// gives the exact, provider-correct recovery sequence instead of letting
+/// the caller offer an impossible change-create.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn mr_base_diagnosis_message(
+    forge_kind: crate::forge::ForgeKind,
+    outcome: MrBasePreflight,
+    source_branch: &str,
+    base: &str,
+) -> String {
+    let change_noun = forge_kind.change_noun();
+    let condition = match outcome {
+        MrBasePreflight::Ok => return String::new(),
+        MrBasePreflight::OriginUnreachable => {
+            return format!(
+                "not offering a {change_noun} from `{source_branch}`: could not reach \
+                 `origin` to confirm that `{base}` exists there. Check the network or \
+                 credentials and run the command again."
+            );
+        }
+        MrBasePreflight::MissingRemoteBase => format!(
+            "the intended base `{base}` does not exist on `origin`. This usually \
+             happens when the repository was initialized before `{base}` was pushed, \
+             so the forge made `{source_branch}` the project's default branch instead"
+        ),
+        MrBasePreflight::SourceEqualsBase => format!(
+            "it is also the intended base `{base}` (the project's current default \
+             branch) — a change cannot merge into itself"
+        ),
+    };
+    let mut msg = format!(
+        "refusing to offer a {change_noun} from `{source_branch}` — {condition}.\n\n\
+         Recovery:\n  1. git push -u origin {base}\n"
+    );
+    match forge_kind {
+        crate::forge::ForgeKind::GitLab => {
+            msg.push_str(&format!(
+                "  2. glab repo update --defaultBranch {base}\n  \
+                 3. glab mr create --source-branch {source_branch} --target-branch {base}"
+            ));
+        }
+        crate::forge::ForgeKind::GitHub => {
+            msg.push_str(&format!(
+                "  2. gh repo edit --default-branch {base}\n  \
+                 3. gh pr create --head {source_branch} --base {base}"
+            ));
+        }
+        crate::forge::ForgeKind::None => {
+            msg.push_str("  2. open the change against that base through your forge's UI");
+        }
+    }
+    msg
+}
+
+/// Persisted state of a change offered/attempted via `aida review`'s AC-5
+/// (re)open-a-change prompt — enough to remember which base a retry should
+/// target without the operator re-typing it every time.
+// trace:BUG-1610 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct MrRecoveryState {
+    pub spec: String,
+    pub source_branch: String,
+    pub target_branch: String,
+}
+
+/// `.aida/mr-recovery/<spec>.json` under the project root — mirrors
+/// [`crate::punt::hold_signal_path`]'s convention for small, spec-scoped JSON
+/// markers.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn mr_recovery_path(project_root: &std::path::Path, spec: &str) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join("mr-recovery")
+        .join(format!("{spec}.json"))
+}
+
+/// Write a recovery-state marker, creating `.aida/mr-recovery/` if needed.
+///
+/// Refuses (returns `Err`, writes nothing) when `source_branch ==
+/// target_branch` — persisting that pair is exactly the self-referential
+/// state BUG-1610 observed a hand-run `glab mr create --source-branch
+/// <branch>` (no `--target-branch`) leave behind when the branch was also
+/// the project's default. A later, corrected `--target-branch` retry must
+/// never read that broken pair back (see [`resolve_mr_target_branch`]), so
+/// it must never be written in the first place — enforced here rather than
+/// trusted to every call site.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn write_mr_recovery_state(
+    path: &std::path::Path,
+    state: &MrRecoveryState,
+) -> Result<()> {
+    if state.source_branch == state.target_branch {
+        anyhow::bail!(
+            "refusing to save MR recovery state for {} with source == target (`{}`)",
+            state.spec,
+            state.source_branch
+        );
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(state)?)?;
+    Ok(())
+}
+
+/// Read a recovery-state marker. `None` when absent or unparseable — either
+/// way the caller falls back to the resolved default base.
+// trace:BUG-1610 | ai:claude
+pub(crate) fn read_mr_recovery_state(path: &std::path::Path) -> Option<MrRecoveryState> {
+    let body = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&body).ok()
+}
+
+/// Resolve the target branch for a (re)tried change-create. An explicit
+/// `--target-branch` ALWAYS wins over whatever a previous attempt saved —
+/// a corrected retry must never be silently overridden by stale recovery
+/// state (the exact BUG-1610 failure: `--recover --target-branch main`
+/// still failing because a saved `story-52-work -> story-52-work` pair won).
+// trace:BUG-1610 | ai:claude
+pub(crate) fn resolve_mr_target_branch(
+    explicit_target_branch: Option<&str>,
+    saved: Option<&MrRecoveryState>,
+    default_base: &str,
+) -> String {
+    if let Some(t) = explicit_target_branch {
+        return t.to_string();
+    }
+    if let Some(s) = saved {
+        return s.target_branch.clone();
+    }
+    default_base.to_string()
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1610_mr_base_recovery_tests.rs"]
+mod bug_1610_mr_base_recovery_tests;
+
 #[cfg(test)]
 #[path = "tests/task_471_stale_base_preflight_tests.rs"]
 mod task_471_stale_base_preflight_tests;
@@ -4331,6 +4643,26 @@ mod pr_ship_environment_tests {
         assert!(args.contains("pr create"), "{args}");
         assert!(args.contains("--base main"), "{args}");
         assert!(args.contains("--head bug-896"), "{args}");
+
+        // STORY-1480: the adoption recorded its lifecycle pair — the
+        // implementer entry and the PR-open boundary — credited to the spec
+        // the head commit's trailer names, with no run uuid (no drain).
+        // trace:STORY-1480 | ai:claude
+        let feed = crate::events::read_all(&repo);
+        let adoption: Vec<_> = feed
+            .iter()
+            .filter(|e| e.spec.as_deref() == Some("BUG-896"))
+            .collect();
+        assert_eq!(adoption.len(), 2, "{adoption:?}");
+        assert!(matches!(
+            adoption[0].kind,
+            crate::events::EventKind::PhaseEntered { ref slug, attempt: 1, .. } if slug == "implementer"
+        ));
+        assert!(matches!(
+            adoption[1].kind,
+            crate::events::EventKind::PhaseDonePr { pr: 896 }
+        ));
+        assert!(adoption.iter().all(|e| e.run_uuid.is_empty()));
     }
 
     #[test]

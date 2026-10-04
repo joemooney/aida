@@ -159,7 +159,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 - `list --dangling` — surface edges whose target no longer resolves (tombstones from deleted specs). Pairs with `aida doctor verify-relationships --repair` to clean them.
 - `list --all` — include edges between terminal-status specs, hidden by default so the global view stays focused on actionable work.
 
-**Gotchas.** `rel list` with no args lists *every edge in the graph* — on a large project that's a firehose; pass a spec-id (or `--source`/`--target`) to scope it. The `--source` flag is just the explicit form of the positional ID, for scripts that want to be unambiguous.
+**Gotchas.** `rel remove` removes only edges of the `--type` you name. Removing `references` (or `related`) also removes an old custom `related` edge to the same target. To repair every old custom edge whose spelling resolves to a standard type at once, use `aida db migrate-related-edges` (Chapter 10). `rel list` with no args lists *every edge in the graph* — on a large project that's a firehose; pass a spec-id (or `--source`/`--target`) to scope it. The `--source` flag is just the explicit form of the positional ID, for scripts that want to be unambiguous. A `parent`/`child` edge is always bidirectional — `rel add --type child` (without `-b`) also writes the parent's reciprocal `parent` edge, and `rel remove --type child` (without `-b`) removes both sides too, so the pair can't go stale by removing only one end.
 
 **Chains with** — `rel add` wires the edge → `graph` traverses it. `rel list --dangling` → `aida doctor` to repair.
 
@@ -205,7 +205,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 **Don't reach for it when** — the spec is still *live* work — archiving non-terminal specs is guarded for a reason (the closed long-tail is the target). And don't reach for `archive` when you mean *delete* (`del`) — archive preserves; or when you mean *reject* (`edit --status rejected`) — archive is orthogonal to status, it doesn't say "we decided no."
 
 **Key options (rationale only).**
-- `--older-than <DURATION>` — bulk-sweep every spec last touched before a window (`30d`, `12h`, RFC3339). Mutually exclusive with a single ID; this is the maintenance verb.
+- `--older-than <DURATION>` — bulk-sweep every spec last touched before a point: a relative window (`30d`, `12h`, `2w`, `24 hours ago`), an ISO date (local midnight), a zone-less ISO datetime (local time), or RFC3339 — the same grammar as every other time bound. <!-- trace:TASK-1509 | ai:claude --> Mutually exclusive with a single ID; this is the maintenance verb.
 - `--status <CSV>` — restrict the `--older-than` sweep to specific statuses; defaults to `completed,rejected` so a bulk sweep can't accidentally archive live work.
 - `--dry-run` — print the sweep plan without writing. **Always** dry-run a bulk `--older-than` first.
 - `--force` — opt past the safety rails: archive a *non-terminal* or *queued* spec, or let the sweep include non-terminal statuses. The deliberate override when you really do mean to shelve live work.

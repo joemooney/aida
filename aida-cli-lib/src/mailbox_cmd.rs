@@ -831,8 +831,8 @@ fn archive_mailbox_older_than(
 ) -> Result<()> {
     use aida_core::mailbox::{archive_candidates, inbox_for, merge_dedup, Message};
 
-    let age = parse_days_arg(duration)
-        .map_err(|e| anyhow::anyhow!("invalid --older-than `{duration}`: {e}"))?;
+    // trace:TASK-1509 | ai:claude
+    let age = crate::queue_cmd::parse_lookback(duration, "--older-than")?;
     let cutoff = (chrono::Utc::now() - age).timestamp_millis();
     let local = mailbox_store::read_local_messages(project_root)?;
     let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -1413,7 +1413,7 @@ mod tests {
             .env("AIDA_BUG_1482_WORKER", "1")
             .env("AIDA_BUG_1482_PROJECT", project.path())
             .stdout(std::process::Stdio::piped())
-            .spawn()
+            .spawn_retrying_etxtbsy()
             .expect("spawn worker");
 
         // Act like `| head`: read lines up through the inbox header (skipping

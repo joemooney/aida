@@ -1,5 +1,20 @@
 # AGENTS.md
 
+History supports scoped named templates and ordered event fields across CLI/MCP.
+Template parsing, event-local field projection, and config persistence share
+`aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.
+Template saves preserve inline TOML tables; date formatting consumes the feed's
+already-local minute timestamps without a second timezone conversion.
+See [history layout docs](docs/cli/08-reporting.md#history-layouts-and-columns)
+and the [accepted storage ADR](docs/aida/05-decisions/ADR-history-template-config.md).
+<!-- trace:STORY-1477 | ai:codex -->
+
+Merge-hold gate checks now require recorded clearance for any PR carrying the
+persistent `aida:merge-hold-recorded` label; local event history reports marker
+deletion without clearance. The same-user/admin-token limit and protected-broker
+boundary are documented in [reporting](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
+<!-- trace:BUG-1693 | ai:codex -->
+
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
 keep git and the spec store coherent, and leave durable traces for the
@@ -16,6 +31,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
+## Cache read behavior
+
+Compatible read snapshots use a single refresh flock and a shared bounded wait.
+Before the detached worker slice lands, non-TTY full-rebuild reads report
+`deferred`; a one-attempt incremental SQLite contention reports `writer_busy`.
+Neither state promises background progress. `worker_running` means an observed
+refresh flock holder (including an inline refresher). `aida cache rebuild` and
+mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
+
 ## Storage Model
 
 The spec graph is git-canonical. The orphan `aida-store` branch stores
@@ -30,6 +54,11 @@ needs direct git-canonical access:
 ```bash
 ln -s /home/joe/ai/aida/.aida-store .aida-store
 ```
+
+Global role queues use permanent `~/.aida/queue/<role>.lock` sidecars and
+atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
+snapshot-save writer. Corrupt queues fail closed on mutation; position
+placement is still computed by callers outside the lock. See OVERVIEW.md.
 
 ## Requirements Management
 
@@ -152,6 +181,11 @@ brief, follow this path (the same one used for TASK-132 and BUG-406):
 7. `aida pr ship` — watches CI, squash-merges, pulls, and auto-bumps the spec to Completed.
 8. End the session; verify the spec reached Completed.
 9. Architecture-class work → sketch first and wait for master sign-off (see Sketch-First Protocol).
+
+Local drain locks use PID/start identity, never launch age, to retain a live
+holder. Integration takes the main worktree's lock even from a sibling checkout.
+`AIDA_DRAIN_LOCK_STALE_SECS` controls shared claims only; see
+[lock regression coverage](docs/testing/bug-1683-drain-lock.md) for scope and limits.
 
 ## Code Traceability
 

@@ -13,8 +13,6 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::IsTerminal;
 
-use aida_core::DatabaseBackend;
-
 use crate::not_found;
 use crate::{
     has_open_decision_request, print_decision_request, prompt_decision_action,

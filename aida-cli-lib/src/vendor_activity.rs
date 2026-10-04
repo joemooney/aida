@@ -136,20 +136,10 @@ fn lease_pid_alive(ctx: &VendorActivityContext) -> bool {
     else {
         return false;
     };
-    creator_pid.is_some_and(pid_alive)
-}
-
-fn pid_alive(pid: u32) -> bool {
-    #[cfg(unix)]
-    {
-        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-        rc == 0
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        false
-    }
+    // BUG-1741: the canonical predicate, not a local `kill(pid, 0)` — a
+    // defunct (zombie) creator must not count as vendor activity.
+    // trace:BUG-1741 | ai:claude
+    creator_pid.is_some_and(aida_core::liveness::pid_is_alive)
 }
 
 struct ClaudeActivity;
@@ -205,7 +195,7 @@ fn codex_sessions_root() -> Option<PathBuf> {
             return Some(PathBuf::from(trimmed));
         }
     }
-    dirs::home_dir().map(|home| home.join(".codex").join("sessions"))
+    crate::home_dir().map(|home| home.join(".codex").join("sessions"))
 }
 
 fn codex_rollout_activity(session_id: &str) -> Option<SystemTime> {
@@ -289,7 +279,10 @@ mod tests {
             format!("{{\"session_id\":\"{session}\",\"event\":\"step\"}}\n"),
         )
         .unwrap();
-        std::env::set_var(
+        // Hold the shared env lock for the whole set -> read -> restore
+        // window; the guard restores the prior value even if an assert fails.
+        // trace:BUG-1666 | ai:claude
+        let _env = crate::test_env::EnvVarGuard::set(
             "AIDA_CODEX_SESSIONS_DIR",
             tmp.path().join("codex").join("sessions"),
         );
@@ -299,7 +292,6 @@ mod tests {
 
         assert_eq!(snap.source, Some("codex_rollout"));
         assert!(snap.last_activity.is_some());
-        std::env::remove_var("AIDA_CODEX_SESSIONS_DIR");
     }
 
     #[test]

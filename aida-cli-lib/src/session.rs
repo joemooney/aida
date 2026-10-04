@@ -14,6 +14,7 @@
 //!
 //! trace:FR-1-043 | ai:claude
 
+use crate::process_retry::RetryEtxtbsy;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use std::path::{Path, PathBuf};
@@ -813,7 +814,7 @@ fn truncate(s: &str, max: usize) -> String {
 const LAUNCH_LOG_REL: &str = ".aida/session-launches.log";
 
 fn launch_log_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate launches log")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate launches log")?;
     Ok(home.join(LAUNCH_LOG_REL))
 }
 
@@ -882,15 +883,17 @@ pub fn exec_claude_with_session(
 /// Build the argv (after the `claude` program name) for an interactive
 /// `aida queue work` launch — `--permission-mode`, optional `--name` /
 /// `--session-id`, and a trailing positional initial prompt. Shared by
-/// `exec_claude` (process replacement) and `spawn_claude_session`
-/// (spawn + wait, BUG-226) so the two launch paths can never drift.
+/// `exec_claude` (process replacement) and the interactive reviewer launch
+/// plan ([`interactive_reviewer_launch_plan`], spawn + wait, BUG-226/BUG-1607)
+/// so the launch paths can never drift.
 /// trace:BUG-226 | ai:claude
 ///
 /// STORY-495: `permission_mode` is `Option<&str>`. `None` omits
 /// `--permission-mode` entirely so the spawned `claude` uses its native
 /// permission posture (the faithful-launcher default). The headless launch
-/// path uses a separate [`claude_headless_args`] builder that always forces
-/// `bypassPermissions`, so this change never touches the unattended drain.
+/// path uses a separate [`claude_headless_args_with_posture`] builder that
+/// always forces `bypassPermissions`, so this change never touches the
+/// unattended drain.
 pub fn claude_session_args(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -1019,34 +1022,9 @@ fn run_claude_session(
     Ok(())
 }
 
-/// BUG-226: spawn an interactive `claude` session (inherited stdio) and
-/// wait for it, returning the exit status. The standalone reviewer path
-/// needs `aida queue work` to *outlive* the launch so it can print an
-/// end-of-command summary — `exec_claude` (process replacement) cannot.
-/// trace:BUG-226 | ai:claude
-pub fn spawn_claude_session(
-    permission_mode: Option<&str>,
-    name: Option<&str>,
-    initial_prompt: &str,
-    session_id: &str,
-    contained: bool,
-) -> Result<std::process::ExitStatus> {
-    std::process::Command::new("claude")
-        .args(claude_session_args(
-            permission_mode,
-            name,
-            Some(initial_prompt),
-            Some(session_id),
-            contained,
-            None,
-        ))
-        .status()
-        .context("failed to spawn claude")
-}
-
 /// BUG-226: spawn (not exec) a headless `claude -p` reviewer and wait,
 /// returning the exit status. Mirrors `exec_claude_headless` exactly —
-/// same `claude_headless_args` flag set, `AIDA_HEADLESS=1` in the env,
+/// same `claude_headless_args_with_posture` flag set, `AIDA_HEADLESS=1` in the env,
 /// stdout redirected to `log_path` — but keeps the parent alive so the
 /// standalone reviewer summary can read the verdict file + JSONL log.
 /// trace:BUG-226 | ai:claude
@@ -1244,7 +1222,7 @@ pub fn spawn_vendor_headless_with_seat(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok(status)
@@ -1327,6 +1305,82 @@ pub fn exec_codex_session(initial_prompt: &str, bypass: bool, model: Option<&str
     }
 }
 
+/// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
+/// PURE decision (which program + argv, or a refusal for an unsupported
+/// vendor); no process is spawned. Every interactive reviewer launch site
+/// (the standalone `aida queue work --role reviewer` launch and the inline
+/// `aida review` / `aida human review` launch) builds its plan through this
+/// ONE function and then hands it to [`spawn_reviewer_launch_plan`], so a
+/// vendor knob can never route one site and miss the other — the exact
+/// BUG-1607 failure mode. Unit-tested directly, without spawning
+/// `claude`/`codex`.
+// trace:BUG-1607 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReviewerLaunchPlan {
+    pub(crate) vendor: HeadlessVendor,
+    /// The binary to spawn — routed through [`resolve_agent_program`], so a
+    /// test can swap it for a mock via `AIDA_AGENT_CMD` without needing a
+    /// real `claude`/`codex` installed. Unset, it is the vendor's own
+    /// binary name, byte-identical to before this seam existed.
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+}
+
+// trace:BUG-1607 | ai:claude
+pub(crate) fn interactive_reviewer_launch_plan(
+    vendor: HeadlessVendor,
+    permission_mode: Option<&str>,
+    name: Option<&str>,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Result<ReviewerLaunchPlan> {
+    match vendor {
+        HeadlessVendor::Claude => Ok(ReviewerLaunchPlan {
+            vendor,
+            program: resolve_agent_program(vendor.program()),
+            args: claude_session_args(
+                permission_mode,
+                name,
+                Some(prompt),
+                Some(session_id),
+                contained,
+                None,
+            ),
+        }),
+        HeadlessVendor::Codex => {
+            // Interactive queue-work's Codex-tab launch maps the uniform
+            // `[agents] bypass` posture (surfaced here as
+            // `--permission-mode bypassPermissions`) to Codex's own bypass
+            // flag (BUG-743); a reviewer session follows the same mapping.
+            let bypass = permission_mode == Some("bypassPermissions");
+            Ok(ReviewerLaunchPlan {
+                vendor,
+                program: resolve_agent_program(vendor.program()),
+                args: codex_session_args(prompt, bypass, None),
+            })
+        }
+        HeadlessVendor::Agy => anyhow::bail!(
+            "interactive reviewer launch does not support vendor `agy` yet. Recovery: \
+             re-run with `--vendor claude` or `--vendor codex`, or use `--no-human` for a \
+             headless AGY reviewer."
+        ),
+    }
+}
+
+/// Spawn (not exec) an [`interactive_reviewer_launch_plan`] and wait,
+/// returning the exit status — the only place an interactive reviewer
+/// launch plan is actually turned into a process.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn spawn_reviewer_launch_plan(
+    plan: &ReviewerLaunchPlan,
+) -> Result<std::process::ExitStatus> {
+    std::process::Command::new(&plan.program)
+        .args(&plan.args)
+        .status_retrying_etxtbsy()
+        .with_context(|| format!("failed to spawn {}", plan.program))
+}
+
 /// STORY-683: which vendor's headless CLI drives an orchestrator drain phase.
 /// The autonomous drain (`burndown` / `queue work --auto-complete --no-human`)
 /// used to hardcode `claude -p`; this enum lets the same spawn path launch
@@ -1343,10 +1397,12 @@ pub enum HeadlessVendor {
     Claude,
     /// `codex exec …` — the Codex headless CLI. trace:STORY-683
     Codex,
-    /// `agy -p …` — the Antigravity (AGY) headless CLI. The `agy` runtime's
-    /// non-interactive `-p`/`--print` mode is the AGY analogue of `claude -p` /
-    /// `codex exec` (verified in SPIKE-27's agy-architecture surface note).
-    // trace:TASK-1048 | ai:claude
+    /// `agy … -p <prompt>` — the Antigravity (AGY) headless CLI. The `agy`
+    /// runtime's non-interactive `-p`/`--print` mode is the AGY analogue of
+    /// `claude -p` / `codex exec` (verified in SPIKE-27's agy-architecture
+    /// surface note). BUG-1686: agy's `-p` TAKES the prompt as its value, so it
+    /// comes last, after every option flag.
+    // trace:TASK-1048 BUG-1686 | ai:claude
     Agy,
 }
 
@@ -1614,6 +1670,72 @@ pub(crate) fn resolve_enabled_headless_vendor(worktree_root: &Path) -> Result<He
     );
 }
 
+/// BUG-1607: verify the resolved launch vendor's CLI is actually reachable —
+/// BEFORE a caller mints a lease or worktree. [`resolve_enabled_headless_vendor`]
+/// only checks the `[agents] enabled` config; it can resolve to a vendor that
+/// is enabled but never installed. The observed failure: a codex-only project
+/// correctly resolved `vendor: codex`, created the reviewer lease + worktree,
+/// then the launch itself hardcoded `claude` and failed with a raw ENOENT —
+/// leaving a live lease/worktree behind with no process. Every launch site
+/// that mutates state before spawning MUST call this first, in addition to
+/// (not instead of) `resolve_enabled_headless_vendor`, and propagate the
+/// error unchanged.
+///
+/// Routes the binary name through [`resolve_agent_program`] first, so tests
+/// can inject a fake reachable/unreachable "binary" via `AIDA_AGENT_CMD`
+/// without spawning a real vendor CLI — the same seam the headless spawn
+/// paths already use.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn preflight_vendor_binary(vendor: HeadlessVendor) -> Result<()> {
+    let program = resolve_agent_program(vendor.program());
+    let reachable = if program.contains(std::path::MAIN_SEPARATOR) {
+        Path::new(&program).is_file()
+    } else {
+        which_on_path(&program).is_some()
+    };
+    if reachable {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "the resolved launch vendor `{}` (`{program}`) is not on PATH — refusing before \
+         creating a lease or worktree. Recovery: install `{program}`, choose an installed \
+         vendor with `--vendor <name>`, or point `[agents] vendor` / `[agents] enabled` in \
+         agents.toml at a profile that is actually installed.",
+        vendor.as_str()
+    );
+}
+
+/// BUG-1607: preflight a launch of `vendor` — vendor SUPPORT (for an
+/// `interactive` launch, only Agy is refused: the AGY dispatch policy is
+/// draft-for-review-only, mechanical/bounded work, with no interactive
+/// keystone dialog) AND binary reachability, checked in that order, both
+/// BEFORE any caller mints a lease or worktree.
+///
+/// This closes an ordering gap that had the exact BUG-1607 shape: before
+/// this function existed, an interactive Agy launch passed
+/// `preflight_vendor_binary` cleanly whenever the `agy` binary happened to
+/// be reachable, so `session_start` minted the lease + worktree, and only
+/// THEN did [`interactive_reviewer_launch_plan`] (or the equivalent
+/// implementer-side Agy check) refuse — leaving an orphaned lease/worktree
+/// behind with a refusal instead of a process, same as the original bug.
+/// Folding the support check into the ONE preflight every launch site
+/// already calls before mutating state closes it for every reviewer AND
+/// implementer entry point at once.
+///
+/// A headless (`interactive = false`) launch supports Agy — only the
+/// binary check applies.
+// trace:BUG-1607 | ai:claude
+pub(crate) fn preflight_launch_vendor(vendor: HeadlessVendor, interactive: bool) -> Result<()> {
+    if interactive && vendor == HeadlessVendor::Agy {
+        anyhow::bail!(
+            "interactive launch does not support vendor `agy` yet. Recovery: re-run with \
+             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor \
+             codex`, or use `--no-launch`."
+        );
+    }
+    preflight_vendor_binary(vendor)
+}
+
 /// TASK-1162: resolve the session vendor for a launch rooted at the current
 /// project — the same precedence stack as a headless drain spawn (flag
 /// override → `AIDA_HEADLESS_VENDOR` → `[orchestrator] headless_vendor` →
@@ -1715,27 +1837,39 @@ pub fn headless_vendor_args(
 /// `aida agent new antigravity --bypass-sandbox` launch uses) so the run is
 /// unattended. Like Codex, AGY has no caller-minted `--session-id` /
 /// `stream-json` machinery threaded here, so the arm does not carry `session_id`.
-/// The prompt is the final positional. Pure — unit-tested without spawning.
-// trace:TASK-1048 | ai:claude
+///
+/// BUG-1686: unlike Claude's boolean `-p`, Antigravity's `-p`/`--print` TAKES A
+/// VALUE, so the prompt is that flag's value and `-p <prompt>` must come LAST,
+/// after every option flag. Pure — unit-tested without spawning.
+// trace:TASK-1048 BUG-1686 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn agy_headless_args(prompt: &str) -> Vec<String> {
     agy_headless_args_with_effort(prompt, None)
 }
 
 // trace:STORY-1033 | ai:codex
+// BUG-1686: argv ORDER is load-bearing here. Antigravity CLI 1.2.12 parses
+// Go-style flags and `-p` / `--print` / `--prompt` is a VALUE-taking flag
+// ("Run a single prompt non-interactively and print the response"), not the
+// boolean `-p` claude has. The pre-BUG-1686 order emitted
+// `-p --dangerously-skip-permissions [--effort E] <prompt>`, so agy took the
+// literal string "--dangerously-skip-permissions" as the prompt, never saw the
+// permission flag as a flag, and rejected the launch — `aida queue work <SPEC>
+// --vendor agy --no-human=both --strict` left a lease and worktree behind with
+// no implementer process. Go's flag parser also stops at the first non-flag
+// argument, so a trailing positional prompt is not an option either: EVERY
+// option flag precedes `-p`, and the prompt is `-p`'s value at the tail.
+// The permission posture is unchanged — the same single flag, moved, not weakened.
+// trace:BUG-1686 | ai:claude
 pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
-    vec![
-        "-p".to_string(),
-        "--dangerously-skip-permissions".to_string(),
-    ]
-    .into_iter()
-    .chain(
-        effort
-            .filter(|e| !e.trim().is_empty())
-            .map(|e| vec!["--effort".to_string(), e.to_string()])
-            .unwrap_or_default(),
-    )
-    .chain([prompt.to_string()])
-    .collect()
+    let mut args = vec!["--dangerously-skip-permissions".to_string()];
+    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
+        args.extend(["--effort".to_string(), effort.to_string()]);
+    }
+    args.extend(["-p".to_string(), prompt.to_string()]);
+    args
 }
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
@@ -1752,6 +1886,9 @@ pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<
 /// Codex is actively working. Streaming JSONL makes the existing watchdog log
 /// mtime/length signal live for Codex phases.
 // trace:STORY-683 BUG-909 | ai:codex
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     codex_headless_args_with_model(prompt, None)
 }
@@ -1782,6 +1919,9 @@ pub fn codex_headless_args_with_model_and_effort(
     args
 }
 
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
     claude_headless_args_with_posture(prompt, session_id, false)
 }
@@ -1853,15 +1993,6 @@ pub fn claude_headless_args_with_posture_model_and_effort(
     .collect()
 }
 
-/* old impl retained below */
-/* pub fn codex_headless_args(prompt: &str) -> Vec<String> {
-    vec![
-        "exec".to_string(),
-        "--dangerously-bypass-approvals-and-sandbox".to_string(),
-        prompt.to_string(),
-    ]
-} */
-
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
 /// `docs/spikes/2026-05-16-claude-headless.md`:
@@ -1894,6 +2025,91 @@ pub fn claude_contained_flags() -> Vec<String> {
         "--settings".to_string(),
         claude_contained_settings_json(),
     ]
+}
+
+/// Which AIDA surface a supervised seat gets. TASK-1558 default is `Off`: SPIKE-73 measured MCP at
+/// ~1.8-2x the CLI's cost for identical or worse success over a 72-cell matrix, and the result is
+/// structural — on-demand schema loading does not rescue it. No shipped skill references the MCP
+/// surface, and every generated seat brief already speaks in `aida ...` CLI verbs.
+///
+/// Only claude exposes launch-time MCP flags. Codex and antigravity register MCP in their own
+/// config files, so this cannot be enforced at launch for them.
+// trace:TASK-1558 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AgentMcpSurface {
+    /// No MCP servers at all; the `aida` CLI is the surface.
+    #[default]
+    Off,
+    /// Only AIDA's own server definition (BUG-1698).
+    Aida,
+    /// Inject nothing; the vendor's own MCP configuration applies, trust prompt included.
+    Native,
+}
+
+impl AgentMcpSurface {
+    // trace:TASK-1558 | ai:claude
+    pub(crate) fn parse(raw: &str) -> Result<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "off" | "none" | "cli" => Ok(Self::Off),
+            "aida" => Ok(Self::Aida),
+            "native" | "vendor" => Ok(Self::Native),
+            other => anyhow::bail!(
+                "[agents] mcp value `{other}` is not recognised — expected `off` (no MCP, the \
+                 `aida` CLI is the surface), `aida` (attach AIDA's own server) or `native` (leave \
+                 the vendor's MCP configuration alone)"
+            ),
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Aida => "aida",
+            Self::Native => "native",
+        }
+    }
+}
+
+/// The MCP launch flags for a claude seat under `surface`.
+///
+/// BUG-1698: every `aida agent new claude` launch in an AIDA repo used to stop on Claude Code's
+/// project-MCP trust modal —
+///
+///   New MCP server found in this project: aida
+///   > Continue without using this MCP server
+///
+/// in a PTY nobody was watching, blocking the caller until it was killed. `--permission-mode
+/// bypassPermissions` does NOT dismiss it; project-MCP trust is a separate gate from tool
+/// permission mode (probed on claude v2.1.283). `--strict-mcp-config` closes the gate under both
+/// `Off` and `Aida` because nothing from `.mcp.json` is consulted — so a checkout cannot smuggle a
+/// command in under the name `aida`.
+// trace:BUG-1698 | ai:claude
+// trace:TASK-1558 | ai:claude
+pub(crate) fn claude_mcp_flags(surface: AgentMcpSurface) -> Vec<String> {
+    match surface {
+        AgentMcpSurface::Off => vec!["--strict-mcp-config".to_string()],
+        AgentMcpSurface::Aida => vec![
+            "--mcp-config".to_string(),
+            aida_mcp_server_config_json(),
+            "--strict-mcp-config".to_string(),
+        ],
+        AgentMcpSurface::Native => Vec::new(),
+    }
+}
+
+/// The `aida` server definition AIDA vouches for, built here rather than read from the
+/// repository.
+// trace:BUG-1698 | ai:claude
+pub(crate) fn aida_mcp_server_config_json() -> String {
+    serde_json::json!({
+        "mcpServers": {
+            "aida": {
+                "command": "aida",
+                "args": ["mcp-serve"]
+            }
+        }
+    })
+    .to_string()
 }
 
 fn claude_contained_settings_json() -> String {
@@ -2319,7 +2535,7 @@ pub(crate) fn os_wrapped_program_and_args(
     bwrap_preflight()?;
     let store = worktree_root.join(".aida-store");
     let mut rw_paths = vec![store];
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::home_dir() {
         // Cargo/npm registry + build caches must stay writable or cargo/npm fail
         // mid-build; `~/.claude` + `~/.claude.json` hold Claude Code's session
         // state and auth, which it writes during a run.
@@ -2574,7 +2790,7 @@ pub fn exec_vendor_headless(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .spawn()
+        .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     if vendor != HeadlessVendor::Claude {
         if let Some(id) = lease_id {
@@ -2620,14 +2836,16 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
     if let Some(start_time) = crate::process_probe::process_start_identity(pid) {
         doc["active_pid_start_time"] = value(start_time);
     }
-    std::fs::write(&path, doc.to_string())
+    // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
+    // trace:STORY-1429 | ai:claude
+    aida_core::write_atomic(&path, doc.to_string())
         .with_context(|| format!("writing lease {}", path.display()))?;
     Ok(())
 }
 
 /// STORY-306: build the argv (after the `claude` program name) for a headless
 /// `claude -p --resume <id>` launch — the advisor tier's implementer-resume
-/// leg. Identical to [`claude_headless_args`] (the SPIKE-7 mandatory flag
+/// leg. Identical to [`claude_headless_args_with_posture`] (the SPIKE-7 mandatory flag
 /// set) except it `--resume`s an existing session instead of minting a new
 /// `--session-id`, so the resumed implementer re-enters its punted phase-1
 /// conversation with the working model it had already built. Pure — the flag
@@ -2684,7 +2902,8 @@ pub fn claude_headless_resume_args_with_posture(
 /// - `seeded_prompt` is the cold-boot prompt (the live-advisor-context prepend
 ///   the assess cold-boot uses); `advisor_uuid` is the resume/session id.
 ///
-/// **Codex has no `--resume` / session model** (see [`codex_headless_args`]), so
+/// **Codex has no `--resume` / session model** (see
+/// [`codex_headless_args_with_model_and_effort`]), so
 /// a Codex advisor tier ignores `is_fork` and always hosts a *fresh* `codex exec`
 /// per punt against the seeded prompt — no resume, the per-punt-fresh-spawn
 /// trade-off noted in STORY-683's follow-ups. The caller is responsible for
@@ -2695,6 +2914,9 @@ pub fn claude_headless_resume_args_with_posture(
 /// inline construction, so an un-configured drain (vendor = Claude) is unchanged.
 /// Pure — both arms are unit-tested without spawning.
 // trace:TASK-894 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only default-tuning wrapper; the
+// orchestrator calls `advisor_tier_program_and_args_with_tuning`.
+#[cfg(test)]
 pub fn advisor_tier_program_and_args(
     vendor: HeadlessVendor,
     is_fork: bool,
@@ -2814,7 +3036,7 @@ pub fn spawn_claude_headless_resume(
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
-        .status()
+        .status_retrying_etxtbsy()
         .context("failed to spawn claude")?;
     tee.stop();
     Ok(status)
@@ -2963,7 +3185,7 @@ fn claude_entries_for_cwd(cwd: &Path) -> Result<Vec<SessionLogEntry>> {
 }
 
 fn codex_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Codex sessions")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Codex sessions")?;
     let root = home.join(".codex").join("sessions");
     if !root.is_dir() {
         return Ok(Vec::new());
@@ -2993,7 +3215,7 @@ fn codex_entries() -> Result<Vec<SessionLogEntry>> {
 }
 
 fn antigravity_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Antigravity sessions")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Antigravity sessions")?;
     let candidates = [
         home.join(".antigravity").join("sessions"),
         home.join(".config").join("Antigravity").join("sessions"),
@@ -3019,10 +3241,10 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     #[cfg(test)]
     let home = std::env::var_os("AIDA_TEST_HOME")
         .map(PathBuf::from)
-        .or_else(dirs::home_dir)
+        .or_else(crate::home_dir)
         .context("HOME not set; cannot locate Claude project dir")?;
     #[cfg(not(test))]
-    let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
+    let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
     Ok(home.join(".claude/projects").join(encoded))
 }
 
@@ -3047,13 +3269,13 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     // current project root or a sibling `<root>-<slug>` worktree. When we can't
     // resolve a project root (not in a project), keep the old global behaviour.
     // trace:BUG-447 | ai:claude
-    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
-        .filter(|m| {
+    let mut out: Vec<SessionMeta> =
+        collect_global_project_sessions(150, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
             m.spec
                 .as_deref()
                 .map(|s| s.eq_ignore_ascii_case(want))
                 .unwrap_or(false)
-        })
+        })?
         .collect();
     out.sort_by_key(|m| m.age_seconds);
     Ok(out)
@@ -3062,22 +3284,37 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
 /// STORY-821: recent Claude conversations whose detected AIDA role matches
 /// `role`, newest first, scoped to the current project/worktree family. This is
 /// the role-enter view over the same session metadata used by `session resume`.
+/// BUG-1789: bounded — stops once `limit` matches are found, and never reads
+/// more than `SESSION_SCAN_BYTE_BUDGET` in total.
 // trace:STORY-821 | ai:codex
+// trace:BUG-1789 | ai:antigravity
 pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> {
     let want = canonical_session_role(role);
-    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
-        .filter(|m| m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str()))
+    let mut out: Vec<SessionMeta> =
+        collect_global_project_sessions(limit, Some(SESSION_SCAN_BYTE_BUDGET), |m| {
+            m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str())
+        })?
         .collect();
     out.sort_by_key(|m| m.age_seconds);
-    out.truncate(limit);
     fill_branches(&mut out);
     normalize_specs(&mut out);
     fill_recent_focus(&mut out);
     Ok(out)
 }
 
-fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = SessionMeta>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate sessions")?;
+/// Newest-first, project-scoped session rows that pass `filter_fn`; see
+/// [`select_recent_sessions`] for the bounds. `byte_budget: None` means only
+/// the file-count bound applies (used by exact id-prefix resume lookups).
+// trace:BUG-1789 | ai:antigravity
+fn collect_global_project_sessions<F>(
+    limit: usize,
+    byte_budget: Option<u64>,
+    mut filter_fn: F,
+) -> Result<impl Iterator<Item = SessionMeta>>
+where
+    F: FnMut(&SessionMeta) -> bool,
+{
+    let home = crate::home_dir().context("HOME not set; cannot locate sessions")?;
     let projects = home.join(".claude").join("projects");
     let mut entries: Vec<SessionLogEntry> = Vec::new();
     if projects.is_dir() {
@@ -3109,30 +3346,123 @@ fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = 
     entries.extend(codex_entries()?);
     entries.extend(antigravity_entries()?);
     entries.sort_by(|a, b| b.mtime.cmp(&a.mtime));
-    entries.truncate(session_scan_limit(limit));
 
     let now = SystemTime::now();
     let project_root = crate::find_main_worktree_root().ok();
-    let sessions: Vec<SessionMeta> = entries
-        .into_iter()
-        .filter_map(move |entry| {
-            parse_session_meta_for_agent(&entry.path, entry.mtime, now, entry.agent).ok()
-        })
-        .filter(move |m| match &project_root {
+    let agents = load_agent_views_for_enrich();
+    let (sessions, _stats) = select_recent_sessions(
+        entries,
+        limit,
+        byte_budget,
+        now,
+        project_root.as_deref(),
+        &agents,
+        &mut filter_fn,
+    );
+    Ok(sessions.into_iter())
+}
+
+/// BUG-1789: what a bounded session scan actually consumed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct SessionScanStats {
+    files_opened: usize,
+    bytes_read: u64,
+}
+
+/// BUG-1789: walk `entries` (already sorted newest-first) and stop as soon as
+/// any bound trips: `limit` rows survived the project-scope + caller filters,
+/// `session_scan_limit(limit.max(150))` files were opened, or `byte_budget` bytes were
+/// read. Each file read is capped at `SESSION_META_MAX_BYTES`, and a file is
+/// only opened while a full cap still fits, so `bytes_read <= byte_budget` is
+/// a hard guarantee. Registry
+/// enrichment runs per row *before* the filter so registry-only roles/specs
+/// still match. Returns the selected rows (newest first) plus scan stats.
+// trace:BUG-1789 | ai:antigravity
+fn select_recent_sessions<F>(
+    entries: Vec<SessionLogEntry>,
+    limit: usize,
+    byte_budget: Option<u64>,
+    now: SystemTime,
+    project_root: Option<&Path>,
+    agents: &[crate::agent_registry::AgentRegistryView],
+    filter_fn: &mut F,
+) -> (Vec<SessionMeta>, SessionScanStats)
+where
+    F: FnMut(&SessionMeta) -> bool,
+{
+    // Keep the historical >=1500-file window (`session_scan_limit(150)`);
+    // the byte budget, not the file count, is the real I/O bound.
+    let max_open = session_scan_limit(limit.max(150));
+    let mut stats = SessionScanStats::default();
+    let mut sessions = Vec::new();
+    for entry in entries {
+        if sessions.len() >= limit
+            || stats.files_opened >= max_open
+            || byte_budget.is_some_and(|b| stats.bytes_read + SESSION_META_MAX_BYTES > b)
+        {
+            break;
+        }
+        stats.files_opened += 1;
+        let in_scope = |cwd: &str| {
+            project_root
+                .map(|root| session_cwd_in_project(cwd, root))
+                .unwrap_or(true)
+        };
+        let scope: Option<&dyn Fn(&str) -> bool> = project_root.map(|_| &in_scope as _);
+        let Ok((mut m, n)) =
+            parse_session_meta_counted(&entry.path, entry.mtime, now, entry.agent, scope)
+        else {
+            continue;
+        };
+        stats.bytes_read += n;
+        let in_project = match project_root {
             Some(root) => m
                 .last_cwd
                 .as_deref()
                 .map(|cwd| session_cwd_in_project(cwd, root))
                 .unwrap_or(false),
             None => true,
-        })
-        .collect();
-    let mut sessions = sessions;
-    enrich_from_agent_registry(&mut sessions);
+        };
+        if !in_project {
+            continue;
+        }
+        enrich_one_from_agent_views(&mut m, agents);
+        if filter_fn(&m) {
+            sessions.push(m);
+        }
+    }
     sessions.sort_by_key(|m| m.age_seconds);
-    sessions.truncate(limit);
-    Ok(sessions.into_iter())
+    (sessions, stats)
 }
+
+/// BUG-1789: `Read` adapter counting bytes actually pulled from the file
+/// (including `BufReader` read-ahead) — the injected counter for the scan
+/// budget.
+struct CountingRead<R> {
+    inner: R,
+    count: std::rc::Rc<std::cell::Cell<u64>>,
+}
+
+impl<R: std::io::Read> std::io::Read for CountingRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.count.set(self.count.get() + n as u64);
+        Ok(n)
+    }
+}
+
+/// BUG-1789: per-file read cap for `parse_session_meta_for_agent`. Sized from
+/// measured logs: the first AIDA role marker sits at p50 ~100 KB, p99 ~1.4 MB
+/// (max seen ~2.8 MB) — a 256 KB cap would have hidden ~1 in 5 sessions.
+const SESSION_META_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+/// BUG-1789: a scoped parse gives up after this many bytes with no cwd seen.
+const SESSION_META_NO_CWD_PROBE_BYTES: u64 = 64 * 1024;
+
+/// BUG-1789: total read budget for interactive scans (role-enter picker,
+/// scope resume lookup). A hard ceiling (~47 MB) so a cold scan stays under
+/// 50 MB even on a contended disk.
+const SESSION_SCAN_BYTE_BUDGET: u64 = 45 * 1024 * 1024;
 
 fn session_scan_limit(limit: usize) -> usize {
     limit.saturating_mul(10).max(150)
@@ -3143,31 +3473,42 @@ fn session_scan_limit(limit: usize) -> usize {
 /// correlates.
 // trace:STORY-822 | ai:codex
 fn enrich_from_agent_registry(sessions: &mut [SessionMeta]) {
+    let agents = load_agent_views_for_enrich();
+    for session in sessions {
+        enrich_one_from_agent_views(session, &agents);
+    }
+}
+
+fn load_agent_views_for_enrich() -> Vec<crate::agent_registry::AgentRegistryView> {
     let Ok(project_root) = crate::find_main_worktree_root() else {
-        return;
+        return Vec::new();
     };
     let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
-    let agents = crate::agent_registry::list_agent_views(&project_root, &ctx);
-    for session in sessions {
-        let Some(view) = agents.iter().find(|agent| {
-            agent
-                .native_session_id
-                .as_deref()
-                .map(|id| id == session.id)
-                .unwrap_or(false)
-        }) else {
-            continue;
-        };
-        session.agent = view.agent_type.clone();
-        if session.role.is_none() {
-            session.role = view.role.clone();
-        }
-        if session.spec.is_none() {
-            session.spec = view.current_spec.clone();
-        }
-        if session.terminal.is_none() {
-            session.terminal = view.terminal.clone();
-        }
+    crate::agent_registry::list_agent_views(&project_root, &ctx)
+}
+
+fn enrich_one_from_agent_views(
+    session: &mut SessionMeta,
+    agents: &[crate::agent_registry::AgentRegistryView],
+) {
+    let Some(view) = agents.iter().find(|agent| {
+        agent
+            .native_session_id
+            .as_deref()
+            .map(|id| id == session.id)
+            .unwrap_or(false)
+    }) else {
+        return;
+    };
+    session.agent = view.agent_type.clone();
+    if session.role.is_none() {
+        session.role = view.role.clone();
+    }
+    if session.spec.is_none() {
+        session.spec = view.current_spec.clone();
+    }
+    if session.terminal.is_none() {
+        session.terminal = view.terminal.clone();
     }
 }
 
@@ -3257,9 +3598,9 @@ fn claude_session_jsonl_path_by_id(session_id: &str) -> Option<PathBuf> {
     #[cfg(test)]
     let home = std::env::var_os("AIDA_TEST_HOME")
         .map(PathBuf::from)
-        .or_else(dirs::home_dir)?;
+        .or_else(crate::home_dir)?;
     #[cfg(not(test))]
-    let home = dirs::home_dir()?;
+    let home = crate::home_dir()?;
     let projects = home.join(".claude").join("projects");
     let dirs = std::fs::read_dir(projects).ok()?;
     let filename = format!("{session_id}.jsonl");
@@ -3287,6 +3628,25 @@ fn parse_session_meta_for_agent(
     now: SystemTime,
     agent: &'static str,
 ) -> Result<SessionMeta> {
+    parse_session_meta_counted(path, mtime, now, agent, None).map(|(meta, _)| meta)
+}
+
+/// Same as [`parse_session_meta_for_agent`], also returning the number of
+/// bytes actually read from the file (BUG-1789 scan budget accounting).
+///
+/// `in_scope`: when given, the parse stops as soon as the FIRST recorded cwd
+/// is out of scope, so a foreign-project log costs only its head (Codex puts
+/// cwd in line-1 `session_meta`; Claude events carry it from the first event)
+/// instead of a full per-file cap. Trade-off: a session launched outside the
+/// project that later moved into it is no longer matched.
+// trace:BUG-1789 | ai:antigravity
+fn parse_session_meta_counted(
+    path: &Path,
+    mtime: SystemTime,
+    now: SystemTime,
+    agent: &'static str,
+    in_scope: Option<&dyn Fn(&str) -> bool>,
+) -> Result<(SessionMeta, u64)> {
     use std::io::{BufRead, BufReader};
     let mut file_name = path
         .file_stem()
@@ -3306,7 +3666,17 @@ fn parse_session_meta_for_agent(
     // stay sub-millisecond per file even on multi-MB session logs.
     const MAX_LINES: usize = 400;
     let file = std::fs::File::open(path)?;
-    let reader = BufReader::new(file);
+    // BUG-1789: the line cap is no byte bound — a Codex rollout event is one
+    // multi-MB line — so also cap the bytes read per file. Every marker this
+    // parser needs lives near the head of the log.
+    // trace:BUG-1789 | ai:antigravity
+    let counter = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    let counted = CountingRead {
+        inner: file,
+        count: counter.clone(),
+    };
+    let reader = BufReader::new(std::io::Read::take(counted, SESSION_META_MAX_BYTES));
+    let mut scope_checked = in_scope.is_none();
     let mut role: Option<String> = None;
     let mut title: Option<String> = None;
     let mut spec: Option<String> = None;
@@ -3328,11 +3698,17 @@ fn parse_session_meta_for_agent(
     // MAX_LINES is `unknown` (None), never a late match found by scanning
     // further into a transcript that may still be growing.
     // trace:BUG-1593 | ai:claude
-    for (i, line) in reader.lines().enumerate() {
+    for (i, line) in reader.split(b'\n').enumerate() {
         if i >= MAX_LINES {
             break;
         }
+        // Lossy decode: the byte cap can split a multibyte char on the last
+        // line, which must not discard the whole (often first) line.
+        // Lines with invalid UTF-8 (previously skipped by `lines()`) are now
+        // parsed with U+FFFD replacements.
         let Ok(line) = line else { continue };
+        let line = String::from_utf8_lossy(&line);
+        let line = line.strip_suffix('\r').unwrap_or(&line);
 
         // STORY-59: capture the most recent cwd we see in the parse
         // window. Each event in Claude Code's .jsonl carries `"cwd":"..."`
@@ -3364,6 +3740,20 @@ fn parse_session_meta_for_agent(
                         }
                     }
                 }
+            }
+        }
+
+        // BUG-1789: bail on a foreign-project log once its first cwd is known.
+        // A scoped parse that has seen no cwd in its first 64 KiB would be
+        // dropped by the caller anyway (no cwd => out of scope), so stop.
+        if !scope_checked {
+            if let (Some(cwd), Some(f)) = (last_cwd.as_deref(), in_scope) {
+                scope_checked = true;
+                if !f(cwd) {
+                    break;
+                }
+            } else if counter.get() > SESSION_META_NO_CWD_PROBE_BYTES {
+                break;
             }
         }
 
@@ -3480,7 +3870,7 @@ fn parse_session_meta_for_agent(
     // the tier-2 bare `Role: ` match, if any.
     let role = role.or(tier2_role);
 
-    Ok(SessionMeta {
+    let meta = SessionMeta {
         agent: agent.to_string(),
         id: file_name,
         age_seconds,
@@ -3494,7 +3884,8 @@ fn parse_session_meta_for_agent(
         recent_focus: None,
         path: Some(path.to_path_buf()),
         process: Default::default(),
-    })
+    };
+    Ok((meta, counter.get()))
 }
 
 fn codex_id_from_rollout_stem(stem: &str) -> Option<String> {
@@ -3863,7 +4254,8 @@ fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
 fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
     // Allow a generous walk — user might have written down the id from a
     // weeks-old session; collect everything and filter.
-    let all: Vec<SessionMeta> = collect_global_project_sessions(usize::MAX)?.collect();
+    let all: Vec<SessionMeta> =
+        collect_global_project_sessions(usize::MAX, None, |_| true)?.collect();
     let matches: Vec<&SessionMeta> = all.iter().filter(|s| s.id.starts_with(prefix)).collect();
     match matches.len() {
         0 => anyhow::bail!("no session matches id prefix `{}`", prefix),
@@ -3958,26 +4350,24 @@ mod tests {
     /// test acquires this at its top; mutators still set/remove the var within
     /// their body — those changes are also undone by the drop restore.
     /// trace:BUG-581 | ai:claude
+    // BUG-697 / TASK-1532: route through EnvVarGuard. trace:BUG-581 trace:TASK-1532 | ai:agy
     struct OsWrapEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarGuard,
     }
 
     impl OsWrapEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved = std::env::var_os("AIDA_OS_WRAP");
-            std::env::remove_var("AIDA_OS_WRAP");
-            Self { _lock: lock, saved }
-        }
-    }
-
-    impl Drop for OsWrapEnvGuard {
-        fn drop(&mut self) {
-            match &self.saved {
-                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-                None => std::env::remove_var("AIDA_OS_WRAP"),
+            Self {
+                _guard: crate::test_env::EnvVarGuard::unset("AIDA_OS_WRAP"),
             }
+        }
+
+        fn set(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.reset(val);
+        }
+
+        fn unset(&mut self) {
+            self._guard.reset_unset();
         }
     }
 
@@ -4026,44 +4416,33 @@ mod tests {
     }
 
     /// RAII guard for the `AIDA_AGENT_CMD` resolver tests. It shares the
-    /// `OS_WRAP_ENV_LOCK` so it is mutually exclusive with the os_wrap
+    /// `ENV_LOCK` so it is mutually exclusive with the os_wrap
     /// program-resolution tests — those call `claude_program_and_args`, which now
     /// reads `AIDA_AGENT_CMD`, so a concurrently-set override must never leak into
     /// their clean-baseline `program == "claude"` assertions. Saves + clears both
     /// `AIDA_AGENT_CMD` and `AIDA_OS_WRAP` on construct (a clean, os_wrap-off
     /// baseline), restores both on drop.
-    // trace:TASK-1081 | ai:claude
+    // trace:TASK-1081 trace:TASK-1532 | ai:agy
     struct AgentCmdEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved_cmd: Option<std::ffi::OsString>,
-        saved_wrap: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarsGuard,
     }
 
     impl AgentCmdEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved_cmd = std::env::var_os("AIDA_AGENT_CMD");
-            let saved_wrap = std::env::var_os("AIDA_OS_WRAP");
-            std::env::remove_var("AIDA_AGENT_CMD");
-            std::env::remove_var("AIDA_OS_WRAP");
             Self {
-                _lock: lock,
-                saved_cmd,
-                saved_wrap,
+                _guard: crate::test_env::EnvVarsGuard::apply(&[
+                    ("AIDA_AGENT_CMD", None),
+                    ("AIDA_OS_WRAP", None),
+                ]),
             }
         }
-    }
 
-    impl Drop for AgentCmdEnvGuard {
-        fn drop(&mut self) {
-            match &self.saved_cmd {
-                Some(v) => std::env::set_var("AIDA_AGENT_CMD", v),
-                None => std::env::remove_var("AIDA_AGENT_CMD"),
-            }
-            match &self.saved_wrap {
-                Some(v) => std::env::set_var("AIDA_OS_WRAP", v),
-                None => std::env::remove_var("AIDA_OS_WRAP"),
-            }
+        fn set_cmd(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.set_key("AIDA_AGENT_CMD", val);
+        }
+
+        fn unset_cmd(&mut self) {
+            self._guard.unset_key("AIDA_AGENT_CMD");
         }
     }
 
@@ -4075,7 +4454,7 @@ mod tests {
     // trace:TASK-1081 | ai:claude
     #[test]
     fn agent_cmd_override_swaps_program_keeps_argv() {
-        let _env = AgentCmdEnvGuard::acquire();
+        let mut _env = AgentCmdEnvGuard::acquire();
 
         // Unset → the native vendor binaries, byte-identical to today.
         assert_eq!(resolve_agent_program("claude"), "claude");
@@ -4083,7 +4462,7 @@ mod tests {
 
         // Set at a trivial fake exe → that program replaces every vendor binary.
         let fake = "/tmp/aida-fake-agent-task-1081";
-        std::env::set_var("AIDA_AGENT_CMD", fake);
+        _env.set_cmd(fake);
         assert_eq!(resolve_agent_program("claude"), fake);
         assert_eq!(resolve_agent_program("codex"), fake);
 
@@ -4098,9 +4477,9 @@ mod tests {
         assert_eq!(args, claude_args, "argv is passed through unchanged");
 
         // Empty / whitespace override is treated as unset — fall back to native.
-        std::env::set_var("AIDA_AGENT_CMD", "   ");
+        _env.set_cmd("   ");
         assert_eq!(resolve_agent_program("claude"), "claude");
-        std::env::remove_var("AIDA_AGENT_CMD");
+        _env.unset_cmd();
         assert_eq!(resolve_agent_program("claude"), "claude");
     }
 
@@ -4610,6 +4989,210 @@ mod tests {
             Some("/home/joe/ai/aida-story-822")
         );
         assert!(meta.started_at.is_some());
+    }
+
+    /// BUG-1789: write a Codex rollout whose head is `head` followed by one
+    /// unterminated line padded (sparsely) to `total` bytes — the shape of a
+    /// real multi-MB single-line rollout event, without the disk cost.
+    fn write_bug1789_rollout(path: &Path, head: &str, total: u64) {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path).unwrap();
+        f.write_all(head.as_bytes()).unwrap();
+        f.write_all(b"{\"type\":\"response_item\",\"payload\":\"")
+            .unwrap();
+        f.set_len(total).unwrap();
+    }
+
+    fn bug1789_session_meta_line(id: &str, cwd: &Path) -> String {
+        format!(
+            "{{\"timestamp\":\"2026-09-03T15:39:39.268Z\",\"type\":\"session_meta\",\"payload\":{{\"session_id\":\"{id}\",\"timestamp\":\"2026-09-03T15:39:39.093Z\",\"cwd\":\"{}\"}}}}\n",
+            cwd.display()
+        )
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_parse_reads_at_most_the_per_file_byte_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-09-03T08-39-39-01a067ec-facc-71a0-9a69-1476568e1f1e.jsonl");
+        let head = format!(
+            "{}{{\"message\":\"- Role: implementer\"}}\n",
+            bug1789_session_meta_line("01a067ec-facc-71a0-9a69-1476568e1f1e", Path::new("/w/p"))
+        );
+        write_bug1789_rollout(&path, &head, 8 * 1024 * 1024);
+        let now = SystemTime::now();
+        let (meta, bytes) = parse_session_meta_counted(&path, now, now, "codex", None).unwrap();
+        assert!(
+            bytes <= SESSION_META_MAX_BYTES,
+            "read {bytes} bytes, cap is {SESSION_META_MAX_BYTES}"
+        );
+        assert_eq!(meta.id, "01a067ec-facc-71a0-9a69-1476568e1f1e");
+        assert_eq!(meta.last_cwd.as_deref(), Some("/w/p"));
+        assert_eq!(meta.role.as_deref(), Some("implementer"));
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_first_line_truncated_by_cap_still_yields_cwd_and_id() {
+        // A session_meta line larger than the cap is cut mid-line (and here
+        // mid-multibyte-char): serde fails, so cwd/timestamp must come from
+        // the substring scan and the id from the rollout filename.
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-09-03T08-39-39-01a067ec-facc-71a0-9a69-1476568e1f1e.jsonl");
+        let mut line = String::from(
+            r#"{"timestamp":"2026-09-03T15:39:39.268Z","type":"session_meta","payload":{"cwd":"/w/p","instructions":""#,
+        );
+        while (line.len() as u64) < SESSION_META_MAX_BYTES + 1024 {
+            line.push('é');
+        }
+        line.push_str("\"}}\n");
+        std::fs::write(&path, line).unwrap();
+        let now = SystemTime::now();
+        let meta = parse_session_meta_for_agent(&path, now, now, "codex").unwrap();
+        assert_eq!(meta.id, "01a067ec-facc-71a0-9a69-1476568e1f1e");
+        assert_eq!(meta.last_cwd.as_deref(), Some("/w/p"));
+        assert!(meta.started_at.is_some());
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_role_scan_over_1500_multi_mb_rollouts_is_byte_bounded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        let foreign = tmp.path().join("other-project");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now() - std::time::Duration::from_secs(100_000);
+        let mut entries = Vec::new();
+        for i in 0..1500u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            // Three in-project advisor sessions (newest, behind 39 foreign
+            // multi-MB rollouts, and the very oldest); the rest are foreign
+            // projects. Foreign logs must cost only their head, so the scan
+            // reaches all three without blowing the byte budget.
+            let head = if [0, 40, 1499].contains(&i) {
+                format!(
+                    "{}{{\"message\":\"AIDA_SESSION_ROLE=advisor\"}}\n{{\"type\":\"ai-title\",\"aiTitle\":\"title {i}\"}}\n",
+                    bug1789_session_meta_line(&id, &project)
+                )
+            } else {
+                bug1789_session_meta_line(&id, &foreign)
+            };
+            write_bug1789_rollout(&path, &head, 3 * 1024 * 1024);
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let want = canonical_session_role("advisor");
+        let mut filter =
+            |m: &SessionMeta| m.role.as_deref().map(canonical_session_role) == Some(want.clone());
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            Some(SESSION_SCAN_BYTE_BUDGET),
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut filter,
+        );
+        assert!(stats.bytes_read <= SESSION_SCAN_BYTE_BUDGET);
+        assert!(
+            stats.bytes_read < 50_000_000,
+            "scan read {} bytes over {} files",
+            stats.bytes_read,
+            stats.files_opened
+        );
+        assert_eq!(stats.files_opened, 1500);
+        assert_eq!(rows.len(), 3);
+        for (i, row) in [0, 40, 1499].iter().zip(rows.iter()) {
+            assert_eq!(row.role.as_deref(), Some("advisor"));
+            assert_eq!(row.title.as_deref(), Some(format!("title {i}").as_str()));
+            assert_eq!(row.last_cwd.as_deref(), Some(project.to_str().unwrap()));
+        }
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_in_project_non_matching_rollouts_trip_the_byte_budget() {
+        // Worst case: every log is in-project (so each costs a full per-file
+        // cap) but none matches the role. The budget must stop the scan.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now();
+        let mut entries = Vec::new();
+        for i in 0..200u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            let head = format!(
+                "{}{{\"message\":\"AIDA_SESSION_ROLE=implementer\"}}\n",
+                bug1789_session_meta_line(&id, &project)
+            );
+            write_bug1789_rollout(&path, &head, 3 * 1024 * 1024);
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            Some(SESSION_SCAN_BYTE_BUDGET),
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut |m: &SessionMeta| m.role.as_deref() == Some("advisor"),
+        );
+        assert!(rows.is_empty());
+        assert!(stats.bytes_read <= SESSION_SCAN_BYTE_BUDGET);
+        assert_eq!(
+            stats.files_opened as u64,
+            SESSION_SCAN_BYTE_BUDGET / SESSION_META_MAX_BYTES
+        );
+    }
+
+    // trace:BUG-1789 | ai:antigravity
+    #[test]
+    fn bug1789_scan_stops_once_limit_matches_found() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let base = SystemTime::now();
+        let mut entries = Vec::new();
+        for i in 0..50u64 {
+            let id = format!("01a067ec-facc-71a0-9a69-{i:012x}");
+            let path = tmp
+                .path()
+                .join(format!("rollout-2026-09-03T08-39-39-{id}.jsonl"));
+            std::fs::write(&path, bug1789_session_meta_line(&id, &project)).unwrap();
+            entries.push(SessionLogEntry {
+                path,
+                mtime: base - std::time::Duration::from_secs(i),
+                agent: "codex",
+            });
+        }
+        let (rows, stats) = select_recent_sessions(
+            entries,
+            8,
+            None,
+            SystemTime::now(),
+            Some(&project),
+            &[],
+            &mut |_: &SessionMeta| true,
+        );
+        assert_eq!(rows.len(), 8);
+        assert_eq!(stats.files_opened, 8);
     }
 
     // trace:STORY-822 | ai:codex
@@ -5303,34 +5886,28 @@ mod tests {
             )));
     }
 
-    // STORY-683 / BUG-697: serialize the tests that mutate the process-global
-    // `AIDA_HEADLESS_VENDOR` env var on the ONE shared env lock
-    // (crate::test_env::env_lock) — same parallel-env hazard as os_wrap.
-
+    // STORY-683 / BUG-697 / TASK-1532: route through EnvVarGuard. trace:TASK-1532 | ai:agy
     struct HeadlessVendorEnvGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-        saved: Option<std::ffi::OsString>,
+        _guard: crate::test_env::EnvVarGuard,
     }
 
     impl HeadlessVendorEnvGuard {
         fn acquire() -> Self {
-            let lock = crate::test_env::env_lock(); // BUG-697: shared env lock
-            let saved = std::env::var_os("AIDA_HEADLESS_VENDOR");
-            std::env::remove_var("AIDA_HEADLESS_VENDOR");
+            let guard = crate::test_env::EnvVarGuard::unset("AIDA_HEADLESS_VENDOR");
             // TASK-1116: the flag-override tier is a process-global too — clear
             // it under the same lock so a prior override-setting test can never
             // leak into an env/knob/default assertion.
             set_headless_vendor_override(None);
-            Self { _lock: lock, saved }
+            Self { _guard: guard }
+        }
+
+        fn set(&mut self, val: impl AsRef<std::ffi::OsStr>) {
+            self._guard.reset(val);
         }
     }
 
     impl Drop for HeadlessVendorEnvGuard {
         fn drop(&mut self) {
-            match &self.saved {
-                Some(v) => std::env::set_var("AIDA_HEADLESS_VENDOR", v),
-                None => std::env::remove_var("AIDA_HEADLESS_VENDOR"),
-            }
             // TASK-1116: reset the override tier so it does not survive the test.
             set_headless_vendor_override(None);
         }
@@ -5380,14 +5957,16 @@ mod tests {
             "codex arm must not carry claude's -p: {codex:?}"
         );
 
-        // TASK-1048: Agy arm: `agy -p --dangerously-skip-permissions <prompt>`,
-        // with the prompt as the final positional and NO codex `exec`.
+        // TASK-1048: Agy arm: `agy --dangerously-skip-permissions -p <prompt>`,
+        // with the prompt as `-p`'s value at the tail and NO codex `exec`.
+        // BUG-1686: the permission flag leads; `-p` is value-taking on agy.
+        // trace:BUG-1686 | ai:claude
         let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None);
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
-        assert_eq!(agy.first().map(String::as_str), Some("-p"), "{agy:?}");
-        assert!(
-            agy.contains(&"--dangerously-skip-permissions".to_string()),
-            "agy bypass: {agy:?}"
+        assert_eq!(
+            agy.first().map(String::as_str),
+            Some("--dangerously-skip-permissions"),
+            "{agy:?}"
         );
         assert_eq!(agy.last().map(String::as_str), Some(prompt), "{agy:?}");
         assert!(
@@ -5493,7 +6072,13 @@ mod tests {
                 advisor_tier_program_and_args(HeadlessVendor::Agy, is_fork, seeded, advisor_uuid);
             assert_eq!(prog, "agy", "is_fork={is_fork}");
             assert_eq!(args, agy_headless_args(seeded), "is_fork={is_fork}");
-            assert_eq!(args.first().map(String::as_str), Some("-p"), "{args:?}");
+            // BUG-1686: permission flag first, prompt as `-p`'s trailing value.
+            // trace:BUG-1686 | ai:claude
+            assert_eq!(
+                args.first().map(String::as_str),
+                Some("--dangerously-skip-permissions"),
+                "{args:?}"
+            );
             assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
             assert!(!args.contains(&"--resume".to_string()), "{args:?}");
             assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
@@ -5552,16 +6137,16 @@ mod tests {
     /// trace:STORY-683 | ai:claude
     #[test]
     fn resolve_headless_vendor_env_override() {
-        let _env = HeadlessVendorEnvGuard::acquire();
+        let mut _env = HeadlessVendorEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
 
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "nonsense");
+        _env.set("nonsense");
         assert_eq!(
             resolve_headless_vendor(tmp.path()),
             HeadlessVendor::Claude,
@@ -5662,6 +6247,272 @@ mod tests {
         );
         assert!(msg.contains("--vendor codex"), "{msg}");
         assert!(msg.contains("--no-launch"), "{msg}");
+    }
+
+    /// BUG-1607: an explicit `--vendor` flag (the `install_headless_vendor_override`
+    /// bridge every `--vendor` flag installs before resolution — the SAME bridge
+    /// `aida queue work --role reviewer --vendor codex` uses) wins over the
+    /// project `[agents] vendor` default, for the exact resolver
+    /// (`resolve_enabled_headless_vendor`) both the standalone reviewer launch
+    /// and the implementer launch share.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn reviewer_vendor_resolution_explicit_flag_wins_over_config_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        // Project config defaults to claude, with both profiles enabled.
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[agents]\nvendor = \"claude\"\nenabled = [\"claude\", \"codex\"]\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HEADLESS_VENDOR", None),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+        ]);
+        set_headless_vendor_override(None);
+
+        // No flag: the configured default (claude) wins.
+        assert_eq!(
+            resolve_enabled_headless_vendor(&project).unwrap(),
+            HeadlessVendor::Claude,
+            "with no explicit vendor, the config default should resolve"
+        );
+
+        // An explicit `--vendor codex` wins over the config default.
+        assert_eq!(
+            install_headless_vendor_override("codex"),
+            Some(HeadlessVendor::Codex)
+        );
+        assert_eq!(
+            resolve_enabled_headless_vendor(&project).unwrap(),
+            HeadlessVendor::Codex,
+            "an explicit --vendor must win over `[agents] vendor`"
+        );
+
+        set_headless_vendor_override(None);
+    }
+
+    /// BUG-1607: [`preflight_vendor_binary`] must fail closed for a resolved
+    /// vendor whose binary cannot be found — this is the check that must run
+    /// BEFORE `session_start` mints a lease/worktree, so a
+    /// resolved-but-uninstalled vendor never leaves orphaned state behind.
+    /// Routes through `AIDA_AGENT_CMD` (the same mock seam the headless spawn
+    /// paths already use) so no real `claude`/`codex` binary is ever spawned or
+    /// even required to exist on the test machine.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_vendor_binary_fails_closed_for_unreachable_binary() {
+        let mut _env = AgentCmdEnvGuard::acquire();
+        let missing = "/tmp/aida-bug-1607-missing-agent-binary-does-not-exist";
+        let _ = std::fs::remove_file(missing);
+        _env.set_cmd(missing);
+
+        // A tempdir standing in for "nothing has been created yet" — the
+        // state right before `session_start` would mint a lease/worktree.
+        let tmp = tempfile::tempdir().unwrap();
+        let before = std::fs::read_dir(tmp.path()).unwrap().count();
+
+        let err = preflight_vendor_binary(HeadlessVendor::Codex)
+            .expect_err("an unreachable binary must fail the preflight");
+        let msg = err.to_string();
+        assert!(msg.contains("codex"), "{msg}");
+        assert!(msg.contains("not on PATH"), "{msg}");
+        assert!(
+            msg.contains("lease or worktree"),
+            "the error must say WHY this runs early: {msg}"
+        );
+
+        // Purely a reachability check — it must not have touched the
+        // filesystem at all (no lease, no worktree, nothing).
+        let after = std::fs::read_dir(tmp.path()).unwrap().count();
+        assert_eq!(before, after, "preflight must not create any state");
+    }
+
+    /// BUG-1607: the mirror of the above — once the mock binary actually
+    /// exists (still never a real vendor CLI), the preflight passes.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_vendor_binary_succeeds_for_reachable_binary() {
+        let mut _env = AgentCmdEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-agent");
+        std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
+        _env.set_cmd(fake.to_str().unwrap());
+
+        preflight_vendor_binary(HeadlessVendor::Codex)
+            .expect("an existing (mock) binary must pass the preflight");
+        preflight_vendor_binary(HeadlessVendor::Claude)
+            .expect("the same mock override applies uniformly across vendors");
+    }
+
+    /// BUG-1607: the ordering-gap fix. Before `preflight_launch_vendor`
+    /// existed, an interactive Agy launch could pass `preflight_vendor_binary`
+    /// cleanly whenever `agy` happened to be reachable — so `session_start`
+    /// minted the lease + worktree, and only the LATER
+    /// `interactive_reviewer_launch_plan` call (or the implementer-side
+    /// `launch_vendor == Agy && !no_human` check, both well after
+    /// `session_start`) refused. That is the exact BUG-1607 shape: a refusal
+    /// that arrives after state was already mutated. Prove the fix two ways:
+    /// (1) an interactive Agy launch refuses EVEN WHEN the binary is
+    /// reachable — vendor support is checked, not just presence; (2) the
+    /// SAME resolved vendor, launched headlessly, still succeeds — the fix
+    /// must not regress AGY's real (headless) support.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_launch_vendor_refuses_interactive_agy_even_when_binary_reachable() {
+        let mut _env = AgentCmdEnvGuard::acquire();
+        let tmp = tempfile::tempdir().unwrap();
+        let fake = tmp.path().join("fake-agy");
+        std::fs::write(&fake, "#!/bin/sh\nexit 0\n").unwrap();
+        _env.set_cmd(fake.to_str().unwrap());
+
+        // Binary IS reachable (the mock exists) — the old
+        // `preflight_vendor_binary`-only check would have passed here,
+        // letting a caller mint a lease/worktree before the later refusal.
+        preflight_vendor_binary(HeadlessVendor::Agy).expect("sanity: the mock binary is reachable");
+
+        // The interactive preflight must still refuse — vendor SUPPORT is
+        // checked, independent of binary reachability.
+        let err = preflight_launch_vendor(HeadlessVendor::Agy, true)
+            .expect_err("an interactive Agy launch must be refused before any state is created");
+        let msg = err.to_string();
+        assert!(msg.contains("agy"), "{msg}");
+        assert!(msg.contains("--vendor claude"), "{msg}");
+        assert!(msg.contains("--vendor codex"), "{msg}");
+
+        // A headless launch of the SAME resolved vendor is unaffected — the
+        // fix narrows the gap, it doesn't remove Agy's real (headless)
+        // support.
+        preflight_launch_vendor(HeadlessVendor::Agy, false)
+            .expect("headless Agy launches remain supported");
+    }
+
+    /// BUG-1607: vendor support is checked BEFORE binary reachability, so an
+    /// interactive Agy refusal names the real reason ("does not support
+    /// vendor `agy`") even when the binary is ALSO missing — an operator
+    /// installing `agy` would not make an interactive reviewer/implementer
+    /// launch work, so the error must not suggest otherwise.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn preflight_launch_vendor_agy_support_check_runs_before_binary_check() {
+        let _env = AgentCmdEnvGuard::acquire();
+        // No override installed — `agy` is (almost certainly) not a real
+        // binary on the test machine either, so BOTH checks could fire;
+        // assert the vendor-support message wins.
+        let err = preflight_launch_vendor(HeadlessVendor::Agy, true)
+            .expect_err("interactive Agy must refuse regardless of binary presence");
+        assert!(
+            err.to_string().contains("does not support vendor `agy`"),
+            "{err}"
+        );
+    }
+
+    /// BUG-1607: the pure launch-plan resolver an interactive reviewer launch
+    /// (`aida queue work --role reviewer` and `aida review` / `aida human
+    /// review`) builds from — no process is spawned. With Codex resolved, the
+    /// plan names the `codex` program and the exact argv
+    /// [`codex_session_args`] builds, so "reviewer launch with codex resolves
+    /// to the codex exec" is provable without spawning anything.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_codex_resolves_to_codex_exec() {
+        // The plan's `program` is now routed through `resolve_agent_program`
+        // (`AIDA_AGENT_CMD`), so guard against a concurrently-running mock
+        // test leaking an override into this one.
+        let _env = AgentCmdEnvGuard::acquire();
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            None,
+            Some("review-story-1"),
+            "/aida-review --pr 42",
+            "session-1",
+            false,
+        )
+        .expect("codex is a supported interactive reviewer vendor");
+        assert_eq!(plan.vendor, HeadlessVendor::Codex);
+        assert_eq!(plan.program, "codex");
+        assert_eq!(
+            plan.args,
+            codex_session_args("/aida-review --pr 42", false, None)
+        );
+        assert_eq!(
+            plan.args.last().map(String::as_str),
+            Some("/aida-review --pr 42")
+        );
+
+        // `--permission-mode bypassPermissions` maps to Codex's own bypass
+        // flag (mirrors the general interactive Codex-tab dispatch, BUG-743).
+        let bypass_plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Codex,
+            Some("bypassPermissions"),
+            Some("review-story-1"),
+            "/aida-review --pr 42",
+            "session-1",
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            bypass_plan.args,
+            codex_session_args("/aida-review --pr 42", true, None)
+        );
+    }
+
+    /// BUG-1607: parity check — Claude's plan is byte-identical to the
+    /// pre-existing `claude_session_args` shape, so routing the reviewer
+    /// launch through the shared plan resolver never changes Claude's
+    /// behavior.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_claude_matches_claude_session_args() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let plan = interactive_reviewer_launch_plan(
+            HeadlessVendor::Claude,
+            Some("acceptEdits"),
+            Some("review-story-1"),
+            "/aida-review",
+            "session-1",
+            true,
+        )
+        .expect("claude is a supported interactive reviewer vendor");
+        assert_eq!(plan.vendor, HeadlessVendor::Claude);
+        assert_eq!(plan.program, "claude");
+        assert_eq!(
+            plan.args,
+            claude_session_args(
+                Some("acceptEdits"),
+                Some("review-story-1"),
+                Some("/aida-review"),
+                Some("session-1"),
+                true,
+                None,
+            )
+        );
+    }
+
+    /// BUG-1607: Agy has no interactive reviewer support yet — the plan
+    /// resolver refuses with a recovery hint instead of silently launching
+    /// nothing or falling back to another vendor.
+    // trace:BUG-1607 | ai:claude
+    #[test]
+    fn interactive_reviewer_launch_plan_agy_refuses_with_recovery_hint() {
+        let err = interactive_reviewer_launch_plan(
+            HeadlessVendor::Agy,
+            None,
+            None,
+            "/aida-review",
+            "session-1",
+            false,
+        )
+        .expect_err("agy has no interactive reviewer support");
+        let msg = err.to_string();
+        assert!(msg.contains("agy"), "{msg}");
+        assert!(msg.contains("--vendor claude"), "{msg}");
+        assert!(msg.contains("--vendor codex"), "{msg}");
     }
 
     /// BUG-705: the shared composition routes per vendor — with Codex the
@@ -5811,12 +6662,12 @@ mod tests {
     // trace:TASK-1116 | ai:claude
     #[test]
     fn resolve_headless_vendor_flag_override_wins_over_env_and_knob() {
-        let _env = HeadlessVendorEnvGuard::acquire();
+        let mut _env = HeadlessVendorEnvGuard::acquire();
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
 
         // Set up the LOSING tiers: env says codex, the config knob says codex.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         std::fs::write(
             tmp.path().join(".aida/config.toml"),
             "[orchestrator]\nheadless_vendor = \"codex\"\n",
@@ -5840,12 +6691,12 @@ mod tests {
         );
 
         // Flipped: override codex still wins regardless of the lower tiers.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         set_headless_vendor_override(Some(HeadlessVendor::Codex));
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Codex);
 
         // TASK-1048: the agy override wins over the codex env + codex knobs too.
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "codex");
+        _env.set("codex");
         set_headless_vendor_override(Some(HeadlessVendor::Agy));
         assert_eq!(
             resolve_headless_vendor(tmp.path()),
@@ -5854,7 +6705,7 @@ mod tests {
         );
 
         // Clearing the override falls back to the env/knob tiers (now claude).
-        std::env::set_var("AIDA_HEADLESS_VENDOR", "claude");
+        _env.set("claude");
         set_headless_vendor_override(None);
         assert_eq!(resolve_headless_vendor(tmp.path()), HeadlessVendor::Claude);
     }
@@ -6195,7 +7046,7 @@ mod tests {
     fn aida_os_wrap_env_overrides_config() {
         // Serialize env mutation across the os_wrap tests + start clean; the
         // guard's drop restores the ambient AIDA_OS_WRAP (BUG-581). trace:BUG-581
-        let _env = OsWrapEnvGuard::acquire();
+        let mut _env = OsWrapEnvGuard::acquire();
 
         // Config says OFF (no config at all).
         let off_dir = tempfile::tempdir().unwrap();
@@ -6210,7 +7061,7 @@ mod tests {
 
         // Override ON forces true even when config is off.
         for truthy in ["1", "true", "TRUE", "Yes", " yes "] {
-            std::env::set_var("AIDA_OS_WRAP", truthy);
+            _env.set(truthy);
             assert!(
                 os_wrap_enabled(off_dir.path()),
                 "AIDA_OS_WRAP={truthy:?} must force os_wrap ON over an off config"
@@ -6219,7 +7070,7 @@ mod tests {
 
         // Override OFF forces false even when config is on.
         for falsey in ["0", "false", "FALSE", "No", " no "] {
-            std::env::set_var("AIDA_OS_WRAP", falsey);
+            _env.set(falsey);
             assert!(
                 !os_wrap_enabled(on_dir.path()),
                 "AIDA_OS_WRAP={falsey:?} must force os_wrap OFF over an on config"
@@ -6227,7 +7078,7 @@ mod tests {
         }
 
         // Unrecognized value → ignored → config wins.
-        std::env::set_var("AIDA_OS_WRAP", "maybe");
+        _env.set("maybe");
         assert!(
             !os_wrap_enabled(off_dir.path()),
             "garbage AIDA_OS_WRAP must fall through to the (off) config"
@@ -6238,7 +7089,7 @@ mod tests {
         );
 
         // Unset → config wins in both directions.
-        std::env::remove_var("AIDA_OS_WRAP");
+        _env.unset();
         assert!(!os_wrap_enabled(off_dir.path()));
         assert!(os_wrap_enabled(on_dir.path()));
     }
@@ -6252,7 +7103,7 @@ mod tests {
     fn interactive_path_wraps_when_enabled_unchanged_when_off() {
         // Serialize + clean env baseline; the guard restores it on drop
         // (BUG-581). trace:BUG-581
-        let _env = OsWrapEnvGuard::acquire();
+        let mut _env = OsWrapEnvGuard::acquire();
 
         let resolved_binary = "/usr/local/bin/claude";
         let args = vec![
@@ -6273,7 +7124,7 @@ mod tests {
         assert_eq!(out_args, args, "args unchanged when off");
 
         // ON via the env override.
-        std::env::set_var("AIDA_OS_WRAP", "1");
+        _env.set("1");
         let on_dir = tempfile::tempdir().unwrap();
         match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
             Ok((program, out_args)) => {

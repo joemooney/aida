@@ -201,10 +201,51 @@ fn normalize_volatile(mut value: serde_json::Value) -> serde_json::Value {
     // Separate process invocations can cross a one-second boundary while
     // reporting the same session. The contract is the field/schema and all
     // stable values, not equality of a live elapsed-time sample.
+    // trace:BUG-1692 | ai:codex
+    // History can switch from a git walk to its warmed cache between these
+    // invocations; source and index_tip describe that provenance, not the
+    // history answer, so keep comparing count and every event field below.
     if let Some(object) = value.as_object_mut() {
         object.remove("idle_secs");
+        object.remove("source");
+        object.remove("index_tip");
     }
     value
+}
+
+#[test]
+fn history_json_comparison_ignores_cache_provenance_only() {
+    let walked = serde_json::json!({
+        "source": "git-walk",
+        "index_tip": null,
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+    let cached = serde_json::json!({
+        "source": "history-cache",
+        "index_tip": "abc123",
+        "count": 1,
+        "events": [{"id": "event-1", "kind": "spec.created"}],
+    });
+
+    assert_eq!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(cached.clone())
+    );
+
+    let mut different_count = cached.clone();
+    different_count["count"] = serde_json::json!(2);
+    assert_ne!(
+        normalize_volatile(walked.clone()),
+        normalize_volatile(different_count)
+    );
+
+    let mut different_event = cached;
+    different_event["events"][0]["kind"] = serde_json::json!("spec.updated");
+    assert_ne!(
+        normalize_volatile(walked),
+        normalize_volatile(different_event)
+    );
 }
 
 #[test]
@@ -441,6 +482,9 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ("aida queue list", &["queue", "list"]),
         ("aida queue progress", &["queue", "progress"]),
         ("aida findings list", &["findings", "list"]),
+        // trace:BUG-1631 | ai:claude
+        ("aida history", &["history", "--full"]),
+        ("aida history events", &["history", "events"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();
@@ -496,4 +540,126 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
             );
         }
     }
+}
+
+// BUG-1631: `aida history --json` stdout is pure JSON even where the human
+// `Window: …` line would otherwise print (human mode forced with
+// AIDA_AGENT_OUTPUT=0, or `--format human --json`).
+// trace:BUG-1631 | ai:claude
+#[test]
+fn bug_1631_history_json_stdout_is_pure_json_outside_agent_mode() {
+    let (_tmp, repo, home, _spec) = fixture();
+    let cases: &[(&[&str], Option<&str>)] = &[
+        (&["history", "--json", "--since", "7d"], Some("0")),
+        (&["history", "events", "--json", "--since", "7d"], Some("0")),
+        (
+            &["history", "--format", "human", "--json", "--since", "7d"],
+            None,
+        ),
+    ];
+    for (args, agent_env) in cases {
+        let mut command = aida_command(&repo, &home);
+        command.args(*args);
+        if let Some(v) = agent_env {
+            command.env("AIDA_AGENT_OUTPUT", v);
+        }
+        let out = command.output().expect("run aida");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!stdout.contains("Window:"), "{args:?} leaked: {stdout}");
+        let value: serde_json::Value = serde_json::from_str(&stdout)
+            .unwrap_or_else(|e| panic!("{args:?} stdout is not JSON ({e}): {stdout}"));
+        assert!(value["events"].is_array(), "{args:?}: {value}");
+    }
+}
+
+// BUG-1635: the real binary renders the same history rows in human, TOON
+// and JSON for `--status-changes`, a single SPEC-ID, and `--comments`, and
+// neither the per-event flags nor a piped SPEC-ID fall back to the digest.
+// trace:BUG-1635 | ai:claude
+#[test]
+fn bug_1635_history_formats_agree_on_event_count() {
+    let (_tmp, repo, home, spec) = fixture();
+    let run_ok = |args: &[&str]| {
+        let out = aida(&repo, &home, args);
+        assert!(
+            out.status.success(),
+            "{args:?}: stdout={}\nstderr={}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+    run_ok(&["edit", &spec, "--status", "in-progress", "--force"]);
+    run_ok(&["comment", "add", &spec, "first note"]);
+
+    // Lines that start with two spaces: human event/progression lines and
+    // TOON table rows.
+    let rows = |text: &str| text.lines().filter(|l| l.starts_with("  ")).count();
+    let toon_count = |text: &str| -> usize {
+        text.lines()
+            .find_map(|l| l.strip_prefix("count: "))
+            .unwrap_or_else(|| panic!("no count line: {text}"))
+            .trim()
+            .parse()
+            .unwrap()
+    };
+
+    let cases: Vec<(&str, Vec<&str>)> = vec![
+        (
+            "--status-changes",
+            vec!["history", "--status-changes", "--all"],
+        ),
+        ("--comments", vec!["history", "--comments", "--all"]),
+        ("<SPEC-ID>", vec!["history", spec.as_str()]),
+        (
+            "<SPEC-ID> --comments",
+            vec!["history", spec.as_str(), "--comments"],
+        ),
+    ];
+    for (label, args) in cases {
+        let with = |fmt: &str| {
+            let mut a = args.clone();
+            a.extend(["--format", fmt]);
+            run_ok(&a)
+        };
+        let human = with("human");
+        let toon = with("toon");
+        let json: serde_json::Value =
+            serde_json::from_str(&with("json")).unwrap_or_else(|e| panic!("[{label}] JSON: {e}"));
+        let n = json["count"].as_u64().unwrap() as usize;
+        assert!(n >= 1, "[{label}] expected events: {json}");
+        assert_eq!(rows(&human), n, "[{label}] human:\n{human}");
+        // trace:TASK-1526 | ai:codex
+        // Only the event table's rows count; the separate cache object also
+        // has indented fields and must not masquerade as another event.
+        let toon_rows = toon
+            .lines()
+            .skip_while(|line| !line.starts_with("events["))
+            .skip(1)
+            .take_while(|line| line.starts_with("  "))
+            .count();
+        assert_eq!(toon_rows, n, "[{label}] toon:\n{toon}");
+        assert_eq!(json["cache"]["stale"], false);
+        assert!(toon.contains("cache:\n  stale: false"), "{toon}");
+        assert_eq!(toon_count(&toon), n, "[{label}] toon:\n{toon}");
+        assert!(
+            !toon.lines().any(|l| l == "view: history"),
+            "[{label}] fell back to the digest:\n{toon}"
+        );
+        for row in json["events"].as_array().unwrap() {
+            for key in ["id", "ts", "author", "kind", "from", "to", "summary"] {
+                assert!(row.get(key).is_some(), "[{label}] missing {key}: {row}");
+            }
+        }
+    }
+
+    // The single-spec progression names the transition in TOON too.
+    let toon = run_ok(&["history", &spec, "--format", "toon"]);
+    assert!(toon.starts_with("view: history-progression"), "{toon}");
+    assert!(toon.contains("status_change"), "{toon}");
 }

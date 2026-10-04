@@ -77,6 +77,12 @@ pub struct AutoCompleteEvent {
     /// circular reference, it is the pre-draft snapshot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drafted_bug: Option<String>,
+    /// TASK-1564: UUID of the comment this failure was recorded as on the
+    /// parent spec, replacing the TASK-266 draft-BUG container. Set after the
+    /// comment is written, so the verbatim copy embedded in that comment
+    /// carries `None` here — the same pre-write snapshot `drafted_bug` takes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_comment: Option<String>,
     /// Short build SHA of the aida binary (release tracking).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary_sha: Option<String>,
@@ -99,8 +105,12 @@ impl AutoCompleteEvent {
 
 /// Resolve `~/.aida/auto-complete.jsonl`. Returns `None` when the home dir
 /// can't be located (treat as "telemetry off" — never error out).
+/// Resolves home through `crate::aida_home_dir()` so the `AIDA_HOME` override
+/// is honoured on every platform and agrees with `usage::log_path`; with
+/// `AIDA_HOME` unset it is the same `~/.aida/...` path as before.
+// trace:BUG-1649 | ai:claude
 pub fn log_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
+    crate::aida_home_dir().map(|h| h.join(".aida").join("auto-complete.jsonl"))
 }
 
 /// Append a single event as JSONL. Errors are intentionally swallowed —
@@ -271,6 +281,7 @@ mod tests {
             }],
             total_ms: 5000,
             drafted_bug: failed_phase.map(|_| "BUG-200".to_string()),
+            failure_comment: None,
             binary_sha: Some("abc1234".to_string()),
             auto_rebase: Vec::new(),
             lifecycle_skips: Vec::new(),
@@ -457,6 +468,50 @@ mod tests {
         if let Some(p) = log_path() {
             assert!(p.ends_with("auto-complete.jsonl"));
             assert!(p.to_string_lossy().contains(".aida"));
+        }
+    }
+}
+
+// trace:BUG-1649 | ai:claude
+#[cfg(test)]
+mod bug_1649_telemetry_path_tests {
+    use crate::test_env::EnvVarsGuard;
+    use std::path::PathBuf;
+
+    fn paths() -> [(Option<PathBuf>, &'static str); 4] {
+        [
+            (super::log_path(), "auto-complete.jsonl"),
+            (
+                crate::field_study::auto_complete_path(),
+                "auto-complete.jsonl",
+            ),
+            (crate::field_study::log_path(), "field-study.jsonl"),
+            (crate::rule_violation::log_path(), "rule-violations.jsonl"),
+        ]
+    }
+
+    #[test]
+    fn bug_1649_telemetry_logs_honour_aida_home() {
+        let home = tempfile::tempdir().unwrap();
+        let aida_home = tempfile::tempdir().unwrap();
+        let _env = EnvVarsGuard::set(&[
+            ("HOME", home.path().to_str().unwrap()),
+            ("AIDA_HOME", aida_home.path().to_str().unwrap()),
+        ]);
+        for (path, file) in paths() {
+            assert_eq!(path, Some(aida_home.path().join(".aida").join(file)));
+        }
+    }
+
+    #[test]
+    fn bug_1649_telemetry_logs_unchanged_without_aida_home() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvVarsGuard::apply(&[
+            ("HOME", Some(home.path().to_str().unwrap())),
+            ("AIDA_HOME", None),
+        ]);
+        for (path, file) in paths() {
+            assert_eq!(path, Some(home.path().join(".aida").join(file)));
         }
     }
 }

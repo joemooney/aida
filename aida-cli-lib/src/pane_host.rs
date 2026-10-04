@@ -25,6 +25,7 @@
 
 /// The dedicated detached tmux session implementer windows are created under,
 /// so they never crowd the operator's own working session.
+use crate::process_retry::RetryEtxtbsy;
 pub(crate) const DRAIN_SESSION: &str = "aida-drain";
 
 /// Transport for the resolved `--panes` host: the `queue work` / `burndown run`
@@ -198,7 +199,7 @@ pub(crate) fn host_implementer_in_tmux(
     let argv = tmux_new_window_argv(DRAIN_SESSION, spec, &window_cmd, &envs, cwd.as_deref());
     let spawn = std::process::Command::new(&argv[0])
         .args(&argv[1..])
-        .output()?;
+        .output_retrying_etxtbsy()?;
     if !spawn.status.success() {
         let _ = std::fs::remove_file(&rc_path);
         return Err(std::io::Error::other(format!(

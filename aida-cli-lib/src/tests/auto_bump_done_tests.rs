@@ -287,7 +287,7 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     // trace:BUG-1454 | ai:claude
     let gh_log = project_root.join("fake-gh.log");
     let fake_gh = project_root.join("fake-gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &fake_gh,
         format!(
             "#!/bin/sh\n\
@@ -304,8 +304,7 @@ fn open_pr_for_same_spec_defers_auto_bump() {
              esac\n",
             log = gh_log.display()
         ),
-    )
-    .unwrap();
+    );
     // `std::os::unix` does not exist on a Windows target, so an ungated import
     // here is a COMPILE error and takes the whole test binary with it — not a
     // failing test. Verified directly rather than assumed: a file containing
@@ -314,13 +313,6 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     // (The workspace-wide `cargo check --target ...` guard cannot answer this
     // question — it dies in ring's build script.)
     // trace:BUG-1565 | ai:claude
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&fake_gh).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&fake_gh, permissions).unwrap();
-    }
     let _gh = crate::test_env::EnvVarGuard::set(
         "AIDA_TEST_GH_BINARY",
         fake_gh.to_string_lossy().as_ref(),
@@ -759,6 +751,89 @@ fn auto_bump_rejects_matching_auto_drafted_failure_bug() {
             .status,
         RequirementStatus::Draft
     ));
+}
+
+/// BUG-1768: the flip-driven sweep only ever saw the specs a pass flipped
+/// itself, so a parent that reached `Completed` by any other route -- a hand
+/// `aida edit --status completed`, or any path outside the pass's confirmed set
+/// -- orphaned its auto-drafted phase-failure finding in `Draft` forever, where
+/// it surfaced as human work in the advisor `groom` bucket. The observed case
+/// (BUG-1821 on BUG-1817) was still Draft 20 hours after its parent completed,
+/// while two siblings whose parents completed through the auto-bump's own flip
+/// were rejected on schedule.
+///
+/// This pass flips nothing, which is the state the orphan was stranded in; the
+/// two controls assert the widened sweep stays inside
+/// `is_auto_complete_failure_bug_about`.
+// trace:BUG-1768 | ai:claude
+#[test]
+fn auto_bump_rejects_failure_finding_whose_parent_completed_outside_this_pass() {
+    let (_tmp, project_root, store_path) = init_test_project();
+
+    // Completed outright, the shape a non-auto-bump author's flip leaves behind.
+    let orphan_parent = seed_spec_at(&store_path, "TASK-91768", "Completed");
+    let orphan = seed_auto_complete_failure_bug(&store_path, "BUG-917680", &orphan_parent);
+
+    // Control: a finding whose parent is still open must stay Draft.
+    let open_parent = seed_spec_at(&store_path, "TASK-91769", "InProgress");
+    let on_open_parent = seed_auto_complete_failure_bug(&store_path, "BUG-917681", &open_parent);
+
+    // Control: same title shape, no `auto-drafted` marker, so the predicate must
+    // refuse it even though the spec its title names is Completed.
+    let storage = Storage::new(&store_path);
+    let mut store = storage.load().unwrap();
+    let mut hand_filed = aida_core::Requirement::new(
+        format!("auto-complete failure: phase 1 (implementer) on {orphan_parent}"),
+        "Looks similar, but is missing the auto-drafted marker.".to_string(),
+    );
+    hand_filed.spec_id = Some("BUG-917682".to_string());
+    hand_filed.req_type = aida_core::RequirementType::Bug;
+    hand_filed.set_status_from_str("Draft");
+    hand_filed.tags.insert("auto-complete".to_string());
+    hand_filed.tags.insert("failure-1".to_string());
+    store.requirements.push(hand_filed);
+    storage.save(&store).unwrap();
+
+    // No commit lands in this range: the pass has nothing of its own to flip.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 0, "no spec should flip in this pass");
+
+    let after = storage.load().unwrap();
+    let resolved = after.get_requirement_by_spec_id(&orphan).unwrap();
+    assert!(
+        matches!(resolved.status, RequirementStatus::Rejected),
+        "orphaned finding should be Rejected, was {:?}",
+        resolved.status
+    );
+    assert!(
+        resolved
+            .comments
+            .iter()
+            .any(|c| c.author == "aida-auto-bump"
+                && c.content.contains(&orphan_parent)
+                && c.content.contains(&orphan)),
+        "rejection should carry the aida-auto-bump comment naming parent and finding"
+    );
+
+    let still_open = after.get_requirement_by_spec_id(&on_open_parent).unwrap();
+    assert!(
+        matches!(still_open.status, RequirementStatus::Draft),
+        "a finding whose parent is still open must stay Draft, was {:?}",
+        still_open.status
+    );
+    assert!(
+        still_open.comments.is_empty(),
+        "a finding whose parent is still open must be left un-commented"
+    );
+
+    let hand_filed_after = after.get_requirement_by_spec_id("BUG-917682").unwrap();
+    assert!(
+        matches!(hand_filed_after.status, RequirementStatus::Draft),
+        "a BUG without the auto-drafted marker must be untouched, was {:?}",
+        hand_filed_after.status
+    );
 }
 
 /// BUG-477: the merge-driven Done→Completed auto-bump must record the
@@ -2829,14 +2904,10 @@ fn write_fake_gh_for_pr_states(
         }
         script.push_str("  *)\n    exit 1\n    ;;\nesac\n");
         let path = root.join("gh");
-        std::fs::write(&path, script).unwrap();
         #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&path).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&path, perms).unwrap();
-        }
+        crate::test_exec::write_executable(&path, &script);
+        #[cfg(not(unix))]
+        std::fs::write(&path, script).unwrap();
         path
     }
 }
@@ -3253,6 +3324,181 @@ fn seed_blocked_spec(
         created_by: None,
     });
     storage.save(&store).unwrap();
+}
+
+// trace:BUG-1721 | ai:codex
+fn add_blocked_by(store_path: &std::path::Path, spec: &str, blocker: &str) {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap();
+    let blocker_uuid = store.get_requirement_by_spec_id(blocker).unwrap().id;
+    store
+        .get_requirement_by_spec_id_mut(spec)
+        .unwrap()
+        .relationships
+        .push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::BlockedBy,
+            target_id: blocker_uuid,
+            created_at: None,
+            created_by: None,
+        });
+    storage.save(&store).unwrap();
+}
+
+#[test]
+fn closure_fixed_point_releases_credited_blocker_chain() {
+    let (_tmp, project_root, path) = init_test_project();
+    seed_spec_at(&path, "TASK-17210", "Done");
+    seed_spec_at(&path, "TASK-17211", "Done");
+    add_blocked_by(&path, "TASK-17211", "TASK-17210");
+    let store = Storage::new(&path).load().unwrap();
+    let mut flips = vec!["TASK-17210", "TASK-17211"]
+        .into_iter()
+        .map(|id| AutoBumpFlip::new(id.into(), "abcdef123".into(), RequirementStatus::Done))
+        .collect();
+    assert!(split_closure_held_flips(&store, &mut flips).is_empty());
+    assert_eq!(flips.len(), 2);
+
+    // The real reconcile path sees both credits on one commit and closes both
+    // specs in that single invocation.
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("chain.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "."]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "fix: land (TASK-17210 TASK-17211)"],
+    );
+    let storage = Storage::new(&path);
+    auto_bump_done_to_completed(&project_root, &path, Some(&pre_sha), &storage).unwrap();
+    let after = storage.load().unwrap();
+    for id in ["TASK-17210", "TASK-17211"] {
+        assert_eq!(
+            after.get_requirement_by_spec_id(id).unwrap().status,
+            RequirementStatus::Completed,
+            "{id} must complete after the one reconcile"
+        );
+    }
+}
+
+#[test]
+fn closure_fixed_point_is_independent_of_flip_order() {
+    let (_tmp, _, path) = init_test_project();
+    seed_spec_at(&path, "TASK-17212", "Done");
+    seed_spec_at(&path, "TASK-17213", "Done");
+    add_blocked_by(&path, "TASK-17213", "TASK-17212");
+    let store = Storage::new(&path).load().unwrap();
+    let mut flips = vec!["TASK-17213", "TASK-17212"]
+        .into_iter()
+        .map(|id| AutoBumpFlip::new(id.into(), "abcdef123".into(), RequirementStatus::Done))
+        .collect();
+    assert!(split_closure_held_flips(&store, &mut flips).is_empty());
+    assert_eq!(flips.len(), 2);
+}
+
+#[test]
+fn closure_fixed_point_reports_credited_dependency_cycle() {
+    let (_tmp, _, path) = init_test_project();
+    seed_spec_at(&path, "TASK-17214", "Done");
+    seed_spec_at(&path, "TASK-17215", "Done");
+    add_blocked_by(&path, "TASK-17214", "TASK-17215");
+    add_blocked_by(&path, "TASK-17215", "TASK-17214");
+    let store = Storage::new(&path).load().unwrap();
+    let mut flips = vec!["TASK-17214", "TASK-17215"]
+        .into_iter()
+        .map(|id| AutoBumpFlip::new(id.into(), "abcdef123".into(), RequirementStatus::Done))
+        .collect();
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert_eq!(holds.len(), 2);
+    assert!(holds.iter().all(|h| !h.cycle_members.is_empty()));
+    assert!(closure_hold_comment(&holds[0]).contains("dependency cycle"));
+}
+
+#[test]
+fn closure_fixed_point_preserves_external_blocker_hold() {
+    let (_tmp, _, path) = init_test_project();
+    seed_blocked_spec(&path, "TASK-17216", "Done", "TASK-17217", "In Progress");
+    let store = Storage::new(&path).load().unwrap();
+    let mut flips = vec![AutoBumpFlip::new(
+        "TASK-17216".into(),
+        "abcdef123".into(),
+        RequirementStatus::Done,
+    )];
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert!(flips.is_empty());
+    assert_eq!(holds[0].blockers[0].id, "TASK-17217");
+    // BUG-1721: an ordinary blocker wait must NOT be reclassified as a cycle —
+    // this empty set is what keeps `report_closure_holds` on the pre-fix
+    // "completion waits for the blocker" line.
+    assert!(holds[0].cycle_members.is_empty());
+    assert!(closure_hold_comment(&holds[0]).contains("releases once every blocker"));
+}
+
+/// BUG-1721: the pre-fix `retain` KEPT a flip whose spec id does not resolve in
+/// the store (there was nothing to hold it on, so it fell through to the write
+/// loop, which skips it harmlessly). The fixed-point rewrite must not silently
+/// drop it from `flips` — `flips` is also the value `aida pull` reports and
+/// files plan followups from.
+// trace:BUG-1721 | ai:claude
+#[test]
+fn closure_fixed_point_keeps_a_flip_whose_spec_is_not_in_the_store() {
+    let (_tmp, _, path) = init_test_project();
+    seed_spec_at(&path, "TASK-17218", "Done");
+    let store = Storage::new(&path).load().unwrap();
+    let mut flips = vec![
+        AutoBumpFlip::new(
+            "TASK-17218".into(),
+            "abcdef123".into(),
+            RequirementStatus::Done,
+        ),
+        AutoBumpFlip::new(
+            "TASK-99999".into(),
+            "abcdef123".into(),
+            RequirementStatus::Done,
+        ),
+    ];
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert!(holds.is_empty());
+    assert_eq!(
+        flips.iter().map(|f| f.spec_id.as_str()).collect::<Vec<_>>(),
+        vec!["TASK-17218", "TASK-99999"],
+        "a flip for an unknown spec id must survive the split, as it did pre-fix"
+    );
+}
+
+/// BUG-1721: `ClosureBlocker.id` is the blocker's DISPLAY id (agreed_id wins),
+/// while an `AutoBumpFlip` carries whichever form the commit trailer used. A
+/// cycle between two agreed-id specs credited by one commit must still be named
+/// as a cycle, not reported as an ordinary blocker wait.
+// trace:BUG-1721 | ai:claude
+#[test]
+fn closure_fixed_point_names_a_cycle_when_blockers_carry_agreed_ids() {
+    let (_tmp, _, path) = init_test_project();
+    seed_spec_at(&path, "TASK-17219", "Done");
+    seed_spec_at(&path, "TASK-17220", "Done");
+    add_blocked_by(&path, "TASK-17219", "TASK-17220");
+    add_blocked_by(&path, "TASK-17220", "TASK-17219");
+    {
+        let storage = Storage::new(&path);
+        let mut store = storage.load().unwrap();
+        for (spec, agreed) in [("TASK-17219", "FR-1-219"), ("TASK-17220", "FR-1-220")] {
+            store
+                .get_requirement_by_spec_id_mut(spec)
+                .unwrap()
+                .agreed_id = Some(agreed.to_string());
+        }
+        storage.save(&store).unwrap();
+    }
+    let store = Storage::new(&path).load().unwrap();
+    // The flips still carry the trailer (spec_id) form, not the agreed form.
+    let mut flips = vec!["TASK-17219", "TASK-17220"]
+        .into_iter()
+        .map(|id| AutoBumpFlip::new(id.into(), "abcdef123".into(), RequirementStatus::Done))
+        .collect();
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert_eq!(holds.len(), 2);
+    assert!(
+        holds.iter().all(|h| !h.cycle_members.is_empty()),
+        "cycle must be recognised across the spec_id/agreed_id form mismatch"
+    );
 }
 
 /// Land a commit carrying `(spec_id)` and run the live auto-bump over it.
@@ -3771,6 +4017,10 @@ fn auto_bump_completes_with_unmet_stretch_and_records_debt() {
 #[test]
 fn auto_bump_required_still_holds_and_met_stretch_writes_no_debt() {
     let (_tmp, project_root, store_path) = init_test_project();
+    // BUG-1618: pin the ambient project root / TTY / session role and hold the
+    // env lock, so an inherited AIDA_SESSION_ROLE (or a sibling test swapping
+    // AIDA_* env mid-run) cannot change what the bump path sees.
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&project_root, None); // trace:BUG-1618 | ai:claude
     seed_spec_at(&store_path, "STORY-9386", "Done");
     mutate_spec(&store_path, "STORY-9386", |r| {
         r.description = "## Closure\n- [ ] required, open\n- [ ] reach (stretch)\n".to_string();

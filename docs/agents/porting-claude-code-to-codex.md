@@ -749,7 +749,11 @@ Review the staged diff for $ARGUMENTS and check it satisfies the spec.
 ```
 
 **Codex** — `.agents/skills/aida-review/SKILL.md` (a skill is a *directory* with a
-required `SKILL.md`; invoke with `/skills` or `$aida-review`):
+required `SKILL.md`; invoke with `/skills` or `$aida-review`). Verified on Codex
+0.157.0, which also reads a hard link or a symlinked skill *directory*, but
+silently skips a `SKILL.md` that is itself a symlink, so write a regular file.
+Antigravity 1.2.11 reads the same `.agents/skills/` directory. See the skill
+discovery matrix in `docs/agents/seat-parity.md`:
 
 ```markdown
 ---

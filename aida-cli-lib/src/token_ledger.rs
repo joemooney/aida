@@ -1184,7 +1184,7 @@ pub(crate) fn rebuild(root: &Path, json: bool) -> Result<()> {
         .create_new(true)
         .open(&temp)?;
     let mut paths = Vec::new();
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = crate::home_dir() {
         walk_jsonl(&home.join(".claude/projects"), &mut paths);
         walk_jsonl(&home.join(".codex/sessions"), &mut paths);
     }

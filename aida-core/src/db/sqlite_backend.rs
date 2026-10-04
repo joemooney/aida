@@ -590,6 +590,7 @@ impl SqliteBackend {
                 execution_mode: None,
                 // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                 origin: None,
+                filed_at: None,
                 custom_status,
                 custom_priority,
                 custom_fields,
@@ -1274,6 +1275,8 @@ impl DatabaseBackend for SqliteBackend {
             store_version,
             migrated_to: None, // SQLite is never a migrated-from source
             dispenser: None,
+            loaded_objects: None,
+            id_counters_reset: crate::models::CounterResetFlag::default(),
         })
     }
 
@@ -1546,6 +1549,7 @@ impl DatabaseBackend for SqliteBackend {
                     execution_mode: None,
                     // trace:STORY-634 | ai:claude — origin not carried by legacy backend
                     origin: None,
+                    filed_at: None,
                     custom_status,
                     custom_priority,
                     custom_fields,

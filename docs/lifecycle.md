@@ -682,6 +682,17 @@ carrying the verdict word, **the commit the review examined**, and a timestamp:
 - `aida queue next` shows the latest verdict, so an implementer picking the
   spec back up cannot miss it.
 
+**`queue done` only finishes approved work.** Its legal predecessors are
+Approved, Planned, and In Progress (and Done again, as a no-op). From Draft or
+Needs Attention it needs approval authority, the same guard as approving the
+spec; from a closed state (Rejected, Completed, Superseded) it refuses outright,
+because it is not a reopen verb. `--force` does not bypass either check. The
+same rule holds for a forced reopen: `aida edit <SPEC> --status approved --force`
+on a Rejected or Completed spec clears the reopen guard but still needs approval
+authority, and `aida zen` under `[autopilot] approve = "auto"` routes a draft to
+the advisor when the session does not hold that authority.
+<!-- trace:BUG-1611 -->
+
 Related: the branch-vs-default-branch check behind `queue done` resolves the
 **local** default branch (`main` or `master`) when there is no `origin` remote,
 and refuses rather than warning when it cannot produce an answer at all — a

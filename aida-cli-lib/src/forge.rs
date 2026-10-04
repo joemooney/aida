@@ -24,6 +24,8 @@
 //! trace:EPIC-35 trace:SPIKE-49 trace:TASK-1242 | ai:claude+codex
 #![allow(dead_code)] // Providers/trait are wired into call sites in follow-on slice-1 commits.
 
+use crate::process_retry::RetryEtxtbsy;
+
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -202,15 +204,24 @@ impl ForgeKind {
     /// title/body from that branch's head commit in the shell command itself.
     /// This is for user-facing hints where AIDA knows the branch but is not
     /// opening the change directly. It must not rely on the caller's cwd branch.
+    ///
+    /// `base` is always spelled out explicitly (`--target-branch` / `--base`)
+    /// rather than left for the forge to infer. BUG-1610: a GitLab project
+    /// whose default branch became the feature branch itself (remote `main`
+    /// never pushed) made an implicit `glab mr create --source-branch
+    /// <branch>` silently target that same branch — an MR that can never
+    /// merge. Always naming the base here closes that hole at the source.
     // trace:BUG-816 | ai:codex
-    pub fn create_cmd_for_branch(self, branch: &str) -> Option<String> {
+    // trace:BUG-1610 | ai:claude
+    pub fn create_cmd_for_branch(self, branch: &str, base: &str) -> Option<String> {
         let branch = crate::shell_quote(branch);
+        let base = crate::shell_quote(base);
         match self {
             ForgeKind::GitHub => Some(format!(
-                "gh pr create --head {branch} --title \"$(git log -1 --format=%s {branch})\" --body \"$(git log -1 --format=%b {branch})\""
+                "gh pr create --head {branch} --base {base} --title \"$(git log -1 --format=%s {branch})\" --body \"$(git log -1 --format=%b {branch})\""
             )),
             ForgeKind::GitLab => Some(format!(
-                "glab mr create --source-branch {branch} --title \"$(git log -1 --format=%s {branch})\" --description \"$(git log -1 --format=%b {branch})\""
+                "glab mr create --source-branch {branch} --target-branch {base} --title \"$(git log -1 --format=%s {branch})\" --description \"$(git log -1 --format=%b {branch})\""
             )),
             ForgeKind::None => None,
         }
@@ -508,6 +519,9 @@ impl ReviewDecision {
 pub struct ChangeMetadata {
     pub state: ChangeState,
     pub title: String,
+    /// Forge account that created the change. Missing when the forge omits it.
+    // trace:TASK-1529 | ai:codex
+    pub author: Option<String>,
     /// When the change merged, if the forge exposes it. Used by drain
     /// reconciliation to avoid crediting pre-reopen PRs.
     // trace:BUG-1112 | ai:codex
@@ -588,6 +602,16 @@ pub enum CiProbeResult {
     Failed { change: u64, summary: String },
 }
 
+/// A branch CI observation together with the commit the forge says that
+/// observation belongs to. `head_sha` is the PR/MR head on GitHub and the
+/// newest pipeline SHA on GitLab.
+// trace:BUG-1819 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CiProbeEvidence {
+    pub probe: CiProbeResult,
+    pub head_sha: Option<String>,
+}
+
 /// STORY-516: adapt the orchestrator's `CiProbe` (main.rs) to the forge-neutral
 /// `CiProbeResult` — 1:1, preserving `NoSignal(reason)`. Pure + unit-tested.
 /// trace:STORY-516 | ai:claude
@@ -611,6 +635,17 @@ fn ci_probe_result_from_ci_probe(p: crate::CiProbe) -> CiProbeResult {
             summary: failed_summary,
         },
     }
+}
+
+fn github_ci_head_from_json(body: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(body.trim())
+        .ok()?
+        .get(0)?
+        .get("headRefOid")?
+        .as_str()
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -773,6 +808,11 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<ChangeMetadata>;
 
+    /// Login of the account authenticated by this forge CLI. Ownership-sensitive
+    /// operations must fail closed when this identity cannot be resolved.
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String>;
+
     /// STORY-621 Slice 2: the headline (first line) of each commit on the
     /// change, oldest-first — what the BUG-245/BUG-357 credit reconcile parses
     /// `(SPEC-ID)` trailers out of. Separate from [`Forge::change_metadata`] so
@@ -890,6 +930,15 @@ pub trait Forge {
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
 
+    /// `gh pr ready` / `glab mr update --ready` / pure-git no-op.
+    ///
+    /// Converts a draft change back to ready-for-review. The orchestrator uses
+    /// this when phase 1 reuses an already-open change that is sitting in
+    /// draft state: every forge refuses to merge a draft, so a reused draft
+    /// would pass CI and review and then stall at the merge with no signal.
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()>;
+
     /// `gh pr checkout` / pure git checkout (mostly forge-agnostic).
     fn checkout_change(&self, c: &ChangeRef) -> Result<()>;
 
@@ -995,7 +1044,11 @@ pub fn write_forge_config_provider(project_dir: &Path, kind: ForgeKind) -> Resul
         if in_forge {
             if let Some((key, _val)) = line.split_once('=') {
                 if key.trim() == "provider" {
-                    lines.push(format!("provider = \"{}\"", kind.config_token()));
+                    // trace:BUG-1650 | ai:claude
+                    lines.push(format!(
+                        "provider = {}",
+                        aida_core::toml_quote::toml_string(kind.config_token())
+                    ));
                     changed = true;
                     continue;
                 }
@@ -1149,8 +1202,9 @@ pub fn init_forge_config_section(project_root: &Path) -> String {
          # otherwise pure-git (works direct-to-default-branch; merge = git\n\
          # ancestry + (SPEC-ID)-trailer auto-complete, no forge needed).\n\
          [forge]\n\
-         provider = \"{}\"\n",
-        kind.config_token()
+         provider = {}\n",
+        // trace:BUG-1650 | ai:claude
+        aida_core::toml_quote::toml_string(kind.config_token())
     )
 }
 
@@ -1206,6 +1260,33 @@ pub fn forge_for_kind(project_root: &Path, kind: ForgeKind) -> Box<dyn Forge> {
     }
 }
 
+/// Read CI state and its covered head in one provider response. This is used
+/// by `--from-pr` reconciliation, where a bare green bit is insufficient: the
+/// reviewer must know that the terminal result covers the current PR/MR head.
+// trace:BUG-1819 | ai:codex
+pub(crate) fn ci_probe_evidence_for_branch(
+    project_root: &Path,
+    kind: ForgeKind,
+    branch: &str,
+) -> CiProbeEvidence {
+    match kind {
+        ForgeKind::GitHub => GitHubForge::new(project_root).ci_probe_evidence(branch),
+        ForgeKind::GitLab => GitLabForge::new(project_root).ci_probe_evidence(branch),
+        ForgeKind::None => CiProbeEvidence {
+            probe: CiProbeResult::NoSignal("no forge CI (pure-git)".to_string()),
+            head_sha: None,
+        },
+    }
+}
+
+/// TASK-1421: an injectable forge constructor. The orchestrator driver holds an
+/// optional one so a test can hand it a fake forge whose calls it observes; when
+/// unset (every production path) the driver falls back to [`forge_for_kind`].
+/// Deliberately a plain value on the driver, not an env var or global switch,
+/// so no production build carries a way to swap the forge out.
+// trace:TASK-1421 | ai:claude
+pub type ForgeFactory = std::sync::Arc<dyn Fn(&Path, ForgeKind) -> Box<dyn Forge> + Send + Sync>;
+
 /// The forge provider for opening a real PR/MR/change request.
 pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
     forge_for_kind(project_root, resolve_open_change_forge_kind(project_root))
@@ -1215,6 +1296,35 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 
 /// GitHub provider — shells out to `gh`, preserving the exact behavior of the
 /// pre-EPIC-35 call sites.
+/// BUG-1774: the spec keys a merge chokepoint weighs beside `PR-<id>` — the
+/// ids the change's branch and title name. These are the same recovery
+/// surfaces SPEC-410 squash subjects are derived from, so the gate sees the
+/// spec-keyed verdict artifact even when the PR-keyed one was never written.
+// trace:BUG-1774 | ai:claude
+fn corpus_gate_spec_hints(c: &ChangeRef) -> Vec<String> {
+    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
+    if let Some(title) = c.title.as_deref() {
+        for id in crate::pr_ship::extract_spec_ids_from_text(title) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
+}
+
+/// BUG-1774: the live head a provider's merge gate judges the corpus at when
+/// no `match_head` pin constrains the merge. `None` — unreadable — fails the
+/// gate closed once verdict artifacts exist.
+// trace:BUG-1774 | ai:claude
+fn merge_gate_live_head(forge: &dyn Forge, c: &ChangeRef) -> Option<String> {
+    forge
+        .change_status(c)
+        .ok()
+        .map(|s| s.head_sha.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 pub struct GitHubForge {
     project_root: PathBuf,
 }
@@ -1233,12 +1343,59 @@ impl GitHubForge {
         Command::new(&gh)
             .current_dir(&self.project_root)
             .args(args)
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke `gh` — is the GitHub CLI installed?")
+    }
+
+    fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
+        let out = self.gh(&[
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "number,headRefOid,statusCheckRollup",
+            "--limit",
+            "1",
+        ]);
+        let (probe, head_sha) = match out {
+            Ok(out) if out.status.success() => {
+                let body = String::from_utf8_lossy(&out.stdout);
+                let head = github_ci_head_from_json(&body);
+                (
+                    ci_probe_result_from_ci_probe(crate::parse_ci_probe(&body)),
+                    head,
+                )
+            }
+            Ok(out) => (
+                CiProbeResult::NoSignal(format!(
+                    "gh pr list failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                )),
+                None,
+            ),
+            Err(error) => (CiProbeResult::NoSignal(format!("{error:#}")), None),
+        };
+        CiProbeEvidence { probe, head_sha }
     }
 }
 
 impl Forge for GitHubForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        let out = self.gh(&["api", "user", "--jq", ".login"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh api user failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let login = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        anyhow::ensure!(!login.is_empty(), "gh api user returned an empty login");
+        Ok(login)
+    }
+
     // trace:STORY-1166 | ai:claude
     fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
         let pr = change.id.to_string();
@@ -1418,7 +1575,7 @@ impl Forge for GitHubForge {
                 "view",
                 &id_str,
                 "--json",
-                "state,title,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+                "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]);
             c
         })
@@ -1579,12 +1736,11 @@ impl Forge for GitHubForge {
         // trace:STORY-1163 | ai:codex
         //
         // STORY-516: delegate to the proven `probe_ci_state_for_branch` (single
-        // `gh pr list --json number,statusCheckRollup` call → PR number + rollup,
-        // with the BUG-* NoSignal degradations) and adapt CiProbe → CiProbeResult.
-        // No classification reimplementation. trace:STORY-516 | ai:claude
-        Ok(ci_probe_result_from_ci_probe(
-            crate::probe_ci_state_for_branch_github(branch),
-        ))
+        // `gh pr list --json number,headRefOid,statusCheckRollup` call → PR
+        // number + covered head + rollup, with the BUG-* NoSignal
+        // degradations). No classification reimplementation.
+        // trace:STORY-516 trace:BUG-1819 | ai:codex
+        Ok(self.ci_probe_evidence(branch).probe)
     }
 
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
@@ -1648,6 +1804,22 @@ impl Forge for GitHubForge {
         if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
             return Err(MergeHoldRefusal::new(c.id, &reason).into());
         }
+        // BUG-1774: the corpus half of the chokepoint — a blocking verdict
+        // holds the merge whatever producer wrote the artifact, marker or no
+        // marker. The head is resolved lazily (a PR with no verdict artifacts
+        // pays no forge read): a pinned merge can only land `match_head`, so
+        // that IS the head the corpus is judged at; otherwise the live head.
+        // trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| merge_gate_live_head(self, c))
+            },
+        )?;
         let args: Vec<String> = github_merge_argv(c.id, opts);
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let project_root = self.project_root.clone();
@@ -1690,6 +1862,18 @@ impl Forge for GitHubForge {
         anyhow::ensure!(
             out.status.success(),
             "gh pr close failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+        let out = self.gh(&["pr", "ready", &c.id.to_string()])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr ready failed for #{}: {}",
             c.id,
             String::from_utf8_lossy(&out.stderr).trim()
         );
@@ -1768,7 +1952,7 @@ impl GitLabForge {
         Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args)
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke `glab` — is the GitLab CLI installed?")
     }
 
@@ -1814,7 +1998,7 @@ impl GitLabForge {
         Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args.iter().map(String::as_str))
-            .output()
+            .output_retrying_etxtbsy()
             .context("could not invoke GitLab's merge API")
     }
 
@@ -1828,9 +2012,37 @@ impl GitLabForge {
             _ => 0,
         }
     }
+
+    fn ci_probe_evidence(&self, branch: &str) -> CiProbeEvidence {
+        let change = self.mr_iid_for_branch(branch);
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]);
+        ci_probe_evidence_from_glab_pipelines(out, change)
+    }
 }
 
 impl Forge for GitLabForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        let out = self.glab_api_get("user", &[])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab api user failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        let user: serde_json::Value =
+            serde_json::from_slice(&out.stdout).context("glab api user returned invalid JSON")?;
+        let login = user
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        anyhow::ensure!(
+            !login.is_empty(),
+            "glab api user returned an empty username"
+        );
+        Ok(login.to_string())
+    }
+
     // trace:STORY-1166 | ai:claude
     fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
         let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &change.branch)])?;
@@ -2112,9 +2324,7 @@ impl Forge for GitLabForge {
         // projects/:id/pipelines?ref=<branch>` (glab 1.36 has no `-F json` on
         // `ci list`), mirroring the BUG-639 MR-read fix. trace:STORY-510
         // trace:TASK-962 | ai:claude
-        let change = self.mr_iid_for_branch(branch);
-        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]);
-        Ok(ci_probe_from_glab_pipelines(out, change))
+        Ok(self.ci_probe_evidence(branch).probe)
     }
 
     fn watch_ci(&self, change: &ChangeRef) -> Result<CiState> {
@@ -2174,6 +2384,18 @@ impl Forge for GitLabForge {
         opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
+        // BUG-1774: the corpus half of the merge chokepoint, same contract as
+        // the GitHub provider. trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| merge_gate_live_head(self, c))
+            },
+        )?;
         // BUG-1232: `glab mr merge` rewrites some GitLab 405/409 responses as a
         // false "not enough privileges" error. Gate on GitLab's authoritative
         // detailed_merge_status, then call the REST merge endpoint directly.
@@ -2331,6 +2553,18 @@ impl Forge for GitLabForge {
         Ok(())
     }
 
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+        let out = self.glab(&["mr", "update", &c.id.to_string(), "--ready"])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr update --ready failed for !{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn checkout_change(&self, c: &ChangeRef) -> Result<()> {
         pure_git_checkout(&self.project_root, &c.branch)
     }
@@ -2378,6 +2612,11 @@ impl PureGitForge {
 }
 
 impl Forge for PureGitForge {
+    // trace:TASK-1529 | ai:codex
+    fn authenticated_user_login(&self) -> Result<String> {
+        anyhow::bail!("pure-git has no authenticated forge user")
+    }
+
     fn kind(&self) -> ForgeKind {
         ForgeKind::None
     }
@@ -2511,6 +2750,20 @@ impl Forge for PureGitForge {
         } else {
             c.base.clone()
         };
+        // BUG-1774: the corpus half of the merge chokepoint. Pure-git's change
+        // id is 0 ("the branch IS the change"), so the gate reads the
+        // spec-keyed artifacts its branch names; the head is the local branch
+        // tip. trace:BUG-1774 | ai:claude
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            &self.project_root,
+            c.id,
+            &corpus_gate_spec_hints(c),
+            || {
+                opts.match_head
+                    .clone()
+                    .or_else(|| rev_parse(&self.project_root, &c.branch))
+            },
+        )?;
         let git = |args: &[&str]| -> std::io::Result<std::process::Output> {
             Command::new("git")
                 .arg("-C")
@@ -2518,6 +2771,10 @@ impl Forge for PureGitForge {
                 .args(args)
                 .output()
         };
+        // Change branch and base names never reach git as options.
+        // trace:BUG-1622 | ai:claude
+        crate::git_arg_guard::reject_option_like("change branch", &c.branch)?;
+        crate::git_arg_guard::reject_option_like("change base", &base)?;
         // TASK-1458: pure-git has no forge-side head check, so compare the
         // local branch head with the approved pin before touching anything.
         // trace:TASK-1458 | ai:claude
@@ -2533,7 +2790,7 @@ impl Forge for PureGitForge {
         }
         // Checkout base, then land the branch onto it.
         anyhow::ensure!(
-            git(&["checkout", &base])?.status.success(),
+            git(&["checkout", &base, "--"])?.status.success(),
             "pure-git merge: could not checkout {base}"
         );
         // STORY-516: unified merge_change contract — bail (Err) on the first
@@ -2547,7 +2804,14 @@ impl Forge for PureGitForge {
                 // `(SPEC-ID)` trailer survives and trailer-driven auto-complete
                 // still fires. trace:STORY-516 | ai:claude
                 anyhow::ensure!(
-                    git(&["merge", "--squash", &c.branch])?.status.success(),
+                    git(&[
+                        "merge",
+                        "--squash",
+                        crate::git_arg_guard::END_OF_OPTIONS,
+                        &c.branch
+                    ])?
+                    .status
+                    .success(),
                     "pure-git merge: `git merge --squash {}` failed",
                     c.branch
                 );
@@ -2563,21 +2827,34 @@ impl Forge for PureGitForge {
             // `--no-edit` keeps the default merge message without opening an
             // editor (which would hang a non-interactive ship/drain).
             MergeMethod::Merge => anyhow::ensure!(
-                git(&["merge", "--no-ff", "--no-edit", &c.branch])?
-                    .status
-                    .success(),
+                git(&[
+                    "merge",
+                    "--no-ff",
+                    "--no-edit",
+                    crate::git_arg_guard::END_OF_OPTIONS,
+                    &c.branch
+                ])?
+                .status
+                .success(),
                 "pure-git merge: `git merge --no-ff {}` failed",
                 c.branch
             ),
             MergeMethod::Rebase => anyhow::ensure!(
-                git(&["rebase", &c.branch])?.status.success(),
+                git(&["rebase", crate::git_arg_guard::END_OF_OPTIONS, &c.branch])?
+                    .status
+                    .success(),
                 "pure-git merge: `git rebase {}` failed",
                 c.branch
             ),
         }
         // STORY-516: forge-side branch delete after a successful pure-git merge.
         if opts.delete_branch {
-            let _ = git(&["branch", "-D", &c.branch]);
+            let _ = git(&[
+                "branch",
+                "-D",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                &c.branch,
+            ]);
         }
         let sha = rev_parse(&self.project_root, &base);
         Ok(MergeResult {
@@ -2596,6 +2873,13 @@ impl Forge for PureGitForge {
     /// holds.
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, _c: &ChangeRef, _reason: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Pure git has no draft concept, so a reused change is never
+    /// draft-blocked — vacuously ready.
+    // trace:BUG-1690 | ai:claude
+    fn mark_change_ready(&self, _c: &ChangeRef) -> Result<()> {
         Ok(())
     }
 
@@ -2970,6 +3254,11 @@ fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
     ChangeMetadata {
         state,
         title: s("title"),
+        author: json
+            .get("author")
+            .and_then(|a| a.get("login"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         merged_at: json
             .get("mergedAt")
             .and_then(|v| v.as_str())
@@ -3051,6 +3340,11 @@ fn parse_glab_mr_metadata(body: &str) -> Result<ChangeMetadata> {
     Ok(ChangeMetadata {
         state,
         title: s("title"),
+        author: v
+            .get("author")
+            .and_then(|a| a.get("username"))
+            .and_then(|x| x.as_str())
+            .map(str::to_string),
         merged_at: v
             .get("merged_at")
             .and_then(|x| x.as_str())
@@ -3279,7 +3573,9 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
     matches!(probe, CiProbeResult::InProgress { .. })
 }
 
-fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
+// mapper for a sha-filtered pipeline query instead of a second implementation.
+pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
         url: None,
@@ -3336,42 +3632,78 @@ fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus 
 /// transient-vs-definitive split: a `glab` invocation error → `NoSignal` (couldn't
 /// probe), distinct from "no pipelines" (`NoChecks`). trace:STORY-510 | ai:claude
 fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) -> CiProbeResult {
+    ci_probe_evidence_from_glab_pipelines(out, change).probe
+}
+
+// trace:BUG-1819 | ai:codex
+fn ci_probe_evidence_from_glab_pipelines(
+    out: Result<std::process::Output>,
+    change: u64,
+) -> CiProbeEvidence {
     let out = match out {
         // The only Err `glab(...)` produces is "could not invoke glab".
-        Err(_) => return CiProbeResult::NoSignal("glab not on PATH".to_string()),
+        Err(_) => {
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal("glab not on PATH".to_string()),
+                head_sha: None,
+            }
+        }
         Ok(o) => o,
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return CiProbeResult::NoSignal(if stderr.is_empty() {
-            "glab ci list failed".to_string()
-        } else {
-            stderr
-        });
+        return CiProbeEvidence {
+            probe: CiProbeResult::NoSignal(if stderr.is_empty() {
+                "glab ci list failed".to_string()
+            } else {
+                stderr
+            }),
+            head_sha: None,
+        };
     }
     let body = String::from_utf8_lossy(&out.stdout);
     let trimmed = body.trim();
     if trimmed.is_empty() {
-        return CiProbeResult::NoChecks { change };
+        return CiProbeEvidence {
+            probe: CiProbeResult::NoChecks { change },
+            head_sha: None,
+        };
     }
     let arr = match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(serde_json::Value::Array(a)) => a,
         Ok(_) => {
-            return CiProbeResult::NoSignal("glab ci list JSON was not an array".to_string());
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal("glab ci list JSON was not an array".to_string()),
+                head_sha: None,
+            };
         }
         Err(e) => {
-            return CiProbeResult::NoSignal(format!("could not parse glab ci list JSON: {e}"));
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoSignal(format!("could not parse glab ci list JSON: {e}")),
+                head_sha: None,
+            };
         }
     };
     let pipeline = match newest_glab_pipeline(&arr) {
         Some(p) => p,
-        None => return CiProbeResult::NoChecks { change },
+        None => {
+            return CiProbeEvidence {
+                probe: CiProbeResult::NoChecks { change },
+                head_sha: None,
+            }
+        }
     };
+    let head_sha = pipeline
+        .get("sha")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .map(str::to_string);
     let status = pipeline
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    match glab_ci_state_from_status(status) {
+    let probe = match glab_ci_state_from_status(status) {
         CiState::Success => CiProbeResult::Green { change },
         CiState::Failed => CiProbeResult::Failed {
             change,
@@ -3380,7 +3712,8 @@ fn ci_probe_from_glab_pipelines(out: Result<std::process::Output>, change: u64) 
         CiState::Running | CiState::Pending => CiProbeResult::InProgress { change },
         // An unknown/empty status token gives no usable verdict.
         CiState::None => CiProbeResult::NoChecks { change },
-    }
+    };
+    CiProbeEvidence { probe, head_sha }
 }
 
 /// Map a `glab mr list --output json` body to a `Vec<ChangeRef>`. A clean run
@@ -3404,10 +3737,13 @@ fn parse_glab_mr_list(body: &str) -> Result<Vec<ChangeRef>> {
 // ─────────────────────────── shared git helpers ───────────────────────────
 
 fn pure_git_checkout(project_root: &Path, branch: &str) -> Result<()> {
+    // `checkout` lacks `--end-of-options` on git 2.43: refuse a dash-led
+    // name and pin it with `--`. trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("branch", branch)?;
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["checkout", branch])
+        .args(["checkout", branch, "--"])
         .output()?;
     anyhow::ensure!(
         out.status.success(),
@@ -3421,7 +3757,14 @@ fn branch_is_ancestor_of(project_root: &Path, branch: &str, base: &str) -> bool 
     Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["merge-base", "--is-ancestor", branch, base])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "merge-base",
+            "--is-ancestor",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            branch,
+            base,
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -3434,7 +3777,15 @@ fn branch_head_subject(project_root: &Path, r#ref: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "-1", "--format=%s", r#ref])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "log",
+            "-1",
+            "--format=%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            r#ref,
+            "--",
+        ])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -3452,7 +3803,14 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", r#ref])
+        // trace:BUG-1622 | ai:claude
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            r#ref,
+        ])
         .output()
         .ok()?;
     if !out.status.success() {
@@ -3509,6 +3867,192 @@ pub(crate) fn default_branch_of(project_root: &Path) -> String {
         }
     }
     "main".to_string()
+}
+
+/// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from
+/// canned values; `close_change` is recorded so a test can assert the
+/// publication boundary retracted (or did not retract) a change.
+// trace:TASK-1421 | ai:claude
+#[cfg(test)]
+pub(crate) mod fake {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    pub(crate) struct RecordingForge {
+        pub(crate) open_for_branch: ChangeLookup,
+        pub(crate) open_for_spec: ChangeLookup,
+        pub(crate) merged_for_branch: ChangeLookup,
+        pub(crate) author: Option<String>,
+        /// What `change_metadata` reports for `is_draft` — scripts the
+        /// reused-draft-PR scenario.
+        // trace:BUG-1690 | ai:claude
+        pub(crate) is_draft: bool,
+        /// Scripted state served by `change_metadata` (default `Open`).
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_state: ChangeState,
+        /// When set, `change_metadata` fails with this message — the
+        /// unreadable-forge path of the retraction ownership probe.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) metadata_error: Option<String>,
+        /// When set, `close_change` fails with this message after recording
+        /// the attempt.
+        // trace:TASK-1552 | ai:claude
+        pub(crate) close_error: Option<String>,
+        /// `(change id, reason)` for every `close_change` call.
+        pub(crate) closed: Arc<Mutex<Vec<(u64, String)>>>,
+        /// `(change id, body)` for every `comment` call.
+        // trace:BUG-1714 | ai:claude
+        pub(crate) commented: Arc<Mutex<Vec<(u64, String)>>>,
+        /// Change id for every `mark_change_ready` call.
+        // trace:BUG-1690 | ai:claude
+        pub(crate) readied: Arc<Mutex<Vec<u64>>>,
+    }
+
+    impl RecordingForge {
+        pub(crate) fn new() -> Self {
+            Self {
+                open_for_branch: ChangeLookup::NoChange,
+                open_for_spec: ChangeLookup::NoChange,
+                merged_for_branch: ChangeLookup::NoChange,
+                author: Some("codex-bot".into()),
+                is_draft: false,
+                metadata_state: ChangeState::Open,
+                metadata_error: None,
+                close_error: None,
+                closed: Arc::new(Mutex::new(Vec::new())),
+                commented: Arc::new(Mutex::new(Vec::new())),
+                readied: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        /// A factory handing out clones that share this forge's call log.
+        pub(crate) fn factory(&self) -> ForgeFactory {
+            let me = self.clone();
+            Arc::new(move |_: &Path, _: ForgeKind| Box::new(me.clone()) as Box<dyn Forge>)
+        }
+
+        pub(crate) fn closed(&self) -> Vec<(u64, String)> {
+            self.closed.lock().unwrap().clone()
+        }
+
+        // trace:BUG-1714 | ai:claude
+        pub(crate) fn commented(&self) -> Vec<(u64, String)> {
+            self.commented.lock().unwrap().clone()
+        }
+
+        // trace:BUG-1690 | ai:claude
+        pub(crate) fn readied(&self) -> Vec<u64> {
+            self.readied.lock().unwrap().clone()
+        }
+    }
+
+    impl Forge for RecordingForge {
+        fn authenticated_user_login(&self) -> Result<String> {
+            Ok("codex-bot".to_string())
+        }
+        fn kind(&self) -> ForgeKind {
+            ForgeKind::GitHub
+        }
+        fn open_change(&self, _: OpenChange) -> Result<ChangeRef> {
+            anyhow::bail!("RecordingForge: open_change not scripted")
+        }
+        fn change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.open_for_branch.clone())
+        }
+        fn change_for_spec(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.open_for_spec.clone())
+        }
+        fn merged_change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
+            Ok(self.merged_for_branch.clone())
+        }
+        fn change_status(&self, _: &ChangeRef) -> Result<ChangeStatus> {
+            anyhow::bail!("RecordingForge: change_status not scripted")
+        }
+        fn change_metadata(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<ChangeMetadata> {
+            if let Some(msg) = &self.metadata_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
+            Ok(ChangeMetadata {
+                state: self.metadata_state,
+                title: "fake change".into(),
+                author: self.author.clone(),
+                merged_at: None,
+                base_ref: "main".into(),
+                head_ref: "codex/task".into(),
+                head_sha: "abc".into(),
+                is_draft: self.is_draft,
+                is_cross_repository: false,
+                head_repo: None,
+            })
+        }
+        fn change_commit_headlines(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<Vec<String>> {
+            anyhow::bail!("RecordingForge: change_commit_headlines not scripted")
+        }
+        fn diff_change(&self, _: u64) -> Result<()> {
+            anyhow::bail!("RecordingForge: diff_change not scripted")
+        }
+        fn change_reviews(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<ChangeReviews> {
+            anyhow::bail!("RecordingForge: change_reviews not scripted")
+        }
+        fn ci_status(&self, _: CiTarget) -> Result<CiStatus> {
+            anyhow::bail!("RecordingForge: ci_status not scripted")
+        }
+        fn ci_probe_for_branch(&self, _: &str) -> Result<CiProbeResult> {
+            anyhow::bail!("RecordingForge: ci_probe_for_branch not scripted")
+        }
+        fn watch_ci(&self, _: &ChangeRef) -> Result<CiState> {
+            anyhow::bail!("RecordingForge: watch_ci not scripted")
+        }
+        fn stream_ci_for_branch(&self, _: &str, _: bool) -> Result<CiProbeResult> {
+            anyhow::bail!("RecordingForge: stream_ci_for_branch not scripted")
+        }
+        fn merge_change(
+            &self,
+            _: &ChangeRef,
+            _: &MergeOptions,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> Result<MergeResult> {
+            anyhow::bail!("RecordingForge: merge_change not scripted")
+        }
+        fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
+            self.commented
+                .lock()
+                .unwrap()
+                .push((c.id, body.to_string()));
+            Ok(())
+        }
+        fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()> {
+            self.closed.lock().unwrap().push((c.id, reason.to_string()));
+            if let Some(msg) = &self.close_error {
+                anyhow::bail!("RecordingForge: {msg}");
+            }
+            Ok(())
+        }
+        // trace:BUG-1690 | ai:claude
+        fn mark_change_ready(&self, c: &ChangeRef) -> Result<()> {
+            self.readied.lock().unwrap().push(c.id);
+            Ok(())
+        }
+        fn checkout_change(&self, _: &ChangeRef) -> Result<()> {
+            anyhow::bail!("RecordingForge: checkout_change not scripted")
+        }
+        fn list_changes(&self, _: ChangeFilter) -> Result<Vec<ChangeRef>> {
+            Ok(Vec::new())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -4047,14 +4591,17 @@ mod tests {
         );
         assert_eq!(ForgeKind::None.create_cmd(), None);
         assert_eq!(
-            ForgeKind::GitHub.create_cmd_for_branch("bug-816"),
-            Some("gh pr create --head bug-816 --title \"$(git log -1 --format=%s bug-816)\" --body \"$(git log -1 --format=%b bug-816)\"".to_string())
+            ForgeKind::GitHub.create_cmd_for_branch("bug-816", "main"),
+            Some("gh pr create --head bug-816 --base main --title \"$(git log -1 --format=%s bug-816)\" --body \"$(git log -1 --format=%b bug-816)\"".to_string())
         );
         assert_eq!(
-            ForgeKind::GitLab.create_cmd_for_branch("bug-816"),
-            Some("glab mr create --source-branch bug-816 --title \"$(git log -1 --format=%s bug-816)\" --description \"$(git log -1 --format=%b bug-816)\"".to_string())
+            ForgeKind::GitLab.create_cmd_for_branch("bug-816", "main"),
+            Some("glab mr create --source-branch bug-816 --target-branch main --title \"$(git log -1 --format=%s bug-816)\" --description \"$(git log -1 --format=%b bug-816)\"".to_string())
         );
-        assert_eq!(ForgeKind::None.create_cmd_for_branch("bug-816"), None);
+        assert_eq!(
+            ForgeKind::None.create_cmd_for_branch("bug-816", "main"),
+            None
+        );
         assert_eq!(
             ForgeKind::GitLab.view_cmd("9"),
             Some("glab mr view 9".to_string())
@@ -5019,6 +5566,13 @@ mod tests {
         );
     }
 
+    // trace:BUG-1819 | ai:codex
+    #[test]
+    fn github_ci_evidence_reads_the_pr_head() {
+        let body = r#"[{"number":26,"headRefOid":"abc123","statusCheckRollup":[]}]"#;
+        assert_eq!(github_ci_head_from_json(body).as_deref(), Some("abc123"));
+    }
+
     // trace:BUG-1224 | ai:codex
     #[test]
     fn gitlab_progress_snapshot_changes_as_running_job_duration_advances() {
@@ -5232,6 +5786,24 @@ mod tests {
         }
     }
 
+    // trace:BUG-1819 | ai:codex
+    #[test]
+    fn gitlab_ci_evidence_reads_the_newest_pipeline_head() {
+        let evidence = ci_probe_evidence_from_glab_pipelines(
+            Ok(fake_output(
+                0,
+                &real_glab_api_pipelines_response(101, "success"),
+                "",
+            )),
+            26,
+        );
+        assert_eq!(evidence.probe, CiProbeResult::Green { change: 26 });
+        assert_eq!(
+            evidence.head_sha.as_deref(),
+            Some("a91957a858320c0e17f3a0eca7cfacbff50ea29a")
+        );
+    }
+
     // ─────────────── change-metadata parsers (TASK-963) ───────────────
 
     #[test]
@@ -5240,6 +5812,7 @@ mod tests {
             r#"{
               "state": "MERGED",
               "title": "[AI:claude] fix(x): y (TASK-1)",
+              "author": {"login": "codex-bot"},
               "mergedAt": "2026-09-12T18:00:00Z",
               "baseRefName": "main",
               "headRefName": "task-1-fix",
@@ -5253,6 +5826,7 @@ mod tests {
         let m = parse_gh_change_metadata(&json);
         assert_eq!(m.state, ChangeState::Merged);
         assert_eq!(m.title, "[AI:claude] fix(x): y (TASK-1)");
+        assert_eq!(m.author.as_deref(), Some("codex-bot"));
         assert_eq!(
             m.merged_at.map(|dt| dt.to_rfc3339()).as_deref(),
             Some("2026-09-12T18:00:00+00:00")
@@ -5271,6 +5845,7 @@ mod tests {
         let m = parse_gh_change_metadata(&json);
         assert_eq!(m.state, ChangeState::Open);
         assert!(m.title.is_empty());
+        assert_eq!(m.author, None);
         assert!(m.base_ref.is_empty());
         assert!(!m.is_draft);
         assert!(!m.is_cross_repository);
@@ -5316,6 +5891,7 @@ mod tests {
               "iid": 7,
               "state": "opened",
               "title": "Fix the thing",
+              "author": {"username": "codex-bot"},
               "target_branch": "main",
               "source_branch": "fix-thing",
               "sha": "def456",
@@ -5327,6 +5903,7 @@ mod tests {
         .unwrap();
         assert_eq!(m.state, ChangeState::Open);
         assert_eq!(m.title, "Fix the thing");
+        assert_eq!(m.author.as_deref(), Some("codex-bot"));
         assert_eq!(m.base_ref, "main");
         assert_eq!(m.head_ref, "fix-thing");
         assert_eq!(m.head_sha, "def456");

@@ -15,8 +15,7 @@ use aida_core::Storage;
 
 use crate::not_found;
 use crate::{
-    current_user_id, is_terminal_status_str, parse_since_arg, prompt_yes_no, record_role_activity,
-    shorten_text,
+    current_user_id, is_terminal_status_str, prompt_yes_no, record_role_activity, shorten_text,
 };
 
 // STORY-441: `aida archive <ID>` and `aida archive --older-than <DUR>`.
@@ -185,6 +184,29 @@ fn archive_single(
     Ok(())
 }
 
+/// Whether the AUTHORITATIVE object `req` still qualifies for an age-based
+/// archive sweep: not already archived, its own status is one of `statuses`
+/// (matched the way the cache's status filter matches: case-insensitive,
+/// ignoring spaces, hyphens and underscores), and its own `modified_at` is
+/// older than `cutoff`. The sweeps select candidates from the cache projection,
+/// which a read may serve from a stale snapshot, so each candidate is
+/// re-checked here before it is archived.
+// trace:BUG-1664 | ai:claude
+pub(crate) fn archive_sweep_still_eligible<S: AsRef<str>>(
+    req: &aida_core::Requirement,
+    statuses: &[S],
+    cutoff: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    fn norm(s: &str) -> String {
+        s.chars()
+            .filter(|c| !matches!(c, ' ' | '-' | '_'))
+            .collect::<String>()
+            .to_lowercase()
+    }
+    let status = norm(&format!("{:?}", req.status));
+    !req.archived && statuses.iter().any(|s| norm(s.as_ref()) == status) && req.modified_at < cutoff
+}
+
 fn archive_sweep(
     duration: &str,
     status_csv: Option<&str>,
@@ -193,8 +215,13 @@ fn archive_sweep(
     verbose: bool,
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
-    let cutoff = parse_since_arg(duration)
-        .map_err(|e| anyhow::anyhow!("invalid --older-than `{duration}`: {e}"))?;
+    // trace:TASK-1509 | ai:claude
+    let cutoff = crate::queue_cmd::parse_time_bound_at(
+        duration,
+        "--older-than",
+        chrono::Utc::now(),
+        &chrono::Local,
+    )?;
     let statuses: Vec<String> = status_csv
         .unwrap_or("completed,rejected")
         .split(',')
@@ -233,6 +260,11 @@ fn archive_sweep(
     // Pull all non-archived rows matching any of the requested statuses,
     // then post-filter by modified_at < cutoff. The cache's status filter
     // is single-value so we do one query per status and merge.
+    //
+    // cache-tolerant-read: selection only — each candidate's YAML object is
+    // re-read and its eligibility re-decided inside the store write lock
+    // (`bulk_update_atomically`) before anything is written.
+    // trace:BUG-1671 | ai:claude
     let mut candidates: Vec<aida_core::RequirementSummary> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for s in &statuses {
@@ -268,25 +300,45 @@ fn archive_sweep(
     }
 
     if dry_run {
+        // BUG-1664: preview what the real sweep would do — re-check each
+        // candidate against its authoritative object, as the write path does.
+        // trace:BUG-1664 | ai:claude
+        let mut would: Vec<aida_core::Requirement> = Vec::with_capacity(eligible.len());
+        let mut unreadable = 0usize;
+        for s in &eligible {
+            // BUG-1671: one spec whose object will not read is skipped and
+            // counted, never a reason to abort the preview.
+            // trace:BUG-1671 | ai:claude
+            match backend.get_requirement(&s.id) {
+                Ok(Some(req)) => {
+                    if archive_sweep_still_eligible(&req, &statuses, cutoff) {
+                        would.push(req);
+                    }
+                }
+                Ok(None) => {}
+                Err(_) => unreadable += 1,
+            }
+        }
         println!(
             "{} {} spec(s) older than {duration} with status in {} (--dry-run, no writes):",
             "Would archive:".cyan().bold(),
-            eligible.len(),
+            would.len(),
             statuses.join(",")
         );
-        for s in &eligible {
-            let display_id = s
+        for req in &would {
+            let display_id = req
                 .agreed_id
                 .as_deref()
-                .or(s.spec_id.as_deref())
+                .or(req.spec_id.as_deref())
                 .unwrap_or("?");
             println!(
                 "  {:<14} {:<10} {}",
                 display_id,
-                s.status,
-                shorten_text(&s.title, 60)
+                format!("{:?}", req.status),
+                shorten_text(&req.title, 60)
             );
         }
+        print_sweep_skipped_note(eligible.len() - would.len() - unreadable, unreadable);
         return Ok(());
     }
 
@@ -314,6 +366,7 @@ fn archive_sweep(
         statuses.join(",")
     );
     let mut to_archive = Vec::with_capacity(total);
+    let mut unreadable = 0usize;
     let mut last_tick = std::time::Instant::now();
     for (i, s) in eligible.iter().enumerate() {
         let display_id = s
@@ -322,15 +375,26 @@ fn archive_sweep(
             .or(s.spec_id.as_deref())
             .unwrap_or_default()
             .to_string();
-        let Some(mut req) = backend.get_requirement(&s.id)? else {
-            continue;
+        // `get_requirement` reads the spec's YAML object, not the cache row.
+        // BUG-1664: `s` came from the cache projection, which may be a stale
+        // snapshot, so re-check status and age on the object itself (a spec
+        // reopened or edited since then is skipped).
+        // BUG-1671: this pass is a cheap pre-filter and the source of the
+        // progress ticks and display ids — the DECIDING re-check happens on
+        // the object read inside the store lock, below. An object that will
+        // not read is skipped and counted, never fatal.
+        // trace:BUG-1664 trace:BUG-1671 | ai:claude
+        let req = match backend.get_requirement(&s.id) {
+            Ok(Some(req)) => req,
+            Ok(None) => continue,
+            Err(_) => {
+                unreadable += 1;
+                continue;
+            }
         };
-        if req.archived {
+        if !archive_sweep_still_eligible(&req, &statuses, cutoff) {
             continue;
         }
-        req.archived = true;
-        req.archived_at = Some(now);
-        req.modified_at = now;
         if verbose {
             eprintln!("  [{}/{}] {display_id}", i + 1, total);
         } else if show_progress
@@ -342,15 +406,65 @@ fn archive_sweep(
             last_tick = std::time::Instant::now();
         }
         to_archive.push(req);
-        record_role_activity(&display_id, "archive");
     }
-    let archived_count = backend.bulk_update(&to_archive, "chore(archive)")?;
+    let selected = to_archive.len();
+    crate::sweep_test_hook::fire(backend.path());
+    // BUG-1671: the eligibility decision is re-taken on each object read INSIDE
+    // the store write lock, so a spec reopened between the pass above and this
+    // write is skipped rather than reverted by the whole-object write. Still
+    // one commit (BUG-425). trace:BUG-1671 | ai:claude
+    let report = backend.bulk_update_atomically(&to_archive, "chore(archive)", |req| {
+        if !archive_sweep_still_eligible(req, &statuses, cutoff) {
+            return false;
+        }
+        req.archived = true;
+        req.archived_at = Some(now);
+        req.modified_at = now;
+        true
+    })?;
+    for req in &report.written {
+        let display_id = req
+            .agreed_id
+            .as_deref()
+            .or(req.spec_id.as_deref())
+            .unwrap_or_default();
+        record_role_activity(display_id, "archive");
+    }
     println!(
-        "{} {archived_count} spec(s) in 1 commit (older than {duration}, status in {})",
+        "{} {} spec(s) in 1 commit (older than {duration}, status in {})",
         "Archived:".cyan().bold(),
+        report.written.len(),
         statuses.join(",")
     );
+    print_sweep_skipped_note(
+        (total - selected - unreadable) + report.skipped_changed + report.skipped_missing,
+        unreadable + report.skipped_unreadable,
+    );
     Ok(())
+}
+
+/// Name the candidates the sweep left alone: those whose spec changed since the
+/// cached view it selected them from, and (counted apart, because it points at
+/// a damaged store rather than ordinary concurrency) those whose object could
+/// not be read.
+// trace:BUG-1664 trace:BUG-1671 | ai:claude
+fn print_sweep_skipped_note(skipped: usize, unreadable: usize) {
+    if unreadable > 0 {
+        println!(
+            "  {}",
+            format!("could not read {unreadable} spec(s); left them alone").dimmed()
+        );
+    }
+    if skipped > 0 {
+        println!(
+            "  {}",
+            format!(
+                "skipped {skipped} spec(s) that changed since the cached view \
+                 (status, age or archive flag no longer match)"
+            )
+            .dimmed()
+        );
+    }
 }
 
 // trace:STORY-441 | ai:claude

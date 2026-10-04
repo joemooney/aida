@@ -78,6 +78,55 @@ fn print_rework_needed_notes(
     }
 }
 
+/// BUG-1771: the parked lens of one `aida list` row.
+///
+/// Every list surface that cares about the lens — the `--format json`
+/// `status_lens` field and the `--status shelved` / `--status needs-decision`
+/// filters — goes through here, so a row the filter selects can never be
+/// labelled as the other lens. The read is a single targeted object fetch and
+/// is gated on the row's stored status, so a list with no parked rows pays
+/// nothing and a filtered one pays only for the parked set — small by nature,
+/// since a parked spec is one waiting on a human.
+///
+/// Known limit, deliberately inherited rather than introduced: this reads the
+/// ROW's own parked fields, so an EPIC whose derived status is NeedsAttention
+/// only because a child is parked has no lens here. That is exactly what the
+/// `--format json` `status_lens` field already reported before BUG-1771, and
+/// making the filter disagree with the label would be the worse bug. The legacy
+/// `effective_needs_attention_lens_with_source` in `lib.rs` does walk children;
+/// unifying the two is its own change, on its own spec.
+// trace:TASK-1572 | ai:claude
+// trace:BUG-1798 | ai:claude
+fn row_parked_lens(
+    backend: &aida_core::CachedGitBackend,
+    lazy_store: &mut Option<aida_core::RequirementsStore>,
+    row: &aida_core::RequirementSummary,
+) -> Option<status_display::NeedsAttentionLens> {
+    if !row.status.eq_ignore_ascii_case("NeedsAttention") {
+        return None;
+    }
+
+    // For non-epics, we don't need to walk children, so a single read suffices
+    if !row.req_type.eq_ignore_ascii_case("epic") {
+        let req = backend.get_requirement(&row.id).ok().flatten()?;
+        return status_display::needs_attention_lens(&req);
+    }
+
+    // For epics, we must walk children, which requires the full store.
+    let store = lazy_store.get_or_insert_with(|| {
+        aida_core::db::DatabaseBackend::load(backend)
+            .unwrap_or_else(|_| backend.load_metadata_only().unwrap_or_default())
+    });
+
+    let req = store.get_requirement_by_id(&row.id)?;
+    crate::effective_needs_attention_lens_with_source(
+        store,
+        req,
+        &aida_core::RequirementStatus::NeedsAttention,
+    )
+    .map(|(_, lens)| lens)
+}
+
 /// TASK-1456: `aida list --format json`'s `status_label`/`status_lens`
 /// value for a row — either the folded-in-as-rework annotation (takes
 /// priority; a row is never simultaneously Done and NeedsAttention) or the
@@ -254,6 +303,45 @@ fn show_cached_context(
     }
 
     (effective_status, serialize_command)
+}
+
+/// The TOON `status` scalar value for the per-spec agent-mode `show`: the
+/// normalized status token, annotated with the derived-status disclosure when
+/// the displayed (effective) value and the stored field resolve to different
+/// lifecycle states. Split out for direct unit testing, same rationale as
+/// BUG-1423's `emit_ship_pr_merged`.
+// trace:BUG-1767 | ai:claude
+fn toon_show_status(effective_status: &str, stored_status: &str) -> String {
+    let token = toon_status_token(effective_status);
+    match status_display::derived_status_annotation(effective_status, stored_status) {
+        Some(annotation) => format!("{token} ({annotation})"),
+        None => token,
+    }
+}
+
+// trace:TASK-1569 | ai:codex
+fn toon_show_comment_lines(comments: &[aida_core::Comment], include_bodies: bool) -> Vec<String> {
+    if comments.is_empty() {
+        return Vec::new();
+    }
+    if !include_bodies {
+        return vec![crate::toon::scalar(
+            "comments",
+            &format!("{} (--comments to print)", comments.len()),
+        )];
+    }
+
+    let mut lines = vec![crate::toon::scalar("comments", &comments.len().to_string())];
+    for (index, comment) in comments.iter().enumerate() {
+        let value = format!(
+            "author: {}\ncreated_at: {}\nbody: {}",
+            comment.author,
+            comment.created_at.to_rfc3339(),
+            comment.content
+        );
+        lines.push(crate::toon::scalar(&format!("comments[{index}]"), &value));
+    }
+    lines
 }
 
 // trace:BUG-1207 | ai:codex
@@ -459,6 +547,7 @@ mod list_title_width_tests {
             execution_mode: None,
             weight: None,
             origin: None,
+            completed_at: None, // trace:TASK-1474 | ai:claude
             yaml_path: String::new(),
         }
     }
@@ -609,8 +698,13 @@ fn list_proxy_approvals(
     json: bool,
 ) -> Result<()> {
     // trace:STORY-1173 | ai:codex
-    let since = since.map(parse_since_arg).transpose()?;
-    let until = until.map(parse_since_arg).transpose()?;
+    // trace:TASK-1509 | ai:claude — label errors with the flag that failed.
+    let now = chrono::Utc::now();
+    let bound = |raw: &str, flag: &str| {
+        crate::queue_cmd::parse_time_bound_at(raw, flag, now, &chrono::Local)
+    };
+    let since = since.map(|raw| bound(raw, "--since")).transpose()?;
+    let until = until.map(|raw| bound(raw, "--until")).transpose()?;
     let store = backend.load()?;
     let mut entries = Vec::new();
     for req in &store.requirements {
@@ -630,7 +724,7 @@ fn list_proxy_approvals(
             .then(a.spec_id.cmp(&b.spec_id))
     });
     if json {
-        println!("{}", serde_json::to_string_pretty(&entries)?);
+        println!("{}", crate::cache_output::json_pretty(&entries)?);
         return Ok(());
     }
     if entries.is_empty() {
@@ -869,6 +963,85 @@ mod show_latency_regression_tests {
         let req = Requirement::new("BUG-1559 witness".to_string(), String::new());
         let _ = show_cached_context(&AnotherCacheOnlyView, &req);
     }
+
+    /// BUG-1767 (acceptance 1): the `show` status value for a rollup-complete
+    /// epic whose STORED status is not Completed must carry BOTH values — the
+    /// derived one and the stored one — so no caller can mistake a rolled-up
+    /// Completed for a stored one. Dropping the stored value from the line
+    /// turns this red.
+    // trace:BUG-1767 | ai:claude
+    #[test]
+    fn toon_show_status_discloses_derived_and_stored() {
+        // trace:BUG-1767.acc811ae | ai:claude
+        // The spec's fixture shape: stored Draft, rollup-derived Completed.
+        let line = toon_show_status("Completed", "Draft");
+        assert!(line.contains("completed"), "derived value legible: {line}");
+        assert!(
+            line.contains("stored: draft"),
+            "stored value legible: {line}"
+        );
+
+        // The other stored shape observed (EPIC-71): stored InProgress.
+        let line = toon_show_status("Completed", "InProgress");
+        assert!(line.contains("stored: in-progress"), "{line}");
+    }
+
+    /// BUG-1767 (acceptance 3): the unchanged cases — a non-epic, and an epic
+    /// whose rollup matches its stored field — render EXACTLY the stored
+    /// status token with no derivation annotation, including across spelling
+    /// variants of the same state and for custom statuses outside the
+    /// lifecycle.
+    // trace:BUG-1767 | ai:claude
+    #[test]
+    fn toon_show_status_unannotated_when_stored_agrees() {
+        // trace:BUG-1767.ac336a39 | ai:claude
+        // TASK-1565 / STORY-1486 shape: a non-epic's effective status IS the
+        // stored one.
+        assert_eq!(toon_show_status("Draft", "Draft"), "draft");
+        // EPIC-74 shape: an epic that is not rollup-complete derives its
+        // stored value back.
+        assert_eq!(toon_show_status("Completed", "Completed"), "completed");
+        assert_eq!(
+            toon_show_status("In Progress", "In Progress"),
+            "in-progress"
+        );
+        // Spelling variants of the SAME state are agreement, not divergence.
+        assert_eq!(toon_show_status("InProgress", "In Progress"), "in-progress");
+        // A custom status outside the lifecycle never grows an annotation.
+        assert_eq!(toon_show_status("frobnicated", "Draft"), "frobnicated");
+    }
+
+    // trace:TASK-1569 | ai:codex
+    #[test]
+    fn toon_show_comment_lines_projects_count_and_full_bodies() {
+        use chrono::{TimeZone, Utc};
+        let empty = Vec::new();
+        assert!(toon_show_comment_lines(&empty, false).is_empty());
+
+        let comments = vec![aida_core::Comment {
+            id: uuid::Uuid::nil(),
+            author: "reviewer".into(),
+            content: "distinctive body phrase survives intact".into(),
+            created_at: Utc.timestamp_opt(1_759_500_000, 0).unwrap(),
+            modified_at: Utc.timestamp_opt(1_759_500_000, 0).unwrap(),
+            parent_id: None,
+            replies: Vec::new(),
+            reactions: Vec::new(),
+            session_id: None,
+            relayed_from: None,
+        }];
+        let hint = toon_show_comment_lines(&comments, false).join("\n");
+        assert!(hint.contains("comments: 1 (--comments to print)"), "{hint}");
+
+        let body = toon_show_comment_lines(&comments, true).join("\n");
+        assert!(body.contains("comments: 1"), "{body}");
+        assert!(body.contains("reviewer"), "{body}");
+        assert!(
+            body.contains("distinctive body phrase survives intact"),
+            "{body}"
+        );
+        assert!(!body.contains("--comments to print"), "{body}");
+    }
 }
 
 /// `aida edit --status` — emit the seat-tagged `DispositionChanged` event
@@ -1032,7 +1205,7 @@ pub(crate) fn handle_git_backend_command(
     }
     if !notice_fast_fail && !matches!(command, Command::Report { recheck: true, .. }) {
         let storage = Storage::new(store_path);
-        report_cmd::maybe_print_upstream_recheck_notice(&storage);
+        report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
 
     // STORY-640: team identity hygiene. In a TEAM context (a roster with >1
@@ -1071,6 +1244,10 @@ pub(crate) fn handle_git_backend_command(
         Command::Supervise(supervise_cmd) => {
             // trace:STORY-1052 | ai:codex
             return supervise_cmd::handle_supervise_command(supervise_cmd, &backend, store_path);
+        }
+        Command::Shift(shift_cmd) => {
+            // trace:STORY-1218 | ai:claude
+            return crate::shift::handle_shift_command(shift_cmd, &backend, store_path);
         }
         Command::Node(node_cmd) => {
             return node_cmd::handle_node_command(node_cmd, store_path);
@@ -1355,18 +1532,27 @@ pub(crate) fn handle_git_backend_command(
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
             // STORY-530: the `--health` catalog also needs the store.
-            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
-                normalize_usage_mode(
-                    unused.as_deref(),
-                    *errors,
-                    *auto_complete,
-                    *failures,
-                    *pattern,
-                    *health,
-                    *slowest,
-                    *events,
-                    action.as_ref(),
-                );
+            let (
+                unused,
+                errors,
+                auto_complete,
+                failures,
+                pattern,
+                health,
+                slowest,
+                events,
+                timeline,
+            ) = normalize_usage_mode(
+                unused.as_deref(),
+                *errors,
+                *auto_complete,
+                *failures,
+                *pattern,
+                *health,
+                *slowest,
+                *events,
+                action.as_ref(),
+            );
             let store = if auto_complete || health {
                 backend.load().ok()
             } else {
@@ -1386,12 +1572,41 @@ pub(crate) fn handle_git_backend_command(
                 *read_write,
                 slowest,
                 events,
+                timeline,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),
             );
         }
         Command::Metrics { cmd } => {
+            // STORY-1479: the cycle-time aggregate reads the orphan-branch
+            // store + local drain feed, so it dispatches here with the store
+            // path; the telemetry-log reports below need no store at all.
+            // trace:STORY-1479 | ai:claude
+            if let crate::cli::MetricsCommand::CycleTime {
+                since,
+                until,
+                req_type,
+                tags,
+                slowest,
+                json,
+            } = cmd
+            {
+                let output = history::HistoryOutput::select(
+                    *json || crate::output_format_is_json(),
+                    false,
+                    crate::agent_output_mode(),
+                );
+                return metrics_cycle_time::run(
+                    store_path,
+                    since,
+                    until.as_deref(),
+                    req_type.as_deref(),
+                    tags,
+                    *slowest,
+                    output,
+                );
+            }
             // trace:STORY-477 | ai:claude — reporting layer over the local
             // telemetry logs; no store load required.
             return metrics_cmd::handle_metrics_command(cmd);
@@ -1517,6 +1732,8 @@ pub(crate) fn handle_git_backend_command(
             unreachable!("autopilot is dispatched before storage init")
         }
         Command::Why { .. } => unreachable!("why is dispatched before storage init"),
+        Command::Explain { .. } => unreachable!("explain is dispatched before storage init"),
+        Command::Wiki(_) => unreachable!("wiki is dispatched before storage init"),
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
@@ -1544,6 +1761,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
         }
@@ -1779,22 +1997,81 @@ pub(crate) fn handle_git_backend_command(
             let exact_draft_view = raw_status
                 .as_deref()
                 .is_some_and(crate::status_spec_is_exact_draft);
+            // BUG-1771: `shelved` and `needs-decision` are STORY-1023 display
+            // lenses over the stored `NeedsAttention` status, not statuses — no
+            // cache column holds them, so `expand_filter_spec` rejected both and
+            // the two lenses were unreachable from the shipped CLI even though
+            // the legacy `list_requirements` path accepted them. Split the lens
+            // tokens out, widen the cache query to `needs-attention` so the
+            // superset comes back, and narrow the rows by lens after the query
+            // (see `parked_lens_keys` at the retain below).
+            //
+            // `lens_widened_needs_attention` records that `needs-attention`
+            // reached the query ONLY as the lens widening, not because the caller
+            // named it. That distinction is what lets a mixed set honour both
+            // halves (`--status shelved,approved` keeps Approved rows and the
+            // Shelved subset of the parked rows) without silently dropping a
+            // token, while an explicit `--status shelved,needs-attention` still
+            // shows every parked row.
+            // trace:BUG-1771 | ai:claude
+            let mut parked_lens_keys: Vec<&'static str> = Vec::new();
+            let mut lens_widened_needs_attention = false;
+            // BUG-1687: `--status deferred` is the other non-stored token.
+            // Deferral is STORY-584's view-flag, orthogonal to status, so it
+            // has no status to widen to — it opens the defer axis instead,
+            // exactly as `--deferred` does. trace:BUG-1687 | ai:claude
+            let mut status_asked_deferred = false;
             let status: Option<String> = match raw_status {
                 Some(spec) => {
-                    let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
+                    let split = crate::status_display::split_status_filter_spec(&spec);
+                    parked_lens_keys = split.lens_keys;
+                    status_asked_deferred = split
+                        .view_axes
+                        .contains(&crate::status_display::ViewFilterAxis::Deferred);
+                    let mut expanded = match split.residual.as_deref() {
+                        Some(residual) => aida_core::RequirementStatus::expand_filter_spec(
+                            residual,
+                        )
                         .map_err(|tok| {
                             anyhow::anyhow!(
                                 "Unknown status filter '{tok}'. Use a status \
-                                 (draft, approved, planned, in-progress, done, \
-                                 completed, rejected, needs-attention), an alias \
-                                 (open, closed), or a comma-separated set \
-                                 (draft,approved). To filter by something else \
-                                 try --type, --tags, or `aida search`."
+                                         (draft, approved, planned, in-progress, done, \
+                                         completed, rejected, needs-attention), a parked \
+                                         lens ({lenses}), a view lens ({views}), an alias \
+                                         (open, closed), or a comma-separated set \
+                                         (draft,approved). To filter by something else try \
+                                         --type, --tags, or `aida search`.",
+                                lenses = crate::status_display::lens_filter_token_list(),
+                                views = crate::status_display::view_filter_token_list()
                             )
-                        })?;
-                    // expand_filter_spec returns canonical cache-keys; join
-                    // them back into the comma-OR spec the cache understands.
-                    Some(expanded.join(","))
+                        })?,
+                        // Non-stored tokens only: nothing stored was named, so
+                        // the lens widening below (or the defer axis) supplies
+                        // the whole query.
+                        None => Vec::new(),
+                    };
+                    if !parked_lens_keys.is_empty() {
+                        let needs_attention = aida_core::RequirementStatus::NeedsAttention
+                            .cache_key()
+                            .to_string();
+                        if !expanded.contains(&needs_attention) {
+                            expanded.push(needs_attention);
+                            lens_widened_needs_attention = true;
+                        }
+                    }
+                    if expanded.is_empty() {
+                        // A bare `--status deferred` names no status at all.
+                        // `Some("")` would hand the cache an empty status
+                        // clause; the honest value is "no status constraint",
+                        // which also keeps the STORY-723 default open lens from
+                        // re-hiding what the caller asked for (see
+                        // `want_deferred_only`). trace:BUG-1687 | ai:claude
+                        None
+                    } else {
+                        // expand_filter_spec returns canonical cache-keys; join
+                        // them back into the comma-OR spec the cache understands.
+                        Some(expanded.join(","))
+                    }
                 }
                 None => None,
             };
@@ -1860,9 +2137,14 @@ pub(crate) fn handle_git_backend_command(
             let asked_for_defer_tag = effective_tags
                 .iter()
                 .any(|t| t.starts_with("deferred:") || t.starts_with("deferred*"));
+            // BUG-1687: `--status deferred` is a spelling of `--deferred`, so
+            // it reaches the axis through the same variable and inherits the
+            // same precedence — `--all` / `--archived` still widen to Both.
+            // trace:BUG-1687 | ai:claude
+            let want_deferred_only = *deferred || status_asked_deferred;
             let defer = if *all || *archived || asked_for_defer_tag {
                 aida_core::DeferFilter::Both
-            } else if *deferred {
+            } else if want_deferred_only {
                 aida_core::DeferFilter::DeferredOnly
             } else {
                 aida_core::DeferFilter::NonDeferredOnly
@@ -1877,8 +2159,16 @@ pub(crate) fn handle_git_backend_command(
             // an explicit `aida list closed` / `--status completed` is untouched.
             // The closed set stays one flag away (`--all` / `--status closed`).
             // trace:STORY-723 | ai:claude
-            let default_open_lens =
-                list_default_open_lens(effective_status.is_some(), *all, *archived, *deferred);
+            // BUG-1687: a bare `--status deferred` leaves `effective_status`
+            // None, so the defer axis is what has to stop the open-lens default
+            // from re-hiding a deferred-and-Completed row the caller asked for.
+            // trace:BUG-1687 | ai:claude
+            let default_open_lens = list_default_open_lens(
+                effective_status.is_some(),
+                *all,
+                *archived,
+                want_deferred_only,
+            );
             let effective_status = if default_open_lens {
                 Some(
                     aida_core::RequirementStatus::open_statuses()
@@ -1897,10 +2187,13 @@ pub(crate) fn handle_git_backend_command(
                 "heft" | "centrality" => aida_core::SortOrder::HeftDesc,
                 // trace:FR-283 | ai:claude — heaviest user-set weight first.
                 "weight" => aida_core::SortOrder::WeightDesc,
+                // trace:TASK-1464 | ai:claude — creation / completion date sorts.
+                "created" => aida_core::SortOrder::CreatedDesc,
+                "completed" => aida_core::SortOrder::CompletedDesc,
                 "modified" | "" => aida_core::SortOrder::ModifiedDesc,
                 other => {
                     eprintln!(
-                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', or 'weight'); using 'modified'"
+                        "warning: unknown --sort '{other}' (expected 'modified', 'heft', 'weight', 'created', or 'completed'); using 'modified'"
                     );
                     aida_core::SortOrder::ModifiedDesc
                 }
@@ -1951,6 +2244,28 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
+            let mut lazy_store = None;
+
+            // BUG-1771: narrow the widened query back down to the requested
+            // parked lens(es). Runs before every downstream lens so the rows the
+            // renderers see are already the asked-for set.
+            //
+            // A row that is NOT parked got here by matching one of the stored
+            // statuses the caller named in the same comma set, so it passes
+            // untouched — that is the "honours both" half of a mixed
+            // `--status shelved,approved`. Skipped entirely when the caller named
+            // `needs-attention` itself, because every parked row is then in scope
+            // by its stored status regardless of lens.
+            // trace:BUG-1771 | ai:claude
+            if !parked_lens_keys.is_empty() && lens_widened_needs_attention {
+                reqs.retain(|r| {
+                    if !r.status.eq_ignore_ascii_case("NeedsAttention") {
+                        return true;
+                    }
+                    row_parked_lens(&backend, &mut lazy_store, r)
+                        .is_some_and(|lens| parked_lens_keys.contains(&lens.palette_key()))
+                });
+            }
 
             // TASK-1456 (follow-up to BUG-1515): the open lens's status set
             // excludes `Done` (it sits with Completed/Rejected on the closed
@@ -2330,6 +2645,16 @@ pub(crate) fn handle_git_backend_command(
             // 2-space-indented line only when rows on that axis were hidden.
             // trace:STORY-441 trace:STORY-584 trace:STORY-723 | ai:claude
             let print_hidden_hints = || {
+                // BUG-1737: scope disclosure for the count, printed under the
+                // open-work lens whether or not the counted STORY-441 /
+                // STORY-584 tier nudges below are opted in. Same dimmed,
+                // 2-space footer idiom. trace:BUG-1737 | ai:claude
+                if let Some(scope) = crate::list_lens_scope_disclosure(open_work_lens) {
+                    println!(
+                        "{}",
+                        format!("  ({scope} — pass --all to see them)").dimmed()
+                    );
+                }
                 for line in list_hidden_hint_lines(
                     show_view_tier_hints,
                     closed_hidden_count,
@@ -2441,15 +2766,9 @@ pub(crate) fn handle_git_backend_command(
                     .iter()
                     .map(|r| {
                         let (in_flight, blocked, queued) = row_routing(r);
-                        let parked_lens = if r.status.eq_ignore_ascii_case("NeedsAttention") {
-                            backend
-                                .get_requirement(&r.id)
-                                .ok()
-                                .flatten()
-                                .and_then(|req| status_display::needs_attention_lens(&req))
-                        } else {
-                            None
-                        };
+                        // trace:BUG-1771 | ai:claude — one lens computation
+                        // shared with the `--status shelved` filter.
+                        let parked_lens = row_parked_lens(&backend, &mut lazy_store, r);
                         // TASK-1456: a Done row folded in by
                         // `select_done_rework_rows` still carries `status:
                         // "Done"` — the machine-consumer contract that field
@@ -2538,10 +2857,10 @@ pub(crate) fn handle_git_backend_command(
                             serde_json::Value::Object(row)
                         })
                         .collect();
-                    println!("{}", serde_json::to_string_pretty(&narrowed)?);
+                    println!("{}", crate::cache_output::json_pretty(&narrowed)?);
                     return Ok(());
                 }
-                println!("{}", serde_json::to_string_pretty(&out)?);
+                println!("{}", crate::cache_output::json_pretty(&out)?);
                 return Ok(());
             }
 
@@ -2582,6 +2901,15 @@ pub(crate) fn handle_git_backend_command(
                 println!("{}", crate::toon::table_raw("specs", &field_refs, &rows));
                 if agent_default_cap.is_some() && total_after_filters > reqs.len() {
                     println!("note: agent default cap — `aida list --all` or `--limit N` to widen");
+                }
+                // BUG-1737: the notes below enumerate what this view withheld,
+                // which made them read as the complete account — they were not.
+                // Lead with the two tiers that had no line at all, in the same
+                // position the human footer gives it (immediately under the
+                // count), so both surfaces read alike. Static text: no extra
+                // backend query on the agent hot path. trace:BUG-1737 | ai:claude
+                if let Some(scope) = crate::list_lens_scope_disclosure(open_work_lens) {
+                    println!("note: {scope} — `aida list --all` for every spec");
                 }
                 // STORY-723: tell the agent the closed history exists but is
                 // hidden behind the default open lens. trace:STORY-723
@@ -2987,6 +3315,7 @@ pub(crate) fn handle_git_backend_command(
                 // trace:FR-283 | ai:claude
                 weight: None,
                 mode,
+                gates: Vec::new(),
             };
             return handle_git_backend_command(store_path, &add);
         }
@@ -3015,6 +3344,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:FR-283 | ai:claude
             weight,
             mode,
+            gates,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -3159,6 +3489,15 @@ pub(crate) fn handle_git_backend_command(
             };
             let effective_priority: Option<String> = priority.clone().or(interactive_priority);
 
+            // STORY-1427: `--gates` runs named library gates over the draft text
+            // before filing. Advisory — prints verdicts, never blocks; absent the
+            // flag this is a no-op. trace:STORY-1427 | ai:claude
+            crate::gate_cmd::run_intake_gates(
+                gates,
+                &title_resolved,
+                resolved_description.as_deref().unwrap_or_default(),
+            )?;
+
             let mut req =
                 Requirement::new(title_resolved, resolved_description.unwrap_or_default());
             if let Some(s) = status {
@@ -3240,8 +3579,11 @@ pub(crate) fn handle_git_backend_command(
                 req.owner = o.clone();
             }
             if let Some(t) = tags {
-                for tag in t.split(',') {
-                    req.tags.insert(tag.trim().to_string());
+                // BUG-1770: one shared parser for every `--tags` write path, so
+                // a whitespace blob cannot be created here and the rule cannot
+                // drift between `add` and `edit`. trace:BUG-1770 | ai:claude
+                for tag in parse_tag_list(t)? {
+                    req.tags.insert(tag);
                 }
             }
             if let Some(effort) = effort {
@@ -3938,10 +4280,21 @@ pub(crate) fn handle_git_backend_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
-        Command::Criteria { spec, json } => {
+        Command::Criteria {
+            spec,
+            json,
+            window_days,
+        } => {
             let store = backend.load()?;
             let project_root = find_project_root()?;
-            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+            // trace:STORY-1487 | ai:claude
+            crate::criteria_coverage::dispatch_criteria(
+                &project_root,
+                &store,
+                spec,
+                *window_days,
+                *json,
+            )?;
         }
         Command::Reconstitute {
             spec,
@@ -3990,6 +4343,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Show {
             id,
             comments,
+            no_comments,
             tree,
             depth,
             sync,
@@ -4066,19 +4420,23 @@ pub(crate) fn handle_git_backend_command(
             // BUG-1535: an ambiguous id is refused (non-zero exit, every
             // candidate listed) — never answered with one of them — and that
             // refusal passes through unwrapped. trace:BUG-1535 | ai:claude
-            let lookup = backend.get_requirement_unambiguous(id).map_err(|e| {
-                if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
-                    .is_some()
-                {
-                    return e;
-                }
-                anyhow::anyhow!(
-                    "Parse failed: {}\n  Detail: {:#}\n{}",
-                    id,
-                    e,
-                    aida_core::object_store::parse_failure_hint(None),
-                )
-            });
+            // Read-only: the tolerant resolver keeps `show` off the cache
+            // write lock. trace:BUG-1670 | ai:claude
+            let lookup = backend
+                .get_requirement_unambiguous_for_read(id)
+                .map_err(|e| {
+                    if e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>()
+                        .is_some()
+                    {
+                        return e;
+                    }
+                    anyhow::anyhow!(
+                        "Parse failed: {}\n  Detail: {:#}\n{}",
+                        id,
+                        e,
+                        aida_core::object_store::parse_failure_hint(None),
+                    )
+                });
             if *tree {
                 match lookup? {
                     Some(root) => {
@@ -4096,6 +4454,9 @@ pub(crate) fn handle_git_backend_command(
             }
             match lookup? {
                 Some(req) => {
+                    // Share the fallback index across relationships and blockers.
+                    // trace:BUG-1678 | ai:codex
+                    let read_target = backend.requirement_reader();
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     // STORY-632: deterministic local graph-centrality, read from
                     // the cache (recomputed on rebuild from the relationship
@@ -4119,6 +4480,18 @@ pub(crate) fn handle_git_backend_command(
                         &effective_status_str,
                     )
                     .to_string();
+                    // BUG-1767: the displayed (effective) status can be a
+                    // derived rollup that disagrees with the stored field.
+                    // Compute the stored value and the disclosure once; every
+                    // render surface below must not present the derived value
+                    // as if it were stored, and must not prescribe `archive`
+                    // while the stored status is non-terminal.
+                    // trace:BUG-1767 | ai:claude
+                    let stored_status_str = req.status.to_string();
+                    let derived_annotation = status_display::derived_status_annotation(
+                        &effective_status_str,
+                        &stored_status_str,
+                    );
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -4168,12 +4541,17 @@ pub(crate) fn handle_git_backend_command(
                             // trace:BUG-1594 | ai:claude
                             complete: bool,
                             incomplete: Vec<String>,
+                            // TASK-1475: filing-drift hint (CR-8 acceptance 6
+                            // follow-up), omitted when there's nothing to
+                            // say. trace:TASK-1475 | ai:claude
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            drift_since_filing: Option<String>,
                         }
                         let relationships: Vec<RelJson> = req
                             .relationships
                             .iter()
                             .map(|rel| {
-                                let (id, title) = match backend.get_requirement(&rel.target_id) {
+                                let (id, title) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4203,6 +4581,15 @@ pub(crate) fn handle_git_backend_command(
                                 }
                             }
                             let linkage = crate::collect_git_linkage(&project_root, &ids);
+                            // TASK-1475: compute before `linkage.{files,commits}`
+                            // are moved into the JSON payload below.
+                            // trace:TASK-1475 | ai:claude
+                            let drift_since_filing = crate::filing_drift_hint(
+                                &project_root,
+                                req.filed_at.as_ref(),
+                                &linkage.files,
+                                &linkage.commits,
+                            );
                             // trace:BUG-1594 | ai:claude
                             let mut incomplete = Vec::new();
                             if let Some((scanned, total)) = linkage.branch_scan_truncated {
@@ -4235,6 +4622,7 @@ pub(crate) fn handle_git_backend_command(
                                 worktree: linkage.worktree,
                                 shipped_pr: linkage.shipped_pr,
                                 repo: linkage.repo,
+                                drift_since_filing,
                             })
                         };
                         // BUG-527: carry the human-visible queue membership
@@ -4281,13 +4669,35 @@ pub(crate) fn handle_git_backend_command(
                             "modified".to_string(),
                             serde_json::to_value(req.modified_at)?,
                         );
-                        object.insert(
-                            "status".to_string(),
-                            serde_json::Value::String(display_status.clone()),
-                        );
+                        // BUG-1687: the machine projection reports the same
+                        // DISPLAY answer the human and TOON surfaces do, so a
+                        // deferred spec never reads as "act now" on one surface
+                        // and not another (AC4). `stored_status` is why that is
+                        // safe — it exists so a consumer never has to infer
+                        // which of the two values is presentation-only — and the
+                        // defer axis itself is reported as its own fields rather
+                        // than left to be parsed out of a label.
+                        // trace:BUG-1687 | ai:claude
+                        let json_status = if status_display::is_deferred(&req) {
+                            status_display::DEFERRED_LABEL.to_string()
+                        } else {
+                            display_status.clone()
+                        };
+                        object.insert("status".to_string(), serde_json::Value::String(json_status));
                         object.insert(
                             "stored_status".to_string(),
                             serde_json::Value::String(req.status.to_string()),
+                        );
+                        object.insert(
+                            "deferred".to_string(),
+                            serde_json::Value::Bool(status_display::is_deferred(&req)),
+                        );
+                        object.insert(
+                            "deferred_until".to_string(),
+                            match status_display::deferred_revisit_trigger(&req) {
+                                Some(trigger) => serde_json::Value::String(trigger),
+                                None => serde_json::Value::Null,
+                            },
                         );
                         object.insert(
                             "priority".to_string(),
@@ -4311,7 +4721,7 @@ pub(crate) fn handle_git_backend_command(
                             .relationships
                             .iter()
                             .filter(|rel| matches!(rel.rel_type, RelationshipType::BlockedBy))
-                            .map(|rel| match backend.get_requirement(&rel.target_id) {
+                            .map(|rel| match read_target(&rel.target_id) {
                                 Ok(Some(blocker)) => serde_json::json!({
                                     "id": blocker.display_id(),
                                     "status": blocker.status.to_string(),
@@ -4332,8 +4742,14 @@ pub(crate) fn handle_git_backend_command(
                         );
                         object.insert("blockers".to_string(), serde_json::Value::Array(blockers));
 
-                        let mut next =
-                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        // trace:BUG-1767 | ai:claude — stored-aware, so a
+                        // derived-complete epic is prescribed the close move,
+                        // not `archive`.
+                        let mut next = crate::help_next::show_spec_next(
+                            &effective_status_str,
+                            &stored_status_str,
+                            &req.display_id(),
+                        );
                         crate::help_next::push_serialize_cluster(
                             &mut next,
                             serialize_cluster_command.clone(),
@@ -4354,7 +4770,7 @@ pub(crate) fn handle_git_backend_command(
                             "queue_membership".to_string(),
                             serde_json::Value::Array(queue_membership),
                         );
-                        println!("{}", serde_json::to_string_pretty(&out)?);
+                        println!("{}", crate::cache_output::json_pretty(&out)?);
                         return Ok(());
                     }
                     // TASK-964: AGENT-MODE token-efficient TOON render for the
@@ -4376,10 +4792,36 @@ pub(crate) fn handle_git_backend_command(
                             "type",
                             &format!("{:?}", req.req_type).to_ascii_lowercase(),
                         ));
-                        lines.push(crate::toon::scalar(
-                            "status",
-                            &toon_status_token(&effective_status_str),
-                        ));
+                        // BUG-1687: this is the surface that misled two agent
+                        // sessions — both read `status: needs-attention` off a
+                        // spec they had just deferred. A deferred spec reports
+                        // `deferred` here, keeps the stored value beside it as
+                        // `stored_status` (so nothing is hidden, and AC3's
+                        // round trip is readable), and emits the revisit trigger
+                        // as its own scalar so the agent sees until WHEN without
+                        // a second command. trace:BUG-1687 | ai:claude
+                        // BUG-1767: on the non-deferred path (and inside
+                        // `stored_status` for a deferred epic) a derived rollup
+                        // status still carries its disclosure, so the agent can
+                        // tell it from a stored one. trace:BUG-1767 | ai:claude
+                        if status_display::is_deferred(&req) {
+                            lines.push(crate::toon::scalar(
+                                "status",
+                                status_display::DEFERRED_TOKEN,
+                            ));
+                            lines.push(crate::toon::scalar(
+                                "stored_status",
+                                &toon_show_status(&effective_status_str, &stored_status_str),
+                            ));
+                            if let Some(trigger) = status_display::deferred_revisit_trigger(&req) {
+                                lines.push(crate::toon::scalar("deferred_until", &trigger));
+                            }
+                        } else {
+                            lines.push(crate::toon::scalar(
+                                "status",
+                                &toon_show_status(&effective_status_str, &stored_status_str),
+                            ));
+                        }
                         lines.push(crate::toon::scalar(
                             "priority",
                             &format!("{}", req.effective_priority()).to_ascii_lowercase(),
@@ -4447,6 +4889,12 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(o) = &req.origin {
                             lines.push(crate::toon::scalar("origin", &o.to_string()));
                         }
+                        // CR-8: filing provenance, one compact scalar, only
+                        // when stamped. trace:CR-8 | ai:claude
+                        if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
+                            lines.push(crate::toon::scalar("filed_at", &p.summary_line()));
+                        }
+                        lines.extend(toon_show_comment_lines(&req.comments, *comments));
                         println!("{}", lines.join("\n"));
 
                         // Relationships as a uniform TOON table (rel,id,title).
@@ -4457,7 +4905,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows: Vec<Vec<String>> = Vec::new();
                             for rel in &req.relationships {
                                 let label = rel_type_label(&rel.rel_type);
-                                let (tid, ttitle) = match backend.get_requirement(&rel.target_id) {
+                                let (tid, ttitle) = match read_target(&rel.target_id) {
                                     Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                     _ => ("(unknown)".to_string(), String::new()),
                                 };
@@ -4482,9 +4930,7 @@ pub(crate) fn handle_git_backend_command(
                             let mut rows = Vec::new();
                             let mut unsatisfied = 0usize;
                             for target in blocker_targets {
-                                let (id, status, satisfied) = match backend
-                                    .get_requirement(&target)?
-                                {
+                                let (id, status, satisfied) = match read_target(&target)? {
                                     Some(blocker) => {
                                         let satisfied =
                                             matches!(blocker.status, RequirementStatus::Completed);
@@ -4526,8 +4972,12 @@ pub(crate) fn handle_git_backend_command(
                         // TASK-974 (AXI #9): lifecycle-aware next-step block —
                         // the valid next transition(s) for THIS spec's current
                         // state, templated with its id. trace:TASK-974
-                        let mut next =
-                            crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        // trace:BUG-1767 | ai:claude — stored-aware.
+                        let mut next = crate::help_next::show_spec_next(
+                            &effective_status_str,
+                            &stored_status_str,
+                            &req.display_id(),
+                        );
                         crate::help_next::push_serialize_cluster(
                             &mut next,
                             serialize_cluster_command.clone(),
@@ -4556,7 +5006,7 @@ pub(crate) fn handle_git_backend_command(
                         // trace:BUG-1471 | ai:claude
                         let mut rels: Vec<CardRel> = Vec::new();
                         for rel in &req.relationships {
-                            let (rid, rtitle) = match backend.get_requirement(&rel.target_id) {
+                            let (rid, rtitle) = match read_target(&rel.target_id) {
                                 Ok(Some(t)) => (t.display_id(), t.title.clone()),
                                 _ => ("(unknown)".to_string(), String::new()),
                             };
@@ -4616,10 +5066,22 @@ pub(crate) fn handle_git_backend_command(
                     // ACCEPTED — the terminal state — so display it that way
                     // here and in the reprint at the foot. trace:BUG-781
                     let status = display_status.clone();
+                    // BUG-1767: a derived rollup status carries its disclosure
+                    // on BOTH prints (here and the foot reprint), so neither
+                    // reads as a stored value. trace:BUG-1767 | ai:claude
+                    let status_note = derived_annotation
+                        .as_deref()
+                        .map(|a| format!(" {}", format!("({a})").dimmed()))
+                        .unwrap_or_default();
+                    // BUG-1687: a deferred spec must not advertise the status it
+                    // was deferred OUT of — `spec_status_badge` applies the
+                    // display override and falls through to the stored badge for
+                    // everything else. trace:BUG-1687 | ai:claude
                     println!(
-                        "{}: {}",
+                        "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status)
+                        status_display::spec_status_badge(&req, &status),
+                        status_note
                     );
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
                     // FR-283: the numeric weight/score, shown only when set.
@@ -4632,6 +5094,19 @@ pub(crate) fn handle_git_backend_command(
                     // absent = single-repo, prints nothing.
                     if let Some(o) = &req.origin {
                         println!("{}: {}", "Origin".bold(), o.to_string().cyan());
+                    }
+                    // CR-8: where (code state) and with what (tooling) the
+                    // spec was filed — one compact line, only when stamped.
+                    // trace:CR-8 | ai:claude
+                    if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
+                        println!("{}: {}", "Filed at".bold(), p.summary_line().dimmed());
+                        if p.build_diverges_from_code() && crate::cwd_is_aida_source_repo() {
+                            println!(
+                                "  {} filed by a binary built from a different commit than \
+                                 the checked-out code",
+                                "note:".yellow()
+                            );
+                        }
                     }
                     // BUG-524: surface when the spec was opened / last touched so
                     // `aida show` reveals its age. Stored UTC, rendered in local
@@ -4728,7 +5203,7 @@ pub(crate) fn handle_git_backend_command(
                             println!("{}:", "Relations".bold());
                             for rel in req.relationships.iter().take(TRUNCATE_AT) {
                                 let phrase = relationship_phrase(&rel.rel_type);
-                                match backend.get_requirement(&rel.target_id)? {
+                                match read_target(&rel.target_id)? {
                                     Some(t) => println!(
                                         "  {} {} {} ({})",
                                         crate::glyph(crate::glyphs::Glyph::SubArrow),
@@ -4797,7 +5272,7 @@ pub(crate) fn handle_git_backend_command(
                         println!("\n{}:", "Blockers".bold());
                         let mut unsatisfied = 0;
                         for target in &blocker_targets {
-                            let (sid, status, satisfied) = match backend.get_requirement(target)? {
+                            let (sid, status, satisfied) = match read_target(target)? {
                                 Some(b) => {
                                     let satisfied =
                                         matches!(b.status, RequirementStatus::Completed);
@@ -4831,7 +5306,7 @@ pub(crate) fn handle_git_backend_command(
                             );
                         }
                     }
-                    if !req.comments.is_empty() {
+                    if !req.comments.is_empty() && !crate::agent_output_mode() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
                     {
@@ -4963,7 +5438,7 @@ pub(crate) fn handle_git_backend_command(
                     // would have shown. Runs unconditionally (not gated on
                     // `*comments`) and duplicates into the full `-c` comment
                     // list below without harm. trace:STORY-1434 | ai:claude
-                    {
+                    if !*no_comments && (!crate::agent_output_mode() || *comments) {
                         let mut visible_comments: Vec<&aida_core::Comment> = Vec::new();
                         crate::collect_default_visible_comments(
                             &req.comments,
@@ -4998,7 +5473,10 @@ pub(crate) fn handle_git_backend_command(
                             }
                         }
                     }
-                    if *comments && !req.comments.is_empty() {
+                    if !*no_comments
+                        && (*comments || !crate::agent_output_mode())
+                        && !req.comments.is_empty()
+                    {
                         println!("\n{}:", "Comments".green().bold());
                         for c in &req.comments {
                             print_comment(c, 0);
@@ -5048,17 +5526,21 @@ pub(crate) fn handle_git_backend_command(
                             .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                        print_git_linkage(&project_root, &ids, *verbose);
+                        print_git_linkage(&project_root, &ids, *verbose, req.filed_at.as_ref());
                     }
                     // TASK-269: `aida show` output runs 50-150 lines, so the
                     // top Status field scrolls off-screen. Reprint it after a
                     // rule — "what state is this in?" then sits at the cursor
                     // when the command returns. trace:TASK-269 | ai:claude
                     println!("\n{}", "─".repeat(40).dimmed());
+                    // trace:BUG-1767 | ai:claude — reprint keeps the disclosure.
+                    // trace:BUG-1687 | ai:claude — the reprint carries the same
+                    // deferral override as the Status line at the top.
                     println!(
-                        "{}: {}",
+                        "{}: {}{}",
                         "Status".bold(),
-                        status_display::status_badge(&status)
+                        status_display::spec_status_badge(&req, &status),
+                        status_note
                     );
                     // STORY-727: the per-spec next-command block for HUMANS. The
                     // agent-mode TOON `next` block fires on its own branch above
@@ -5066,8 +5548,13 @@ pub(crate) fn handle_git_backend_command(
                     // but not to per-spec inspection, so the human `show` never
                     // got a next command. Render it now, leading with `aida zen
                     // <id>` for an Approved/Planned spec. trace:STORY-727
-                    let mut next =
-                        crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                    // trace:BUG-1767 | ai:claude — stored-aware, matching the
+                    // agent surfaces above.
+                    let mut next = crate::help_next::show_spec_next(
+                        &effective_status_str,
+                        &stored_status_str,
+                        &req.display_id(),
+                    );
                     crate::help_next::push_serialize_cluster(&mut next, serialize_cluster_command);
                     if let Some(block) = crate::help_next::render_human(&next) {
                         println!("{block}");
@@ -5211,6 +5698,11 @@ pub(crate) fn handle_git_backend_command(
             let mut req = backend
                 .get_requirement_unambiguous(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            // TASK-1506: the copy this edit started from. The write below
+            // re-reads the spec under the store lock and applies only what
+            // this edit changed (this copy → `req`) onto that fresh copy.
+            // trace:TASK-1506 | ai:claude
+            let read_copy = req.clone();
 
             // TASK-47: refuse to re-open a Completed/Rejected req
             // without --force. Closing or idempotent re-flips stay
@@ -5600,6 +6092,15 @@ pub(crate) fn handle_git_backend_command(
             // TASK-358: triage out of NeedsAttention — captured here, applied
             // after the backend save below. trace:TASK-358 | ai:claude
             let mut left_needs_attention = false;
+            // STORY-1429: an applied NeedsAttention exit, checked and reported
+            // around the targeted write below. trace:STORY-1429 | ai:claude
+            let mut pending_leave: Option<(
+                String,
+                std::path::PathBuf,
+                crate::requeue::ReturnCtx,
+                RequirementStatus,
+                crate::requeue::ReturnOutcome,
+            )> = None;
             if let Some(s) = status {
                 // BUG-751: type-aware — a decision spec (ADR) may be moved to
                 // its accepted state with the ADR-native verb `accepted`,
@@ -5690,6 +6191,10 @@ pub(crate) fn handle_git_backend_command(
                 // below (same "before the mutation" rule STORY-738 uses).
                 // trace:TASK-1450 | ai:claude
                 let status_before = req.status.to_string();
+                // TASK-1477: captured before the mutation so a reopen (this
+                // spec was Completed, canonical isn't) can clear the stale
+                // completed_at stamp below. trace:TASK-1477 | ai:claude
+                let prior_status_for_reopen = req.status.clone();
                 // STORY-1418: an into-Completed edit stamps through the seam;
                 // the ship record is emitted below once the write lands.
                 // trace:STORY-1418 | ai:claude
@@ -5697,6 +6202,14 @@ pub(crate) fn handle_git_backend_command(
                     crate::completion::mark_completed(&mut req);
                 } else {
                     req.set_status_from_str(canonical);
+                    // TASK-1477: reopening a Completed spec must clear the
+                    // stale completed_at so the next completion stamps a
+                    // fresh date instead of keeping the first one forever.
+                    // trace:TASK-1477 | ai:claude
+                    crate::completion::clear_completed_at_on_reopen(
+                        &mut req,
+                        &prior_status_for_reopen,
+                    );
                 }
                 disposition_event = Some((status_before, req.status.to_string()));
                 // TASK-1446: a spec deliberately reopened to Draft after its
@@ -5730,36 +6243,57 @@ pub(crate) fn handle_git_backend_command(
                 // that, a triaged spec stayed out of the drain for good. The
                 // comment records why the spec came back (auditable re-entry).
                 // trace:TASK-1311 | ai:claude
+                //
+                // STORY-1429: the exit runs through the one owner,
+                // `requeue::return_to_flight`, on this one spec. The status is
+                // re-read and compared just before the single targeted write
+                // below, so a spec that moved in between (a concurrent requeue
+                // or a drain) is left alone. The requeue lease gate applies
+                // here too.
+                // trace:STORY-1429 | ai:claude
                 if was_needs_attention && !matches!(req.status, RequirementStatus::NeedsAttention) {
+                    let spec_label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+                    let lease_root = store_path
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .map(std::path::Path::to_path_buf)
+                        .or_else(|| find_project_root().ok())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let display = req.display_id();
+                    let check = crate::requeue_lease_gate(
+                        &lease_root,
+                        &[spec_label.as_str(), display.as_str()],
+                    );
+                    if let Some(msg) = check.refusal(&spec_label) {
+                        anyhow::bail!(msg);
+                    }
                     // The escalation tag is a hand-off to a human; only a
                     // human at a terminal may clear it (not a non-TTY advisor
                     // agent, not an orchestrated phase).
-                    let cleared = crate::requeue::clear_shelve_markers(
+                    let ctx = crate::requeue::ReturnCtx {
+                        via: "`aida edit --status`".to_string(),
+                        via_slug: "edit",
+                        author: get_default_author(),
+                        clear_escalation: crate::requeue::caller_may_clear_escalation(),
+                        reason: None,
+                        automated: false, // trace:BUG-1632 | ai:claude
+                    };
+                    let target = req.status.clone();
+                    req.status = RequirementStatus::NeedsAttention;
+                    let outcome = crate::requeue::return_to_flight(
                         &mut req,
-                        crate::requeue::caller_may_clear_escalation(),
+                        &RequirementStatus::NeedsAttention,
+                        &target,
+                        &ctx,
                     );
-                    if cleared != crate::requeue::ClearedMarkers::default() {
-                        let note = cleared.audit_note(
-                            "`aida edit --status`",
-                            &req.status.to_string(),
-                            None,
-                        );
-                        req.add_comment(aida_core::Comment::new(get_default_author(), note));
-                    }
-                    if !cleared.removed_tags.is_empty() {
-                        eprintln!(
-                            "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
-                            "·".dimmed(),
-                            cleared.removed_tags.join(", ")
-                        );
-                    }
-                    if let Some(w) = crate::requeue::kept_escalation_warning(
-                        req.spec_id.as_deref().unwrap_or(id),
-                        &cleared,
-                    ) {
-                        eprintln!("  {} {w}", "Warning:".yellow().bold());
-                    }
+                    pending_leave = Some((spec_label, lease_root, ctx, target, outcome));
                     left_needs_attention = true;
+                } else {
+                    // BUG-1637: every other status edit is recorded under the
+                    // caller through the one shared history helper (leaving
+                    // NeedsAttention is recorded by `return_to_flight` above).
+                    // trace:BUG-1637 | ai:claude
+                    crate::record_caller_status_transition(&mut req, &prior_status_for_reopen);
                 }
                 changed = true;
                 new_status_for_manifest = Some(canonical.to_string());
@@ -5819,14 +6353,13 @@ pub(crate) fn handle_git_backend_command(
                 // visible. `--add-tag` / `--remove-tag` are the incremental forms
                 // (kept mutually exclusive with `--tags` by clap's conflicts_with).
                 // trace:BUG-545 | ai:claude
+                // BUG-1770: parse and validate the replacement set BEFORE
+                // clearing the old one — a refusal must leave the spec's tags
+                // exactly as they were. trace:BUG-1770 | ai:claude
+                let replacement = parse_tag_list(t)?;
                 let old_tags = req.tags.clone();
                 req.tags.clear();
-                for tag in t.split(',') {
-                    let trimmed = tag.trim();
-                    if !trimmed.is_empty() {
-                        req.tags.insert(trimmed.to_string());
-                    }
-                }
+                req.tags.extend(replacement);
                 // trace:BUG-1252 | ai:codex
                 force_dropped_structural_tags =
                     enforce_structural_tag_replacement(&old_tags, &req.tags, *force)?;
@@ -5845,7 +6378,12 @@ pub(crate) fn handle_git_backend_command(
             // forms mutually exclusive. Adding a present tag or removing
             // an absent one is a graceful no-op.
             // trace:TASK-351 | ai:claude
-            if apply_tag_deltas(&mut req.tags, add_tag, remove_tag) {
+            // BUG-1770: keep the REPORT, not just the bool. A `--remove-tag`
+            // that matched nothing used to fall through to the generic
+            // "No changes specified" line, which tells the caller to pass a
+            // flag they already passed. trace:BUG-1770 | ai:claude
+            let tag_report = apply_tag_deltas_report(&mut req.tags, add_tag, remove_tag)?;
+            if tag_report.changed() {
                 changed = true;
             }
             // TASK-524: typo guard — a `lifecycle:*` tag that isn't a recognized
@@ -5918,17 +6456,66 @@ pub(crate) fn handle_git_backend_command(
 
             if changed {
                 req.modified_at = chrono::Utc::now();
-                if force_dropped_structural_tags.is_empty() {
-                    backend.update_requirement(&req)?;
-                } else {
-                    backend.bulk_update(
-                        std::slice::from_ref(&req),
-                        &format!(
-                            "update {}: replaced tags, dropped: {}",
-                            req.spec_id.as_deref().unwrap_or(id),
-                            force_dropped_structural_tags.join(", ")
-                        ),
-                    )?;
+                // STORY-1429 / TASK-1506: one targeted write through the
+                // per-spec compare-and-swap. Under the store lock the spec is
+                // re-read, a NeedsAttention exit is re-checked against that
+                // copy (nothing is written when the spec left NeedsAttention
+                // meanwhile), and this edit's field changes are applied to it,
+                // so a concurrent change to another field is kept and a
+                // same-field clash refuses instead of being overwritten.
+                // trace:STORY-1429 trace:TASK-1506 | ai:claude
+                let label = req.spec_id.clone().unwrap_or_else(|| id.to_string());
+                let leave_target = pending_leave.as_ref().map(|(_, _, _, target, _)| target);
+                let subject = (!force_dropped_structural_tags.is_empty()).then(|| {
+                    format!(
+                        "update {}: replaced tags, dropped: {}",
+                        label,
+                        force_dropped_structural_tags.join(", ")
+                    )
+                });
+                let leave_label = pending_leave
+                    .as_ref()
+                    .map(|(l, _, _, _, _)| l.as_str())
+                    .unwrap_or(label.as_str());
+                req = crate::edit_rebase::write_edit_atomically(
+                    &backend,
+                    leave_label,
+                    &read_copy,
+                    &req,
+                    leave_target,
+                    crate::edit_rebase::EditMerge {
+                        // `--tags` replaces the set: refuse on a concurrent
+                        // tag change instead of merging.
+                        tags_replaced: tags.is_some(),
+                        // `--status` refuses on a concurrent move to any
+                        // other status, even a same-value request.
+                        status_set: status.is_some(),
+                        ..Default::default()
+                    },
+                    // STORY-647 re-run on the copy read under the lock: a
+                    // protected tag added meanwhile blocks this edit.
+                    // trace:TASK-1506 trace:STORY-647 | ai:claude
+                    &|cur: &aida_core::Requirement| {
+                        enforce_protected_spec_gate(cur.tags.iter(), *force)
+                    },
+                    subject.as_deref(),
+                )?;
+                // STORY-1429: the exit landed; report what it cleared and
+                // record the requeue. trace:STORY-1429 | ai:claude
+                if let Some((label, root, ctx, _, outcome)) = &pending_leave {
+                    if let crate::requeue::ReturnOutcome::Returned { cleared, .. } = outcome {
+                        if !cleared.removed_tags.is_empty() {
+                            eprintln!(
+                                "  {} cleared stale parking tag(s) {} so the drain can pick it up again",
+                                "·".dimmed(),
+                                cleared.removed_tags.join(", ")
+                            );
+                        }
+                        if let Some(w) = crate::requeue::kept_escalation_warning(label, cleared) {
+                            eprintln!("  {} {w}", "Warning:".yellow().bold());
+                        }
+                    }
+                    crate::requeue::emit_requeued(root, label, ctx, outcome);
                 }
                 // TASK-1450: a disposition (status) or execution_mode change
                 // made through `aida edit` is a coordination-seat decision —
@@ -5975,6 +6562,16 @@ pub(crate) fn handle_git_backend_command(
                         render_completion_crescendo(display_id, &req.title);
                     }
                     EditCompletionRender::Updated => println!("Updated: {}", id),
+                }
+
+                // BUG-1770: say what the tag flags actually did, on the success
+                // path too. A caller who removes two tags and mistypes one
+                // currently sees only "Updated" and cannot tell. The lines are
+                // emitted whenever tag flags were passed, including the partial
+                // case where some matched and some did not.
+                // trace:BUG-1770 | ai:claude
+                for line in tag_report.summary_lines() {
+                    println!("  {line}");
                 }
 
                 // TASK-928 (SPIKE-71): a tag edit that introduces a
@@ -6105,7 +6702,19 @@ pub(crate) fn handle_git_backend_command(
                 // trace:STORY-1434 | ai:claude
                 && carve_out.is_none()
             {
-                println!("No changes specified. Use --title, --status, --priority, etc.");
+                // BUG-1770: only say "no changes SPECIFIED" when none were.
+                // If tag flags were passed and matched nothing, say THAT —
+                // conflating the two is what made a no-op indistinguishable
+                // from success and hid this class long enough to be found by
+                // accident. trace:BUG-1770 | ai:claude
+                let tag_lines = tag_report.summary_lines();
+                if tag_lines.is_empty() {
+                    println!("No changes specified. Use --title, --status, --priority, etc.");
+                } else {
+                    for line in tag_lines {
+                        println!("{line}");
+                    }
+                }
             }
 
             // TASK-1176: record the supersede lineage AFTER the scalar save,
@@ -6245,6 +6854,40 @@ pub(crate) fn handle_git_backend_command(
             };
             let cmd = findings_cmd.as_ref().unwrap_or(&default_list);
             handle_findings_command(cmd, &backend, store_path)?;
+            // STORY-1429: bare `aida findings` at a terminal offers the
+            // one-keystroke requeue loop when specs are parked, the way bare
+            // `aida questions` offers its answer loop. `findings list` never
+            // prompts. trace:STORY-1429 | ai:claude
+            use std::io::IsTerminal;
+            if findings_cmd.is_none()
+                && !output_format_is_json()
+                && std::io::stdin().is_terminal()
+                && std::io::stdout().is_terminal()
+            {
+                let parked = backend
+                    .list_summaries(&aida_core::ListFilter {
+                        status: Some("needs-attention".to_string()),
+                        ..Default::default()
+                    })
+                    .map(|v| v.len())
+                    .unwrap_or(0);
+                if parked > 0 {
+                    print!("\nTriage {parked} parked now? [Y/n] ");
+                    use std::io::Write;
+                    std::io::stdout().flush()?;
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input)?;
+                    let answer = input.trim();
+                    if answer.is_empty() || answer.eq_ignore_ascii_case("y") {
+                        let storage = Storage::new(store_path);
+                        crate::queue_cmd::handle_rework_entry(
+                            &storage,
+                            None,
+                            &crate::queue_cmd::ReworkFlags::default(),
+                        )?;
+                    }
+                }
+            }
         }
         Command::ImportPlan {
             file,
@@ -6296,7 +6939,14 @@ pub(crate) fn handle_git_backend_command(
                 if *guided {
                     handle_guided_human_review(spec)?;
                 } else {
-                    handle_review_spec(&backend, store_path, spec, *no_agent, *allow_stale_base)?;
+                    handle_review_spec(
+                        &backend,
+                        store_path,
+                        spec,
+                        *no_agent,
+                        *allow_stale_base,
+                        None,
+                    )?;
                 }
             }
             _ => {
@@ -6467,7 +7117,7 @@ pub(crate) fn handle_git_backend_command(
                         tags: &req.tags,
                     })
                     .collect();
-                println!("{}", serde_json::to_string_pretty(&out)?);
+                println!("{}", crate::cache_output::json_pretty(&out)?);
                 return Ok(());
             }
 
@@ -6637,7 +7287,7 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1-020 | ai:claude
             // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
-                .get_requirement_unambiguous(id)?
+                .get_requirement_unambiguous_for_read(id)? // read-only; trace:BUG-1670 | ai:claude
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
             println!("{}: {}", "Requirement".cyan(), req.title);
@@ -6965,7 +7615,8 @@ pub(crate) fn handle_git_backend_command(
             to_pos,
             from_flag,
             to_flag,
-            ..
+            r#type,
+            bidirectional,
         }) => {
             let from = from_pos
                 .as_deref()
@@ -6984,8 +7635,17 @@ pub(crate) fn handle_git_backend_command(
                 .get_requirement_unambiguous(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
+            // TASK-1426: honor `--type`. This arm used to drop EVERY edge to
+            // the target whatever type was asked for, so removing a stale
+            // custom `related` edge also removed a good `references` edge
+            // beside it. `related` resolves through the same alias as
+            // `rel add`, and the references family also matches stored
+            // legacy custom `related` spellings. trace:TASK-1426 | ai:claude
+            let requested = cli_relationship_type(r#type);
             let before = from_req.relationships.len();
-            from_req.relationships.retain(|r| r.target_id != to_req.id);
+            from_req.relationships.retain(|r| {
+                !(r.target_id == to_req.id && rel_remove_matches(&r.rel_type, &requested))
+            });
             let removed = before - from_req.relationships.len();
 
             if removed > 0 {
@@ -6996,7 +7656,35 @@ pub(crate) fn handle_git_backend_command(
                     removed, from, to
                 );
             } else {
-                println!("No relationship found from {} to {}", from, to);
+                println!(
+                    "No {} relationship found from {} to {}",
+                    requested, from, to
+                );
+            }
+
+            // Mirror `rel add`'s `rel_should_write_inverse` — the parent/child
+            // pair (and any future pair added to that rule) is canonically
+            // bidirectional, so remove drops both reciprocal edges even
+            // without an explicit `--bidirectional`. Every other type keeps
+            // the opt-in flag, matching `rel add`. trace:BUG-1602 | ai:claude
+            if rel_should_write_inverse(&requested, *bidirectional) {
+                let inverse = requested.inverse().unwrap_or_else(|| requested.clone());
+                let mut to_req = backend
+                    .get_requirement(&to_req.id)?
+                    .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
+                let before = to_req.relationships.len();
+                to_req.relationships.retain(|r| {
+                    !(r.target_id == from_req.id && rel_remove_matches(&r.rel_type, &inverse))
+                });
+                let removed_inverse = before - to_req.relationships.len();
+                if removed_inverse > 0 {
+                    to_req.modified_at = chrono::Utc::now();
+                    backend.update_requirement(&to_req)?;
+                    println!(
+                        "Removed {} inverse relationship(s) from {} to {}",
+                        removed_inverse, to, from
+                    );
+                }
             }
         }
         Command::Rel(RelationshipCommand::List {
@@ -7323,6 +8011,19 @@ pub(crate) fn handle_git_backend_command(
             handle_db_check_collisions(&backend, store_path, *repair)?;
         }
 
+        // trace:TASK-1426 | ai:claude
+        Command::Db(DbCommand::MigrateRelatedEdges { dry_run, json }) => {
+            let outcome = crate::related_edge_migration::run_migration(&backend, *dry_run)?;
+            if *json {
+                println!("{}", crate::cache_output::json_pretty(&outcome)?);
+            } else {
+                print!(
+                    "{}",
+                    crate::related_edge_migration::render_outcome(&outcome)
+                );
+            }
+        }
+
         // Phase 3: Export to git backend
         Command::Db(DbCommand::ExportGit { output }) => {
             let output_path = std::path::PathBuf::from(output);
@@ -7417,26 +8118,30 @@ pub(crate) fn handle_git_backend_command(
             user,
         } => {
             let storage = Storage::new(store_path);
-            handle_queue_rework(
+            // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+            crate::queue_cmd::handle_rework_entry(
                 &storage,
-                id,
-                *work,
-                r#for.as_deref(),
-                *tail,
-                status.as_deref(),
-                reason.as_deref(),
-                *resume,
-                *force,
-                *steal,
-                permission_mode.as_deref(),
-                *no_pull,
-                user.as_deref(),
+                id.as_deref(),
+                &crate::queue_cmd::ReworkFlags {
+                    work: *work,
+                    for_role: r#for.as_deref(),
+                    tail: *tail,
+                    status: status.as_deref(),
+                    reason: reason.as_deref(),
+                    resume: *resume,
+                    force: *force,
+                    steal: *steal,
+                    permission_mode: permission_mode.as_deref(),
+                    no_pull: *no_pull,
+                    user: user.as_deref(),
+                },
             )?;
         }
         Command::Review {
             spec,
             no_agent,
             allow_stale_base,
+            target_branch,
             cmd,
         } => {
             // trace:STORY-553 | ai:claude — `aida review <SPEC>` drives a
@@ -7451,6 +8156,7 @@ pub(crate) fn handle_git_backend_command(
                         spec_id,
                         *no_agent,
                         *allow_stale_base,
+                        target_branch.as_deref(),
                     )?;
                 }
                 (None, Some(review_cmd)) => {
@@ -7502,9 +8208,15 @@ pub(crate) fn handle_git_backend_command(
             doc_cmd::handle_doc_command(doc_cmd, store_path, &backend)?;
         }
         Command::History {
+            spec,
+            template,
+            fields,
+            save_as_template,
+            force,
             limit,
             max_commits,
             events,
+            full,
             id,
             r#type,
             author,
@@ -7513,17 +8225,92 @@ pub(crate) fn handle_git_backend_command(
             status_changes,
             kind,
             shipped,
+            to,
+            from,
+            opened,
             comments,
             oneline,
+            json,
             all,
             archived,
             deferred,
             include_meta,
+            timeline,
             cmd,
         } => {
+            // trace:STORY-1477 | ai:codex
+            use crate::history_layout::{Layout, Templates};
+            // Reject even a parent-position --json before loading or mutating config.
+            if matches!(cmd, Some(HistoryCommand::Templates { .. })) && *json {
+                anyhow::bail!(
+                    "history templates has no JSON projection; use --format human or --format toon"
+                );
+            }
+            let json = &(*json || matches!(cmd, Some(HistoryCommand::Events { json: true })));
+            let templates =
+                if template.is_some() || matches!(cmd, Some(HistoryCommand::Templates { .. })) {
+                    Some(Templates::load(&crate::find_project_root_from(
+                        &std::env::current_dir()?,
+                    )?)?)
+                } else {
+                    None
+                };
+            if let Some(HistoryCommand::Templates { cmd }) = cmd {
+                if template.is_some() || fields.is_some() || save_as_template.is_some() || *force {
+                    anyhow::bail!("invalid combination: templates management cannot be combined with render/save options");
+                }
+                let templates = templates.as_ref().unwrap();
+                match cmd {
+                    Some(crate::cli::HistoryTemplatesCommand::Rm { name }) => {
+                        templates.remove(name)?
+                    }
+                    None => print!("{}", templates.list()),
+                }
+                return Ok(());
+            }
+            if template.is_some()
+                && (*json
+                    || matches!(
+                        crate::output_format_override(),
+                        Some(crate::cli::OutputFormat::Json | crate::cli::OutputFormat::Toon)
+                    )
+                    || matches!(cmd, Some(HistoryCommand::Events { .. })))
+            {
+                anyhow::bail!("invalid combination: --template requires human output and cannot be combined with events; use --format human and omit events");
+            }
+            let layout = template
+                .as_deref()
+                .map(|raw| templates.as_ref().unwrap().resolve(raw))
+                .transpose()?;
+            let selected_fields = fields
+                .as_deref()
+                .map(crate::history_layout::fields)
+                .transpose()?;
+            if let Some(target) = save_as_template {
+                templates
+                    .as_ref()
+                    .unwrap()
+                    .validate_save(target, template.as_deref(), *force)?;
+            }
+            let oneline = &(*oneline || matches!(layout, Some(Layout::Oneline)));
+            let custom_feed =
+                matches!(layout, Some(Layout::Custom(_))) || selected_fields.is_some();
+            // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
+            // history --id <SPEC-ID>` — clap keeps them mutually exclusive
+            // (`conflicts_with`), so at most one is ever set here.
+            // trace:TASK-1480 | ai:claude
+            let requested_id = id.as_ref().or(spec.as_ref());
             // STORY-1436: `--kind` reads the local event feed (non-actions
             // included) rather than the spec git log. trace:STORY-1436 | ai:claude
+            // BUG-1631: `--json` / `--format json` is the events feed's
+            // JSON projection. trace:BUG-1631 | ai:claude
+            let json = *json || crate::output_format_is_json();
             if let Some(kind) = kind {
+                if json {
+                    anyhow::bail!(
+                        "`aida history --kind` has no JSON projection; use `--format human` or `--format toon`"
+                    );
+                }
                 return crate::history_kind_report(
                     kind,
                     since.as_deref(),
@@ -7532,8 +8319,9 @@ pub(crate) fn handle_git_backend_command(
                     *limit,
                 );
             }
-            let events = match cmd {
-                Some(HistoryCommand::Events) => true,
+            let explicit_events = match cmd {
+                Some(HistoryCommand::Events { .. }) => true,
+                Some(HistoryCommand::Templates { .. }) => unreachable!(),
                 None => {
                     if *events {
                         note_hidden_alias(
@@ -7541,14 +8329,66 @@ pub(crate) fn handle_git_backend_command(
                             "aida history events",
                         );
                     }
-                    *events
+                    // trace:TASK-1480 | ai:claude — `--full` is the
+                    // discoverable, non-hidden spelling of the same mode.
+                    *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
                 }
             };
+            // TASK-1512: `--to`/`--from` take the status spellings `aida
+            // edit --status` does; an unknown one fails before any git walk.
+            // They and `--opened` are event selectors like `--shipped`:
+            // always the events feed, on the 250-commit default window.
+            // trace:TASK-1512 | ai:claude
+            let to_status = to
+                .as_deref()
+                .map(|raw| history::resolve_status_filter("--to", raw))
+                .transpose()?;
+            let from_status = from
+                .as_deref()
+                .map(|raw| history::resolve_status_filter("--from", raw))
+                .transpose()?;
+            history::validate_transition_pair(
+                from_status.as_deref(),
+                to_status.as_deref(),
+                "--from",
+                "--to",
+            )?;
+            let event_selector =
+                *shipped || *opened || to_status.is_some() || from_status.is_some();
+            // BUG-1635: per-event flags (`--status-changes`, `--comments`,
+            // `--oneline`, `--json`) switch a multi-spec query to the events
+            // feed instead of being silently ignored by the digest; with a
+            // SPEC-ID they shape the status-progression view instead.
+            // trace:BUG-1635 | ai:claude
+            let events = history::resolve_events_mode(
+                explicit_events,
+                requested_id.is_some(),
+                event_selector,
+                *status_changes,
+                *comments,
+                *oneline,
+                json,
+            );
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
-            let default_max = if events { (*limit * 5).max(50) } else { 250 };
+            // BUG-1635: chosen by mode, not output format; see
+            // `history::default_max_commits`. trace:BUG-1635 | ai:claude
+            let default_max = history::default_max_commits(
+                *limit,
+                explicit_events,
+                requested_id.is_some(),
+                json,
+                event_selector,
+                *status_changes,
+                *comments,
+                *oneline,
+            );
+            // BUG-1617: did the caller pin the window themselves? Gates the
+            // "window ran out" notice — an explicit --max-commits means they
+            // already know it's narrow. trace:BUG-1617 | ai:claude
+            let max_commits_explicit = max_commits.is_some();
             let max = max_commits.unwrap_or(default_max);
             // STORY-441: archive axis replaces TASK-64's terminal-status
             // hide. Default surfaces non-archived rows; `--all` widens to
@@ -7556,7 +8396,7 @@ pub(crate) fn handle_git_backend_command(
             // `--id <ID>` was passed, the user named a single spec so we
             // bypass archive filtering for that spec's timeline.
             // trace:STORY-441 | ai:claude
-            let archive = if id.is_some() || *all {
+            let archive = if requested_id.is_some() || *all {
                 aida_core::ArchiveFilter::Both
             } else if *archived {
                 aida_core::ArchiveFilter::ArchivedOnly
@@ -7567,7 +8407,7 @@ pub(crate) fn handle_git_backend_command(
             // timeline); `--all` and `--archived` keep it open so those audits
             // are complete; `--deferred` narrows to the shelf; default hides it.
             // trace:STORY-584 | ai:claude
-            let defer = if id.is_some() || *all || *archived {
+            let defer = if requested_id.is_some() || *all || *archived {
                 aida_core::DeferFilter::Both
             } else if *deferred {
                 aida_core::DeferFilter::DeferredOnly
@@ -7638,22 +8478,79 @@ pub(crate) fn handle_git_backend_command(
             // empty "(no recent activity)" — the filter never matched because it
             // only ever compared against spec_id. Resolve a UUID (or agreed_id)
             // to its canonical spec_id here so the documented invocation works.
+            // Also refuses early and clearly on a malformed id or one that
+            // resolves to more than one requirement (TASK-1480's "invalid or
+            // ambiguous IDs get a clear error" acceptance bar); a well-formed
+            // id that just isn't live right now (deleted, or never existed) is
+            // NOT rejected here — `history::run` decides that once it knows
+            // whether the id has any recorded history at all.
             // trace:BUG-588 | ai:claude
-            let id_filter = id
-                .as_ref()
-                .map(|raw| resolve_history_id_filter(&backend, raw));
+            // trace:TASK-1480 | ai:claude
+            let id_filter = match requested_id {
+                Some(raw) => Some(resolve_history_id_filter(&backend, raw)?),
+                None => None,
+            };
+            // STORY-1478: the per-spec work/wait/unknown timeline. Checked
+            // here, right after the ID resolves, because it answers a
+            // different question from every other history view and shares
+            // none of their windowing.
+            // trace:STORY-1478 | ai:claude
+            if *timeline {
+                let Some(spec_id) = id_filter.as_deref() else {
+                    anyhow::bail!(
+                        "`aida history --timeline` needs one requirement: \
+                         `aida history <SPEC-ID> --timeline`"
+                    );
+                };
+                if matches!(cmd, Some(HistoryCommand::Events { .. })) {
+                    anyhow::bail!(
+                        "`--timeline` and the `events` feed are different views; pass one or the other"
+                    );
+                }
+                // A narrowed window would still print totals that look whole.
+                if *limit != history_timeline::HISTORY_DEFAULT_LIMIT {
+                    anyhow::bail!(
+                        "`--timeline` covers a requirement's whole recorded life, so `--limit` \
+                         does not apply to it"
+                    );
+                }
+                let output =
+                    history::HistoryOutput::select(json, false, crate::agent_output_mode());
+                // Opt out of the forge lookup for an offline or fixture run.
+                let forge_enabled = std::env::var("AIDA_TIMELINE_NO_FORGE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty() && v != "0")
+                    .is_none();
+                return history_timeline::run(store_path, spec_id, output, forge_enabled);
+            }
+            // TASK-1480: a single spec (`--id` / positional SPEC-ID) without
+            // `--full` defaults to the status-progression view — status
+            // transitions only, so `aida history TASK-1480` reads as a
+            // timeline rather than a single digest row. An explicit
+            // `--status-changes`/`--comments` narrows exactly as it always
+            // has; `--full` (or the `events` subcommand) opts back into the
+            // complete trail. trace:TASK-1480 | ai:claude
+            let single_spec_default_progress =
+                id_filter.is_some() && !events && !*status_changes && !*comments;
+            let status_changes_only = *status_changes || single_spec_default_progress;
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
-                // TASK-507: --shipped is an events-mode filter; imply it.
-                events_mode: events || *shipped,
+                max_commits_explicit,
+                // TASK-507: --shipped is an events-mode filter; implied by
+                // `resolve_events_mode` above.
+                events_mode: events,
                 id_filter,
                 type_filter: r#type.clone(),
                 author_filter: author.clone(),
                 since: since.clone(),
                 until: until.clone(),
-                status_changes_only: *status_changes,
+                status_changes_only,
                 shipped_only: *shipped,
+                // trace:TASK-1512 | ai:claude
+                to_status,
+                from_status,
+                opened_only: *opened,
                 comments_only: *comments,
                 oneline: *oneline,
                 archived_specs,
@@ -7666,7 +8563,37 @@ pub(crate) fn handle_git_backend_command(
                 // default-view drowning. trace:STORY-737 | ai:claude
                 exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
             };
-            history::run(store_path, &opts)?;
+            if custom_feed {
+                // All parsing, ID/window validation and collection succeed before mutation.
+                let records = history::collect_event_records(store_path, &opts)?;
+                let output = if let Some(Layout::Custom(template)) = &layout {
+                    template.render_records(&records)?
+                } else if json {
+                    format!(
+                        "{}\n",
+                        crate::history_layout::project_json(
+                            &records,
+                            selected_fields.as_ref().unwrap()
+                        )?
+                    )
+                } else {
+                    crate::history_layout::project_table(
+                        &records,
+                        selected_fields.as_ref().unwrap(),
+                        crate::agent_output_mode(),
+                    )
+                };
+                if let Some(target) = save_as_template {
+                    templates.as_ref().unwrap().save(
+                        target,
+                        template.as_deref().unwrap(),
+                        *force,
+                    )?;
+                }
+                print!("{output}");
+            } else {
+                history::run(store_path, &opts, json)?;
+            }
         }
         Command::StateSnapshot {
             spec,

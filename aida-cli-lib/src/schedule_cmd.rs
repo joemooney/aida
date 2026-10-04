@@ -44,15 +44,15 @@ pub(crate) fn handle_schedule_command(
                     "a schedule named '{name}' already exists — `aida advisor schedule remove {name}` first, or pick a different name"
                 );
             }
-            let parsed_tags: Vec<String> = tags
-                .as_deref()
-                .map(|t| {
-                    t.split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
+            // BUG-1770: these tags are copied onto the requirement the
+            // schedule files each time it fires, so a blob accepted here
+            // reappears on every firing. Validate at WRITE time; the firing
+            // path stays tolerant so a legacy schedule file still runs.
+            // trace:BUG-1770 | ai:claude
+            let parsed_tags: Vec<String> = match tags.as_deref() {
+                Some(t) => crate::parse_tag_list(t)?,
+                None => Vec::new(),
+            };
             file.schedules.push(schedule::Schedule {
                 name: name.clone(),
                 cadence: every.clone(),

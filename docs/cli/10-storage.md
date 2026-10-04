@@ -36,10 +36,11 @@ What this means in practice: **a normal user needs almost none of the commands b
 - `merge-gate` — collapses a distributed node-aware id (`<spec-id>-001`) down to its agreed short form (`<spec-id>`) at merge-to-trunk. It runs automatically inside `aida pull` (the merge-gate step); call it by hand only when you've disabled the auto-gate or are reconciling IDs manually.
 - `reconcile-status` — **the recovery tool you'll actually use.** Replays the Done→Completed auto-bump over a wider commit window than the `pull` that missed it. See its own entry below.
 - `check` — store integrity audit (currently `--collisions`: two specs claiming the same short id). The recovery-side counterpart to the gate-time prevention.
+- `migrate-related-edges` — a one-time repair for custom-typed edges whose spelling resolves to a standard relationship type (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), which graph traversals don't follow. Converts each to its standard type, or deletes it when an edge of that type to the same target already exists. See its own entry below.
 - `block` — pre-allocates blocks of agreed IDs to a node so offline `trace:` comments can cite a final id. Distributed-multi-node housekeeping; single-machine projects never need it.
 - `workspace-init` / `retire-legacy-ids` — the rare ones. `workspace-init` sets up multiple code repos sharing one store; `retire-legacy-ids` is a one-time migration collapsing old zero-padded ids onto their short agreed ids. Both are setup/migration events, not daily verbs.
 
-**Gotchas.** `db sync` moves *only the store branch* — it is **not** a substitute for `aida push`/`pull`, which move both legs. Pushing your store but forgetting your code (or vice versa) is exactly the split that two-leg `pull`/`push` exist to prevent; don't reintroduce it by reaching for `db sync` out of habit. And the destructive-shaped maintenance verbs (`retire-legacy-ids`, `check --repair`) take `--dry-run` for a reason — preview first.
+**Gotchas.** `db sync` moves *only the store branch* — it is **not** a substitute for `aida push`/`pull`, which move both legs. Pushing your store but forgetting your code (or vice versa) is exactly the split that two-leg `pull`/`push` exist to prevent; don't reintroduce it by reaching for `db sync` out of habit. And the destructive-shaped maintenance verbs (`retire-legacy-ids`, `check --repair`, `migrate-related-edges`) take `--dry-run` for a reason — preview first.
 
 **Chains with** — `db status` before a push; `db reconcile-status` after a merge whose auto-bump missed; `db merge-gate` is invoked by `aida pull`. For routine two-leg syncing, the wrappers in Chapter 4.
 
@@ -66,19 +67,48 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 ---
 
+### `aida db migrate-related-edges`
+
+<!-- doc-intent: TASK-1426 TASK-1488 -->
+
+**One line** — repair old custom edges whose spelling now resolves to a standard relationship type, so the graph follows them.
+
+**Mental model.** Earlier versions of the CLI stored several relationship spellings — `related`, `depends-on`, `verified_by`, `replaced_by`, and others — as *custom* edges named after the literal spelling typed in. Graph traversals only follow standard edge types, so those links were invisible to `aida graph` even though `rel list` showed them. `rel add`/`rel remove` now resolve every one of those spellings to its standard type up front, and this command repairs the edges written before that resolution existed. It recognizes any custom spelling that the shared relationship-type parser resolves to a standard type, and treats each source/target/type triple on its own:
+
+- **no edge of that standard type to that target yet** — the custom edge is converted to the standard type in place, keeping who created it and when;
+- **an edge of that standard type to that target already exists** — the custom edge is deleted instead, because converting it would create a duplicate.
+
+Every other custom edge type — for example `implements`, `implemented-by`, or a `sprint_*` label — is left alone, because none of those spellings resolve to a standard type. No reciprocal edge is added on the target side even for a paired type like `parent`/`child` or `supersedes`/`superseded_by`: the legacy edge was one-directional data, and this command repairs its type, not its topology. Add the reciprocal explicitly afterward with `aida rel add --type child` (or `-b`) if you want the canonical bidirectional pair.
+
+**Reach for it when** — `rel list` shows a custom edge whose name looks like a standard relationship (`related`, `depends-on`, `verified_by`, `replaced_by`, and similar), or `aida graph` misses links you know you added.
+
+**Don't reach for it when** — you want to change a single edge. Use `aida rel remove` and `aida rel add` for that.
+
+**Key options (rationale only).**
+- `--dry-run` — prints the counts and the action for every edge on every spec, and writes nothing. Run it first.
+- `--json` — the same report as JSON, for scripts.
+
+**Gotchas.** Each changed spec gets its own store commit; the store is never rewritten wholesale. The command checks the planned result before it writes anything, and it refuses to run if a spec it would change still ends up holding two edges of the same type to one target. It re-reads each spec after writing and checks it again. The plan is measured from the store on every run, so a second run after a successful one finds nothing to do.
+
+**Chains with** — `aida db migrate-related-edges --dry-run` → review → `aida db migrate-related-edges` → `aida push` to publish the store commits.
+
+---
+
 ### `aida cache`
 
 **One line** — view and rebuild the SQLite read-cache that makes `list`/`search` instant.
 
-**Mental model.** The cache (`.aida/cache.db`) is a **derived, disposable** index over the git store — never a source of truth. `aida cache` has exactly two subcommands because there are only two honest operations on a derived projection: **look at its state** (`status`) and **throw it away and recompute** (`rebuild`). You never *edit* the cache; writes flow through the spec commands and the cache updates itself write-through.
+**Mental model.** The cache (`.aida/cache.db`) is a **derived, disposable** index over the git store — never a source of truth. The honest operations on a derived projection are to **look at its state** (`status`), **bring it current** (`refresh`), **cross-check it row by row** (`verify`), and **throw it away and recompute** (`rebuild`). You never *edit* the cache; writes flow through the spec commands and the cache updates itself write-through.
 
 **Reach for it when** — you suspect the cache drifted from the store (a `list` that disagrees with `show`, or after a manual poke at the `.aida-store/` worktree): `cache status` to confirm, `cache rebuild` to fix. In normal operation the HEAD-SHA stale-check rebuilds automatically, so reaching for `rebuild` by hand means the auto-detect somehow didn't fire — rare, and worth a mental note if it recurs.
 
 **Don't reach for it when** — `list`/`search` are simply *empty* and you assume the cache is broken. Empty results are far more often a *filter* (a role scope, an archive flag, the wrong `$USER` for the queue) than a stale cache. Diagnose the query before rebuilding.
 
 **Key subcommands (rationale only).**
-- `status` — shows the cache's recorded HEAD vs the store's actual HEAD, the requirement count, and last build time. The diagnostic: a HEAD mismatch that *isn't* auto-clearing is the signal to rebuild.
+- `status` — shows the cache's recorded HEAD vs the store's actual HEAD, the requirement count, last build time, the refresh lock, and any pending background-refresh request (including when its worker has been failing and background refresh has stood down). The diagnostic: a HEAD mismatch that *isn't* auto-clearing is the signal to rebuild.
+- `refresh` — brings the cache current now, and clears a pending background-refresh request. When a read finds the cache stale and cannot refresh it cheaply, it files that request and hands the work to a detached background worker (a scheduled `cache refresh --if-requested` tick retries one that died); `refresh` is the direct, foreground form of the same operation — the recovery verb when `status` reports background refresh has stood down after repeated worker failures.
 - `rebuild` — drops and recomputes the whole cache from the git store. The repair. It's cheap and side-effect-free (the store is untouched), so it's the safe thing to try when the cache is the suspect.
+- `rebuild --history` — rebuilds the separate **history index** instead (`.aida/history-v<N>-<M>.db`), the derived copy of store events that makes `aida history events` and the MCP history tool fast. It fills itself in on normal `aida history` queries (newest history first, a little per query) and falls back to reading git directly whenever it can't prove it holds the whole answer, so you only need this to build it all at once. Plain `rebuild` leaves it alone; `status` reports both, with a History section showing how far back the index reaches and whether it matches the store HEAD.
 
 **Gotchas.** Rebuilding the cache **cannot lose data** — the store is canonical and the cache is regenerated from it — so it's a no-risk operation, unlike most "rebuild the database" commands. But it also *fixes nothing in the store itself*: if a spec is wrong in the YAML, rebuilding the cache faithfully re-projects the wrong value. The cache is only ever as right as the store it mirrors. (Also: `cache` is git-canonical-mode only; legacy centralized projects have no cache to rebuild.)
 

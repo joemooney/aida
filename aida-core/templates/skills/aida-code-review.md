@@ -60,7 +60,7 @@ grep -rn "trace:" --include="*.rs" src/ | head -20
 find src/ -name "*.rs" -exec sh -c 'grep -L "trace:" "$1" 2>/dev/null' _ {} \;
 
 # Cross-reference: do traced spec IDs exist in the database?
-grep -oP 'trace:\K[A-Z]+-[0-9]+' --include="*.rs" -r src/ | sort -u | while read id; do
+grep -ohE 'trace:[A-Z]+-[0-9]+' --include="*.rs" -r src/ | sed 's/^trace://' | sort -u | while read id; do
   aida show "$id" >/dev/null 2>&1 || echo "ORPHAN TRACE: $id (not in database)"
 done
 ```

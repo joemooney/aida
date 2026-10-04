@@ -530,19 +530,26 @@ mod tests {
         )
         .unwrap();
 
-        // SAFETY: tests in this module don't run this specific test
-        // concurrently with another that reads AIDA_AGENT_REGISTRY_TOKEN in a
-        // conflicting way; scoped narrowly and cleared in a guard.
-        struct EnvGuard;
-        impl Drop for EnvGuard {
-            fn drop(&mut self) {
-                std::env::remove_var("AIDA_AGENT_REGISTRY_TOKEN");
-            }
-        }
-        let _guard = EnvGuard;
-        std::env::set_var("AIDA_AGENT_REGISTRY_TOKEN", token);
+        // SAFETY: serialized under the shared ENV_LOCK via EnvVarGuard so it
+        // cannot data-race other tests reading AIDA_AGENT_REGISTRY_TOKEN.
+        // trace:TASK-1532 | ai:agy
+        let _env = crate::test_env::EnvVarGuard::set("AIDA_AGENT_REGISTRY_TOKEN", token);
 
         let result = enforce_at_commit(root);
         assert!(result.is_ok(), "matching token must allow: {:?}", result);
+    }
+
+    // TASK-1532: regression test ensuring token setup uses the shared env lock.
+    // trace:TASK-1532 | ai:agy
+    #[test]
+    fn locking_gate_token_test_holds_env_lock() {
+        let _env = crate::test_env::EnvVarGuard::set(
+            "AIDA_AGENT_REGISTRY_TOKEN",
+            "token-regression-check",
+        );
+        assert_eq!(
+            std::env::var("AIDA_AGENT_REGISTRY_TOKEN").unwrap(),
+            "token-regression-check"
+        );
     }
 }

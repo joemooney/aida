@@ -193,10 +193,15 @@ impl TuiConfig {
 }
 
 /// Walk up from `start` looking for a directory that holds
-/// `.aida/config.toml`.
+/// `.aida/config.toml`. Never adopts a temp root itself as the project root
+/// (BUG-1598) — see `aida_core::store_locate` for the shared rationale.
+// trace:BUG-1598 | ai:claude
 fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut dir = Some(start);
     while let Some(d) = dir {
+        if aida_core::store_locate::is_system_temp_dir(d) {
+            return None;
+        }
         if d.join(".aida").join("config.toml").is_file() {
             return Some(d.to_path_buf());
         }

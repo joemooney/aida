@@ -56,6 +56,7 @@ These cut through the *"should I even use this?"* question honestly.
 | [multi-node.md](multi-node.md) | Distributed node identity, IDs, and the merge gate. |
 | [multi-advisor-coordination.md](multi-advisor-coordination.md) | Coordinating multiple advisor seats on one project. |
 | [session-lifecycle.md](session-lifecycle.md) | Scoped sessions, worktrees, and leases — how concurrent work stays isolated. |
+| [explanations/feature-lanes.md](explanations/feature-lanes.md) | Working on a feature on the side without touching `main`: what works today, and the planned (not shipped) feature lanes. |
 | [agents/](agents/) | Per-agent setup (Claude Code, Codex, Cursor, …), the MCP install matrix, and inter-agent communication. |
 | [environment-variables.md](environment-variables.md) | The canonical reference for every `AIDA_*` environment variable — what it does, default, who sets it, scope. |
 

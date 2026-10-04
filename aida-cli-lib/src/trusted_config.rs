@@ -27,7 +27,14 @@
 //! an unmerged commit, whereas the remote default branch only moves through a
 //! reviewed merge.
 //!
-//! trace:TASK-969 | ai:claude
+//! BUG-1723 (2026-10-02) ratified this split as the standing doctrine for the
+//! whole config surface: branch-local reads are POLICY-ONLY; anything that
+//! selects an executable, a shell command, or a credential reads through this
+//! module or from outside the worktree. The enumerated classification lives
+//! in `scripts/config-trust.toml`, enforced by
+//! `tests/bug_1723_config_trust_tests.rs`.
+//!
+//! trace:TASK-969 trace:BUG-1723 | ai:claude
 
 use std::path::Path;
 use std::process::Command;
@@ -60,7 +67,12 @@ fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", "--verify", "--quiet"])
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            crate::git_arg_guard::END_OF_OPTIONS,
+        ]) // trace:BUG-1622 | ai:claude
         .arg(format!("{refname}^{{commit}}"))
         .output()
         .ok()?;
@@ -85,6 +97,36 @@ fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
 pub fn read_trusted_config_toml(project_root: &Path) -> Option<String> {
     let sha = trusted_default_branch_sha(project_root)?;
     read_config_at_sha(project_root, &sha)
+}
+
+/// Read the default-branch config using only local git refs. This is for
+/// display-only probes on hot paths where asking `gh` for the default branch
+/// on every review would add a network call. It preserves the trusted-config
+/// boundary: only a local default branch ref is read, never the worktree copy.
+// trace:TASK-1545 | ai:codex
+pub fn read_trusted_config_toml_local(project_root: &Path) -> Option<String> {
+    let branch_ref = local_default_branch_ref(project_root)?;
+    let sha = rev_parse_commit(project_root, &branch_ref)?;
+    read_config_at_sha(project_root, &sha)
+}
+
+fn local_default_branch_ref(project_root: &Path) -> Option<String> {
+    let symbolic = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|branch| !branch.is_empty());
+    if symbolic.is_some() {
+        return symbolic;
+    }
+    ["origin/main", "origin/master", "main", "master"]
+        .into_iter()
+        .find(|branch| rev_parse_commit(project_root, branch).is_some())
+        .map(str::to_string)
 }
 
 /// `git show <sha>:.aida/config.toml`. `None` on any non-zero exit (file

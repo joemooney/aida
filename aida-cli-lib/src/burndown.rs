@@ -80,6 +80,11 @@ pub(crate) struct SpecClassifyInput<'a> {
     pub req_type: &'a str,
     pub has_unsatisfied_blocker: bool,
     pub has_pending_decision: bool,
+    /// The spec's groomed execution mode, or `None` when ungroomed. A mode that
+    /// needs a human in the loop (`guided`, `operator`, `decide`) buckets as
+    /// `Supervised` instead of becoming a fan-out candidate.
+    // trace:BUG-1717 | ai:claude
+    pub execution_mode: Option<aida_core::ExecutionMode>,
 }
 
 /// Classify ONE spec for the burndown selector. The filter order is load-bearing
@@ -133,6 +138,21 @@ pub(crate) fn classify_spec(input: &SpecClassifyInput) -> SpecDisposition {
         .iter()
         .any(|t| t.eq_ignore_ascii_case("supervised"))
     {
+        return SpecDisposition::Supervised;
+    }
+    // BUG-1717: the `supervised` TAG was the only thing that could reach this
+    // bucket, so a spec whose groomed execution_mode is `guided` / `operator` /
+    // `decide` was handed to the drain as a fan-out candidate — the exact
+    // opposite of what those modes mean. A guided keystone dispatched
+    // unattended is the failure this gate exists to prevent, and it is not
+    // hypothetical: STORY-1484 (heft 17, cache-refresh architecture, mode
+    // guided) was listed as "Ready to fan out" while the supervised bucket
+    // reported 0. Mode is authoritative here and the tag remains an
+    // independent opt-in, so either one is sufficient to supervise a spec.
+    // An ungroomed spec (None) keeps its previous disposition: it is not
+    // supervised, it is simply not yet groomed.
+    // trace:BUG-1717 | ai:claude
+    if input.execution_mode.is_some_and(|m| !m.is_autonomous()) {
         return SpecDisposition::Supervised;
     }
     SpecDisposition::Candidate(BurndownCandidate {
@@ -701,10 +721,20 @@ pub(crate) const WHY_OPEN_PREFIX: &str = "why-open:";
 /// the prefix; returns the trimmed reason text. trace:TASK-723 | ai:claude
 pub(crate) fn parse_why_open_comment(content: &str) -> Option<String> {
     let trimmed = content.trim_start();
-    if trimmed.len() < WHY_OPEN_PREFIX.len() {
+    // `get(..n)` instead of `split_at(n)`: the prefix length is a BYTE count, and
+    // a comment whose 9th byte falls INSIDE a multi-byte character made
+    // `split_at` panic — "byte index 9 is not a char boundary". A real comment
+    // did it: `SKETCH — awaiting independent advisor signoff` is 7 ASCII bytes
+    // then an em-dash spanning bytes 7..10. That took down `aida human` and the
+    // burndown's open-facts collection for the whole project, because one spec
+    // carried one em-dash in one comment. `get` returns None on a non-boundary,
+    // which is also the correct answer: a string that cannot be split there
+    // cannot start with an ASCII prefix.
+    // trace:BUG-1715 | ai:claude
+    let Some(head) = trimmed.get(..WHY_OPEN_PREFIX.len()) else {
         return None;
-    }
-    let (head, rest) = trimmed.split_at(WHY_OPEN_PREFIX.len());
+    };
+    let rest = &trimmed[WHY_OPEN_PREFIX.len()..];
     if head.eq_ignore_ascii_case(WHY_OPEN_PREFIX) {
         let reason = rest.trim();
         if reason.is_empty() {
@@ -2205,6 +2235,7 @@ mod tests {
             req_type: "task",
             has_unsatisfied_blocker: false,
             has_pending_decision: false,
+            execution_mode: None,
         })
     }
 
@@ -2530,9 +2561,107 @@ mod tests {
                 req_type: ty,
                 has_unsatisfied_blocker: false,
                 has_pending_decision: false,
+                execution_mode: None,
             });
             assert_eq!(d, SpecDisposition::Skip, "{ty} must not be a candidate");
         }
+    }
+
+    /// BUG-1717: a spec whose groomed execution_mode needs a human in the loop
+    /// must bucket as `Supervised`, never as a fan-out candidate. Before the
+    /// fix only the `supervised` TAG could reach that bucket, so STORY-1484
+    /// (mode guided, heft 17, cache-refresh architecture) was listed as "Ready
+    /// to fan out" while the supervised count read 0 — a drain would have
+    /// dispatched a keystone unattended.
+    // trace:BUG-1717 | ai:claude
+    #[test]
+    fn human_in_the_loop_execution_modes_are_supervised_never_candidates() {
+        for mode in [
+            aida_core::ExecutionMode::Guided,
+            aida_core::ExecutionMode::Operator,
+            aida_core::ExecutionMode::Decide,
+        ] {
+            let d = classify_spec(&SpecClassifyInput {
+                archived: false,
+                deferred: false,
+                status_norm: "approved",
+                want_status: "approved",
+                tags: &[],
+                tag_filter: None,
+                batch_tag: None,
+                type_filter: None,
+                disp: "STORY-1484",
+                req_type: "story",
+                has_unsatisfied_blocker: false,
+                has_pending_decision: false,
+                execution_mode: Some(mode),
+            });
+            assert_eq!(
+                d,
+                SpecDisposition::Supervised,
+                "mode {mode} must be supervised, not fanned out"
+            );
+        }
+    }
+
+    /// BUG-1717: the autonomous rungs stay autonomous. Guarding the fix against
+    /// over-correction — if `drain`/`drive` also became Supervised the drain
+    /// would have nothing to do, which would "fix" the bug by breaking the
+    /// feature.
+    // trace:BUG-1717 | ai:claude
+    #[test]
+    fn autonomous_execution_modes_remain_candidates() {
+        for mode in [
+            aida_core::ExecutionMode::Drain,
+            aida_core::ExecutionMode::Drive,
+        ] {
+            let d = classify_spec(&SpecClassifyInput {
+                archived: false,
+                deferred: false,
+                status_norm: "approved",
+                want_status: "approved",
+                tags: &[],
+                tag_filter: None,
+                batch_tag: None,
+                type_filter: None,
+                disp: "TASK-204",
+                req_type: "task",
+                has_unsatisfied_blocker: false,
+                has_pending_decision: false,
+                execution_mode: Some(mode),
+            });
+            assert!(
+                matches!(d, SpecDisposition::Candidate(_)),
+                "mode {mode} must stay a fan-out candidate, got {d:?}"
+            );
+        }
+    }
+
+    /// BUG-1717: an UNGROOMED spec (no mode) keeps its previous disposition.
+    /// It is not supervised — it is simply not yet groomed — and pinning this
+    /// keeps the fix's blast radius to the human-in-the-loop modes. That
+    /// `burndown plan` still advertises an ungroomed spec that `aida do` will
+    /// refuse is a separate labelling defect, tracked on BUG-1717, not changed
+    /// here.
+    // trace:BUG-1717 | ai:claude
+    #[test]
+    fn ungroomed_spec_disposition_is_unchanged_by_the_mode_gate() {
+        let d = classify_spec(&SpecClassifyInput {
+            archived: false,
+            deferred: false,
+            status_norm: "approved",
+            want_status: "approved",
+            tags: &[],
+            tag_filter: None,
+            batch_tag: None,
+            type_filter: None,
+            disp: "TASK-1",
+            req_type: "task",
+            has_unsatisfied_blocker: false,
+            has_pending_decision: false,
+            execution_mode: None,
+        });
+        assert!(matches!(d, SpecDisposition::Candidate(_)), "got {d:?}");
     }
 
     /// BUG-784: a knowledge-class record tagged `supervised` must be dropped
@@ -2555,6 +2684,7 @@ mod tests {
             req_type: "decision",
             has_unsatisfied_blocker: false,
             has_pending_decision: false,
+            execution_mode: None,
         });
         assert_eq!(d, SpecDisposition::Skip);
     }
@@ -2578,6 +2708,7 @@ mod tests {
                 req_type,
                 has_unsatisfied_blocker: false,
                 has_pending_decision: false,
+                execution_mode: None,
             })
         };
         assert!(matches!(
@@ -2628,6 +2759,7 @@ mod tests {
                 req_type: ty,
                 has_unsatisfied_blocker: false,
                 has_pending_decision: false,
+                execution_mode: None,
             });
             assert!(
                 matches!(d, SpecDisposition::Candidate(_)),
@@ -2652,6 +2784,7 @@ mod tests {
             req_type: "task",
             has_unsatisfied_blocker: true,
             has_pending_decision: true,
+            execution_mode: None,
         });
         match d {
             SpecDisposition::Candidate(c) => {
@@ -3960,6 +4093,56 @@ mod tests {
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.
+    // BUG-1715: a comment whose 9th BYTE falls inside a multi-byte character used
+    // to panic `split_at` — "byte index 9 is not a char boundary" — which took
+    // down `aida human` and the burndown's open-facts collection for the entire
+    // project. One em-dash in one comment on one spec was enough. This is the
+    // exact string that did it, in production.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn multibyte_char_at_the_prefix_boundary_does_not_panic() {
+        assert_eq!(
+            parse_why_open_comment("SKETCH — awaiting independent advisor signoff"),
+            None,
+            "not a why-open comment, and must not panic deciding that"
+        );
+    }
+
+    // Every byte offset around the 9-byte prefix, so no boundary is left untested.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn a_multibyte_char_at_any_offset_near_the_boundary_is_safe() {
+        for pad in 0..12 {
+            let s = format!("{}—tail", "x".repeat(pad));
+            assert_eq!(
+                parse_why_open_comment(&s),
+                None,
+                "pad={pad} must be rejected without panicking: {s:?}"
+            );
+        }
+    }
+
+    // A short non-ASCII string must not panic either: the old length guard
+    // compared BYTE lengths, so a 3-byte char could pass it and still not be a
+    // valid split point.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn short_multibyte_input_is_safe() {
+        for s in ["—", "——", "é", "🙂🙂"] {
+            assert_eq!(parse_why_open_comment(s), None, "{s:?} must not panic");
+        }
+    }
+
+    // The fix must not break the thing the function is FOR.
+    // trace:BUG-1715 | ai:claude
+    #[test]
+    fn a_real_why_open_comment_with_an_em_dash_in_the_reason_still_parses() {
+        assert_eq!(
+            parse_why_open_comment("why-open: blocked — upstream API is down"),
+            Some("blocked — upstream API is down".to_string())
+        );
+    }
+
     #[test]
     fn parse_why_open_comment_extracts_reason_case_insensitively() {
         assert_eq!(

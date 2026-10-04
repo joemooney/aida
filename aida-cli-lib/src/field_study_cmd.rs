@@ -22,6 +22,10 @@ pub(crate) fn handle_field_study_command(cmd: &crate::cli::FieldStudyCommand) ->
         crate::find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     match cmd {
         crate::cli::FieldStudyCommand::Scan { since, limit } => {
+            // trace:BUG-1622 | ai:claude
+            if let Some(rev) = since.as_deref() {
+                crate::git_arg_guard::reject_option_like("--since", rev)?;
+            }
             if !field_study::is_enabled(Some(&root)) {
                 println!(
                     "Field study is off (nothing recorded). Opt in to plant the sensor:\n  \

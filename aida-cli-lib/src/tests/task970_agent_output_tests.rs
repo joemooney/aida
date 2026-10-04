@@ -70,6 +70,7 @@ fn fields_summary(
         execution_mode: None,
         weight: None,
         origin: None,
+        completed_at: None, // trace:TASK-1474 | ai:claude
         yaml_path: String::new(),
     }
 }

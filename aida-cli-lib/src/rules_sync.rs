@@ -73,7 +73,10 @@ pub fn sync(
 ) -> Result<SyncReport> {
     // Step 1: pull every spec that could be in scope (avoid loading the
     // full store; the cache summary already has status + title + tags).
-    let summaries = backend.list_summaries(&ListFilter {
+    // Strict: this pass writes and deletes files by status, so it must not
+    // act on a snapshot served while another process writes the cache.
+    // trace:BUG-1670 | ai:claude
+    let summaries = backend.list_summaries_strict(&ListFilter {
         archive: ArchiveFilter::Both,
         ..Default::default()
     })?;
@@ -208,7 +211,10 @@ pub fn sync_review_md(
     trace_graph: &HashMap<String, Vec<TracedFile>>,
     dry_run: bool,
 ) -> Result<ReviewMdReport> {
-    let summaries = backend.list_summaries(&ListFilter {
+    // Strict: this pass writes and deletes files by status, so it must not
+    // act on a snapshot served while another process writes the cache.
+    // trace:BUG-1670 | ai:claude
+    let summaries = backend.list_summaries_strict(&ListFilter {
         archive: ArchiveFilter::Both,
         ..Default::default()
     })?;
@@ -651,6 +657,7 @@ mod tests {
             execution_mode: None,
             weight: None,
             origin: None,
+            completed_at: None, // trace:TASK-1474 | ai:claude
             yaml_path: String::new(),
         }
     }

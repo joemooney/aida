@@ -171,3 +171,55 @@ unattributed	aida-tui/src/intent.rs:"aida && touch /tmp/x",
 unattributed	aida-tui/src/palette.rs:"run aida && touch /tmp/x",
 unattributed	aida-tui/src/redesign/store.rs:let p = focus_marker_path(Path::new("/tmp/proj"));
 unattributed	aida-tui/tests/launcher_intent.rs:&aida_tui::__test_only::Intent::Launch("rm -rf / && touch /tmp/x".to_string()),
+# prose-classification (STORY-1382): production-scoped. Matches 17 lines at 6
+# sites on main (2026-09-23), all reviewed as real classification on message
+# text: 6/6 sites true positive. Baselined, not endorsed; remove rows as fixed.
+# Context comes only from lines ABOVE the match (bare `e` is not a signal), so a
+# receiver bound from a non-error source (a struct field, an enum payload) is
+# not caught. Opt out one site with `// prose-ok: <why>` on or above the line.
+# Deliberately NOT caught: string tests on our own data (URLs, tags, membership,
+# content heuristics whose subject is not an error/output), test code and
+# assertions, char/framing tests, `contains_any_case_insensitive` calls and
+# functions carrying `// external-prose-classifier:` (the BUG-1310 inventory),
+# `starts_with`/`==`/regex matches, and a lowered copy whose error-shaped
+# source is more than 12 lines above the match.
+prose-classification	aida-cli-lib/src/lib.rs:if msg.contains("ambiguous") {
+prose-classification	aida-cli-lib/src/lib.rs:if stderr.contains("branch not protected") {
+prose-classification	aida-cli-lib/src/maintenance_schedule.rs:if stderr.contains("no crontab") {
+prose-classification	aida-cli-lib/src/mcp.rs:let code = if lower.contains("missing required parameter")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("cannot be empty")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must be a string")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("must not contain")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid punt category")
+prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("invalid brief path")
+prose-classification	aida-cli-lib/src/mcp.rs:} else if lower.contains("unknown tool")
+prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("/// ")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc comment")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("doc-comment")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("provenance")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("spec-id leak")
+prose-classification	aida-cli-lib/src/rule_violation.rs:|| m.contains("trace:")
+prose-classification	aida-cli-lib/src/rule_violation.rs:if m.contains("rustfmt")
+# toml-path-interpolation (BUG-1646): a path formatted raw into a TOML basic
+# string is an invalid escape on Windows (`C:\Users\...`). Encode it with
+# `toml::Value::String(..)` or serialize with serde. 2 test sites baselined.
+# BUG-1648: the rule also covers raw strings (bare quotes) and quoted table
+# keys (`[repo."{}"]`); the sites it newly found were fixed, not baselined,
+# and the bug_1629 row above was dropped once that fixture was fixed.
+toml-path-interpolation	aida-cli-lib/src/tests/story_1218_shift_tick_tests.rs:"scope = \"drain\"\nnode_id = \"1\"\nclone_path = \"{clone}\"\nhost = \"{}\"\npid = 77\nagent = \"queue work\"\nstarted_at = \"{t}\"\nheartbeat_at = \"{t}\"\nttl_secs = 1800\nprocess_backed = true\n",
+toml-path-interpolation	aida-cli-lib/src/tests/story_827_init_readme_registry_tests.rs:path = \"{}\"
+# toml-value-interpolation (BUG-1650): production-scope sibling of the rule
+# above. Any key (or `{key}`) followed by `= \"{..}\"` or a Debug `= {:?}`
+# means a hand-built TOML value that bypasses
+# `aida_core::toml_quote::toml_string`. Nothing is baselined; a line that only
+# looks like TOML (a log message) opts out with `// toml-ok: <reason>` on the
+# line or the line above. Known gaps (accepted; review by eye): a value with
+# text around the placeholder (`= \"{a}/x\"`, `= \"{a}{b}\"`), a
+# single-quoted literal (`= '{x}'`), and raw-string templates (r#"k = "{x}""#).
+# trace:BUG-1650 | ai:claude
+gnu-only-coreutils	scripts/ablations/ryo-friction-benchmark.sh:sed -i "s/^Blocks:.*/Blocks: $id/" "$dir/specs/$blockedby.md"
+gnu-only-coreutils	scripts/glyph-lint.sh:count=$(grep -oP "[$GLYPHS]" "$f" 2>/dev/null | wc -l || true)
+gnu-only-coreutils	scripts/multi-clone-harness.sh:HOME="$WORKDIR/home" sed -i \
+gnu-only-coreutils	scripts/release.sh:marker_epoch=$(date -d "$last_updated" +%s 2>/dev/null || true)
+gnu-only-coreutils	scripts/restart-mcp-servers.sh:exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null)" || continue
+gnu-only-coreutils	tests/test_restore_git_mtimes.sh:sed -i 's/Hello, world!/Changed/' "$fixture/src/main.rs"

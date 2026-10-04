@@ -1268,6 +1268,12 @@ fn render_hint_row(frame: &mut Frame, area: Rect, model: &DashboardModel) {
 pub fn project_root_of(cwd: &std::path::Path) -> Option<PathBuf> {
     let mut dir = Some(cwd);
     while let Some(d) = dir {
+        // BUG-1598: never adopt a temp root itself as the project root —
+        // see `aida_core::store_locate` for the shared rationale.
+        // trace:BUG-1598 | ai:claude
+        if aida_core::store_locate::is_system_temp_dir(d) {
+            return None;
+        }
         if d.join(".git").exists() || d.join(".aida").join("config.toml").is_file() {
             return Some(d.to_path_buf());
         }

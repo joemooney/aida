@@ -335,6 +335,13 @@ pub(crate) fn handle_db_command(
                 "!".yellow()
             );
         }
+        // trace:TASK-1426 | ai:claude
+        DbCommand::MigrateRelatedEdges { .. } => {
+            println!(
+                "{} db migrate-related-edges only applies to git-backed stores.",
+                "!".yellow()
+            );
+        }
         DbCommand::WorkspaceInit { name, remote } => {
             let cwd = std::env::current_dir()?;
             let ws_name = name.as_deref().unwrap_or_else(|| {

@@ -42,7 +42,17 @@
 //! The module calls no model and makes no network request; its only
 //! subprocess is the one `git worktree list` (in `aida_core::git_ops`) that
 //! finds the worktree slugs.
-// trace:STORY-1462 | ai:claude
+//!
+//! TASK-1473 (PRIN-5): degraded/unknown evidence is silent by design — but a
+//! watchdog that STAYS degraded or blind never pages anyone, including about
+//! its own blindness, which is exactly the failure BUG-1589 was. The state
+//! file also tracks a consecutive degraded/unknown run streak
+//! (`consecutive_blind`); once it crosses `[watchdog] blind_alert_after`
+//! (default 4, ~1h at the scaffolded 15-minute tick) a single `watchdog-blind`
+//! finding fires, deduped through the same `active` once-per-crossing set as
+//! every rule above, and clears itself the first run evidence is read
+//! cleanly again.
+// trace:STORY-1462 trace:TASK-1473 | ai:claude
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
@@ -106,6 +116,12 @@ pub(crate) struct WatchdogPolicy {
     pub(crate) max_total_bytes: u64,
     /// Wall-clock budget for one run; the rest resumes next run.
     pub(crate) time_budget_ms: u64,
+    /// Consecutive `degraded`/`unknown` runs before the watchdog raises ONE
+    /// deduped alert on ITSELF (PRIN-5: a watchdog that stays blind never
+    /// pages anyone about anything, including its own blindness). `0` turns
+    /// the check off. Default 4 runs ~= 1h at the scheduled 15-minute tick.
+    // trace:TASK-1473 | ai:claude
+    pub(crate) blind_alert_after: u64,
 }
 
 impl Default for WatchdogPolicy {
@@ -122,6 +138,7 @@ impl Default for WatchdogPolicy {
             noop_reply_max_chars: 60,
             restart_context_tokens: 0,
             max_compactions_per_day: 4,
+            blind_alert_after: 4,
             max_bytes_per_file: 256 * 1024 * 1024,
             max_total_bytes: 1024 * 1024 * 1024,
             time_budget_ms: 10_000,
@@ -130,8 +147,9 @@ impl Default for WatchdogPolicy {
 }
 
 /// Read `[watchdog]`, keeping the default for any key that is absent,
-/// non-integer or out of range. `restart_context_tokens = 0` is honoured
-/// (it is the "off" value).
+/// non-integer or out of range. `restart_context_tokens = 0` and
+/// `blind_alert_after = 0` are both honoured (each is that field's "off"
+/// value).
 // trace:STORY-1462 | ai:claude
 pub(crate) fn policy(cfg: Option<&toml::Value>) -> WatchdogPolicy {
     let mut p = WatchdogPolicy::default();
@@ -163,6 +181,9 @@ pub(crate) fn policy(cfg: Option<&toml::Value>) -> WatchdogPolicy {
     );
     if let Some(v) = raw("restart_context_tokens").filter(|v| *v >= 0) {
         p.restart_context_tokens = v as u64;
+    }
+    if let Some(v) = raw("blind_alert_after").filter(|v| *v >= 0) {
+        p.blind_alert_after = v as u64;
     }
     if let Some(v) = get("budget_alert_pct").filter(|v| *v <= 100) {
         p.budget_alert_pct = v;
@@ -197,7 +218,7 @@ pub(crate) fn default_sources(project_root: &Path) -> Sources {
             roots.push(wt);
         }
     }
-    let transcript_dirs = match dirs::home_dir() {
+    let transcript_dirs = match crate::home_dir() {
         Some(home) => roots
             .iter()
             .map(|r| {
@@ -285,7 +306,9 @@ pub(crate) struct Coverage {
     pub(crate) still_active: Vec<String>,
     /// `ok` (evidence read, nothing tripped), `tripped`, `degraded` (the run
     /// was budget-cut; judged on what was read) or `unknown` (no evidence
-    /// source was readable). Neither `degraded` nor `unknown` is a finding.
+    /// source was readable). Neither `degraded` nor `unknown` is itself a
+    /// finding — except that enough of them IN A ROW is: see
+    /// `blind_alert_after` / the `watchdog-blind` finding (TASK-1473).
     pub(crate) verdict: String,
 }
 
@@ -352,6 +375,18 @@ struct State {
     /// Finding ids tripped as of the last run.
     #[serde(default)]
     active: BTreeSet<String>,
+    /// Consecutive `degraded`/`unknown` runs, for the PRIN-5 self-blind
+    /// alert. Resets to 0 the first run evidence is read cleanly again.
+    // trace:TASK-1473 | ai:claude
+    #[serde(default)]
+    consecutive_blind: u64,
+    /// When the last run finished, and its verdict. Read by the night-shift
+    /// tick's budget-evidence guard: an old or blind run is not evidence.
+    // trace:STORY-1218 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_run_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_verdict: Option<String>,
 }
 
 fn load_state(path: Option<&Path>) -> State {
@@ -1048,12 +1083,59 @@ pub(crate) fn scan(
 
     prune(&mut state.sessions, minute_of(day_start));
     let tripped = judge(project_label, &state.sessions, policy, now, seats);
-    let tripped_ids: BTreeSet<String> = tripped.iter().map(|f| f.id.clone()).collect();
-    coverage.still_active = tripped_ids.intersection(&state.active).cloned().collect();
-    let findings: Vec<DoctorFinding> = tripped
+    let mut tripped_ids: BTreeSet<String> = tripped.iter().map(|f| f.id.clone()).collect();
+    let mut findings: Vec<DoctorFinding> = tripped
         .into_iter()
         .filter(|f| !state.active.contains(&f.id))
         .collect();
+
+    coverage.bytes_read = budget.bytes;
+    coverage.partial = budget.partial;
+    coverage.sessions = state.sessions.len();
+    coverage.sessions_timing_unknown = state.sessions.values().filter(|s| !s.timed).count();
+    coverage.elapsed_ms = budget.started.elapsed().as_millis() as u64;
+    let any_available = coverage.sources.iter().any(|s| s.state == "available");
+    let verdict = if !any_available {
+        "unknown"
+    } else if !tripped_ids.is_empty() {
+        "tripped"
+    } else if budget.partial {
+        "degraded"
+    } else {
+        "ok"
+    };
+
+    // PRIN-5: a watchdog that stays degraded/blind indefinitely never pages
+    // anyone — the findings it would raise are exactly what it stopped
+    // seeing. Track a persisted consecutive-run streak and raise ONE
+    // deduped alert once it crosses `blind_alert_after`, reusing the same
+    // once-per-crossing `active` dedup as every other rule: it fires once,
+    // not every run, and clears itself the first run evidence is read
+    // cleanly again (verdict `ok` or `tripped`).
+    // trace:TASK-1473 | ai:claude
+    state.consecutive_blind = if verdict == "degraded" || verdict == "unknown" {
+        state.consecutive_blind.saturating_add(1)
+    } else {
+        0
+    };
+    if policy.blind_alert_after > 0 && state.consecutive_blind >= policy.blind_alert_after {
+        let id = "watchdog-blind".to_string();
+        tripped_ids.insert(id.clone());
+        if !state.active.contains(&id) {
+            findings.push(DoctorFinding {
+                category: CATEGORY.to_string(),
+                id: id.clone(),
+                summary: format!(
+                    "watchdog-blind: the runaway-seat watchdog itself has been {verdict} for {} consecutive run(s) (threshold {}) — it may not be seeing anything",
+                    state.consecutive_blind, policy.blind_alert_after
+                ),
+                action: "run `aida doctor check runaway-seats` interactively and read the evidence block below it; a persistently unavailable or budget-cut source usually means a missing transcript directory or a budget too small for this project's log volume".to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+
+    coverage.still_active = tripped_ids.intersection(&state.active).cloned().collect();
     // A budget-cut run judged incomplete aggregates: never let it clear a
     // rule (that would re-alert on the next complete run).
     state.active = if budget.partial {
@@ -1062,25 +1144,49 @@ pub(crate) fn scan(
         tripped_ids.clone()
     };
     state.version = STATE_VERSION;
+    // trace:STORY-1218 | ai:claude
+    state.last_run_at = Some(now);
+    state.last_verdict = Some(verdict.to_string());
     save_state(sources.state_path.as_deref(), &state);
 
-    coverage.bytes_read = budget.bytes;
-    coverage.partial = budget.partial;
-    coverage.sessions = state.sessions.len();
-    coverage.sessions_timing_unknown = state.sessions.values().filter(|s| !s.timed).count();
-    coverage.elapsed_ms = budget.started.elapsed().as_millis() as u64;
-    let any_available = coverage.sources.iter().any(|s| s.state == "available");
-    coverage.verdict = if !any_available {
-        "unknown"
-    } else if !tripped_ids.is_empty() {
-        "tripped"
-    } else if budget.partial {
-        "degraded"
-    } else {
-        "ok"
-    }
-    .into();
+    coverage.verdict = verdict.into();
     (findings, coverage)
+}
+
+/// What the persisted watchdog aggregates say about spend, for the
+/// night-shift budget guards. Reads the state file only: no rescan, no
+/// transcript read, zero tokens.
+// trace:STORY-1218 | ai:claude
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BudgetEvidence {
+    /// Tokens in the trailing 24h across every session the watchdog saw.
+    pub(crate) spent_24h: u64,
+    /// When the watchdog last ran (`None` for a state file written before
+    /// this field existed).
+    pub(crate) last_run_at: Option<DateTime<Utc>>,
+    /// That run's verdict (`ok`, `tripped`, `degraded`, `unknown`).
+    pub(crate) last_verdict: Option<String>,
+}
+
+/// `None` when the state file is missing, unreadable or of another version.
+// trace:STORY-1218 | ai:claude
+pub(crate) fn budget_evidence(state_path: &Path, now: DateTime<Utc>) -> Option<BudgetEvidence> {
+    let body = fs::read_to_string(state_path).ok()?;
+    let state = serde_json::from_str::<State>(&body)
+        .ok()
+        .filter(|s| s.version == STATE_VERSION)?;
+    let day_start = minute_of(now - Duration::minutes(DAY_MINUTES));
+    let spent_24h = state
+        .sessions
+        .values()
+        .flat_map(|s| s.minutes.range(day_start..))
+        .map(|(_, b)| b.tokens)
+        .sum();
+    Some(BudgetEvidence {
+        spent_24h,
+        last_run_at: state.last_run_at,
+        last_verdict: state.last_verdict,
+    })
 }
 
 /// Text rendering of the coverage block, printed under the doctor report.
@@ -1600,30 +1706,42 @@ mod tests {
         for i in 0..5 {
             write(&dir, &format!("big-{i}.jsonl"), &one);
         }
+        let fixture_bytes = 5 * one.len() as u64;
         let src = sources(tmp.path());
         let now = t0() + Duration::minutes(60);
+        // The default 10s scan budget would cut the run short on a slow host
+        // and leave the byte/file counts below, which are the real assertions
+        // here, measuring the cutoff instead of the work. This test is about
+        // bytes, not about the cutoff, so raise the cutoff out of the way and
+        // let the ceiling below catch a genuine hang. trace:BUG-1730
+        let policy = WatchdogPolicy {
+            time_budget_ms: 600_000,
+            ..WatchdogPolicy::default()
+        };
         let started = Instant::now();
-        let (_, coverage) = scan(
-            "aida",
-            &src,
-            &WatchdogPolicy::default(),
-            now,
-            &HashMap::new(),
-        );
+        let (_, coverage) = scan("aida", &src, &policy, now, &HashMap::new());
         assert!(!coverage.partial);
-        assert!(
-            started.elapsed().as_secs() < 3,
-            "took {:?}",
-            started.elapsed()
+        // "Bounded" is a claim about work, not about wall clock, so assert the
+        // work directly: exactly one pass over the fixture, no file read twice.
+        // This holds on any host, which the old `elapsed().as_secs() < 3` did
+        // not — it had barely 30% margin and went red under ordinary load.
+        // trace:BUG-1730
+        assert_eq!(coverage.files_scanned, 5);
+        assert_eq!(coverage.bytes_read, fixture_bytes);
+        // The real coverage is the two assertions above, which hold anywhere.
+        // The 3s budget is kept as a performance signal on a quiet host; the
+        // 60s ceiling is the hang guard and is enforced on every host.
+        crate::test_timing::assert_within_budget(
+            started,
+            std::time::Duration::from_secs(3),
+            std::time::Duration::from_secs(60),
+            "watchdog scan of 5 storm transcripts",
         );
-        let (_, again) = scan(
-            "aida",
-            &src,
-            &WatchdogPolicy::default(),
-            now,
-            &HashMap::new(),
-        );
+        let (_, again) = scan("aida", &src, &policy, now, &HashMap::new());
+        // `files_scanned` counts files with NEW bytes, so a steady-state
+        // rescan must touch none of them.
         assert_eq!(again.bytes_read, 0);
+        assert_eq!(again.files_scanned, 0);
     }
 
     #[test]
@@ -1646,5 +1764,147 @@ mod tests {
         assert_eq!(cron_interval_minutes("*/5 * * * *"), Some(5));
         assert_eq!(cron_interval_minutes("* * * * *"), Some(1));
         assert_eq!(cron_interval_minutes("0 9 * * *"), None);
+    }
+
+    /// `blind_alert_after` reads from `[watchdog]` like every other knob, and
+    /// `0` is honoured as its explicit "off" value (same shape as
+    /// `restart_context_tokens`).
+    // trace:TASK-1473 | ai:claude
+    #[test]
+    fn policy_reads_blind_alert_after_and_honours_zero_as_off() {
+        assert_eq!(WatchdogPolicy::default().blind_alert_after, 4);
+        let cfg: toml::Value = toml::from_str("[watchdog]\nblind_alert_after = 6\n").unwrap();
+        assert_eq!(policy(Some(&cfg)).blind_alert_after, 6);
+        let off: toml::Value = toml::from_str("[watchdog]\nblind_alert_after = 0\n").unwrap();
+        assert_eq!(policy(Some(&off)).blind_alert_after, 0);
+    }
+
+    /// PRIN-5 (TASK-1473): a watchdog that stays blind never pages anyone —
+    /// so N consecutive `unknown`-evidence runs raise exactly ONE deduped
+    /// `watchdog-blind` finding, reusing the same once-per-crossing `active`
+    /// dedup as every other rule: it does not re-fire on later still-blind
+    /// runs, and a run that reads evidence cleanly again clears it.
+    #[test]
+    fn watchdog_alerts_once_after_n_consecutive_blind_runs_then_clears() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Neither transcript nor headless dir exists yet: every run is
+        // `unknown` evidence (nothing readable), never a finding on its own.
+        let src = Sources {
+            transcript_dirs: vec![tmp.path().join("claude")],
+            headless_dirs: vec![tmp.path().join("headless")],
+            state_path: Some(tmp.path().join("state").join("state.json")),
+        };
+        let policy = WatchdogPolicy {
+            blind_alert_after: 3,
+            ..WatchdogPolicy::default()
+        };
+
+        let mut alerts = 0usize;
+        for i in 0..3 {
+            let (findings, coverage) = scan(
+                "aida",
+                &src,
+                &policy,
+                t0() + Duration::minutes(i),
+                &HashMap::new(),
+            );
+            assert_eq!(coverage.verdict, "unknown");
+            assert!(
+                findings.iter().all(|f| f.id != "watchdog-blind" || i == 2),
+                "watchdog-blind must not fire before the streak crosses the threshold: run {i}"
+            );
+            alerts += findings.iter().filter(|f| f.id == "watchdog-blind").count();
+        }
+        assert_eq!(
+            alerts, 1,
+            "exactly one deduped watchdog-blind alert once the streak crosses the threshold"
+        );
+
+        // Still blind on the next run: the alert stays quiet (already
+        // reported once) but shows as still-active evidence.
+        let (findings, coverage) = scan(
+            "aida",
+            &src,
+            &policy,
+            t0() + Duration::minutes(10),
+            &HashMap::new(),
+        );
+        assert_eq!(coverage.verdict, "unknown");
+        assert!(findings.iter().all(|f| f.id != "watchdog-blind"));
+        assert!(coverage
+            .still_active
+            .contains(&"watchdog-blind".to_string()));
+
+        // A run that reads evidence cleanly resets the streak and clears it.
+        fs::create_dir_all(tmp.path().join("claude")).unwrap();
+        fs::create_dir_all(tmp.path().join("headless")).unwrap();
+        let (findings, healthy) = scan(
+            "aida",
+            &src,
+            &policy,
+            t0() + Duration::minutes(20),
+            &HashMap::new(),
+        );
+        assert_eq!(healthy.verdict, "ok");
+        assert!(findings.is_empty());
+        assert!(healthy.still_active.is_empty());
+    }
+
+    /// `blind_alert_after = 0` turns the self-blind check off entirely, even
+    /// across many consecutive blind runs.
+    #[test]
+    fn blind_alert_after_zero_disables_the_self_alert() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = Sources {
+            transcript_dirs: vec![tmp.path().join("claude")],
+            headless_dirs: vec![tmp.path().join("headless")],
+            state_path: Some(tmp.path().join("state").join("state.json")),
+        };
+        let policy = WatchdogPolicy {
+            blind_alert_after: 0,
+            ..WatchdogPolicy::default()
+        };
+        for i in 0..10 {
+            let (findings, coverage) = scan(
+                "aida",
+                &src,
+                &policy,
+                t0() + Duration::minutes(i),
+                &HashMap::new(),
+            );
+            assert_eq!(coverage.verdict, "unknown");
+            assert!(findings.is_empty());
+        }
+    }
+
+    /// STORY-1218: the night-shift budget guard reads spend and freshness
+    /// from the persisted aggregates alone.
+    // trace:STORY-1218 | ai:claude
+    #[test]
+    fn budget_evidence_reads_trailing_day_and_last_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(
+            &tmp.path().join("claude"),
+            "s.jsonl",
+            &ordinary_transcript("s", 2),
+        );
+        let src = sources(tmp.path());
+        let state_path = src.state_path.clone().unwrap();
+        assert_eq!(budget_evidence(&state_path, t0()), None, "no state yet");
+        let now = t0() + Duration::minutes(150);
+        let (_, cov) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        let ev = budget_evidence(&state_path, now).expect("state written");
+        assert!(ev.spent_24h > 0, "{ev:?}");
+        assert_eq!(ev.last_run_at, Some(now));
+        assert_eq!(ev.last_verdict.as_deref(), Some(cov.verdict.as_str()));
+        // Two days later the same aggregates fall out of the trailing day.
+        let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
+        assert_eq!(later.spent_24h, 0);
     }
 }
