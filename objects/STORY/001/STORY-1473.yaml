@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T01:20:55.835788652Z
-modified_at: 2026-10-04T15:07:52.520301384Z
+modified_at: 2026-10-04T16:57:35.962012931Z
 req_type: Story
 tags:
 - authority
@@ -80,6 +80,13 @@ comments:
   created_at: 2026-10-04T06:35:34.567117059Z
   modified_at: 2026-10-04T06:35:34.567117059Z
   relayed_from: advisor
+- id: 01a107d9-7bda-7150-a456-ad9ec9bf8179
+  author: joe
+  content: |
+    Advisor gate (oversight session, 2026-10-04): independent reviewer swept PR #2418 at head 5cc9c028 against all six acceptance items — verdict APPROVED, each item met with file:line evidence. Explicit checks: no production gate weakened by the CI-fix rework; test fixtures only forge on-disk records inside the conceded same-user boundary (no backdoor); label-only role add confers zero authority anywhere and actively sheds stale AIDA_SESSION_GRANT; CLI and MCP resolve seats through the same grant validator. Five non-blocking hygiene findings and three design confirmations are captured as TASK-1594. Verdict will be recorded at head once required CI is green.
+  created_at: 2026-10-04T16:57:35.962012931Z
+  modified_at: 2026-10-04T16:57:35.962012931Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 history:
 - id: 01a0def4-ce7f-7a71-a26a-0698f546a335
   author: joe
