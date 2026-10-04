@@ -106,6 +106,7 @@ pub(crate) fn current_grant(project_root: &Path) -> Option<SeatGrant> {
         if parent.revoked_at.is_some()
             || now >= parent.expires_at
             || parent.principal != grant.principal
+            || !roster_allows(project_root, &parent.principal, &parent.seat)
             || !parent
                 .delegable_seats
                 .iter()
