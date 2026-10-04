@@ -1,7 +1,6 @@
 # STORY-1473 advisor-seat issuance sketch
 
-Status: revised for independent advisor signoff; no implementation authorized
-until the sketch is signed off.
+Status: advisor signoff passed 2026-10-03; ready for guided implementation.
 
 Decision source: Joe agreed on 2026-10-03 to **TTY grant + scoped child seat**.
 Related decision: ADR-66 (Draft). Requirement: STORY-1473.
@@ -46,10 +45,12 @@ same-user sessions share authority.
 3. Have each AIDA launcher pass an explicit requested child seat through the
    shared issuer. Validate it against the roster and the issuer grant's
    explicit `delegable_seats`, then issue a distinct child grant; do not copy
-   the parent's authority by inheriting its role label. Proposed least-
-   privilege default: a child receives no delegation scope unless the issuer
-   explicitly delegates a subset it already holds. Advisor should confirm
-   this recursive delegation behavior.
+   the parent's authority by inheriting its role label. `aida role enter`
+   offers an optional TTY selection of `delegable_seats`, defaulting to the
+   empty set. Each child grant also defaults to an empty delegation set; the
+   launcher may pass a nonempty subset only when the parent explicitly
+   selected those seats and the child role is in that subset. This applies at
+   every generation of child launches.
 4. Have MCP capture the grant belonging to its server process at startup and
    use the shared resolver for tool authorization. Changing the caller shell's
    hint does not change a running server's authority; reconnect after a new
@@ -60,29 +61,65 @@ same-user sessions share authority.
    this change into a protected broker or claim protection against a same-UID
    process that can inspect another process's state.
 
-## Questions for advisor signoff
+## Data shape, command behavior, and grant lifecycle
 
-1. `registry/team.toml` currently stores one role per user, but this policy
-   speaks in terms of multiple roster-allowed seats. Proposed migration:
-   represent allowed seats explicitly and interpret each legacy scalar role as
-   a singleton set, without silently granting new seats. Advisor should
-   confirm this schema and the TTY-only command that edits it.
-2. Joe chose an explicit per-grant delegation set: a parent may issue only
-   child seats in that set, intersected with the roster. Do not infer a total
-   role order: advisor, product, integrator, reviewer, and implementer have
-   overlapping but incomparable powers. Advisor should confirm the proposed
-   no-delegation-by-default behavior for child grants and explicit-subset
-   propagation to grandchildren.
-3. Define a session-bound grant record and validation path shared by direct
-   CLI commands, child launchers, and MCP. The proposed record needs principal,
-   session ID, issued seat, TTY issuance reference, delegable-seat set, parent
-   grant ID, and issued/expiry/revocation state. Define how CLI and MCP locate
-   the same grant without treating `AIDA_SESSION_ROLE` as authority, and how
-   `aida role end`, fresh shells, and revocation behave. State the same-user
-   limitation.
-4. Confirm the direct TTY entry point and the complete set of launch paths
-   that must issue child grants. No command may retain an env-only authority
-   fallback after migration.
+- Canonical roster shape: `[members]` maps each user to an array of allowed
+  seats, for example `joe = ["advisor", "product", "implementer"]`. On
+  read, a legacy scalar such as `joe = "advisor"` means the singleton set
+  `["advisor"]`; migration must not add seats implicitly.
+- `aida team set-role <user> <seat>` remains a replace operation and writes a
+  singleton array. Add explicit allow/disallow-seat operations for editing a
+  multi-seat set. `unset-role <user>` removes that user's roster entry and
+  invalidates any active grants on their next validation. Every roster write
+  requires a controlling human TTY. Advisor signoff should confirm these
+  proposed compatibility semantics before implementation.
+- A grant is an opaque, unguessable handle plus a validated record held in
+  AIDA's local session-grant store. The handle locates the record; possession
+  is not treated as proof by itself. The record binds principal, a fresh
+  session ID, issued seat, TTY issuance event, explicit delegable-seat set,
+  optional parent grant ID, and issued/expiry/revocation state. Protected
+  operations validate the record and current roster ceiling through the
+  shared resolver.
+- The interactive shell/session that completes `aida role enter` receives
+  the handle. Descendant commands inherit it only through explicit AIDA
+  launcher plumbing. A fresh independent shell has no handle and receives no
+  seat, regardless of environment labels. `aida role end` revokes the active
+  grant; missing, expired, revoked, malformed, or roster-mismatched records
+  fail closed. Environment variables may carry a handle locator but never a
+  seat assertion accepted as authority.
+- MCP captures and validates the exact grant handle at server startup. It
+  does not need a TTY because the grant was issued by the interactive parent;
+  it cannot elevate itself. Reconnect/restart is required to use a later
+  grant. A same-UID process that can inspect/copy another process's handle or
+  local grant state remains outside this story's OS security claim.
+
+## Required launcher and authorization inventory
+
+Before implementation is complete, trace every protected role decision and
+every AIDA-managed process spawn. The initial migration inventory is:
+
+- Direct interactive issuance and revocation: `aida role enter` and
+  `aida role end`.
+- Interactive and background child launch: `aida agent new` (all vendor
+  adapters and `--bg`), plus `aida session` launch/spawn paths.
+- Queue pickup, drain, burndown, and orchestrator phase dispatch, including
+  implementer, reviewer, advisor, and integrator children.
+- MCP stdio server startup and its advisor-gated tool checks.
+- All CLI and MCP authorization reads currently consulting
+  `AIDA_SESSION_ROLE`, roster role defaults, or inherited session context.
+
+The implementation must produce a call-site inventory from source search and
+tests. Unknown/unmigrated launch paths and protected reads fail closed; there
+is no env-only fallback. Add any discovered spawn/authorization surfaces to
+this list before claiming acceptance.
+
+## Advisor signoff requested
+
+Please review the concrete roster compatibility behavior, explicit empty-by-
+default delegation, grant locator/validation/lifecycle, MCP startup capture,
+and launcher/authorization inventory above. Confirm whether the design is
+ready for implementation or identify specific remaining gaps. No code is
+authorized until this review signs off.
 
 ## Acceptance evidence to carry into the implementation plan
 

@@ -1,7 +1,7 @@
 # TTY-established, session-bound seats with scoped child grants
 
-Status: Draft — Joe's policy choice recorded 2026-10-03; implementation sketch
-awaits independent advisor signoff.
+Status: Draft — Joe's policy choice and advisor-approved implementation sketch
+recorded 2026-10-03. The ADR remains Draft until implementation validates it.
 
 Trace: STORY-1473.
 
@@ -39,7 +39,10 @@ another process's state; that remains separate protected-boundary work.
 
 The architecture sketch is
 [`2026-10-03-story-1473-advisor-seat-issuance-sketch.md`](../../plans/2026-10-03-story-1473-advisor-seat-issuance-sketch.md).
-Advisor signoff must resolve roster representation, grant validation and
-lifetime, recursive delegation defaults, and the complete set of CLI/MCP
-issuance paths before implementation begins. No code change is authorized by
-this Draft ADR alone.
+The linked sketch's roster representation, grant validation and lifetime,
+recursive delegation defaults, and CLI/MCP issuance inventory received
+independent advisor signoff on 2026-10-03. It records legacy
+scalar-to-singleton roster reads, TTY-selected empty-by-default delegation,
+revocable opaque grant handles, MCP startup capture, and the initial
+launcher/authorization inventory. Implementation proceeds under STORY-1473's
+guided execution mode; this Draft ADR alone does not change the decision.
