@@ -7,14 +7,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a103e6-4edb-7f83-83a7-f7876c73e725
-  position: 32000
-  added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-03T23:52:12.836384448Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a103ea-9c33-7050-b396-4869df40d16d
   position: 33000
   added_by: joe
@@ -37,14 +29,6 @@
   note: auto-queued by `aida pr` (01a103cf); covers 1 spec
   added_at: 2026-10-04T00:55:22.851976770Z
   for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0ffed-c39d-7f72-8937-ade7e1cde10e
-  position: 36000
-  added_by: joe
-  note: 'Needs advisor disposition: PR-2396 latest verdict approves current head 8f448c, but TASK-1575 remains Needs Attention and STORY-1517 remains Draft; reconcile the hold before integration.'
-  added_at: 2026-10-04T00:59:45.627658530Z
-  for_role: advisor
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a10353-664a-7900-94b9-dbe68f6e5e29
