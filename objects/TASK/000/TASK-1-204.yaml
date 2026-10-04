@@ -1,5 +1,6 @@
 id: 01a10874-8512-7721-a991-0d5449d1383e
 spec_id: TASK-1-204
+agreed_id: TASK-1315
 title: windows_path_key uses to_ascii_lowercase(), so a recorded lease path containing…
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1794, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
