@@ -8,10 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-23T01:21:32.734871536Z
-modified_at: 2026-07-23T04:49:51.407854106Z
+modified_at: 2026-10-04T04:45:46.275035477Z
 req_type: Task
 tags:
-- aida:session session-lifecycle slice-of:FR-284
+- aida:session
+- session-lifecycle
+- slice-of:FR-284
 relationships:
 - rel_type: Parent
   target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
