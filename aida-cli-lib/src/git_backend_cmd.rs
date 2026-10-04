@@ -96,13 +96,28 @@ fn print_rework_needed_notes(
 /// `effective_needs_attention_lens_with_source` in `lib.rs` does walk children;
 /// unifying the two is its own change, on its own spec.
 // trace:TASK-1572 | ai:claude
+// trace:BUG-1798 | ai:claude
 fn row_parked_lens(
-    store: &aida_core::RequirementsStore,
+    backend: &aida_core::CachedGitBackend,
+    lazy_store: &mut Option<aida_core::RequirementsStore>,
     row: &aida_core::RequirementSummary,
 ) -> Option<status_display::NeedsAttentionLens> {
     if !row.status.eq_ignore_ascii_case("NeedsAttention") {
         return None;
     }
+
+    // For non-epics, we don't need to walk children, so a single read suffices
+    if !row.req_type.eq_ignore_ascii_case("epic") {
+        let req = backend.get_requirement(&row.id).ok().flatten()?;
+        return status_display::needs_attention_lens(&req);
+    }
+
+    // For epics, we must walk children, which requires the full store.
+    let store = lazy_store.get_or_insert_with(|| {
+        aida_core::db::DatabaseBackend::load(backend)
+            .unwrap_or_else(|_| backend.load_metadata_only().unwrap_or_default())
+    });
+
     let req = store.get_requirement_by_id(&row.id)?;
     crate::effective_needs_attention_lens_with_source(
         store,
@@ -2229,10 +2244,7 @@ pub(crate) fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
-            use aida_core::db::DatabaseBackend;
-            let store = backend
-                .load()
-                .unwrap_or_else(|_| backend.load_metadata_only().unwrap());
+            let mut lazy_store = None;
 
             // BUG-1771: narrow the widened query back down to the requested
             // parked lens(es). Runs before every downstream lens so the rows the
@@ -2250,7 +2262,7 @@ pub(crate) fn handle_git_backend_command(
                     if !r.status.eq_ignore_ascii_case("NeedsAttention") {
                         return true;
                     }
-                    row_parked_lens(&store, r)
+                    row_parked_lens(&backend, &mut lazy_store, r)
                         .is_some_and(|lens| parked_lens_keys.contains(&lens.palette_key()))
                 });
             }
@@ -2756,7 +2768,7 @@ pub(crate) fn handle_git_backend_command(
                         let (in_flight, blocked, queued) = row_routing(r);
                         // trace:BUG-1771 | ai:claude — one lens computation
                         // shared with the `--status shelved` filter.
-                        let parked_lens = row_parked_lens(&store, r);
+                        let parked_lens = row_parked_lens(&backend, &mut lazy_store, r);
                         // TASK-1456: a Done row folded in by
                         // `select_done_rework_rows` still carries `status:
                         // "Done"` — the machine-consumer contract that field
