@@ -12,7 +12,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-10T06:24:01.372086761Z
-modified_at: 2026-06-11T04:45:44.854601809Z
+modified_at: 2026-10-04T20:17:07.585544363Z
 req_type: Task
 tags:
 - adopt-adapt
@@ -26,5 +26,20 @@ comments:
   content: Commit 6682c3c13 references this requirement
   created_at: 2026-06-10T06:35:43.259886796Z
   modified_at: 2026-06-10T06:35:43.259886796Z
+- id: 01a10890-2801-76fb-99b8-1fbe3550d8a8
+  author: joe
+  content: |
+    Advisor disposition (2026-10-04, operator delegated): KEEP the feature; do NOT ship the existing branch as-is.
+
+    Branch origin/task-724-import-dry-run-preview holds a complete 714-line read-only implementation (commit 08accd599d, 2026-07-03) of the dry-run import preview. It merges against today's main with only minor conflicts, but it predates ~3 months of aida-cli restructuring (grant-based authority, output-format conventions, CI gate additions), so it must not land without modernization.
+
+    Salvage brief for the implementer who picks this up:
+    1. Branch from main; use origin/task-724-import-dry-run-preview as the reference implementation (cherry-pick or rebase 08accd599d, resolve against current cli.rs/main.rs structure).
+    2. Keep scope read-only exactly as the spec says: --dry-run parses and previews, writes NOTHING to the graph.
+    3. Align with current conventions: output format flags (human/toon/json), trace comments, no authority requirement beyond what read-only commands carry.
+    4. Ship via normal PR + review; delete the stale remote branch after the replacement merges so the unshipped-work detector stops flagging it.
+  created_at: 2026-10-04T20:17:07.585544363Z
+  modified_at: 2026-10-04T20:17:07.585544363Z
+  session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
 archived: true
 archived_at: 2026-06-11T04:45:44.854601809Z
