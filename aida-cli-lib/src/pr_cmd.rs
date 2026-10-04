@@ -52,6 +52,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
+        PrCommand::List { json } => pr_list_handler(*json),
     }
 }
 
