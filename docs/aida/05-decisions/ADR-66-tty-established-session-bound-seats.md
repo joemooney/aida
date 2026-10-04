@@ -33,7 +33,11 @@ Joe selected **TTY grant + scoped child seat**:
 
 This preserves advisor agents while separating their sessions. It does not
 claim an OS-level security boundary against a same-user process that can read
-another process's state; that remains separate protected-boundary work.
+another process's state. A same-user process can still copy a grant handle or
+replay a drain token; STORY-1473 does not prevent that or claim protection from
+it. The protected broker follow-up remains separately tracked by BUG-1669,
+deferred pending its operator authorization gate; SPIKE-91 records the design
+package. No protected broker is deployed.
 
 ## Implementation gate
 
