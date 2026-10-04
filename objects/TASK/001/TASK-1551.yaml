@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-10-04T01:32:38.016710871Z
+modified_at: 2026-10-04T02:41:13.154899286Z
 req_type: Task
 tags:
 - build throughput profile from:operator
@@ -113,6 +113,26 @@ comments:
   content: Implemented new agent profile. Measured cold build for 'agent' profile ~20% faster than 'release', and warm builds are significantly snappier due to less intensive optimization (opt-level 1 vs 3). The machine was not fully quiet, but the relative advantage is clear. Proceeding with the change.
   created_at: 2026-10-04T01:14:05.545280098Z
   modified_at: 2026-10-04T01:14:05.545280098Z
+- id: 01a104c9-71c2-79d3-be03-436dccaab5e5
+  author: joe
+  content: |
+    ## Code Review Summary (TASK-1551)
+
+    **1. CRITICAL: Makefile `build-release` target improperly modified**
+    - **File:** `Makefile`
+    - **Description:** The `build-release` target was modified from `cargo build --workspace --release` to `cargo build --workspace --profile agent`.
+    - **Impact:** This violates AC1, which states that shipping artifacts and performance measurements must remain at opt-level 3. `build-release` is meant for producing production artifacts (as per its inline comment). Only `build-fast` was supposed to be changed to use the new `agent` profile.
+    - **Action Required:** Revert the change on the `build-release` target back to `--release`.
+
+    **2. PASS: `agent` profile correctly integrated**
+    - **File:** `Cargo.toml`, `aida-cli-lib/src/dev_cmd.rs`, `aida-cli-lib/src/cli.rs`
+    - **Description:** `[profile.agent]` is properly set up inheriting release with `opt-level = 1` and `debug = false`. The CLI code correctly prioritizes `DevProfile::Agent` in `auto_select_dev_profile` and `dev_build_candidates`, successfully satisfying AC2.
+
+    **3. MINOR: Test script execution**
+    - **File:** `tests/test_performance_profile_opt_level.sh`
+    - **Description:** The new shell script correctly verifies the profile options. Ensure it is hooked up to CI or the main test runner so it provides the ongoing protection required by AC4.
+  created_at: 2026-10-04T02:41:13.154899286Z
+  modified_at: 2026-10-04T02:41:13.154899286Z
 history:
 - id: 01a0e36c-a542-70f3-9af1-2f55156db28e
   author: joe
