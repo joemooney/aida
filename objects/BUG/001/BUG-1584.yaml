@@ -50,10 +50,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-21T23:41:00.172675010Z
-modified_at: 2026-09-22T07:58:50.160864586Z
+modified_at: 2026-10-04T04:49:58.232388495Z
 req_type: Bug
 tags:
-- card rendering papercut
+- card
+- papercut
+- rendering
 relationships:
 - rel_type:
     custom: implemented-by
