@@ -1574,7 +1574,7 @@ pub(crate) fn handle_queue_command(
             // Read-only; renders its own view and returns early so it never
             // perturbs the per-identity default path below. Title resolution
             // reuses the SQLite cache summaries (BUG-618's pattern) rather than
-            // a slow `storage.load()` full YAML scan. trace:STORY-672
+            // a slow `storage.load_for_read()` full YAML scan. trace:STORY-672
             if *all_users {
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&queue_dead_target_summary_filter())?;
@@ -1597,7 +1597,7 @@ pub(crate) fn handle_queue_command(
             // role/scope display refinement. trace:BUG-616 | ai:claude
             //
             // BUG-618: resolve titles via the SQLite cache (`list_summaries`,
-            // the same path `aida list` uses, ~0.2s) instead of `storage.load()`
+            // the same path `aida list` uses, ~0.2s) instead of `storage.load_for_read()`
             // — the legacy full YAML/git scan that cost ~1s on the cockpit
             // paint. `RequirementSummary` carries id/spec_id/agreed_id/title/
             // status, everything the JSON shape needs. trace:BUG-618 | ai:claude
@@ -1618,7 +1618,7 @@ pub(crate) fn handle_queue_command(
                     || tag_prefix_filter.is_some()
                     || (!*all && !*no_scope && active_role_scope().is_some())
                 {
-                    Some(storage.load()?)
+                    Some(storage.load_for_read()?)
                 } else {
                     None
                 };
@@ -1654,7 +1654,7 @@ pub(crate) fn handle_queue_command(
                     .any(|e| e.for_role.as_deref() == Some("reviewer"))
                 {
                     if let Ok(project_root) = find_project_root() {
-                        if let Ok(full_store) = storage.load() {
+                        if let Ok(full_store) = storage.load_for_read() {
                             let leases = list_leases(&project_root);
                             for entry in raw
                                 .iter()
@@ -1725,7 +1725,7 @@ pub(crate) fn handle_queue_command(
                     || tag_prefix_filter.is_some()
                     || (!*all && !*no_scope && active_role_scope().is_some())
                 {
-                    Some(storage.load()?)
+                    Some(storage.load_for_read()?)
                 } else {
                     None
                 };
@@ -1783,7 +1783,7 @@ pub(crate) fn handle_queue_command(
                     .any(|e| e.for_role.as_deref() == Some("reviewer"))
                 {
                     find_project_root().ok().and_then(|root| {
-                        storage.load().ok().map(|full_store| {
+                        storage.load_for_read().ok().map(|full_store| {
                             let leases = list_leases(&root);
                             (root, full_store, leases)
                         })

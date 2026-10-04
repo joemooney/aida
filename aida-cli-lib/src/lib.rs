@@ -5734,7 +5734,7 @@ fn run() -> Result<()> {
             json,
             cmd,
         } => {
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
             let (id, blocked_by, blocks, tree, impact) = match cmd {
                 Some(GraphCommand::BlockedBy { id }) => (id.as_str(), true, false, false, false),
                 Some(GraphCommand::Blocks { id }) => (id.as_str(), false, true, false, false),
@@ -18892,7 +18892,7 @@ fn list_requirements(
     tags: &Option<String>,
 ) -> Result<()> {
     // Load requirements
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
     let mut requirements = store.requirements.clone();
 
     // Apply filters if provided
@@ -19324,7 +19324,7 @@ fn effective_display_status(
 
 fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // Load requirements first (needed for SPEC-ID lookup)
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
 
     // Parse UUID or SPEC-ID
     let id = parse_requirement_id(id_str, &store)?;
@@ -96370,7 +96370,7 @@ fn grep_requirements(
 ) -> Result<()> {
     use regex::RegexBuilder;
 
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
 
     // Build the regex pattern
     let regex = if extended_regex {

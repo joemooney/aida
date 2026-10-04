@@ -89,7 +89,7 @@ pub(crate) fn handle_report_command(
             project_root,
             include_scaffold,
         }) => {
-            let store = storage.load()?;
+            let store = storage.load_for_read()?;
 
             // Parse format
             let report_format = match format.to_lowercase().as_str() {
@@ -163,7 +163,7 @@ fn handle_upstream_report(
         anyhow::bail!("--title must not be empty");
     }
     let description = resolve_report_description(description)?;
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
     let project_root = project_root_for_storage(storage);
     let context = upstream_report_context(&store, &project_root);
     let body = compose_upstream_report(kind, title, &description, &context);
@@ -310,7 +310,7 @@ fn file_upstream_report(
     body: &str,
     version: &str,
 ) -> Result<Requirement> {
-    let mut store = storage.load()?;
+    let mut store = storage.load_for_read()?;
     let mut req = Requirement::new(format!("AIDA: {title}"), body.to_string());
     req.req_type = RequirementType::Bug;
     req.status = RequirementStatus::Draft;
@@ -457,7 +457,7 @@ fn parse_version_triplet(raw: &str) -> Option<(u64, u64, u64)> {
 }
 
 fn handle_report_recheck(storage: &Storage) -> Result<()> {
-    let store = storage.load()?;
+    let store = storage.load_for_read()?;
     let rows = open_upstream_report_rows(&store, env!("CARGO_PKG_VERSION"));
     render_recheck_rows(&rows);
     Ok(())
@@ -500,7 +500,7 @@ pub(crate) fn maybe_print_upstream_recheck_notice(
     // `--file <dir>` stores, not the busy git-canonical store).
     // trace:BUG-1606 | ai:claude
     let Some(git_head) = git_head else {
-        let Ok(store) = storage.load() else {
+        let Ok(store) = storage.load_for_read() else {
             return;
         };
         print_stale_upstream_notice(&open_upstream_report_rows(&store, current));

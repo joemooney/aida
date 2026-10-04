@@ -1,0 +1,29 @@
+--- aida-core/src/db/traits.rs
++++ aida-core/src/db/traits.rs
+@@ -111,6 +111,9 @@
+     /// Loads the entire requirements store from the database
+     fn load(&self) -> Result<RequirementsStore>;
+ 
++    /// Loads the requirements store tolerating stale cache for reads
++    fn load_for_read(&self) -> Result<RequirementsStore>;
++
+     /// Saves the entire requirements store to the database
+     fn save(&self, store: &RequirementsStore) -> Result<()>;
+ 
+@@ -213,6 +216,16 @@
+             .collect())
+     }
+ 
++    /// Lists all requirements (non-archived by default) tolerating stale cache for reads
++    fn list_requirements_for_read(&self, include_archived: bool) -> Result<Vec<Requirement>> {
++        let store = self.load_for_read()?;
++        Ok(store
++            .requirements
++            .iter()
++            .filter(|r| include_archived || !r.archived)
++            .cloned()
++            .collect())
++    }
++
+     /// Updates a requirement without bumping its modified timestamp
+     fn internal_update_requirement(&self, requirement: Requirement) -> Result<Requirement>;
