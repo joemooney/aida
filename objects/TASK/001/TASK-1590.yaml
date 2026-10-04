@@ -1,0 +1,19 @@
+id: 01a10772-e9ce-7f50-b0c7-9e4b3c0e73db
+spec_id: TASK-1590
+agreed_id: TASK-1590
+title: Add aida review list command to show statuses of all review verdicts
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T15:05:33.902772529Z
+modified_at: 2026-10-04T15:05:33.902772529Z
+req_type: Task
+filed_at:
+  code_sha: 158d4ff3affdab47006323eb6619c0618dfcbc77
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1b8bdda092
+  vendor: antigravity
