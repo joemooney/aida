@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1518",
+  "publishes": [
+    {
+      "at": "2026-10-04T06:13:42.647076804Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-04T05:06:01.827326990Z",
+      "spec": "STORY-1518",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T05:12:44.721425275Z",
+      "spec": "STORY-1518",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T06:13:42.629527138Z",
+      "spec": "STORY-1518",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "pr": 2397,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
