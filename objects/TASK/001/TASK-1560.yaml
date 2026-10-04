@@ -94,7 +94,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-30T12:45:04.726316376Z
-modified_at: 2026-10-04T01:07:54.033495872Z
+modified_at: 2026-10-04T01:10:29.243718919Z
 req_type: Task
 comments:
 - id: 01a0f259-9f52-7d62-8a7b-76e4aadf5487
@@ -289,6 +289,284 @@ comments:
   created_at: 2026-09-30T13:13:51.063739930Z
   modified_at: 2026-09-30T13:13:51.063739930Z
   session_id: 08266c5d-f39e-4334-b87d-f481a6ba1b02
+- id: 01a10476-607b-7623-843c-16c07310049d
+  author: joe
+  content: |-
+    | ID | Tier | Destination |
+    |---|---|---|
+    | MEMORY | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_blob_tag_renders_as_the_tags_it_isnt | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_fence_tag_is_a_gate_scope_decision | genuinely one-agent | Claude memory pack |
+    | feedback_a_misleading_parameter_name_costs_review_rounds | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_new_struct_field_breaks_every_literal | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_nothing_to_do_guard_may_have_a_twin | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_partial_fix_can_turn_a_clean_failure_into_a_hang | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_preserving_write_is_not_a_placement | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_refusal_must_speak_the_callers_syntax | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_sha_is_read_never_composed | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_source_scanning_guard_greps_your_comment_too | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_stale_autodrafted_finding_is_an_autoresolver_gap | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_a_test_name_is_not_a_test | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_a_test_on_the_branch_may_be_wired_into_nothing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_timing_flake_may_fail_a_freshness_assert | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_a_unit_test_cannot_see_its_own_seam | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_absent_is_not_matching | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_advisor_grooms_dont_shift_to_operator | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_advisor_role_for_queue_after_647 | universal, aids-not-enforces | aida-core/templates/.aida/discipline/advisor-role.md |
+    | feedback_advisor_triage_mailbox_regularly | universal, aids-not-enforces | aida-core/templates/.aida/discipline/advisor-role.md |
+    | feedback_advocate_not_be_passive | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_agreement_is_not_corroboration_when_seats_share_an_artifact | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_agy_dispatch_policy | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_aida_capture_proactive | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_aida_edit_tags_replaces_use_add_tag | genuinely one-agent | Claude memory pack |
+    | feedback_aida_review_record_is_the_noninteractive_path | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_anchor_pgrep_patterns_monitor_shells_self_match | genuinely one-agent | Claude memory pack |
+    | feedback_archive_is_noncore_only_never_core | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_ask_which_assertion_witnesses_the_regression | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_batch_drain_ignores_approved_work_outside_the_batch | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_batched_shell_calls_merge_provenance | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_best_effort_shell_mode_must_audit_set_e_escapes | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_brief_message_spec_and_proof_must_agree | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_build_combined_main_after_concurrent_merges | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_build_dispatch_resilience_multivendor | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_cannot_be_shown_red_names_the_mutation | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_cap_parallel_cargo_builds | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_capture_doc_seeds | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_capture_over_concentration | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_capture_vs_slop_in_article_flow | genuinely one-agent | Claude memory pack |
+    | feedback_cargo_check_one_package_is_not_ci | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_charge_forward_autonomously | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_check_call_order_before_trusting_a_bugs_prescription | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_check_for_an_open_pr_before_claiming_a_spec | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_check_ignore_names_the_winner | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_check_in_flight_before_rejecting | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_check_in_flight_review_before_merge | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_check_ledger_before_proxy_confirm_and_guard_cat_subst | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_check_orchestrator_before_manual_steps | genuinely one-agent | Claude memory pack |
+    | feedback_cherrypick_not_reset_soft_for_far_behind_branch | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_ci_pending_at_handoff_is_not_ci_green | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_ci_surface_beyond_cargo_test | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_claude_code_statusline_posix | genuinely one-agent | Claude memory pack |
+    | feedback_clean_worktree_is_not_no_work | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_codex_cannot_commit_in_a_linked_worktree | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_commit_trailer_completes_the_spec | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_competitive_analysis_is_living_doc | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_competitive_discovery_multimodal | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_confirming_a_mechanism_is_not_explaining_an_event | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_context_ceiling_is_soft | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_count_rounds_from_commits_before_claiming_a_finding_repeated | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_cross_clone_leases_get_no_liveness_check | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_dated_artifacts_immutable | genuinely one-agent | Claude memory pack |
+    | feedback_declare_the_seat_when_dispatching | genuinely one-agent | Claude memory pack |
+    | feedback_defer_execution_modifiers_under_broad_mandate | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_delegated_findings_are_not_verified_ground_truth | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_dialog_role_responsibilities | genuinely one-agent | Claude memory pack |
+    | feedback_dialog_routes_to_implementer | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_dispatched_agent_cannot_write_the_shared_cache | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_dogfood_config_assertions_read_at_runtime | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | feedback_dont_background_interactive_commands | genuinely one-agent | Claude memory pack |
+    | feedback_dont_brief_full_workspace_suite_per_agent | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_dont_declare_drained_from_filtered_view | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_dont_rebuild_main_with_another_lanes_wip | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_drift_gate_must_delete_before_it_compares | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_drive_the_ready_set_dont_invent_blockers | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_duplicate_toml_table_fails_with_empty_stderr | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_edit_at_merge_reaches_only_the_commit_message | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_edit_in_the_worktree_not_main_checkout | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_end_session_with_db_sync_push | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_enumerate_finding_instances_dont_name_the_class | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_exit_cleanly_after_main_handoff | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_explicit_paste_ready_prompts | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_fail_loud_on_empty_for_actionable_queries | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_failed_flag_attempts_are_ux_signals | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_faithful_launcher_honor_native_default | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_falsification_is_partitioned_between_seats | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_fan_committing_agents_with_worktree_isolation | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_fetch_before_commit | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_file_forks_as_decisionrequests_not_chat | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_file_spec_before_tracing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_finish_checkpoint_clarity | genuinely one-agent | Claude memory pack |
+    | feedback_fitting_explanation_is_not_a_surviving_one | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_flat_open_count_may_be_a_flake_chain_not_slowness | genuinely one-agent | Claude memory pack |
+    | feedback_fork_window_keeps_an_flock_past_its_guard | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_fresh_branch_can_miss_interleaved_squash | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_gh_run_rerun_is_not_fresh_ci | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_goal_prompt_phrasing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_green_ci_is_the_predicted_observation | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_grep_the_code_before_filing_as_new | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_grep_the_whole_crate_the_filed_list_undercounts | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_half_fix_leaves_the_shape | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_headless_advisor_is_cold_boot | genuinely one-agent | Claude memory pack |
+    | feedback_idle_peer_sessions_as_independent_review_seats | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_idle_seat_is_not_a_working_seat | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_insert_above_the_doc_header_not_between_it_and_its_fn | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_instrument_dont_infer_on_contradiction | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_instruments_that_cannot_see_themselves | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_integrator_stale_base_rebase | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_investigation_and_implementation_must_use_the_same_method | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_is_it_pushed_is_a_two_hub_question | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_isolate_own_committing_work_from_shared_worktree | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_lead_churn_direct_agents | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_local_time | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_mark_relayed_operator_decisions_as_unverifiable | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_match_operator_mode_specific_when_execution | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_may_kill_firefox_on_memory_pressure | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_measure_in_a_quiet_environment_and_check_the_failure_direction | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_memory_pack_hygiene | genuinely one-agent | Claude memory pack |
+    | feedback_multi_agent_budget_dispatching | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_mutate_both_directions_for_a_discriminator | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_name_only_cannot_see_an_inline_rust_test | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_narrow_measurement_broad_claim | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_never_conclude_from_truncated_command_output | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_never_force_push_main_and_chain_cd | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_never_git_checkout_ref_dashdash_in_a_live_checkout | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_never_multicast_a_second_person_body | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_never_quote_a_rate_from_consecutive_observations | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_never_stash_for_a_mutation_proof | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_never_suppress_stderr_on_a_command_you_will_report_on | genuinely one-agent | Claude memory pack |
+    | feedback_never_switch_branches_in_operators_checkout | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_new_cli_leaf_must_regenerate_format_json_audit | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_no_backticks_in_aida_description_args | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_no_d_warnings_on_floating_toolchain | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_no_e2e_drain_test_on_real_spec | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_no_eval_role_enter | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_no_fixed_timestamps_in_ttl_tests | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_no_honest_hedging_words | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_no_mail_storm_to_codex | genuinely one-agent | Claude memory pack |
+    | feedback_no_partial_force_overwrite | genuinely one-agent | Claude memory pack |
+    | feedback_no_tokens_in_chat | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_no_unsolicited_stop_framing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_null_grep_for_invented_terms_is_not_absence | genuinely one-agent | Claude memory pack |
+    | feedback_observation_finding_capture | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_one_idiom_grep_undercounts_write_paths | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_one_master_advisor_until_subsystems | universal, aids-not-enforces | aida-core/templates/.aida/discipline/advisor-role.md |
+    | feedback_orphaned_load_generators_poison_every_measurement | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_oversight_supervisor_layer_smooths_drains | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_parallel_implementer_fanout_burndown | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_parallel_vs_sequential_ui | genuinely one-agent | Claude memory pack |
+    | feedback_patch_id_drifts_when_the_base_advances | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_pause_for_design_input | genuinely one-agent | Claude memory pack |
+    | feedback_pgrep_codex_matches_zombies_and_daemon | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_pgrep_wait_predicates_self_match | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_plain_language_define_jargon_for_operator | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_precise_claim_not_overclaim_in_positioning | genuinely one-agent | Claude memory pack |
+    | feedback_precise_lifecycle_vocabulary | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_precomputed_worklist_must_skip_what_the_write_pass_replaced | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_prefer_configurable_policy_with_default | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_presence_is_not_the_clock | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_price_the_criterions_own_disjunct_before_dispositioning | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_probe_the_sandboxed_form_before_declaring_dispatch_denied | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_propagate_generic_discipline_via_scaffolding | genuinely one-agent | Claude memory pack |
+    | feedback_prove_a_test_fails_without_the_fix | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_proxy_reviewer_with_independence_rule | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_public_repo_scrub_employer_content | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_push_first_overlap_ci_with_local_suite | genuinely one-agent | Claude memory pack |
+    | feedback_pushback_on_overengineering | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_qualify_an_ac_predicate_that_cannot_reach_zero | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_quarantine_specialized_context_in_skills | genuinely one-agent | Claude memory pack |
+    | feedback_question_existing_form_not_just_existence | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_queue_autonomous_ready_filings_at_filing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_read_the_artifact_as_data_not_as_a_sentence | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_read_the_verdict_not_just_the_check_rollup | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_realign_local_branch_after_force_push_rebase | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_reclaim_disk_by_deleting_worktree_targets | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_reconstruct_provenance_by_bracketing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_recording_a_verdict_blocks_your_own_merge | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_refinements_must_be_acceptance_criteria | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_release_cut_crossplatform_debt | genuinely one-agent | Claude memory pack |
+    | feedback_reliability_fixes_use_keyboard_not_drain | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_reproduce_then_falsify_with_a_control | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_rerun_the_acceptance_measurement_yourself | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_reset_to_main_between_sequential_specs | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_review_the_dropped_argument_and_the_shared_root_file | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_rework_briefs_advisory_framing_gets_skipped | universal, aids-not-enforces | aida-core/templates/.aida/discipline/advisor-role.md |
+    | feedback_ride_native_within_vendor_own_cross_vendor | genuinely one-agent | Claude memory pack |
+    | feedback_run_help_before_suggesting_flags | genuinely one-agent | Claude memory pack |
+    | feedback_sccache_shared_target_serves_stale_worktree_builds | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_scope_liveness_checks_to_the_repo_not_the_process_name | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_scripting_friction_is_a_missing_surface_signal | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_search_for_the_fix_not_the_symptom | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_search_the_active_batch_before_filing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_self_deprecating_claims_escape_review | genuinely one-agent | Claude memory pack |
+    | feedback_self_test_via_dogfood_merge | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_serial_not_fanout_on_this_host | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_set_spec_inprogress_at_dispatch | universal, aids-not-enforces | aida-core/templates/.aida/discipline/spec-authoring.md |
+    | feedback_shared_tree_tracking_ref_hazard | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_sibling_agents_stop_and_flag | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_sketch_first_pays_for_itself | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_source_scanning_guards_need_the_full_suite | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | feedback_sqlite_wal_read_needs_a_live_shm | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_state_how_a_number_was_derived | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_stay_in_the_active_session_role | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_substrate_as_bouncer_not_rules | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_substrate_first_never_rely_on_agent_awake | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_substrate_learning_loop_calibration | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_suite_log_predicates_must_anchor_on_harness_lines | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_surfaces_are_fossilised_agreement | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_symlink_checks_must_cover_the_directory | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_test_merge_before_judging_a_stranded_wip | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_the_fixture_shape_decides_which_path_you_test | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_three_mode_autonomy_taxonomy | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_tier_a_gate_transitively_not_by_its_body | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_token_usage_optimization_agent_fleet_economics | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_trust_reviewer_over_dialog_intuition | genuinely one-agent | Claude memory pack |
+    | feedback_unbounded_goal_loops_the_stop_hook | universal, aids-not-enforces | aida-core/templates/.aida/discipline/autonomous-burndown.md |
+    | feedback_undefined_state_is_confusion_not_simplicity | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_underused_features_get_an_adoption_path_not_a_deprecation | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_unset_aida_session_role_for_tests | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_use_aida_pull_not_git_pull_for_autobump | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_vendor_inference_features_at_execution_layer | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_verify_a_new_ci_step_actually_executed | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_verify_acceptance_matches_primary_caller | genuinely one-agent | Claude memory pack |
+    | feedback_verify_agent_pr_done_claims_against_diff | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_before_filing | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_ci_green_before_merge | genuinely one-agent | Claude memory pack |
+    | feedback_verify_edits_landed_before_claiming_done | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_fix_mechanism_before_locking | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_lore_against_code_not_docs | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_pr_contents_before_directing_rebase | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_verify_pr_head_after_push_gh_pr_checks_lies_on_merged_pr | universal, aids-not-enforces | aida-core/templates/.aida/discipline/git-sync-and-review.md |
+    | feedback_verify_target_surface_is_current_default | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_verify_the_drain_binary_not_just_the_drain | universal, aids-not-enforces | aida-core/templates/.aida/discipline/implementer-discipline.md |
+    | feedback_wait_for_the_terminal_artifact_before_writing_a_consequence | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | feedback_workflows_saved_script_lane | genuinely one-agent | Claude memory pack |
+    | feedback_worth_noting_means_note_it | universal, aids-not-enforces | aida-core/templates/.aida/discipline/workflow-patterns.md |
+    | project_aida_hub_is_first_user_dogfood_vehicle | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_aida_is_a_probe_not_the_objective | genuinely one-agent | Claude memory pack |
+    | project_axi_incorporation_and_mcp_reweighting | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_bugs_before_marketing_phase | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_burst_usage_robustness_over_speed | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_champion_product_not_probe | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_forge_plumbed_not_wired | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_main_branch_protection_requires_only_merge_hold_gate | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_northstar_code_to_decision_magic | genuinely one-agent | Claude memory pack |
+    | project_repositioning_parked_behind_stabilization | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_resume_lease_coupled_phases | genuinely one-agent | Claude memory pack |
+    | project_scaffold_upgrade_corrupts_dev_repo | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | project_single_drain_lock_per_repo | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_build_slots_sccache_mold | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_codegraph_local_setup_and_1mib_cap | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_codex_exec_dispatch_recipe | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_codex_needs_add_dir_for_cargo_slots | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_gh_job_logs_servable_mid_run | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_git_push_dry_run_still_pushes_the_mirror | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_gitlab_mirror_runner_setup | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_headless_claude_p_skills_and_fanout | genuinely one-agent | Claude memory pack |
+    | reference_is_ancestor_lies_after_squash_merge | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_mail_intake_bug_reports | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_merge_hold_clear_is_human_only | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_merged_spec_needs_queue_done_then_aida_pull | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_nvme_fast_scratch_migration | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_recordingforge_makes_orchestrator_pr_tests_hermetic | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_run_test_binary_needs_rust_min_stack | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_run_user_tmpfs_is_only_7g | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_suite_aggregate_line_is_the_largest_passed_count | repo-specific fact | docs/agents/aida-repository-guide.md |
+    | reference_trace_marker_never_on_a_doc_comment | genuinely one-agent | Claude memory pack |
+    | review_matt_pocock_skills | genuinely one-agent | Claude memory pack |
+    | user_likes_emoji | genuinely one-agent | Claude memory pack |
+    | user_permission_posture | genuinely one-agent | Claude memory pack |
+  created_at: 2026-10-04T01:10:29.243718919Z
+  modified_at: 2026-10-04T01:10:29.243718919Z
 history:
 - id: 01a0f273-3645-73c0-82b9-0b588a27b8c0
   author: joe
