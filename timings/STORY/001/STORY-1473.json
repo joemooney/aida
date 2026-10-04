@@ -5,9 +5,43 @@
     {
       "at": "2026-10-04T15:07:53.214322330Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-04T20:48:14.234445815Z",
+      "closed_by": "reconcile-status"
     }
   ],
   "events": [
+    {
+      "ts": "2026-09-26T18:23:01.601310960Z",
+      "spec": "STORY-1473",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-09-26T18:23:01.601354514Z",
+      "spec": "STORY-1473",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-04T04:53:51.863944193Z",
+      "spec": "STORY-1473",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-04T06:30:25.732461974Z",
       "spec": "STORY-1473",
@@ -16,6 +50,53 @@
         "spec": "STORY-1473",
         "branch": "story-1473",
         "first_seen": "2026-10-04T06:30:25.732445433+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-04T06:34:44.732025985Z",
+      "spec": "STORY-1473",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1473",
+        "branch": "story-1473",
+        "first_seen": "2026-10-04T06:34:44.731955872+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:44:53.016882524Z",
+      "spec": "STORY-1473",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2418,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1f1aa6fda870816cb118f8267e8e59fd966370b7"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:45:24.274537879Z",
+      "spec": "STORY-1473",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T20:45:29.995794117Z",
+      "spec": "STORY-1473",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2418
+      }
+    },
+    {
+      "ts": "2026-10-04T20:48:14.227348367Z",
+      "spec": "STORY-1473",
+      "run_uuid": "01a108a7-9f45-7489-b2f5-720d9874bf27",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b602a5d9cab22a042bf7c1f0d60558872af8cd7b",
+        "closed_by": "reconcile-status"
       }
     }
   ]
