@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:52:32.637321704Z
-modified_at: 2026-10-04T00:13:26.722103952Z
+modified_at: 2026-10-04T00:20:20.665422142Z
 req_type: Bug
 tags:
 - pull
@@ -60,6 +60,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-03T23:42:59.709641361Z
   modified_at: 2026-10-03T23:42:59.709641361Z
+- id: 01a10448-7839-7780-8e1f-7bb362c123ff
+  author: joe
+  content: Commit 4552377706 references this requirement
+  created_at: 2026-10-04T00:20:20.665422142Z
+  modified_at: 2026-10-04T00:20:20.665422142Z
 history:
 - id: 01a103ce-75a5-7c31-accb-2bcbfa1f5f6d
   author: joe
