@@ -8,10 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T17:26:43.450698985Z
-modified_at: 2026-07-19T19:04:38.872075191Z
+modified_at: 2026-10-04T04:46:19.747301232Z
 req_type: Bug
 tags:
-- aida:cache integrity from-dogfood
+- aida:cache
+- from-dogfood
+- integrity
 history:
 - id: 019f7bc4-20d2-76e2-9425-7bd54ba7c8c2
   author: aida-auto-bump
