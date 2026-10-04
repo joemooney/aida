@@ -1,0 +1,35 @@
+id: 01a107d9-1985-7121-a68a-4faab3356781
+spec_id: TASK-1594
+agreed_id: TASK-1594
+title: 'STORY-1473 review follow-ups: seat-authority hygiene findings and three design confirmations'
+description: |
+  Follow-ups from the independent review of PR #2418 (STORY-1473 / ADR-66, head 5cc9c028). Verdict was APPROVED; these items are non-blocking and must not evaporate.
+
+  ## Hygiene findings (from the review)
+  1. mcp.rs ~6210 `mcp_caller_has_advisor_authority` doc comment still describes env-based resolution; body is grant-based. Update comment.
+  2. cli.rs:2299/2308 `role active`/`role current` help text still says "Pure read of $AIDA_SESSION_ROLE"; handlers resolve the validated grant. Update help strings.
+  3. role_cmd.rs `handle_role_enter` (~244): `issue_direct` runs before `load_role`, so entering a nonexistent role mints an orphaned grant record (lives up to 24h). Mint after role resolution or delete on the error path.
+  4. queue_cmd.rs ~12257 `handle_queue_work`: interactive path overwrites the process's own GRANT_ENV with an empty-delegation child grant via std::env::set_var; a later issue_child in the same process would fail. Pass the child handle on the spawned command env only.
+  5. lib.rs:15302 / mcp.rs:12663: stakeholder deny-only refusal is the last user-facing message naming AIDA_SESSION_ROLE; reword for consistency (it is not an authority override).
+
+  ## Design confirmations routed to product/operator
+  A. issue_direct inherits `principal` from any active grant (seat_authority.rs:150-152): a human at a TTY inside an env carrying another principal's child grant roster-checks against that principal's ceiling. Within ADR-66's conceded same-user boundary; advisor recommendation is subject-always at a TTY unless inheritance was intended. Confirm.
+  B. Headless advisor sub-launches (questions_clarify, intake, harvest, reconstitute) now require the launching session to hold a grant delegating the needed seat — intended fail-closed per ADR-66, but a real operator-visible behavior change; consider a delegation prompt in `aida role enter` as UX follow-up (derisk candidate).
+  C. The signed sketch says MCP "captures the grant at startup"; the implementation re-validates per call (revocation applies immediately — strictly tighter). Amend the sketch/ADR-66 wording to match the implementation.
+
+  Provenance: independent reviewer sweep at head 5cc9c028, advisor disposition 2026-10-04 (advisor oversight session). Review verdict record: .aida/review-verdicts/STORY-1473.json once recorded.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T16:57:10.789226548Z
+modified_at: 2026-10-04T16:57:10.789226548Z
+req_type: Task
+filed_at:
+  code_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 1b8bdda092
+  vendor: antigravity
+  session: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
