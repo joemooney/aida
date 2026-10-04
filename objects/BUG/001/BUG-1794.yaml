@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:34:51.156926148Z
-modified_at: 2026-10-04T03:19:09.019117519Z
+modified_at: 2026-10-04T03:19:09.183780831Z
 req_type: Bug
 tags:
 - cross-platform
@@ -68,6 +68,11 @@ filed_at:
   session: 424cc773-b969-4027-95eb-13a904e9c298
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib advisor_code_gate::tests::worktree_lease_role_takes_precedence_over_roster_role -- --exact
+    cargo test -p aida-cli-lib lease_covers_cwd_tests:: -- --nocapture (5 Linux tests)
+    make check-ci-fast (19 fast gates passed)
   implemented_at: 2026-10-04T03:19:08.248442398Z
   implemented_by: joe
 interface_changes: {}
