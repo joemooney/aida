@@ -5,24 +5,25 @@ title: 'No first-class deferred/on-hold state: an operator hold recorded only in
 description: |
   Observed 2026-10-03 on BUG-1669: all original blockers Completed, operator hold existed only as decision records (01a0e125/01a0e10c) and comments — `aida session start` happily took a lease and moved the spec In Progress; the agy seat discovered the hold only by READING the spec, then had to back out (session 01a1027a, worktrees/branches cleaned).
 
-  The status vocabulary (draft/approved/planned/in-progress/done/completed/rejected/superseded + punt's NeedsAttention) has no state for "approved but operator-held with a revisit trigger", and `approved` is documented as "blessed, ready to plan/queue" — a misstatement for a held spec, so `aida list` presents it as actionable.
+  The status vocabulary (draft/approved/planned/in-progress/done/completed/rejected/superseded + punt's NeedsAttention) has no explicit operator hold with a revisit trigger, and `approved` is documented as "blessed, ready to plan/queue" — a misstatement for held work.
 
-  Workaround used: a DECISION-GATE task (TASK-1580, kept Draft) wired as blocked-by, which pickup DOES enforce ("refused until all blockers are Completed"). That works but is a convention, not a feature: nothing stops a gate task being approved by an agent, nothing renders held specs distinctly in list, and punt cannot express it (requires In Progress, lands in NeedsAttention which nags the awaiting view).
+  Workaround used: a DECISION-GATE task (TASK-1580, kept Draft) wired as blocked-by, which pickup DOES enforce ("refused until all blockers are Completed"). That works but is a convention, not a feature: nothing stops a gate task being approved by an agent, nothing renders held specs distinctly in a deferred view, and punt cannot express it (requires In Progress, lands in NeedsAttention which nags the awaiting view).
 
   Substrate-as-bouncer principle: the hold should be enforced by the substrate, not depend on agents reading prose.
 
-  Acceptance sketch:
-  1. A hold/defer verb (or status) settable on an Approved spec with a required reason + optional revisit-trigger text.
-  2. pickup/queue/drain refuse a held spec with a typed refusal naming the hold.
-  3. `aida list` renders held distinctly and excludes it from ready-lenses.
-  4. Only an operator (or explicitly authorized seat) can lift the hold.
-  5. Migration note for the TASK-1580-style convention.
+  ## Acceptance
+
+  1. A spec can be explicitly deferred with a required reason and optional revisit trigger while preserving its underlying lifecycle status (for example, Approved). Defer is a first-class operator-visible hold, orthogonal to lifecycle status.
+  2. Pickup, direct session start, queue work, and drains refuse a deferred spec with a typed refusal naming the hold, reason, and revisit trigger when present.
+  3. Deferred specs are hidden from the default `aida list` view and excluded from ready/pickup lenses. `aida list --deferred` and `aida show <ID>` display the Deferred/Held marker, the underlying lifecycle status, reason, and revisit trigger when present.
+  4. Only an operator or explicitly authorized seat can lift a hold. Lifting it clears the defer marker and preserves the underlying lifecycle status.
+  5. Document migration from the TASK-1580-style convention.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:57.958700833Z
-modified_at: 2026-10-04T02:28:55.351758123Z
+modified_at: 2026-10-04T04:17:56.748232946Z
 req_type: Bug
 relationships:
 - rel_type:
