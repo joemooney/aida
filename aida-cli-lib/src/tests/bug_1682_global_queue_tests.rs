@@ -431,6 +431,22 @@ fn callers() {
     store.requirements.push(req);
     backend.save(&store).unwrap();
     let storage = crate::Storage::new(&store_path);
+    // ADR-66: `queue add --for implementer` needs dispatch authority from a
+    // validated grant, so seat this child as a granted advisor before
+    // exercising the load-error propagation under test.
+    // trace:STORY-1473 | ai:claude
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &crate::current_user_id(None),
+        "advisor",
+        &[],
+    );
+    let _env = crate::test_env::EnvVarGuard::set(crate::seat_authority::GRANT_ENV, &grant_id);
+    let _outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: project.clone(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+    }));
     let path = queue_path(ROLE).unwrap();
     let corrupt = "broken: [";
     std::fs::write(&path, corrupt).unwrap();

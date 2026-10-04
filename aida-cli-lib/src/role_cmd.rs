@@ -285,7 +285,7 @@ fn handle_role_enter(
         resume,
         no_title,
         Some(&registry_entry),
-        &grant.id,
+        Some(&grant.id),
     );
     Ok(())
 }
@@ -462,9 +462,27 @@ fn handle_role_add(
         launch_prompt: None,
         launch_prompt_spec: None,
     };
-    let grant =
-        crate::seat_authority::issue_direct(project_root, &canonical_role_name(name), Vec::new())?;
-    crate::seat_authority::revoke_current()?;
+    // ADR-66: a role record is a label; only the seat GRANT carries
+    // authority, and minting one requires a controlling TTY plus a roster
+    // ceiling that allows the seat. When issuance is unavailable (headless
+    // caller, or a custom label outside the roster), still create the record
+    // and enter it label-only — the emitted hint confers no authority, and
+    // `aida role enter <seat>` at a human TTY remains the issuance path.
+    // trace:STORY-1473 | ai:claude
+    let grant_id = match crate::seat_authority::issue_direct(
+        project_root,
+        &canonical_role_name(name),
+        Vec::new(),
+    ) {
+        Ok(grant) => {
+            crate::seat_authority::revoke_current()?;
+            Some(grant.id)
+        }
+        Err(reason) => {
+            eprintln!("note: no seat grant issued ({reason}); the role is a label without authority. Enter it at an interactive TTY to establish the seat.");
+            None
+        }
+    };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
     emit_role_enter_eval(
@@ -475,7 +493,7 @@ fn handle_role_add(
         None,
         /* no_title */ false,
         None,
-        &grant.id,
+        grant_id.as_deref(),
     );
     Ok(())
 }
@@ -547,7 +565,7 @@ fn emit_role_enter_eval(
     resume_session_id: Option<String>,
     no_title: bool,
     registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
-    grant_id: &str,
+    grant_id: Option<&str>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -593,7 +611,16 @@ fn emit_role_enter_eval(
         "export AIDA_SESSION_ROLE='{}'",
         sh_single_quote(&state.name)
     );
-    println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id));
+    // ADR-66: the grant handle is the seat; the role env above is only a
+    // display/routing hint. A label-only enter (no grant) must also shed any
+    // stale grant so the shell cannot keep a previous seat's authority under
+    // the new label. trace:STORY-1473 | ai:claude
+    match grant_id {
+        Some(grant_id) => {
+            println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id))
+        }
+        None => println!("unset AIDA_SESSION_GRANT"),
+    }
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
     } else {

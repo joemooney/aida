@@ -572,9 +572,12 @@ mod tests {
     #[test]
     fn dashboard_person_key_role_is_read_by_effective_role() {
         // The crux of STORY-653: the dashboard groups/keys on the person key
-        // (`aida_core::team::person_key`), and a role written under that key is
-        // exactly what `effective_role_for_user` reads back — so a role set in
-        // the UI actually enforces. trace:STORY-653
+        // (`aida_core::team::person_key`), and a roster entry written under
+        // that key is exactly what authority resolution validates against.
+        // ADR-66 (STORY-1473) made the roster a CEILING: the active seat comes
+        // from a validated session grant, and the roster entry under the
+        // person key is what keeps that grant alive — so a role set in the UI
+        // still actually enforces. trace:STORY-653 trace:STORY-1473 | ai:claude
         let entry = NodeRegistryEntry {
             id: "1".to_string(),
             user_id: 1, // the OLD cryptic integer the bug keyed on
@@ -592,30 +595,38 @@ mod tests {
         );
 
         let dir = tempfile::tempdir().unwrap();
-        let registry = dir.path().join("registry");
-        std::fs::create_dir_all(&registry).unwrap();
-        // The UI writes the role under the person key (what TeamMemberDto.user_id
-        // now carries).
+        let root = dir.path();
+        // The UI writes the roster entry under the person key (what
+        // TeamMemberDto.user_id now carries); the person's grant validates
+        // against it.
+        let grant_id =
+            crate::seat_authority::test_support::mint_grant_for(root, &key, "advisor", &[]);
+        let store = crate::detect_distributed_store_from(root).expect("fixture store detected");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_USER", Some(key.as_str())),
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+        ]);
+
+        // effective_role_for_user resolves the granted seat, kept alive by the
+        // roster entry under the same person key.
+        let (role, src) = effective_role_for_user(&store, &key);
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Grant);
+
+        // A roster keyed on the OLD integer (the bug) does NOT keep the grant
+        // alive — proving the enforcing key is the person key, not luck.
         std::fs::write(
-            registry.join("team.toml"),
-            format!("[members]\n{key} = \"advisor\"\n"),
+            store.join("registry").join("team.toml"),
+            "[members]\n\"1\" = [\"advisor\"]\n",
         )
         .unwrap();
-
-        // effective_role_for_user, called with the same person key, reads it.
-        let (role, src) = effective_role_for_user(dir.path(), &key);
-        assert_eq!(role, "advisor");
-        assert_eq!(src, RoleSource::Roster);
-
-        // The OLD integer key (the bug) does NOT resolve — proving the fix is the
-        // key, not luck.
-        let (role_int, src_int) = effective_role_for_user(dir.path(), "1");
+        let (role_int, src_int) = effective_role_for_user(&store, "1");
         assert_ne!(
             src_int,
-            RoleSource::Roster,
-            "integer key is not in the roster"
+            RoleSource::Grant,
+            "integer key must not validate the person-key grant"
         );
-        let _ = role_int;
+        assert_ne!(role_int, "advisor");
     }
 
     #[test]

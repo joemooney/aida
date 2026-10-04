@@ -984,11 +984,14 @@ fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
     // bare headless implementer/reviewer: no authority
     assert!(!advisor_authority_from("implementer", false, false));
     assert!(!advisor_authority_from("reviewer", false, false));
-    // the three authority sources
-    assert!(advisor_authority_from("advisor", false, false)); // advisor role
-    assert!(advisor_authority_from("implementer", true, false)); // interactive TTY
+    // the two remaining authority sources
+    assert!(advisor_authority_from("advisor", false, false)); // advisor seat
     assert!(advisor_authority_from("implementer", false, true)); // under a live orchestrator
     assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
+                                                              // ADR-66 / STORY-1473: a TTY is where a seat grant is ISSUED, never an
+                                                              // authority source by itself — an interactive non-advisor seat stays
+                                                              // gated. trace:STORY-1473 | ai:claude
+    assert!(!advisor_authority_from("implementer", true, false));
 }
 
 /// Dispatch and disposition deliberately have different role matrices.

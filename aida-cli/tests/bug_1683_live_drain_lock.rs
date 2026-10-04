@@ -5,6 +5,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 
+// STORY-1473 / ADR-66: env roles confer no authority; the fixture rides a
+// validated advisor seat grant (delegating the launch seats) instead.
+mod support;
+
 struct Holder(Child);
 impl Drop for Holder {
     fn drop(&mut self) {
@@ -39,8 +43,8 @@ struct Fixture {
 }
 impl Fixture {
     fn run(&self, cwd: &Path, args: &[&str]) -> Output {
-        Command::new("timeout")
-            .args(["--kill-after=5", "30", env!("CARGO_BIN_EXE_aida")])
+        let mut cmd = Command::new("timeout");
+        cmd.args(["--kill-after=5", "30", env!("CARGO_BIN_EXE_aida")])
             .args(args)
             .current_dir(cwd)
             .env_clear()
@@ -48,8 +52,20 @@ impl Fixture {
             .env("HOME", &self.home)
             .env("TMPDIR", self._tmp.path())
             .env("AIDA_USER", "fixture")
-            .env("AIDA_SESSION_ROLE", "advisor")
-            .env("AIDA_HEADLESS", "1")
+            .env("AIDA_SESSION_ROLE", "advisor");
+        // ADR-66: the role env is only a hint; the advisor-gated steps ride a
+        // validated seat grant delegating the launchable seats (set after
+        // env_clear so it survives). trace:STORY-1473 | ai:claude
+        if let Some(grant) = support::ensure_seat_for(
+            &self.home,
+            &self.repo,
+            "fixture",
+            "advisor",
+            &["implementer", "reviewer"],
+        ) {
+            cmd.env("AIDA_SESSION_GRANT", grant);
+        }
+        cmd.env("AIDA_HEADLESS", "1")
             .env("AIDA_NO_HUMAN_ACKNOWLEDGED", "1")
             .env("AIDA_TELEMETRY", "0")
             .env("AIDA_DRAIN_LOCK_STALE_SECS", "0")

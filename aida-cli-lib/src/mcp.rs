@@ -13370,24 +13370,30 @@ mod tests {
     fn mcp_authority_refusal_names_roles_and_relaunch_command() {
         use RequirementStatus::*;
 
+        // ADR-66: the server's seat comes from its validated startup grant;
+        // the caller's env role is only a hint, and the recovery path is TTY
+        // issuance + restart — never an env-var relaunch.
+        // trace:STORY-1473 | ai:claude
         let line = mcp_authority_line_for(Some("implementer"), Some("advisor"));
-        assert!(line.contains("server role=implementer"), "{line}");
-        assert!(line.contains("caller shell role=advisor"), "{line}");
+        assert!(line.contains("server seat=implementer"), "{line}");
+        assert!(line.contains("caller shell hint=advisor"), "{line}");
         assert!(line.contains("advisor authority: no"), "{line}");
         assert!(
             line.contains("enter advisor at a TTY, then restart the MCP server"),
             "{line}"
         );
+        assert!(!line.contains("AIDA_SESSION_ROLE"), "{line}");
 
         let msg = mcp_status_gate_message_for(&Draft, &Approved, false)
             .expect("non-advisor MCP server must refuse advisor-gated transition");
         assert!(msg.contains("MCP authority:"), "{msg}");
-        assert!(msg.contains("server role="), "{msg}");
-        assert!(msg.contains("caller shell role="), "{msg}");
+        assert!(msg.contains("server seat="), "{msg}");
+        assert!(msg.contains("caller shell hint="), "{msg}");
         assert!(
             msg.contains("Enter advisor at a TTY, restart the MCP server"),
             "{msg}"
         );
+        assert!(!msg.contains("AIDA_SESSION_ROLE"), "{msg}");
     }
 
     #[test]

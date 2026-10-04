@@ -480,10 +480,19 @@ mod tests {
     #[test]
     fn refusal_message_names_op_role_and_force() {
         let cfg = TeamPermissions::default();
-        let msg = refusal_message(GatedOp::Integrate, "implementer", RoleSource::Roster, &cfg);
+        // ADR-66: the enforced role comes from a validated session grant; the
+        // refusal points at TTY issuance (`aida role enter`) and never at an
+        // env-var override. trace:STORY-1473 | ai:claude
+        let msg = refusal_message(GatedOp::Integrate, "implementer", RoleSource::Grant, &cfg);
         assert!(msg.contains("integrating ready PRs"));
         assert!(msg.contains("`advisor`"));
         assert!(msg.contains("team role is `implementer`"));
         assert!(msg.contains("--force"));
+        assert!(msg.contains("aida role enter advisor"), "{msg}");
+        assert!(!msg.contains("AIDA_SESSION_ROLE"), "{msg}");
+
+        // A defaulted (ungranted) seat reads as a plain role, not a team role.
+        let msg = refusal_message(GatedOp::Integrate, "implementer", RoleSource::Default, &cfg);
+        assert!(msg.contains("your role is `implementer`"), "{msg}");
     }
 }

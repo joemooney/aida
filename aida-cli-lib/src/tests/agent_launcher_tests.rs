@@ -2541,6 +2541,20 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         "store_path = \".aida-store\"\n",
     )
     .unwrap();
+    // ADR-66: launching a tracked child issues it a scoped grant, which
+    // needs an active parent grant whose delegation set covers the child's
+    // seat. trace:STORY-1473 | ai:claude
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["implementer"],
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        crate::seat_authority::GRANT_ENV,
+        Some(grant_id.as_str()),
+    )]);
     let fake_bin = tmp.path().join("bin");
     std::fs::create_dir_all(&fake_bin).unwrap();
     let fake_agent = fake_bin.join("agent");
@@ -2642,6 +2656,20 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         "store_path = \".aida-store\"\n",
     )
     .unwrap();
+    // ADR-66: launching a tracked child issues it a scoped grant, which
+    // needs an active parent grant whose delegation set covers the child's
+    // seat. trace:STORY-1473 | ai:claude
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["implementer"],
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        crate::seat_authority::GRANT_ENV,
+        Some(grant_id.as_str()),
+    )]);
     let fake_agent = tmp.path().join("agy");
     let env_out = tmp.path().join("env.txt");
     let argv_out = tmp.path().join("argv.txt");
@@ -3058,6 +3086,20 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
+    // ADR-66: launching a tracked child issues it a scoped grant, which
+    // needs an active parent grant whose delegation set covers the child's
+    // seat. trace:STORY-1473 | ai:claude
+    let launcher = crate::current_user_id(None);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &launcher,
+        "advisor",
+        &["advisor"],
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        crate::seat_authority::GRANT_ENV,
+        Some(grant_id.as_str()),
+    )]);
     let fake_agent = tmp.path().join("agent");
     let env_out = tmp.path().join("env.txt");
     let context_out = tmp.path().join("context-copy.md");

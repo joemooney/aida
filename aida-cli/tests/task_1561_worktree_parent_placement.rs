@@ -22,6 +22,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// STORY-1473 / ADR-66: env roles confer no authority; advisor-gated setup
+// steps ride a validated seat grant.
+mod support;
+
 fn aida(repo: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(repo);
@@ -111,6 +115,13 @@ fn project(base_dir: &Path, pool_keys: &str) -> (PathBuf, PathBuf, String) {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        // ADR-66: the approved filing is advisor-gated; env roles confer
+        // nothing, so carry a validated seat grant. trace:STORY-1473 | ai:claude
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&home, &repo, "advisor", &[])
+                .expect("fixture repo is initialized"),
+        )
         .args([
             "add", "--type", "task", "--status", "approved", "--title", "place me",
         ])

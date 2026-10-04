@@ -10,16 +10,21 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+// STORY-1473 / ADR-66: env roles confer no authority; the builder rides a
+// validated advisor seat grant for the status-write setup steps.
+mod support;
+
 fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aida"))
-        .current_dir(repo)
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+    cmd.current_dir(repo)
         .env("HOME", home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
-        .env_remove("AIDA_PERMISSION_MODE")
-        .args(args)
-        .output()
-        .expect("run aida")
+        .env_remove("AIDA_PERMISSION_MODE");
+    if let Some(grant) = support::ensure_seat(home, repo, "advisor", &[]) {
+        cmd.env("AIDA_SESSION_GRANT", grant);
+    }
+    cmd.args(args).output().expect("run aida")
 }
 
 fn git(repo: &Path, args: &[&str]) {

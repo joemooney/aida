@@ -10,6 +10,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
+// STORY-1473 / ADR-66: env roles confer no authority; advisor-gated setup
+// steps ride a validated seat grant.
+mod support;
+
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn git(repo: &Path, args: &[&str]) {
@@ -139,19 +143,32 @@ impl Project {
         let out = run(
             {
                 let mut cmd = aida(&self.repo, &self.home);
-                cmd.env("AIDA_SESSION_ROLE", "advisor").args([
-                    "add",
-                    "--type",
-                    kind,
-                    "--status",
-                    "approved",
-                    "--mode",
-                    "operator",
-                    "--title",
-                    title,
-                    "--description",
-                    "## Acceptance\n- fixture acceptance",
-                ]);
+                // ADR-66: `--mode` is an advisor-authority write; carry a
+                // validated advisor seat grant for the fixed test identity.
+                // trace:STORY-1473 | ai:claude
+                let grant = support::ensure_seat_for(
+                    &self.home,
+                    &self.repo,
+                    "aida-protocol-test",
+                    "advisor",
+                    &[],
+                )
+                .expect("fixture repo is initialized");
+                cmd.env("AIDA_SESSION_ROLE", "advisor")
+                    .env("AIDA_SESSION_GRANT", grant)
+                    .args([
+                        "add",
+                        "--type",
+                        kind,
+                        "--status",
+                        "approved",
+                        "--mode",
+                        "operator",
+                        "--title",
+                        title,
+                        "--description",
+                        "## Acceptance\n- fixture acceptance",
+                    ]);
                 if kind == "spike" {
                     cmd.arg("--no-human-only");
                 }

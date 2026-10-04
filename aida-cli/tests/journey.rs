@@ -47,6 +47,15 @@
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+// STORY-1473 / ADR-66: env roles confer no authority; advisor-gated steps
+// ride a validated seat grant for the fixed journey identity.
+mod support;
+
+fn advisor_grant(repo: &Path, home: &Path) -> String {
+    support::ensure_seat_for(home, repo, "journeytester", "advisor", &[])
+        .expect("fixture repo is initialized")
+}
+
 /// Base command for the real `aida` binary against an isolated repo + HOME.
 /// Deliberately does NOT set AIDA_AGENT_OUTPUT — each call selects the human
 /// (`0`) or agent (`toon`/`1`) surface explicitly, since in a test pipe stdout
@@ -165,6 +174,7 @@ fn human_journey_add_zen_history_empty_queue_and_completion() {
     let zen = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["zen", "Add a dark mode toggle to settings", "--dry-run"])
         .output()
         .expect("run aida zen --dry-run");
@@ -202,6 +212,7 @@ fn human_journey_add_zen_history_empty_queue_and_completion() {
     let add = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -276,6 +287,7 @@ fn human_journey_add_zen_history_empty_queue_and_completion() {
     let done = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["edit", &spec, "--status", "completed"])
         .output()
         .expect("run aida edit --status completed");
@@ -305,6 +317,7 @@ fn agent_journey_toon_list_search_queue_done_and_status() {
     let add = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "toon")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -337,6 +350,7 @@ fn agent_journey_toon_list_search_queue_done_and_status() {
         let target = aida(&repo, &home)
             .env("AIDA_AGENT_OUTPUT", "toon")
             .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
             .args([
                 "add", "--type", "task", "--status", "approved", "--title", title,
             ])
@@ -572,6 +586,7 @@ fn agent_journey_toon_list_search_queue_done_and_status() {
     let qadd = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "toon")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &spec])
         .output()
         .expect("run aida queue add");
@@ -705,6 +720,7 @@ fn bug_1558_show_carries_stored_relationship_type_on_every_surface() {
         let out = aida(&repo, &home)
             .env("AIDA_AGENT_OUTPUT", "toon")
             .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
             .args([
                 "add", "--type", "task", "--status", "approved", "--title", title,
             ])
@@ -847,6 +863,7 @@ fn task_1417_relationship_collapse_declares_view_limit_at_threshold() {
         let out = aida(&repo, &home)
             .env("AIDA_AGENT_OUTPUT", "toon")
             .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
             .args([
                 "add", "--type", "task", "--status", "approved", "--title", title,
             ])

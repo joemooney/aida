@@ -25,6 +25,10 @@
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+// STORY-1473 / ADR-66: env roles confer no authority; advisor-gated setup
+// steps carry a validated seat grant instead.
+mod support;
+
 fn aida(repo: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(repo);
@@ -97,10 +101,14 @@ fn init_repo() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
 #[test]
 fn queue_done_non_interactive_without_yes_marks_done_not_cancelled() {
     let (_base, repo, home) = init_repo();
+    // ADR-66: the advisor-gated setup writes ride a validated seat grant.
+    // trace:STORY-1473 | ai:claude
+    let grant = support::grant_seat(&home, &repo, "advisor", &[]);
 
     // File + queue an approved spec (advisor-gated writes).
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", &grant)
         .args([
             "add",
             "--type",
@@ -126,6 +134,7 @@ fn queue_done_non_interactive_without_yes_marks_done_not_cancelled() {
 
     let qadd = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", &grant)
         .args(["queue", "add", &spec])
         .output()
         .expect("run aida queue add");

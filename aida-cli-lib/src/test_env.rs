@@ -375,9 +375,62 @@ pub(crate) struct AmbientGuard {
 }
 
 impl AmbientGuard {
+    /// Hermetic ambient plus a validated, session-bound `seat` grant for the
+    /// hermetic test user (ADR-66: authority comes only from a grant — the
+    /// role env stays a display/routing hint, so this mints the real records
+    /// `aida role enter` would and exports the handle). `delegable` lists the
+    /// child seats this session may issue (empty by default in production;
+    /// pass the child's seat for launcher tests).
+    // trace:STORY-1473 | ai:claude
+    pub(crate) fn hermetic_with_seat(
+        root: &std::path::Path,
+        seat: &str,
+        delegable: &[&str],
+    ) -> Self {
+        Self::hermetic_with_seat_and(root, seat, delegable, &[])
+    }
+
+    /// [`Self::hermetic_with_seat`] plus extra env pins applied under the SAME
+    /// guard (the env lock is not reentrant, so a test cannot stack a second
+    /// guard for them).
+    // trace:STORY-1473 | ai:claude
+    pub(crate) fn hermetic_with_seat_and(
+        root: &std::path::Path,
+        seat: &str,
+        delegable: &[&str],
+        extra: &[(&'static str, Option<&str>)],
+    ) -> Self {
+        let grant_id = crate::seat_authority::test_support::mint_grant_for(
+            root,
+            HERMETIC_TEST_USER,
+            seat,
+            delegable,
+        );
+        let mut pairs: Vec<(&'static str, Option<&str>)> = vec![
+            ("AIDA_SESSION_ROLE", Some(seat)),
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            ("AIDA_USER", Some(HERMETIC_TEST_USER)),
+            ("AIDA_ROLE_INSTANCE", None),
+            ("AIDA_AUTO_COMPLETE", None),
+            ("AIDA_AUTO_COMPLETE_TOKEN", None),
+        ];
+        pairs.extend_from_slice(extra);
+        let env = EnvVarsGuard::apply(&pairs);
+        let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: root.to_path_buf(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+        }));
+        Self { prev, _env: env }
+    }
+
     pub(crate) fn hermetic(root: &std::path::Path, role: Option<&str>) -> Self {
         let env = EnvVarsGuard::apply(&[
             ("AIDA_SESSION_ROLE", role),
+            // ADR-66: a seat grant is ambient authority too — a hermetic
+            // context must shed any leased grant along with the role env.
+            // trace:STORY-1473 | ai:claude
+            (crate::seat_authority::GRANT_ENV, None),
             ("AIDA_USER", Some(HERMETIC_TEST_USER)),
             ("AIDA_ROLE_INSTANCE", None),
             ("AIDA_AUTO_COMPLETE", None),
@@ -564,29 +617,32 @@ mod tests {
         }));
 
         // Positive control: clear the role inputs (not the identity), resolve
-        // the ambient identity exactly as the authority check does, roster it
-        // as advisor, and confirm authority is granted.
+        // the ambient identity exactly as the authority check does, and seat
+        // it through a validated advisor grant (ADR-66: the roster is only
+        // the grant's ceiling — a roster row alone seats nobody).
+        // trace:STORY-1473 | ai:claude
         let ambient_user = {
-            let _env = EnvVarsGuard::apply(&[
-                ("AIDA_SESSION_ROLE", None),
-                ("AIDA_ROLE_INSTANCE", None),
-                ("AIDA_AUTO_COMPLETE", None),
-                ("AIDA_AUTO_COMPLETE_TOKEN", None),
-            ]);
             let user = crate::current_user_id(None);
             assert_ne!(
                 user, HERMETIC_TEST_USER,
                 "ambient identity is the hermetic id"
             );
-            let key = user.replace('\\', "\\\\").replace('"', "\\\"");
-            std::fs::write(
-                store.join("registry").join("team.toml"),
-                format!("[members]\n\"{key}\" = \"advisor\"\n"),
-            )
-            .unwrap();
+            let grant_id = crate::seat_authority::test_support::mint_grant_for(
+                tmp.path(),
+                &user,
+                "advisor",
+                &[],
+            );
+            let _env = EnvVarsGuard::apply(&[
+                ("AIDA_SESSION_ROLE", None),
+                (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+                ("AIDA_ROLE_INSTANCE", None),
+                ("AIDA_AUTO_COMPLETE", None),
+                ("AIDA_AUTO_COMPLETE_TOKEN", None),
+            ]);
             assert!(
                 crate::has_advisor_authority(),
-                "the fake roster must grant the ambient identity {user:?} advisor authority"
+                "the granted seat must give the ambient identity {user:?} advisor authority"
             );
             user
         };
@@ -600,6 +656,7 @@ mod tests {
             );
             for key in [
                 "AIDA_SESSION_ROLE",
+                crate::seat_authority::GRANT_ENV, // trace:STORY-1473 | ai:claude
                 "AIDA_ROLE_INSTANCE",
                 "AIDA_AUTO_COMPLETE",
                 "AIDA_AUTO_COMPLETE_TOKEN",
@@ -614,7 +671,7 @@ mod tests {
             );
             assert!(
                 !crate::has_advisor_authority(),
-                "the hermetic guard must not inherit the roster's advisor role for {ambient_user:?}"
+                "the hermetic guard must not inherit the granted advisor seat of {ambient_user:?}"
             );
         }
 

@@ -20,6 +20,16 @@
 use std::path::Path;
 use std::process::Command;
 
+// STORY-1473 / ADR-66: env roles confer no authority; dispatch-gated setup
+// steps ride a validated advisor seat grant (delegating the work seats the
+// launch paths may issue to children).
+mod support;
+
+fn advisor_grant(repo: &Path, home: &Path) -> String {
+    support::ensure_seat(home, repo, "advisor", &["implementer", "reviewer"])
+        .expect("fixture repo is initialized")
+}
+
 fn aida(repo: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(repo);
@@ -80,6 +90,7 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -113,6 +124,7 @@ fn defer_removes_queued_rows_across_queue_identities() {
 
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "queue",
             "add",
@@ -207,6 +219,7 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     // (TASK-647); the rest of the test runs role-free.
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -440,6 +453,7 @@ fn no_launch_with_custom_base_populates_submodules() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -539,6 +553,7 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -564,6 +579,7 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
 
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &spec])
         .output()
         .expect("run aida queue add");
@@ -690,6 +706,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let add_reviewer = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -715,6 +732,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let add_impl = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -740,6 +758,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let queue_reviewer = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &reviewer_spec, "--for", "reviewer"])
         .output()
         .expect("run aida queue add reviewer");
@@ -750,6 +769,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
     );
     let queue_impl = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &impl_spec, "--for", "implementer"])
         .output()
         .expect("run aida queue add implementer");
@@ -835,6 +855,7 @@ fn interactive_dry_run_autopicks_codex_only_enabled_profile() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -991,6 +1012,7 @@ fn interactive_work_refuses_all_disabled_profile_before_state() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -1015,6 +1037,7 @@ fn interactive_work_refuses_all_disabled_profile_before_state() {
         .to_string();
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &spec, "--for", "implementer"])
         .output()
         .expect("run aida queue add");

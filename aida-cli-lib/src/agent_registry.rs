@@ -3172,12 +3172,15 @@ mod tests {
         assert_eq!(lines.len(), 1);
         let line = &lines[0];
         assert!(line.contains("MCP authority:"), "{line}");
-        assert!(line.contains("role=implementer"), "{line}");
+        // ADR-66: the line names the server's granted seat and points at TTY
+        // issuance, never an env-var relaunch. trace:STORY-1473 | ai:claude
+        assert!(line.contains("seat=implementer"), "{line}");
         assert!(line.contains("advisor authority: no"), "{line}");
         assert!(
             line.contains("enter advisor at a TTY, then restart MCP"),
             "{line}"
         );
+        assert!(!line.contains("AIDA_SESSION_ROLE"), "{line}");
     }
 
     #[test]

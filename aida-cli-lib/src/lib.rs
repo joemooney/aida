@@ -93271,7 +93271,11 @@ fn review_spec_launch_reviewer(
         false,
     )
     .map_err(|e| anyhow::anyhow!("aida review: {e}"))?;
-    session::spawn_reviewer_launch_plan(&plan, &std::env::current_dir()?)
+    // ADR-66: the reviewer child grant validates against the PROJECT root,
+    // resolved the same way every other authority check resolves it — not
+    // whatever directory the process happens to sit in.
+    // trace:STORY-1473 | ai:claude
+    session::spawn_reviewer_launch_plan(&plan, &find_project_root()?)
         .context("failed to launch the reviewer")
 }
 
