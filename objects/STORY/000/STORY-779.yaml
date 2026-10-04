@@ -8,10 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T01:42:07.154131649Z
-modified_at: 2026-07-20T04:46:56.178756959Z
+modified_at: 2026-10-04T04:50:47.939905687Z
 req_type: Story
 tags:
-- subsystems parent:EPIC-0433 from-ratification
+- from-ratification
+- parent:EPIC-0433
+- subsystems
 deferred: true
 deferred_at: 2026-07-20T01:42:21.425646497Z
 deferred_until: master-advisor context noise becomes measured pain (operator-ratified trigger 2026-07-19)
