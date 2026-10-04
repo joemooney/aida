@@ -883,15 +883,17 @@ pub fn exec_claude_with_session(
 /// Build the argv (after the `claude` program name) for an interactive
 /// `aida queue work` launch — `--permission-mode`, optional `--name` /
 /// `--session-id`, and a trailing positional initial prompt. Shared by
-/// `exec_claude` (process replacement) and `spawn_claude_session`
-/// (spawn + wait, BUG-226) so the two launch paths can never drift.
+/// `exec_claude` (process replacement) and the interactive reviewer launch
+/// plan ([`interactive_reviewer_launch_plan`], spawn + wait, BUG-226/BUG-1607)
+/// so the launch paths can never drift.
 /// trace:BUG-226 | ai:claude
 ///
 /// STORY-495: `permission_mode` is `Option<&str>`. `None` omits
 /// `--permission-mode` entirely so the spawned `claude` uses its native
 /// permission posture (the faithful-launcher default). The headless launch
-/// path uses a separate [`claude_headless_args`] builder that always forces
-/// `bypassPermissions`, so this change never touches the unattended drain.
+/// path uses a separate [`claude_headless_args_with_posture`] builder that
+/// always forces `bypassPermissions`, so this change never touches the
+/// unattended drain.
 pub fn claude_session_args(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -1020,34 +1022,9 @@ fn run_claude_session(
     Ok(())
 }
 
-/// BUG-226: spawn an interactive `claude` session (inherited stdio) and
-/// wait for it, returning the exit status. The standalone reviewer path
-/// needs `aida queue work` to *outlive* the launch so it can print an
-/// end-of-command summary — `exec_claude` (process replacement) cannot.
-/// trace:BUG-226 | ai:claude
-pub fn spawn_claude_session(
-    permission_mode: Option<&str>,
-    name: Option<&str>,
-    initial_prompt: &str,
-    session_id: &str,
-    contained: bool,
-) -> Result<std::process::ExitStatus> {
-    std::process::Command::new("claude")
-        .args(claude_session_args(
-            permission_mode,
-            name,
-            Some(initial_prompt),
-            Some(session_id),
-            contained,
-            None,
-        ))
-        .status()
-        .context("failed to spawn claude")
-}
-
 /// BUG-226: spawn (not exec) a headless `claude -p` reviewer and wait,
 /// returning the exit status. Mirrors `exec_claude_headless` exactly —
-/// same `claude_headless_args` flag set, `AIDA_HEADLESS=1` in the env,
+/// same `claude_headless_args_with_posture` flag set, `AIDA_HEADLESS=1` in the env,
 /// stdout redirected to `log_path` — but keeps the parent alive so the
 /// standalone reviewer summary can read the verdict file + JSONL log.
 /// trace:BUG-226 | ai:claude
@@ -1326,22 +1303,6 @@ pub fn exec_codex_session(initial_prompt: &str, bypass: bool, model: Option<&str
         let status = cmd.status().context("failed to spawn codex")?;
         std::process::exit(status.code().unwrap_or(1));
     }
-}
-
-/// BUG-1607: spawn (not exec) an interactive `codex <prompt>` session and
-/// wait, returning the exit status — the Codex analogue of
-/// [`spawn_claude_session`] for the standalone reviewer launch, which must
-/// outlive the child to print its end-of-command summary (BUG-226).
-// trace:BUG-1607 | ai:claude
-pub fn spawn_codex_session(
-    initial_prompt: &str,
-    bypass: bool,
-    model: Option<&str>,
-) -> Result<std::process::ExitStatus> {
-    std::process::Command::new("codex")
-        .args(codex_session_args(initial_prompt, bypass, model))
-        .status()
-        .context("failed to spawn codex")
 }
 
 /// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
@@ -1881,6 +1842,9 @@ pub fn headless_vendor_args(
 /// VALUE, so the prompt is that flag's value and `-p <prompt>` must come LAST,
 /// after every option flag. Pure — unit-tested without spawning.
 // trace:TASK-1048 BUG-1686 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn agy_headless_args(prompt: &str) -> Vec<String> {
     agy_headless_args_with_effort(prompt, None)
 }
@@ -1922,6 +1886,9 @@ pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<
 /// Codex is actively working. Streaming JSONL makes the existing watchdog log
 /// mtime/length signal live for Codex phases.
 // trace:STORY-683 BUG-909 | ai:codex
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     codex_headless_args_with_model(prompt, None)
 }
@@ -1952,6 +1919,9 @@ pub fn codex_headless_args_with_model_and_effort(
     args
 }
 
+// trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
+// production launch builds its argv through `headless_vendor_args`.
+#[cfg(test)]
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
     claude_headless_args_with_posture(prompt, session_id, false)
 }
@@ -2022,15 +1992,6 @@ pub fn claude_headless_args_with_posture_model_and_effort(
     .chain([prompt.to_string()])
     .collect()
 }
-
-/* old impl retained below */
-/* pub fn codex_headless_args(prompt: &str) -> Vec<String> {
-    vec![
-        "exec".to_string(),
-        "--dangerously-bypass-approvals-and-sandbox".to_string(),
-        prompt.to_string(),
-    ]
-} */
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
@@ -2884,7 +2845,7 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
 
 /// STORY-306: build the argv (after the `claude` program name) for a headless
 /// `claude -p --resume <id>` launch — the advisor tier's implementer-resume
-/// leg. Identical to [`claude_headless_args`] (the SPIKE-7 mandatory flag
+/// leg. Identical to [`claude_headless_args_with_posture`] (the SPIKE-7 mandatory flag
 /// set) except it `--resume`s an existing session instead of minting a new
 /// `--session-id`, so the resumed implementer re-enters its punted phase-1
 /// conversation with the working model it had already built. Pure — the flag
@@ -2941,7 +2902,8 @@ pub fn claude_headless_resume_args_with_posture(
 /// - `seeded_prompt` is the cold-boot prompt (the live-advisor-context prepend
 ///   the assess cold-boot uses); `advisor_uuid` is the resume/session id.
 ///
-/// **Codex has no `--resume` / session model** (see [`codex_headless_args`]), so
+/// **Codex has no `--resume` / session model** (see
+/// [`codex_headless_args_with_model_and_effort`]), so
 /// a Codex advisor tier ignores `is_fork` and always hosts a *fresh* `codex exec`
 /// per punt against the seeded prompt — no resume, the per-punt-fresh-spawn
 /// trade-off noted in STORY-683's follow-ups. The caller is responsible for
@@ -2952,6 +2914,9 @@ pub fn claude_headless_resume_args_with_posture(
 /// inline construction, so an un-configured drain (vendor = Claude) is unchanged.
 /// Pure — both arms are unit-tested without spawning.
 // trace:TASK-894 | ai:claude
+// trace:TASK-1581 | ai:antigravity — test-only default-tuning wrapper; the
+// orchestrator calls `advisor_tier_program_and_args_with_tuning`.
+#[cfg(test)]
 pub fn advisor_tier_program_and_args(
     vendor: HeadlessVendor,
     is_fork: bool,

@@ -47,7 +47,7 @@ pub enum VendorAdapter {
 /// Returns `None` for an unknown vendor so the caller can skip-with-a-note
 /// rather than fail the whole run.
 ///
-/// The claude argv intentionally does NOT reuse `session::claude_headless_args`:
+/// The claude argv intentionally does NOT reuse `session::claude_headless_args_with_posture`:
 /// that builder forces `--session-id`/`--output-format stream-json` for the
 /// orchestrator's resumable, machine-parsed drains. A compete arm just needs a
 /// one-shot headless run whose stdout we tee to a log, so the simpler
