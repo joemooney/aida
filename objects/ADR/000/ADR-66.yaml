@@ -1,0 +1,65 @@
+id: 01a10593-033c-71a0-b1dc-abef981b97bf
+spec_id: ADR-66
+agreed_id: ADR-66
+title: TTY-established, session-bound seats with scoped child grants
+description: |
+  # TTY-established, session-bound seats with scoped child grants
+
+  Status: Draft — Joe's policy choice recorded 2026-10-03; implementation sketch
+  awaits independent advisor signoff.
+
+  Trace: STORY-1473.
+
+  ## Context
+
+  The current team roster assigns a role to a person, and `AIDA_SESSION_ROLE`
+  can declare a different role in any process running as that person. AIDA's
+  role separation is therefore shell/process-wide instead of session-bound.
+  This weakens the product, advisor, implementer, and reviewer boundaries.
+
+  STORY-1473 requires a TTY-established session seat, a roster ceiling,
+  human-at-TTY roster writes, consistent CLI/MCP authority, and documentation
+  of the residual same-user token-replay limit. Its implementation is guided
+  and requires advisor signoff on a sketch before code.
+
+  ## Decision
+
+  Joe selected **TTY grant + scoped child seat**:
+
+  - Joe explicitly chooses a roster-allowed seat at an interactive TTY.
+  - The roster limits eligible seats; it is not itself the active session seat.
+  - AIDA launchers may issue each child only the explicitly requested,
+    roster-allowed seat for that child session.
+  - `AIDA_SESSION_ROLE` is a display/routing hint and cannot grant authority.
+  - Roster writes require a human at an interactive TTY.
+
+  This preserves advisor agents while separating their sessions. It does not
+  claim an OS-level security boundary against a same-user process that can read
+  another process's state; that remains separate protected-boundary work.
+
+  ## Implementation gate
+
+  The architecture sketch is
+  [`2026-10-03-story-1473-advisor-seat-issuance-sketch.md`](../../plans/2026-10-03-story-1473-advisor-seat-issuance-sketch.md).
+  Advisor signoff must resolve roster representation, grant validation and
+  lifetime, parent-to-child delegation limits, and the complete set of CLI/MCP
+  issuance paths before implementation begins. No code change is authorized by
+  this Draft ADR alone.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-04T06:21:23.132987925Z
+modified_at: 2026-10-04T06:21:23.132987925Z
+req_type: Decision
+tags:
+- authority
+- operator-decision
+- roles
+filed_at:
+  code_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
