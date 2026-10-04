@@ -24,12 +24,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T02:20:02.437526721Z
-modified_at: 2026-09-28T15:07:16.989890580Z
+modified_at: 2026-10-04T04:50:55.845898097Z
 req_type: Story
 tags:
+- advisor
+- autonomy
 - closure:pending
+- cold-boot
 - docs:impacted
-- seat-rotation token-economics autonomy advisor product cold-boot parent:EPIC-71 parent:EPIC-62
+- parent:EPIC-62
+- parent:EPIC-71
+- product
+- seat-rotation
+- token-economics
 comments:
 - id: 01a0d226-4f48-7c51-89ba-63e24bbab3a6
   author: joe
