@@ -1,4 +1,3 @@
-#![cfg(unix)]
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -9,7 +8,17 @@ fn setup_repo(home: &Path, repo: &Path) {
     std::fs::create_dir_all(home).unwrap();
     std::fs::create_dir_all(repo).unwrap();
     std::process::Command::new("git")
-        .args(["init", "-q"])
+        .args(["init", "-q", "-b", "main"])
+        .current_dir(repo)
+        .status()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.email", "you@example.com"])
+        .current_dir(repo)
+        .status()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Your Name"])
         .current_dir(repo)
         .status()
         .unwrap();
@@ -18,20 +27,17 @@ fn setup_repo(home: &Path, repo: &Path) {
         .current_dir(repo)
         .status()
         .unwrap();
-    // Add the user to the roster so they have the advisor seat.
-    std::fs::create_dir_all(repo.join(".aida-store/team")).unwrap();
-    let user = std::env::var("USER").unwrap_or_else(|_| "joe".to_string());
-    let roster = format!(
-        r#"
-members:
-  - id: {}
-    name: Test User
-    seats:
-      - advisor
-"#,
-        user
-    );
-    std::fs::write(repo.join(".aida-store/team/roster.yaml"), roster).unwrap();
+
+    let bin = env!("CARGO_BIN_EXE_aida");
+    std::process::Command::new(bin)
+        .args(["init", "--no-skills", "--no-hooks", "--no-agent-config"])
+        .env("HOME", home)
+        .env("AIDA_HEADLESS", "1")
+        .current_dir(repo)
+        .output()
+        .unwrap();
+
+    support::ensure_seat(home, repo, "advisor", &[]);
 }
 
 #[test]
@@ -82,61 +88,75 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     cmd.cwd(&repo);
 
     let mut child = pair.slave.spawn_command(cmd).unwrap();
+    drop(pair.slave);
 
-    // Read the prompt in a non-blocking way or using a thread
     let mut reader = pair.master.try_clone_reader().unwrap();
     let mut writer = pair.master.take_writer().unwrap();
-    let (tx, rx) = std::sync::mpsc::channel();
 
     std::thread::spawn(move || {
-        let mut output = String::new();
-        let mut buf = [0u8; 1024];
-        let mut found = false;
-        while let Ok(n) = reader.read(&mut buf) {
-            if n == 0 {
-                break;
-            }
-            output.push_str(std::str::from_utf8(&buf[..n]).unwrap_or(""));
-            if !found && output.contains("TTY-issued delegation") {
-                found = true;
-                tx.send(output.clone()).unwrap();
-            }
-        }
-        std::fs::write("debug_pty.log", output).unwrap();
+        // Sleep briefly to let the prompt render
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        // Decline the prompt
+        writer
+            .write_all(
+                b"n
+",
+            )
+            .unwrap();
+        // Drop writer so EOF is sent
+        drop(writer);
     });
 
-    // Wait for the prompt
-    let res = rx.recv_timeout(std::time::Duration::from_secs(5));
-    assert!(
-        res.is_ok(),
-        "should prompt at TTY, output log written to debug_pty.log"
-    );
-
-    // Decline the prompt
-    writer
-        .write_all(
-            b"n
-",
-        )
-        .unwrap();
-
-    // Drop writer so EOF is sent if needed
-    drop(writer);
+    let mut output = String::new();
+    reader.read_to_string(&mut output).unwrap();
+    std::fs::write("debug_pty.log", &output).unwrap();
 
     assert!(child.wait().unwrap().success());
+    assert!(
+        output.contains("TTY-issued delegation"),
+        "should prompt at TTY"
+    );
 
     // Verify recovery hint on sub-launch failure
-    let sub = std::process::Command::new(bin)
-        .arg("decide")
-        .arg("--clarify")
+    let mut grant_id = String::new();
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("export AIDA_SESSION_GRANT='") {
+            if let Some(id) = rest.strip_suffix("'") {
+                grant_id = id.to_string();
+                break;
+            }
+        }
+    }
+    assert!(
+        !grant_id.is_empty(),
+        "could not find AIDA_SESSION_GRANT in pty output"
+    );
+
+    std::process::Command::new(bin)
+        .args([
+            "add", "--type", "task", "--title", "test", "--status", "approved",
+        ])
+        .env("HOME", &home)
         .env("AIDA_SESSION_ROLE", "advisor")
-        // No grant
+        .env("AIDA_SESSION_GRANT", &grant_id)
+        .current_dir(&repo)
+        .status()
+        .unwrap();
+
+    let sub = std::process::Command::new(bin)
+        .arg("questions")
+        .arg("clarify")
+        .arg("TASK-1") // The first spec added above
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", &grant_id)
         .env("HOME", &home)
         .current_dir(&repo)
         .output()
         .unwrap();
 
     let sub_stderr = String::from_utf8(sub.stderr).unwrap();
-    assert!(sub_stderr.contains("does not delegate `advisor`"));
-    assert!(sub_stderr.contains("aida role enter advisor --delegate-seat advisor"));
+    let sub_stdout = String::from_utf8(sub.stdout).unwrap();
+    println!("sub_stderr: {}\nsub_stdout: {}", sub_stderr, sub_stdout);
+    assert!(sub_stdout.contains("does not delegate `advisor`"));
+    assert!(sub_stdout.contains("aida role enter advisor --delegate-seat advisor"));
 }
