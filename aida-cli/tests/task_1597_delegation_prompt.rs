@@ -75,34 +75,55 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     cmd.arg("enter");
     cmd.arg("advisor");
     cmd.env("HOME", &home);
+    cmd.env(
+        "USER",
+        std::env::var("USER").unwrap_or_else(|_| "joe".to_string()),
+    );
     cmd.cwd(&repo);
 
     let mut child = pair.slave.spawn_command(cmd).unwrap();
+
+    // Read the prompt in a non-blocking way or using a thread
     let mut reader = pair.master.try_clone_reader().unwrap();
     let mut writer = pair.master.take_writer().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    // Read the prompt
-    let mut output = String::new();
-    let mut buf = [0u8; 1024];
-    for _ in 0..100 {
-        if let Ok(n) = reader.read(&mut buf) {
-            if n > 0 {
-                output.push_str(std::str::from_utf8(&buf[..n]).unwrap());
-                if output.contains("Include it in the TTY-issued delegation set?") {
-                    break;
-                }
+    std::thread::spawn(move || {
+        let mut output = String::new();
+        let mut buf = [0u8; 1024];
+        let mut found = false;
+        while let Ok(n) = reader.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            output.push_str(std::str::from_utf8(&buf[..n]).unwrap_or(""));
+            if !found && output.contains("TTY-issued delegation") {
+                found = true;
+                tx.send(output.clone()).unwrap();
             }
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+        std::fs::write("debug_pty.log", output).unwrap();
+    });
+
+    // Wait for the prompt
+    let res = rx.recv_timeout(std::time::Duration::from_secs(5));
     assert!(
-        output.contains("Include it in the TTY-issued delegation set?"),
-        "should prompt at TTY"
+        res.is_ok(),
+        "should prompt at TTY, output log written to debug_pty.log"
     );
 
-    // Decline the prompt (type 'n' and enter)
-    writer.write_all(b"n\r").unwrap();
-    child.wait().unwrap();
+    // Decline the prompt
+    writer
+        .write_all(
+            b"n
+",
+        )
+        .unwrap();
+
+    // Drop writer so EOF is sent if needed
+    drop(writer);
+
+    assert!(child.wait().unwrap().success());
 
     // Verify recovery hint on sub-launch failure
     let sub = std::process::Command::new(bin)
