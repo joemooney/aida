@@ -27,12 +27,12 @@ description: |
   Sequence with TASK-1537 (baseline build timings for aida-cli-lib), which is already queued and deliberately held for a quiet machine for the same reason: take TASK-1537's baseline FIRST, then evaluate this against it. Two build-timing measurements taken under different unrecorded load are not comparable.
 
   Out of scope: changing [profile.release], changing test/dev opt-level, and the STORY-1488 crate split (a separate and larger lever on the same problem).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-27T15:11:56.017473960Z
-modified_at: 2026-10-04T04:43:46.906888103Z
+modified_at: 2026-10-05T06:46:21.749150349Z
 req_type: Task
 tags:
 - build
@@ -163,3 +163,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10ad0-3d1d-72e2-be46-73c6b8c81721
+  author: aida-auto-bump
+  timestamp: 2026-10-05T06:46:21.725775828Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10ad0-3d35-72ae-92ce-491321f6ddef
+  timestamp: 2026-10-05T06:46:21.749148959Z
+  agent: aida
+  commit_sha: c561b1401f398d28be7787f6369d278865bbd8d1
+  summary: Completed via merge c561b140
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-05T06:46:21.725750589Z
+  completion_sha: c561b1401f398d28be7787f6369d278865bbd8d1
