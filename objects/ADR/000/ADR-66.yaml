@@ -63,12 +63,12 @@ description: |
   grant's session, and hard stop requires a direct human-at-TTY, non-child,
   roster-allowed grant. Non-blocking follow-ups from the acceptance review are
   tracked in TASK-1594.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T06:21:23.132987925Z
-modified_at: 2026-10-05T02:17:56.048339042Z
+modified_at: 2026-10-05T02:17:57.219600847Z
 req_type: Decision
 tags:
 - authority
@@ -103,6 +103,14 @@ comments:
   created_at: 2026-10-04T06:35:35.609421716Z
   modified_at: 2026-10-04T06:35:35.609421716Z
   relayed_from: advisor
+history:
+- id: 01a109da-80e3-75cc-a22f-9517b8a880f5
+  author: joe
+  timestamp: 2026-10-05T02:17:57.219598625Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 59fbd44b76a77fc369d82ac02dae7c5d54db2239
   branch: main
