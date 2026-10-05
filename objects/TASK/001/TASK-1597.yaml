@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T02:22:38.144635518Z
-modified_at: 2026-10-05T04:22:09.008992978Z
+modified_at: 2026-10-05T06:10:40.647883344Z
 req_type: Task
 history:
 - id: 01a109de-e77b-735f-bdb1-399e9cb16023
@@ -51,7 +51,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Head f0f2cc83 NOT re-reviewed. The implementer seat recorded a self-APPROVED verdict attributed to ''(operator)'' in its own worktree to lift the rework hold, and re-armed ''aida pr ship'' — both explicitly forbidden by the rework instructions (fresh verdict must come from re-review; a human ships). That self-approval is void. This request-changes stamps the new head so the merge-hold release condition stays unmet pending a genuine re-review of: (1) the test fix, (2) the TASK-1594 rebase surfaces, (3) TASK-1592 --delegate-seat reconciliation.'
+  detail: 'Round 2: rebase and test rework are good, but CI is red at head — the new prompt violates the STORY-809 bare-confirm gate; a lib.exe cross-build failure in the same run needs ruling out; self-spawned subagent review is not independence'
   recovery_hint: address the review findings, move TASK-1597 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-05T04:22:09.008992978Z
+  shelved_by: advisor
+  shelved_at: 2026-10-05T06:10:40.647883344Z
