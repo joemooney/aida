@@ -1,0 +1,17 @@
+# trace:TASK-1538 | ai:claude
+# Standalone helper (NOT a workspace member): structural item-span and
+# visibility tooling for the STORY-1488 lib.rs split. Parses with syn so
+# raw strings, char literals, and nested braces are handled by a real
+# parser instead of regexes (the round-1/round-2 failure mode).
+[package]
+name = "itemtool"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"

@@ -1,0 +1,32 @@
+# STORY-1488 slice 1 — incremental landing manifest (TASK-1538, round 3)
+# trace:TASK-1538 | ai:claude
+#
+# Content-anchored module manifest for the per-PR extraction of
+# aida-cli-lib/src/lib.rs into the SIGNED-OFF named modules (advisor signoff
+# on STORY-1488, 2026-09-26, amendments binding). Selectors are kind+name
+# (resolved via `itemtool spans`), never line numbers, so each entry replays
+# on whatever main the PR branches from. A selector matches ALL occurrences
+# (cfg-gated twins move together).
+#
+# Entries are added module-by-module as each PR is prepared; the signed-off
+# map in the STORY-1488 sketch comment is the authoritative target list.
+# Process per PR: itemtool spans -> extract_module.py -> verify_pr.sh
+# (V2 multiset, V3 fmt, V4 tests, V5 golden, V7 caps) -> PR -> merge.
+
+[module.claim]
+purpose = "`aida claim` / `aida unclaim` — operator spec-scoped claim leases (STORY-1488 slice 1)."
+items = [
+  "fn resolve_spec_for_claim",
+  "fn claim_scope_id",
+  "fn is_own_claim",
+  "fn handle_claim",
+  "fn handle_unclaim",
+]
+# spec_scoped_lease stays in lib.rs for now: it is a lease gate consumed by
+# status/ps and moves later with leases.rs per the signed-off map.
+
+[module.tui_entry]
+purpose = "`aida tui` entry: the cfg(feature = \"tui\") / stub pair (STORY-1488 slice 1)."
+items = [
+  "fn handle_tui_command",   # matches BOTH cfg-gated twins; they move as a pair
+]
