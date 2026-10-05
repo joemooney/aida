@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1537",
+  "publishes": [
+    {
+      "at": "2026-10-05T04:39:44.922471225Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-28T15:51:06.430573545Z",
+      "spec": "TASK-1537",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-09-28T15:53:42.213385108Z",
+      "spec": "TASK-1537",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-05T04:39:44.903209987Z",
+      "spec": "TASK-1537",
+      "seat": "reviewer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-05T04:39:44.903317477Z",
+      "spec": "TASK-1537",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
