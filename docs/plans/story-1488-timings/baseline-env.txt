@@ -1,0 +1,10 @@
+git_sha: 92bd6cb529d2e232dce95a5841dcae3be859b318
+date: 2026-10-04T21:04:07-07:00
+rustc: rustc 1.92.0 (ded5c06cf 2025-12-08)
+cargo: cargo 1.92.0 (344c4567c 2025-10-21)
+CARGO_BUILD_JOBS: 3
+AIDA_CARGO_NO_SLOT: 1 (slot gate bypassed so queue wait cannot pollute timings; box verified quiet instead)
+linker: mold; rustc-wrapper: sccache, DISABLED for clean builds via CARGO_BUILD_RUSTC_WRAPPER=
+quiet_discipline: 3x60s quiet checks before start; foreign-build check before/after every timed run, dirty runs redone
+uptime_start:  21:04:07 up 30 days,  7:02,  1 user,  load average: 1.98, 2.27, 1.59
+uptime_end:  21:38:02 up 30 days,  7:36,  1 user,  load average: 3.10, 3.50, 3.22
