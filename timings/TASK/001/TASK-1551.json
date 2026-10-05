@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1551",
+  "publishes": [
+    {
+      "at": "2026-10-05T06:46:22.455757820Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-27T15:12:25.197903165Z",
+      "spec": "TASK-1551",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T01:15:06.874957511Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2402
+      }
+    },
+    {
+      "ts": "2026-10-04T01:32:38.644769136Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T01:34:43.378789596Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T01:34:46.152049692Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-04T02:42:11.687518613Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-04T02:42:17.267783328Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2402
+      }
+    },
+    {
+      "ts": "2026-10-04T02:43:20.037518307Z",
+      "spec": "TASK-1551",
+      "seat": "product",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (c561b14) but completion held at Done — blocked by TASK-1537 (Approved)",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-04T02:44:23.295498703Z",
+      "spec": "TASK-1551",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1551",
+        "branch": "task-1551",
+        "first_seen": "2026-10-04T02:44:23.287055387+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-05T06:46:22.447809092Z",
+      "spec": "TASK-1551",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c561b1401f398d28be7787f6369d278865bbd8d1",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
