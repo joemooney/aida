@@ -18,13 +18,15 @@ description: |
   5. The PR body states, and the shipped CLI and docs strings confirm, that no protected boundary is deployed; and either the gate-3 real-boundary evidence is attached, or the PR is explicitly marked as claiming no protection.
 
   Design record: ADR-61 (P-enrolled-host protected boundary), with binding amendments M1-M5 from architecture signoff 01a0e11e-12db-7cd0-a3d1-39df79961a63. Remains implementation-held per 01a0e125 even after TASK-1549, SPIKE-91 and TASK-1550 complete; a concrete installer/backend/credential package returns for Joe's separate authorization. No protection is deployed.
-status: Approved
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-10-05T04:15:03.688124271Z
+modified_at: 2026-10-05T04:15:04.784718599Z
 req_type: Bug
+tags:
+- deferred
 relationships:
 - rel_type: BlockedBy
   target_id: 01a0e123-5f79-7011-9708-df33ae577f93
@@ -810,6 +812,16 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a10a45-bc50-745e-911e-a68a74b6931b
+  author: joe
+  timestamp: 2026-10-05T04:15:04.784705958Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Draft
+implementation_info:
+  implemented: false
+  reopened_at_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
 decision_request:
   question: Approve gating the headless full-access launch paths (compete, intake assess, burndown run) on a human at a terminal or a verified drain token?
   choices:
