@@ -10,12 +10,12 @@ description: |
   Add a delegation prompt to `aida role enter`: when entering a role at a TTY, show which seats the entered role's known sub-launches need, and offer to include them in the TTY-issued delegation set (roster-allowed only, explicit opt-in per ADR-66's empty-by-default delegation). No authority semantics change: this only front-loads the existing explicit delegation choice to entry time. Refusal messages for a missing delegation should name the `aida role enter` re-entry path.
 
   Acceptance sketch: entering a role whose sub-launches need delegable seats prompts once at the TTY; declining leaves delegation empty and sub-launches still fail closed; the prompt never appears headless; a refused sub-launch names the re-entry path. Tests cover prompt-at-TTY, decline path, headless no-prompt, and the named recovery hint.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T02:22:38.144635518Z
-modified_at: 2026-10-05T02:22:45.627870483Z
+modified_at: 2026-10-05T02:32:28.907544180Z
 req_type: Task
 history:
 - id: 01a109de-e77b-735f-bdb1-399e9cb16023
@@ -25,6 +25,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a109e7-cdeb-7588-8387-4b44ec02d77e
+  author: joe
+  timestamp: 2026-10-05T02:32:28.907539518Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 92bd6cb529d2e232dce95a5841dcae3be859b318
   branch: main
