@@ -1,0 +1,20 @@
+id: 01a10ad3-a06e-7652-b18c-f8291c96a154
+spec_id: BUG-1803
+agreed_id: BUG-1803
+title: mirror-sync pushes the LOCAL main to mirror hubs, so a commit the canonical hub rejected can propagate to the mirror
+description: 'Observed 2026-10-04/05: commit dedfc092 was rejected by GitHub''s protected main (the canonical hub), but gitlab/main ended up at dedfc092 anyway — the hourly hub-mirror-sync (or the mirror-push path) pushed the local checkout''s main in the window before the local branch was reset. The mirror-push hook''s own message states the contract (''mirrors follow origin; a forge-side merge is mirrored by aida pull / aida remote mirror-sync''), but the implementation pushed a local-only commit that origin had refused, producing a diverged mirror that needed a human force-push (gitlab protection toggle + --force-with-lease) to repair. Fix: mirror-sync should push origin''s refs (fetch origin, push origin/main:main) to mirror hubs, never the local branch tip; a local tip ahead of origin is not mirrorable state. Acceptance sketch: with local main ahead of origin by a commit origin rejects, mirror-sync leaves the mirror at origin''s tip and reports the local-only commit instead of pushing it.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-05T06:50:03.758361585Z
+modified_at: 2026-10-05T06:50:03.758361585Z
+req_type: Bug
+filed_at:
+  code_sha: 9e33e1494c8f44359429291e56aaecf7ed930f1e
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: bfd19354-cbdf-496f-9fae-64fb73c21959
