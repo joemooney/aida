@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T16:57:10.789226548Z
-modified_at: 2026-10-04T18:11:32.555140408Z
+modified_at: 2026-10-05T02:22:24.629958044Z
 req_type: Task
 comments:
 - id: 01a1081d-2e4b-79c2-8c29-6d6ecb0d6c77
@@ -35,6 +35,23 @@ comments:
   created_at: 2026-10-04T18:11:32.555140408Z
   modified_at: 2026-10-04T18:11:32.555140408Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+- id: 01a109de-9575-7674-9b30-e5440bb12906
+  author: joe
+  content: |
+    OPERATOR DECISIONS RECORDED (Joe, 2026-10-04, via advisor session) — design confirmations resolved; scope for implementation fixed as follows.
+
+    A — DECIDED: subject-always-at-TTY. `issue_direct` must bind the grant principal to the actual invoking identity at the TTY, never inherit a principal from ambient grant env (seat_authority.rs:150-152). Roster checks run against the subject's own ceiling. In scope for this task.
+
+    B — DECIDED: headless advisor sub-launches stay fail-closed; no carve-out. The UX follow-up (delegation prompt in `aida role enter`) is spun out as its own task, not part of this one.
+
+    C — RESOLVED 2026-10-04: ADR-66 amended to record per-call MCP grant revalidation (strictly tighter than the sketch's startup capture). No code change needed.
+
+    D — DECIDED: `hold_authority_from` keeps the human-at-TTY leg as a deliberate, documented carve-out: holds are the supervision floor and emergency brake, and the brake must stay reachable by a human even when grant issuance is unhealthy. In scope: add a code comment at the leg citing the ADR-66 carve-out comment (recorded on ADR-66 today). The `|| orchestrated` leg of the same condition is NOT covered by this carve-out: the implementer must either produce a written justification on this task or route orchestrated hold authority through the validated grant like other dispatch.
+
+    Implementation scope of this task = hygiene findings 1-5 from the description + decision A's fix + decision D's documentation/orchestrated-leg reconciliation. Drain-safe: mechanical fixes and doc/help-text updates, no architecture decisions remaining.
+  created_at: 2026-10-05T02:22:24.629958044Z
+  modified_at: 2026-10-05T02:22:24.629958044Z
+  session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
 filed_at:
   code_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
   branch: main
