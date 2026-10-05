@@ -1,0 +1,20 @@
+id: 01a10abf-d2f9-7771-9ee8-3319060a19dc
+spec_id: TASK-1598
+agreed_id: TASK-1598
+title: 'Discipline: author pre-review protocol and CI-is-a-verifier-not-a-debugger rules (from PR-2424 review rounds)'
+description: 'Documentation-only: add two sections to aida-core/templates/.aida/discipline/implementer-discipline.md codifying (1) adversarial author pre-review via spawned subagent — findings-only, never represented as independent review; (2) local-vs-CI verification discipline — check-ci-fast pre-push, targeted local tests for new/changed tests, red CI is evidence to read not a dice roll to re-throw, green claims cite the completed run at head. Source incidents: PR-2424 rounds 1-2 (2026-10-04/05). Operator approved adding these 2026-10-04.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-05T06:28:25.977134459Z
+modified_at: 2026-10-05T06:28:25.977134459Z
+req_type: Task
+filed_at:
+  code_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: bfd19354-cbdf-496f-9fae-64fb73c21959
