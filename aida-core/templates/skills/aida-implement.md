@@ -303,26 +303,57 @@ a required check — `gh pr merge --admin` is a violation in every lane.
 
 ### Pre-review self-check loop: spawned checker, zero authority
 
-Before handing the PR to the real review, you MAY run a self-check loop
-with a SPAWNED fresh-context agent (the Task/Agent tool where the
-harness provides one). Brief it adversarially: give it the spec ID, the
-PR/branch, and the acceptance criteria; tell it to RE-DERIVE every
-proof itself rather than trust the PR body, to verify acceptance
-against the diff, and to return findings with file:line evidence. The
-checker agent must not modify the repo, must not record verdicts, and
-must not comment on the PR. Fix what it finds, re-spawn against the
-new head, and stop when it finds nothing or after 3 rounds (still
-failing after 3: park the spec NeedsAttention with the findings — do
-not grind). Report the loop (rounds, final findings) in the PR body.
+Before handing the PR to review, run a self-check loop with a SPAWNED
+fresh-context agent (the Task/Agent tool where the harness provides
+one) — the author's last act before handoff. Shape it so it can
+actually disagree with you:
+
+- Hand it the SPEC and the verdict file / acceptance criteria as they
+  exist in the substrate — never your restatement of them. A checker
+  pointed at the author's summary confirms the summary.
+- Prompt it adversarially: "find the reason this gets
+  request-changes", not "verify my work". A subagent asked to review
+  its parent's rework overwhelmingly validates.
+- It must RUN ITS OWN evidence commands (tests, diffs, proofs) rather
+  than trusting any claim in the PR body, and it must not modify the
+  repo, record verdicts, or comment on the PR.
+- Its output is a FINDINGS LIST with file:line evidence, which you fix
+  or explicitly rebut — never an approval. Re-spawn against the new
+  head; stop when it finds nothing or after 3 rounds (still failing:
+  park the spec NeedsAttention with the findings — do not grind).
+- Report the loop (rounds, final findings, fixes) in the PR trail, and
+  reserve the word "review" there for the independent gate.
 
 ADVISOR RULING (2026-10-04, binding): **a subagent you spawn is not an
 independent review and must not be represented as one** — its prompt,
-its relayed output, and its stopping point are all controlled by the
-implementer, which is exactly the independence the gate requires and
-this loop lacks. The approving verdict comes from the ADVISOR SEAT
-only; a merge-hold clears only via a fresh APPROVED verdict at the new
-head, and a human ships it. Never call the self-check "review" in the
-PR, the spec, or your report. trace:BUG-1802 | ai:claude
+its input, and its stopping point are all controlled by the author,
+and both real failures that night came from unexamined evidence the
+author already possessed. The approving verdict comes from a session
+INDEPENDENT OF THE AUTHOR — the drain's phase-3 reviewer, another
+seat's review session, or a human; a spec that has produced false
+green claims may be escalated to advisor-seat-only review. A
+merge-hold clears only via a fresh APPROVED verdict at the new head,
+and a human ships it. trace:BUG-1802 | ai:claude
+
+### CI discipline: CI is verification, not a debugger
+
+A full local workspace build is expensive and CI rebuilds everything
+anyway, so letting CI be the FIRST full-workspace verification of a
+branch is a legitimate trade. What is not legitimate is push →
+wait → red → re-trigger. The floor:
+
+1. `make check-ci-fast` before EVERY push, actually run, no
+   exceptions.
+2. New or changed tests run locally, targeted, before the first push:
+   `cargo test -p <crate> <filter>` is cheap once anything has built
+   (the agent compile profile exists for exactly this).
+3. A red CI run is EVIDENCE TO READ, not a dice roll to re-throw.
+   Re-triggering without a changed hypothesis and a local reproduction
+   attempt is the named anti-pattern — runners are a shared queue, and
+   probe-pushes degrade everyone's merge latency.
+4. A green claim cites the COMPLETED run at the current head — never a
+   targeted subset, never a run at an older head, never "CI will
+   confirm". trace:BUG-1802 | ai:claude
 
 ### Step 7: Exit after `aida pr ship` (or `aida queue done`) — do NOT linger watching CI
 
