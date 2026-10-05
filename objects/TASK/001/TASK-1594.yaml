@@ -18,12 +18,12 @@ description: |
   C. The signed sketch says MCP "captures the grant at startup"; the implementation re-validates per call (revocation applies immediately — strictly tighter). Amend the sketch/ADR-66 wording to match the implementation.
 
   Provenance: independent reviewer sweep at head 5cc9c028, advisor disposition 2026-10-04 (advisor oversight session). Review verdict record: .aida/review-verdicts/STORY-1473.json once recorded.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T16:57:10.789226548Z
-modified_at: 2026-10-05T02:22:27.075436866Z
+modified_at: 2026-10-05T03:48:50.592214464Z
 req_type: Task
 comments:
 - id: 01a1081d-2e4b-79c2-8c29-6d6ecb0d6c77
@@ -60,6 +60,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a10a2d-b6f1-711a-b5d9-39cdce68c7a3
+  author: aida-auto-bump
+  timestamp: 2026-10-05T03:48:50.545128171Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a10a2d-b720-72b5-8788-cf7c94a0a27b
+  timestamp: 2026-10-05T03:48:50.592212135Z
+  agent: aida
+  commit_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
+  summary: Completed via merge ea1c51e5
 filed_at:
   code_sha: 62e3374e5173363fb67dfce21e21b73adea921f3
   branch: main
@@ -68,3 +81,7 @@ filed_at:
   aida_build_sha: 1b8bdda092
   vendor: antigravity
   session: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-05T03:48:50.545035672Z
+  completion_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
