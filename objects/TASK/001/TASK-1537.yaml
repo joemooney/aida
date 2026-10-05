@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:16:56.745444346Z
-modified_at: 2026-09-28T15:53:41.611368652Z
+modified_at: 2026-10-05T04:39:43.091832569Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -118,6 +118,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/lease-conflict: phase 1 retry cannot reclaim predecessor lease 01a0e89f on `TASK-1537` after 3 liveness re-probe(s); worktree: /tmp/aida-pool-aida-nightshift-0. No triage reason was given.'
   created_at: 2026-09-28T15:53:41.611367272Z
   modified_at: 2026-09-28T15:53:41.611367272Z
+- id: 01a10a5c-4af3-7530-a56a-3aaf7e3b9dd6
+  author: joe
+  content: |
+    BASELINE RECORDED (TASK-1537 / T1, session 01a109e7, 2026-10-04 21:04–21:38, quiet window on 92bd6cb529): protocol (a)–(d) per amendment 4. Full record + raw CSVs + cargo --timings HTMLs: docs/plans/2026-09-26-story-1488-timings.md and docs/plans/story-1488-timings/ (lands with the first slice-1 PR).
+
+    Medians (3 runs, spread recorded in the doc): (a) clean dev 153.4s, clean release 366.4s, sccache disabled, CARGO_BUILD_JOBS=3, mold, rustc 1.92.0. (c) clean test --no-run 116.5s. (b) one-line edit rebuild: lib.rs 20.0s / cli.rs 18.9s / leaf module 17.1s. (c) edit test --no-run: lib 31.7s / cli 34.4s / leaf 30.3s. (d) check -p aida-cli-lib after lib.rs edit: 11.8s.
+
+    KEY READING: the lib.rs edit-rebuild penalty over a leaf module is ~2.9s on a ~17s crate-wide floor (~15%), and ~1.4s on the ~30s test-build floor. Slice 1's build-throughput win is real but bounded by these deltas — the dominant cost is front-end + link, which the module split does not remove. Slice 1 proceeds on its merge-safety goal (lib.rs remains the top conflict hotspot) with throughput secondary; the slice-2 keep-only-if-faster gates (amendment 5) now have a quantified bar, and these numbers predict those gates will bite hard — the V10 deltas must beat the recorded spread.
+
+    Measurement-hygiene note for the post-split V10 run: attempt 1 was scrapped after a concurrent seat's builds polluted it (test build 341s contended vs 116.5s quiet — a 3x distortion). The contaminated CSV is preserved alongside the clean one as the cautionary record. V10 must use the same quiet discipline (foreign-rustc check before/after every timed run).
+  created_at: 2026-10-05T04:39:43.091832569Z
+  modified_at: 2026-10-05T04:39:43.091832569Z
+  session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
 history:
 - id: 01a0e8b8-d1eb-7643-9def-54e6edac92a7
   author: joe
