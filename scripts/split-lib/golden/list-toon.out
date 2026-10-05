@@ -1,0 +1,39 @@
+count: 30 of 30 open
+specs[30]{id,title,status,type,modified_at}:
+  BUG-1803,"mirror-sync pushes the LOCAL main to mirror hubs, so a commit the canonical hub rejected can propagate to the mirror",approved,bug,"2026-10-05T06:50:09.351194505+00:00"
+  TASK-1599,"Skill-prose floor for BUG-1802: review independence, worktree precondition, self-check loop in aida-implement",approved,task,"2026-10-05T06:33:59.104407336+00:00"
+  BUG-1802,aida review record lets an implementer seat self-approve its own PR with '(operator)' attribution,approved,bug,"2026-10-05T06:32:28.874098142+00:00"
+  TASK-1598,"Discipline: author pre-review protocol and CI-is-a-verifier-not-a-debugger rules (from PR-2424 review rounds)",approved,task,"2026-10-05T06:28:31.038029205+00:00"
+  TASK-1538,"Slice 1: mechanical split of lib.rs into ~45 flat modules (STORY-1488 T2)",approved,task,"2026-10-05T06:15:20.471921047+00:00"
+  TASK-1597,"aida role enter: prompt for sub-launch seat delegation at TTY entry (ADR-66 UX follow-up)",needs-attention,task,"2026-10-05T06:10:40.647883344+00:00"
+  STORY-1488,"Split aida-cli-lib for build throughput and merge safety: lib.rs (~110k lines) into modules, then the crate into dependency-ordered crates",approved,story,"2026-10-05T04:39:41.780840773+00:00"
+  STORY-1485,"Single-occupancy orchestrator seat: warn or refuse a second live session driving the orchestrator loop in the same repo",in-progress,story,"2026-10-05T02:15:25.818102094+00:00"
+  TASK-1316,"Latent: stamp paths passing empty findings (stamp_pr_review_verdict lib.rs:9422…",draft,task,"2026-10-04T21:34:29.047618684+00:00"
+  BUG-1801,"aida show breaches its 1s budget on 28% of calls across four recent binaries (worst 8054 ms, 5s ceiling breached)",approved,bug,"2026-10-04T21:27:22.685313641+00:00"
+  TASK-1596,Register monthly merged-worktrees guard + advisor route in the schedule registry,approved,task,"2026-10-04T21:07:56.529237072+00:00"
+  STORY-1217,"Time-boxed, ledgered grant for DISPOSITIONAL acts only (aida grant), after STORY-1353 separates dispatch from advisor authority",approved,story,"2026-10-04T20:52:39.444549417+00:00"
+  TASK-1593,Enforce session grants across CLI commands,approved,task,"2026-10-04T15:37:24.088267030+00:00"
+  TASK-1591,Multi-seat roster support and CLI commands,approved,task,"2026-10-04T15:37:21.386524117+00:00"
+  DOC-6,Entering session-bound seats and delegating child seats,approved,doc,"2026-10-04T15:37:15.534855378+00:00"
+  TASK-1565,Performance guard trips on a 0.2-point proportion margin and one 9449 ms call measured under fleet contention — decide whether to recalibrate the budget or make the measurement contention-aware,approved,task,"2026-10-04T04:44:40.217681985+00:00"
+  TASK-1588,Implement ADR-65 weekly Windows validation on main,approved,task,"2026-10-04T03:32:24.907287770+00:00"
+  STORY-1484,"Single-flight cache refresh: flock-guarded, double-checked, with a durable refresh request and a detached worker; readers get a bounded wait and then a labelled stale read",approved,story,"2026-10-03T05:39:34.416501924+00:00"
+  STORY-1486,"Scaffolded agent launch profile: writable vs read-only roots, seat-based Git-write policy, and approval-prompt exemptions (permission half split from TASK-1499)",draft,story,"2026-10-02T10:47:15.085897884+00:00"
+  STORY-1483,"Lane sync with main, drift warning, and aida lane land (one reviewed lane→main PR)",approved,story,"2026-09-29T06:28:25.428007975+00:00"
+  STORY-1482,Lane-targeted PRs and Done-in-lane status (no Completed until the lane lands),approved,story,"2026-09-29T06:28:24.403199005+00:00"
+  STORY-1481,"Lane record + seat, and main-line exclusion of laned epics' specs (aida lane open/list/close)",approved,story,"2026-09-29T06:28:22.860238697+00:00"
+  EPIC-74,"Feature lanes: epic-bound side work that cannot reach main until deliberately landed",draft,epic,"2026-09-29T06:28:11.269268693+00:00"
+  CR-7,"Cross-harness seat wake: idle agent seats resume on addressed work via held Stop hooks, with no model-side polling",approved,changerequest,"2026-09-27T21:00:45.568580496+00:00"
+  TASK-1511,"Night shift: headless cold-boot of seat jobs (split from TASK-1492)",approved,task,"2026-09-27T20:59:33.868650159+00:00"
+  TASK-1540,"Slice 2a: aida-cli-kernel + aida-cli-testkit (STORY-1488 T4)",approved,task,"2026-09-26T22:21:35.380203640+00:00"
+  TASK-1541,"Slice 2c: aida-cli-engine (drain engine) (STORY-1488 T5)",approved,task,"2026-09-26T22:21:30.869599405+00:00"
+  TASK-1539,"Slice 2b: extract aida-cli-base (LAYER-0, cli.rs first), keep only if measured faster (STORY-1488 T3)",approved,task,"2026-09-26T22:19:11.450664521+00:00"
+  TASK-1523,"North-star check: run STORY-1425's two-arm reconstitution measure on aida-monitor and publish the AIDA-vs-no-AIDA delta as VIS-2's executable test",approved,task,"2026-09-26T19:09:48.414430743+00:00"
+  EPIC-69,"/aida-away: human-proxy authorization + auditable approval ledger",in-progress,epic,"2026-09-21T19:47:10.501667993+00:00"
+note: open lens excludes archived and deferred specs — `aida list --all` for every spec
+note: 3082 closed hidden (open lens) — `aida list --all` or `--status closed`
+note: 35 accepted decisions hidden (terminal) — `aida list --type decision`
+next[1]{cmd,to}:
+  aida show <id>,detail
+cache:
+  stale: false
