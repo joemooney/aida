@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-05T02:34:27.172689592Z
+modified_at: 2026-10-05T06:15:20.471921047Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -92,6 +92,12 @@ comments:
     Salvage: scripts/split-lib/{visibility,move}.py and the manifest format from recovered/task-1538-split are reusable as starting points; the chunker outputs are not. Branch task-1538 (round 2) has no salvage value and will be deleted per round-2 verdict.
   created_at: 2026-10-05T02:34:27.172689592Z
   modified_at: 2026-10-05T02:34:27.172689592Z
+  session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
+- id: 01a10ab3-d697-764f-a37d-9574d0184454
+  author: joe
+  content: 'PR 2425 (slice-1 PR 0: commit A visibility + split tooling) is pushed, CI Build green, merge-hold placed. Per the advisor ruling of 2026-10-04: the fresh-context subagent this session spawned against the PR is a PRE-REVIEW SELF-CHECK only — not an independent review, and not represented as one. Its findings will be posted on the PR when it completes. The approving verdict comes from the advisor seat only, at the current head; the hold clears on that verdict and a human ships. Skill codification of the ruling: PR 2426 (BUG-1802).'
+  created_at: 2026-10-05T06:15:20.471921047Z
+  modified_at: 2026-10-05T06:15:20.471921047Z
   session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
