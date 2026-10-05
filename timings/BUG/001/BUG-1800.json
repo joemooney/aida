@@ -5,6 +5,10 @@
     {
       "at": "2026-10-04T21:28:41.127474923Z",
       "closed_by": "edit"
+    },
+    {
+      "at": "2026-10-05T02:21:09.481058757Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -36,6 +40,53 @@
         "event": "SpecCompleted",
         "commit": "",
         "closed_by": "edit"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:32:15.917239708Z",
+      "spec": "BUG-1800",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-04T21:43:34.327825046Z",
+      "spec": "BUG-1800",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-05T01:37:34.134428195Z",
+      "spec": "BUG-1800",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-05T01:37:40.402925468Z",
+      "spec": "BUG-1800",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2422
+      }
+    },
+    {
+      "ts": "2026-10-05T02:21:09.473421832Z",
+      "spec": "BUG-1800",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "92bd6cb529d2e232dce95a5841dcae3be859b318",
+        "closed_by": "auto-bump"
       }
     }
   ]
