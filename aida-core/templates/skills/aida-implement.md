@@ -301,6 +301,29 @@ human (or the drain, where its rung allows) ships. Never clear a hold
 you did not place, never arm auto-merge under a hold, and never bypass
 a required check — `gh pr merge --admin` is a violation in every lane.
 
+### Pre-review self-check loop: spawned checker, zero authority
+
+Before handing the PR to the real review, you MAY run a self-check loop
+with a SPAWNED fresh-context agent (the Task/Agent tool where the
+harness provides one). Brief it adversarially: give it the spec ID, the
+PR/branch, and the acceptance criteria; tell it to RE-DERIVE every
+proof itself rather than trust the PR body, to verify acceptance
+against the diff, and to return findings with file:line evidence. The
+checker agent must not modify the repo, must not record verdicts, and
+must not comment on the PR. Fix what it finds, re-spawn against the
+new head, and stop when it finds nothing or after 3 rounds (still
+failing after 3: park the spec NeedsAttention with the findings — do
+not grind). Report the loop (rounds, final findings) in the PR body.
+
+ADVISOR RULING (2026-10-04, binding): **a subagent you spawn is not an
+independent review and must not be represented as one** — its prompt,
+its relayed output, and its stopping point are all controlled by the
+implementer, which is exactly the independence the gate requires and
+this loop lacks. The approving verdict comes from the ADVISOR SEAT
+only; a merge-hold clears only via a fresh APPROVED verdict at the new
+head, and a human ships it. Never call the self-check "review" in the
+PR, the spec, or your report. trace:BUG-1802 | ai:claude
+
 ### Step 7: Exit after `aida pr ship` (or `aida queue done`) — do NOT linger watching CI
 
 **Your work ends the moment `aida pr ship` returns zero (or `aida queue
