@@ -10,6 +10,10 @@ feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
 modified_at: 2026-10-05T06:32:28.874098142Z
 req_type: Bug
+relationships:
+- rel_type: Parent
+  target_id: 01a10ac4-ba89-711e-9dfa-32a8f9fef915
+  created_at: 2026-10-05T06:33:50.288187331Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
