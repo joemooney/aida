@@ -174,7 +174,10 @@ fn visibility(file: &syn::File) {
                     syn::Fields::Unnamed(fields) => {
                         for (n, f) in fields.unnamed.iter().enumerate() {
                             if matches!(f.vis, syn::Visibility::Inherited) {
-                                let p = insertion_point(f.span());
+                                // Type span, NOT field span: the field span
+                                // includes attributes, and `pub(crate)` must
+                                // land after them (finding 5d on PR 2425).
+                                let p = insertion_point(f.ty.span());
                                 out.push((p.0, p.1, format!("field {}.{}", i.ident, n)));
                             }
                         }

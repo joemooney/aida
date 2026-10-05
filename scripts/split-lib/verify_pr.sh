@@ -57,7 +57,11 @@ if [[ -d "$GOLD" ]]; then
     gate "V5 golden $g" diff -q "$GOLD/$g.out" "$T/$g.out"
   done
 else
-  note "SKIP: V5 golden outputs ($GOLD missing — capture on base first)"
+  note "SKIP: V5 golden outputs — capture them on the BASE commit first (finding 5f):"
+  note "  git stash && cargo build -p aida-cli && mkdir -p $GOLD && \\"
+  note "  target/debug/aida --help > $GOLD/help.out && target/debug/aida help-all > $GOLD/help-all.out && \\"
+  note "  target/debug/aida list --format toon > $GOLD/list-toon.out && git stash pop && cargo build -p aida-cli"
+  note "  ($GOLD is per-PR scratch — do not commit it; outputs embed store state)"
 fi
 
 if (( FAIL == 0 )); then note "=== ALL GATES PASS ==="; else note "=== GATE FAILURES — do not merge ==="; exit 1; fi

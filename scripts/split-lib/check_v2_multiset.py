@@ -32,8 +32,14 @@ def main():
 
     extra = new - old - allowed       # lines that appeared from nowhere
     missing = old - new               # lines that vanished
-    unused_allow = allowed - (new - old)
     ok = True
+    # The wiring lines must actually have been ADDED (self-check finding 5c
+    # on PR 2425: previously only claimed, never checked).
+    added = new - old
+    for required in (f"mod {name};", f"use {name}::*;"):
+        if added[required] < 1:
+            ok = False
+            print(f"V2 FAIL: required wiring line missing from new lib.rs: {required}")
     if extra:
         ok = False
         print("V2 FAIL: unexplained NEW lines:")

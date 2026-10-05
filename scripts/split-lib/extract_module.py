@@ -93,10 +93,15 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
+    import re
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", args.module):
+        sys.exit(f"ERROR: module name must be a plain snake_case identifier: {args.module!r}")
     with open(args.manifest, "rb") as f:
         manifest = tomllib.load(f)
     spec = manifest["module"][args.module]
     purpose, selectors = spec["purpose"], spec["items"]
+    if "\n" in purpose or "\r" in purpose:
+        sys.exit("ERROR: manifest purpose must be a single line (it becomes the //! header)")
 
     rows = load_spans(args.spans)
     chosen = []
@@ -146,13 +151,20 @@ def main():
             del lines[s - 1]
 
     # Wire up: `mod x;` alphabetically, `use x::*;` in the glob block.
+    # Anchors must be CRATE-ROOT lines (column 0): inline test mods contain
+    # indented `use super::*;` lines that would otherwise match and put the
+    # wiring inside a mod body (self-check finding 5a on PR 2425).
     def mod_matcher(l):
-        ls = l.strip()
+        if l.startswith((" ", "\t")):
+            return None
+        ls = l.rstrip()
         if ls.startswith("mod ") and ls.endswith(";"):
             return ls[4:-1]
         return None
     def glob_matcher(l):
-        ls = l.strip()
+        if l.startswith((" ", "\t")):
+            return None
+        ls = l.rstrip()
         if ls.startswith("use ") and ls.endswith("::*;"):
             return ls[4:-4]
         return None
