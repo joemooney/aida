@@ -23,6 +23,17 @@ say “still working,” “continuing,” or equivalent about yourself. Delegat
 work is not your own active work. See `.aida/discipline/advisor-role.md`.
 <!-- trace:TASK-1557 | ai:codex -->
 
+## Precondition: an isolated worktree, never the primary checkout
+
+Implementation happens in the spec's isolated sibling worktree with its
+lease claimed — `aida queue work <SPEC-ID>` (or `/aida-pickup`) creates
+both and puts you there. Before editing anything, verify `pwd`: if you
+are in the primary checkout (`git rev-parse --git-common-dir` equals
+`.git`, i.e. not a linked worktree), STOP and enter through
+`aida queue work <SPEC-ID>` instead of editing in place. The primary
+checkout belongs to the operator; editing it breaks parallel seats and
+the integrate flow. trace:BUG-1802 | ai:claude
+
 ## Purpose
 
 Implement an approved requirement with full traceability, evolving the requirement database to capture implementation details and creating child requirements as needed.
