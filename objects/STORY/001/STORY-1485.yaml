@@ -3,12 +3,12 @@ spec_id: STORY-1485
 agreed_id: STORY-1485
 title: 'Single-occupancy orchestrator seat: warn or refuse a second live session driving the orchestrator loop in the same repo'
 description: 'Follow-on to the skill fix (see linked bug). Skill text alone did not stop a backgrounded orchestrator from continuing. Substrate guard: the orchestrator seat (aida session handoff --seat orchestrator, and seat claims generally for single-seat roles) records a live-holder lease (session, pid, harness). A second session that reads or writes that seat''s handoff, or claims the seat, while the holder is live gets a clear warning naming the holder and the commands to stop or attach it (claude stop <id> / claude attach <id>); with a flag, or by config, it is refused. Stale holders (dead pid) are taken over silently. Architecture-class (coordination and authority surface): needs a SKETCH on this spec plus ADVISOR SIGNOFF before implementation. Open questions: which roles are single-occupancy by default (orchestrator, integrator?); how to detect harness liveness for backgrounded Claude sessions (pid of ''claude daemon run''); interaction with the existing triage lease and aida ps presence; whether a handoff --write by a non-holder is refused or only warned.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-05T02:13:40.073713009Z
+modified_at: 2026-10-05T02:13:41.999818579Z
 req_type: Story
 tags:
 - sketch-signed-off
@@ -107,3 +107,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a109d6-9bef-74b0-949e-8c3be55c6b3c
+  author: aida-mcp-punt
+  timestamp: 2026-10-05T02:13:41.999818329Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
