@@ -8,10 +8,18 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-10-03T19:02:40.452728083Z
+modified_at: 2026-10-05T04:15:10.144426517Z
 req_type: Task
 relationships:
 - rel_type: Blocks
   target_id: 01a0df0b-ae41-7031-bc31-6425ece75175
   created_at: 2026-10-03T19:02:40.452724911Z
   created_by: joe
+comments:
+- id: 01a10a45-d140-73d5-8db5-cfa37bb6728a
+  author: joe
+  content: |
+    Companion deferral recorded 2026-10-04: BUG-1669 moved Approved → Draft (tag: deferred) with operator decision + advisor concurrence; its pre-work (TASK-1549, SPIKE-91, TASK-1550) is complete and banked. This gate remains the single reopening point: approving TASK-1580 with the chosen package named returns BUG-1669 to Approved, sketch-first.
+  created_at: 2026-10-05T04:15:10.144426517Z
+  modified_at: 2026-10-05T04:15:10.144426517Z
+  session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
