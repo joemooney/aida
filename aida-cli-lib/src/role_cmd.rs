@@ -278,11 +278,8 @@ Include it in the TTY-issued delegation set?";
         }
     }
 
-    let grant = crate::seat_authority::issue_direct(
-        project_root,
-        &seat_name,
-        final_delegate_seats,
-    )?;
+    let grant =
+        crate::seat_authority::issue_direct(project_root, &seat_name, final_delegate_seats)?;
     crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
