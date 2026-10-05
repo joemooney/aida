@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-09-27T14:15:34.035479936Z
+modified_at: 2026-10-05T04:39:41.780840773Z
 req_type: Story
 tags:
 - closure:pending
@@ -246,3 +246,16 @@ comments:
   created_at: 2026-09-27T14:15:34.035479936Z
   modified_at: 2026-09-27T14:15:34.035479936Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a10a5c-45d4-73b6-a20b-3c370083b3b4
+  author: joe
+  content: |
+    BASELINE RECORDED (TASK-1537 / T1, session 01a109e7, 2026-10-04 21:04–21:38, quiet window on 92bd6cb529): protocol (a)–(d) per amendment 4. Full record + raw CSVs + cargo --timings HTMLs: docs/plans/2026-09-26-story-1488-timings.md and docs/plans/story-1488-timings/ (lands with the first slice-1 PR).
+
+    Medians (3 runs, spread recorded in the doc): (a) clean dev 153.4s, clean release 366.4s, sccache disabled, CARGO_BUILD_JOBS=3, mold, rustc 1.92.0. (c) clean test --no-run 116.5s. (b) one-line edit rebuild: lib.rs 20.0s / cli.rs 18.9s / leaf module 17.1s. (c) edit test --no-run: lib 31.7s / cli 34.4s / leaf 30.3s. (d) check -p aida-cli-lib after lib.rs edit: 11.8s.
+
+    KEY READING: the lib.rs edit-rebuild penalty over a leaf module is ~2.9s on a ~17s crate-wide floor (~15%), and ~1.4s on the ~30s test-build floor. Slice 1's build-throughput win is real but bounded by these deltas — the dominant cost is front-end + link, which the module split does not remove. Slice 1 proceeds on its merge-safety goal (lib.rs remains the top conflict hotspot) with throughput secondary; the slice-2 keep-only-if-faster gates (amendment 5) now have a quantified bar, and these numbers predict those gates will bite hard — the V10 deltas must beat the recorded spread.
+
+    Measurement-hygiene note for the post-split V10 run: attempt 1 was scrapped after a concurrent seat's builds polluted it (test build 341s contended vs 116.5s quiet — a 3x distortion). The contaminated CSV is preserved alongside the clean one as the cautionary record. V10 must use the same quiet discipline (foreign-rustc check before/after every timed run).
+  created_at: 2026-10-05T04:39:41.780840773Z
+  modified_at: 2026-10-05T04:39:41.780840773Z
+  session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
