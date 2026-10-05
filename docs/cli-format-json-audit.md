@@ -271,6 +271,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida worktree exit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida worktree list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree gc` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida worktree dismiss` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida worktree reclaim` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida worktree pool` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida worktree pool status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
