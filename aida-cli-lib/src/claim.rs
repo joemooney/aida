@@ -36,6 +36,7 @@ pub(crate) fn resolve_spec_for_claim(spec: &str) -> Result<(std::path::PathBuf, 
         })?;
     Ok((project_root, req))
 }
+
 /// The canonical display id (agreed id preferred, else spec id) used as a
 /// claim's scope so it matches the BUG-637 gates exactly like an AIDA-launched
 /// spec lease.
@@ -46,6 +47,7 @@ pub(crate) fn claim_scope_id(req: &Requirement) -> String {
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| req.id.to_string())
 }
+
 /// True iff `lease` is a TASK-957 claim minted by THIS caller for `scope` — same
 /// scope (case-insensitive), same advisory-claim kind, and the same creator pid.
 /// Used for idempotency (re-claim = refresh) and for `aida unclaim` (remove only
@@ -54,6 +56,7 @@ pub(crate) fn claim_scope_id(req: &Requirement) -> String {
 pub(crate) fn is_own_claim(lease: &SessionLease, scope: &str, my_pid: Option<u32>) -> bool {
     lease.claim_verb && lease.scope.eq_ignore_ascii_case(scope) && lease.creator_pid == my_pid
 }
+
 /// `aida claim <spec>` — record a spec-scoped advisory CLAIM so advisor-fanned
 /// work (a Claude Agent-tool subagent, which otherwise takes only a generic
 /// `harness-worktree` lease) is visible to the BUG-637 duplicate-dispatch gates.
@@ -165,6 +168,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     }
     Ok(())
 }
+
 /// `aida unclaim <spec>` — remove THIS caller's spec-scoped claim (matched by
 /// scope + creator pid), so a fresh `aida queue work <spec>` / `aida edit
 /// <spec>` no longer sees it. Removing a claim the caller doesn't hold is a

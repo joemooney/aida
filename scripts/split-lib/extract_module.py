@@ -176,7 +176,14 @@ def main():
     out_path = args.lib.rsplit("/", 1)[0] + f"/{args.module}.rs"
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(HEADER_FMT.format(purpose=purpose))
-        f.write("".join(text for text, _ in moved_chunks))
+        # One blank line between items, as in the source (the cut ranges end
+        # at the item's closing brace, so the source's inter-item separator
+        # blank is not part of any chunk — reinsert it; self-check finding 3
+        # on PR 2428: dropping them makes the move non-byte-pure).
+        for n, (text, _) in enumerate(moved_chunks):
+            if n > 0 and not text.startswith("\n"):
+                f.write("\n")
+            f.write(text)
     with open(args.lib, "w", encoding="utf-8") as f:
         f.writelines(lines)
     moved = sum(len(t.splitlines()) for t, _ in moved_chunks)
