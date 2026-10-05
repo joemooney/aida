@@ -37,6 +37,7 @@ dependencies = [
  "aida-cli-lib",
  "aida-core",
  "chrono",
+ "portable-pty",
  "rusqlite",
  "serde_json",
  "tempfile",

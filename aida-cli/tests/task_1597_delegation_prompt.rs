@@ -84,7 +84,7 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     // Read the prompt
     let mut output = String::new();
     let mut buf = [0u8; 1024];
-    for _ in 0..20 {
+    for _ in 0..100 {
         if let Ok(n) = reader.read(&mut buf) {
             if n > 0 {
                 output.push_str(std::str::from_utf8(&buf[..n]).unwrap());
@@ -101,7 +101,7 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     );
 
     // Decline the prompt (type 'n' and enter)
-    writer.write_all(b"n\n").unwrap();
+    writer.write_all(b"n\r").unwrap();
     child.wait().unwrap();
 
     // Verify recovery hint on sub-launch failure
