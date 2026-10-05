@@ -12286,7 +12286,6 @@ pub(crate) fn handle_queue_work(
         );
     }
     // trace:TASK-1594 | ai:claude
-    // trace:TASK-1594 | ai:claude
     let mut child_grant_id = None;
     if !no_human {
         let child_grant = crate::seat_authority::issue_child(

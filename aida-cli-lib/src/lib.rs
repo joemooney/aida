@@ -15311,7 +15311,6 @@ pub(crate) fn active_stakeholder_role() -> Option<String> {
 }
 
 // trace:TASK-1594 | ai:claude
-// trace:TASK-1594 | ai:claude
 pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
     format!(
         "The '{role}' role is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
@@ -53089,7 +53088,6 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || orchestrated
 }
 
-// trace:TASK-1594 | ai:claude
 // trace:TASK-1594 | ai:claude
 pub(crate) fn hold_authority_from(role: &str, is_tty: bool, _orchestrated: bool) -> bool {
     // ADR-66 carve-out: holds are the supervision floor and emergency brake.

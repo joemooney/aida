@@ -863,7 +863,6 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// `exec` replaces this process. `session_id` must be a valid UUID —
 /// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
 // trace:TASK-1594 | ai:claude
-// trace:TASK-1594 | ai:claude
 pub fn exec_claude_with_session(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -935,7 +934,6 @@ pub fn claude_session_args(
     args
 }
 
-// trace:TASK-1594 | ai:claude
 // trace:TASK-1594 | ai:claude
 fn exec_claude(
     permission_mode: Option<&str>,
@@ -1305,7 +1303,6 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
 // trace:TASK-895 | ai:claude
-// trace:TASK-1594 | ai:claude
 // trace:TASK-1594 | ai:claude
 pub fn exec_codex_session(
     initial_prompt: &str,
@@ -4404,7 +4401,6 @@ fn exec_resume_command(
 /// + wait on platforms without exec semantics. `permission_mode`, when
 ///   given, is passed through so a resumed `aida queue work` session keeps
 ///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
-// trace:TASK-1594 | ai:claude
 // trace:TASK-1594 | ai:claude
 pub fn exec_claude_resume(
     id: &str,

@@ -156,7 +156,6 @@ pub(crate) fn issue_direct(
         bail!("AIDA-managed agent sessions cannot issue direct TTY grants; request a scoped child seat from the launcher");
     }
     // trace:TASK-1594 | ai:claude
-    // trace:TASK-1594 | ai:claude
     let subject = crate::current_user_id(None);
     let principal = subject.clone();
     if !roster_allows(project_root, &principal, seat) {
@@ -381,7 +380,6 @@ mod tests {
             assert_eq!(current_seat(root), None, "env role alone must not seat");
         }
 
-        // trace:TASK-1594 | ai:claude
         // trace:TASK-1594 | ai:claude
         let subject = crate::current_user_id(None);
         let id = test_support::mint_grant_for(root, &subject, "advisor", &["implementer"]);

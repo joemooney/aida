@@ -241,6 +241,7 @@ fn handle_role_enter(
             }
         }
     };
+    // trace:TASK-1594 | ai:claude
     let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
