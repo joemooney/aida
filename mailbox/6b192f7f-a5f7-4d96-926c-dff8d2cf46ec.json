@@ -1,0 +1,19 @@
+{
+  "id": "6b192f7f-a5f7-4d96-926c-dff8d2cf46ec",
+  "thread_id": "6b192f7f-a5f7-4d96-926c-dff8d2cf46ec",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1791166502903,
+  "body": "/tmp/claude-1000/-home-joe-ai-aida/bfd19354-cbdf-496f-9fae-64fb73c21959/scratchpad/story1485-scope-decision.md",
+  "subject": "STORY-1485 scope gate: two-slice boundary authorized",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
