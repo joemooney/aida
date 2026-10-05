@@ -8,8 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-10-05T04:15:10.144426517Z
+modified_at: 2026-10-05T04:16:48.441119506Z
 req_type: Task
+tags:
+- operator-held
 relationships:
 - rel_type: Blocks
   target_id: 01a0df0b-ae41-7031-bc31-6425ece75175
@@ -23,3 +25,7 @@ comments:
   created_at: 2026-10-05T04:15:10.144426517Z
   modified_at: 2026-10-05T04:15:10.144426517Z
   session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
+deferred: true
+deferred_at: 2026-10-05T04:16:48.441119506Z
+deferred_until: a second human works this repo; seats run on hosts the operator does not control; the product serves external users
+deferred_reason: Decision gate holds BUG-1669; approval IS the operator's authorization act and no revisit trigger has fired (single human, controlled hosts, no external users).
