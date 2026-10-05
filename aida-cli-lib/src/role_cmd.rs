@@ -241,12 +241,6 @@ fn handle_role_enter(
             }
         }
     };
-    let grant = crate::seat_authority::issue_direct(
-        project_root,
-        &canonical_role_name(&resolved),
-        delegate_seats.to_vec(),
-    )?;
-    crate::seat_authority::revoke_current()?;
     let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
@@ -256,6 +250,12 @@ fn handle_role_enter(
             resolved
         )
     })?;
+    let grant = crate::seat_authority::issue_direct(
+        project_root,
+        &canonical_role_name(&resolved),
+        delegate_seats.to_vec(),
+    )?;
+    crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;

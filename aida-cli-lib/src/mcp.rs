@@ -6205,16 +6205,14 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     }
 }
 
+// trace:TASK-1594 | ai:claude
 /// BUG-486: whether the current MCP caller holds advisor authority, routed
 /// through the SAME predicate the CLI uses (`advisor_authority_from`) so the two
 /// surfaces can't drift — the CLI↔MCP inconsistency *was* the bug. The MCP
 /// server runs non-TTY and is never orchestrator-corroborated, so the only axis
 /// that can grant authority here is the resolved role. Role resolution:
-/// `role_active_env()` (the canonicalized `AIDA_SESSION_ROLE` the server
-/// inherited from the launching shell) is the source — `role_enter` (STORY-534)
-/// is a peek that sets exactly that shell env, so the entered session role and
-/// the env fallback are one and the same value seen by this process. An agent
-/// that has not entered an advisor role resolves to non-advisor and is refused,
+/// `role_active_env()` (the validated grant via `current_seat()`) is the source.
+/// An agent that has not entered an advisor role resolves to non-advisor and is refused,
 /// matching the headless / non-TTY default. trace:BUG-486 | ai:claude
 fn mcp_caller_has_advisor_authority() -> bool {
     // trace:BUG-486
@@ -12660,9 +12658,7 @@ mod tests {
             assert!(result["structuredError"]["message"]
                 .as_str()
                 .unwrap()
-                .starts_with(
-                    "AIDA_SESSION_ROLE=guest is a least-privilege stakeholder role; refusing"
-                ));
+                .starts_with("The 'guest' role is a least-privilege stakeholder role; refusing"));
         }
         let read = server
             .handle_tools_call(&json!(3), &json!({"name": "list_requirements"}))

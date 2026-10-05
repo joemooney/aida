@@ -15310,9 +15310,11 @@ pub(crate) fn active_stakeholder_role() -> Option<String> {
         .filter(|role| role == "guest" || role == "requester")
 }
 
+// trace:TASK-1594 | ai:claude
+// trace:TASK-1594 | ai:claude
 pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
     format!(
-        "AIDA_SESSION_ROLE={role} is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
+        "The '{role}' role is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
     )
 }
 
@@ -53087,8 +53089,13 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || orchestrated
 }
 
-pub(crate) fn hold_authority_from(role: &str, is_tty: bool, orchestrated: bool) -> bool {
-    matches!(role, "product" | "advisor" | "operator") || is_tty || orchestrated
+// trace:TASK-1594 | ai:claude
+// trace:TASK-1594 | ai:claude
+pub(crate) fn hold_authority_from(role: &str, is_tty: bool, _orchestrated: bool) -> bool {
+    // ADR-66 carve-out: holds are the supervision floor and emergency brake.
+    // The brake must stay reachable by a human at a TTY even when grant issuance is unhealthy.
+    // Orchestrated hold authority routes through the validated grant (the `role` check).
+    matches!(role, "product" | "advisor" | "operator") || is_tty
 }
 
 /// Dispatch authority permits routing already-disposed work without granting

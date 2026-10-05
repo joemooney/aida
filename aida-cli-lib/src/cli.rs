@@ -2304,16 +2304,16 @@ pub enum RoleCommand {
     Repair { name: Option<String> },
 
     /// Print the active role's name and exit, or exit 1 with empty
-    /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
+    /// stdout when no role is active. Resolves the validated grant
     /// — no project-store load. Shell-friendly counterpart to
     /// `git branch --show-current`.
-    // trace:TASK-42 | ai:claude
+    // trace:TASK-42 trace:TASK-1594 | ai:claude
     Active,
 
     /// Print the active role's name on stdout (empty line when no role is
     /// active) and exit 0 either way. With `--check`, exit 1 instead when
-    /// no role is active (still printing the name when one is). A pure read
-    /// of `$AIDA_SESSION_ROLE` — no project-store load. Scripting-friendly
+    /// no role is active (still printing the name when one is). Resolves
+    /// the validated grant — no project-store load. Scripting-friendly
     /// surface for agents without direct env access.
     // trace:STORY-64 | ai:claude
     Current {
