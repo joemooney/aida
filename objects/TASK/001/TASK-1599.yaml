@@ -10,6 +10,10 @@ feature: Uncategorized
 created_at: 2026-10-05T06:33:47.401872557Z
 modified_at: 2026-10-05T06:33:47.401872557Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a10a4c-889f-75cf-9f4f-a7c52dfe0bcc
+  created_at: 2026-10-05T06:33:50.288187331Z
 filed_at:
   code_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
   branch: main
