@@ -68,7 +68,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T06:21:23.132987925Z
-modified_at: 2026-10-05T02:17:57.219600847Z
+modified_at: 2026-10-05T02:22:26.008756038Z
 req_type: Decision
 tags:
 - authority
@@ -103,6 +103,15 @@ comments:
   created_at: 2026-10-04T06:35:35.609421716Z
   modified_at: 2026-10-04T06:35:35.609421716Z
   relayed_from: advisor
+- id: 01a109de-9ad8-710d-a4ff-9d6a933adf4a
+  author: joe
+  content: |
+    AMENDMENT — reasoned-hold human-at-TTY carve-out (operator decision, Joe, 2026-10-04; TASK-1594 confirmation D).
+
+    `hold_authority_from` (BUG-1793) deliberately retains a bare human-at-TTY authority leg, which this ADR removed from `advisor_authority_from`. This is a recorded exception, not drift: holds are the supervision floor and emergency brake — their purpose is to reach a human, so brake operations must remain reachable by a human at an interactive terminal even when grant issuance is broken or misconfigured. Fail-closed applies to dispatch; the brake fails open to the human. The carve-out covers ONLY the interactive TTY leg: the `orchestrated` leg of the same condition is not covered and is being reconciled under TASK-1594 (justify in writing or route through the validated grant).
+  created_at: 2026-10-05T02:22:26.008756038Z
+  modified_at: 2026-10-05T02:22:26.008756038Z
+  session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
 history:
 - id: 01a109da-80e3-75cc-a22f-9517b8a880f5
   author: joe
