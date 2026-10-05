@@ -10,12 +10,12 @@ description: |
   Add a delegation prompt to `aida role enter`: when entering a role at a TTY, show which seats the entered role's known sub-launches need, and offer to include them in the TTY-issued delegation set (roster-allowed only, explicit opt-in per ADR-66's empty-by-default delegation). No authority semantics change: this only front-loads the existing explicit delegation choice to entry time. Refusal messages for a missing delegation should name the `aida role enter` re-entry path.
 
   Acceptance sketch: entering a role whose sub-launches need delegable seats prompts once at the TTY; declining leaves delegation empty and sub-launches still fail closed; the prompt never appears headless; a refused sub-launch names the re-entry path. Tests cover prompt-at-TTY, decline path, headless no-prompt, and the named recovery hint.
-status: InProgress
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T02:22:38.144635518Z
-modified_at: 2026-10-05T02:32:28.907544180Z
+modified_at: 2026-10-05T03:58:04.100482285Z
 req_type: Task
 history:
 - id: 01a109de-e77b-735f-bdb1-399e9cb16023
@@ -32,6 +32,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10a36-2944-7752-ae80-97ca2d04fbb1
+  author: aida-orchestrator
+  timestamp: 2026-10-05T03:58:04.100511593Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 92bd6cb529d2e232dce95a5841dcae3be859b318
   branch: main
@@ -40,3 +47,11 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: bfd19354-cbdf-496f-9fae-64fb73c21959
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: CI failures are the PR's own hanging test, not infrastructure; base is stale behind TASK-1594; admin-merge bypass attempted without any review verdict
+  recovery_hint: address the review findings, move TASK-1597 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-05T03:58:04.100482285Z
