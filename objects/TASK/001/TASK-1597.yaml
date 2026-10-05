@@ -1,0 +1,27 @@
+id: 01a109de-ca40-76a4-8050-4d40cf09b77c
+spec_id: TASK-1597
+agreed_id: TASK-1597
+title: 'aida role enter: prompt for sub-launch seat delegation at TTY entry (ADR-66 UX follow-up)'
+description: |
+  UX follow-up from ADR-66 / STORY-1473 acceptance review (TASK-1594 confirmation B, operator-decided 2026-10-04: authority stays fail-closed; this task is UX only).
+
+  Headless advisor sub-launches (questions_clarify, intake, harvest, reconstitute) now require the launching session to hold a grant delegating the needed seat. That is intended ADR-66 behavior, but today the operator only discovers a missing delegation when a sub-launch is refused mid-flow.
+
+  Add a delegation prompt to `aida role enter`: when entering a role at a TTY, show which seats the entered role's known sub-launches need, and offer to include them in the TTY-issued delegation set (roster-allowed only, explicit opt-in per ADR-66's empty-by-default delegation). No authority semantics change: this only front-loads the existing explicit delegation choice to entry time. Refusal messages for a missing delegation should name the `aida role enter` re-entry path.
+
+  Acceptance sketch: entering a role whose sub-launches need delegable seats prompts once at the TTY; declining leaves delegation empty and sub-launches still fail closed; the prompt never appears headless; a refused sub-launch names the re-entry path. Tests cover prompt-at-TTY, decline path, headless no-prompt, and the named recovery hint.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-05T02:22:38.144635518Z
+modified_at: 2026-10-05T02:22:38.144635518Z
+req_type: Task
+filed_at:
+  code_sha: 92bd6cb529d2e232dce95a5841dcae3be859b318
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: bfd19354-cbdf-496f-9fae-64fb73c21959
