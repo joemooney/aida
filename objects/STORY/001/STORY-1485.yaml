@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-05T00:54:14.567270016Z
+modified_at: 2026-10-05T02:13:40.073713009Z
 req_type: Story
 tags:
 - sketch-signed-off
@@ -72,6 +72,26 @@ comments:
   created_at: 2026-10-05T00:54:09.290545770Z
   modified_at: 2026-10-05T00:54:09.290545770Z
   session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
+- id: 01a109d6-9469-7346-a814-ad3a2a3578a5
+  author: mcp
+  content: |-
+    GUIDED IMPLEMENTATION PREFLIGHT / ADVISOR CONSULTATION — 2026-10-04, ai:codex.
+
+    Verified independent advisor signoff for faa07e4acb and the 2026-09-26 operator acceptance. Existing clean branch story-1485 still points to faa07e4acb and preserves edeac57b63. Previous lease 01a108d76d87 was confirmed exited by aida ps and its creator PID 446899 no longer exists. Recovered through normal session end (no force, branch retained) and session start --reuse-branch --force-claim; new implementation lease 01a109d5b1fa. No production code changed, no PR opened, no merge/merge-hold clearance/completion.
+
+    Base issue: branch predates b602a5d9ca, so seat_authority.rs is absent there. Fetched origin/main = 92bd6cb529d2e232dce95a5841dcae3be859b318. Plan is to merge the current main into the existing branch, preserving both sketch commit identities; not reset it.
+
+    Inventory refresh against 92bd6cb529: beyond the sketch table, classify and fence orchestrator-origin operations in advisor_watch.rs spawn_claude_headless_resume/spawn_vendor_headless_with_seat; schedule_cmd.rs queue_add; backlog.rs queue_add; assign_cmd.rs queue_add/queue_remove; archive_cmd.rs queue_remove; defer_cmd.rs queue_remove; doctor_cmd.rs dismiss_queue_orphan's queue_remove; init_cmd.rs queue_add; supervisor.rs's direct backend.queue_add; queue_cmd.rs opportunistic GC/prune and queue_remove_many_if, queue_remove_for_role_if, queue_reorder, queue_clear. Storage exposes multiple mutation primitives, and supervisor bypasses Storage; wrapper-only guards would miss this path. These are discovered candidates to classify by persisted binding, not blanket bans on ordinary implementer work. A complete production/test-site audit remains required during implementation.
+
+    REVIEWABILITY DECISION REQUEST (operator explicitly requires advisor approval before splitting):
+    Recommend two dependent vertical slices, not an unattended drain:
+    A. Complete graceful single-occupancy path: config/CLI, exact identity tri-state probes, permanent sidecar/atomic generation record, persisted caller/child lineage and demotion tombstones, reservation/receipt recovery, all refreshed CLI/MCP/spawn/queue/handoff gateways, notification-only mailbox, validated ack/release, resumable requests and absolute timeouts, silent provably-dead recovery, idempotent event history. --kill fails closed everywhere and is explicitly incomplete scaffolding. Tests cover concurrent sibling claims, idempotent reclaims, live refusals/warnings, graceful ack/release, interrupted requests/timeouts, stale/spoofed/mail-only ack, env/seat omission fencing, reservation/transfer/crash races, PID reuse/missing identity/probe errors, ambiguous mappings, dead replacement, history projection, and kill refusals. Production activation requires the full gateway inventory, binding and probes together; no env-only compatibility fallback.
+    B. Direct-human hard takeover: direct non-child TTY-issued roster grant and target confirmation, post-grace revalidation, exact-target stop adapters with verified daemon mapping/pidfd as supported, stopping recovery, dirty worktree reporting/preservation, positive termination proof and CAS transfer. Tests prove real authorized direct stop using controlled processes, managed/MCP/headless refusal, ambiguous mapping refusal, stop failure/Unknown recovery and dirty reporting. No trusted-kill config.
+    Both slices run relevant tests and make check-ci-fast before each push, and prove key refusals non-vacuous by removing/restoring guards. No existing peer process is a test target. First PR must explicitly retain STORY-1485 In Progress and cannot claim hard-takeover acceptance; full story remains gated on B, operator acceptance and independent advisor review. Child spec IDs/completion trailers must be agreed before opening multiple PRs to avoid auto-completing the parent on a partial merge.
+
+    Please decide: authorize this two-slice boundary and child-spec/PR treatment, or require one full implementation PR. This is a proposal, not a new signoff or changed acceptance. Implementation pauses at this requested scope gate.
+  created_at: 2026-10-05T02:13:40.073683663Z
+  modified_at: 2026-10-05T02:13:40.073683663Z
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
