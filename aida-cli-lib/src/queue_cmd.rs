@@ -12285,13 +12285,15 @@ pub(crate) fn handle_queue_work(
             launch_vendor,
         );
     }
+    // trace:TASK-1594 | ai:claude
+    let mut child_grant_id = None;
     if !no_human {
         let child_grant = crate::seat_authority::issue_child(
             &project_root,
             &crate::canonical_role_name(&role),
             &crate::current_user_id(None),
         )?;
-        std::env::set_var(crate::seat_authority::GRANT_ENV, child_grant.id);
+        child_grant_id = Some(child_grant.id);
     }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
     // no caller-minted session id / AIDA-addressable resume, and the interactive
@@ -12320,7 +12322,12 @@ pub(crate) fn handle_queue_work(
             )
             .cyan()
         );
-        return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
+        return session::exec_codex_session(
+            &prompt,
+            codex_bypass,
+            resolved_model.as_deref(),
+            child_grant_id.as_deref(),
+        );
     }
     // BUG-1607: an interactive Agy launch is now refused by
     // `preflight_launch_vendor` above, BEFORE `session_start` minted the
@@ -12388,7 +12395,12 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
-            session::exec_claude_resume(&id, permission_mode.as_deref(), contained)
+            session::exec_claude_resume(
+                &id,
+                permission_mode.as_deref(),
+                contained,
+                child_grant_id.as_deref(),
+            )
         }
         QueueWorkLaunch::Fresh(id) => {
             let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
@@ -12472,6 +12484,7 @@ pub(crate) fn handle_queue_work(
                 &id,
                 contained,
                 resolved_model.as_deref(),
+                child_grant_id.as_deref(),
             )
         }
     }

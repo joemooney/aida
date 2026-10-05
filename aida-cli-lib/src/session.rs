@@ -862,6 +862,7 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// manifest (and a later `--resume` can find the conversation) before
 /// `exec` replaces this process. `session_id` must be a valid UUID —
 /// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
+// trace:TASK-1594 | ai:claude
 pub fn exec_claude_with_session(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -869,6 +870,7 @@ pub fn exec_claude_with_session(
     session_id: &str,
     contained: bool,
     model: Option<&str>,
+    grant_id: Option<&str>,
 ) -> Result<()> {
     exec_claude(
         permission_mode,
@@ -877,6 +879,7 @@ pub fn exec_claude_with_session(
         Some(session_id),
         contained,
         model,
+        grant_id,
     )
 }
 
@@ -931,6 +934,7 @@ pub fn claude_session_args(
     args
 }
 
+// trace:TASK-1594 | ai:claude
 fn exec_claude(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -938,9 +942,13 @@ fn exec_claude(
     session_id: Option<&str>,
     contained: bool,
     model: Option<&str>,
+    grant_id: Option<&str>,
 ) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant);
+    }
     cmd.args(claude_session_args(
         permission_mode,
         name,
@@ -1295,9 +1303,18 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
 // trace:TASK-895 | ai:claude
-pub fn exec_codex_session(initial_prompt: &str, bypass: bool, model: Option<&str>) -> Result<()> {
+// trace:TASK-1594 | ai:claude
+pub fn exec_codex_session(
+    initial_prompt: &str,
+    bypass: bool,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("codex");
+    if let Some(id) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, id);
+    }
     cmd.args(codex_session_args(initial_prompt, bypass, model));
     #[cfg(unix)]
     {
@@ -4373,7 +4390,7 @@ fn exec_resume_command(
     contained: bool,
 ) -> Result<()> {
     if target.agent == "claude" {
-        return exec_claude_resume(&target.id, permission_mode, contained);
+        return exec_claude_resume(&target.id, permission_mode, contained, None);
     }
     let (program, args) = resume_command_for(target);
     println!("{} {}", program, crate::shell_join_display(&args));
@@ -4384,9 +4401,18 @@ fn exec_resume_command(
 /// + wait on platforms without exec semantics. `permission_mode`, when
 ///   given, is passed through so a resumed `aida queue work` session keeps
 ///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
-pub fn exec_claude_resume(id: &str, permission_mode: Option<&str>, contained: bool) -> Result<()> {
+// trace:TASK-1594 | ai:claude
+pub fn exec_claude_resume(
+    id: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+    grant_id: Option<&str>,
+) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant);
+    }
     cmd.args(["--resume", id]);
     if let Some(m) = permission_mode {
         cmd.args(["--permission-mode", m]);
