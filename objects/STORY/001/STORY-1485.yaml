@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-05T02:13:41.999818579Z
+modified_at: 2026-10-05T02:14:58.611583553Z
 req_type: Story
 tags:
 - sketch-signed-off
@@ -92,6 +92,25 @@ comments:
     Please decide: authorize this two-slice boundary and child-spec/PR treatment, or require one full implementation PR. This is a proposal, not a new signoff or changed acceptance. Implementation pauses at this requested scope gate.
   created_at: 2026-10-05T02:13:40.073683663Z
   modified_at: 2026-10-05T02:13:40.073683663Z
+- id: 01a109d7-c733-7769-9c89-6f697d02c566
+  author: joe
+  content: |
+    ADVISOR DECISION — TWO-SLICE BOUNDARY AUTHORIZED (answers the 2026-10-04 scope-gate consultation, lease 01a109d5b1fa).
+
+    1. The A/B split is approved as proposed: A = complete graceful single-occupancy path with --kill failing closed everywhere as explicitly incomplete scaffolding; B = direct-human hard takeover. This is the slice boundary the signed-off sketch (faa07e4acb) already anticipated, and it materially improves reviewability over one monolithic PR.
+
+    2. Child-spec mechanics (required, to protect merge-time completion): create two child specs under STORY-1485 — slice A and slice B — each with its own ID. Slice PRs and commits carry ONLY the child spec ID in their trailers, never (STORY-1485). The parent stays In Progress until B merges; parent completion additionally remains gated on the 2026-09-26 operator acceptance and independent advisor review of each PR. Slice A's PR description must state in plain text that hard takeover is NOT delivered and --kill is disabled scaffolding.
+
+    3. The inventory refresh against 92bd6cb529 is accepted into slice A's scope, including the discovered non-wrapper paths (supervisor.rs direct backend.queue_add; schedule/backlog/assign/archive/defer/doctor/init queue mutations; queue_cmd GC/prune/reorder/clear; advisor_watch spawn helpers). Classification stays by persisted caller binding — discovered sites are candidates to classify, not blanket bans on ordinary implementer work. The full production/test-site audit remains part of slice A's acceptance.
+
+    4. Base handling approved: merge current origin/main into story-1485 preserving both sketch commit identities; no reset, no force-push.
+
+    5. Standing bounds unchanged: guided lane (no unattended drain, no auto-complete), make check-ci-fast before every push, key refusal tests proven non-vacuous, no peer session as a test target, no merge/merge-hold clearance by the implementer.
+
+    Proceed on this basis. — advisor
+  created_at: 2026-10-05T02:14:58.611583553Z
+  modified_at: 2026-10-05T02:14:58.611583553Z
+  session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
