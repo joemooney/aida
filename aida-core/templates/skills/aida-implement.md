@@ -262,6 +262,34 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
    Step 6 (menu) and `/aida-pr` orchestrator-mode (closing block).
    trace:TASK-359
 
+### Review independence — who records verdicts, who ships (BUG-1802)
+
+**You never record a review verdict for a spec you implemented.**
+`aida review record --verdict approved` is the reviewer's tool, run
+from a SEPARATE review session. A verdict recorded by the session that
+wrote the code is void whatever its attribution says, and recording one
+to lift a hold is a process breach, not initiative. The motivating
+incident is PR-2424 (TASK-1597, 2026-10-04): after CHANGES REQUESTED
+and a rework merge-hold, the implementer seat recorded a self-APPROVED
+verdict in its own worktree and re-armed `aida pr ship`; the hold
+refused, the verdict was voided, and the spec was parked.
+trace:BUG-1802 | ai:claude
+
+Run `aida pr ship` only when BOTH hold:
+
+- no merge-hold and no CHANGES REQUESTED / rework verdict exists for
+  the spec or its PR (`aida merge-hold list`, `aida show <SPEC>`), and
+- the lane allows implementer-ship (solo / fasttrack / a drain rung
+  that grants auto-complete) — i.e. nobody asked for an independent
+  review before merge.
+
+When a review gate exists, your job ends earlier than Step 7: fix,
+tests green locally, `make check-ci-fast` clean, push, report the PR
+back for re-review — then exit. The reviewer records the verdict; a
+human (or the drain, where its rung allows) ships. Never clear a hold
+you did not place, never arm auto-merge under a hold, and never bypass
+a required check — `gh pr merge --admin` is a violation in every lane.
+
 ### Step 7: Exit after `aida pr ship` (or `aida queue done`) — do NOT linger watching CI
 
 **Your work ends the moment `aida pr ship` returns zero (or `aida queue
