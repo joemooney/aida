@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-05T01:02:24.615489827Z
+modified_at: 2026-10-05T02:34:27.172689592Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -77,6 +77,22 @@ comments:
   created_at: 2026-10-05T01:02:24.615489827Z
   modified_at: 2026-10-05T01:02:24.615489827Z
   session_id: b3f706b1-659d-4f62-aad2-f8ae1a8cd387
+- id: 01a109e9-9be4-7773-b5c2-58459bfebb73
+  author: joe
+  content: |
+    OPERATOR DECISION (Joe, relayed via attended Fable session 01a109e7, 2026-10-04 19:40): REVISED LANDING STRATEGY after two unattended REJECTs. Slice 1 is redone incrementally in an attended session — the guided-implement mode the signoff itself prescribed. The signed-off module map, the amendments (1a–1n retargets, trait-impl exclusion, explicit test-module ownership), and the V-proof obligations remain binding; what changes is the landing cadence: N small PRs instead of one branch in one quiet window.
+
+    Sequence:
+    - PR 0 'commit A': scripted uniform pub(crate) visibility (amendment 2 rules: inherent impls only, skip cfg(test) bodies). Proof: V1 token-identity, builds+tests green on its own. Lands first so every later move is a provably pure cut-paste.
+    - PR 1..n: ONE named module per PR from the signed-off map, smallest/least-entangled first. Each PR = pure move + 'mod X; use X::*;' wiring + //! header + trace comment + exactly the retargets (1a–1n) that THIS move triggers. Nothing else changes — zero edits to pre-existing modules.
+    - Per-PR gate (hard, no next PR until green): V2 color-moved + multiset diff; V3 fmt/clippy warning-count parity; V4 cargo test --workspace green, unchanged count; V5 golden outputs byte-identical; V7 size caps. V6 (mcp stdio) at PRs near mcp-coupled code and at completion. V8 verified per-PR against the retarget list, with the full grep proof repeated at the final PR.
+    - V9 amendment: the relocate-hunks helper + declared-window machinery existed because one 110k-line landing would break every in-flight branch at once. Small PRs rebase normally; the helper ships only if a real conflict bites. No single quiet window needed beyond the TASK-1537 baseline window.
+    - V10: baseline (TASK-1537, running now on 92bd6cb529) before PR 0; post-split timings by the same protocol after the final module PR; optional mid-point check.
+
+    Salvage: scripts/split-lib/{visibility,move}.py and the manifest format from recovered/task-1538-split are reusable as starting points; the chunker outputs are not. Branch task-1538 (round 2) has no salvage value and will be deleted per round-2 verdict.
+  created_at: 2026-10-05T02:34:27.172689592Z
+  modified_at: 2026-10-05T02:34:27.172689592Z
+  session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
