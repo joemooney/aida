@@ -1,0 +1,27 @@
+id: 01a10caf-67f1-77dc-b3f4-b4dc632f0eb3
+spec_id: TASK-1-206
+title: 'Ship instruction: TASK-1537 is Completed, so nothing defers trailer-driven comp…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1538, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Ship instruction: TASK-1537 is Completed, so nothing defers trailer-driven completion — the squash-merge title of this and every slice-1 PR except the FINAL one must NOT end with the parenthesized (TASK-1538) trailer, or PR 0 of ~46 completes the spec. Reference the spec in the subject body instead; only the last module PR carries the completing trailer.
+  Reviewed sha: 33f085472a1fb6001c68ad8102b76ab003f98c0a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-05T15:29:44.433990004Z
+modified_at: 2026-10-05T15:29:44.433990004Z
+req_type: Task
+tags:
+- carried-from:TASK-1538
+- finding-hash:320c6196
+- from-review:TASK-1538
+- kind:carried-forward
+filed_at:
+  code_sha: 887bf7e5fba50ec5c510910ee5a3c2e472541d43
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
