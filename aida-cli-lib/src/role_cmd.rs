@@ -267,7 +267,8 @@ fn handle_role_enter(
         ) {
             let prompt = "The advisor role spawns headless sub-launches (questions_clarify, intake, harvest, reconstitute) which require the `advisor` seat.
 Include it in the TTY-issued delegation set?";
-            // inquire writes to stderr and reads from /dev/tty properly
+            // inquire writes to stderr and reads from /dev/tty properly.
+            // ?-exempt: cannot use confirm_with_context because it writes to stdout, breaking shell eval
             let include = inquire::Confirm::new(prompt)
                 .with_default(false)
                 .prompt()
