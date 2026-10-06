@@ -3,12 +3,12 @@ spec_id: TASK-1604
 agreed_id: TASK-1604
 title: 'orphan-store pull fails with ''fatal: Cannot rebase onto multiple branches'' — aida-store fetch resolves to multiple refs'
 description: 'Three occurrences 2026-10-05 evening, all during drain pre-pickup pulls (''aida db sync --pull''): wave-1 BUG-1803 pickup, wave-2 TASK-1588/BUG-1801 pickups. git pull --rebase of origin/aida-store fetches FETCH_HEAD with more than one candidate, so rebase refuses. Same window also produced ''fatal: cannot lock ref HEAD: is at 1aaf34fa but expected 0b03629a'' during a ''chore: sync pending changes'' auto-commit — concurrent store writers racing the pull. The CLI labels it ''transient (e.g. network); re-run aida pull'', which is wrong: ''multiple branches'' is a refspec/config shape (duplicate fetch refspec or wildcard matching aida-store twice), not connectivity, and it recurs deterministically under drain concurrency. Pickups proceed on the local view, so the failure is masked rather than harmful tonight, but cross-clone coordination silently degrades. Diagnose: git config --get-all remote.origin.fetch in the affected clones/worktrees; fix the refspec or make db sync pull fetch an explicit single ref (git fetch origin aida-store && rebase FETCH_HEAD).'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:17:44.663524239Z
-modified_at: 2026-10-06T07:26:55.496959136Z
+modified_at: 2026-10-06T07:28:18.453131747Z
 req_type: Bug
 comments:
 - id: 01a1101b-bc08-70b3-80fd-944d7f37914f
@@ -31,6 +31,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1101d-0029-70b0-b1a0-082121165481
+  author: joe
+  timestamp: 2026-10-06T07:28:18.473253540Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -39,3 +46,7 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: c4533f5c-49cf-4219-829a-015580ac4dc4
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-06T07:28:18.453131747Z
+  implemented_by: joe
