@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1598",
+  "publishes": [
+    {
+      "at": "2026-10-06T01:51:38.470829337Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-05T06:28:31.827957948Z",
+      "spec": "TASK-1598",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-05T11:15:00.096592733Z",
+      "spec": "TASK-1598",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1598",
+        "branch": "task-1598",
+        "first_seen": "2026-10-05T11:15:00.096562025+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:51:20.175779610Z",
+      "spec": "TASK-1598",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T01:51:28.357389489Z",
+      "spec": "TASK-1598",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2427
+      }
+    },
+    {
+      "ts": "2026-10-06T01:51:38.463075846Z",
+      "spec": "TASK-1598",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4935a1fdf899399c62ce13e6142e034c5d1452e4",
+        "pr": 2427,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

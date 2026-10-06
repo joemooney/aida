@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1599",
+  "publishes": [
+    {
+      "at": "2026-10-06T01:52:34.540081158Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-05T06:33:59.823234332Z",
+      "spec": "TASK-1599",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-05T06:34:01.605681485Z",
+      "spec": "TASK-1599",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2426,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b409b5ae3ebb"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:52:34.532121392Z",
+      "spec": "TASK-1599",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:52:34.532184946Z",
+      "spec": "TASK-1599",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
