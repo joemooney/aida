@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T06:50:03.758361585Z
-modified_at: 2026-10-06T02:01:31.719476971Z
+modified_at: 2026-10-06T02:07:34.983490472Z
 req_type: Bug
 comments:
 - id: 01a10ef1-d347-75c0-b309-be9c45bd3058
@@ -16,6 +16,11 @@ comments:
   content: 'Inspection: mirror_sync_hubs already pushes observed origin SHAs; the pre-push hook mirrored proposed local SHAs before origin acceptance. Fix gates hook refspecs on origin confirmation, pins post-push code fan-out to fetched origin SHAs, and reports ignored local-only commits in mirror-sync. Regression exercises rejection, hook, post-push fan-out and sync using local bare hubs.'
   created_at: 2026-10-06T02:01:31.719476971Z
   modified_at: 2026-10-06T02:01:31.719476971Z
+- id: 01a10ef7-5e47-7723-88e1-d54778694cd0
+  author: joe
+  content: 'Validation: current-source remote_create::tests passed 50/50; cargo fmt --all -- --check passed; make check-ci-fast passed all 19 fast-tier gates. Author-side skeptic self-check found and corrected recovery-documentation scope and explicit annotated-tag fixture identity. Full workspace tests/CI not claimed.'
+  created_at: 2026-10-06T02:07:34.983490472Z
+  modified_at: 2026-10-06T02:07:34.983490472Z
 history:
 - id: 01a10ad3-b647-71f1-a464-abcdcb09413d
   author: joe
