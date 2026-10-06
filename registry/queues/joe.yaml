@@ -6,13 +6,6 @@
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a10f5e-6b82-71a1-ba08-fc19d8d6ee64
-  position: 13000
-  added_by: joe
-  note: Promoted from finding TASK-1-216 via `aida findings promote`
-  added_at: 2026-10-06T04:03:00.818842917Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a10f68-9ece-7e91-9a6c-295a10cddcb7
   position: 16000
   added_by: joe
