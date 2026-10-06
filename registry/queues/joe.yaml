@@ -1,11 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
-  position: 1000
-  added_by: joe
-  added_at: 2026-10-06T01:57:39.278368772Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a108d6-fab7-725c-a949-8b075faed74a
   position: 4000
   added_by: joe
