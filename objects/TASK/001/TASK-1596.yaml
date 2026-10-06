@@ -3,12 +3,12 @@ spec_id: TASK-1596
 agreed_id: TASK-1596
 title: Register monthly merged-worktrees guard + advisor route in the schedule registry
 description: 'Operator request (Joe, 2026-10-04) after a 116-worktree buildup made pr-ship step 6 crawl: add a monthly read-only guard (doctor check merged-agent-worktrees --fail-on-findings) with an advisor route job prompting the human-at-TTY cleanup (aida worktree gc --yes --force). Force stays OUT of the scheduled job by design: gc --force is refused in unattended contexts, and the guard/route split is this repo''s established pattern (STORY-1367).'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T20:57:22.898899845Z
-modified_at: 2026-10-04T21:07:56.529237072Z
+modified_at: 2026-10-06T01:58:26.191427978Z
 req_type: Task
 comments:
 - id: 01a108b8-85ad-71ab-9e11-e8517d534975
@@ -35,6 +35,14 @@ comments:
   created_at: 2026-10-04T21:07:56.529237072Z
   modified_at: 2026-10-04T21:07:56.529237072Z
   session_id: 6c10ef8c-9f75-4dc3-8026-358b9c63b33a
+history:
+- id: 01a10eee-fea3-71f1-a26c-6578ea607d68
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T01:58:26.211032282Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
   branch: main
