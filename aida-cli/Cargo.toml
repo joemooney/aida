@@ -42,6 +42,7 @@ toml.workspace = true
 # ADR-66 seat fixture) — uuid handles + RFC3339 issue/expiry stamps.
 uuid.workspace = true
 chrono.workspace = true
+portable-pty.workspace = true
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

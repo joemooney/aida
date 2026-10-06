@@ -244,18 +244,52 @@ fn handle_role_enter(
     // trace:TASK-1594 | ai:claude
     let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
-            "No such role: {}\n\
-             Create it with: `aida role add {}`\n\
+            "No such role: {}
+\
+             Create it with: `aida role add {}`
+\
              See available roles with: `aida role list`",
             resolved,
             resolved
         )
     })?;
-    let grant = crate::seat_authority::issue_direct(
-        project_root,
-        &canonical_role_name(&resolved),
-        delegate_seats.to_vec(),
-    )?;
+
+    let mut final_delegate_seats = delegate_seats.to_vec();
+    let seat_name = canonical_role_name(&resolved);
+
+    use std::io::IsTerminal;
+    let is_direct_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let is_managed_agent = ["AIDA_AGENT_NAME", "AIDA_AGENT_TYPE"].iter().any(|key| {
+        std::env::var(key)
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+    });
+
+    if seat_name == "advisor"
+        && final_delegate_seats.is_empty()
+        && is_direct_tty
+        && !is_managed_agent
+    {
+        // trace:TASK-1597 | ai:claude
+
+        if crate::seat_authority::roster_allows(
+            project_root,
+            &crate::current_user_id(None),
+            "advisor",
+        ) {
+            let prompt = "The advisor role spawns headless sub-launches (questions_clarify, intake, harvest, reconstitute) which require the `advisor` seat.
+Include it in the TTY-issued delegation set?";
+            // inquire writes to stderr and reads from /dev/tty properly.
+            // ?-exempt: cannot use confirm_with_context because it writes to stdout, breaking shell eval
+            let include = inquire::Confirm::new(prompt).with_default(false).prompt()?; // Returns Err on Ctrl-C / interrupt, which is the desired abort behavior
+            if include {
+                final_delegate_seats.push("advisor".to_string());
+            }
+        }
+    }
+
+    let grant =
+        crate::seat_authority::issue_direct(project_root, &seat_name, final_delegate_seats)?;
     crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();

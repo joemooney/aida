@@ -90,7 +90,7 @@ fn store_root(project_root: &Path) -> Option<PathBuf> {
     store.join("objects").is_dir().then_some(store)
 }
 
-fn roster_allows(project_root: &Path, principal: &str, seat: &str) -> bool {
+pub(crate) fn roster_allows(project_root: &Path, principal: &str, seat: &str) -> bool {
     store_root(project_root)
         .and_then(|store| aida_core::team::TeamRoster::load(&store).seats_for(principal))
         .map(|seats| {
@@ -210,8 +210,11 @@ pub(crate) fn issue_child(
         .iter()
         .any(|seat| seat == requested_seat)
     {
+        // trace:TASK-1597 | ai:claude
         bail!(
-            "the active `{}` grant does not delegate `{requested_seat}`",
+            "the active `{}` grant does not delegate `{requested_seat}` (re-enter the role to include it: `aida role enter {} --delegate-seat {requested_seat}`)",
+
+            parent.seat,
             parent.seat
         );
     }
