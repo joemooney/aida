@@ -1,0 +1,27 @@
+id: 01a10f17-139a-7691-b2d2-b053bc8d29a9
+spec_id: TASK-1-210
+title: 'role_cmd.rs:271: the new inquire::Confirm is a bare confirm, failing context_pr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1597, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  role_cmd.rs:271: the new inquire::Confirm is a bare confirm, failing context_prompt::story_809_coverage_tests::every_bare_confirm_is_exempted_or_adopted (CI run 04:34Z, 7733 passed / 1 failed). Fix by adopting the house ContextCard prompt surface, or if there is a concrete reason the ContextCard surface does not fit this prompt, add a '?-exempt: <reason>' comment within the two preceding lines stating it. Prefer ContextCard — the gate exists to drive adoption.
+  Reviewed sha: eda8fafcd66671a12214e46d9f8c71f2b5d44317
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T02:42:13.018173748Z
+modified_at: 2026-10-06T02:42:13.018173748Z
+req_type: Task
+tags:
+- carried-from:TASK-1597
+- finding-hash:2268e9c1
+- from-review:TASK-1597
+- kind:carried-forward
+filed_at:
+  code_sha: 2ab2b58d01cda563730a510301298719688a9b81
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
