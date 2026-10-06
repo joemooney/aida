@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:43:51.039322739Z
-modified_at: 2026-10-06T13:42:53.995931972Z
+modified_at: 2026-10-06T13:50:56.437864327Z
 req_type: Task
 comments:
 - id: 01a11017-967f-70d2-8ae7-b8dc8cb6a282
@@ -67,6 +67,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a11017 exited with code 1 after 16661ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1602` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1602 --force-claim` to take over here, or `aida edit TASK-1602 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1602 — the store reports TASK-1602 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
   created_at: 2026-10-06T13:03:02.277059515Z
   modified_at: 2026-10-06T13:03:02.277059515Z
+- id: 01a1117b-4fb5-7283-8673-849b61da3355
+  author: joe
+  content: 'Implemented the existing ownership guard as a fresh-state probe plus bounded --wait [secs] (300 default, 2-second polling). Direct human terminals explain owning wave/PID/run/phase and member-scoped vendor activity; no interactive prompt. Direct role issuance and ship explanations share the exact TTY/non-managed predicate. Headless/drive seats refuse immediately; explicit override and all merge-hold gates remain intact. Ownership refusal and timeout now exit non-zero. PR-ship unit suite: 107 passed; CLI release/timeout/headless/hold regressions passed, final PTY regression pending.'
+  created_at: 2026-10-06T13:50:56.437864327Z
+  modified_at: 2026-10-06T13:50:56.437864327Z
 history:
 - id: 01a10f72-0aa0-7513-a223-e328f25b5822
   author: joe
