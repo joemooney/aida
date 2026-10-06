@@ -5,6 +5,10 @@
     {
       "at": "2026-10-06T02:14:39.350402578Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-06T02:42:12.697388704Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -130,6 +134,15 @@
       "ts": "2026-10-06T02:14:39.342300613Z",
       "spec": "TASK-1597",
       "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b8b16f5e6be5e25c1f0c6b9d29bcd96d35271763",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:42:12.688832223Z",
+      "spec": "TASK-1597",
       "kind": {
         "event": "SpecCompleted",
         "commit": "b8b16f5e6be5e25c1f0c6b9d29bcd96d35271763",

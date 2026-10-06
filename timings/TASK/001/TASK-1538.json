@@ -13,6 +13,10 @@
     {
       "at": "2026-10-06T02:17:06.489469050Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-06T02:42:12.682016916Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -178,6 +182,25 @@
       "ts": "2026-10-06T02:17:06.481606480Z",
       "spec": "TASK-1538",
       "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2dc90ca81f5fcf0d38262dae16dadaa7b480eb09",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:18:29.844661385Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:42:12.672820737Z",
+      "spec": "TASK-1538",
       "kind": {
         "event": "SpecCompleted",
         "commit": "2dc90ca81f5fcf0d38262dae16dadaa7b480eb09",
