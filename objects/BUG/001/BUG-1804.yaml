@@ -8,8 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:48:15.015902162Z
-modified_at: 2026-10-06T03:22:37.631962451Z
+modified_at: 2026-10-06T03:34:37.451877649Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a10f46-ef32-7422-ab2b-3c9cfeee6127
+  created_at: 2026-10-06T03:34:37.451872073Z
+  created_by: joe
 comments:
 - id: 01a10f37-b3c4-7d80-8111-caf1bf0fd932
   author: joe
