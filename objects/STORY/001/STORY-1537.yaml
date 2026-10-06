@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T14:30:23.507320949Z
-modified_at: 2026-10-06T16:35:53.362365516Z
+modified_at: 2026-10-06T16:40:25.830068440Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,13 @@ relationships:
   target_id: 01a10f36-d0b6-7798-bbab-f1a68dbafdb4
   created_at: 2026-10-06T14:30:32.330031113Z
   created_by: joe
+comments:
+- id: 01a11216-7be6-7593-8a24-0a7703db8913
+  author: joe
+  content: 'Burn-down 2026-10-06: independent review REQUESTED CHANGES on PR #2445 (verdict posted as PR comment). Core register-before-bump fix sound, but both P1s from the TASK-1603 rework brief remain unfixed at head a760a2016b: (P1-1) removing the parent pre-bump lets the pipelined scheduler re-select a launched-but-unbumped member and falsely declare exhaustion; (P1-2) shared run_uuid + unconditional clear_run lets a concurrent member clobber active authority (new test asserts the clobber as correct). PR also CONFLICTING with main (OVERVIEW.md) — left unresolved since rework will touch it. Needs implementer rework; do not clear the hold until addressed.'
+  created_at: 2026-10-06T16:40:25.830068440Z
+  modified_at: 2026-10-06T16:40:25.830068440Z
+  session_id: 36e37eeb-41d2-4231-8a77-efe52f659ee7
 history:
 - id: 01a11212-5392-76b0-bdb9-8d84b078547f
   author: joe
