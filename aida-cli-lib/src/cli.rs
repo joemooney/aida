@@ -2136,6 +2136,12 @@ pub enum PrCommand {
         #[clap(long)]
         dry_run: bool,
 
+        /// Wait for the drive to release this PR before shipping (default: 300
+        /// seconds). Timeout exits non-zero. Drive seats still fail closed.
+        // trace:TASK-1602 | ai:codex
+        #[clap(long, value_name = "SECS", num_args = 0..=1, default_missing_value = "300")]
+        wait: Option<u64>,
+
         /// Delete the merged branch even when branches/PRs are stacked on
         /// it. Without this, ship keeps the branch alive when it detects
         /// stacked children, so deleting it can't auto-close their PRs;

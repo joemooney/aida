@@ -119,14 +119,14 @@ fi
         }
     }
 
-    fn ship(&self) -> Output {
+    fn ship_command(&self) -> Command {
         let inherited = std::env::var_os("PATH").unwrap_or_default();
         let path = std::env::join_paths(
             std::iter::once(self.bin.clone()).chain(std::env::split_paths(&inherited)),
         )
         .unwrap();
-        Command::new(env!("CARGO_BIN_EXE_aida"))
-            .current_dir(&self.repo)
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+        cmd.current_dir(&self.repo)
             .args([
                 "pr",
                 "ship",
@@ -140,9 +140,12 @@ fi
             .env("AIDA_FIXTURE_STATE", &self.state)
             .env("AIDA_TELEMETRY", "0")
             .env("NO_COLOR", "1")
-            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1")
-            .output()
-            .unwrap()
+            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1");
+        cmd
+    }
+
+    fn ship(&self) -> Output {
+        self.ship_command().output().unwrap()
     }
 }
 
@@ -233,4 +236,165 @@ fn marker_hold_binds_pr_ship_without_a_live_drive() {
         !calls.contains("pr checks") && !calls.contains("pr merge"),
         "refused before the CI watch: {calls:?}"
     );
+}
+
+// Exercise actual CLI exit status, continuation to merge, and the downstream
+// hold gate using the same fake forge as the hold regressions above.
+// trace:TASK-1602 | ai:codex
+fn drive_state(fixture: &Fixture) -> PathBuf {
+    let aida = fixture.repo.join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    std::fs::write(
+        aida.join("drain.lock"),
+        serde_json::json!({
+            "pid": std::process::id(), "started_at_utc": "2026-10-06T13:42:00Z",
+            "command": "test drive", "host": "test", "wave_id": "test-wave"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let path = aida.join("drain-state.json");
+    std::fs::write(
+        &path,
+        serde_json::json!({
+            "command": "test drive", "mode": "single", "members": [{
+                "spec": "TASK-1602", "state": "in-phase-3", "pr": 1287
+            }], "current": "TASK-1602", "current_phase": "3 (reviewer)",
+            "orchestrator_pid": std::process::id(), "started_at": "2026-10-06T13:42:00Z",
+            "on_drain_complete": "escalates merge", "run_uuid": "test-run"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    path
+}
+
+fn operator_ship(fixture: &Fixture) -> Command {
+    let mut cmd = fixture.ship_command();
+    for key in [
+        "AIDA_HEADLESS",
+        "AIDA_AUTO_COMPLETE",
+        "AIDA_AUTO_COMPLETE_TOKEN",
+        "AIDA_AGENT_NAME",
+        "AIDA_AGENT_TYPE",
+        "AIDA_PR_SHIP_ALLOW_IN_DRIVE",
+    ] {
+        cmd.env_remove(key);
+    }
+    cmd
+}
+
+#[test]
+fn drive_owned_cli_timeout_is_nonzero_and_never_watches_ci() {
+    let fixture = Fixture::new(false);
+    drive_state(&fixture);
+    let output = operator_ship(&fixture)
+        .args(["--wait", "0"])
+        .output()
+        .unwrap();
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("timed out"), "{text}");
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+    assert!(
+        !calls.contains("pr checks") && !calls.contains("pr merge"),
+        "{calls}"
+    );
+    let output = operator_ship(&fixture)
+        .env("AIDA_HEADLESS", "1")
+        .args(["--wait", "300"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{}", output_text(&output));
+    assert!(output_text(&output).contains("caller is a drive"));
+    assert!(!output_text(&output).contains("waiting for drive release"));
+}
+
+#[test]
+fn drive_release_wait_continues_to_ship_and_still_enforces_holds() {
+    for held in [false, true] {
+        let fixture = Fixture::new(held);
+        let path = drive_state(&fixture);
+        let child = operator_ship(&fixture)
+            .args(["--wait", "10"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        // Releasing state after the process starts allows either the first or
+        // a later ownership probe to observe release; unit coverage verifies
+        // the exact two-probe transition separately.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        std::fs::remove_file(path).unwrap();
+        let output = child.wait_with_output().unwrap();
+        let text = output_text(&output);
+        assert_eq!(output.status.success(), !held, "{text}");
+        let events = std::fs::read_to_string(fixture.state.join("events")).unwrap_or_default();
+        assert_eq!(events.contains("merge"), !held, "{text}");
+    }
+}
+
+#[test]
+// trace:TASK-1602 | ai:codex
+fn direct_tty_explains_ownership_but_managed_tty_gets_plain_refusal() {
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use std::io::Read;
+    for managed in [false, true] {
+        let fixture = Fixture::new(false);
+        drive_state(&fixture);
+        let source = operator_ship(&fixture);
+        let mut cmd = CommandBuilder::new(source.get_program());
+        cmd.args(source.get_args());
+        cmd.cwd(&fixture.repo);
+        for (key, value) in source.get_envs() {
+            match value {
+                Some(value) => cmd.env(key, value),
+                None => cmd.env_remove(key),
+            }
+        }
+        if managed {
+            cmd.env("AIDA_AGENT_NAME", "codex");
+        }
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 120,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let mut child = pair.slave.spawn_command(cmd).unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let read = std::thread::spawn(move || {
+            let mut text = String::new();
+            let _ = reader.read_to_string(&mut text);
+            text
+        });
+        let started = std::time::Instant::now();
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break status;
+            }
+            if started.elapsed() > std::time::Duration::from_secs(5) {
+                child.kill().unwrap();
+                panic!("ship must explain/refuse without waiting for terminal input");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert!(!status.success());
+        drop(pair.master);
+        let text = read.join().unwrap();
+        assert!(text.contains("owned by the live drive"), "{text}");
+        assert_eq!(text.contains("test-wave"), !managed, "{text}");
+        assert_eq!(text.contains("test-run"), !managed, "{text}");
+        assert_eq!(text.contains("3/6 (reviewer)"), !managed, "{text}");
+        assert_eq!(text.contains("activity unavailable"), !managed, "{text}");
+        assert_eq!(
+            text.contains("escalates the merge decision"),
+            !managed,
+            "{text}"
+        );
+        assert_eq!(text.contains("--wait 300"), !managed, "{text}");
+    }
 }

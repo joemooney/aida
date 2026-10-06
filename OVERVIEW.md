@@ -1,5 +1,14 @@
 # AIDA — Overview
 
+`aida pr ship` reports live drive ownership at direct human terminals using
+wave/PID, owning member phase/run, and session-scoped activity evidence.
+`--wait [secs]` (default 300) polls ownership every two seconds and continues
+through the existing shipping gates after release; timeout/refusal exits
+non-zero. Drive seats and headless callers refuse immediately, preventing
+self-waits. The explicit in-drive override does not bypass merge holds.
+See [git lifecycle](docs/cli/04-git-lifecycle.md) for usage and evidence limits.
+<!-- trace:TASK-1602 | ai:codex -->
+
 Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
 manual dispatches fail before validation. Selected-path Windows PR checks stay
 informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
