@@ -37,14 +37,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a10ffe-4742-72f3-bfcd-6fc72ae9e7b3
-  position: 29000
-  added_by: joe
-  note: 'BUG-1291 recovery: PR #2440 handed off after shelving in phase 3 (reviewer): reviewer verdict is RequestChanges — not Approved'
-  added_at: 2026-10-06T07:21:35.464190961Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1102d-f47c-7fe3-b217-2a10b521d00c
   position: 31000
   added_by: joe
@@ -65,5 +57,13 @@
   added_by: joe
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-10-06T13:06:28.090197359Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a10ffe-4742-72f3-bfcd-6fc72ae9e7b3
+  position: 35000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-06T13:08:06.737410522Z
   for_role: reviewer
   added_by_machine: imac
