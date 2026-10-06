@@ -1,0 +1,33 @@
+id: 01a1117c-acd3-7fc0-be76-39424c753fee
+spec_id: STORY-1536
+agreed_id: STORY-1536
+title: 'Review PR-2444: [AI:codex] fix(ship): explain drive ownership and support bounded waits (TASK-1602)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a11173`) for branch `task-1602`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2444>
+  - Branch: `task-1602` → `main`
+
+  ## Covers
+
+  - TASK-1602
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2444` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T13:52:25.811245828Z
+modified_at: 2026-10-06T13:52:25.811245828Z
+req_type: Story
+filed_at:
+  code_sha: 2747ca02404075e6c1be333b9b69192f27b9bced
+  branch: task-1602
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cd1aa53848
+  vendor: codex
