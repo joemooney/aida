@@ -3,12 +3,12 @@ spec_id: BUG-1804
 agreed_id: BUG-1804
 title: tick_bounds_global_schedule_log test races other writers of the global schedule-tick.log under parallel cargo test
 description: 'Observed 2026-10-05 in a full ''cargo test --workspace'' run: maintenance_schedule::tests::tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation panicked (''a non-hook tick must bound the log: 526186 bytes'') but passes in isolation (0.04s). The test asserts bounding of a GLOBAL log (~/.aida/schedule-tick.log) that other tests and live shift timers append to concurrently; under parallel test execution the log can grow between the tick and the assertion. Fix: point the test at a test-scoped AIDA home (test_env/test_home pattern) instead of the real global log, or serialize it with the lock the other global-log tests use.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:48:15.015902162Z
-modified_at: 2026-10-06T03:37:22.919706043Z
+modified_at: 2026-10-06T03:37:37.604803015Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10f49-ce43-75f6-9dd8-e07f78e1a861
+  author: aida-auto-bump
+  timestamp: 2026-10-06T03:37:37.603600444Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10f49-ce44-700b-9b50-6915ad407220
+  timestamp: 2026-10-06T03:37:37.604802243Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/advisor/BUG-1804-2026-10-06T033725Z.md
+  commit_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
+  summary: Completed via merge dafb6643
 execution_mode: drain
 filed_at:
   code_sha: 887bf7e5fba50ec5c510910ee5a3c2e472541d43
@@ -88,3 +102,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T03:20:55.354201448Z
   implemented_by: joe
+  completed_at: 2026-10-06T03:37:37.603576660Z
+  completion_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
