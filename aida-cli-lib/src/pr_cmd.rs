@@ -2437,9 +2437,40 @@ pub(crate) fn pr_ship_handler(
         // its own provider's merge. The unified contract returns Err (with stderr)
         // on a failed merge, which we map to the existing activity-log + recovery
         // hint + bail. trace:STORY-516 | ai:claude
+        // TASK-1330: identity hygiene — when the project allowlists emails
+        // and the default squash body would carry a non-allowlisted one
+        // (an explicit Co-authored-by trailer, or a commit author/committer
+        // the forge would auto-derive a trailer from), replace the body with
+        // the sanitized commit messages. Fail-closed: an unreadable config or
+        // uninspectable branch refuses the merge rather than publishing an
+        // unchecked body. trace:TASK-1330 | ai:claude
+        let identity_allowlist = crate::identity_gate::read_allowed_emails(&project_root)?;
+        let sanitized_squash_body = crate::identity_gate::squash_coauthor_body_override(
+            &project_root,
+            &retarget_base,
+            head_sha.as_deref().unwrap_or(&ship_branch),
+            &identity_allowlist,
+        )?;
+        let sanitized_squash_body = sanitized_squash_body.map(|(body, violations)| {
+            eprintln!(
+                "  step 3: identity gate — stripping {} non-allowlisted email reference(s) \
+                 from the squash body:",
+                violations.len()
+            );
+            for v in &violations {
+                eprintln!(
+                    "    {} {} {}",
+                    &v.sha[..v.sha.len().min(10)],
+                    v.role,
+                    v.email
+                );
+            }
+            body
+        });
         let mut merge_opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: explicit_squash_subject.clone(),
+            squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude
             delete_branch,
             match_head, // trace:TASK-1458 | ai:claude
         };
@@ -4783,7 +4814,7 @@ mod pr_ship_environment_tests {
 
         let delete_branch = pr_ship::should_delete_branch(branch_in_sibling, 0, 0, false);
         assert!(!delete_branch);
-        let merge_args = pr_ship::merge_args(732, delete_branch, None);
+        let merge_args = pr_ship::merge_args(732, delete_branch, None, None);
         assert!(!merge_args.iter().any(|arg| arg == "--delete-branch"));
     }
 

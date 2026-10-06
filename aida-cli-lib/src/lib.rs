@@ -158,6 +158,7 @@ mod external_import_bleed;
 mod feature_cmd;
 mod findings;
 pub mod graded_review;
+mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
@@ -4878,6 +4879,31 @@ pub(crate) fn run() -> Result<()> {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
         };
+    }
+
+    // TASK-1330: the identity HYGIENE subcommands read only git state and
+    // `.aida/config.toml` — no store needed, and the pre-push hook plumbing
+    // must work even when the store is unavailable — so dispatch them before
+    // storage init, like `remote`. The person-alias registry subcommands
+    // (link/list/show) read the store and fall through to the normal path.
+    // trace:TASK-1330 | ai:claude
+    if let Command::Identity { cmd } = &cli.command {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        match cmd {
+            crate::cli::IdentityCommand::Check => {
+                return identity_gate::handle_identity_check(&project_root);
+            }
+            crate::cli::IdentityCommand::CheckPush { pushed_remote } => {
+                return identity_gate::handle_identity_check_push(&project_root, pushed_remote);
+            }
+            crate::cli::IdentityCommand::InstallHook => {
+                return identity_gate::handle_identity_install_hook(&project_root);
+            }
+            crate::cli::IdentityCommand::Link { .. }
+            | crate::cli::IdentityCommand::List { .. }
+            | crate::cli::IdentityCommand::Show { .. } => {}
+        }
     }
 
     // Sandbox commands MANAGE a throwaway store directory; they don't read the
@@ -25760,6 +25786,19 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "hook-drift",
         ],
         "mirror-hook-drift",
+    ),
+    // TASK-1330: identity hygiene — when `[identity] allowed_emails` is
+    // configured, report a git identity outside the allowlist and a pre-push
+    // hook that does not run the fail-closed identity gate. Report-only.
+    // trace:TASK-1330 | ai:claude
+    (
+        &[
+            "identity",
+            "identity-hygiene",
+            "allowed-emails",
+            "email-allowlist",
+        ],
+        "identity",
     ),
 ];
 
@@ -60257,6 +60296,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
     let opts = forge::MergeOptions {
         method: forge::MergeMethod::Squash,
         squash_subject: None,
+        squash_body: None, // trace:TASK-1330 | ai:claude
         delete_branch: false,
         match_head: None,
     };
@@ -71267,6 +71307,7 @@ pub(crate) fn handle_release(
         let merge_opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };
@@ -114262,6 +114303,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let mut opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };

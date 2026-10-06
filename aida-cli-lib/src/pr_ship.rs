@@ -608,9 +608,17 @@ pub fn merge_error_landed_despite_failure(pr_is_merged_after_error: Option<bool>
 
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
 /// contract that the wrapper passes `--subject` when it repairs a squash
-/// subject.
+/// subject. TASK-1330: an explicit `body` (the identity-sanitized squash
+/// body) is passed as `--body`, which also suppresses GitHub's auto-derived
+/// `Co-authored-by:` trailers.
 // trace:SPEC-410 | ai:codex
-pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) -> Vec<String> {
+// trace:TASK-1330 | ai:claude
+pub fn merge_args(
+    pr_number: u64,
+    delete_branch: bool,
+    subject: Option<&str>,
+    body: Option<&str>,
+) -> Vec<String> {
     let mut args = vec![
         "pr".to_string(),
         "merge".to_string(),
@@ -623,6 +631,10 @@ pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) ->
     if let Some(subject) = subject {
         args.push("--subject".to_string());
         args.push(subject.to_string());
+    }
+    if let Some(body) = body {
+        args.push("--body".to_string());
+        args.push(body.to_string());
     }
     args
 }
@@ -739,6 +751,7 @@ pub fn dry_run_merge_cmd(forge: crate::forge::ForgeKind, delete_branch: bool) ->
             let opts = crate::forge::MergeOptions {
                 method: crate::forge::MergeMethod::Squash,
                 squash_subject: None,
+                squash_body: None, // trace:TASK-1330 | ai:claude
                 delete_branch,
                 match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
             };
@@ -2461,6 +2474,7 @@ mod tests {
             201,
             false,
             Some("[AI:codex] feat(store): add cadence (STORY-284)"),
+            None,
         );
         assert_eq!(
             args,
@@ -2477,10 +2491,29 @@ mod tests {
 
     #[test]
     fn merge_args_without_repair_keep_existing_shape() {
-        let args = merge_args(197, true, None);
+        let args = merge_args(197, true, None, None);
         assert_eq!(
             args,
             vec!["pr", "merge", "197", "--squash", "--delete-branch"]
+        );
+    }
+
+    // TASK-1330: an identity-sanitized squash body rides along as --body,
+    // which also suppresses GitHub's auto-derived Co-authored-by trailers.
+    // trace:TASK-1330 | ai:claude
+    #[test]
+    fn merge_args_pass_sanitized_squash_body() {
+        let args = merge_args(202, false, None, Some("* feat: one (TASK-1)\n\nBody."));
+        assert_eq!(
+            args,
+            vec![
+                "pr",
+                "merge",
+                "202",
+                "--squash",
+                "--body",
+                "* feat: one (TASK-1)\n\nBody."
+            ]
         );
     }
 
@@ -2688,6 +2721,7 @@ mod tests {
                 &crate::forge::MergeOptions {
                     method: crate::forge::MergeMethod::Squash,
                     squash_subject: None,
+                    squash_body: None, // trace:TASK-1330 | ai:claude
                     delete_branch,
                     match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
                 },
@@ -2695,7 +2729,7 @@ mod tests {
             // Same shape as merge_args, then the pin.
             assert_eq!(
                 &real[..real.len() - 2],
-                merge_args(4242, delete_branch, None).as_slice()
+                merge_args(4242, delete_branch, None, None).as_slice()
             );
             let expected = format!("3. gh {}", real.join(" ").replace("4242", "<N>"));
             let steps = vec![

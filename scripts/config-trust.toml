@@ -490,6 +490,14 @@ enabled = "policy"
 first_run = "policy"
 workflow_hints = "policy"
 
+# TASK-1330: the identity hygiene gate. An email allowlist can only REFUSE a
+# commit/push/merge — it selects nothing executable, opens nothing, and
+# authenticates nothing. A tampered worktree copy could at worst widen the
+# allowlist, which the trusted-copy review of the config change itself covers.
+# trace:TASK-1330 | ai:claude
+[keys.worktree.identity]
+allowed_emails = "policy"
+
 [keys.worktree.scaffold]
 agents_md_block = "policy"
 footprint = "policy"

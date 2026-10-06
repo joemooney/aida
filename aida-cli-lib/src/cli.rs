@@ -4164,6 +4164,34 @@ pub enum IdentityCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Check the identity a commit made here would carry (author + committer,
+    /// honoring GIT_AUTHOR_EMAIL/GIT_COMMITTER_EMAIL overrides) against the
+    /// project's `[identity] allowed_emails` allowlist in .aida/config.toml.
+    /// Exits non-zero on a violation; a project with no allowlist passes with
+    /// a hint on how to enable the gate.
+    // trace:TASK-1330 | ai:claude
+    Check,
+
+    /// (plumbing) The fail-closed pre-push identity gate. Reads the ref lines
+    /// git feeds a pre-push hook on stdin, inspects every commit the push
+    /// would introduce on the named remote, and exits non-zero when any
+    /// carries an author, committer, or Co-authored-by email outside
+    /// `[identity] allowed_emails`. Silent no-op when no allowlist is
+    /// configured.
+    // trace:TASK-1330 | ai:claude
+    #[clap(hide = true)]
+    CheckPush {
+        /// The remote the triggering push targets (hook argument $1).
+        pushed_remote: String,
+    },
+
+    /// Install the identity gate into the repo's pre-push hook. Idempotent:
+    /// refreshes AIDA's own hooks in place (including the mirror fan-out
+    /// hook, which embeds the gate) and never clobbers a custom pre-push
+    /// hook (prints the lines to add instead).
+    // trace:TASK-1330 | ai:claude
+    InstallHook,
 }
 
 #[derive(Subcommand, Debug)]
@@ -10958,7 +10986,11 @@ pub enum Command {
     /// strings one human registers under across machines (`joe`,
     /// `joe.mooney@gmail.com`) so the queue, team roster, and block list
     /// collapse them to one canonical person. Composes with the case-fold.
+    /// Also hosts the identity hygiene gate (`check`, `install-hook`): the
+    /// `[identity] allowed_emails` allowlist that refuses commits/pushes
+    /// carrying any other author, committer, or Co-authored-by email.
     // trace:TASK-845 | ai:claude
+    // trace:TASK-1330 | ai:claude
     Identity {
         #[clap(subcommand)]
         cmd: IdentityCommand,
