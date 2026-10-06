@@ -8,8 +8,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T01:53:20.230961374Z
-req_type: Task
+modified_at: 2026-10-06T01:53:32.833739497Z
+req_type: Bug
 filed_at:
   code_sha: 4935a1fdf899399c62ce13e6142e034c5d1452e4
   branch: main
