@@ -3,12 +3,12 @@ spec_id: TASK-1600
 agreed_id: TASK-1600
 title: aida pr ship scrapes mid-title spec-ID tokens into completing squash trailers, falsely completing specs the title merely mentions
 description: 'Second confirmed occurrence 2026-10-05: PR 2426 was deliberately retitled off BUG-1802 and approved under TASK-1599 (a child spec created solely so the merge trailer would complete the child, not the parent), yet ship squash-merged it as 078c394e with subject ending ''(BUG-1802)'' — the bare token ''BUG-1802'' appearing MID-TITLE (''BUG-1802 prose layer —'') was scraped and appended as a completing trailer, auto-bumping the still-open parent whose substrate fix is unshipped. First occurrence: TASK-1538 falsely completed at a slice-1 module PR merge and force-reopened (see PR 2429 body). Expected: only an explicit trailing ''(ID)'' trailer in the squash subject should complete a spec; an ID token elsewhere in the title is prose, not a completion directive. Current workarounds are fragile human rules (trailer-free slice titles, decoy child specs) that failed twice in two days. Advisor corrections applied both times (force-reopen + complete the intended spec), but the ship path remains unsafe for any PR whose title mentions a spec ID.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T02:43:04.798982445Z
+modified_at: 2026-10-06T03:19:55.886352238Z
 req_type: Bug
 comments:
 - id: 01a10f02-6118-749b-a79c-7db2608eb04e
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-06T02:43:04.798982445Z
   modified_at: 2026-10-06T02:43:04.798982445Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+history:
+- id: 01a10f39-9aee-751e-92a7-f800a1d8d36c
+  author: joe
+  timestamp: 2026-10-06T03:19:55.886347946Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+execution_mode: guided
 filed_at:
   code_sha: 4935a1fdf899399c62ce13e6142e034c5d1452e4
   branch: main
