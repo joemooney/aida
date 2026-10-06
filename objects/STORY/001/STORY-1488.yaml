@@ -10,12 +10,12 @@ description: |-
   2. Slice 1 (mechanical, no behaviour change): lib.rs split into cohesive modules; no module over ~15k lines; public API and CLI output unchanged; full test suite green; landed in a quiet window with a rebase note for in-flight branches.
   3. Slice 2+: crate extraction along the measured dependency seams, one crate per slice, each with before/after timings; a split is kept only if it improves incremental build time.
   4. Template/trace conventions preserved (trace comments move with their code).
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-10-06T13:31:27.589849741Z
+modified_at: 2026-10-06T17:29:02.974406866Z
 req_type: Story
 tags:
 - closure:pending
@@ -349,6 +349,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+- id: 01a11242-ff00-7252-a301-04de3593e762
+  author: aida-auto-bump
+  timestamp: 2026-10-06T17:29:02.976057171Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 implementation_info:
   implemented: false
   reopened_at_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
