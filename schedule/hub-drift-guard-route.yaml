@@ -1,10 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-10-06T03:58:57.914487685Z
+last_run: 2026-10-06T08:58:24.208219468Z
 last_by:
   seat: advisor
   session: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
   vendor: antigravity
 result: done
-note: aida-store diverged (gitlab +5 / origin +2); local union 27cf62a9 already contained both tips — aida remote reconcile --execute pushed it to both hubs; aida remote status now clean for store
-due_since: 2026-10-06T07:12:27.312785537Z
-due_reason: on CronJobFailed:hub-drift-guard
+note: aida-store diverged again (gitlab +18 / origin +1) — recurring TASK-1604 refspec bug during tonight's drain pulls; reconciled via union ec51faf0, pushed both hubs. Permanent fix is PR 2442 (open, CI red, needs morning rework).
