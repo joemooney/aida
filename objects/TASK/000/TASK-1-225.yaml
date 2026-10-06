@@ -1,0 +1,23 @@
+id: 01a1101a-d324-7002-9942-3eb492b0fc4c
+spec_id: TASK-1-225
+title: Store sync pre-commit and rebase need the existing writer lock
+description: 'TASK-1604 isolates the fetched rebase target from shared FETCH_HEAD and corrects the error hint. Inspection found aida db sync staging/commit/rebase in git_backend_cmd.rs does not hold db::store_lock across that window, unlike backend spec mutations. The original report also saw cannot lock ref HEAD during chore: sync pending changes. Target isolation does not fix concurrent commits/rebases on the same store worktree; follow-up should reuse the existing re-entrant store writer lock around sync, audit other network store writers, and add concurrent-process regression coverage. No race was reproduced against the live shared store during this implementation.'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T07:25:55.876829177Z
+modified_at: 2026-10-06T07:25:55.876829177Z
+req_type: Task
+tags:
+- from-advisor:TASK-1604
+- kind:observation
+- linked:TASK-1604
+- severity:minor
+filed_at:
+  code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
+  branch: task-1604
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
