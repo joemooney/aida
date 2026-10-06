@@ -65,6 +65,14 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
 
+<!-- trace:TASK-1328 | ai:codex -->
+**Queue completion ownership.** `aida queue done` uses both the current display
+ID and the stored origin ID from the resolved requirement. Remapping an ID
+mid-session therefore preserves ownership of an existing branch and its commit
+trailers. Mixed branches naming unrelated requirements remain refused, even
+when their commits name an accepted alias; unscoped branches retain the existing
+commit-evidence and ledgered `--force` rules.
+
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
 the main checkout's lock, including launches from sibling worktrees. Shared

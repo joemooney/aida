@@ -49,6 +49,15 @@ Keep this table in your head and every command below is obvious.
 
 *(Covered in [Chapter 1](01-getting-started.md#aida-done).)* The newcomer shortcut — "I finished it." Once you're on a real pipeline, **stop using it** and use `aida queue done` (lands **Done**, the precise "finished on a branch" state) so the merge can earn **Completed**. `aida done`'s simplicity is also its limitation: it doesn't know where in the lifecycle you are.
 
+<!-- trace:TASK-1328 | ai:codex -->
+`aida queue done` recognizes both the resolved requirement's display ID and its
+stored origin ID when checking branch ownership and commit evidence. A session
+can finish on its original branch after the store assigns a new display ID.
+Every recognized requirement ID in a scoped branch must belong to that same
+requirement (including existing dashed child variants); an unrelated branch
+cannot gain ownership through an alias in a commit trailer. No branch rename
+or forced completion is needed for an ID remapping.
+
 ---
 
 ### `aida pr`
