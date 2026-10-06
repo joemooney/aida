@@ -49,6 +49,8 @@
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
 "GitLab live-smoke workflow guard" = "fast"
+# trace:TASK-1588 | ai:codex
+"Weekly Windows workflow contract" = "fast"
 "External-prose classifier inventory" = "fast"
 "Run MCP stdio compatibility tests" = "full"
 "Run history template CLI/config/MCP contract tests" = "full"

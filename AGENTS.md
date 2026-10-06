@@ -1,5 +1,14 @@
 # AGENTS.md
 
+Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
+manual dispatches fail before validation. Selected-path Windows PR checks stay
+informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
+required. Product's 24h weekly-windows-triage reminder records the tracking issue
+or no-issue result without queuing implementation. Releases still require a green
+platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+See [CI policy](docs/agents/aida-repository-guide.md).
+<!-- trace:TASK-1588 | ai:codex -->
+
 Ship derives completion IDs from an explicit trailing PR-title group, then
 store-resolving branch IDs. Title prose, PR bodies, and an unrelated branch-head
 trailer do not grant completion credit. CLI/MCP rework and status edits record

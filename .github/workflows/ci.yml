@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         # TASK-257: PR CI is Linux-only during the alpha to keep cycle time
-        # at ~3-5 min. Windows + macOS validation moved to the nightly
+        # at ~3-5 min. Windows validation runs in the weekly
         # .github/workflows/cross-platform.yml workflow. Job names still
         # parameterize on ${{ matrix.os }}, so re-adding platforms here is a
         # one-line revert once there are non-Linux users.
@@ -157,6 +157,10 @@ jobs:
       - name: GitLab live-smoke workflow guard
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_gitlab_live_access_workflow.sh
+
+      # trace:TASK-1588 | ai:codex
+      - name: Weekly Windows workflow contract
+        run: python3 tests/test_weekly_windows_workflow.py
 
       # BUG-1526: this step runs AFTER the test suite deliberately. It used to sit
       # at position 12 of 26, and `bash -e` aborts the job on failure — so a stale

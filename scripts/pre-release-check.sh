@@ -2,7 +2,7 @@
 # scripts/pre-release-check.sh — gate a release on cross-platform CI.
 #
 # AIDA's PR CI (.github/workflows/ci.yml) is Linux-only during the alpha
-# (TASK-257). Windows + macOS are validated by the nightly
+# (TASK-257). Windows is validated by the weekly
 # .github/workflows/cross-platform.yml workflow. Before tagging a release we
 # want a *recent, green* cross-platform run so the release tarballs aren't
 # shipping an untested win/mac regression.

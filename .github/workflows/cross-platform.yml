@@ -1,21 +1,18 @@
-name: Cross-platform (nightly)
+name: Cross-platform (weekly)
 
-# TASK-257: Windows + macOS validation runs HERE — on a nightly cron and on
-# manual dispatch — not on every PR. PR CI (ci.yml) is Linux-only to hold the
-# cycle time at ~3-5 min during the alpha. Both triggers below run against the
-# default branch (`main`), so a cross-platform regression is caught within
-# ~24h of landing rather than blocking every PR merge.
+# Weekly Windows validation of latest main keeps platform checks informational.
+# Ubuntu Build and merge-hold-gate remain the only required PR checks.
+# macOS stays disabled; fixes use ordinary topic branches into main.
+# This cadence reduces platform-run frequency, not Linux PR CI duration.
+# trace:TASK-1588 | ai:codex
 #
-# Refresh on demand (e.g. before a release):
-#   gh workflow run cross-platform.yml
-#
-# scripts/pre-release-check.sh gates release tagging on a recent green run
-# here — see scripts/release.sh and CLAUDE.md.
+# Refresh before release: gh workflow run cross-platform.yml --ref main
+# scripts/pre-release-check.sh still requires green within 24 hours.
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC daily
-  # TASK-1205: keep the full Windows/macOS matrix informational on PRs that
+    - cron: '0 6 * * 0'   # Sunday 06:00 UTC
+  # TASK-1205: keep the Windows matrix informational on PRs that
   # touch the fragile cross-platform surface, without expanding the required
   # Linux-only PR CI path. trace:TASK-1205 | ai:codex
   pull_request:
@@ -45,7 +42,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # TASK-1273: a real nightly GitLab lifecycle catches provider assumptions that
+  # Refuse misleading manual feature-branch validation before matrix work.
+  # trace:TASK-1588 | ai:codex
+  validate-main:
+    name: Validate main dispatch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-main manual dispatch
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Cross-platform manual validation requires --ref main (received $GITHUB_REF)"
+            exit 1
+          fi
+
+  # TASK-1273: a real weekly GitLab lifecycle catches provider assumptions that
   # mocked CLI output cannot: open MR -> wait for pipeline -> read review verdict
   # -> merge through the Forge trait. The ignored Rust test owns cleanup. An
   # absent credentials fail loudly; only an unreachable mirror skips the probe.
@@ -55,6 +66,7 @@ jobs:
   # at request time; no perimeter secret is written to disk.
   # trace:TASK-1425 trace:ADR-54 | ai:codex
   gitlab-forge-smoke:
+    needs: validate-main
     name: GitLab live forge smoke
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -64,6 +76,8 @@ jobs:
       GLAB_VERSION: 1.118.0
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Check mirror availability and credentials
         id: preflight
@@ -221,20 +235,24 @@ jobs:
 
   # TASK-1507: the history index's random-DAG parity sweep is too slow for
   # the PR suite (about 40 s of git processes), so it is #[ignore]d there and
-  # run nightly here, like the gitlab_live smoke above. trace:TASK-1507 | ai:claude
+  # run weekly here, like the gitlab_live smoke above. trace:TASK-1507 | ai:claude
   history-index-sweep:
+    needs: validate-main
     name: History index random sweep
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: main
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
       - name: Run the ignored random DAG sweep
         run: cargo test -p aida-cli-lib --lib task_1507_random_dag_sweep -- --ignored --nocapture
 
   build:
+    needs: validate-main
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -242,14 +260,16 @@ jobs:
       matrix:
         # TASK-1570: macOS is disabled until further notice (operator mandate,
         # 2026-10-02). Restore by re-adding macos-latest. While disabled, the
-        # BUG-1776 macOS nightly reds cannot fire. trace:TASK-1570 | ai:claude
+        # BUG-1776 macOS weekly reds cannot fire. trace:TASK-1570 | ai:claude
         os: [windows-latest]
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
 
       # TASK-1205: manual, opt-in tripwire for exercising the red-matrix
-      # tracking-issue path without waiting for a genuine nightly failure.
+      # tracking-issue path without waiting for a genuine weekly failure.
       # trace:TASK-1205 | ai:codex
       - name: Exercise tracking issue notifier
         if: github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue
@@ -335,16 +355,16 @@ jobs:
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
 
-  # TASK-687: the nightly matrix was red 3 days unnoticed before a release gate
+  # TASK-687: the former daily matrix was red 3 days unnoticed before a release gate
   # forced the issue. PR CI is Linux-only (TASK-257), so cross-platform debt
   # accrues invisibly between releases. Make failure LOUD: open (or comment on)
   # a single tracking issue when the *scheduled* run fails, and close it when a
   # scheduled run goes green again. Scoped to `schedule` so the manual dispatches
   # fired during a release fix-forward loop don't spam issues. trace:TASK-687
   notify-failure:
-    name: Open tracking issue on nightly failure
+    name: Open tracking issue on weekly failure
     needs: build
-    if: failure() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue))
+    if: failure() && needs.build.result == 'failure' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue))
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -361,21 +381,22 @@ jobs:
         run: |
           label="cross-platform-red"
           gh label create "$label" --color B60205 \
-            --description "Nightly Windows/macOS CI is failing" 2>/dev/null || true
+            --description "Weekly Windows CI is failing" 2>/dev/null || true
           existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
-          line="Nightly cross-platform run failed: $RUN_URL"
+          line="Weekly Windows validation failed: $RUN_URL"
+          title="Weekly cross-platform CI is red"
+          body="$(printf '%s\n\n%s\n\n%s\n' "$line" \
+            "The Windows matrix is failing on the weekly Sunday 06:00 UTC main validation. macOS remains disabled. PR CI requires Ubuntu Build and merge-hold-gate only; selected-path Windows PR checks are informational. Product triages this issue at its next daily check and before any release. Windows fixes remain behind Linux work unless the operator reprioritizes them. Subsequent weekly failures update this issue; a green scheduled recovery closes it." \
+            "trace:TASK-687 trace:TASK-1588")"
           if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body "$body"
             gh issue comment "$existing" --body "$line"
           else
-            printf '%s\n\n%s\n\n%s\n' \
-              "$line" \
-              "The Windows/macOS matrix is failing on the nightly cron. PR CI is Linux-only (TASK-257), so cross-platform regressions only surface here. Fix-forward until green; this issue auto-comments on each subsequent nightly failure and closes itself once a scheduled run lands green." \
-              "trace:TASK-687" \
-              | gh issue create --title "Nightly cross-platform CI is red" --label "$label" --body-file -
+            gh issue create --title "$title" --label "$label" --body "$body"
           fi
 
   notify-recovery:
-    name: Close tracking issue on nightly recovery
+    name: Close tracking issue on weekly recovery
     needs: build
     if: success() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
