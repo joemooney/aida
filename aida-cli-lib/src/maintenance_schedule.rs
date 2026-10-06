@@ -4197,8 +4197,16 @@ enabled = true
     fn tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        // trace:BUG-1804 | ai:codex
+        // The log is already test-local. Use separate project locks: a parallel
+        // subprocess spawn can retain the hook's flock briefly after it returns
+        // (see tick_lock_is_nonblocking_and_reusable), making a timer tick on the
+        // same root skip housekeeping. Both projects still share this temp home.
+        let hook_root = tmp.path().join("hook-project");
+        let timer_root = tmp.path().join("timer-project");
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         let log = tmp.path().join(".aida").join("schedule-tick.log");
+        assert_eq!(global_schedule_log_path().as_deref(), Some(log.as_path()));
         let line = "error: unsupported\n";
         let big = line.repeat((GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100);
         let big_len = big.len() as u64;
@@ -4207,7 +4215,8 @@ enabled = true
         // meant to stay minimal, and the installed hook script redirects
         // its own output to /dev/null anyway.
         std::fs::write(&log, &big).unwrap();
-        let _ = tick(tmp.path(), true, None).unwrap();
+        let hook_lines = tick(&hook_root, true, None).unwrap();
+        assert!(hook_lines.is_empty(), "hook tick must run: {hook_lines:?}");
         let after_hook = std::fs::metadata(&log).unwrap().len();
         assert_eq!(
             after_hook, big_len,
@@ -4216,7 +4225,11 @@ enabled = true
 
         // A timer/cron-shaped tick (hook = false — the shape the installed
         // crontab entry uses) bounds it.
-        let _ = tick(tmp.path(), false, None).unwrap();
+        let timer_lines = tick(&timer_root, false, None).unwrap();
+        assert!(
+            timer_lines.is_empty(),
+            "timer tick must run: {timer_lines:?}"
+        );
         let after_timer = std::fs::metadata(&log).unwrap().len();
         assert!(
             after_timer <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
