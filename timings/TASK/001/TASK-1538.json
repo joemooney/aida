@@ -9,6 +9,10 @@
     {
       "at": "2026-10-05T15:29:44.149870598Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-06T02:17:06.489469050Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -138,6 +142,45 @@
       "kind": {
         "event": "SpecCompleted",
         "commit": "887bf7e5fba50ec5c510910ee5a3c2e472541d43",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:29:52.197066070Z",
+      "spec": "TASK-1538",
+      "seat": "reviewer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:04:41.976778731Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "47eb02980cc4b773cb8b3b582c69b706cb462a15"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:16:57.092611212Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2429
+      }
+    },
+    {
+      "ts": "2026-10-06T02:17:06.481606480Z",
+      "spec": "TASK-1538",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2dc90ca81f5fcf0d38262dae16dadaa7b480eb09",
         "closed_by": "auto-bump"
       }
     }
