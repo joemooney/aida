@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1327",
+  "publishes": [
+    {
+      "at": "2026-10-06T13:17:24.713332077Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T06:46:49.739334316Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T06:46:59.817633496Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T06:59:21.330476550Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a10ff7-f2b3-7de2-afd8-f995dd806bce",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:09:25.238881490Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a10ff7-f2b3-7de2-afd8-f995dd806bce",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:31.023704125Z",
+      "spec": "TASK-1327",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:49.051239677Z",
+      "spec": "TASK-1327",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2439
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:51.571725864Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a1100d-f10e-7551-bfed-1fb211319564",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:52.054461385Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a1100d-f10e-7551-bfed-1fb211319564",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:57.309773863Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a1100d-f10e-7551-bfed-1fb211319564",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T07:11:58.410247958Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a1100d-f10e-7551-bfed-1fb211319564",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:14:42.887542691Z",
+      "spec": "TASK-1327",
+      "run_uuid": "01a1100d-f10e-7551-bfed-1fb211319564",
+      "kind": {
+        "event": "AdvisorEscalated",
+        "reason": "TASK-1327 investigation obligations verified; no actionable diff defects. Exact-head Ubuntu CI passed; required merge-hold gate fails on active supervised hold, so merge is escalated to operator/advisor."
+      }
+    },
+    {
+      "ts": "2026-10-06T07:14:42.896778756Z",
+      "spec": "TASK-1327",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2439
+      }
+    },
+    {
+      "ts": "2026-10-06T13:17:24.705069590Z",
+      "spec": "TASK-1327",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cd1aa538485b6d2c91df86ed41e04edeccbaea56",
+        "pr": 2439,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

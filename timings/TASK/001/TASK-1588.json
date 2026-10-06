@@ -5,9 +5,233 @@
     {
       "at": "2026-10-06T04:11:25.601975654Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-06T13:34:42.422531334Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-04T03:32:28.690669461Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:01:33.691568220Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:12.550214591Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f35-481d-709b-a1c2-c938430efe6b",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:20.331042524Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:36.267762618Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a10f35 exited with code 1 after 15929ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1588` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1588 --force-claim` to take over here, or `aida edit TASK-1588 --stat"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:36.268397869Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:07.681603068Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a10f35 exited with code 1 after 30658ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1588` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1588 --force-claim` to take over here, or `aida edit TASK-1588 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1588 — the store reports TASK-1588 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1588`."
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:52.971123064Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:52.971174036Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:30:38.405630708Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f43-68bf-72b2-aab8-646168f530b0",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:30:41.437698356Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f43-68bf-72b2-aab8-646168f530b0",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:22.521209162Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f43-68bf-72b2-aab8-646168f530b0",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T03:35:09.993923782Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "no-pr",
+        "attempt": 2,
+        "max": 3,
+        "detail": "the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:35:10.029080234Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:39:52.734572523Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "no-pr",
+        "attempt": 3,
+        "max": 3,
+        "detail": "the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:39:52.754022040Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:44:46.125688410Z",
+      "spec": "TASK-1588",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "no-pr",
+        "detail": "the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 3/3)",
+        "recovery_hint": "The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-1588 --resume 01a10f4c21f9`"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:00:49.868341441Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:05:47.513499313Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:05:49.981669715Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-06T04:06:27.435052626Z",
       "spec": "TASK-1588",
@@ -16,6 +240,79 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:17:32.509756664Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T04:28:57.424463899Z",
+      "spec": "TASK-1588",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T04:43:59.987017837Z",
+      "spec": "TASK-1588",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1588",
+        "branch": "task-1588",
+        "first_seen": "2026-10-06T04:43:59.986967533+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-06T05:50:24.197088825Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2436,
+        "verdict": "APPROVED",
+        "reviewed_sha": "522d73a9504f5af651b2f6834d3b38393a582652"
+      }
+    },
+    {
+      "ts": "2026-10-06T06:28:07.975131032Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2436,
+        "verdict": "APPROVED",
+        "reviewed_sha": "77919d1e1e"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:34:42.394098012Z",
+      "spec": "TASK-1588",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:34:42.394191625Z",
+      "spec": "TASK-1588",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
