@@ -1,0 +1,29 @@
+id: 01a11219-24a8-7721-bf31-1caa029e287f
+spec_id: TASK-1-228
+title: 'burndown run has no --require-head: stale-binary waves launch on a warning the operator never sees'
+description: |-
+  `aida burndown run` cannot enforce the fresh-binary floor. 2026-10-06 09:08: operator launched burndown run while `aida` resolved to the stale release build 978c4974 (main at 010de0e6); readiness printed only a warning ("the wave will run this build — run make build-fast, or pass --require-head to refuse") and launched 12 specs on the old binary. But burndown run does not accept --require-head (the flag lives on `aida queue work` and is honored by `[drain] require_head`), and a headless launch scrolls the warning away instantly.
+
+  Consequence today: the wave runs without the PR-2443 alias-ownership fix, so members with origin aliases (TASK-1322/TASK-1-215, TASK-1316/TASK-1-205) risk the exact refusal class 2443 just fixed. Fails safe (refusals/shelves, not corruption), but it re-manufactures race-victim requeues.
+
+  Suggested fix: honor `[drain] require_head = true` in burndown run's readiness gate (refuse, not warn), and/or accept --require-head there for parity. Secondary: `make build-fast` builds target/agent, which neither `aida dev activate` (debug|release only) nor a release-pinned PATH resolves — the warning's own fix hint cannot take effect for a release-pinned shell (separate UX gap, observed twice today).
+
+  Interim operator rule (already in the seat handoff): set `[drain] require_head = true` and verify `aida --version` vs main before any launcher.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T16:43:20.104709930Z
+modified_at: 2026-10-06T16:43:20.104709930Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+filed_at:
+  code_sha: 010de0e6894d84ee6d0f1ea848a85b9b1835f71c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
