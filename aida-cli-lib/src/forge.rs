@@ -665,6 +665,17 @@ pub struct MergeOptions {
     /// Explicit squash/merge subject. `None` lets the forge default (gh: the PR
     /// title; pure-git: the branch head's subject).
     pub squash_subject: Option<String>,
+    /// Explicit squash body. `None` lets the forge build its default (gh:
+    /// the branch's commit messages plus auto-derived `Co-authored-by:`
+    /// trailers). `aida pr ship` sets this when the default body would carry
+    /// a non-allowlisted email (TASK-1330 identity hygiene): passing an
+    /// explicit body both strips the offending trailers and suppresses the
+    /// forge's auto-derivation. GitHub-only today — gh passes it as
+    /// `--body`; the GitLab and pure-git merge paths ignore it (their squash
+    /// message comes from `squash_subject`, so they never auto-derive
+    /// co-author trailers in the first place).
+    // trace:TASK-1330 | ai:claude
+    pub squash_body: Option<String>,
     /// Delete the source branch after a successful merge (forge-side).
     pub delete_branch: bool,
     /// Refuse the merge unless the change's head is still this commit — the
@@ -682,6 +693,7 @@ impl MergeOptions {
         Self {
             method: MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: false,
             match_head: None,
         }
@@ -704,9 +716,12 @@ pub(crate) fn head_matches_pin(pin: &str, actual: &str) -> bool {
 // trace:TASK-1458 | ai:claude
 pub(crate) fn github_merge_argv(id: u64, opts: &MergeOptions) -> Vec<String> {
     let mut a: Vec<String> = match opts.method {
-        MergeMethod::Squash => {
-            crate::pr_ship::merge_args(id, opts.delete_branch, opts.squash_subject.as_deref())
-        }
+        MergeMethod::Squash => crate::pr_ship::merge_args(
+            id,
+            opts.delete_branch,
+            opts.squash_subject.as_deref(),
+            opts.squash_body.as_deref(), // trace:TASK-1330 | ai:claude
+        ),
         other => {
             let mut a: Vec<String> = vec!["pr".into(), "merge".into(), id.to_string()];
             a.push(
@@ -4336,6 +4351,7 @@ mod tests {
                 &MergeOptions {
                     method: MergeMethod::Squash,
                     squash_subject: None,
+                    squash_body: None, // trace:TASK-1330 | ai:claude
                     delete_branch: true,
                     match_head: None,
                 },
@@ -5018,12 +5034,13 @@ mod tests {
         let opts = MergeOptions {
             method: MergeMethod::Squash,
             squash_subject: Some("feat: x (TASK-1)".into()),
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };
         assert_eq!(
             github_merge_argv(42, &opts),
-            crate::pr_ship::merge_args(42, true, Some("feat: x (TASK-1)"))
+            crate::pr_ship::merge_args(42, true, Some("feat: x (TASK-1)"), None)
         );
     }
 
@@ -5033,6 +5050,7 @@ mod tests {
             let opts = MergeOptions {
                 method,
                 squash_subject: None,
+                squash_body: None, // trace:TASK-1330 | ai:claude
                 delete_branch: true,
                 match_head: Some(PIN.into()),
             };
@@ -5210,6 +5228,7 @@ mod tests {
         let opts = |method| MergeOptions {
             method,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };

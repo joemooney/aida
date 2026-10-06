@@ -704,6 +704,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1330: identity hygiene. 2026-10-05: an employer-identifying email
+    // reached public history because a work machine's git config used it and
+    // nothing refused it. When `[identity] allowed_emails` is configured,
+    // report a git identity outside the allowlist and a pre-push hook that
+    // does not run the gate. Silent when the project opted out (no
+    // allowlist). One git config read + one file read; kept in the opt-in
+    // append path with its neighbours. trace:TASK-1330 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "identity")? {
+        findings.extend(scan_identity_hygiene(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1527 (amendment A7): the detached-refresh health report. Silent
     // when no request is pending or a fresh request is simply in flight;
     // reports a crash-looped worker (readers are falling back to strict
@@ -1784,6 +1796,176 @@ fn mirror_hook_drift_finding(hooks_dir: &std::path::Path) -> Option<DoctorFindin
             .to_string(),
         safe_heal: false,
     })
+}
+
+/// TASK-1330: identity hygiene scan. Gathers the live inputs (allowlist,
+/// effective `git config user.email`, installed pre-push hook body) and
+/// hands them to the pure `identity_hygiene_findings` core.
+// trace:TASK-1330 | ai:claude
+fn scan_identity_hygiene(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let allowlist = match crate::identity_gate::read_allowed_emails(project_root) {
+        Ok(list) => list,
+        Err(err) => {
+            return vec![DoctorFinding {
+                category: "identity".to_string(),
+                id: "identity-config-unreadable".to_string(),
+                summary: format!(
+                    "could not read [identity] allowed_emails from .aida/config.toml ({err:#}) — \
+                     the push-time identity gate refuses pushes while the config is unreadable"
+                ),
+                action: "fix the TOML syntax in .aida/config.toml so the allowlist loads"
+                    .to_string(),
+                safe_heal: false,
+            }];
+        }
+    };
+    let user_email = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["config", "user.email"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let hook_body = std::fs::read_to_string(
+        crate::remote_create::repo_hooks_dir(project_root).join("pre-push"),
+    )
+    .ok();
+    identity_hygiene_findings(&allowlist, user_email.as_deref(), hook_body.as_deref())
+}
+
+/// The tempdir-testable core of the `identity` scan.
+///
+/// Silent when no allowlist is configured — the gate is opt-in per project.
+/// Once configured, two findings cover the two ways the 2026-10-05 incident
+/// could recur: the commit identity itself is wrong (`git config user.email`
+/// outside the allowlist), and the recurrence guard is not wired (no
+/// pre-push hook running `aida identity check-push`). Report-only: both
+/// remedies touch the operator's git config / `.git/hooks/`, writes outside
+/// the store.
+// trace:TASK-1330 | ai:claude
+fn identity_hygiene_findings(
+    allowlist: &[String],
+    user_email: Option<&str>,
+    hook_body: Option<&str>,
+) -> Vec<DoctorFinding> {
+    if allowlist.is_empty() {
+        return Vec::new();
+    }
+    let mut findings = Vec::new();
+    match user_email {
+        Some(email) if crate::identity_gate::email_allowed(email, allowlist) => {}
+        other => {
+            let observed = match other {
+                Some(email) => format!("`{email}`"),
+                None => "unset".to_string(),
+            };
+            findings.push(DoctorFinding {
+                category: "identity".to_string(),
+                id: "git-user-email-not-allowlisted".to_string(),
+                summary: format!(
+                    "git user.email is {observed}, which is not in [identity] allowed_emails \
+                     ({}) — commits made here would carry a non-allowlisted identity",
+                    allowlist.join(", ")
+                ),
+                action: "run `git config user.email <allowed-address>` (and fix any \
+                         GIT_AUTHOR_EMAIL/GIT_COMMITTER_EMAIL overrides)"
+                    .to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+    let gate_wired = hook_body
+        .map(|body| body.contains(crate::identity_gate::IDENTITY_HOOK_MARKER))
+        .unwrap_or(false);
+    if !gate_wired {
+        findings.push(DoctorFinding {
+            category: "identity".to_string(),
+            id: "identity-pre-push-hook-missing".to_string(),
+            summary: "[identity] allowed_emails is configured but the repository's pre-push \
+                      hook does not run `aida identity check-push` — a push from a \
+                      misconfigured machine would publish non-allowlisted emails unchallenged"
+                .to_string(),
+            action: "run `aida identity install-hook` (refreshes AIDA's own hooks in place; \
+                     prints the lines to add when the hook is custom)"
+                .to_string(),
+            safe_heal: false,
+        });
+    }
+    findings
+}
+
+#[cfg(test)]
+mod task_1330_identity_hygiene_tests {
+    use super::*;
+
+    fn allow(emails: &[&str]) -> Vec<String> {
+        emails.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_allowlist_means_no_findings() {
+        assert!(identity_hygiene_findings(&[], Some("anyone@anywhere.com"), None).is_empty());
+    }
+
+    #[test]
+    fn allowlisted_email_and_wired_hook_are_silent() {
+        let hook = crate::identity_gate::identity_pre_push_hook_script();
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(&hook),
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn the_gate_embedded_in_the_mirror_hook_counts_as_wired() {
+        let hook = crate::remote_create::mirror_pre_push_hook_script();
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(&hook),
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn non_allowlisted_email_and_missing_hook_are_both_reported() {
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("joe@work.example.com"),
+            None,
+        );
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "git-user-email-not-allowlisted",
+                "identity-pre-push-hook-missing"
+            ]
+        );
+        assert!(findings.iter().all(|f| !f.safe_heal));
+    }
+
+    #[test]
+    fn unset_user_email_is_reported() {
+        let findings = identity_hygiene_findings(&allow(&["good@example.org"]), None, None);
+        assert_eq!(findings[0].id, "git-user-email-not-allowlisted");
+        assert!(findings[0].summary.contains("unset"));
+    }
+
+    #[test]
+    fn a_custom_hook_running_the_gate_counts_as_wired() {
+        let hook = "#!/bin/sh\nrefs=$(cat)\nprintf '%s\\n' \"$refs\" | \
+                    aida identity check-push \"$1\" || exit 1\n";
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(hook),
+        );
+        assert!(findings.is_empty());
+    }
 }
 
 #[cfg(test)]

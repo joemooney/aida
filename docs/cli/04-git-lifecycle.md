@@ -222,6 +222,22 @@ The marker is best-effort when the code repository cannot be read.
 
 ---
 
+### `aida identity`
+
+**One line** — the project's email allowlist: refuse commits and pushes that would publish a non-allowlisted author, committer, or Co-authored-by email. <!-- trace:TASK-1330 | ai:claude -->
+
+**Mental model.** A work machine whose git config carries an employer address will happily sign every commit with it, and nothing in stock git objects. Declare the addresses this project may publish under `[identity] allowed_emails` in `.aida/config.toml`; from then on `aida identity check` reports the identity a commit made here would carry, `aida commit` refuses to assemble a commit under any other address, and the pre-push hook installed by `aida identity install-hook` refuses a push that introduces *any* commit — author, committer, or `Co-authored-by:` trailer — outside the allowlist. The push gate is fail-closed: if the gate cannot run (unreadable config, missing subcommand) while an allowlist is configured, the push is refused rather than waved through. `aida pr ship` closes the last gap: when a squash merge's body would carry a non-allowlisted co-author trailer, the body is replaced with the branch's commit messages with the offending trailers stripped. The `link` / `list` / `show` subcommands are a different concern sharing the namespace: the shared person-alias registry that collapses one human's several identity strings into one canonical person.
+
+**Reach for it when** — a machine's git config might carry an identity this repository must never publish (work laptop, shared box), or right after an identity leak while you rewrite history — this is the recurrence guard.
+
+**Don't reach for it when** — no allowlist is configured: every check is silent, so there is nothing to bypass or tune. The gate is opt-in per project.
+
+**Gotchas.** The installer never clobbers a custom pre-push hook — it prints the lines to paste instead. Repos running the mirror fan-out hook get the gate embedded in that same hook (git only runs one pre-push hook); re-running `aida identity install-hook` or `aida remote mirror <name>` refreshes an older gate-less install in place. `aida doctor` (category `identity`) reports a git identity outside the allowlist and a pre-push hook that does not run the gate. A deliberate bypass is `git push --no-verify` — loud, explicit, and on you.
+
+**Chains with** — `aida commit` (commit-time enforcement point), `aida remote mirror` (shared pre-push hook), `aida doctor` (drift reporting), `aida pr ship` (squash-body sanitizer).
+
+---
+
 ### `aida changelog`
 
 **One line** — generate `CHANGELOG.md` mechanically from git tags + the spec graph.
