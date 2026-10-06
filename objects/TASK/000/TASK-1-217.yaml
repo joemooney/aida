@@ -1,5 +1,6 @@
 id: 01a10f64-5515-72c3-9ebe-1d844112e65f
 spec_id: TASK-1-217
+agreed_id: TASK-1325
 title: 'Windows: task_1597_delegation_prompt test fails on first cross-platform run'
 description: 'test_task_1597_delegation_prompt_and_recovery_hint (aida-cli/tests/task_1597_delegation_prompt.rs:117) fails on windows-latest: assertion failed: child.wait().unwrap().success(), suite 0 passed/1 failed in 1.61s — looks deterministic, not flaky. Test added tonight in b8b16f5e (TASK-1597 TTY seat-delegation prompt); run 37408907677 at 51fb3f49 was its FIRST Windows exercise, so main is now Windows-red independent of any PR. Same family as BUG-1794 (Windows advisor_code_gate worktree-lease failure) but a different test. Blocks TASK-1588 (ADR-65 weekly Windows validation on main) from ever being green. Rerun: cargo test -p aida-cli --test task_1597_delegation_prompt on Windows.'
 status: Approved

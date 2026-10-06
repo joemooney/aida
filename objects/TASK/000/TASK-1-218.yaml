@@ -1,5 +1,6 @@
 id: 01a10f64-6302-73a1-bec3-3cd254905d87
 spec_id: TASK-1-218
+agreed_id: TASK-1326
 title: 'Windows: agent_launcher terminate test — plain sleep survives SIGTERM+SIGKILL'
 description: 'agent_launcher_tests::terminate_reports_survivors_and_live_pids_tracks_real_processes (aida-cli-lib/src/tests/agent_launcher_tests.rs:3575) failed on windows-latest in run 37408907677: ''pid 6864 still alive after SIGTERM — sending SIGKILL'' then panic ''a plain sleep must not survive SIGTERM+SIGKILL: [6864]''. 7516 passed/1 failed. Windows process-termination semantics (no POSIX signals) or kill-latency race; possibly flaky rather than deterministic — recur if seen again before promoting.'
 status: Draft
