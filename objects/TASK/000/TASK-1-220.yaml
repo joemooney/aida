@@ -1,5 +1,6 @@
 id: 01a10f68-9ece-7e91-9a6c-295a10cddcb7
 spec_id: TASK-1-220
+agreed_id: TASK-1328
 title: queue done rejects owned branches after canonical spec-ID remapping
 description: 'During TASK-1-216 implementation, the shared store remapped its canonical ID to TASK-1324 (origin_id: TASK-1-216). The existing implementer lease still owns TASK-1-216 on branch task-1-216, and both aida show IDs resolve to the identical requirement. Commit 9ec89b97b6 and PR #2435 reference the authorized original ID. aida pr auto-queue-review succeeded and filed STORY-1528 covering the remapped requirement, but aida queue done TASK-1-216 refused: branch task-1-216 is not owned by TASK-1324. No force override or git rename/reset was attempted. Completion remains in-progress pending alias-aware ownership reconciliation. Ownership checks should recognize the stored origin ID when canonical display IDs change mid-session.'
 status: Draft
