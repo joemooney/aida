@@ -3,12 +3,12 @@ spec_id: TASK-1601
 agreed_id: TASK-1601
 title: 'CI gate candidate: compile aida-cli with --no-default-features so the cfg-stub twins (e.g. tui feature) stay buildable'
 description: 'Surfaced during PR 2429 (tui_entry.rs slice-1 module 2): the extracted handle_tui_command carries a cfg(feature = "tui") implementation and a cfg(not(feature = "tui")) stub twin, but CI has no --no-default-features build, so a broken stub only fails for users building without default features. The 2429 self-check caught this and verified the stub compiles manually. A cheap gate (cargo check -p aida-cli --no-default-features, or workspace-wide) closes the gap for all ~45 slice-1 modules and any other feature-gated pair. Candidate for ci-gate-tiers; keep it in the fast tier if check-only.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:19:54.480530782Z
-modified_at: 2026-10-06T07:24:39.789055500Z
+modified_at: 2026-10-06T08:55:32.015948627Z
 req_type: Task
 relationships:
 - rel_type:
@@ -38,6 +38,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1106c-dbaf-71b2-909d-0b5da2e8f4e7
+  author: aida-orchestrator
+  timestamp: 2026-10-06T08:55:32.015961846Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2dc90ca81f5fcf0d38262dae16dadaa7b480eb09
   branch: main
@@ -55,4 +62,12 @@ implementation_info:
     python3 scripts/check-docs-guards-scheduled.py; git diff --check
   implemented_at: 2026-10-06T07:24:25.291411045Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-2441: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed: Build (ubuntu-latest) (run 37429444950; `gh run view 37429444950`). Push fixups to the same branch: `aida queue work TASK-1601 --branch task-1601 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-10-06T08:55:32.015948627Z
 interface_changes: {}
