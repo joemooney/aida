@@ -3,12 +3,12 @@ spec_id: TASK-1-215
 agreed_id: TASK-1322
 title: Bug protocol warns about missing tests for inline Rust test changes
 description: 'During BUG-1804 pickup, aida queue done warned "protocol: bug — missing test-file change (layer: type; no test file in the diff)" although the entire implementation diff changes an existing #[test] in aida-cli-lib/src/maintenance_schedule.rs and adds assertions. Consider recognizing inline Rust test-module edits or clarifying that the heuristic only checks filenames. Evidence: commit 428510740d, PR #2432. Nonblocking; queue done succeeded.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T03:21:25.888015030Z
-modified_at: 2026-10-06T17:53:47.149734625Z
+modified_at: 2026-10-06T18:16:53.042867915Z
 req_type: Task
 tags:
 - from-advisor:BUG-1804
@@ -142,6 +142,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1126e-ca2b-70e2-b8a0-48044f85587f
+  author: aida-auto-bump
+  timestamp: 2026-10-06T18:16:53.035353162Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1126e-ca32-7163-8717-27117102ef2f
+  timestamp: 2026-10-06T18:16:53.042867150Z
+  agent: aida
+  commit_sha: 9c86e9c7ff37151e0301957ce7f61f9b7153146a
+  summary: Completed via merge 9c86e9c7
+  punted:
+  - 'punted: phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  - 'punted: phase 1 child session 01a11172 exited with code 1 after 15542ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
 filed_at:
   code_sha: 428510740dd8ff20a37fed4d68fdc625522cef0c
   branch: bug-1804
@@ -153,3 +169,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T17:53:47.149734625Z
   implemented_by: joe
+  completed_at: 2026-10-06T18:16:53.035328881Z
+  completion_sha: 9c86e9c7ff37151e0301957ce7f61f9b7153146a
