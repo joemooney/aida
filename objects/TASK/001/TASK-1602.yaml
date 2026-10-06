@@ -3,12 +3,12 @@ spec_id: TASK-1602
 agreed_id: TASK-1602
 title: 'aida pr ship on a drive-owned PR: report the owning phase + liveness, offer --wait <secs>, and prompt-or-explain at a TTY instead of a bare refusal'
 description: 'Operator request (Joe, 2026-10-05) after PR 2431: ship refused twice with ''target PR is owned by the live drive'' while the drive''s reviewer phase was mid-flight; the operator had no way to tell whether to wait, for how long, or whether the drive was hung. Shape: (1) at a TTY, the refusal should name the owning run/phase and its liveness evidence (e.g. ''reviewer phase, headless log last written 12s ago'') and the expected outcome (''escalates merge to you on completion''); (2) --wait [secs] polls until the drive releases the PR, then proceeds with the ship (exit non-zero on timeout); (3) any interactive prompt must sit behind the same direct-TTY + non-managed-agent predicate as issue_direct (TASK-1597 lesson). Headless behavior stays a plain fail-closed refusal. AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 remains the explicit override.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:43:51.039322739Z
-modified_at: 2026-10-06T07:22:23.743990634Z
+modified_at: 2026-10-06T13:03:02.277060786Z
 req_type: Task
 comments:
 - id: 01a11017-967f-70d2-8ae7-b8dc8cb6a282
@@ -62,6 +62,11 @@ comments:
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-06T07:22:23.743985066Z
   modified_at: 2026-10-06T07:22:23.743985066Z
+- id: 01a1114f-7485-7441-aadd-0565214831f9
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a11017 exited with code 1 after 16661ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1602` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1602 --force-claim` to take over here, or `aida edit TASK-1602 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1602 — the store reports TASK-1602 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T13:03:02.277059515Z
+  modified_at: 2026-10-06T13:03:02.277059515Z
 history:
 - id: 01a10f72-0aa0-7513-a223-e328f25b5822
   author: joe
@@ -84,6 +89,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1114f-7485-7441-aadd-0556a07fa290
+  author: joe
+  timestamp: 2026-10-06T13:03:02.277050842Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2ab2b58d01cda563730a510301298719688a9b81
   branch: main
@@ -92,11 +104,3 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: c4533f5c-49cf-4219-829a-015580ac4dc4
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: launch-refused
-  detail: 'phase 1 child session 01a11017 exited with code 1 after 16661ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1602` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1602 --force-claim` to take over here, or `aida edit TASK-1602 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1602 — the store reports TASK-1602 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
-  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1602`.'
-  shelved_by: advisor
-  shelved_at: 2026-10-06T07:22:20.282236260Z
