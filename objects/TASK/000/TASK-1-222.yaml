@@ -1,5 +1,6 @@
 id: 01a10fc0-eeb1-7150-8acf-f15fd844f35b
 spec_id: TASK-1-222
+agreed_id: TASK-1329
 title: 'Windows CI: no per-test timeout — a hung test holds the job for hours'
 description: '2026-10-05 ~22:45: PR 2436''s windows-latest ''Run tests'' step in-progress ~70min (baseline 22min, run 37412494312); suite is cargo test --workspace --no-fail-fast with no per-test timeout, so a hang (likely the agent_launcher process-termination raciness family, cf. TASK-1326 where the same class panicked instead: ''plain sleep must not survive SIGTERM+SIGKILL'') occupies the runner until job timeout and stalls any drain phase gating on it. Fix shape: per-test timeout on Windows (cargo-nextest with timeout config, or a job-level timeout-minutes tightened for the test step) so hangs convert to loud failures in minutes. Recur with TASK-1326 if the same test is implicated when the job concludes.'
 status: Draft
