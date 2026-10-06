@@ -1,0 +1,33 @@
+id: 01a10f8f-a191-79b0-bff3-1d9df4005242
+spec_id: STORY-1529
+agreed_id: STORY-1529
+title: 'Review PR-2437: [AI:codex] fix(tests): pin delegation prompt fixture identity (TASK-1325)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a10f8b`) for branch `task-1325`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2437>
+  - Branch: `task-1325` → `main`
+
+  ## Covers
+
+  - TASK-1325
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2437` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T04:53:53.681787565Z
+modified_at: 2026-10-06T04:53:53.681787565Z
+req_type: Story
+filed_at:
+  code_sha: a3f0acbc24ccac57796cd5483d1be956fefd2ffc
+  branch: task-1325
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dafb66432e
+  vendor: codex
