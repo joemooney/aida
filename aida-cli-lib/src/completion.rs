@@ -161,6 +161,32 @@ pub(crate) fn clear_completed_at_on_reopen(req: &mut Requirement, prior: &Requir
     }
 }
 
+/// Record a deliberate reopen after the status mutation. Keep completion_sha
+/// for BUG-410, clear the stale completion date, and fence off all code evidence
+/// already present at reopen time. Done -> Completed is forward progress.
+// trace:TASK-1600 | ai:codex
+pub(crate) fn record_reopen(
+    req: &mut Requirement,
+    prior: &RequirementStatus,
+    project_root: Option<&std::path::Path>,
+) {
+    if req.status == *prior || matches!(req.status, RequirementStatus::Completed) {
+        return;
+    }
+    clear_completed_at_on_reopen(req, prior);
+    if !matches!(
+        prior,
+        RequirementStatus::Done | RequirementStatus::Completed
+    ) {
+        return;
+    }
+    if let Some(sha) = project_root.and_then(|root| aida_core::git_ops::head_sha(root).ok()) {
+        req.implementation_info
+            .get_or_insert_with(aida_core::ImplementationInfo::default)
+            .reopened_at_sha = Some(sha);
+    }
+}
+
 /// Emit the durable ship record after the store confirms a transition to
 /// `Completed`. Best-effort like every event-stream write.
 // trace:BUG-1286 | ai:codex

@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Ship derives completion IDs from an explicit trailing PR-title group, then
+store-resolving branch IDs. Title prose, PR bodies, and an unrelated branch-head
+trailer do not grant completion credit. CLI/MCP rework and status edits record
+`reopened_at_sha` when reopening Done/Completed; live and replay scans reject
+evidence at or before that SHA. See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1600 | ai:codex -->
+
 Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
 mirrored only when origin already advertises the exact SHA; rejected or pending
 pushes are skipped. Mirror-sync ignores and reports local-only default/store

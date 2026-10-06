@@ -20271,7 +20271,10 @@ pub(crate) fn edit_requirement_cli(
                 format!("{:?}", req.status),
                 format!("{:?}", new_status),
             ));
+            let prior = req.status.clone();
             req.status = new_status;
+            // trace:TASK-1600 | ai:codex
+            completion::record_reopen(req, &prior, Some(&queue_cmd::requeue_project_root(storage)));
         }
     }
 
@@ -20526,7 +20529,10 @@ pub(crate) fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> R
                 format!("{:?}", req.status),
                 format!("{:?}", new_status),
             ));
+            let prior = req.status.clone();
             req.status = new_status;
+            // trace:TASK-1600 | ai:codex
+            completion::record_reopen(req, &prior, Some(&queue_cmd::requeue_project_root(storage)));
         }
     }
 
@@ -75353,6 +75359,51 @@ pub(crate) fn sha_at_or_before_reopen(
         .unwrap_or(false)
 }
 
+/// Reopening fences off all already-landed evidence, including a different
+/// older SHA and paths that never stamped completion_sha (closure holds).
+// trace:TASK-1600 | ai:codex
+pub(crate) fn auto_bump_evidence_is_stale(
+    project_root: &std::path::Path,
+    req: &Requirement,
+    sha: &str,
+) -> bool {
+    let Some(info) = req.implementation_info.as_ref() else {
+        return false;
+    };
+    if !sha.is_empty() && info.completion_sha.as_deref() == Some(sha) {
+        return true;
+    }
+    info.reopened_at_sha.as_deref().is_some_and(|reopen_sha| {
+        sha.is_empty() || sha_at_or_before_reopen(project_root, sha, reopen_sha)
+    })
+}
+
+// Filter before closure projection so stale evidence cannot move a reopened
+// spec back to Done or release its dependents during this pass.
+// trace:TASK-1600 | ai:codex
+fn retain_fresh_auto_bump_flips(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    flips: &mut Vec<AutoBumpFlip>,
+) {
+    flips.retain(|flip| {
+        trailer_spec_or_skip(store, &flip.spec_id, &flip.sha)
+            .is_some_and(|r| !auto_bump_evidence_is_stale(project_root, r, &flip.sha))
+    });
+}
+
+// trace:TASK-1600 | ai:codex
+fn retain_fresh_stale_review_flips(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    flips: &mut Vec<(String, String, u64, RequirementStatus)>,
+) {
+    flips.retain(|(id, sha, ..)| {
+        trailer_spec_or_skip(store, id, sha)
+            .is_some_and(|r| !auto_bump_evidence_is_stale(project_root, r, sha))
+    });
+}
+
 /// Resolve a `(SPEC-ID)` commit-trailer id for the pull auto-bump. An id
 /// that names more than one requirement is SKIPPED with a printed warning
 /// (the rest of the pull proceeds): bumping a guessed spec is how a trailer
@@ -75416,15 +75467,8 @@ pub(crate) fn collect_draft_landed_candidates(
             ) {
                 return None;
             }
-            // trace:TASK-1446 | ai:claude
-            if let Some(reopen_sha) = req
-                .implementation_info
-                .as_ref()
-                .and_then(|i| i.reopened_at_sha.as_deref())
-            {
-                if sha_at_or_before_reopen(project_root, sha, reopen_sha) {
-                    return None;
-                }
+            if auto_bump_evidence_is_stale(project_root, req, sha) {
+                return None;
             }
             Some((spec_id.clone(), sha.clone()))
         })
@@ -75485,6 +75529,7 @@ pub(crate) fn apply_draft_landed_flip(
 /// missing from.
 // trace:BUG-1506 | ai:claude
 pub(crate) fn apply_draft_to_done_bumps(
+    project_root: &std::path::Path,
     storage: &Storage,
     draft_candidates: &[(String, String)],
 ) -> Result<Vec<(String, String)>> {
@@ -75505,7 +75550,9 @@ pub(crate) fn apply_draft_to_done_bumps(
             let Some(mut r) = backend.get_requirement_by_spec_id(spec_id)? else {
                 continue;
             };
-            if !matches!(r.status, RequirementStatus::Draft) {
+            if !matches!(r.status, RequirementStatus::Draft)
+                || auto_bump_evidence_is_stale(project_root, &r, sha)
+            {
                 continue;
             }
             apply_draft_landed_flip(&mut r, sha, now);
@@ -75525,7 +75572,9 @@ pub(crate) fn apply_draft_to_done_bumps(
                 r.spec_id.as_deref() == Some(spec_id.as_str())
                     || r.agreed_id.as_deref() == Some(spec_id.as_str())
             }) {
-                if !matches!(r.status, RequirementStatus::Draft) {
+                if !matches!(r.status, RequirementStatus::Draft)
+                    || auto_bump_evidence_is_stale(project_root, &r, sha)
+                {
                     continue;
                 }
                 apply_draft_landed_flip(r, sha, now);
@@ -76304,17 +76353,8 @@ pub(crate) fn apply_auto_bump_flip(
     if !auto_bump_eligible_status(&r.status) {
         return false;
     }
-    // BUG-410: skip a spec already completed by THIS exact commit and since
-    // manually reopened — re-bumping silently overwrites the deliberate
-    // reopen. completion_sha survives a `--force` reopen, so equality here
-    // means "this commit already completed it once"; a DIFFERENT commit
-    // referencing it still bumps.
-    if !flip.sha.is_empty()
-        && r.implementation_info
-            .as_ref()
-            .and_then(|i| i.completion_sha.as_deref())
-            == Some(flip.sha.as_str())
-    {
+    // trace:TASK-1600 | ai:codex
+    if auto_bump_evidence_is_stale(project_root, r, &flip.sha) {
         return false;
     }
     // BUG-477: record the merge-driven bump in the per-spec history the same
@@ -76646,7 +76686,11 @@ pub(crate) fn apply_closure_hold(
     r: &mut aida_core::Requirement,
     hold: &ClosureHold,
     now: chrono::DateTime<chrono::Utc>,
+    project_root: &std::path::Path,
 ) -> bool {
+    if auto_bump_evidence_is_stale(project_root, r, &hold.flip.sha) {
+        return false;
+    }
     if !auto_bump_eligible_status(&r.status) {
         return false;
     }
@@ -76769,6 +76813,9 @@ pub(crate) fn apply_stale_review_flip(
         r.status,
         RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
     ) {
+        return false;
+    }
+    if auto_bump_evidence_is_stale(project_root, r, sha) {
         return false;
     }
     // trace:STORY-1418 | ai:claude
@@ -76925,6 +76972,16 @@ pub(crate) fn collect_stranded_review_pr_resolutions(
             // Still open — untouched, per acceptance.
             crate::forge::ChangeState::Open => continue,
         };
+        // trace:TASK-1600 | ai:codex
+        if outcome == StrandedReviewPrOutcome::Merged
+            && req
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.reopened_at_sha.as_ref())
+                .is_some()
+        {
+            continue;
+        }
         out.push(StrandedReviewPrResolution {
             spec_id: spec_id.to_string(),
             pr_n,
@@ -76948,6 +77005,14 @@ pub(crate) fn apply_stranded_review_pr_resolution(
         r.status,
         RequirementStatus::Draft | RequirementStatus::Approved | RequirementStatus::InProgress
     ) {
+        return false;
+    }
+    if resolution.outcome == StrandedReviewPrOutcome::Merged
+        && r.implementation_info
+            .as_ref()
+            .and_then(|i| i.reopened_at_sha.as_ref())
+            .is_some()
+    {
         return false;
     }
     let prior = r.status.clone();
@@ -77179,7 +77244,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // confirmation short of Completed. trace:BUG-1506 | ai:claude
     let draft_landed = collect_draft_landed_candidates(project_root, &store, &candidates, None);
     if !draft_landed.is_empty() {
-        if let Ok(confirmed) = apply_draft_to_done_bumps(storage, &draft_landed) {
+        if let Ok(confirmed) = apply_draft_to_done_bumps(project_root, storage, &draft_landed) {
             if !confirmed.is_empty() {
                 println!(
                     "  {} {} Draft spec{} → {} (trailered commit already on the default \
@@ -77319,6 +77384,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // chain graduates it without depending on `pr_to_sha`. Runs after the
     // candidate + BUG-102 + BUG-106 blocks so a covered spec flipped in
     // this same pass is already visible in `flips`. trace:BUG-113 | ai:claude
+    retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     for flip in collect_covers_completed_review_flips(&store, &flips) {
         flips.push(flip);
     }
@@ -77337,6 +77403,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // remainder visible. An unavailable GitHub lookup is ambiguous and also
     // preserves Done; a later pull/reconcile can complete it once the forge is
     // reachable and no open PR remains. trace:BUG-1454 | ai:codex
+    retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
     match specs_with_open_prs(project_root, candidate_ids) {
         Some(open) => {
@@ -77381,7 +77448,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // authoritative "review is over" signal. Flip each to Completed with
     // an audit comment naming why review was skipped.
     // trace:TASK-246 trace:BUG-219 | ai:claude
-    let stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
+    let mut stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
+    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
 
     // BUG-1768: the second nothing-to-do guard. A pass with an orphaned finding
     // to resolve and nothing to flip reaches here, so this one has to admit the
@@ -77437,7 +77505,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
             let Some(mut r) = backend.get_requirement_by_spec_id(&hold.flip.spec_id)? else {
                 continue;
             };
-            if apply_closure_hold(&mut r, hold, now) {
+            if apply_closure_hold(&mut r, hold, now, project_root) {
                 backend.update_requirement(&r)?;
                 // STORY-1436: first time this merge is held — record the
                 // non-completion (deduped with the audit note, so a re-pull
@@ -77486,7 +77554,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
                     r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
                         || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
                 }) {
-                    apply_closure_hold(r, hold, now);
+                    apply_closure_hold(r, hold, now, project_root);
                 }
             }
             for flip in &flips_for_write {
@@ -78190,6 +78258,7 @@ pub(crate) fn handle_db_reconcile_status(
     // already covers the Done-state review story, so this completes the
     // {Approved, InProgress, Done} set. trace:BUG-219 | ai:claude
     let mut stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
+    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
     if let Some(target) = spec {
         stale_review_flips.retain(|(sid, ..)| sid.eq_ignore_ascii_case(target));
     }
@@ -78200,6 +78269,7 @@ pub(crate) fn handle_db_reconcile_status(
     // the `(#N)` scan missed because their PR's merge commit is outside
     // the replay range. Mirrors the auto-bump path; honours `--spec`.
     // trace:BUG-113 | ai:claude
+    retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let mut covers_completed_flips = collect_covers_completed_review_flips(&store, &flips);
     if let Some(target) = spec {
         covers_completed_flips.retain(|f| f.spec_id.eq_ignore_ascii_case(target));
@@ -78212,6 +78282,7 @@ pub(crate) fn handle_db_reconcile_status(
     // auto-bump. Otherwise a manual Completed → Done recovery would be undone
     // immediately by the already-landed trailer in this wider scan.
     let mut open_pr_deferred = false;
+    retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
     match specs_with_open_prs(project_root, candidate_ids) {
         Some(open) => {
@@ -78404,7 +78475,7 @@ pub(crate) fn handle_db_reconcile_status(
                 r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
                     || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
             }) {
-                apply_closure_hold(r, hold, now);
+                apply_closure_hold(r, hold, now, project_root);
             }
         }
         for flip in &flips_for_write {
@@ -78423,17 +78494,8 @@ pub(crate) fn handle_db_reconcile_status(
                 if !auto_bump_eligible_status(&r.status) {
                     continue;
                 }
-                // BUG-410: skip a spec already completed by THIS exact commit
-                // and since manually reopened — re-bumping silently overwrites
-                // the deliberate reopen. completion_sha survives a `--force`
-                // reopen, so equality here means "this commit already completed
-                // it once"; a DIFFERENT commit referencing it still bumps.
-                if !flip.sha.is_empty()
-                    && r.implementation_info
-                        .as_ref()
-                        .and_then(|i| i.completion_sha.as_deref())
-                        == Some(flip.sha.as_str())
-                {
+                // trace:TASK-1600 | ai:codex
+                if auto_bump_evidence_is_stale(project_root, r, &flip.sha) {
                     continue;
                 }
                 // BUG-477: record the reconcile-driven Done→Completed bump
@@ -78488,6 +78550,9 @@ pub(crate) fn handle_db_reconcile_status(
                         | RequirementStatus::Approved
                         | RequirementStatus::InProgress
                 ) {
+                    continue;
+                }
+                if auto_bump_evidence_is_stale(project_root, r, sha) {
                     continue;
                 }
                 // trace:STORY-1418 | ai:claude
@@ -78587,7 +78652,7 @@ pub(crate) fn handle_db_reconcile_status(
     // different re-check (`Draft` only) — so it can't be folded into
     // `AutoBumpFlip`'s Completed-only write without teaching that path a
     // second destination status. trace:BUG-1506 | ai:claude
-    let confirmed_draft = apply_draft_to_done_bumps(&storage, &draft_landed)?;
+    let confirmed_draft = apply_draft_to_done_bumps(project_root, &storage, &draft_landed)?;
     if !confirmed_draft.is_empty() {
         println!(
             "  {} {} Draft spec{} → {} (trailered commit already on the default branch; \

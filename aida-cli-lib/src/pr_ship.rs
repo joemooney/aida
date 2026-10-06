@@ -146,12 +146,24 @@ pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
     out
 }
 
-/// Derive the best spec-id set to preserve in a squash subject. Priority:
-/// PR title, then branch name, then PR body.
-// trace:SPEC-410 | ai:codex
-pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, pr_body: &str) -> Vec<String> {
-    for source in [pr_title, branch, pr_body] {
-        let ids = extract_spec_ids_from_text(source);
+/// Derive completion intent from an explicit title trailer, then the branch.
+/// PR body prose and mid-title references are never completion directives.
+// trace:SPEC-410 TASK-1600 | ai:codex
+pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, _pr_body: &str) -> Vec<String> {
+    derive_squash_subject_spec_ids_resolving(pr_title, branch, |_| true)
+}
+
+// trace:TASK-1600 | ai:codex
+pub(crate) fn derive_squash_subject_spec_ids_resolving(
+    pr_title: &str,
+    branch: &str,
+    resolves: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    for ids in [
+        extract_trailing_spec_ids_from_subject(pr_title),
+        extract_spec_ids_from_text(branch),
+    ] {
+        let ids: Vec<String> = ids.into_iter().filter(|id| resolves(id)).collect();
         if !ids.is_empty() {
             return ids;
         }
@@ -197,21 +209,57 @@ pub fn derive_squash_subject(
     pr_body: &str,
     branch_head_commit_message: &str,
 ) -> Option<String> {
-    let pr_title_subject = derive_pr_title_from_commit(pr_title);
-    let branch_subject = derive_pr_title_from_commit(branch_head_commit_message);
-    let mut ids = derive_squash_subject_spec_ids(pr_title, branch, pr_body);
-    if ids.is_empty() {
-        ids = extract_spec_ids_from_text(&branch_subject);
-    }
-    let base = if pr_title_subject.is_empty() {
-        branch_subject
+    derive_squash_subject_resolving(
+        pr_title,
+        branch,
+        pr_body,
+        branch_head_commit_message,
+        |_| true,
+    )
+}
+
+/// The shipping path supplies store resolution so ID-shaped prose such as
+/// SLICE-1 cannot acquire completion authority. Remove unresolved IDs even
+/// when they already appear in a title trailer.
+// trace:TASK-1600 | ai:codex
+pub(crate) fn derive_squash_subject_resolving(
+    pr_title: &str,
+    branch: &str,
+    _pr_body: &str,
+    branch_head_commit_message: &str,
+    resolves: impl Fn(&str) -> bool,
+) -> Option<String> {
+    let title = derive_pr_title_from_commit(pr_title);
+    let base = if title.is_empty() {
+        derive_pr_title_from_commit(branch_head_commit_message)
     } else {
-        pr_title_subject
+        title
     };
     if base.is_empty() {
         return None;
     }
-    Some(squash_subject_with_spec_ids(&base, &ids))
+    let ids = derive_squash_subject_spec_ids_resolving(&base, branch, resolves);
+    let clean_base = without_spec_trailer(&base);
+    Some(squash_subject_with_spec_ids(&clean_base, &ids))
+}
+
+fn without_spec_trailer(subject: &str) -> String {
+    let (tail, suffix) = match trailing_paren_group(subject) {
+        Some((head, inner))
+            if inner
+                .strip_prefix('#')
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())) =>
+        {
+            (head.trim_end(), format!(" ({inner})"))
+        }
+        _ => (subject, String::new()),
+    };
+    match trailing_paren_group(tail) {
+        Some((head, inner)) if !parse_spec_id_group(inner).is_empty() => {
+            format!("{}{suffix}", head.trim_end())
+        }
+        _ => subject.to_string(),
+    }
 }
 
 /// Extract the exact shape the auto-bump scanner recognizes: a trailing
@@ -2333,7 +2381,7 @@ mod tests {
     }
 
     #[test]
-    fn squash_subject_can_recover_spec_id_from_branch_head() {
+    fn squash_subject_does_not_credit_branch_head_when_title_is_present() {
         let branch_head = "[AI:codex] fix(pr-ship): preserve subject (TASK-140)";
         assert_eq!(
             derive_squash_subject(
@@ -2342,7 +2390,68 @@ mod tests {
                 "",
                 branch_head,
             ),
-            Some("[AI:codex] fix(pr-ship): preserve subject (TASK-140)".to_string())
+            Some("[AI:codex] fix(pr-ship): preserve subject".to_string())
+        );
+    }
+
+    // trace:TASK-1600 | ai:codex
+    #[test]
+    fn task_1600_incident_titles_and_bodies_do_not_grant_completion() {
+        let title = "[AI:codex] docs: BUG-1802 prose layer — clarify lifecycle";
+        assert_eq!(
+            derive_squash_subject_resolving(
+                title,
+                "prose-layer",
+                "BUG-1802",
+                "fix: old (BUG-1802)",
+                |_| true
+            ),
+            Some(title.into())
+        );
+        let title = "[AI:codex] refactor: pure move, 57 lines";
+        assert_eq!(
+            derive_squash_subject_resolving(
+                title,
+                "module-one",
+                "SLICE-1 STORY-1488 TASK-1538",
+                "old (TASK-1538)",
+                |_| true
+            ),
+            Some(title.into())
+        );
+        assert!(
+            derive_squash_subject_spec_ids("fix: BUG-1802 prose", "prose-layer", "TASK-1599")
+                .is_empty()
+        );
+    }
+
+    // trace:TASK-1600 | ai:codex
+    #[test]
+    fn task_1600_only_store_resolving_trailers_and_branch_recovery_survive() {
+        let resolves = |id: &str| matches!(id, "TASK-1599" | "TASK-1600");
+        assert_eq!(
+            derive_squash_subject_resolving(
+                "docs: BUG-1802 prose layer (SLICE-1 TASK-1599) (#2426)",
+                "task-1600",
+                "BUG-1802",
+                "",
+                resolves
+            ),
+            Some("docs: BUG-1802 prose layer (TASK-1599) (#2426)".into())
+        );
+        assert_eq!(
+            derive_squash_subject_resolving(
+                "fix: prose (SLICE-1)",
+                "neutral",
+                "TASK-1599",
+                "",
+                resolves
+            ),
+            Some("fix: prose".into())
+        );
+        assert_eq!(
+            derive_squash_subject_resolving("fix: prose", "task-1600", "TASK-1599", "", resolves),
+            Some("fix: prose (TASK-1600)".into())
         );
     }
 

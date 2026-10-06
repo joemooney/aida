@@ -4566,7 +4566,11 @@ impl<'a> McpServer<'a> {
                             // reopen a Completed spec — clear the stale
                             // completed_at so the next completion stamps a
                             // fresh date. trace:TASK-1477 | ai:claude
-                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                            crate::completion::record_reopen(
+                                r,
+                                &current_status,
+                                Some(&project_root),
+                            );
                         })
                         .map_err(|e| e.to_string())?;
                     if let Some(actual) = moved_to {

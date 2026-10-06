@@ -67,6 +67,15 @@ Keep this table in your head and every command below is obvious.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+**Completion credit.** Ship uses an explicit trailing `(REQ-ID …)` title group,
+then branch-name recovery; each ID must resolve unambiguously in the store.
+Mid-title references and PR-body prose do not become completing trailers.
+An older branch-head trailer is ignored when the PR has a title. For partial
+work, use a descriptive title and neutral branch without completion IDs; ship
+preserves the title without adding a trailer. Existing constituent commit
+trailers in squash bodies remain landing evidence for the auto-bump scanner.
+<!-- trace:TASK-1600 | ai:codex -->
+
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
 
 ---
@@ -149,6 +158,13 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 - `--auto` — auto-rebase tracked *stacked* branches whose base just merged. Narrow, powerful, and self-limiting (refuses risky cases into `/aida-rebase`).
 
 **Gotchas.** If the auto-bump "misses" (the YAML was unreadable at pull time, or the spec flipped to Done *after* its commit already landed), recover with `aida db reconcile-status` — a manual replay of the same scan over a wider window. You don't hand-set Completed; you re-run the bump.
+
+**Deliberate reopen.** A status edit or CLI/MCP rework out of Done/Completed
+records the code-repository HEAD. Both pull-time auto-bump and manual replay
+ignore completion evidence at or before that reopen point, including closure
+holds and review propagation. A genuinely later commit can complete the spec.
+The marker is best-effort when the code repository cannot be read.
+<!-- trace:TASK-1600 | ai:codex -->
 
 ### `aida push`
 
