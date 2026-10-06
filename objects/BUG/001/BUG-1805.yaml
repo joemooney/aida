@@ -17,8 +17,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T13:40:06.975309028Z
-modified_at: 2026-10-06T16:19:59.057829407Z
+modified_at: 2026-10-06T17:12:59.279249668Z
 req_type: Bug
+comments:
+- id: 01a11234-4a8f-79b1-ad2f-3db32a94fa9d
+  author: joe
+  content: Commit 4670b0ed55 references this requirement
+  created_at: 2026-10-06T17:12:59.279249668Z
+  modified_at: 2026-10-06T17:12:59.279249668Z
+  session_id: 36e37eeb-41d2-4231-8a77-efe52f659ee7
 history:
 - id: 01a11171-e5f5-78f0-a0e2-818e5e6f49f9
   author: joe
