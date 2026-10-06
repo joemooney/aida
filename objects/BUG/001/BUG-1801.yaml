@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-06T03:19:11.066783114Z
+modified_at: 2026-10-06T03:24:49.560691252Z
 req_type: Bug
 comments:
 - id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
@@ -33,6 +33,11 @@ comments:
   content: 'Reproduced the regression in an isolated one-spec store: show --no-git --format toon took 1562 ms while a foreign process held cache.db.refresh.lock (default 1500 ms read wait). Human TTY also inherits inline full rebuild before the bounded SQLite attempt. Implementing a show-only zero-wait/non-inline read policy using the existing labeled snapshot/worker protocol; canonical object lookup and strict explicit refresh remain unchanged. Regression covers TOON/JSON/human TTY, card/tree/UUID, full-rebuild delegation and strict refresh recovery.'
   created_at: 2026-10-06T03:19:11.066783114Z
   modified_at: 2026-10-06T03:19:11.066783114Z
+- id: 01a10f3e-1618-7581-8d0d-c85646563c03
+  author: joe
+  content: 'Validation: old release binary show --no-git --format toon took 1562 ms behind the fixture refresh flock. Fixed debug: TOON 66 ms, JSON 79 ms, human TTY 72 ms, card 84 ms, UUID 63 ms, tree 49 ms; delegated full rebuild 83 ms. Fixed optimized agent profile: 52/58/52/55/45/37 ms respectively, delegated full rebuild 80 ms. tests/test_show_latency.py passes on both builds (canonical object title, stale labels, isolated real worker, strict refresh recovery). Five existing show cache/render tests passed; cargo fmt --all -- --check, 9 trace-header tests, CI gate audit and all 19 check-ci-fast gates passed. CI now runs the regression. This meets the spec reproduced-worst-case before/after alternative; historical 24h telemetry still contains pre-fix slow samples. Explicit sync/cache operations, absent/incompatible-cache recovery and worker crash-loop/no-detach overrides remain outside the no-wait compatible-snapshot path.'
+  created_at: 2026-10-06T03:24:49.560691252Z
+  modified_at: 2026-10-06T03:24:49.560691252Z
 history:
 - id: 01a108d0-793d-740f-b515-b1e03b6167f3
   author: joe
