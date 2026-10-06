@@ -3,12 +3,12 @@ spec_id: TASK-1-215
 agreed_id: TASK-1322
 title: Bug protocol warns about missing tests for inline Rust test changes
 description: 'During BUG-1804 pickup, aida queue done warned "protocol: bug — missing test-file change (layer: type; no test file in the diff)" although the entire implementation diff changes an existing #[test] in aida-cli-lib/src/maintenance_schedule.rs and adds assertions. Consider recognizing inline Rust test-module edits or clarifying that the heuristic only checks filenames. Evidence: commit 428510740d, PR #2432. Nonblocking; queue done succeeded.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T03:21:25.888015030Z
-modified_at: 2026-10-06T04:11:01.630522095Z
+modified_at: 2026-10-06T13:41:13.943195708Z
 req_type: Task
 tags:
 - from-advisor:BUG-1804
@@ -102,6 +102,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a11172-6c6a-7180-b6f7-6ec5fbb3823c
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T13:41:13.962556884Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 428510740dd8ff20a37fed4d68fdc625522cef0c
   branch: bug-1804
