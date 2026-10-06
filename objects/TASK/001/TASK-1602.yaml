@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:43:51.039322739Z
-modified_at: 2026-10-06T13:51:57.521894469Z
+modified_at: 2026-10-06T13:51:58.963884426Z
 req_type: Task
 comments:
 - id: 01a11017-967f-70d2-8ae7-b8dc8cb6a282
@@ -127,3 +127,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T13:51:57.521894469Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida pr ship --wait [secs] — bounded drive-ownership wait (300s default); direct human terminals show owning phase and activity; ownership refusal and timeout exit non-zero
