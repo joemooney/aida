@@ -1,0 +1,33 @@
+id: 01a10f67-f421-79c2-9a17-68f82790add1
+spec_id: STORY-1528
+agreed_id: STORY-1528
+title: 'Review PR-2435: [AI:codex] fix(reconstitute): preserve probe failures with no traced tests (TASK-1-216)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a10f63`) for branch `task-1-216`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2435>
+  - Branch: `task-1-216` → `main`
+
+  ## Covers
+
+  - TASK-1-216
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2435` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T04:10:33.377001223Z
+modified_at: 2026-10-06T04:10:33.377001223Z
+req_type: Story
+filed_at:
+  code_sha: 9ec89b97b6a9066893618f26fa23c180dc1c912c
+  branch: task-1-216
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dafb66432e
+  vendor: codex
