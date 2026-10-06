@@ -72837,6 +72837,20 @@ pub(crate) fn fan_out_mirror_push(
     if cfg.mirror_remotes.is_empty() {
         return;
     }
+    // Code mirrors must follow origin even if the local branch moves after
+    // the successful push. Store fan-out retains its union/reconcile model.
+    // trace:BUG-1803 | ai:codex
+    let refspec = if branch == "aida-store" {
+        branch.to_string()
+    } else {
+        match remote_create::origin_code_refspec(repo, branch) {
+            Ok(refspec) => refspec,
+            Err(e) => {
+                eprintln!("  mirror push skipped: {e}");
+                return;
+            }
+        }
+    };
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     for mirror in &cfg.mirror_remotes {
         if mirror == "origin" {
@@ -72855,7 +72869,7 @@ pub(crate) fn fan_out_mirror_push(
             continue;
         }
         println!("Mirroring {branch} → {mirror}...");
-        match aida_core::git_ops::push(repo, mirror, branch) {
+        match aida_core::git_ops::push(repo, mirror, &refspec) {
             Ok(true) => {
                 println!("  Mirror push complete.");
                 clear_store_mirror_fanout_failure(project_root, repo, branch, mirror);
