@@ -3,12 +3,12 @@ spec_id: TASK-1-219
 agreed_id: TASK-1327
 title: Investigate reported silent exit-zero reconstitution probes on aida-monitor
 description: TASK-1-216 now preserves missing/invalid probe-output failures even with zero criterion-traced tests, and includes artifact/log paths. The original observation of four ~1s aida-monitor runs with zero-byte headless logs is not explained by this report-layer fix. spawn_vendor_headless_with_seat intentionally returns the process ExitStatus; no live vendor run was performed during this implementation. After rebuilding, use the retained failure reason/log path to investigate vendor/runtime configuration and retry the TASK-1523 measurement. Do not infer that exit code 0 alone establishes probe success.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:10:08.719084873Z
-modified_at: 2026-10-06T07:11:48.145665379Z
+modified_at: 2026-10-06T13:17:23.757662112Z
 req_type: Task
 tags:
 - from-advisor:TASK-1-216
@@ -54,6 +54,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1115c-9997-7bb2-8c97-ffd46fec6b01
+  author: aida-auto-bump
+  timestamp: 2026-10-06T13:17:23.735681319Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1115c-99ad-74e2-ad08-23e750d93fd0
+  timestamp: 2026-10-06T13:17:23.757660872Z
+  agent: aida
+  commit_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  summary: Completed via merge cd1aa538
 filed_at:
   code_sha: 9ec89b97b6a9066893618f26fa23c180dc1c912c
   branch: task-1-216
@@ -65,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T06:52:35.842283091Z
   implemented_by: joe
+  completed_at: 2026-10-06T13:17:23.735653632Z
+  completion_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
