@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T04:21:29.499345885Z
+modified_at: 2026-10-06T08:57:57.253511774Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -22,6 +22,12 @@ comments:
   content: 'Advisor: REPRODUCED on main-tip binary dafb6643 (wave ef0d5689, drain started 2026-10-05 ~21:05 by operator in advisor role). First wave member TASK-1322 (origin TASK-1-215): parent flipped it InProgress, both phase-1 children (01a10f62 36.7s, 01a10f63 15.1s) printed ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' then refused with ''spec TASK-1-215 is InProgress but no local lease holds it''; spec parked NeedsAttention after attempt 2/2. Same wave''s OTHER members (TASK-1-216, TASK-1588) claimed fine via the ''InProgress — claiming it anyway'' path. So the rebuilt binary does NOT fix it; the orchestrator-ownership handshake is lost specifically for the first member. Note the child resolved the spec by its origin_id alias TASK-1-215 while the parent used TASK-1322 — possible alias-keyed lease/ownership lookup mismatch worth checking first.'
   created_at: 2026-10-06T04:08:52.448521560Z
   modified_at: 2026-10-06T04:08:52.448521560Z
+  session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+- id: 01a1106f-1305-72a2-8fbd-b39fe9ff05a5
+  author: joe
+  content: 'Advisor: THIRD reproduction wave (2026-10-06 00:00-01:55, binary dafb6643 — drain started moments before the 978c4974 rebuild landed). Race consumed THREE of ten members this wave, not just the first: TASK-1328, TASK-1324, TASK-1602 all launch-refused with ''spec InProgress but no local lease'' + ''no live orchestrator run owns it'' (children 01a10ff7, 01a11011, 01a11017). Later members in the same wave claimed fine. This upgrades the cost model: the race is per-member-launch timing, not only first-member. Fix remains queued (this spec, approved, unreached this wave).'
+  created_at: 2026-10-06T08:57:57.253511774Z
+  modified_at: 2026-10-06T08:57:57.253511774Z
   session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
