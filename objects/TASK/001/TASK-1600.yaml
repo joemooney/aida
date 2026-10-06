@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T05:14:52.559543940Z
+modified_at: 2026-10-06T05:14:54.587950443Z
 req_type: Bug
 comments:
 - id: 01a10f02-6118-749b-a79c-7db2608eb04e
@@ -49,6 +49,11 @@ comments:
   content: Codex pickup resumed under explicit operator instruction to take implementer role. Working on task-1600 in the pre-created pooled worktree. Existing lease role remains advisor because the CLI role registry is a symlink outside this environment's writable roots; implementation CLI calls will explicitly seat implementer. Following the advisor-approved two-leg sketch; independent review/merge remains with advisor.
   created_at: 2026-10-06T05:05:19.237070238Z
   modified_at: 2026-10-06T05:05:19.237070238Z
+- id: 01a10fa2-defb-78a3-aea9-f596cfb9bd37
+  author: mcp
+  content: 'Implementation ready for independent review: https://github.com/joemooney/aida/pull/2438 at 224c235d5e31a86b9043c65a2ab92957df446595. Both approved legs implemented. Credits come only from explicit title trailers or branch recovery and must resolve unambiguously; PR-body/mid-title prose and unrelated HEAD trailers are ignored. CLI distributed/legacy status edits and CLI/MCP rework stamp the reopen fence, with guards in live/replay candidate filtering, draft writes, completion writes, closure holds and review/forge recovery. Root-cause reproduction: completion_sha is absent-only, so a second completion retains the FIRST SHA and equality cannot block replay of the SECOND commit; closure-held Done landings can also have no completion_sha. Regression exercises both. Verification: 86 auto-bump + 103 ship + 13 completion-seam tests pass (202), cargo fmt --all -- --check and git diff --check pass. CI running at PR creation; merge-hold-gate already passed. No merge performed: advisor independently gates implementation. Files in the original pooled worktree retain the exact verified edits because its shared .git directory and role/lease symlink targets are read-only to this environment. Commit/push performed from an exact-copy writable checkout /tmp/aida-task-1600-publish; no original Git metadata, lease, or another worker''s files were forced.'
+  created_at: 2026-10-06T05:14:54.587943646Z
+  modified_at: 2026-10-06T05:14:54.587943646Z
 history:
 - id: 01a10f39-9aee-751e-92a7-f800a1d8d36c
   author: joe
