@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T06:50:03.758361585Z
-modified_at: 2026-10-06T02:20:57.326694141Z
+modified_at: 2026-10-06T02:41:51.804431578Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -32,6 +32,22 @@ comments:
   content: Implementation committed and pushed as e2034bd741; PR https://github.com/joemooney/aida/pull/2431 opened for downstream review/CI. All 50 affected tests and 19 fast-tier gates passed locally. Closing the implementation queue item per pickup instruction; PR is not merged and no full-workspace CI claim is made.
   created_at: 2026-10-06T02:08:21.866843722Z
   modified_at: 2026-10-06T02:08:21.866843722Z
+- id: 01a10f16-c0bc-72c8-a0bd-07ebdcba4192
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2431
+    agent: codex
+    ran-at: 2026-10-05 19:41 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1803-drain-01a10f16-2010-7531-bd52-84fc18182767.json
+    ? AC (0.98) — The pre-push mirror path mirrors a proposed branch or tag only when origin advertises the exact proposed SHA for that same ref. For annotated tags, confirmation and mirroring use the tag object SHA, not its peeled commit SHA.
+    ? SEM (0.94) — After the pre-push path skips an unconfirmed update, mirror-sync catches up only the default branch and store. Accepted code branches are fanned out by aida push; raw git pushes of feature branches or tags require retrying mirror-hook plumbing after origin confirms the ref.
+    ? SEM (0.95) — Post-push fan-out applies origin-confirmed SHA selection to code branches, but retains local aida-store branch fan-out under the existing union/reconcile model.
+  created_at: 2026-10-06T02:41:51.804431578Z
+  modified_at: 2026-10-06T02:41:51.804431578Z
 history:
 - id: 01a10ad3-b647-71f1-a464-abcdcb09413d
   author: joe
