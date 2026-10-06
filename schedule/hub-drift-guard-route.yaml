@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'oversee pass 2026-10-06 06:18: checked aida remote status — all shared branches and release tag in sync across gitlab+origin (main cd1aa538, store 805b955f). Drift self-healed via hourly mirror-sync after PR 2439 merge; no reconcile needed. Recurrence ends when TASK-1604/PR-2442 merges.'
+due_since: 2026-10-06T19:24:33.033503518Z
+due_reason: on CronJobFailed:hub-drift-guard
