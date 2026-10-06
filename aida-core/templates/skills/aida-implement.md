@@ -23,6 +23,17 @@ say “still working,” “continuing,” or equivalent about yourself. Delegat
 work is not your own active work. See `.aida/discipline/advisor-role.md`.
 <!-- trace:TASK-1557 | ai:codex -->
 
+## Precondition: an isolated worktree, never the primary checkout
+
+Implementation happens in the spec's isolated sibling worktree with its
+lease claimed — `aida queue work <SPEC-ID>` (or `/aida-pickup`) creates
+both and puts you there. Before editing anything, verify `pwd`: if you
+are in the primary checkout (`git rev-parse --git-common-dir` equals
+`.git`, i.e. not a linked worktree), STOP and enter through
+`aida queue work <SPEC-ID>` instead of editing in place. The primary
+checkout belongs to the operator; editing it breaks parallel seats and
+the integrate flow. trace:BUG-1802 | ai:claude
+
 ## Purpose
 
 Implement an approved requirement with full traceability, evolving the requirement database to capture implementation details and creating child requirements as needed.
@@ -261,6 +272,88 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
    communication rubric*. The worked templates live in `/aida-pickup`
    Step 6 (menu) and `/aida-pr` orchestrator-mode (closing block).
    trace:TASK-359
+
+### Review independence — who records verdicts, who ships (BUG-1802)
+
+**You never record a review verdict for a spec you implemented.**
+`aida review record --verdict approved` is the reviewer's tool, run
+from a SEPARATE review session. A verdict recorded by the session that
+wrote the code is void whatever its attribution says, and recording one
+to lift a hold is a process breach, not initiative. The motivating
+incident is PR-2424 (TASK-1597, 2026-10-04): after CHANGES REQUESTED
+and a rework merge-hold, the implementer seat recorded a self-APPROVED
+verdict in its own worktree and re-armed `aida pr ship`; the hold
+refused, the verdict was voided, and the spec was parked.
+trace:BUG-1802 | ai:claude
+
+Run `aida pr ship` only when BOTH hold:
+
+- no merge-hold and no CHANGES REQUESTED / rework verdict exists for
+  the spec or its PR (`aida merge-hold list`, `aida show <SPEC>`), and
+- the lane allows implementer-ship (solo / fasttrack / a drain rung
+  that grants auto-complete) — i.e. nobody asked for an independent
+  review before merge.
+
+When a review gate exists, your job ends earlier than Step 7: fix,
+tests green locally, `make check-ci-fast` clean, push, report the PR
+back for re-review — then exit. The reviewer records the verdict; a
+human (or the drain, where its rung allows) ships. Never clear a hold
+you did not place, never arm auto-merge under a hold, and never bypass
+a required check — `gh pr merge --admin` is a violation in every lane.
+
+### Pre-review self-check loop: spawned checker, zero authority
+
+Before handing the PR to review, run a self-check loop with a SPAWNED
+fresh-context agent (the Task/Agent tool where the harness provides
+one) — the author's last act before handoff. Shape it so it can
+actually disagree with you:
+
+- Hand it the SPEC and the verdict file / acceptance criteria as they
+  exist in the substrate — never your restatement of them. A checker
+  pointed at the author's summary confirms the summary.
+- Prompt it adversarially: "find the reason this gets
+  request-changes", not "verify my work". A subagent asked to review
+  its parent's rework overwhelmingly validates.
+- It must RUN ITS OWN evidence commands (tests, diffs, proofs) rather
+  than trusting any claim in the PR body, and it must not modify the
+  repo, record verdicts, or comment on the PR.
+- Its output is a FINDINGS LIST with file:line evidence, which you fix
+  or explicitly rebut — never an approval. Re-spawn against the new
+  head; stop when it finds nothing or after 3 rounds (still failing:
+  park the spec NeedsAttention with the findings — do not grind).
+- Report the loop (rounds, final findings, fixes) in the PR trail, and
+  reserve the word "review" there for the independent gate.
+
+ADVISOR RULING (2026-10-04, binding): **a subagent you spawn is not an
+independent review and must not be represented as one** — its prompt,
+its input, and its stopping point are all controlled by the author,
+and both real failures that night came from unexamined evidence the
+author already possessed. The approving verdict comes from a session
+INDEPENDENT OF THE AUTHOR — the drain's phase-3 reviewer, another
+seat's review session, or a human; a spec that has produced false
+green claims may be escalated to advisor-seat-only review. A
+merge-hold clears only via a fresh APPROVED verdict at the new head,
+and a human ships it. trace:BUG-1802 | ai:claude
+
+### CI discipline: CI is verification, not a debugger
+
+A full local workspace build is expensive and CI rebuilds everything
+anyway, so letting CI be the FIRST full-workspace verification of a
+branch is a legitimate trade. What is not legitimate is push →
+wait → red → re-trigger. The floor:
+
+1. `make check-ci-fast` before EVERY push, actually run, no
+   exceptions.
+2. New or changed tests run locally, targeted, before the first push:
+   `cargo test -p <crate> <filter>` is cheap once anything has built
+   (the agent compile profile exists for exactly this).
+3. A red CI run is EVIDENCE TO READ, not a dice roll to re-throw.
+   Re-triggering without a changed hypothesis and a local reproduction
+   attempt is the named anti-pattern — runners are a shared queue, and
+   probe-pushes degrade everyone's merge latency.
+4. A green claim cites the COMPLETED run at the current head — never a
+   targeted subset, never a run at an older head, never "CI will
+   confirm". trace:BUG-1802 | ai:claude
 
 ### Step 7: Exit after `aida pr ship` (or `aida queue done`) — do NOT linger watching CI
 
