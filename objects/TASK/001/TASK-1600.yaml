@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T03:19:55.886352238Z
+modified_at: 2026-10-06T03:20:18.814061606Z
 req_type: Bug
 comments:
 - id: 01a10f02-6118-749b-a79c-7db2608eb04e
@@ -22,6 +22,27 @@ comments:
   content: 'Persistence dimension: a force-reopen does NOT stick. The drain''s exit sweep re-processed merge 2dc90ca at 02:42Z and re-completed TASK-1538 (second false completion from the SAME commit) and re-bumped STORY-1488 to Done. Any trailer in main''s history re-fires on every sweep. Mitigation applied: closure:pending tag on TASK-1538 (the closure-hold gate demonstrably stopped STORY-1488 short of Completed). The fix must make trailer-completion idempotent against an explicit reopen: a spec reopened AFTER a commit''s completion was processed must not be re-completed by re-processing that same commit.'
   created_at: 2026-10-06T02:43:04.798982445Z
   modified_at: 2026-10-06T02:43:04.798982445Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a10f39-f47e-7701-9041-d37acb1b51c1
+  author: joe
+  content: |-
+    ADVISOR VERDICT (sketch signoff; code claims verified against source, not taken from the brief):
+
+    1. APPROVED as bug, priority high, mode guided (it modifies ship/auto-bump machinery — never unattended). Heft estimate ~5: three sites + regression tests. (No --heft flag on edit; set at grooming if needed.)
+
+    2. BLESSED SKETCH — REQUIRED (one PR, two legs):
+       LEG A (substrate durability): generalize the TASK-1446 stamp — on ANY reopen from Completed or Done (not just reopen-to-Draft), stamp reopened_at_sha with the code-repo HEAD; honor it in apply_auto_bump_flip and in every landed-candidate collection path: skip any flip whose commit is at-or-before reopened_at_sha. Keep BUG-410's completion_sha semantics ('a DIFFERENT, LATER commit still bumps' stays true via the ancestor/at-or-before check). Implementation note: the 19:42 re-flip came from the SAME sha 2dc90ca that BUG-410's equality guard should have blocked — determine during implementation which reopen leg clears or bypasses completion_sha (TASK-1477's clear_completed_at_on_reopen neighborhood) and cover it with a regression test: complete→force-reopen→sweep same commit→must stay reopened.
+       LEG B (ship-side scrape): remove PR BODY from derive_squash_subject_spec_ids' fallback (title → branch only; the SPEC-410 rationale — recovery for malformed subjects — does not extend to prose bodies, and 2429 proves body references are documentation, not intent), AND filter extracted IDs to ones that resolve in the store (kills the SLICE-1 class).
+       FOLLOW-UP (separate, optional): --no-spec-trailer ship flag for partial-work PRs; option (a) processing_record idempotency is subsumed by LEG A and not required.
+       Acceptance: the three live incidents replayed as tests — (i) mid-title token (PR 2426 shape) completes nothing unless a trailing trailer names a store-resolving ID; (ii) body-only references (PR 2429 shape) complete nothing; (iii) complete→reopen→re-sweep same commit leaves the spec reopened, while a genuinely new later commit naming the ID still completes it.
+
+    3. INTERIM CONVENTION CONFIRMED for remaining slice-1 module PRs: no ID-shaped tokens anywhere ship scrapes — title, branch name, or body. Owning-spec reference goes in a PR COMMENT only (verified: derive_squash_subject_spec_ids reads title/branch/body; comments are never scraped). The final module PR alone carries (TASK-1538) as its trailing trailer.
+
+    4. RECONCILED: TASK-1538 had been re-flipped to Done again by the running wave's pickup sweep (fourth flip today: 08:29, 19:17, 19:42, ~20:16); reset to Approved at 20:19 with closure:pending still set. Expect repeats until LEG A lands; the tag caps damage at Done.
+
+    Verdict recorded on the spec per repo rules; no separate doc.
+  created_at: 2026-10-06T03:20:18.814061606Z
+  modified_at: 2026-10-06T03:20:18.814061606Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 history:
 - id: 01a10f39-9aee-751e-92a7-f800a1d8d36c
