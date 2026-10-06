@@ -8,12 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T06:54:23.196663400Z
+modified_at: 2026-10-06T06:54:54.752386289Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:major
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a10ffe-4742-72f3-bfcd-6fc72ae9e7b3
+  created_at: 2026-10-06T06:54:54.752381434Z
+  created_by: joe
 comments:
 - id: 01a10ffb-f303-7b12-a099-747d0683fcfa
   author: joe
