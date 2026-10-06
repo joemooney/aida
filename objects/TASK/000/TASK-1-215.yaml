@@ -3,12 +3,12 @@ spec_id: TASK-1-215
 agreed_id: TASK-1322
 title: Bug protocol warns about missing tests for inline Rust test changes
 description: 'During BUG-1804 pickup, aida queue done warned "protocol: bug — missing test-file change (layer: type; no test file in the diff)" although the entire implementation diff changes an existing #[test] in aida-cli-lib/src/maintenance_schedule.rs and adds assertions. Consider recognizing inline Rust test-module edits or clarifying that the heuristic only checks filenames. Evidence: commit 428510740d, PR #2432. Nonblocking; queue done succeeded.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T03:21:25.888015030Z
-modified_at: 2026-10-06T04:05:42.016538271Z
+modified_at: 2026-10-06T04:11:01.630522095Z
 req_type: Task
 tags:
 - from-advisor:BUG-1804
@@ -68,6 +68,11 @@ comments:
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-06T04:05:42.016525256Z
   modified_at: 2026-10-06T04:05:42.016525256Z
+- id: 01a10f68-627e-78f1-9897-dfecdc98a419
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T04:11:01.630520857Z
+  modified_at: 2026-10-06T04:11:01.630520857Z
 history:
 - id: 01a10f5c-d97e-79e0-81f2-33e7987d014c
   author: joe
@@ -90,6 +95,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a10f68-627e-78f1-9897-dfd35e1e2bf1
+  author: joe
+  timestamp: 2026-10-06T04:11:01.630512048Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 428510740dd8ff20a37fed4d68fdc625522cef0c
   branch: bug-1804
@@ -97,11 +109,3 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: launch-refused
-  detail: 'phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
-  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1322`.'
-  shelved_by: advisor
-  shelved_at: 2026-10-06T04:05:40.534667914Z
