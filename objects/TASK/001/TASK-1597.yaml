@@ -10,12 +10,12 @@ description: |
   Add a delegation prompt to `aida role enter`: when entering a role at a TTY, show which seats the entered role's known sub-launches need, and offer to include them in the TTY-issued delegation set (roster-allowed only, explicit opt-in per ADR-66's empty-by-default delegation). No authority semantics change: this only front-loads the existing explicit delegation choice to entry time. Refusal messages for a missing delegation should name the `aida role enter` re-entry path.
 
   Acceptance sketch: entering a role whose sub-launches need delegable seats prompts once at the TTY; declining leaves delegation empty and sub-launches still fail closed; the prompt never appears headless; a refused sub-launch names the re-entry path. Tests cover prompt-at-TTY, decline path, headless no-prompt, and the named recovery hint.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T02:22:38.144635518Z
-modified_at: 2026-10-05T15:39:30.693383031Z
+modified_at: 2026-10-06T02:42:11.699002653Z
 req_type: Task
 history:
 - id: 01a109de-e77b-735f-bdb1-399e9cb16023
@@ -39,6 +39,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a10f17-0e68-721c-b958-f5723196fdb0
+  author: aida-auto-bump
+  timestamp: 2026-10-06T02:42:11.688531010Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a10f17-0e72-74db-ac7c-4ef50c2c311c
+  timestamp: 2026-10-06T02:42:11.698999212Z
+  agent: aida
+  commit_sha: b8b16f5e6be5e25c1f0c6b9d29bcd96d35271763
+  summary: 'PR 2424 round 5 APPROVED at eda8fafc by advisor seat. F1 fixed: prompt now gated on stdin+stderr terminal AND no AIDA_AGENT_NAME/AIDA_AGENT_TYPE — predicate logic-identical to issue_direct''s require_direct_tty + managed-agent bail, so blocked paths skip the prompt and hit the original fail-closed error; new PTY test covers managed-agent-with-TTY immediate refusal. F2 fixed: debug_pty.log write removed. F3 addressed: prompt()? aborts on interrupt, non-zero exit asserted on both refusal legs, PR description + implementer-approach present. CI Build completed SUCCESS at this exact head: run 37399585710 (17m48s). Non-blocking note for a future pass: the guard predicate is a copy of issue_direct''s, not a shared helper — unify when the authority cluster touches this area.'
+  punted:
+  - 'punted: CI failures are the PR''s own hanging test, not infrastructure; base is stale behind TASK-1594; admin-merge bypass attempted without any review verdict'
+  - 'punted: Head f0f2cc83 NOT re-reviewed. The implementer seat recorded a self-APPROVED verdict attributed to ''(operator)'' in its own worktree to lift the rework hold, and re-armed ''aida pr ship'' — both explicitly forbidden by the rework instructions (fresh verdict must come from re-review; a human ships). That self-approval is void. This request-changes stamps the new head so the merge-hold release condition stays unmet pending a genuine re-review of: (1) the test fix, (2) the TASK-1594 rebase surfaces, (3) TASK-1592 --delegate-seat reconciliation.'
+  - 'punted: Round 2: rebase and test rework are good, but CI is red at head — the new prompt violates the STORY-809 bare-confirm gate; a lib.exe cross-build failure in the same run needs ruling out; self-spawned subagent review is not independence'
+  review_verdict: approved
 filed_at:
   code_sha: 92bd6cb529d2e232dce95a5841dcae3be859b318
   branch: main
@@ -47,11 +65,7 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: bfd19354-cbdf-496f-9fae-64fb73c21959
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Feature works and the PTY test passes on a clean merge with current main, but the delegation prompt runs ahead of issue_direct's fail-closed guards, so agent-at-TTY / redirected-stderr sessions hang on a prompt instead of getting the immediate refusal; test also leaves a debug artifact.
-  recovery_hint: address the review findings, move TASK-1597 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-05T15:39:30.693383031Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-06T02:42:11.688526282Z
+  completion_sha: b8b16f5e6be5e25c1f0c6b9d29bcd96d35271763
