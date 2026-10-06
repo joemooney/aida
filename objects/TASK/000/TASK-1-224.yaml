@@ -3,12 +3,12 @@ spec_id: TASK-1-224
 agreed_id: TASK-1333
 title: Reconstitution resolves child-seat authority from empty scratch root before spawning vendor
 description: 'Live retry on pinned aida-monitor STORY-3 with rebuilt checkout 978c497429 fails before vendor spawn: no valid parent seat grant is active. run_headless changes cwd to ~/.aida/reconstitute/<run>; spawn_vendor_headless_with_seat then passes headless_worktree_root() (the empty scratch dir) to seat_authority::issue_child. current_grant requires roster_allows, which cannot find a distributed store there, and refuses. The log was already created, so it remains zero bytes; reconstitute returns a successful report with unknown scores rather than a vendor ExitStatus. strace confirmed no vendor exec in the reproduced run. Repair must separate the trusted project authority/config root from the probe cwd without exposing source/store context to the baseline or weakening grant delegation; sketch and master sign-off required for authority semantics. TASK-1-216 fixes report masking but cannot fix this launch refusal. TASK-1523 also remains independently blocked by STORY-1527.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-10-06T11:01:55.751247786Z
+modified_at: 2026-10-06T13:38:02.570402969Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
@@ -29,6 +29,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1116f-80dd-73c0-90a2-be5e22ef257d
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T13:38:02.589731499Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
   branch: task-1327
