@@ -3,12 +3,12 @@ spec_id: TASK-1596
 agreed_id: TASK-1596
 title: Register monthly merged-worktrees guard + advisor route in the schedule registry
 description: 'Operator request (Joe, 2026-10-04) after a 116-worktree buildup made pr-ship step 6 crawl: add a monthly read-only guard (doctor check merged-agent-worktrees --fail-on-findings) with an advisor route job prompting the human-at-TTY cleanup (aida worktree gc --yes --force). Force stays OUT of the scheduled job by design: gc --force is refused in unattended contexts, and the guard/route split is this repo''s established pattern (STORY-1367).'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T20:57:22.898899845Z
-modified_at: 2026-10-06T02:24:33.117543947Z
+modified_at: 2026-10-06T02:27:36.968608626Z
 req_type: Task
 relationships:
 - rel_type:
@@ -66,6 +66,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10f09-b567-715a-824f-9fa1c1a3ceaa
+  author: aida-auto-bump
+  timestamp: 2026-10-06T02:27:36.935975160Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10f09-b588-7419-8d4c-24def6e9c9bb
+  timestamp: 2026-10-06T02:27:36.968581725Z
+  agent: aida
+  commit_sha: 2ab2b58d01cda563730a510301298719688a9b81
+  summary: 'PR 2430 APPROVED at d1e836d1 by advisor seat. Guard/route split matches the STORY-1367 pattern and the spec: read-only doctor check merged-agent-worktrees --fail-on-findings on a 30d cadence, advisor route on CronJobFailed:merged-worktrees-guard, forced cleanup kept out of the scheduled allowlist — the test proves parse_scheduled_command(''worktree gc --yes --force'') errors, proves the 30-day cadence (fires day 0 and 30, not 29), hook_allowed false, and route seats=[advisor]. Docs updated (AGENTS.md, OVERVIEW.md, 03-work-autonomy.md). CI Build completed SUCCESS at this exact head: run 37402476309 (17m57s); merge-hold-gate red is the armed supervision hold, by design. Cosmetic note only: the AGENTS/OVERVIEW paragraphs prepend at the top of each file, matching the existing convention.'
+  review_verdict: approved
 filed_at:
   code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
   branch: main
@@ -78,3 +92,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T02:06:17.100458740Z
   implemented_by: joe
+  completed_at: 2026-10-06T02:27:36.935903807Z
+  completion_sha: 2ab2b58d01cda563730a510301298719688a9b81
