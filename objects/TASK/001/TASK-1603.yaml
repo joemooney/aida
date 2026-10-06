@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:04:20.530979616Z
+modified_at: 2026-10-06T14:07:26.464152077Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -35,6 +35,11 @@ comments:
   created_at: 2026-10-06T13:43:40.802120024Z
   modified_at: 2026-10-06T13:43:40.802120024Z
   session_id: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
+- id: 01a1118a-6b00-7bd2-802f-f94ea9e46180
+  author: joe
+  content: 'Implementation finding: run_auto_complete already called set_run before phase spawn, but status was bumped before registration and ownership persistence was best-effort (missing batch state silently no-op). Fixing registration as a checked prerequisite before the bump; also moving pipelined parent pre-bumps into the child after its own registration. First/later batch and nextN ownership, missing/corrupt state, and write failures receive targeted coverage.'
+  created_at: 2026-10-06T14:07:26.464152077Z
+  modified_at: 2026-10-06T14:07:26.464152077Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
