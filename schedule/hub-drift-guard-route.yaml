@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: aida-store diverged again (gitlab +18 / origin +1) — recurring TASK-1604 refspec bug during tonight's drain pulls; reconciled via union ec51faf0, pushed both hubs. Permanent fix is PR 2442 (open, CI red, needs morning rework).
+due_since: 2026-10-06T13:16:30.437687567Z
+due_reason: on CronJobFailed:hub-drift-guard
