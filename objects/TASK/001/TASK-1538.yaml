@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-05T15:29:43.424807690Z
+modified_at: 2026-10-06T01:29:46.417042052Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -98,6 +98,12 @@ comments:
   content: 'PR 2425 (slice-1 PR 0: commit A visibility + split tooling) is pushed, CI Build green, merge-hold placed. Per the advisor ruling of 2026-10-04: the fresh-context subagent this session spawned against the PR is a PRE-REVIEW SELF-CHECK only — not an independent review, and not represented as one. Its findings will be posted on the PR when it completes. The approving verdict comes from the advisor seat only, at the current head; the hold clears on that verdict and a human ships. Skill codification of the ruling: PR 2426 (BUG-1802).'
   created_at: 2026-10-05T06:15:20.471921047Z
   modified_at: 2026-10-05T06:15:20.471921047Z
+  session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
+- id: 01a10ed4-c0b1-75a4-be2b-ce8550afa9bd
+  author: joe
+  content: 'REOPENED approved (2026-10-05 18:30): aida pr ship appended ''(TASK-1538)'' to PR 2428''s squash subject on its own — it scrapes the spec ID from the PR title — and merge-time completion fired with ~44 of ~45 modules still unextracted. Spec is NOT done: only commit A (PR 2425) and claim.rs (PR 2428) have landed. NEW TITLE CONVENTION for all remaining slice-1 PRs: no spec-ID-shaped token anywhere in the PR title (ship scrapes mid-title text); the spec is referenced in the PR body only. The completing trailer belongs to the final module PR alone — and given ship''s behavior, that final PR should carry the ID in its title deliberately.'
+  created_at: 2026-10-06T01:29:46.417042052Z
+  modified_at: 2026-10-06T01:29:46.417042052Z
   session_id: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
