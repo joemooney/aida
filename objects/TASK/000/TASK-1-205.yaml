@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-04T21:34:29.047618684Z
-modified_at: 2026-10-06T16:20:39.163186006Z
+modified_at: 2026-10-06T16:20:40.368704356Z
 req_type: Task
 tags:
 - carried-from:BUG-1799
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-10-06T02:04:51.350500901Z
   modified_at: 2026-10-06T02:04:51.350500901Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a11204-6530-7000-a183-fe7086c3ef45
+  author: joe
+  content: 'Burn-down drain (2026-10-06) punted this spec per owner routing comment: advisor/guided-lane only, not unattended implementation. Tagged deferred:guided-lane so burndown plan parks it; handle in the BUG-1802 guided session.'
+  created_at: 2026-10-06T16:20:40.368704356Z
+  modified_at: 2026-10-06T16:20:40.368704356Z
+  session_id: 36e37eeb-41d2-4231-8a77-efe52f659ee7
 history:
 - id: 01a10ef4-e076-721c-aec8-fc8df987c6b2
   author: joe
