@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:19:54.480530782Z
-modified_at: 2026-10-06T08:55:32.015948627Z
+modified_at: 2026-10-06T08:55:36.628467170Z
 req_type: Task
 relationships:
 - rel_type:
@@ -16,6 +16,59 @@ relationships:
   target_id: 01a11019-9635-7880-a8a4-6e4d1cf592fd
   created_at: 2026-10-06T07:24:39.789048448Z
   created_by: joe
+comments:
+- id: 01a1106c-edb4-7e72-80ef-0b314f98e4e2
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 2 (ci)
+
+    Recorded by `aida queue work TASK-1601 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 2 (ci) · kind `ci-red`
+    - Seat: ci (session role: advisor)
+    - Parent spec: TASK-1601
+    - Branch under test: main
+    - Commit under test: 978c4974292a
+    - Recorded at: 2026-10-06T08:55:33.117573238+00:00
+
+    ### Failure
+
+    CI is red on PR-2441: Build (ubuntu-latest)
+
+    Failure kind: `ci-red`
+
+    ### Recovery hint shown to the operator
+
+    CI failed on run 37429444950 — view it: `gh run view 37429444950`. Push fixups to the same branch: `aida queue work TASK-1601 --branch task-1601 --steal`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T08:55:33.117573238+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 192980 ms
+      - phase 2 (ci): 5430450 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1601","started_at":"2026-10-06T07:21:43.552518586+00:00","completed_at":"2026-10-06T08:55:33.117573238+00:00","outcome":"failed","variant":"through-ci","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-2441: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":192980},{"phase":2,"slug":"ci","elapsed_ms":5430450}],"total_ms":5628229,"binary_sha":"978c497429"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1601 --title "drain phase 2 (ci) failure on TASK-1601" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T08:55:36.628460679Z
+  modified_at: 2026-10-06T08:55:36.628460679Z
 history:
 - id: 01a10f72-031f-7951-aa0c-ca052524d29b
   author: joe
