@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:48:15.015902162Z
-modified_at: 2026-10-06T03:17:51.172193983Z
+modified_at: 2026-10-06T03:20:52.257653275Z
 req_type: Bug
 comments:
 - id: 01a10f37-b3c4-7d80-8111-caf1bf0fd932
@@ -16,6 +16,11 @@ comments:
   content: 'Investigation: the test already pins AIDA_HOME to a guarded tempfile, and 526186 bytes exactly matches its oversized fixture. The timer tick can instead return early on contention for the preceding hook tick’s project lock: parallel Command spawns briefly inherit flock open-file descriptions (documented by BUG-1595 in the neighboring lock test). Fix uses separate hook/timer project roots sharing the guarded temp home; checks resolved log path and empty tick results so skipped ticks cannot masquerade as execution. No production locking behavior changes.'
   created_at: 2026-10-06T03:17:51.172193983Z
   modified_at: 2026-10-06T03:17:51.172193983Z
+- id: 01a10f3a-7721-7971-9846-2a46842cfe03
+  author: joe
+  content: 'Implemented and pushed commit 428510740d; PR https://github.com/joemooney/aida/pull/2432. Validation: 50 maintenance_schedule tests passed at --test-threads=16, followed by ten direct parallel scheduler stress rounds (500 passing test executions); cargo fmt --all -- --check and git diff --check passed. Live drain owns BUG-1804 phase 1; handing PR to its CI/reviewer/merge phases rather than direct-merging.'
+  created_at: 2026-10-06T03:20:52.257653275Z
+  modified_at: 2026-10-06T03:20:52.257653275Z
 history:
 - id: 01a10f02-a41f-704f-bff6-f851009d6a29
   author: joe
