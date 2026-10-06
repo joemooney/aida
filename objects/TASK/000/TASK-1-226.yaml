@@ -1,0 +1,29 @@
+id: 01a1116b-8bec-7f40-9e1e-beaf7f328dce
+spec_id: TASK-1-226
+title: reconcile-status silently skips Done specs when the forge is unavailable (TASK-1588 stuck)
+description: |-
+  reconcile-status silently skips Done specs when the forge is unavailable.
+
+  Evidence (2026-10-06 ~06:32 local): TASK-1588 is Done; its squash commit 978c4974 ("[AI:codex] feat(ci): validate Windows weekly   on main (TASK-1588) (#2436)") is on main and well inside the default 200-commit window, yet both the full sweep and `aida db reconcile-status --spec TASK-1588 --dry-run` report "no eligible flips". Both runs printed "unknown (forge unavailable)" in the sweep header. TASK-1327's identically shaped title ("... (TASK-1327) (#2439)") auto-bumped fine during the 06:18 `aida pull`, when the forge path presumably worked.
+
+  Hypothesis: completion credit for these titles resolves through the trailing (#PR) group via a forge lookup; when that lookup fails the spec is skipped with no per-spec warning, and the operator-facing message ("no eligible spec had a referencing commit") misattributes the cause. Expected: either credit the explicit (SPEC-ID) group without the forge, or surface the forge failure as the reason and exit nonzero-ish so the operator retries.
+
+  Repro: with forge unreachable, `aida db reconcile-status --spec TASK-1588 --dry-run`. Recovery check: rerun when forge calls succeed — if it still refuses, the parser is discarding the (SPEC-ID) group as title prose (TASK-1600 trailing-group rule) and that is a worse bug.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T13:33:43.276932407Z
+modified_at: 2026-10-06T13:33:43.276932407Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+filed_at:
+  code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
