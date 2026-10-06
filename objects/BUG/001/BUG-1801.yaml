@@ -13,12 +13,12 @@ description: |
   History: this is the fourth episode on the same command — BUG-1480 (bypassed cache), BUG-1606 (329 s calls), BUG-1674 (unbounded wait behind a concurrent writer under strict stale-cache refresh) are all completed. Start by checking whether the BUG-1674 class regressed (lock/refresh contention) or a new hot path landed in `aida show` since 585f46e32a.
 
   Acceptance sketch: identify the slow path with timing evidence; after the fix, `aida doctor check performance` reports `show` within the 10% tolerated share and no ceiling breach over a fresh 24h window (or a reproduced worst-case call drops under 1000 ms in a before/after measurement).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-06T03:24:49.560691252Z
+modified_at: 2026-10-06T03:30:29.009499402Z
 req_type: Bug
 comments:
 - id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
@@ -53,6 +53,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10f43-4411-7267-b984-2832b5071465
+  author: aida-pr-open
+  timestamp: 2026-10-06T03:30:29.009498631Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drive
 filed_at:
   code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
