@@ -1,5 +1,6 @@
 id: 01a1116b-8bec-7f40-9e1e-beaf7f328dce
 spec_id: TASK-1-226
+agreed_id: TASK-1335
 title: reconcile-status silently skips Done specs when the forge is unavailable (TASK-1588 stuck)
 description: |-
   reconcile-status silently skips Done specs when the forge is unavailable.

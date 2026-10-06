@@ -1,5 +1,6 @@
 id: 01a111f3-f3fd-7b11-99ea-6ab4ec8868b9
 spec_id: TASK-1-227
+agreed_id: TASK-1334
 title: 'drain summary under-counts real output: ''0 shipped, diff +0 -0'' on a wave that produced 3 PRs'
 description: |-
   drain summary under-counts real output — third sighting in 24h, now with a clean repro.
