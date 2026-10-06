@@ -12,12 +12,12 @@ description: |
   Fix shape: only push the escalate flag into child argv when the resolved no-human mode is Both (mirror the validation), or give EscalateMode an explicit None/absent arm. Regression test: an interactive nextN batch child argv must not contain --escalate-*; a --no-human=both child argv must.
 
   Workaround until fixed: run batch drains with --no-human=both.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T13:40:06.975309028Z
-modified_at: 2026-10-06T17:13:23.608071209Z
+modified_at: 2026-10-06T17:43:27.673036974Z
 req_type: Bug
 comments:
 - id: 01a11234-4a8f-79b1-ad2f-3db32a94fa9d
@@ -48,6 +48,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a11250-308d-7d82-ba9d-9431af334e35
+  author: aida-auto-bump
+  timestamp: 2026-10-06T17:43:27.629029353Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a11250-30b9-7082-93a1-74f5588c5990
+  timestamp: 2026-10-06T17:43:27.673035605Z
+  agent: aida
+  commit_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
+  summary: Completed via merge 54407257
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
@@ -60,3 +73,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T17:13:23.608071209Z
   implemented_by: joe
+  completed_at: 2026-10-06T17:43:27.629000641Z
+  completion_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
