@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T01:53:32.833739497Z
+modified_at: 2026-10-06T02:19:36.600714798Z
 req_type: Bug
+comments:
+- id: 01a10f02-6118-749b-a79c-7db2608eb04e
+  author: joe
+  content: 'THIRD occurrence, and it answers the open question: PR 2429''s implementer title was deliberately ID-free (''pure move, 57 lines''), yet ship squash-merged 2dc90ca with subject ending ''(SLICE-1 STORY-1488 TASK-1538)'' — and it rewrote the subject (dropped '', 57 lines''). Ship therefore scrapes spec-ID tokens from the PR BODY (and accepts non-spec tokens like SLICE-1, which is not a requirement at all), not just the title. Effects: TASK-1538 falsely Completed again (advisor force-reopened, 2nd time), STORY-1488 bumped Approved→Done (closure-hold tag stopped full completion; advisor reset to Approved). Mitigation guidance until fixed: NO spec-ID tokens anywhere ship can see — title OR body — on partial-work PRs; put the owning-spec reference in a PR comment instead. The implementer asked to know this before module 3: body references are NOT safe.'
+  created_at: 2026-10-06T02:19:36.600714798Z
+  modified_at: 2026-10-06T02:19:36.600714798Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 filed_at:
   code_sha: 4935a1fdf899399c62ce13e6142e034c5d1452e4
   branch: main
