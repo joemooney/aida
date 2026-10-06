@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:19:54.480530782Z
-modified_at: 2026-10-06T13:03:59.401313220Z
+modified_at: 2026-10-06T13:08:22.975210997Z
 req_type: Task
 relationships:
 - rel_type:
@@ -74,6 +74,16 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: ci/ci-red: CI is red on PR-2441: Build (ubuntu-latest). No triage reason was given.'
   created_at: 2026-10-06T13:03:59.401310411Z
   modified_at: 2026-10-06T13:03:59.401310411Z
+- id: 01a11154-593f-78e3-b66c-edc76e847e15
+  author: mcp
+  content: |-
+    ## Implementer approach (CI recovery)
+
+    CI failed only task_1555_every_ci_build_gate_is_classified_for_the_local_runner: the new Check aida-cli without default features step is absent from scripts/ci-gate-tiers.toml. Register it as fast per the spec and existing check-only TUI seam convention. Expected file: scripts/ci-gate-tiers.toml. Verify with the local runner audit, fast-tier command selection, cargo fmt --all -- --check and git diff --check. The new cargo check itself already passed on Ubuntu in run 37429444950. No contract ambiguities. Independent merge-hold clearance remains with advisor.
+
+    The shell comment attempt failed before the edit because the canonical store write lock is outside this session's writable roots; recording through the available MCP connector instead.
+  created_at: 2026-10-06T13:08:22.975187577Z
+  modified_at: 2026-10-06T13:08:22.975187577Z
 history:
 - id: 01a10f72-031f-7951-aa0c-ca052524d29b
   author: joe
