@@ -1305,7 +1305,7 @@ pub fn mirror_pre_push_hook_script() -> String {
 /// leg's job and is intentionally non-fast-forward across hubs) and ref
 /// deletions (a mirror hub keeping a branch is drift to reconcile, not
 /// something to propagate silently). Pushes by SHA so each mirror gets
-/// exactly what origin got, even if the local branch moves meanwhile. Pure.
+/// the proposed tip; callers must confirm origin accepted it before mirroring. Pure.
 pub fn mirror_push_refspecs(ref_lines: &str) -> Vec<String> {
     ref_lines
         .lines()
@@ -1387,6 +1387,38 @@ pub fn run_mirror_push(
         );
         return Ok(());
     }
+    // A pre-push hook runs BEFORE origin accepts the update. Never publish
+    // its proposed SHA unless origin already advertises that exact ref tip.
+    // Missing/unreachable origin fails closed; post-push fan-out catches up later.
+    // trace:BUG-1803 | ai:codex
+    let refspecs: Vec<String> = refspecs
+        .into_iter()
+        .filter(|refspec| {
+            let (sha, remote_ref) = refspec.split_once(':').unwrap();
+            let accepted = git_out(
+                project_root,
+                &["ls-remote", "--refs", "--", "origin", remote_ref],
+            )
+            .and_then(|out| {
+                out.lines().find_map(|line| {
+                    let (tip, name) = line.split_once('\t')?;
+                    (name == remote_ref).then(|| tip.to_string())
+                })
+            });
+            if accepted.as_deref() == Some(sha) {
+                true
+            } else {
+                println!(
+                    "  mirror-push: {remote_ref}@{sha} is not confirmed on origin — skipped; \
+                     retry mirroring after origin accepts the push (mirror-sync catches up the default branch; aida push fans out accepted code branches)"
+                );
+                false
+            }
+        })
+        .collect();
+    if refspecs.is_empty() {
+        return Ok(());
+    }
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     let mut failures: Vec<String> = Vec::new();
     for mirror in mirrors {
@@ -1455,6 +1487,19 @@ pub fn run_mirror_push(
     }
 }
 
+/// Pin post-push code fan-out to an observed canonical tip, fetching its
+/// objects before pushing by SHA. Never reads the local branch.
+// trace:BUG-1803 | ai:codex
+pub(crate) fn origin_code_refspec(repo: &Path, branch: &str) -> Result<String> {
+    let sha = aida_core::git_ops::remote_branch_head_sha(repo, "origin", branch)
+        .ok_or_else(|| anyhow::anyhow!("origin/{branch} is absent or unreachable"))?;
+    let remote_ref = format!("refs/heads/{branch}");
+    if git_out(repo, &["fetch", "--quiet", "--", "origin", &remote_ref]).is_none() {
+        anyhow::bail!("could not fetch origin/{branch}; no code refs mirrored");
+    }
+    Ok(format!("{sha}:{remote_ref}"))
+}
+
 /// `<sha>:refs/heads/<branch>` → `<branch>@<short sha>` for a report line.
 // trace:BUG-1676 | ai:claude
 fn mirror_refspec_label(refspec: &str) -> String {
@@ -1514,8 +1559,7 @@ pub struct MirrorSyncRow {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MirrorSyncReport {
     pub rows: Vec<MirrorSyncRow>,
-    /// Whole-sync skip reasons (no mirrors configured, no origin, origin
-    /// unreachable) and per-hub skips (a listed mirror that is not a remote).
+    /// Whole-sync/per-hub skip reasons and ignored local-only commits.
     pub skipped: Vec<String>,
 }
 
@@ -1709,6 +1753,24 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
             Ok(o) => Some(git_push_failure_detail(&String::from_utf8_lossy(&o.stderr))),
             Err(e) => Some(e.to_string()),
         };
+        // Report ignored local-only commits without changing the source of
+        // truth: only the observed origin SHA below is ever pushed.
+        // trace:BUG-1803 | ai:codex
+        if fetch_error.is_none() {
+            let local_ref = format!("refs/heads/{branch}");
+            if let Some(local) = git_out(project_root, &["rev-parse", "--verify", &local_ref]) {
+                let local = local.trim();
+                let range = format!("{source}..{local}");
+                if let Some(count) = git_out(project_root, &["rev-list", "--count", &range]) {
+                    if count.trim().parse::<usize>().unwrap_or(0) > 0 {
+                        report.skipped.push(format!(
+                            "local {branch}@{local} has {} local-only commit(s) — ignored; mirrors follow origin@{source}",
+                            count.trim()
+                        ));
+                    }
+                }
+            }
+        }
         for mirror in &live_mirrors {
             if let Some(err) = &fetch_error {
                 report.rows.push(MirrorSyncRow {
@@ -3113,6 +3175,17 @@ host = \"should.not.count\"
         let project = tmp.path().join("project");
         std::fs::create_dir_all(&project).unwrap();
         let sha = init_repo_with_commit(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "origin.git"]);
+        git(
+            &project,
+            &[
+                "remote",
+                "add",
+                "origin",
+                tmp.path().join("origin.git").to_str().unwrap(),
+            ],
+        );
+        git(&project, &["push", "-q", "origin", "main"]);
         let mirror = tmp.path().join("mirror.git");
         git(tmp.path(), &["init", "-q", "--bare", "mirror.git"]);
         git(
@@ -3197,6 +3270,17 @@ host = \"should.not.count\"
         let project = tmp.path().join("project");
         std::fs::create_dir_all(&project).unwrap();
         let sha = init_repo_with_commit(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "origin.git"]);
+        git(
+            &project,
+            &[
+                "remote",
+                "add",
+                "origin",
+                tmp.path().join("origin.git").to_str().unwrap(),
+            ],
+        );
+        git(&project, &["push", "-q", "origin", "main"]);
 
         let mirror = tmp.path().join("mirror.git");
         git(tmp.path(), &["init", "-q", "--bare", "mirror.git"]);
@@ -3395,6 +3479,101 @@ host = \"should.not.count\"
             rendered.contains("aida-store on mirror already at"),
             "{rendered}"
         );
+    }
+
+    // trace:BUG-1803 | ai:codex
+    #[test]
+    fn bug_1803_hook_fails_closed_without_origin_confirmation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, _origin, mirror) = two_hub_fixture(tmp.path());
+        let sha = tip(&project, "main").unwrap();
+        // New branches and tags have not yet been accepted by origin.
+        let pending = format!(
+            "refs/heads/feature {sha} refs/heads/feature {ZEROS}\n\
+             refs/tags/v1 {sha} refs/tags/v1 {ZEROS}\n"
+        );
+        run_mirror_push(&project, "origin", &pending, false).unwrap();
+        assert!(tip(&mirror, "feature").is_none());
+        assert!(git_out(&mirror, &["rev-parse", "--verify", "refs/tags/v1"]).is_none());
+        // Confirmed tags still fan out by the exact advertised object SHA.
+        git(
+            &project,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "tag",
+                "-a",
+                "v1",
+                "-m",
+                "release",
+            ],
+        );
+        git(&project, &["push", "-q", "origin", "refs/tags/v1"]);
+        let tag = git_out(&project, &["rev-parse", "refs/tags/v1"]).unwrap();
+        let confirmed = format!("refs/tags/v1 {} refs/tags/v1 {ZEROS}\n", tag.trim());
+        run_mirror_push(&project, "origin", &confirmed, false).unwrap();
+        assert_eq!(git_out(&mirror, &["rev-parse", "refs/tags/v1"]), Some(tag));
+        let lines = format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
+        git(
+            &project,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                tmp.path().join("missing.git").to_str().unwrap(),
+            ],
+        );
+        run_mirror_push(&project, "origin", &lines, false).unwrap();
+        assert!(tip(&mirror, "main").is_none());
+        git(&project, &["remote", "remove", "origin"]);
+        run_mirror_push(&project, "origin", &lines, false).unwrap();
+        assert!(tip(&mirror, "main").is_none());
+    }
+
+    // trace:BUG-1803 | ai:codex
+    #[test]
+    fn bug_1803_rejected_origin_push_never_reaches_mirror() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        mirror_sync_hubs(&project).unwrap();
+        let accepted = tip(&origin, "main").unwrap();
+        let rejected = commit_file(&project, "rejected.txt", "local only\n", "rejected commit");
+        // Model the pre-push hook, which sees the proposed tip before the
+        // protected canonical hub rejects it.
+        let lines = format!("refs/heads/main {rejected} refs/heads/main {accepted}\n");
+        run_mirror_push(&project, "origin", &lines, false).unwrap();
+        assert_eq!(tip(&mirror, "main"), Some(accepted.clone()));
+        std::fs::write(origin.join("hooks/pre-receive"), "#!/bin/sh\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                origin.join("hooks/pre-receive"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+        #[cfg(unix)]
+        assert!(git_out(&project, &["push", "origin", "main"]).is_none());
+        crate::fan_out_mirror_push(&project, "main", &project);
+        assert_eq!(tip(&mirror, "main"), Some(accepted.clone()));
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(report.failures().is_empty(), "{report:?}");
+        assert_eq!(tip(&origin, "main"), Some(accepted.clone()));
+        assert_eq!(tip(&mirror, "main"), Some(accepted));
+        assert_eq!(tip(&project, "main"), Some(rejected.clone()));
+        assert!(report.render().contains(&rejected), "{report:?}");
+        assert!(
+            report.render().contains("1 local-only commit(s)"),
+            "{report:?}"
+        );
+        assert!(report.to_json()["skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v.as_str().unwrap().contains(&rejected)));
     }
 
     // BUG-1676 acceptance 2: a dead hub is a reported failure and a non-zero

@@ -1,5 +1,12 @@
 # AIDA — Overview
 
+Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
+mirrored only when origin already advertises the exact SHA; rejected or pending
+pushes are skipped. Mirror-sync ignores and reports local-only default/store
+commits while fetching and pushing origin's SHA. See
+[git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
+<!-- trace:BUG-1803 | ai:codex -->
+
 The project schedule runs a read-only merged-worktree guard every 30 days and
 routes failures to the advisor. The operator reviews `aida worktree gc` and
 runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
