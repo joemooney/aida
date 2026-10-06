@@ -1,0 +1,33 @@
+id: 01a10f46-ef32-7422-ab2b-3c9cfeee6127
+spec_id: STORY-1526
+agreed_id: STORY-1526
+title: 'Review PR-2432: [AI:codex] test(schedule): isolate hook and timer tick locks (BUG-1804)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a10f36`) for branch `bug-1804`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2432>
+  - Branch: `bug-1804` → `main`
+
+  ## Covers
+
+  - BUG-1804
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2432` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T03:34:29.426974647Z
+modified_at: 2026-10-06T03:34:29.426974647Z
+req_type: Story
+filed_at:
+  code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
