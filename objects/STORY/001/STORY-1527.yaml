@@ -1,0 +1,27 @@
+id: 01a10f5c-e80f-7e71-94d5-daacd442b456
+spec_id: STORY-1527
+agreed_id: STORY-1527
+title: 'North-star subject readiness: no candidate project carries criterion-traced tests, so the two-arm delta is structurally unknown everywhere'
+description: |-
+  Found 2026-10-05 while executing the north-star check on aida-monitor (per the operator decision on SPIKE-86). The two-arm reconstitution measure's recall denominator is tests traced to labeled acceptance criteria (trace:SPEC-ID.ACn, via build_criteria_report). Corpus scan: aida-monitor has 15 specs, ~7 with acceptance-flavored text, 1 test total, 0 criterion-traced tests; aida-hub has 336 tests, 0 criterion-traced; AIDA's own repo has ~13 .ACn markers of which nearly all are test-fixture tokens. Consequence: both arms report 'unknown: no real traced tests to recall' and the delta is unknown for every spec of every candidate subject — the executable VIS-2 check measures only that the .ACn discipline is not yet practiced, exactly the blindness STORY-1425 FLAW-2 predicted and its coverage metric exposes. A dated null snapshot (coverage reported, delta explicitly not evaluable) is being published as the honest current state. This story is the prerequisite for a meaningful delta run.
+
+  Acceptance:
+  1. Define subject readiness: minimum count of specs with labeled ACn criteria AND at least one trace:SPEC.ACn-traced test each (propose >= 8 specs), with tests written organically during feature work, not backfilled from spec text in bulk (circularity hazard: tests derived from the spec inflate arm B recall; note this hazard in the discipline doc).
+  2. The .ACn test-tracing convention is documented in the capture discipline (where trace comments are documented) with one worked example.
+  3. aida-monitor (or a successor subject) reaches readiness through normal development, tracked by the coverage report's criterion-to-test share.
+  4. When readiness is met, the north-star check is re-run for the real delta and the null snapshot superseded.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T03:58:29.391669890Z
+modified_at: 2026-10-06T03:58:29.391669890Z
+req_type: Story
+filed_at:
+  code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dafb66432e
+  vendor: antigravity
+  session: 8440bd1e-cba5-444c-8d52-5cfa9f3753e2
