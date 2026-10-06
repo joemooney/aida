@@ -36,26 +36,49 @@ fn unrecognized_usage_schema_is_unknown_not_zero() {
 // trace:BUG-1418 | ai:codex
 #[test]
 fn foreign_vendor_terminal_shape_is_reported_not_treated_as_truncated() {
+    // A genuinely foreign terminal shape (not claude's `result`, not codex's
+    // `turn.completed` — which TASK-1334 now measures) is reported by shape,
+    // never treated as truncated or fabricated as zero.
     let record =
-        "{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}\n";
+        "{\"type\":\"session.finished\",\"usage\":{\"input_tokens\":4,\"output_tokens\":2}}\n";
     assert_eq!(
         drain_caps::completed_log_tokens(record),
         drain_caps::CompletedLogTokens::Unrecognized {
-            shape: "type=turn.completed".to_string()
+            shape: "type=session.finished".to_string()
         }
     );
-    let diagnostic = unrecognized_usage_diagnostic("codex-phase.jsonl", "type=turn.completed");
+    let diagnostic = unrecognized_usage_diagnostic("foreign-phase.jsonl", "type=session.finished");
     assert_eq!(
         diagnostic,
-        "token usage unrecognized in headless log codex-phase.jsonl (shape: type=turn.completed)"
+        "token usage unrecognized in headless log foreign-phase.jsonl (shape: type=session.finished)"
     );
     assert!(!diagnostic.contains("input_tokens"));
 
     let root = tempfile::tempdir().unwrap();
-    std::fs::write(logs_dir(root.path()).join("codex-phase.jsonl"), record).unwrap();
+    std::fs::write(logs_dir(root.path()).join("foreign-phase.jsonl"), record).unwrap();
     assert_eq!(
         measure_completed_headless_logs(root.path(), SystemTime::UNIX_EPOCH),
         None
+    );
+}
+
+/// TASK-1334: a codex headless log (`turn.completed` usage events) is a
+/// measured completed log — the "token usage unrecognized ... shape:
+/// type=turn.completed" degradation that forced "tokens: unknown (collection
+/// incomplete)" onto whole codex waves is the regression under test.
+// trace:TASK-1334 | ai:claude
+#[test]
+fn codex_turn_completed_log_is_measured_not_unknown() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        logs_dir(root.path()).join("pr-2443-codex.jsonl"),
+        "{\"type\":\"thread.started\",\"thread_id\":\"t1\"}\n\
+         {\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":100,\"cached_input_tokens\":40,\"output_tokens\":7}}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        measure_completed_headless_logs(root.path(), SystemTime::UNIX_EPOCH),
+        Some(107)
     );
 }
 

@@ -603,10 +603,29 @@ failed:
 ─ drain summary ─
   batch:autonomy-modes (drained-with-shelved) · 4 shipped · 1 shelved · 0 skipped · 5 iterations
   tokens: 1,234,567 cumulative · ~246,913/spec
-  diff: +4,210 -820 across 37 files
+  diff: +4,210 -820 across 37 files (merged work only — 1 open PR branch not counted)
+  open PRs awaiting review: #2443 (TASK-1328)
   events: 412 seen · 397 benign-absorbed (96%) · 15 actionable
   findings to triage: 1 — `aida findings list`
 ```
+
+The **diff** line measures merged work only (`base..HEAD` on the integration
+branch). A member that ends **shelved with an open PR** delivered real work
+that is not merged yet, so those PRs get their own **open PRs awaiting
+review** line — derived from the drain's own event window (`PhaseDonePr`
+opens minus `PrMerged` merges) — and the diff line is qualified so a wave
+whose members all shelve with open PRs no longer reads as
+`0 shipped · diff +0 -0` / "nothing happened". The same set is carried on the
+`drain_summary` usage record as `open_prs` / `open_pr_count`.
+<!-- trace:TASK-1334 | ai:claude -->
+
+Token accounting recognises both vendors' headless log shapes: claude's
+terminal `result` usage event and codex's per-turn `turn.completed` usage
+events (summed per turn; `cached_input_tokens` is a subset of `input_tokens`,
+so a turn totals `input + output`). A log whose shape matches neither still
+prints `tokens: unknown (collection incomplete)` with the offending shape
+named, rather than fabricating a zero.
+<!-- trace:TASK-1334 | ai:claude -->
 
 The **events** line is the empirical read-out of the event-driven supervision
 lever (STORY-712): how many state-change events the drain emitted to

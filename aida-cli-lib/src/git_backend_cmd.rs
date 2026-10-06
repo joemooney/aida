@@ -1494,6 +1494,13 @@ pub(crate) fn handle_git_backend_command(
                 IdentityCommand::Link { a, b } => handle_identity_link(store_path, a, b),
                 IdentityCommand::List { json } => handle_identity_list(store_path, *json),
                 IdentityCommand::Show { id, json } => handle_identity_show(store_path, id, *json),
+                // TASK-1330: the identity hygiene subcommands are store-free
+                // and dispatched before storage init. trace:TASK-1330 | ai:claude
+                IdentityCommand::Check
+                | IdentityCommand::CheckPush { .. }
+                | IdentityCommand::InstallHook => {
+                    unreachable!("identity hygiene commands are dispatched before storage init")
+                }
             };
         }
         Command::Usage {

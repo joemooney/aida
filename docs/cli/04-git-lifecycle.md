@@ -49,6 +49,15 @@ Keep this table in your head and every command below is obvious.
 
 *(Covered in [Chapter 1](01-getting-started.md#aida-done).)* The newcomer shortcut — "I finished it." Once you're on a real pipeline, **stop using it** and use `aida queue done` (lands **Done**, the precise "finished on a branch" state) so the merge can earn **Completed**. `aida done`'s simplicity is also its limitation: it doesn't know where in the lifecycle you are.
 
+<!-- trace:TASK-1328 | ai:codex -->
+`aida queue done` recognizes both the resolved requirement's display ID and its
+stored origin ID when checking branch ownership and commit evidence. A session
+can finish on its original branch after the store assigns a new display ID.
+Every recognized requirement ID in a scoped branch must belong to that same
+requirement (including existing dashed child variants); an unrelated branch
+cannot gain ownership through an alias in a commit trailer. No branch rename
+or forced completion is needed for an ID remapping.
+
 ---
 
 ### `aida pr`
@@ -210,6 +219,22 @@ The marker is best-effort when the code repository cannot be read.
 **Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It fetches and pushes origin's observed SHA, ignoring and reporting local-only commits even if a protected origin has rejected them. The pre-push hook only mirrors a proposed ref when origin already advertises that exact SHA; pending or rejected updates are skipped. A later mirror-sync catches up the default branch and store; `aida push` fans out code branches after origin accepts them. Raw `git push` of feature branches or tags requires retrying the mirror hook plumbing once origin confirms the ref. <!-- trace:BUG-1803 | ai:codex --> It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook. The hook itself is generated once, at `aida remote mirror` time: `aida doctor` (category `mirror-hook-drift`) compares the installed hook against the current script and reports when a re-run of `aida remote mirror <name>` is needed to pick up hook fixes — it recognizes only AIDA's own hook and never flags a custom pre-push hook. <!-- trace:BUG-1738 | ai:claude -->
 
 **Chains with** — typically right after `aida init` on a project with no remote; then `aida push` works.
+
+---
+
+### `aida identity`
+
+**One line** — the project's email allowlist: refuse commits and pushes that would publish a non-allowlisted author, committer, or Co-authored-by email. <!-- trace:TASK-1330 | ai:claude -->
+
+**Mental model.** A work machine whose git config carries an employer address will happily sign every commit with it, and nothing in stock git objects. Declare the addresses this project may publish under `[identity] allowed_emails` in `.aida/config.toml`; from then on `aida identity check` reports the identity a commit made here would carry, `aida commit` refuses to assemble a commit under any other address, and the pre-push hook installed by `aida identity install-hook` refuses a push that introduces *any* commit — author, committer, or `Co-authored-by:` trailer — outside the allowlist. The push gate is fail-closed: if the gate cannot run (unreadable config, missing subcommand) while an allowlist is configured, the push is refused rather than waved through. `aida pr ship` closes the last gap: when a squash merge's body would carry a non-allowlisted co-author trailer, the body is replaced with the branch's commit messages with the offending trailers stripped. The `link` / `list` / `show` subcommands are a different concern sharing the namespace: the shared person-alias registry that collapses one human's several identity strings into one canonical person.
+
+**Reach for it when** — a machine's git config might carry an identity this repository must never publish (work laptop, shared box), or right after an identity leak while you rewrite history — this is the recurrence guard.
+
+**Don't reach for it when** — no allowlist is configured: every check is silent, so there is nothing to bypass or tune. The gate is opt-in per project.
+
+**Gotchas.** The installer never clobbers a custom pre-push hook — it prints the lines to paste instead. Repos running the mirror fan-out hook get the gate embedded in that same hook (git only runs one pre-push hook); re-running `aida identity install-hook` or `aida remote mirror <name>` refreshes an older gate-less install in place. `aida doctor` (category `identity`) reports a git identity outside the allowlist and a pre-push hook that does not run the gate. A deliberate bypass is `git push --no-verify` — loud, explicit, and on you.
+
+**Chains with** — `aida commit` (commit-time enforcement point), `aida remote mirror` (shared pre-push hook), `aida doctor` (drift reporting), `aida pr ship` (squash-body sanitizer).
 
 ---
 

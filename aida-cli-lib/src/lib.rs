@@ -158,6 +158,7 @@ mod external_import_bleed;
 mod feature_cmd;
 mod findings;
 pub mod graded_review;
+mod identity_gate;
 mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
@@ -4878,6 +4879,31 @@ pub(crate) fn run() -> Result<()> {
                 remote_create::handle_remote_reconcile(&project_root, *execute, *json, *yes)
             }
         };
+    }
+
+    // TASK-1330: the identity HYGIENE subcommands read only git state and
+    // `.aida/config.toml` — no store needed, and the pre-push hook plumbing
+    // must work even when the store is unavailable — so dispatch them before
+    // storage init, like `remote`. The person-alias registry subcommands
+    // (link/list/show) read the store and fall through to the normal path.
+    // trace:TASK-1330 | ai:claude
+    if let Command::Identity { cmd } = &cli.command {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        match cmd {
+            crate::cli::IdentityCommand::Check => {
+                return identity_gate::handle_identity_check(&project_root);
+            }
+            crate::cli::IdentityCommand::CheckPush { pushed_remote } => {
+                return identity_gate::handle_identity_check_push(&project_root, pushed_remote);
+            }
+            crate::cli::IdentityCommand::InstallHook => {
+                return identity_gate::handle_identity_install_hook(&project_root);
+            }
+            crate::cli::IdentityCommand::Link { .. }
+            | crate::cli::IdentityCommand::List { .. }
+            | crate::cli::IdentityCommand::Show { .. } => {}
+        }
     }
 
     // Sandbox commands MANAGE a throwaway store directory; they don't read the
@@ -25760,6 +25786,19 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "hook-drift",
         ],
         "mirror-hook-drift",
+    ),
+    // TASK-1330: identity hygiene — when `[identity] allowed_emails` is
+    // configured, report a git identity outside the allowlist and a pre-push
+    // hook that does not run the fail-closed identity gate. Report-only.
+    // trace:TASK-1330 | ai:claude
+    (
+        &[
+            "identity",
+            "identity-hygiene",
+            "allowed-emails",
+            "email-allowlist",
+        ],
+        "identity",
     ),
 ];
 
@@ -60257,6 +60296,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
     let opts = forge::MergeOptions {
         method: forge::MergeMethod::Squash,
         squash_subject: None,
+        squash_body: None, // trace:TASK-1330 | ai:claude
         delete_branch: false,
         match_head: None,
     };
@@ -71267,6 +71307,7 @@ pub(crate) fn handle_release(
         let merge_opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };
@@ -100758,46 +100799,88 @@ pub(crate) fn classify_pipelined_child_outcome(
     pipelined_child_reported_nothing(spec, exit_code)
 }
 
+/// Shared argv builder for a pipelined batch / `nextN` child drain
+/// (`aida queue work <spec> --auto-complete=<mode> ...`), used by both
+/// [`RealBatchDriver`] and [`RealNextNDriver`].
+///
+/// The `--escalate-blocks` / `--escalate-defaults` pair is pushed only when
+/// the resolved no-human mode is [`auto_complete::NoHumanMode::Both`],
+/// mirroring the child's STORY-306 kickoff validation: the advisor tier
+/// exists only in a fully-headless drain, and the child rejects the flags
+/// anywhere else. Pushing them unconditionally made every interactive
+/// batch / `nextN` child exit at validation before doing any work.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+// trace:BUG-1805 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pipelined_child_common_args(
+    spec: &str,
+    mode: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> Vec<String> {
+    let mut args = vec![
+        "queue".to_string(),
+        "work".to_string(),
+        spec.to_string(),
+        format!("--auto-complete={}", mode.slug()),
+    ];
+    if json {
+        args.push("--json".to_string());
+    }
+    if let Some(permission_mode) = permission_mode {
+        args.push("--permission-mode".to_string());
+        args.push(permission_mode.to_string());
+    }
+    if let Some(no_human) = no_human {
+        args.push(format!("--no-human={}", no_human.slug()));
+    }
+    if no_human == Some(auto_complete::NoHumanMode::Both) {
+        match escalate_mode {
+            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
+            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
+        }
+    }
+    if steal {
+        args.push("--steal".to_string());
+    }
+    if force_claim {
+        args.push("--force-claim".to_string());
+    }
+    if allow_stale_base {
+        args.push("--allow-stale-base".to_string());
+    }
+    if no_auto_rebase {
+        args.push("--no-auto-rebase".to_string());
+    }
+    args
+}
+
 impl RealBatchDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
+    // trace:BUG-1805 | ai:claude
     pub(crate) fn child_common_args(
         &self,
         spec: &str,
         mode: auto_complete::AutoCompleteVariant,
     ) -> Vec<String> {
-        let mut args = vec![
-            "queue".to_string(),
-            "work".to_string(),
-            spec.to_string(),
-            format!("--auto-complete={}", mode.slug()),
-        ];
-        if self.json {
-            args.push("--json".to_string());
-        }
-        if let Some(permission_mode) = &self.permission_mode {
-            args.push("--permission-mode".to_string());
-            args.push(permission_mode.clone());
-        }
-        if let Some(no_human) = self.no_human {
-            args.push(format!("--no-human={}", no_human.slug()));
-        }
-        match self.escalate_mode {
-            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
-            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
-        }
-        if self.steal {
-            args.push("--steal".to_string());
-        }
-        if self.force_claim {
-            args.push("--force-claim".to_string());
-        }
-        if self.allow_stale_base {
-            args.push("--allow-stale-base".to_string());
-        }
-        if self.no_auto_rebase {
-            args.push("--no-auto-rebase".to_string());
-        }
-        args
+        pipelined_child_common_args(
+            spec,
+            mode,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+        )
     }
 }
 
@@ -102857,6 +102940,13 @@ pub(crate) fn finalize_drain_summary(
     let events_tally = drain_root
         .map(|root| events::tally_window(root, started))
         .unwrap_or_default();
+    // TASK-1334: PRs this drain opened and did not merge in its own window —
+    // shelved members' open PRs. Without them the summary reads "0 shipped ·
+    // diff +0 -0" for a wave that produced real PRs. Derived from the same
+    // event window the tally above reads. trace:TASK-1334 | ai:claude
+    let open_prs = drain_root
+        .map(|root| events::open_prs_window(root, started))
+        .unwrap_or_default();
     let summary = drain_summary::DrainSummary {
         kind: kind.to_string(),
         label,
@@ -102864,6 +102954,7 @@ pub(crate) fn finalize_drain_summary(
         tallies,
         cumulative_tokens,
         diff,
+        open_prs,
         elapsed_secs: elapsed.as_secs(),
         events: events_tally,
     };
@@ -103061,44 +103152,24 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
 
 impl RealNextNDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
+    // trace:BUG-1805 | ai:claude
     pub(crate) fn child_common_args(
         &self,
         spec: &str,
         mode: auto_complete::AutoCompleteVariant,
     ) -> Vec<String> {
-        let mut args = vec![
-            "queue".to_string(),
-            "work".to_string(),
-            spec.to_string(),
-            format!("--auto-complete={}", mode.slug()),
-        ];
-        if self.json {
-            args.push("--json".to_string());
-        }
-        if let Some(permission_mode) = &self.permission_mode {
-            args.push("--permission-mode".to_string());
-            args.push(permission_mode.clone());
-        }
-        if let Some(no_human) = self.no_human {
-            args.push(format!("--no-human={}", no_human.slug()));
-        }
-        match self.escalate_mode {
-            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
-            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
-        }
-        if self.steal {
-            args.push("--steal".to_string());
-        }
-        if self.force_claim {
-            args.push("--force-claim".to_string());
-        }
-        if self.allow_stale_base {
-            args.push("--allow-stale-base".to_string());
-        }
-        if self.no_auto_rebase {
-            args.push("--no-auto-rebase".to_string());
-        }
-        args
+        pipelined_child_common_args(
+            spec,
+            mode,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+        )
     }
 }
 
@@ -114222,6 +114293,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let mut opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: true,
             match_head: None,
         };

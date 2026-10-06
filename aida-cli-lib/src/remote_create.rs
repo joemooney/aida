@@ -1271,10 +1271,13 @@ pub(crate) const MIRROR_HOOK_HEADER: &str =
     "# Mirror fan-out pre-push hook — installed by `aida remote mirror`.";
 
 /// The pre-push hook shim `aida remote mirror` installs. POSIX sh — git runs
-/// hooks under /bin/sh. Pipes the ref lines git feeds the hook straight
-/// through to the plumbing subcommand and always exits 0, so mirroring can
-/// never block the origin push (even when `aida` is not on PATH or an older
-/// binary lacks the hidden plumbing subcommand).
+/// hooks under /bin/sh. Captures the ref lines git feeds the hook once, runs
+/// the TASK-1330 identity hygiene gate over them (fail-closed: a
+/// non-allowlisted author/committer/Co-authored-by email refuses the push),
+/// then pipes them to the mirror-push plumbing and exits 0 — the mirror leg
+/// stays best-effort and can never block the origin push (even when `aida`
+/// is not on PATH or an older binary lacks the hidden plumbing subcommand).
+// trace:TASK-1330 | ai:claude
 pub fn mirror_pre_push_hook_script() -> String {
     format!(
     "#!/bin/sh\n\
@@ -1284,18 +1287,21 @@ pub fn mirror_pre_push_hook_script() -> String {
      # mirror failure warns and never blocks the push. Safe to delete;\n\
      # reinstall with `aida remote mirror <name>`.\n\
      unset GIT_DIR GIT_WORK_TREE\n\
+     refs=$(cat)\n\
+     {identity_gate}\
      # Git runs pre-push for dry-runs but omits the flag from the hook environment.\n\
      git_args=$(ps -p \"$PPID\" -o args= 2>/dev/null) || {{ echo \"mirror-push: could not inspect git arguments; skipped\" >&2; exit 0; }}\n\
      case \" $git_args \" in *\" --dry-run \"*|*\" -n \"*) mirror_dry_run=--dry-run ;; *) mirror_dry_run= ;; esac\n\
      # trace:BUG-1706 | ai:codex\n\
      if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then\n\
      \u{20} if [ -n \"$mirror_dry_run\" ]; then\n\
-     \u{20} \u{20} aida remote mirror-push \"$1\" --dry-run || true\n\
+     \u{20} \u{20} printf '%s\\n' \"$refs\" | aida remote mirror-push \"$1\" --dry-run || true\n\
      \u{20} else\n\
-     \u{20} \u{20} aida remote mirror-push \"$1\" || true\n\
+     \u{20} \u{20} printf '%s\\n' \"$refs\" | aida remote mirror-push \"$1\" || true\n\
      \u{20} fi\n\
      fi\n\
-     exit 0\n"
+     exit 0\n",
+    identity_gate = crate::identity_gate::identity_gate_hook_lines()
     )
 }
 
@@ -3104,9 +3110,20 @@ host = \"should.not.count\"
         );
         assert!(
             s.trim_end().ends_with("exit 0"),
-            "hook must never block the push"
+            "the mirror leg must never block the push"
         );
         assert!(s.contains("--dry-run") && s.contains(" -n "));
+        // TASK-1330: the identity hygiene gate runs first and, unlike the
+        // best-effort mirror leg, IS allowed to refuse the push (fail-closed).
+        // trace:TASK-1330 | ai:claude
+        assert!(
+            s.contains("aida identity check-push \"$1\" || exit 1"),
+            "identity gate violations must refuse the push"
+        );
+        assert!(
+            s.contains("refs=$(cat)"),
+            "stdin must be captured once and fed to both consumers"
+        );
     }
 
     // This integration seam executes a POSIX `/bin/sh` hook; native Windows
@@ -3159,11 +3176,16 @@ host = \"should.not.count\"
         assert!(status.success());
         let calls = std::fs::read_to_string(log).unwrap();
         let calls: Vec<_> = calls.lines().collect();
+        // TASK-1330: the identity gate runs over the same captured ref lines
+        // before each mirror fan-out. trace:TASK-1330 | ai:claude
         assert_eq!(
             calls,
             [
+                "identity check-push origin",
                 "remote mirror-push origin --dry-run",
+                "identity check-push origin",
                 "remote mirror-push origin --dry-run",
+                "identity check-push origin",
                 "remote mirror-push origin"
             ]
         );

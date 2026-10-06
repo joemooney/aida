@@ -503,6 +503,7 @@ mod tests {
                 },
                 cumulative_tokens: Some(0),
                 diff: Default::default(),
+                open_prs: Vec::new(),
                 elapsed_secs: 1,
                 events: Default::default(),
             }
@@ -579,6 +580,7 @@ mod tests {
                 tallies: Default::default(),
                 cumulative_tokens: Some(0),
                 diff: Default::default(),
+                open_prs: Vec::new(),
                 elapsed_secs: 240,
                 events: Default::default(),
             },
@@ -644,6 +646,7 @@ mod tests {
             },
             cumulative_tokens: Some(0),
             diff: crate::drain_summary::DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };

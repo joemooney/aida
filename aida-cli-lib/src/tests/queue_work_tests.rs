@@ -3376,6 +3376,102 @@ fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
     );
 }
 
+/// BUG-1805: the batch / `nextN` child argv builders pushed `--escalate-blocks`
+/// (or `--escalate-defaults`) UNCONDITIONALLY — `EscalateMode` has no "absent"
+/// arm — while `--no-human` was pushed only when set. The spawned child then
+/// tripped the STORY-306 kickoff validation ("--escalate-blocks /
+/// --escalate-defaults only apply to a fully-headless drain") and exited
+/// before any work, so every interactive `aida queue work nextN
+/// --auto-complete` drain failed in seconds. The escalate flag pair must
+/// appear in child argv exactly when the resolved no-human mode is `both`.
+// trace:BUG-1805 | ai:claude
+#[test]
+fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
+    use crate::auto_complete::{AutoCompleteVariant, EscalateMode, NoHumanMode};
+
+    let has_escalate = |args: &[String]| args.iter().any(|a| a.starts_with("--escalate"));
+
+    // The reproduced failure: interactive (no --no-human at all) drain with
+    // the default EscalateMode::Blocks. The child would reject --escalate-*.
+    for escalate in [EscalateMode::Blocks, EscalateMode::Defaults] {
+        let args = crate::pipelined_child_common_args(
+            "TASK-1333",
+            AutoCompleteVariant::ThroughCi,
+            false,
+            None,
+            None,
+            escalate,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(
+            !has_escalate(&args),
+            "an interactive child argv must not carry an escalate flag the \
+             child's kickoff validation rejects: {args:?}"
+        );
+    }
+
+    // --no-human=reviewer-only is still not fully headless; the validation
+    // rejects the pair there too.
+    let reviewer_only = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::ReviewerOnly),
+        EscalateMode::Blocks,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        !has_escalate(&reviewer_only),
+        "--no-human=reviewer-only is not fully headless; no escalate flag: \
+         {reviewer_only:?}"
+    );
+
+    // A fully-headless (--no-human=both) child MUST still get the resolved
+    // escalate mode — that is where the advisor tier lives.
+    let both_blocks = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::Both),
+        EscalateMode::Blocks,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        both_blocks.contains(&"--no-human=both".to_string())
+            && both_blocks.contains(&"--escalate-blocks".to_string()),
+        "a --no-human=both child must carry --escalate-blocks: {both_blocks:?}"
+    );
+
+    let both_defaults = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::Both),
+        EscalateMode::Defaults,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        both_defaults.contains(&"--escalate-defaults".to_string()),
+        "a --no-human=both child must carry the resolved --escalate-defaults: \
+         {both_defaults:?}"
+    );
+}
+
 /// BUG-1515: a `Done` spec whose recorded review verdict is a still-live
 /// refusal (RequestChanges/Rejected, never closed by a later merge) must
 /// classify as `AwaitingRework`, not `AwaitingMerge` — the drain, `aida
