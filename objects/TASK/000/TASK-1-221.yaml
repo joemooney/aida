@@ -3,12 +3,12 @@ spec_id: TASK-1-221
 agreed_id: TASK-1330
 title: 'Identity hygiene gate: refuse pushes/commits with non-allowlisted author emails'
 description: '2026-10-05: work email (employer-identifying) found in public repo history — 438 author/committer entries across refs (9 on main spanning 2025-11-22..2026-05-05, 378 on the public aida-store branch, recent ones on stranded origin/bug-1823 pushed 2026-10-01 from the work machine) PLUS Co-authored-by trailers in 7 squash-merge bodies on main. Root cause: work machine git config used the employer address; nothing in AIDA or git refused it. Fix shape: (1) project allowlist of author/committer emails in .aida/config.toml; (2) aida doctor check identity + pre-push hook that fail-closed refuses a push introducing a non-allowlisted email in author, committer, or Co-authored-by trailers; (3) aida pr ship squash path strips/replaces non-allowlisted co-author trailers. Containment and history rewrite tracked by the operator; this spec is the recurrence guard.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:17:11.528846196Z
-modified_at: 2026-10-06T19:26:21.897648854Z
+modified_at: 2026-10-06T19:26:53.436369894Z
 req_type: Task
 tags:
 - docs:impacted
@@ -37,6 +37,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a112ae-e20f-7410-954a-a50f035397c8
+  author: joe
+  timestamp: 2026-10-06T19:26:53.455943229Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 51fe64d5e96431e0103055c132c5cdf5bd5cab6b
   branch: main
@@ -45,3 +52,7 @@ filed_at:
   aida_build_sha: dafb66432e
   vendor: antigravity
   session: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-06T19:26:53.436369894Z
+  implemented_by: joe
