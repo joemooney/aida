@@ -976,6 +976,64 @@ pub fn tally_window(project_root: &Path, since: std::time::SystemTime) -> EventT
     tally
 }
 
+/// One PR a drain opened and did not merge inside its own window — a shelved
+/// member's open PR awaiting review. Derived from the drain's own event stream
+/// (TASK-1334), so the exit summary can name delivered-but-unmerged work
+/// instead of reading "0 shipped · diff +0 -0" as "nothing happened".
+// trace:TASK-1334 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenDrainPr {
+    /// The spec the PR implements, when the opening event recorded one.
+    pub spec: Option<String>,
+    /// The PR number.
+    pub pr: u32,
+}
+
+/// Scan event lines stamped at or after `since` and return the PRs opened in
+/// the window ([`EventKind::PhaseDonePr`]) that were NOT merged within it
+/// ([`EventKind::PrMerged`]) — the open PRs a drain leaves behind when members
+/// end shelved-with-open-PR. Pure and tolerant like [`classify_since`]: blank
+/// or malformed lines are skipped. Order is first-opened-first; a re-emitted
+/// open for the same PR number keeps the first record.
+// trace:TASK-1334 | ai:claude
+pub fn open_prs_since(body: &str, since: DateTime<Utc>) -> Vec<OpenDrainPr> {
+    let mut open: Vec<OpenDrainPr> = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Ok(ev) = serde_json::from_str::<Event>(trimmed) else {
+            continue;
+        };
+        if ev.ts < since {
+            continue;
+        }
+        match ev.kind {
+            EventKind::PhaseDonePr { pr } => {
+                if !open.iter().any(|o| o.pr == pr) {
+                    open.push(OpenDrainPr { spec: ev.spec, pr });
+                }
+            }
+            EventKind::PrMerged { pr } => open.retain(|o| o.pr != pr),
+            _ => {}
+        }
+    }
+    open
+}
+
+/// Read `.aida/events.jsonl` and derive [`open_prs_since`] over the window
+/// starting at `since` — the drain's own window when called at drain exit.
+/// Best-effort: a missing or unreadable stream yields an empty list, never an
+/// error on the exit path. A mid-window rotation (the [`tally_window`]
+/// `partial_window` case) can only UNDER-report opens, never invent them.
+// trace:TASK-1334 | ai:claude
+pub fn open_prs_window(project_root: &Path, since: std::time::SystemTime) -> Vec<OpenDrainPr> {
+    let since_utc: DateTime<Utc> = since.into();
+    let body = std::fs::read_to_string(events_path(project_root)).unwrap_or_default();
+    open_prs_since(&body, since_utc)
+}
+
 /// Whether the single-generation archive was written at or after `since` — the
 /// signal that [`rotate_if_oversized`] fired inside the window, so the live
 /// stream no longer holds all of it.
@@ -2349,6 +2407,69 @@ mod tests {
         assert_eq!(tally.absorbed_pct(), 67, "4/6 rounds to 67%");
         // Pure classification says nothing about rotation.
         assert!(!tally.partial_window);
+    }
+
+    /// TASK-1334: the drain exit summary derives "open PRs this wave left
+    /// behind" from the drain's own event window — a PR opened in-window and
+    /// not merged in-window is open; a merged one is not; a previous drain's
+    /// PRs are outside the window; malformed lines are skipped.
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn open_prs_since_reports_window_opens_minus_window_merges() {
+        let window_open = Utc::now();
+        let before = window_open - chrono::Duration::seconds(10);
+        let after = window_open + chrono::Duration::seconds(1);
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut push = |ts: DateTime<Utc>, spec: Option<&str>, kind: EventKind| {
+            let ev = Event {
+                ts,
+                spec: spec.map(str::to_string),
+                run_uuid: "run-1".into(),
+                seat: None,
+                kind,
+            };
+            lines.push(serde_json::to_string(&ev).unwrap());
+        };
+        // A previous drain's PR — outside the window, not this wave's output.
+        push(before, Some("TASK-9"), EventKind::PhaseDonePr { pr: 2400 });
+        // This wave: three PRs opened, one of them merged (shipped).
+        push(
+            after,
+            Some("TASK-1328"),
+            EventKind::PhaseDonePr { pr: 2443 },
+        );
+        push(
+            after,
+            Some("TASK-1602"),
+            EventKind::PhaseDonePr { pr: 2444 },
+        );
+        // A duplicate re-emit keeps the first record.
+        push(
+            after,
+            Some("TASK-1602"),
+            EventKind::PhaseDonePr { pr: 2444 },
+        );
+        push(after, None, EventKind::PhaseDonePr { pr: 2445 });
+        push(after, Some("TASK-1602"), EventKind::PrMerged { pr: 2444 });
+
+        let body = format!("{}\n\n  \n{{not json\n", lines.join("\n"));
+        let open = open_prs_since(&body, window_open);
+        assert_eq!(
+            open,
+            vec![
+                OpenDrainPr {
+                    spec: Some("TASK-1328".into()),
+                    pr: 2443
+                },
+                OpenDrainPr {
+                    spec: None,
+                    pr: 2445
+                },
+            ]
+        );
+        // An empty body yields an empty list, never an error.
+        assert!(open_prs_since("", window_open).is_empty());
     }
 
     /// An empty window is all-zero (and divides by zero nowhere), and an
