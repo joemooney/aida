@@ -169,14 +169,6 @@
   added_at: 2026-10-04T02:39:31.852287132Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a104f7-8772-7472-b36e-62333a0bc367
-  position: 420000
-  added_by: role:implementer
-  note: Implement approved ADR-65 policy. Preserve existing release freshness behavior; add deterministic workflow and schedule evidence per acceptance.
-  added_at: 2026-10-04T03:32:28.815643923Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a10877-4247-7611-b92b-bf574c5df9b4
   position: 421000
   added_by: role:implementer
@@ -204,5 +196,13 @@
   added_by: role:implementer
   note: 'Advisor-blessed agy batch: unblocked by BUG-1800 merge (92bd6cb); schedule-allowlist addition per spec comments.'
   added_at: 2026-10-06T01:33:48.923343575Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a104f7-8772-7472-b36e-62333a0bc367
+  position: 426000
+  added_by: role:implementer
+  note: 'Advisor-blessed agy batch: ADR-65 weekly Windows validation; constructive answer to the 13-night cross-platform nightly red.'
+  added_at: 2026-10-06T01:33:50.339809012Z
   for_role: implementer
   added_by_machine: imac
