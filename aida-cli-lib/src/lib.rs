@@ -100771,46 +100771,88 @@ pub(crate) fn classify_pipelined_child_outcome(
     pipelined_child_reported_nothing(spec, exit_code)
 }
 
+/// Shared argv builder for a pipelined batch / `nextN` child drain
+/// (`aida queue work <spec> --auto-complete=<mode> ...`), used by both
+/// [`RealBatchDriver`] and [`RealNextNDriver`].
+///
+/// The `--escalate-blocks` / `--escalate-defaults` pair is pushed only when
+/// the resolved no-human mode is [`auto_complete::NoHumanMode::Both`],
+/// mirroring the child's STORY-306 kickoff validation: the advisor tier
+/// exists only in a fully-headless drain, and the child rejects the flags
+/// anywhere else. Pushing them unconditionally made every interactive
+/// batch / `nextN` child exit at validation before doing any work.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+// trace:BUG-1805 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pipelined_child_common_args(
+    spec: &str,
+    mode: auto_complete::AutoCompleteVariant,
+    json: bool,
+    permission_mode: Option<&str>,
+    no_human: Option<auto_complete::NoHumanMode>,
+    escalate_mode: auto_complete::EscalateMode,
+    steal: bool,
+    force_claim: bool,
+    allow_stale_base: bool,
+    no_auto_rebase: bool,
+) -> Vec<String> {
+    let mut args = vec![
+        "queue".to_string(),
+        "work".to_string(),
+        spec.to_string(),
+        format!("--auto-complete={}", mode.slug()),
+    ];
+    if json {
+        args.push("--json".to_string());
+    }
+    if let Some(permission_mode) = permission_mode {
+        args.push("--permission-mode".to_string());
+        args.push(permission_mode.to_string());
+    }
+    if let Some(no_human) = no_human {
+        args.push(format!("--no-human={}", no_human.slug()));
+    }
+    if no_human == Some(auto_complete::NoHumanMode::Both) {
+        match escalate_mode {
+            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
+            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
+        }
+    }
+    if steal {
+        args.push("--steal".to_string());
+    }
+    if force_claim {
+        args.push("--force-claim".to_string());
+    }
+    if allow_stale_base {
+        args.push("--allow-stale-base".to_string());
+    }
+    if no_auto_rebase {
+        args.push("--no-auto-rebase".to_string());
+    }
+    args
+}
+
 impl RealBatchDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
+    // trace:BUG-1805 | ai:claude
     pub(crate) fn child_common_args(
         &self,
         spec: &str,
         mode: auto_complete::AutoCompleteVariant,
     ) -> Vec<String> {
-        let mut args = vec![
-            "queue".to_string(),
-            "work".to_string(),
-            spec.to_string(),
-            format!("--auto-complete={}", mode.slug()),
-        ];
-        if self.json {
-            args.push("--json".to_string());
-        }
-        if let Some(permission_mode) = &self.permission_mode {
-            args.push("--permission-mode".to_string());
-            args.push(permission_mode.clone());
-        }
-        if let Some(no_human) = self.no_human {
-            args.push(format!("--no-human={}", no_human.slug()));
-        }
-        match self.escalate_mode {
-            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
-            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
-        }
-        if self.steal {
-            args.push("--steal".to_string());
-        }
-        if self.force_claim {
-            args.push("--force-claim".to_string());
-        }
-        if self.allow_stale_base {
-            args.push("--allow-stale-base".to_string());
-        }
-        if self.no_auto_rebase {
-            args.push("--no-auto-rebase".to_string());
-        }
-        args
+        pipelined_child_common_args(
+            spec,
+            mode,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+        )
     }
 }
 
@@ -103080,44 +103122,24 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
 
 impl RealNextNDriver<'_> {
     // trace:STORY-1091 trace:ADR-28 | ai:codex
+    // trace:BUG-1805 | ai:claude
     pub(crate) fn child_common_args(
         &self,
         spec: &str,
         mode: auto_complete::AutoCompleteVariant,
     ) -> Vec<String> {
-        let mut args = vec![
-            "queue".to_string(),
-            "work".to_string(),
-            spec.to_string(),
-            format!("--auto-complete={}", mode.slug()),
-        ];
-        if self.json {
-            args.push("--json".to_string());
-        }
-        if let Some(permission_mode) = &self.permission_mode {
-            args.push("--permission-mode".to_string());
-            args.push(permission_mode.clone());
-        }
-        if let Some(no_human) = self.no_human {
-            args.push(format!("--no-human={}", no_human.slug()));
-        }
-        match self.escalate_mode {
-            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
-            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
-        }
-        if self.steal {
-            args.push("--steal".to_string());
-        }
-        if self.force_claim {
-            args.push("--force-claim".to_string());
-        }
-        if self.allow_stale_base {
-            args.push("--allow-stale-base".to_string());
-        }
-        if self.no_auto_rebase {
-            args.push("--no-auto-rebase".to_string());
-        }
-        args
+        pipelined_child_common_args(
+            spec,
+            mode,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+        )
     }
 }
 
