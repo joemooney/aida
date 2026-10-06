@@ -92,6 +92,74 @@ Where the project has a line ratchet (AIDA uses `scripts/check-portability.sh` w
 
 <!-- trace:STORY-1382 | ai:claude -->
 
+## Pre-review: spawn a skeptic, not a cheerleader
+
+Before handing a branch to the independent review gate, a spawned pre-review
+subagent is good practice — used correctly. The failure mode it exists to catch
+is the author's own: both PR-2424 refusal rounds (2026-10-04/05) turned on
+evidence the author already possessed and did not look at — a `fatal: empty
+ident name` line sitting directly above the hang in its own CI log, and a
+completed-red Build run at the head it then reported as green. A subagent
+pointed at the author's summary and asked to "verify my work" catches none of
+this; the one on PR-2424 ran 1 test of a 7,734-test suite and answered
+"Everything looks excellent!" while the head's CI run was already red.
+
+**The protocol:**
+
+- Hand the pre-reviewer the **spec and the current verdict file**, never your
+  own restatement of the acceptance criteria.
+- Prompt it adversarially — "find the reason this gets a request-changes" —
+  not confirmatively.
+- It must run its own evidence commands (the affected test targets at minimum;
+  the suite when the change is cross-cutting). An author's claim relayed
+  through a subagent is still an author's claim.
+- Its output is a **findings list** the author addresses or rebuts before
+  handoff. It is never an approval.
+- **Representation rule:** a subagent the author spawned is self-checking, not
+  independent review, and is never described as "independent" in a PR trail,
+  mail, or status report. The approving verdict comes from a seat the author
+  does not control. Independence is structural — a prompt not written by the
+  party under review, no authorship stake, an accountable recorded verdict —
+  not a property a capable subagent can supply from inside the author's
+  session.
+
+<!-- trace:TASK-1598 | ai:claude -->
+
+## CI is a verifier, not a debugger
+
+Letting CI be the first **full-workspace** build of a branch is a legitimate
+economy on this repo (the build is expensive; CI rebuilds anyway). Using CI to
+*probe* a failure is not. PR-2424 round 1 burned two 25-minute Build runs
+re-triggering a deterministic hang whose cause was printed in plain text in the
+first run's log; the Build check is a shared merge gate, so probe-pushes tax
+every open PR's merge latency, not just yours.
+
+**The rules:**
+
+1. `make check-ci-fast` before every push, no exceptions. It is ~90s and needs
+   no build; "I ran my own test file" does not substitute.
+2. A **new or changed test runs locally, targeted, before its first push** —
+   `cargo test -p <crate> <filter>` is cheap once anything has built, and the
+   cheap agent compile profile exists for exactly this. A test you have never
+   watched pass locally is not yet a test.
+3. **A red CI run is evidence to read, not a dice roll to re-throw.** Before
+   any re-trigger: read the failing step's log, state the cause hypothesis,
+   reproduce locally (or explain concretely why it cannot reproduce locally),
+   fix, then push. Re-triggering without a changed hypothesis is the named
+   anti-pattern.
+4. **Green claims cite the completed run at the head**, with the run link.
+   "check-ci-fast is clean" is a claim about check-ci-fast only; "tests are
+   green" means the workspace suite, and saying it while the head's Build run
+   is red is a verdict-level process finding
+   (absent-evidence-reads-as-good).
+
+Pairs with [[feedback_dont_brief_full_workspace_suite_per_agent]] (which tests
+run where, and why full-suite belongs at integration/CI) and
+[[feedback_verify_edits_landed_before_claiming_done]] (match CI's check scope,
+capture exit codes directly).
+
+<!-- trace:TASK-1598 | ai:claude -->
+
 ## The substrate-bouncer principle
 
 These rules are articulated here, but the substrate **enforces** them. That's the [substrate-as-bouncer principle](substrate-as-bouncer.md): when an invariant must hold against a confident LLM, ship a programmatic gate, not a rule in a doc. The doc tells you what's coming; the substrate makes sure you can't shortcut around it.
