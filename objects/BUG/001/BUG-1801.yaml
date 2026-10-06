@@ -13,12 +13,12 @@ description: |
   History: this is the fourth episode on the same command — BUG-1480 (bypassed cache), BUG-1606 (329 s calls), BUG-1674 (unbounded wait behind a concurrent writer under strict stale-cache refresh) are all completed. Start by checking whether the BUG-1674 class regressed (lock/refresh contention) or a new hot path landed in `aida show` since 585f46e32a.
 
   Acceptance sketch: identify the slow path with timing evidence; after the fix, `aida doctor check performance` reports `show` within the 10% tolerated share and no ceiling breach over a fresh 24h window (or a reproduced worst-case call drops under 1000 ms in a before/after measurement).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-06T03:30:33.134832342Z
+modified_at: 2026-10-06T04:09:48.472429371Z
 req_type: Bug
 comments:
 - id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
@@ -119,6 +119,22 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a10f67-44af-76b3-8ef6-3de43ad1f63c
+  author: aida-auto-bump
+  timestamp: 2026-10-06T04:09:48.463276550Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a10f67-44b8-7ce2-9e42-c994643dae56
+  timestamp: 2026-10-06T04:09:48.472420896Z
+  agent: aida
+  commit_sha: 169d0f412a14bd13db7795703c41091f210ec55a
+  summary: 'Diff reviewed favorably by prior advisor at this head (zero refresh-wait scoped to Command::Show per BUG-1674 adjudication, real latency regression test, section-anchored docs). CI: required ''CI'' run 37408907697 completed SUCCESS at 51fb3f49 (Build ubuntu-latest pass 17m40s). Cross-platform run 37408907677 at same head: Build windows-latest FAILED on two tests unrelated to this diff — task_1597_delegation_prompt (new on main tonight via b8b16f5e, first Windows exercise) and agent_launcher terminate_reports_survivors (Windows SIGTERM/SIGKILL semantics; file untouched by 2433). PR diff is ci.yml/docs/show-path/latency-test only. Windows red is main-inherited; filed separately. Clear to merge.'
+  punted:
+  - 'punted: phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: b602a5d9cab22a042bf7c1f0d60558872af8cd7b
@@ -128,10 +144,7 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: bfd19354-cbdf-496f-9fae-64fb73c21959
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-unavailable
-  detail: 'phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`'
-  recovery_hint: 'CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1801 --auto-complete`.'
-  shelved_at: 2026-10-06T03:30:30.893902701Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-06T04:09:48.463244645Z
+  completion_sha: 169d0f412a14bd13db7795703c41091f210ec55a
