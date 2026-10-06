@@ -3852,9 +3852,18 @@ pub(crate) fn run() -> Result<()> {
         .iter()
         .any(|s| s == "--notice" || s == "statusline" || s == "statusbar");
     let machine = raw_args.iter().any(|s| s == "--json" || s == "--toon") || agent_output_mode();
+    // A single-spec read must not inherit the 1500ms refresh wait or a
+    // terminal's inline full rebuild. Its object is read canonically; the
+    // existing snapshot labels disclose stale derived graph context.
+    // Strict mutations and explicit cache refresh keep their own policy.
+    // trace:BUG-1801 | ai:codex
+    let single_spec_read = matches!(&cli.command, Command::Show { .. });
     aida_core::db::cache_refresh::configure_read_policy(
-        std::io::IsTerminal::is_terminal(&std::io::stdout()) && !machine && !advisory,
-        advisory.then_some(aida_core::db::cache_refresh::ReadBudget(
+        std::io::IsTerminal::is_terminal(&std::io::stdout())
+            && !machine
+            && !advisory
+            && !single_spec_read,
+        (advisory || single_spec_read).then_some(aida_core::db::cache_refresh::ReadBudget(
             std::time::Duration::ZERO,
         )),
     );

@@ -52,6 +52,13 @@ Antigravity session communication semantics.
 
 ## Cache read behavior
 
+Single-spec `show` uses a zero refresh-wait budget on every CLI format,
+including human TTY output. It reads the canonical object and labels stale
+derived cache context; full rebuilds are delegated through the existing worker
+protocol. Explicit cache operations remain strict. See
+[latency regression](tests/test_show_latency.py).
+<!-- trace:BUG-1801 | ai:codex -->
+
 Compatible read snapshots use a single refresh flock and a shared bounded wait.
 Before the detached worker slice lands, non-TTY full-rebuild reads report
 `deferred`; a one-attempt incremental SQLite contention reports `writer_busy`.
