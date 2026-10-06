@@ -13,12 +13,12 @@ description: |
   3. The first run's results are committed as a dated snapshot (for example docs/positioning/YYYY-MM-DD-north-star-check-aida-monitor.md) with the exact commands, pins and model used, and linked from VIS-2 by comment.
   4. The check states its pass condition in the snapshot: VIS-2 is supported when the aggregate delta is positive and exceeds the run-to-run variance measured by at least two repeated runs.
   5. Re-running with the same pins reproduces the aggregate delta within the stated variance.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:14.072123334Z
-modified_at: 2026-10-06T02:42:37.087179521Z
+modified_at: 2026-10-06T02:43:31.234567794Z
 req_type: Task
 tags:
 - aida-monitor
@@ -102,6 +102,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10eee exited with code 1 after 16034ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1523` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1523 --force-claim` to take over here, or `aida edit TASK-1523 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1523 — the store reports TASK-1523 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
   created_at: 2026-10-06T01:59:03.528316840Z
   modified_at: 2026-10-06T01:59:03.528316840Z
+- id: 01a10f18-4522-7136-8d39-af10117f0ee3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f17 exited with code 1 after 13632ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1523` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1523 --force-claim` to take over here, or `aida edit TASK-1523 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1523 — the store reports TASK-1523 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
+  created_at: 2026-10-06T02:43:31.234563348Z
+  modified_at: 2026-10-06T02:43:31.234563348Z
 history:
 - id: 01a10eee-3f59-74fb-8c61-d65972c8abb3
   author: aida-orchestrator-phase1
@@ -138,11 +143,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a10f18-4522-7136-8d39-af0f095bf3c1
+  author: joe
+  timestamp: 2026-10-06T02:43:31.234547538Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drive
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: launch-refused
-  detail: 'phase 1 child session 01a10f17 exited with code 1 after 13632ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1523` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1523 --force-claim` to take over here, or `aida edit TASK-1523 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1523 — the store reports TASK-1523 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
-  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1523`.'
-  shelved_at: 2026-10-06T02:42:37.087179521Z
