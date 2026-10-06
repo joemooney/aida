@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:53:20.230961374Z
-modified_at: 2026-10-06T02:19:36.600714798Z
+modified_at: 2026-10-06T02:43:04.798982445Z
 req_type: Bug
 comments:
 - id: 01a10f02-6118-749b-a79c-7db2608eb04e
@@ -16,6 +16,12 @@ comments:
   content: 'THIRD occurrence, and it answers the open question: PR 2429''s implementer title was deliberately ID-free (''pure move, 57 lines''), yet ship squash-merged 2dc90ca with subject ending ''(SLICE-1 STORY-1488 TASK-1538)'' — and it rewrote the subject (dropped '', 57 lines''). Ship therefore scrapes spec-ID tokens from the PR BODY (and accepts non-spec tokens like SLICE-1, which is not a requirement at all), not just the title. Effects: TASK-1538 falsely Completed again (advisor force-reopened, 2nd time), STORY-1488 bumped Approved→Done (closure-hold tag stopped full completion; advisor reset to Approved). Mitigation guidance until fixed: NO spec-ID tokens anywhere ship can see — title OR body — on partial-work PRs; put the owning-spec reference in a PR comment instead. The implementer asked to know this before module 3: body references are NOT safe.'
   created_at: 2026-10-06T02:19:36.600714798Z
   modified_at: 2026-10-06T02:19:36.600714798Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a10f17-ddde-77e9-bb7f-d61c4a6383f1
+  author: joe
+  content: 'Persistence dimension: a force-reopen does NOT stick. The drain''s exit sweep re-processed merge 2dc90ca at 02:42Z and re-completed TASK-1538 (second false completion from the SAME commit) and re-bumped STORY-1488 to Done. Any trailer in main''s history re-fires on every sweep. Mitigation applied: closure:pending tag on TASK-1538 (the closure-hold gate demonstrably stopped STORY-1488 short of Completed). The fix must make trailer-completion idempotent against an explicit reopen: a spec reopened AFTER a commit''s completion was processed must not be re-completed by re-processing that same commit.'
+  created_at: 2026-10-06T02:43:04.798982445Z
+  modified_at: 2026-10-06T02:43:04.798982445Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 filed_at:
   code_sha: 4935a1fdf899399c62ce13e6142e034c5d1452e4
