@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T03:44:45.467207897Z
+modified_at: 2026-10-06T03:44:47.084835284Z
 req_type: Task
 tags:
 - ci
@@ -95,6 +95,57 @@ comments:
   created_at: 2026-10-06T03:40:05.616087926Z
   modified_at: 2026-10-06T03:40:05.616087926Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a10f50-5bec-70eb-bdde-8bfbc4184ff8
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work TASK-1588 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `no-pr`
+    - Seat: implementer
+    - Parent spec: TASK-1588
+    - Branch under test: main
+    - Commit under test: dafb66432e7a
+    - Recorded at: 2026-10-06T03:44:46.127721153+00:00
+
+    ### Failure
+
+    the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 3/3)
+
+    Failure kind: `no-pr`
+
+    ### Recovery hint shown to the operator
+
+    The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-1588 --resume 01a10f4c21f9`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T03:44:46.127721153+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 843510 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1588","started_at":"2026-10-06T03:30:38.405658498+00:00","completed_at":"2026-10-06T03:44:46.127721153+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"no-pr","failure_message":"the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 3/3)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":843510}],"total_ms":847029,"binary_sha":"62e3374e51"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1588 --title "drain phase 1 (implementer) failure on TASK-1588" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T03:44:47.084829226Z
+  modified_at: 2026-10-06T03:44:47.084829226Z
 history:
 - id: 01a104f8-50cb-7093-9110-7706defdfc60
   author: joe
