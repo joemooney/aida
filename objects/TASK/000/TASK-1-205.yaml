@@ -9,18 +9,33 @@ description: |-
 
   PR: #2420
   Reviewed sha: d345e6d37cb5913e5e86caab16fa1690c105d589
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-04T21:34:29.047618684Z
-modified_at: 2026-10-04T21:34:29.047618684Z
+modified_at: 2026-10-06T02:04:51.350500901Z
 req_type: Task
 tags:
 - carried-from:BUG-1799
 - finding-hash:f3a6df62
 - from-review:PR-2420
 - kind:carried-forward
+comments:
+- id: 01a10ef4-e05d-77bc-88b0-93e859ab69d3
+  author: joe
+  content: 'Promoted by joe 2026-10-06: Latent stamp-paths-passing-empty-findings sits in stamp_pr_review_verdict — review-integrity machinery, same cluster as BUG-1802. Routed to advisor, NOT implementer: the standing rule keeps this machinery out of the unattended drain; fold it into the BUG-1802 guided-lane session.'
+  created_at: 2026-10-06T02:04:51.350500901Z
+  modified_at: 2026-10-06T02:04:51.350500901Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+history:
+- id: 01a10ef4-e076-721c-aec8-fc8df987c6b2
+  author: joe
+  timestamp: 2026-10-06T02:04:51.702615712Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 35c8f323270e2f045c4372e568d8eb6b30273899
   branch: main
