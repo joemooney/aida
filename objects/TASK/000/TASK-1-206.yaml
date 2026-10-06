@@ -7,18 +7,33 @@ description: |-
 
   Ship instruction: TASK-1537 is Completed, so nothing defers trailer-driven completion — the squash-merge title of this and every slice-1 PR except the FINAL one must NOT end with the parenthesized (TASK-1538) trailer, or PR 0 of ~46 completes the spec. Reference the spec in the subject body instead; only the last module PR carries the completing trailer.
   Reviewed sha: 33f085472a1fb6001c68ad8102b76ab003f98c0a
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-05T15:29:44.433990004Z
-modified_at: 2026-10-05T15:29:44.433990004Z
+modified_at: 2026-10-06T02:04:48.720575561Z
 req_type: Task
 tags:
 - carried-from:TASK-1538
 - finding-hash:320c6196
 - from-review:TASK-1538
 - kind:carried-forward
+comments:
+- id: 01a10ef4-d514-734a-a340-a416b6b5c7ab
+  author: joe
+  content: 'Dismissed by joe 2026-10-06: Absorbed into TASK-1600 (root-cause bug: aida pr ship scrapes mid-title spec-ID tokens into completing trailers). The carried-forward ship instruction described the same trailer-driven-completion hazard; it bit twice (TASK-1538, then BUG-1802 via PR 2426) and now has its own high-priority spec rather than a per-PR note.'
+  created_at: 2026-10-06T02:04:48.720575561Z
+  modified_at: 2026-10-06T02:04:48.720575561Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+history:
+- id: 01a10ef4-d52e-704a-9d47-6f79ecacfcac
+  author: joe
+  timestamp: 2026-10-06T02:04:48.814934580Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 887bf7e5fba50ec5c510910ee5a3c2e472541d43
   branch: main
