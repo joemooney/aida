@@ -205,7 +205,8 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
 - **Branch:** `aida-store` on origin
 - **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; auto-rebuilt when the cache's recorded HEAD doesn't match the orphan's HEAD
-- **Sync:** `aida db sync --pull --push` (uses `git pull --rebase` under the hood for linear orphan history)
+- **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
+<!-- trace:TASK-1604 | ai:codex -->
 
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 

@@ -73453,6 +73453,7 @@ pub(crate) fn report_autostash_restore(
 // before recommending it, so a transient failure doesn't read as a
 // broken/corrupted store.
 // trace:BUG-1500 | ai:claude
+// trace:TASK-1604 | ai:codex
 pub(crate) fn store_pull_failure_hint(store_path: &std::path::Path, err_display: &str) -> String {
     if aida_core::git_ops::rebase_in_progress(store_path) {
         format!(
@@ -73464,8 +73465,9 @@ pub(crate) fn store_pull_failure_hint(store_path: &std::path::Path, err_display:
         )
     } else {
         format!(
-            "{}\n  This looks like a transient failure (e.g. network); \
-             the store is not mid-rebase. Re-run `aida pull` or `aida db sync --pull`.",
+            "{}\n  The store is not mid-rebase. Check the Git error above and resolve \
+             any ref/configuration or concurrent-writer problem before re-running \
+             `aida pull` or `aida db sync --pull`.",
             err_display
         )
     }
@@ -73891,8 +73893,28 @@ mod bug_1500_store_pull_hint_tests {
             !hint.contains("rebase --abort"),
             "hint should not advise `git rebase --abort` when no rebase is in progress: {hint}"
         );
-        assert!(hint.contains("transient failure"));
+        assert!(hint.contains("The store is not mid-rebase"));
         assert!(hint.contains("connection reset (502)"));
+    }
+
+    // trace:TASK-1604 | ai:codex
+    #[test]
+    fn deterministic_git_errors_are_not_labelled_transient() {
+        let tmp = tempfile::tempdir().unwrap();
+        for error in [
+            "fatal: Cannot rebase onto multiple branches",
+            "fatal: cannot lock ref HEAD: is at abc but expected def",
+            "store fetch failed: invalid refspec",
+        ] {
+            let hint = store_pull_failure_hint(tmp.path(), error);
+            assert!(hint.contains(error), "{hint}");
+            assert!(!hint.contains("transient"), "{hint}");
+            assert!(!hint.contains("rebase --abort"), "{hint}");
+            assert!(
+                hint.contains("ref/configuration or concurrent-writer"),
+                "{hint}"
+            );
+        }
     }
 
     // trace:BUG-1500 | ai:claude

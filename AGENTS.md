@@ -3,6 +3,12 @@ informational workflows do not delay shipping. Required checks override the
 informational allow-list; other unlisted failures still block the merge.
 <!-- trace:TASK-1331 | ai:codex -->
 
+Store pulls fetch one explicit branch into an invocation-private ref and rebase
+onto its resolved commit, leaving shared `FETCH_HEAD` untouched. Both plain and
+structural auto-merge paths use this helper; failures preserve the Git error
+without assuming a network problem. See [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
+<!-- trace:TASK-1604 | ai:codex -->
+
 Queue-done ownership accepts a requirement's stored origin ID after its display
 ID is remapped. Every recognized ID in a scoped branch must still belong to
 that requirement; unrelated branches cannot borrow origin-ID commit evidence.
