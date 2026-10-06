@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-06T03:15:41.380786817Z
+modified_at: 2026-10-06T03:19:11.066783114Z
 req_type: Bug
 comments:
 - id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
@@ -28,6 +28,11 @@ comments:
   created_at: 2026-10-06T01:36:58.788747893Z
   modified_at: 2026-10-06T01:36:58.788747893Z
   session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
+- id: 01a10f38-ebda-7f00-9e1d-760ec58ec7d4
+  author: joe
+  content: 'Reproduced the regression in an isolated one-spec store: show --no-git --format toon took 1562 ms while a foreign process held cache.db.refresh.lock (default 1500 ms read wait). Human TTY also inherits inline full rebuild before the bounded SQLite attempt. Implementing a show-only zero-wait/non-inline read policy using the existing labeled snapshot/worker protocol; canonical object lookup and strict explicit refresh remain unchanged. Regression covers TOON/JSON/human TTY, card/tree/UUID, full-rebuild delegation and strict refresh recovery.'
+  created_at: 2026-10-06T03:19:11.066783114Z
+  modified_at: 2026-10-06T03:19:11.066783114Z
 history:
 - id: 01a108d0-793d-740f-b515-b1e03b6167f3
   author: joe
