@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T04:53:53.681787565Z
-modified_at: 2026-10-06T16:20:54.804983353Z
+modified_at: 2026-10-06T16:24:05.699177154Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,6 +30,13 @@ relationships:
   target_id: 01a10f64-5515-72c3-9ebe-1d844112e65f
   created_at: 2026-10-06T04:53:58.071743288Z
   created_by: joe
+comments:
+- id: 01a11207-8743-7572-a1ac-6f5a6d1757f1
+  author: joe
+  content: 'Burn-down 2026-10-06: independent review APPROVED PR #2437 (verdict posted as PR comment). Merge is human-gated by supervised merge-hold — run: aida merge-hold clear 2437 && aida pr ship 2437, then mark this story completed.'
+  created_at: 2026-10-06T16:24:05.699177154Z
+  modified_at: 2026-10-06T16:24:05.699177154Z
+  session_id: 36e37eeb-41d2-4231-8a77-efe52f659ee7
 history:
 - id: 01a11204-9d94-7b30-8a3f-81f6ceea2255
   author: joe
