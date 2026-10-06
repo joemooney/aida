@@ -1,5 +1,6 @@
 id: 01a10f33-e880-7651-a41c-009855b7d535
 spec_id: TASK-1-214
+agreed_id: TASK-1323
 title: cache.db corrupted ('database disk image is malformed') at 2026-10-05 20:12 imm…
 description: 'cache.db corrupted (''database disk image is malformed'') at 2026-10-05 20:12 immediately after an aida pull that auto-completed BUG-1803/STORY-1523 and ran the auto-gate. aida cache rebuild itself failed on the corrupt file; remedy was mv cache.db aside then rebuild (4849 reqs reprojected, verify clean). Corrupt file preserved in session scratchpad 8440bd1e. Side effect: the reviewer seat''s picked queue (4 rows at session start) was emptied — specs unaffected. Suspect concurrent writers (2x aida mcp-serve live) during pull''s cache write.'
 status: Rejected
