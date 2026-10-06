@@ -17,12 +17,12 @@ description: |
 
   ## Verification
   Add or update deterministic workflow-contract tests for the weekly cron, Windows-only scheduled matrix, main-only manual guard, informational PR path, and issue lifecycle. Verify the Product reminder appears in `aida schedule due --seat product` after its interval is due. Run the Linux CI fast gates and the existing release freshness checks.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T03:15:09.467058661Z
+modified_at: 2026-10-06T03:16:06.950792455Z
 req_type: Task
 tags:
 - ci
@@ -47,6 +47,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a10f36-1ca6-750f-b429-7fbe20c6c9ee
+  author: aida-orchestrator
+  timestamp: 2026-10-06T03:16:06.950799511Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 593327e874cd2411aefe2db5b775eb05d3978519
@@ -55,3 +62,10 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 585f46e32a
   vendor: codex
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: launch-refused
+  detail: 'phase 1 child session 01a10f35 exited with code 1 after 30658ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1588` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1588 --force-claim` to take over here, or `aida edit TASK-1588 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1588 — the store reports TASK-1588 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1588`.'
+  shelved_at: 2026-10-06T03:16:06.950792455Z
