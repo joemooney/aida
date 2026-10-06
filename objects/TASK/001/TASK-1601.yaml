@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:19:54.480530782Z
-modified_at: 2026-10-06T13:08:22.975210997Z
+modified_at: 2026-10-06T13:08:46.945014559Z
 req_type: Task
 relationships:
 - rel_type:
@@ -84,6 +84,14 @@ comments:
     The shell comment attempt failed before the edit because the canonical store write lock is outside this session's writable roots; recording through the available MCP connector instead.
   created_at: 2026-10-06T13:08:22.975187577Z
   modified_at: 2026-10-06T13:08:22.975187577Z
+- id: 01a11154-b6e1-7360-92c6-5990f51865c6
+  author: mcp
+  content: |-
+    CI recovery fix is ready in /home/joe/ai/aida-worktrees/aida-task-1601: scripts/ci-gate-tiers.toml now classifies Check aida-cli without default features as fast with trace:TASK-1601. Validation passed: all 45 gates classified by scripts/check-ci-gates.py --audit; fast-tier list selects the step; workflow command parity and removal mutation reproduce the original missing-gate failure; cargo fmt --all -- --check; scripts/check-docs-guards-scheduled.py; git diff --check. Original Ubuntu run 37429444950 confirms no-default-features cargo check passed in 43.81 seconds and the only failing workspace test was missing gate classification.
+
+    Publication blocked by this execution environment: git add cannot create /home/joe/ai/aida/.git/worktrees/aida-task-1601/index.lock (read-only file system). No new commit or push was possible. Patch also saved at /tmp/task-1601-ci-classification.patch. Leave TASK-1601 In Progress until the fix is committed and pushed to existing PR #2441. Suggested commit: [AI:codex] fix(ci): classify feature-disabled check in fast tier (TASK-1601). Independent merge hold is still active and needs advisor review.
+  created_at: 2026-10-06T13:08:46.945009151Z
+  modified_at: 2026-10-06T13:08:46.945009151Z
 history:
 - id: 01a10f72-031f-7951-aa0c-ca052524d29b
   author: joe
