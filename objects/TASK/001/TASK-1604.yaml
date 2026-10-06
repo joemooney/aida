@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:17:44.663524239Z
-modified_at: 2026-10-06T07:46:55.038837731Z
+modified_at: 2026-10-06T11:01:56.513160595Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -22,6 +22,12 @@ comments:
   content: Implemented explicit single-branch fetch to a UUID-scoped temporary ref with --no-write-fetch-head; resolve a commit SHA, clean up the ref, and use that SHA in both plain and structural auto-merge rebase paths. Existing configured tracking-ref updates and rebase conflict/abort behavior are retained. Local remote.origin.fetch has only the standard wildcard, so duplicate refspec was not confirmed as root cause; shared FETCH_HEAD is eliminated regardless. Failure hint now preserves the Git error without diagnosing every non-rebase failure as transient. Regression uses overlapping configured mappings, two FETCH_HEAD entries, and an intervening code fetch. Separate concurrent sync staging/commit/rebase lock gap captured as draft finding TASK-1-225.
   created_at: 2026-10-06T07:26:55.496959136Z
   modified_at: 2026-10-06T07:26:55.496959136Z
+- id: 01a110e0-96a1-7601-b059-ef9bad119e5d
+  author: joe
+  content: 'Advisor: when reworking PR 2442, fold in finding TASK-1-225 (store sync pre-commit and rebase need the existing writer lock) — it is the concurrency half of this bug; the refspec pin alone will not stop the drift (hub-drift guard tripped twice tonight: reconciled unions 27cf62a9 and ec51faf0). Leave TASK-1-225 unpromoted if 2442''s rework covers it; dismiss it then.'
+  created_at: 2026-10-06T11:01:56.513160595Z
+  modified_at: 2026-10-06T11:01:56.513160595Z
+  session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
 history:
 - id: 01a10f71-fe1a-71e3-a955-24c71c7b3075
   author: joe
