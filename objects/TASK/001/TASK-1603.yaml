@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T13:38:03.950678344Z
+modified_at: 2026-10-06T13:43:40.802120024Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -29,6 +29,12 @@ comments:
   created_at: 2026-10-06T08:57:57.253511774Z
   modified_at: 2026-10-06T08:57:57.253511774Z
   session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+- id: 01a11174-aa02-7ce3-9b92-a9ddd51d9086
+  author: joe
+  content: 'Two more instances, 2026-10-06 morning (binary cd1aa53848): (1) The aborted 06:38 interactive next4 launch (BUG-1805 escalate-flag crash) bumped TASK-1603 Approved→InProgress then died before saving a lease — leaving THIS spec stuck InProgress-no-lease, so the 06:40 headless wave skipped the race fix and selected around it. Recovery: aida edit TASK-1603 --status approved, requeue top. (2) The 06:40 wave''s first member TASK-1322 reproduced the race exactly as described: child logged ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'', fell back to interactive rules, and refused InProgress-no-lease — and the refusal was keyed on the ORIGIN ALIAS (scope TASK-1-215, anchor TASK-1322), supporting the alias-ID hypothesis in comment 3 (cross-ref TASK-1328). Second member TASK-1328 launched fine (''claiming it anyway''), consistent with first-member-only timing. Victim count this week: 4.'
+  created_at: 2026-10-06T13:43:40.802120024Z
+  modified_at: 2026-10-06T13:43:40.802120024Z
+  session_id: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
