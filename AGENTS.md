@@ -12,6 +12,11 @@ exit 0 does not establish vendor success. See [launch investigation](docs/testin
 and TASK-1-224 for the authority-root repair awaiting triage.
 <!-- trace:TASK-1327 | ai:codex -->
 
+Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
+workspace build so feature-disabled stubs stay buildable. This check-only guard
+uses the existing full-CI filter and skips docs-only changes.
+<!-- trace:TASK-1601 | ai:codex -->
+
 Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
 manual dispatches fail before validation. Selected-path Windows PR checks stay
 informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain

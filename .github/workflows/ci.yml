@@ -125,6 +125,13 @@ jobs:
           elapsed=$(( $(date +%s) - start ))
           echo "::notice::Cross-target cargo check completed in ${elapsed}s"
 
+      # Check the feature-disabled stubs separately: a workspace build can
+      # unify the TUI feature back in and hide errors in those branches.
+      # Check-only keeps this guard in the fast tier. trace:TASK-1601 | ai:codex
+      - name: Check aida-cli without default features
+        if: steps.changes.outputs.full_ci == 'true'
+        run: cargo check -p aida-cli --no-default-features
+
       - name: Build all packages
         if: steps.changes.outputs.full_ci == 'true'
         # TASK-1204: compile the PR drain path once in the dev profile. The
