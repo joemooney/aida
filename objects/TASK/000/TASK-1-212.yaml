@@ -6,18 +6,33 @@ description: |-
 
   Process: the 'independent reviewer subagent' was spawned by the author and ran only the one new test — that is self-review, not independent review, and its green claim contradicted the head's actual CI run (Build FAILURE completed 04:34Z before the claim was made). The fresh APPROVED verdict comes from the advisor seat reviewing the head; do not represent subagent output as independent verification, and never claim tests/CI are green without the head's completed run as evidence.
   Reviewed sha: eda8fafcd66671a12214e46d9f8c71f2b5d44317
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:42:14.473744250Z
-modified_at: 2026-10-06T02:42:14.473744250Z
+modified_at: 2026-10-06T02:43:57.583985827Z
 req_type: Task
 tags:
 - carried-from:TASK-1597
 - finding-hash:38c866f8
 - from-review:TASK-1597
 - kind:carried-forward
+comments:
+- id: 01a10f18-ac18-7354-932d-9aef0f86d919
+  author: joe
+  content: 'Dismissed by joe 2026-10-06: Addressed structurally: BUG-1802 discipline landed (PR 2426/2427 prose + pending substrate fix), and PR-2424''s final approval was an independent advisor review at head, not author-side subagent output.'
+  created_at: 2026-10-06T02:43:57.583985827Z
+  modified_at: 2026-10-06T02:43:57.583985827Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+history:
+- id: 01a10f18-ac30-7401-9bed-7e63f392f6ed
+  author: joe
+  timestamp: 2026-10-06T02:43:57.616046933Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 2ab2b58d01cda563730a510301298719688a9b81
   branch: main
