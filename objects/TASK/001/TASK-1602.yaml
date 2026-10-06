@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:43:51.039322739Z
-modified_at: 2026-10-06T14:18:34.369175919Z
+modified_at: 2026-10-06T16:02:27.012391316Z
 req_type: Task
 relationships:
 - rel_type:
@@ -83,6 +83,19 @@ comments:
   content: 'Delivered commit 2747ca024040 on task-1602 and PR https://github.com/joemooney/aida/pull/2444. Validation complete: 107 ship unit tests and 6 CLI regressions passed, including real-TTY versus managed-TTY behavior; cargo fmt --all -- --check and git diff --check passed. Queue item marked Done and removed. PR remains open for independent review; Ubuntu Build and merge-hold-gate were queued at handoff. No CI callback wait or direct headless merge attempted.'
   created_at: 2026-10-06T13:52:33.767948742Z
   modified_at: 2026-10-06T13:52:33.767948742Z
+- id: 01a111f3-b644-7261-8a1c-af69ade3356a
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, from .aida/review-verdicts/PR-2444.json, verdict RequestChanges at 2747ca024040). Both findings were REPRODUCED by the reviewer with the PR-head binary (evidence: PR-2444-review.md, PR-2444-merged-wait.txt, PR-2444-run-mismatch.txt). Fix on branch task-1602 / PR 2444, no replacement spec.
+
+    P2-1 — Stale already_merged across --wait. pr_cmd.rs ~1924-1977: already_merged is captured before the wait; if the owning drive merges during the wait, ship proceeds to watch CI and attempt a second merge — exiting 1 on red checks for a PR that is already merged, or on green checks claiming THIS run shipped it. Required: reprobe PR metadata after the wait releases and route into the existing already-merged sync/cleanup path. Evidence of done: OPEN→MERGED wait coverage asserting no CI watch, no merge call, and no claimed merge act.
+
+    P2-2 — Sibling run UUID attributed to the owner. pr_ship.rs ~77-89 prints state.run_uuid as the owning run merely because `current` equals the member spec; under pipelined overlap (set_run(B) then set_phase for A) it prints A with B's run UUID. Required: correlate run identity to the owning spec, or print "unavailable/uncorroborated" — never a sibling's UUID. Evidence of done: overlap-interleaving coverage.
+
+    Note: P2-2's root is the same shared-run_uuid design flaw as PR-2445 finding 2 (TASK-1603 P1-2). If TASK-1603's rework lands per-run ownership tokens first, rebase onto it and P2-2 may reduce to reading the correct token — coordinate via the store, don't duplicate the mechanism.
+  created_at: 2026-10-06T16:02:27.012391316Z
+  modified_at: 2026-10-06T16:02:27.012391316Z
+  session_id: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
 history:
 - id: 01a10f72-0aa0-7513-a223-e328f25b5822
   author: joe
