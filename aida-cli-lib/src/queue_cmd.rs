@@ -8291,7 +8291,11 @@ pub(crate) fn handle_queue_rework(
                     // (Completed -> InProgress is `rework_smart_target`'s
                     // default) — clear the stale completed_at so the next
                     // completion stamps a fresh date. trace:TASK-1477 | ai:claude
-                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                    crate::completion::record_reopen(
+                        r,
+                        &current_status,
+                        Some(&requeue_project_root(storage)),
+                    );
                 })?;
                 if let Some(actual) = moved_to {
                     anyhow::bail!(

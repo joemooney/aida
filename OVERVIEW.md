@@ -196,6 +196,25 @@ Each clone of an AIDA-using project gets a unique **node id** and writes its ide
 - **`[id_format]` policy** in `.aida/config.toml`: `node-aware-only` | `blocks-then-fallback` (default) | `blocks-only`.
 - **`aida init` post-clone bootstrap**: when origin already has the `aida-store` branch, `aida init` fetches it, sets up the worktree, and prompts for node-id acquisition.
 
+### Completion intent and deliberate reopen
+
+`aida pr ship` derives completion credit from an explicit trailing title group,
+then branch-name recovery, and accepts only IDs that resolve unambiguously in
+the canonical store. References in title prose and PR bodies remain descriptive;
+a partial-work PR with a neutral branch can ship without completing its owner.
+When a title is present, an older branch-head trailer cannot supply missing
+credits. When the title is empty, the branch-head subject supplies the title.
+
+Status edits and CLI/MCP rework record the code-repository HEAD when a spec
+leaves Done or Completed for further work. Live auto-bump and manual
+`reconcile-status` reject commits equal to or ancestral to that reopen marker,
+including closure-held landings and review propagation. A new later commit
+may complete the spec. `completion_sha` remains independent: it is retained
+across reopen, while the stale completion date is cleared. The marker is
+best-effort if the code repository is unavailable; existing squash-body
+constituent commit trailers still participate in the landing scan.
+<!-- trace:TASK-1600 | ai:codex -->
+
 ### Surfaces
 
 - **CLI (`aida`)** — primary work surface. Embeds the MCP server (`aida mcp-serve`).

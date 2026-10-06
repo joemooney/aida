@@ -3580,7 +3580,8 @@ fn auto_bump_holds_done_spec_at_done_while_blocker_unresolved() {
     assert!(!apply_closure_hold(
         &mut again,
         &holds[0],
-        chrono::Utc::now()
+        chrono::Utc::now(),
+        &project_root
     ));
 }
 
@@ -4048,4 +4049,303 @@ fn auto_bump_required_still_holds_and_met_stretch_writes_no_debt() {
         .comments
         .iter()
         .any(|c| c.content.contains(STRETCH_DEBT_MARKER)));
+}
+
+// trace:TASK-1600 | ai:codex
+#[test]
+fn task_1600_reopen_survives_live_and_reconcile_sweeps_then_accepts_later_commit() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let spec_id = seed_done_spec(&store_path, "TASK-91600");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: first ({spec_id})"),
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    assert!(has_flip(
+        &auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap(),
+        &spec_id
+    ));
+
+    // A second completion preserves the first completion_sha (absent-only).
+    // Thus BUG-410's equality guard alone misses this most recent merge.
+    let mut store = storage.load().unwrap();
+    let req = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(&spec_id))
+        .unwrap();
+    let prior = req.status.clone();
+    req.set_status_from_str("Approved");
+    completion::record_reopen(req, &prior, Some(&project_root));
+    storage.save(&store).unwrap();
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: second ({spec_id})"),
+        ],
+    );
+    assert!(has_flip(
+        &auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap(),
+        &spec_id
+    ));
+    let latest = aida_core::git_ops::head_sha(&project_root).unwrap();
+
+    let mut store = storage.load().unwrap();
+    let req = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(&spec_id))
+        .unwrap();
+    assert_ne!(
+        req.implementation_info
+            .as_ref()
+            .unwrap()
+            .completion_sha
+            .as_deref(),
+        Some(latest.as_str())
+    );
+    let prior = req.status.clone();
+    req.set_status_from_str("Approved");
+    completion::record_reopen(req, &prior, Some(&project_root));
+    assert_eq!(
+        req.implementation_info
+            .as_ref()
+            .unwrap()
+            .reopened_at_sha
+            .as_deref(),
+        Some(latest.as_str())
+    );
+    assert!(req
+        .implementation_info
+        .as_ref()
+        .unwrap()
+        .completed_at
+        .is_none());
+    storage.save(&store).unwrap();
+
+    // Scan the entire window, not just an empty post-reopen range.
+    assert!(!has_flip(
+        &auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap(),
+        &spec_id
+    ));
+    handle_db_reconcile_status(&store_path, None, Some(&spec_id), true).unwrap();
+    handle_db_reconcile_status(&store_path, None, Some(&spec_id), false).unwrap();
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id(&spec_id)
+            .unwrap()
+            .status,
+        RequirementStatus::Approved
+    );
+
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: genuinely later ({spec_id})"),
+        ],
+    );
+    assert!(has_flip(
+        &auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap(),
+        &spec_id
+    ));
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id(&spec_id)
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+}
+
+// trace:TASK-1600 | ai:codex
+#[test]
+fn task_1600_done_reopen_does_not_reland_at_done_under_closure_hold() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let spec_id = seed_spec_at(&store_path, "TASK-91601", "Done");
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: partial ({spec_id})"),
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    let mut store = storage.load().unwrap();
+    let req = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(&spec_id))
+        .unwrap();
+    req.tags.insert("closure:pending".into());
+    let prior = req.status.clone();
+    req.set_status_from_str("Approved");
+    completion::record_reopen(req, &prior, Some(&project_root));
+    assert!(req
+        .implementation_info
+        .as_ref()
+        .unwrap()
+        .completion_sha
+        .is_none());
+    storage.save(&store).unwrap();
+    assert!(
+        auto_bump_done_to_completed(&project_root, &store_path, None, &storage)
+            .unwrap()
+            .is_empty()
+    );
+    handle_db_reconcile_status(&store_path, None, Some(&spec_id), false).unwrap();
+    let after = storage.load().unwrap();
+    let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+    assert_eq!(req.status, RequirementStatus::Approved);
+    assert!(req
+        .comments
+        .iter()
+        .all(|c| !c.content.contains(CLOSURE_HOLD_MARKER)));
+}
+
+// trace:TASK-1600 | ai:codex
+#[test]
+fn task_1600_reopen_guard_checks_fresh_copy_and_ancestor_evidence() {
+    let (_tmp, root, _) = init_test_project();
+    let old_sha = aida_core::git_ops::head_sha(&root).unwrap();
+    run_git(&root, &["commit", "--allow-empty", "-m", "new tip"]);
+    let reopen_sha = aida_core::git_ops::head_sha(&root).unwrap();
+    for prior in [RequirementStatus::Done, RequirementStatus::Completed] {
+        for target in ["Draft", "Approved", "InProgress", "Done"] {
+            if prior == RequirementStatus::Done && target == "Done" {
+                continue;
+            }
+            let mut req = Requirement::new("reopened".into(), String::new());
+            req.status = prior.clone();
+            req.set_status_from_str(target);
+            completion::record_reopen(&mut req, &prior, Some(&root));
+            assert_eq!(
+                req.implementation_info
+                    .as_ref()
+                    .unwrap()
+                    .reopened_at_sha
+                    .as_deref(),
+                Some(reopen_sha.as_str())
+            );
+            assert!(auto_bump_evidence_is_stale(&root, &req, &old_sha));
+            assert!(auto_bump_evidence_is_stale(&root, &req, &reopen_sha));
+            let flip = AutoBumpFlip::new("TASK-91602".into(), old_sha.clone(), req.status.clone());
+            assert!(!apply_auto_bump_flip(
+                &mut req,
+                &flip,
+                chrono::Utc::now(),
+                &root
+            ));
+            assert!(!apply_stale_review_flip(
+                &mut req,
+                &old_sha,
+                2429,
+                chrono::Utc::now(),
+                &root
+            ));
+        }
+    }
+    let mut req = Requirement::new("forward progress".into(), String::new());
+    req.status = RequirementStatus::Completed;
+    completion::record_reopen(&mut req, &RequirementStatus::Done, Some(&root));
+    assert!(req.implementation_info.is_none());
+}
+
+// trace:TASK-1600 | ai:codex
+#[test]
+fn task_1600_cli_status_edit_stamps_reopen_from_completed_and_done() {
+    let (_tmp, root, store_path) = init_test_project();
+    let storage = Storage::new(&store_path);
+    let head = aida_core::git_ops::head_sha(&root).unwrap();
+    for prior in ["Completed", "Done"] {
+        let id = seed_spec_at(
+            &store_path,
+            &format!("TASK-{}", if prior == "Done" { 91604 } else { 91603 }),
+            prior,
+        );
+        edit_requirement_cli(
+            &storage,
+            &id,
+            &None,
+            &None,
+            &Some("Approved".into()),
+            &None,
+            &None,
+            &None,
+            &None,
+            &None,
+            &[],
+            &[],
+        )
+        .unwrap();
+        let store = storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(
+            req.implementation_info
+                .as_ref()
+                .unwrap()
+                .reopened_at_sha
+                .as_deref(),
+            Some(head.as_str())
+        );
+    }
+}
+
+// trace:TASK-1600 | ai:codex
+#[test]
+fn task_1600_reopened_review_and_closure_hold_cannot_override_fresh_copy() {
+    let (_tmp, root, store_path) = init_test_project();
+    let id = seed_spec_at(&store_path, "TASK-91605", "Done");
+    let storage = Storage::new(&store_path);
+    let mut store = storage.load().unwrap();
+    let req = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+        .unwrap();
+    req.tags.insert("closure:pending".into());
+    let sha = aida_core::git_ops::head_sha(&root).unwrap();
+    let mut flips = vec![AutoBumpFlip::new(id, sha, RequirementStatus::Done)];
+    let holds = split_closure_held_flips(&store, &mut flips);
+    assert_eq!(holds.len(), 1);
+    let mut req = store.requirements[0].clone();
+    let prior = req.status.clone();
+    req.set_status_from_str("Approved");
+    completion::record_reopen(&mut req, &prior, Some(&root));
+    assert!(!apply_closure_hold(
+        &mut req,
+        &holds[0],
+        chrono::Utc::now(),
+        &root
+    ));
+    let resolution = StrandedReviewPrResolution {
+        spec_id: "TASK-91605".into(),
+        pr_n: 2429,
+        outcome: StrandedReviewPrOutcome::Merged,
+    };
+    assert!(!apply_stranded_review_pr_resolution(
+        &mut req,
+        &resolution,
+        chrono::Utc::now()
+    ));
+    assert_eq!(req.status, RequirementStatus::Approved);
+    assert!(req.comments.is_empty());
 }

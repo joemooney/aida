@@ -2711,7 +2711,7 @@ pub(crate) fn pr_ship_handler(
     }
 
     // STORY-439: ship-side calibration capture. Resolve every spec the PR
-    // credits (title → branch → body, the same precedence the squash
+    // credits (explicit title trailer → branch, the same precedence the squash
     // subject repair already uses) and write a ship slot per spec — the
     // implementer's self-assessed complexity + the punt count
     // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
@@ -2727,8 +2727,16 @@ pub(crate) fn pr_ship_handler(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
-        let spec_ids =
-            pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        // Use the same store-qualified completion intent as the squash subject.
+        // trace:TASK-1600 | ai:codex
+        let spec_ids = Storage::new(main_worktree.join(".aida-store"))
+            .load()
+            .map(|store| {
+                pr_ship::derive_squash_subject_spec_ids_resolving(&pr_meta.title, &branch, |id| {
+                    matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
+                })
+            })
+            .unwrap_or_default();
         pr_merged_spec_ids = spec_ids.clone();
         for spec in &spec_ids {
             let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
@@ -3525,16 +3533,17 @@ pub(crate) fn derive_pr_ship_squash_subject(
         )
     })?;
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
-    let normalized = pr_ship::derive_squash_subject(&pr.title, branch, &pr.body, &commit_msg)
+    // A store read is required before granting an ID completion authority.
+    // trace:TASK-1600 | ai:codex
+    let store_root = main_worktree_root_from(project_root);
+    let store = Storage::new(store_root.join(".aida-store")).load()?;
+    let normalized =
+        pr_ship::derive_squash_subject_resolving(&pr.title, branch, &pr.body, &commit_msg, |id| {
+            matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
+        })
         .unwrap_or_default();
     if normalized.is_empty() {
         return Ok(None);
-    }
-    if pr_ship::extract_trailing_spec_ids_from_subject(&normalized).is_empty() {
-        anyhow::bail!(
-            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, PR body, or branch head: `{}`",
-            normalized
-        );
     }
     if normalized == current_subject {
         Ok(None)
