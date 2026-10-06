@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T13:14:59.835132920Z
+modified_at: 2026-10-06T13:15:26.214680109Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -88,6 +88,11 @@ comments:
   content: 'Rework pickup against PR-2440 RequestChanges verdict at /home/joe/ai/aida/.aida/review-verdicts/PR-2440.json: restored non-GitHub failed-watcher row refinement in pr_ship_handler, preserving the coarse failure when rows are unavailable. Added GitLab command-level regressions for informational_checks, informational_workflows, unlisted failures, and unavailable rows. Classifier unit tests: 14 passed. Integration validation still running. Commit/push currently blocked: sandbox rejects creating /home/joe/ai/aida/.git/worktrees/aida-task-1-223/index.lock (read-only filesystem). Full working-tree patch saved at /tmp/task-1331-rework.patch. Spec remains In Progress; PR hold and review verdict unchanged.'
   created_at: 2026-10-06T13:14:59.835099264Z
   modified_at: 2026-10-06T13:14:59.835099264Z
+- id: 01a1115a-ce86-7bc1-a374-00e4aad97b8f
+  author: mcp
+  content: 'Rework validation complete: cargo test -p aida-cli --test task_1287_label_only_merge_hold — 7 passed; cargo test -p aida-cli-lib --lib ci_gate::tests — 14 passed; cargo fmt --all -- --check and git diff HEAD --check passed. New GitLab cases prove failed watcher precedes job-row classification, informational check/workflow failures permit merge, and unlisted failures or unavailable rows prohibit merge. Full validated changes remain in /home/joe/ai/aida-worktrees/aida-task-1-223 and /tmp/task-1331-rework.patch. Cannot stage/commit/push because this sandbox cannot write the parent repository Git index. TASK-1331 remains In Progress and PR-2440 still awaits a pushed fix and independent re-review; no clearance or merge performed.'
+  created_at: 2026-10-06T13:15:26.214664410Z
+  modified_at: 2026-10-06T13:15:26.214664410Z
 history:
 - id: 01a10fe4-0d4f-79c1-8513-6e746727c009
   author: joe
