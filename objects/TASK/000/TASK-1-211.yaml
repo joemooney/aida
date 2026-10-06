@@ -1,0 +1,27 @@
+id: 01a10f17-16b4-71f7-bb72-b50edd50c4fa
+spec_id: TASK-1-211
+title: 'Same CI run, earlier in the Run tests step: ''failed to run custom build command…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1597, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Same CI run, earlier in the Run tests step: 'failed to run custom build command for ring/libsqlite3-sys — cc-rs: failed to find tool lib.exe' (04:25Z, exit 101). Determine whether this is caused by the portable-pty dependency addition reaching a Windows cross-target check, or a stale toolchain cache flake (the step carries BUG-103 workarounds). Compare against main's latest green Build. Do not report the PR green until a full Build run at the head is green end to end, with the run link cited.
+  Reviewed sha: eda8fafcd66671a12214e46d9f8c71f2b5d44317
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T02:42:13.812681221Z
+modified_at: 2026-10-06T02:42:13.812681221Z
+req_type: Task
+tags:
+- carried-from:TASK-1597
+- finding-hash:9ee98c66
+- from-review:TASK-1597
+- kind:carried-forward
+filed_at:
+  code_sha: 2ab2b58d01cda563730a510301298719688a9b81
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
