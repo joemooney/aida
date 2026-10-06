@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:11:17.070084250Z
-modified_at: 2026-10-06T13:47:04.490797404Z
+modified_at: 2026-10-06T13:47:05.374347424Z
 req_type: Task
 tags:
 - from-advisor:TASK-1324
@@ -147,3 +147,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T13:47:04.490797404Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - queue done accepts the stored origin ID after a requirement display ID remapping, preserving original branch ownership.
