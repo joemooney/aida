@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T04:11:25.349854133Z
+modified_at: 2026-10-06T05:47:55.360781284Z
 req_type: Task
 tags:
 - ci
@@ -162,6 +162,58 @@ comments:
   content: 'Implemented ADR-65 weekly Sunday 06:00 UTC Windows validation with latest-main checkout and a visible non-main dispatch refusal before matrix/live-smoke/sweep work. Preserved informational selected-path PR checks and tracking label; existing red issues migrate title/body to weekly wording. Added enabled daily Product reminder and updated orientation/release docs. Verification: workflow shell/issue lifecycle/stale-green release regression passed; existing portable-date and no-runs release tests passed; make check-ci-fast passed all 20 gates (including cargo fmt --all -- --check). GitHub protection confirmed exactly Build (ubuntu-latest) and merge-hold-gate. Isolated CLI fixture confirmed reminder not due at 1h and due at 25h. Installed CLI cannot parse the pre-existing merged-worktrees-guard entry, so fixture used the actual new reminder in an isolated registry; no global runtime changed.'
   created_at: 2026-10-06T04:10:44.861093698Z
   modified_at: 2026-10-06T04:10:44.861093698Z
+- id: 01a10fc1-1860-7992-8435-e21c3acd2793
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 2 (ci)
+
+    Recorded by `aida queue work TASK-1588 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 2 (ci) · kind `ci-unavailable`
+    - Seat: ci (session role: advisor)
+    - Parent spec: TASK-1588
+    - Branch under test: main
+    - Commit under test: 51fe64d5e964
+    - Recorded at: 2026-10-06T05:47:54.738371005+00:00
+
+    ### Failure
+
+    CI state unavailable: CI wait hit absolute ceiling (90m) — giving up
+
+    Failure kind: `ci-unavailable`
+
+    ### Recovery hint shown to the operator
+
+    CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work TASK-1588 --auto-complete`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T05:47:54.738371005+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 701923 ms
+      - phase 2 (ci): 5422219 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1588","started_at":"2026-10-06T04:05:47.513524796+00:00","completed_at":"2026-10-06T05:47:54.738371005+00:00","outcome":"failed","variant":"through-ci","failed_phase":2,"failure_kind":"ci-unavailable","failure_message":"CI state unavailable: CI wait hit absolute ceiling (90m) — giving up","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":701923},{"phase":2,"slug":"ci","elapsed_ms":5422219}],"total_ms":6127214,"binary_sha":"dafb66432e"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1588 --title "drain phase 2 (ci) failure on TASK-1588" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T05:47:55.360773981Z
+  modified_at: 2026-10-06T05:47:55.360773981Z
 history:
 - id: 01a104f8-50cb-7093-9110-7706defdfc60
   author: joe
