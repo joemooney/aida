@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1803",
+  "publishes": [
+    {
+      "at": "2026-10-06T03:11:36.729898433Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-05T06:50:09.951382472Z",
+      "spec": "BUG-1803",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:57:41.614292828Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10eee-5068-7568-ba6d-8953bdf05a80",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:57:45.824348456Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10eee-5068-7568-ba6d-8953bdf05a80",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:16:37.301500506Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:20:31.789169531Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T02:20:59.167814296Z",
+      "spec": "BUG-1803",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2431
+      }
+    },
+    {
+      "ts": "2026-10-06T02:21:02.234591554Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10f03-af94-72a9-a3a6-b2d97321aa20",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:21:03.368196074Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10f03-af94-72a9-a3a6-b2d97321aa20",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:21:05.252169843Z",
+      "spec": "BUG-1803",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2431,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e2034bd741a8549064810afe32143f41e403b873"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:21:42.670571130Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10f03-af94-72a9-a3a6-b2d97321aa20",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T02:21:43.665102608Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10f03-af94-72a9-a3a6-b2d97321aa20",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:24:09.449056652Z",
+      "spec": "BUG-1803",
+      "run_uuid": "01a10f03-af94-72a9-a3a6-b2d97321aa20",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T02:41:55.668138150Z",
+      "spec": "BUG-1803",
+      "kind": {
+        "event": "AdvisorEscalated",
+        "reason": "BUG-1803 is marked unset (supervised) — auto-merge refused; merge requires human/advisor review"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:41:55.691504165Z",
+      "spec": "BUG-1803",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2431
+      }
+    },
+    {
+      "ts": "2026-10-06T02:44:41.035913730Z",
+      "spec": "BUG-1803",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T03:11:30.206818746Z",
+      "spec": "BUG-1803",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2431,
+        "verdict": "APPROVED",
+        "reviewed_sha": "02e06981a6eec4c93c999262a7c14ba9d10229e5"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:11:36.722132018Z",
+      "spec": "BUG-1803",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a0ca7c41988cf3b3d3fafa181983c673f64946a8",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
