@@ -1,0 +1,20 @@
+id: 01a10ee5-ab27-709f-a254-24e5e28b83c9
+spec_id: BUG-1804
+agreed_id: BUG-1804
+title: tick_bounds_global_schedule_log test races other writers of the global schedule-tick.log under parallel cargo test
+description: 'Observed 2026-10-05 in a full ''cargo test --workspace'' run: maintenance_schedule::tests::tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation panicked (''a non-hook tick must bound the log: 526186 bytes'') but passes in isolation (0.04s). The test asserts bounding of a GLOBAL log (~/.aida/schedule-tick.log) that other tests and live shift timers append to concurrently; under parallel test execution the log can grow between the tick and the assertion. Fix: point the test at a test-scoped AIDA home (test_env/test_home pattern) instead of the real global log, or serialize it with the lock the other global-log tests use.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T01:48:15.015902162Z
+modified_at: 2026-10-06T01:48:15.015902162Z
+req_type: Bug
+filed_at:
+  code_sha: 887bf7e5fba50ec5c510910ee5a3c2e472541d43
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
