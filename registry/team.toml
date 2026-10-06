@@ -1,2 +1,5 @@
 [members]
-joe = "advisor"
+joe = [
+    "advisor",
+    "implementer",
+]
