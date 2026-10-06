@@ -6,21 +6,6 @@
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a108d0-5b42-769d-bcac-1595a6d6bfdc
-  position: 10000
-  added_by: joe
-  added_at: 2026-10-06T03:15:13.172386992Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a10f3e-c8f3-7098-958f-6aac4bcf6d5e
-  position: 11000
-  added_by: joe
-  note: 'BUG-1291 recovery: PR #2433 handed off after shelving in phase 2 (ci): phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`'
-  added_at: 2026-10-06T03:30:31.676737930Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a10f5e-6b82-71a1-ba08-fc19d8d6ee64
   position: 13000
   added_by: joe
