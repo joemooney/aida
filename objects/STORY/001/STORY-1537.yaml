@@ -1,0 +1,33 @@
+id: 01a1119f-6e13-77e0-b336-ebd9283c9798
+spec_id: STORY-1537
+agreed_id: STORY-1537
+title: 'Review PR-2445: [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a11187`) for branch `task-1603`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2445>
+  - Branch: `task-1603` → `main`
+
+  ## Covers
+
+  - TASK-1603
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2445` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T14:30:23.507320949Z
+modified_at: 2026-10-06T14:30:23.507320949Z
+req_type: Story
+filed_at:
+  code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cd1aa53848
+  vendor: antigravity
