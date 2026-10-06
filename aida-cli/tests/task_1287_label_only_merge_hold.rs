@@ -152,6 +152,55 @@ fi
             .output()
             .unwrap()
     }
+
+    // trace:TASK-1331 | ai:codex
+    fn use_gitlab(&self, ci_config: &str) {
+        git(
+            &self.repo,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "https://gitlab.com/acme/aida-fixture.git",
+            ],
+        );
+        std::fs::write(self.repo.join(".gitlab-ci.yml"), "fixture: {}\n").unwrap();
+        std::fs::create_dir_all(self.repo.join(".aida")).unwrap();
+        std::fs::write(
+            self.repo.join(".aida/config.toml"),
+            format!("[forge]\nprovider = \"gitlab\"\n[ci]\n{ci_config}\n"),
+        )
+        .unwrap();
+        let glab = self.bin.join("glab");
+        std::fs::write(
+            &glab,
+            r###"#!/bin/sh
+set -eu
+state=${AIDA_FIXTURE_STATE:?}
+printf '%s\n' "$*" >> "$state/glab-calls"
+case "$*" in
+  "--version") echo "glab version 1.50.0" ;;
+  "ci status "*) exit 1 ;;
+  *"pipelines/1/jobs"*)
+    test ! -f "$state/jobs-unavailable" || exit 1
+    printf '%s\n' '[{"name":"Build","status":"success"},{"name":"Optional","status":"failed"}]' ;;
+  *"projects/:id/pipelines"*)
+    printf '%s\n' '[{"id":1,"status":"failed","name":"gitlab-ci"}]' ;;
+  *"merge_requests/1287/merge"*)
+    printf '%s\n' merge >> "$state/events"
+    printf '%s\n' '{"state":"merged"}' ;;
+  *"merge_requests/1287"*)
+    printf '%s\n' '{"iid":1287,"state":"opened","detailed_merge_status":"mergeable","title":"fixture","source_branch":"task-1287-fixture","target_branch":"main","sha":"abc","web_url":"https://gitlab.test/merge_requests/1287"}' ;;
+  *"merge_requests"*) printf '%s\n' '[]' ;;
+  *) printf 'unexpected fake glab call: %s\n' "$*" >&2; exit 2 ;;
+esac
+"###,
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&glab).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&glab, permissions).unwrap();
+    }
 }
 
 fn output_text(output: &Output) -> String {
@@ -300,5 +349,65 @@ fn ship_still_rejects_required_informational_and_unlisted_failures() {
         );
         let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
         assert!(!calls.contains("pr merge"), "{calls}");
+    }
+}
+
+// trace:TASK-1331 | ai:codex
+#[test]
+fn gitlab_ship_refines_failed_watcher_for_informational_jobs() {
+    for config in [
+        "informational_checks = [\"Optional\"]",
+        "informational_workflows = [\"gitlab-*\"]",
+    ] {
+        let fixture = Fixture::new(false);
+        fixture.use_gitlab(config);
+        let output = fixture.ship();
+        assert!(output.status.success(), "{}", output_text(&output));
+        let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
+        let watch = calls
+            .find("ci status")
+            .expect("must retain pipeline watcher");
+        let rows = calls
+            .find("pipelines/1/jobs")
+            .expect("must refine failed watcher");
+        assert!(watch < rows, "{calls}");
+        assert!(calls.contains("merge_requests/1287/merge"), "{calls}");
+        assert_eq!(
+            std::fs::read_to_string(fixture.state.join("events")).unwrap(),
+            "merge\n"
+        );
+    }
+}
+
+// trace:TASK-1331 | ai:codex
+#[test]
+fn gitlab_ship_rejects_unlisted_failures_and_unavailable_job_rows() {
+    for unavailable in [false, true] {
+        let fixture = Fixture::new(false);
+        fixture.use_gitlab(if unavailable {
+            "informational_checks = [\"Optional\"]"
+        } else {
+            "informational_checks = [\"Other\"]"
+        });
+        if unavailable {
+            std::fs::write(fixture.state.join("jobs-unavailable"), "").unwrap();
+        }
+        let output = fixture.ship();
+        assert!(!output.status.success(), "{}", output_text(&output));
+        let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
+        assert!(
+            calls.contains("ci status") && calls.contains("pipelines/1/jobs"),
+            "{calls}"
+        );
+        assert!(!calls.contains("merge_requests/1287/merge"), "{calls}");
+        let text = output_text(&output);
+        if unavailable {
+            assert!(text.contains("CI failed"), "{text}");
+        } else {
+            assert!(
+                text.contains("CI is red") && text.contains("Optional"),
+                "{text}"
+            );
+        }
     }
 }

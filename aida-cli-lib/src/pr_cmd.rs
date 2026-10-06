@@ -2185,14 +2185,20 @@ pub(crate) fn pr_ship_handler(
         // Classify GitHub rows before waiting: the coarse --watch waits for
         // every job, including hung informational workflows. Required checks
         // still override the allow-list, and non-informational failures gate.
-        // Other forges retain their pipeline watcher.
+        // Other forges retain their pipeline watcher and refine failed results.
         // trace:TASK-1331 | ai:codex
         let mut red_detail: Option<String> = None;
-        let ci_result = if forge.kind() == crate::forge::ForgeKind::GitHub {
+        let github = forge.kind() == crate::forge::ForgeKind::GitHub;
+        let coarse_result = if github {
+            Ok(crate::forge::CiState::Pending)
+        } else {
+            forge.watch_ci(&watch_change)
+        };
+        let ci_result = if github || matches!(coarse_result, Ok(crate::forge::CiState::Failed)) {
             let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
             label_only_hold = !hold_present
                 && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-            crate::ci_gate::refine_red(
+            let refined = crate::ci_gate::refine_red(
                 &project_root,
                 forge.as_ref(),
                 &watch_change,
@@ -2225,9 +2231,16 @@ pub(crate) fn pr_ship_handler(
                     }
                     crate::forge::CiState::Success
                 }
-            })
+            });
+            // A forge without per-check rows keeps its coarse failed verdict.
+            // trace:BUG-1180 trace:TASK-1331 | ai:codex
+            if !github && refined.is_err() {
+                coarse_result
+            } else {
+                refined
+            }
         } else {
-            forge.watch_ci(&watch_change)
+            coarse_result
         };
         let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
         // STORY-1480: the ship's CI wait reached a terminal verdict — emit
