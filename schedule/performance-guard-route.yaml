@@ -1,9 +1,8 @@
 job: performance-guard-route
-last_run: 2026-10-04T21:27:23.726502306Z
+last_run: 2026-10-06T03:59:00.103968186Z
 last_by:
   seat: advisor
-  session: bfd19354-cbdf-496f-9fae-64fb73c21959
+  session: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
   vendor: antigravity
 result: done
-due_since: 2026-10-05T01:39:35.225728746Z
-due_reason: on CronJobFailed:performance-guard
+note: 'Trip = BUG-1801 (show: 14.39% of 410 calls over 1s budget vs 10% tolerated, worst 35.5s, 5s ceiling breached). Adjudication: real regression, budget stands. Fix already reviewed favorably as PR 2433 (head 51fb3f49); verdict pending only on Windows Build in cross-platform run 37408907677'
