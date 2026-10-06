@@ -3,12 +3,12 @@ spec_id: TASK-1-223
 agreed_id: TASK-1331
 title: pr ship CI watch blocks on informational workflows the config already excludes
 description: '2026-10-05 23:25: aida pr ship 2436 sat in its checks-watch loop (gh pr checks --watch shape, 10s refresh) waiting on Cross-platform (nightly)/Build (windows-latest) — a job hung ~2.5h (TASK-1-222) that is (a) not a required check (branch protection requires only Build ubuntu-latest + merge-hold-gate) and (b) explicitly declared informational via [ci] informational_workflows = ["Cross-platform*"] in .aida/config.toml. The ship watch should gate on required checks only, or at minimum filter workflows matching informational_workflows — the operator had to Ctrl+C and gh pr merge --squash by hand. Adjacent to TASK-1602 (ship-on-drive-owned-PR UX) but a distinct defect: this is the CI-wait predicate, not the ownership refusal. Evidence: PR 2436, run 37412494312, job 112103837750.'
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T07:21:36.840612375Z
+modified_at: 2026-10-06T13:03:34.601979870Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -78,6 +78,11 @@ comments:
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-06T07:21:36.840606650Z
   modified_at: 2026-10-06T07:21:36.840606650Z
+- id: 01a1114f-f2c9-71a2-800b-50f022005e8e
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: reviewer verdict is RequestChanges — not Approved. No triage reason was given.'
+  created_at: 2026-10-06T13:03:34.601978739Z
+  modified_at: 2026-10-06T13:03:34.601978739Z
 history:
 - id: 01a10fe4-0d4f-79c1-8513-6e746727c009
   author: joe
@@ -107,6 +112,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1114f-f2c9-71a2-800b-50ead40d146f
+  author: joe
+  timestamp: 2026-10-06T13:03:34.601971900Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: d85605cdfd31b36e3e8b4e159b0ae7d3da85111a
   branch: main
@@ -123,14 +135,6 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check passed
   implemented_at: 2026-10-06T06:54:17.403044339Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1331 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-10-06T07:21:34.058384421Z
 interface_changes:
   cli:
   - aida pr ship — GitHub CI waits now ignore pending informational jobs while preserving required checks and unlisted failure gates
