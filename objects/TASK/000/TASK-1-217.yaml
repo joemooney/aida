@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:06:36.053741115Z
-modified_at: 2026-10-06T04:54:05.988731004Z
+modified_at: 2026-10-06T04:54:06.937867558Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -62,6 +62,10 @@ filed_at:
   session: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-cli --test task_1597_delegation_prompt (Linux: passed)
+    USER/AIDA_USER absent, USERNAME=runneradmin: targeted test passed on Linux
+    cargo fmt --all -- --check; git diff --check (passed)
   implemented_at: 2026-10-06T04:54:02.517277201Z
   implemented_by: joe
 interface_changes: {}
