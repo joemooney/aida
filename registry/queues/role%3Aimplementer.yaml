@@ -1,4 +1,12 @@
 - user_id: role:implementer
+  requirement_id: 01a10f36-d0b6-7798-bbab-f1a68dbafdb4
+  position: 301000
+  added_by: role:implementer
+  note: race fix lands first
+  added_at: 2026-10-06T13:15:57.456154179Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
   requirement_id: 01a10fe3-ea4c-7fd3-9561-6e545a5806d6
   position: 302000
   added_by: role:implementer
@@ -21,12 +29,6 @@
   position: 305000
   added_by: role:implementer
   added_at: 2026-10-06T13:02:59.279312615Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a10f36-d0b6-7798-bbab-f1a68dbafdb4
-  position: 306000
-  added_by: role:implementer
-  added_at: 2026-10-06T04:21:29.981948962Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a10f3a-fa80-7263-ae46-caf8982d3ae5
