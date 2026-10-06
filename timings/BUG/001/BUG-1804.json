@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1804",
+  "publishes": [
+    {
+      "at": "2026-10-06T03:20:55.818753788Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T03:16:54.699962997Z",
+      "spec": "BUG-1804",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}
