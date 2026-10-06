@@ -1,5 +1,6 @@
 id: 01a10fe3-ea4c-7fd3-9561-6e545a5806d6
 spec_id: TASK-1-223
+agreed_id: TASK-1331
 title: pr ship CI watch blocks on informational workflows the config already excludes
 description: '2026-10-05 23:25: aida pr ship 2436 sat in its checks-watch loop (gh pr checks --watch shape, 10s refresh) waiting on Cross-platform (nightly)/Build (windows-latest) — a job hung ~2.5h (TASK-1-222) that is (a) not a required check (branch protection requires only Build ubuntu-latest + merge-hold-gate) and (b) explicitly declared informational via [ci] informational_workflows = ["Cross-platform*"] in .aida/config.toml. The ship watch should gate on required checks only, or at minimum filter workflows matching informational_workflows — the operator had to Ctrl+C and gh pr merge --squash by hand. Adjacent to TASK-1602 (ship-on-drive-owned-PR UX) but a distinct defect: this is the CI-wait predicate, not the ownership refusal. Evidence: PR 2436, run 37412494312, job 112103837750.'
 status: Approved
