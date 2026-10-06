@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:11:47.803281485Z
+modified_at: 2026-10-06T14:11:47.968829160Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -96,6 +96,7 @@ filed_at:
   session: c4533f5c-49cf-4219-829a-015580ac4dc4
 implementation_info:
   implemented: true
+  test_coverage_notes: cargo test -p aida-cli-lib --lib drain_state::tests -- --test-threads=1; cargo test -p aida-cli-lib --lib orchestrator::tests -- --test-threads=1; cargo test -p aida-cli-lib --lib phase1_registration_failure_leaves_status_unstarted -- --test-threads=1; cargo test -p aida-cli-lib --lib prepare_auto_complete_phase1_status -- --test-threads=1; cargo fmt --all -- --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
 interface_changes: {}
