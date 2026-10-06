@@ -82,8 +82,8 @@ allowed_hosts = [
   "registry.npmjs.org",
 ]
 
-# BUG-1180/ADR-39 informational CI allow-list. The path-filtered Windows/macOS
-# matrix workflow is named "Cross-platform (nightly)"; the binary default
+# BUG-1180/ADR-39 informational CI allow-list. The path-filtered Windows
+# matrix workflow is named "Cross-platform (weekly)"; the binary default
 # ("Cross-platform", exact) does not match it, so spell the glob here.
 [ci]
 informational_workflows = ["Cross-platform*"]
@@ -326,3 +326,12 @@ enabled = true
 # trace:TASK-1563 | ai:claude
 [worktree_pool]
 worktree_parent = "../aida-worktrees"
+
+# ADR-65 daily Product triage; reminder only, never an implementation producer.
+# trace:TASK-1588 | ai:codex
+[[schedule.jobs]]
+name = "weekly-windows-triage"
+seats = ["product"]
+every = "24h"
+prompt = "Inspect the latest scheduled Windows result in cross-platform.yml on main and the open cross-platform-red tracking issue. Triage any red issue by this due check and before a release. Record the issue number and result, or explicitly record no open issue, with aida schedule done weekly-windows-triage --note <result>. Do not queue implementation or interrupt Linux work; Windows fixes remain behind Linux work unless the operator explicitly reprioritizes a security, data-loss, or release-blocking issue. ADR-47 release deferral until the queue is empty remains in force."
+enabled = true

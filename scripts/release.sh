@@ -38,8 +38,8 @@ set -euo pipefail
 auto_yes=${AIDA_RELEASE_YES:-0}
 prepare_only=0
 # TASK-257: by default the release is gated on a recent, green cross-platform
-# CI run — PR CI is Linux-only during the alpha, so Windows + macOS are only
-# validated by the nightly cross-platform.yml workflow. --skip-xplat-check /
+# CI run — PR CI is Linux-only during the alpha, so Windows is
+# validated by the weekly cross-platform.yml workflow. --skip-xplat-check /
 # AIDA_SKIP_XPLAT_CHECK=1 bypasses the gate (not recommended for a published
 # release). trace:TASK-257 | ai:claude
 skip_xplat=${AIDA_SKIP_XPLAT_CHECK:-0}
@@ -444,8 +444,8 @@ EOM
 esac
 
 # TASK-257: gate the tag on a recent, green cross-platform CI run. PR CI is
-# Linux-only during the alpha, so Windows + macOS are only validated by the
-# nightly cross-platform.yml workflow — block the release until that's green
+# Linux-only during the alpha, so Windows is validated by the
+# weekly cross-platform.yml workflow — block the release until that's green
 # (pre-release-check.sh reuses a <24h green run or dispatches a fresh one and
 # blocks on it). Runs after the confirmation prompt so the user is not made to
 # wait on CI before deciding to release. trace:TASK-257 | ai:claude
