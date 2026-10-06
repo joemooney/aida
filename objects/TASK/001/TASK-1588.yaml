@@ -17,12 +17,12 @@ description: |
 
   ## Verification
   Add or update deterministic workflow-contract tests for the weekly cron, Windows-only scheduled matrix, main-only manual guard, informational PR path, and issue lifecycle. Verify the Product reminder appears in `aida schedule due --seat product` after its interval is due. Run the Linux CI fast gates and the existing release freshness checks.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T03:01:33.191958347Z
+modified_at: 2026-10-06T03:15:09.467058661Z
 req_type: Task
 tags:
 - ci
@@ -40,6 +40,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a10f35-3c2e-721e-9a6f-590b2b7d8e43
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T03:15:09.486278323Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 593327e874cd2411aefe2db5b775eb05d3978519
