@@ -10,16 +10,24 @@ description: |-
   Impact: the one artifact an operator reads to judge a wave says nothing happened; trust falls on manual `aida pr list` cross-checks. "Shipped" may be technically narrow (= merged), but then diff/+0-0 and token-unknown still misrepresent delivered work; shelved-with-open-PR members deserve their own line.
 
   Repro: run any pipelined wave whose members end at verdict shelves with open PRs; compare the summary block to `aida pr list`.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T16:02:42.813121277Z
-modified_at: 2026-10-06T16:02:42.813121277Z
+modified_at: 2026-10-06T16:30:10.147180255Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+history:
+- id: 01a1120d-16e3-7f12-90f5-af0270aee933
+  author: joe
+  timestamp: 2026-10-06T16:30:10.147176531Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
