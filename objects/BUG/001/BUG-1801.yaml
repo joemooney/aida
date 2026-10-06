@@ -18,8 +18,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-04T21:27:22.685313641Z
+modified_at: 2026-10-06T01:36:58.788747893Z
 req_type: Bug
+comments:
+- id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
+  author: joe
+  content: |
+    Drain ordering note (advisor, 2026-10-05): STORY-1484 (single-flight cache refresh) sits in the same queue and overlaps this bug's likely root cause — BUG-1674's class was `aida show` waiting behind a concurrent cache writer, and STORY-1484 is the structural fix for exactly that (bounded wait + labelled stale read). Whoever picks this up: check whether STORY-1484 is in flight or landed first; if it lands, re-measure before building an independent fix. Do not run both concurrently in separate worktrees — they will collide on the cache/refresh paths.
+  created_at: 2026-10-06T01:36:58.788747893Z
+  modified_at: 2026-10-06T01:36:58.788747893Z
+  session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
 history:
 - id: 01a108d0-793d-740f-b515-b1e03b6167f3
   author: joe
