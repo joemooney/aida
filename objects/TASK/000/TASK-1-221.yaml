@@ -3,12 +3,12 @@ spec_id: TASK-1-221
 agreed_id: TASK-1330
 title: 'Identity hygiene gate: refuse pushes/commits with non-allowlisted author emails'
 description: '2026-10-05: work email (employer-identifying) found in public repo history — 438 author/committer entries across refs (9 on main spanning 2025-11-22..2026-05-05, 378 on the public aida-store branch, recent ones on stranded origin/bug-1823 pushed 2026-10-01 from the work machine) PLUS Co-authored-by trailers in 7 squash-merge bodies on main. Root cause: work machine git config used the employer address; nothing in AIDA or git refused it. Fix shape: (1) project allowlist of author/committer emails in .aida/config.toml; (2) aida doctor check identity + pre-push hook that fail-closed refuses a push introducing a non-allowlisted email in author, committer, or Co-authored-by trailers; (3) aida pr ship squash path strips/replaces non-allowlisted co-author trailers. Containment and history rewrite tracked by the operator; this spec is the recurrence guard.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:17:11.528846196Z
-modified_at: 2026-10-06T19:26:53.436369894Z
+modified_at: 2026-10-06T19:40:44.137303069Z
 req_type: Task
 tags:
 - docs:impacted
@@ -44,6 +44,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a112bb-8ee1-76b1-b409-7a1624f046a9
+  author: aida-auto-bump
+  timestamp: 2026-10-06T19:40:44.129734467Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a112bb-8ee9-7530-8150-bb0aca33994c
+  timestamp: 2026-10-06T19:40:44.137302404Z
+  agent: aida
+  commit_sha: 9223c82863f693e581a0a7b2fe676e04aa3390de
+  summary: Completed via merge 9223c828
 filed_at:
   code_sha: 51fe64d5e96431e0103055c132c5cdf5bd5cab6b
   branch: main
@@ -56,3 +69,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T19:26:53.436369894Z
   implemented_by: joe
+  completed_at: 2026-10-06T19:40:44.129707935Z
+  completion_sha: 9223c82863f693e581a0a7b2fe676e04aa3390de
