@@ -5,9 +5,24 @@
     {
       "at": "2026-10-04T18:48:21.683931488Z",
       "closed_by": "edit"
+    },
+    {
+      "at": "2026-10-05T15:29:44.149870598Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-04T07:23:05.377513225Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-04T18:48:21.683761987Z",
       "spec": "TASK-1538",
@@ -25,6 +40,105 @@
         "event": "SpecCompleted",
         "commit": "",
         "closed_by": "edit"
+      }
+    },
+    {
+      "ts": "2026-10-04T18:59:20.742517256Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-04T18:59:32.559857252Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-1538"
+      }
+    },
+    {
+      "ts": "2026-10-04T20:37:04.733157498Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-04T20:42:03.519957738Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1538",
+        "branch": "task-1538",
+        "first_seen": "2026-10-04T20:42:03.502764233+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-05T00:55:24.240036439Z",
+      "spec": "TASK-1538",
+      "seat": "reviewer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-05T06:40:44.573032480Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2425,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0d0a82a3cad6"
+      }
+    },
+    {
+      "ts": "2026-10-05T06:46:16.881556049Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2425
+      }
+    },
+    {
+      "ts": "2026-10-05T15:27:13.351194707Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2428,
+        "verdict": "APPROVED",
+        "reviewed_sha": "33f085472a1f"
+      }
+    },
+    {
+      "ts": "2026-10-05T15:29:38.199574412Z",
+      "spec": "TASK-1538",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2428
+      }
+    },
+    {
+      "ts": "2026-10-05T15:29:44.135766695Z",
+      "spec": "TASK-1538",
+      "run_uuid": "01a108c8-bc97-7538-a7a5-7677d6ac77a8",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "887bf7e5fba50ec5c510910ee5a3c2e472541d43",
+        "closed_by": "auto-bump"
       }
     }
   ]
