@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T21:27:15.010276689Z
-modified_at: 2026-10-06T03:30:30.893902701Z
+modified_at: 2026-10-06T03:30:33.134832342Z
 req_type: Bug
 comments:
 - id: 01a10edb-59a4-73c2-8d83-6500d3ad83a1
@@ -38,6 +38,58 @@ comments:
   content: 'Validation: old release binary show --no-git --format toon took 1562 ms behind the fixture refresh flock. Fixed debug: TOON 66 ms, JSON 79 ms, human TTY 72 ms, card 84 ms, UUID 63 ms, tree 49 ms; delegated full rebuild 83 ms. Fixed optimized agent profile: 52/58/52/55/45/37 ms respectively, delegated full rebuild 80 ms. tests/test_show_latency.py passes on both builds (canonical object title, stale labels, isolated real worker, strict refresh recovery). Five existing show cache/render tests passed; cargo fmt --all -- --check, 9 trace-header tests, CI gate audit and all 19 check-ci-fast gates passed. CI now runs the regression. This meets the spec reproduced-worst-case before/after alternative; historical 24h telemetry still contains pre-fix slow samples. Explicit sync/cache operations, absent/incompatible-cache recovery and worker crash-loop/no-detach overrides remain outside the no-wait compatible-snapshot path.'
   created_at: 2026-10-06T03:24:49.560691252Z
   modified_at: 2026-10-06T03:24:49.560691252Z
+- id: 01a10f43-542e-7619-b00b-75ed3f462863
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 2 (ci)
+
+    Recorded by `aida queue work BUG-1801 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 2 (ci) · kind `ci-unavailable`
+    - Seat: ci
+    - Parent spec: BUG-1801
+    - Branch under test: main
+    - Commit under test: a0ca7c41988c
+    - Recorded at: 2026-10-06T03:30:31.852978131+00:00
+
+    ### Failure
+
+    phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`
+
+    Failure kind: `ci-unavailable`
+
+    ### Recovery hint shown to the operator
+
+    CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1801 --auto-complete`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T03:30:31.852978131+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 909155 ms
+      - phase 2 (ci): 563 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"BUG-1801","started_at":"2026-10-06T03:15:14.254312318+00:00","completed_at":"2026-10-06T03:30:31.852978131+00:00","outcome":"failed","variant":"through-ci","failed_phase":2,"failure_kind":"ci-unavailable","failure_message":"phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":909155},{"phase":2,"slug":"ci","elapsed_ms":563}],"total_ms":916614,"binary_sha":"62e3374e51"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent BUG-1801 --title "drain phase 2 (ci) failure on BUG-1801" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T03:30:33.134826523Z
+  modified_at: 2026-10-06T03:30:33.134826523Z
 history:
 - id: 01a108d0-793d-740f-b515-b1e03b6167f3
   author: joe
