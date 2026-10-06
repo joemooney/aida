@@ -191,17 +191,18 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a108b5-02d2-70eb-a15b-8689bab05424
-  position: 423000
-  added_by: role:implementer
-  added_at: 2026-10-04T21:01:14.579565548Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a10ad3-a06e-7652-b18c-f8291c96a154
   position: 424000
   added_by: role:implementer
   note: 'Advisor-blessed agy batch: mirror-sync pushes origin refs, never local tip; acceptance sketch in spec. Recurs hourly until fixed.'
   added_at: 2026-10-06T01:33:47.669988236Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a108b5-02d2-70eb-a15b-8689bab05424
+  position: 425000
+  added_by: role:implementer
+  note: 'Advisor-blessed agy batch: unblocked by BUG-1800 merge (92bd6cb); schedule-allowlist addition per spec comments.'
+  added_at: 2026-10-06T01:33:48.923343575Z
   for_role: implementer
   added_by_machine: imac
