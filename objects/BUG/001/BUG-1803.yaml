@@ -3,12 +3,12 @@ spec_id: BUG-1803
 agreed_id: BUG-1803
 title: mirror-sync pushes the LOCAL main to mirror hubs, so a commit the canonical hub rejected can propagate to the mirror
 description: 'Observed 2026-10-04/05: commit dedfc092 was rejected by GitHub''s protected main (the canonical hub), but gitlab/main ended up at dedfc092 anyway — the hourly hub-mirror-sync (or the mirror-push path) pushed the local checkout''s main in the window before the local branch was reset. The mirror-push hook''s own message states the contract (''mirrors follow origin; a forge-side merge is mirrored by aida pull / aida remote mirror-sync''), but the implementation pushed a local-only commit that origin had refused, producing a diverged mirror that needed a human force-push (gitlab protection toggle + --force-with-lease) to repair. Fix: mirror-sync should push origin''s refs (fetch origin, push origin/main:main) to mirror hubs, never the local branch tip; a local tip ahead of origin is not mirrorable state. Acceptance sketch: with local main ahead of origin by a commit origin rejects, mirror-sync leaves the mirror at origin''s tip and reports the local-only commit instead of pushing it.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T06:50:03.758361585Z
-modified_at: 2026-10-06T02:41:51.804431578Z
+modified_at: 2026-10-06T03:11:35.747394742Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -70,6 +70,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a10f31-f942-77f2-83d2-ff3202828915
+  author: aida-auto-bump
+  timestamp: 2026-10-06T03:11:35.746170347Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a10f31-f943-70fb-bba4-afe5b613cea6
+  timestamp: 2026-10-06T03:11:35.747384796Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/advisor/BUG-1803-2026-10-06T024153Z.md
+  commit_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
+  summary: 'PR 2431 re-APPROVED at rebased head 02e06981 by advisor seat. Delta from previously approved e2034bd7 verified blob-by-blob: remote_create.rs and 04-git-lifecycle.md byte-identical; lib.rs differs only by main''s absorbed tui_entry extraction (PR 2429), the fan_out_mirror_push hunk untouched; AGENTS.md/OVERVIEW.md carry the keep-both conflict resolution (mirror-refs paragraph + merged-worktrees paragraph). CI Build completed SUCCESS at this exact head: run 37406222919.'
+  review_verdict: approved
 filed_at:
   code_sha: 9e33e1494c8f44359429291e56aaecf7ed930f1e
   branch: main
@@ -82,3 +97,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T02:08:28.933659648Z
   implemented_by: joe
+  completed_at: 2026-10-06T03:11:35.746147183Z
+  completion_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
