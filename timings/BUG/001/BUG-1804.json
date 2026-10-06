@@ -5,9 +5,52 @@
     {
       "at": "2026-10-06T03:20:55.818753788Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-06T03:37:38.580590222Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-06T02:19:54.330605882Z",
+      "spec": "BUG-1804",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:01:34.580733968Z",
+      "spec": "BUG-1804",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:14.217765824Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f36-38da-7652-aa97-a40239045983",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:17.122687256Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f36-38da-7652-aa97-a40239045983",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-06T03:16:54.699962997Z",
       "spec": "BUG-1804",
@@ -16,6 +59,116 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:28:05.547907802Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f36-38da-7652-aa97-a40239045983",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:38.250968530Z",
+      "spec": "BUG-1804",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2432
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:40.633126216Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:41.094389882Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:42.993379061Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:44.404477264Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:37:26.927566969Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 4,
+        "slug": "merge",
+        "vendor": "codex",
+        "seat": "integrator",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:37:32.765958745Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2432
+      }
+    },
+    {
+      "ts": "2026-10-06T03:37:32.767094292Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 5,
+        "slug": "pull",
+        "vendor": "codex",
+        "seat": "integrator",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:37:38.538944036Z",
+      "spec": "BUG-1804",
+      "run_uuid": "01a10f47-1af3-76a3-a3cc-16778e45a836",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dafb66432e7a58201cbdd274f131702e1fbbc90d",
+        "pr": 2432,
+        "closed_by": "auto-bump"
       }
     }
   ]
