@@ -257,7 +257,19 @@ fn handle_role_enter(
     let mut final_delegate_seats = delegate_seats.to_vec();
     let seat_name = canonical_role_name(&resolved);
 
-    if seat_name == "advisor" && final_delegate_seats.is_empty() && std::io::stdin().is_terminal() {
+    use std::io::IsTerminal;
+    let is_direct_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let is_managed_agent = ["AIDA_AGENT_NAME", "AIDA_AGENT_TYPE"].iter().any(|key| {
+        std::env::var(key)
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+    });
+
+    if seat_name == "advisor"
+        && final_delegate_seats.is_empty()
+        && is_direct_tty
+        && !is_managed_agent
+    {
         // trace:TASK-1597 | ai:claude
 
         if crate::seat_authority::roster_allows(
@@ -269,10 +281,7 @@ fn handle_role_enter(
 Include it in the TTY-issued delegation set?";
             // inquire writes to stderr and reads from /dev/tty properly.
             // ?-exempt: cannot use confirm_with_context because it writes to stdout, breaking shell eval
-            let include = inquire::Confirm::new(prompt)
-                .with_default(false)
-                .prompt()
-                .unwrap_or(false);
+            let include = inquire::Confirm::new(prompt).with_default(false).prompt()?; // Returns Err on Ctrl-C / interrupt, which is the desired abort behavior
             if include {
                 final_delegate_seats.push("advisor".to_string());
             }

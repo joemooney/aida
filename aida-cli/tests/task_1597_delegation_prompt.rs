@@ -61,6 +61,10 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
         .unwrap();
     let stderr = String::from_utf8(headless.stderr).unwrap();
     assert!(
+        !headless.status.success(),
+        "should exit with non-zero status in headless"
+    );
+    assert!(
         !stderr.contains("Include it in the TTY-issued delegation set?"),
         "should not prompt headless"
     );
@@ -109,7 +113,6 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
 
     let mut output = String::new();
     reader.read_to_string(&mut output).unwrap();
-    std::fs::write("debug_pty.log", &output).unwrap();
 
     assert!(child.wait().unwrap().success());
     assert!(
@@ -158,5 +161,47 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     let sub_stdout = String::from_utf8(sub.stdout).unwrap();
     println!("sub_stderr: {}\nsub_stdout: {}", sub_stderr, sub_stdout);
     assert!(sub_stdout.contains("does not delegate `advisor`"));
+
+    // 3. Managed agent with TTY gets immediate refusal, no prompt
+    let pty_system2 = native_pty_system();
+    let pair2 = pty_system2
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .unwrap();
+    let mut cmd2 = CommandBuilder::new(bin);
+    cmd2.arg("role");
+    cmd2.arg("enter");
+    cmd2.arg("advisor");
+    cmd2.env("HOME", &home);
+    cmd2.env("AIDA_AGENT_NAME", "codex");
+    cmd2.env(
+        "USER",
+        std::env::var("USER").unwrap_or_else(|_| "joe".to_string()),
+    );
+    cmd2.cwd(&repo);
+
+    let mut child2 = pair2.slave.spawn_command(cmd2).unwrap();
+    drop(pair2.slave);
+
+    let mut reader2 = pair2.master.try_clone_reader().unwrap();
+    // we don't need to write to it because it should immediately refuse
+    let mut output2 = String::new();
+    reader2.read_to_string(&mut output2).unwrap();
+
+    let status2 = child2.wait().unwrap();
+    assert!(!status2.success(), "should exit with non-zero status");
+    assert!(
+        !output2.contains("Include it in the TTY-issued delegation set?"),
+        "should not prompt managed agents"
+    );
+    assert!(
+        output2.contains("AIDA-managed agent sessions cannot issue direct TTY grants"),
+        "should show the managed agent refusal message"
+    );
+
     assert!(sub_stdout.contains("aida role enter advisor --delegate-seat advisor"));
 }
