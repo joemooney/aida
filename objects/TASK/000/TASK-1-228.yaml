@@ -1,5 +1,6 @@
 id: 01a11219-24a8-7721-bf31-1caa029e287f
 spec_id: TASK-1-228
+agreed_id: TASK-1336
 title: 'burndown run has no --require-head: stale-binary waves launch on a warning the operator never sees'
 description: |-
   `aida burndown run` cannot enforce the fresh-binary floor. 2026-10-06 09:08: operator launched burndown run while `aida` resolved to the stale release build 978c4974 (main at 010de0e6); readiness printed only a warning ("the wave will run this build — run make build-fast, or pass --require-head to refuse") and launched 12 specs on the old binary. But burndown run does not accept --require-head (the flag lives on `aida queue work` and is honored by `[drain] require_head`), and a headless launch scrolls the warning away instantly.
