@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T01:48:15.015902162Z
-modified_at: 2026-10-06T03:34:37.451877649Z
+modified_at: 2026-10-06T03:37:22.919706043Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,20 @@ comments:
   content: 'Final handoff: working tree clean; HEAD equals origin/bug-1804 (428510740dd8). Required scheduler tests and ten stress rounds passed; a redundant additional Cargo rerun was cancelled while queued for the machine-wide build slot. Minor protocol warning false-positive captured as draft finding TASK-1-215. Spec verified Done; PR #2432 open for the owning live drain.'
   created_at: 2026-10-06T03:22:37.631962451Z
   modified_at: 2026-10-06T03:22:37.631962451Z
+- id: 01a10f49-94e7-7456-a441-b98af020d98a
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-2432
+    agent: codex
+    ran-at: 2026-10-05 20:37 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1804-drain-01a10f49-4f4c-76ec-a997-def11060ce4b.json
+    ? SEM (0.95) — The hook and timer invocations in the log-bounding regression test use distinct project roots under one temporary AIDA_HOME, so they share the schedule log but use independent project tick locks. Both invocations must return no diagnostic lines before their log-size assertions are evaluated.
+  created_at: 2026-10-06T03:37:22.919706043Z
+  modified_at: 2026-10-06T03:37:22.919706043Z
 history:
 - id: 01a10f02-a41f-704f-bff6-f851009d6a29
   author: joe
