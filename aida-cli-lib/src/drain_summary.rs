@@ -110,6 +110,13 @@ pub(crate) struct DrainSummary {
     // trace:BUG-1418 | ai:codex
     pub(crate) cumulative_tokens: Option<u64>,
     pub(crate) diff: DrainDiffStats,
+    /// TASK-1334: PRs this drain opened and did not merge inside its own
+    /// window — shelved members' open PRs awaiting review (derived from the
+    /// drain's event stream by [`crate::events::open_prs_window`]). Without
+    /// this, a wave whose members all end shelved-with-open-PR renders as
+    /// "0 shipped · diff +0 -0" and reads as if nothing happened.
+    // trace:TASK-1334 | ai:claude
+    pub(crate) open_prs: Vec<crate::events::OpenDrainPr>,
     /// Wall time the drain ran, whole seconds.
     pub(crate) elapsed_secs: u64,
     /// TASK-997: how many drain events the cheap classifier absorbed silently
@@ -158,8 +165,22 @@ impl DrainSummary {
             )),
             _ => out.push_str("  tokens: unknown (collection incomplete)\n"),
         }
+        // TASK-1334: the diff measures MERGED work (base..HEAD on the
+        // integration branch). When the drain left open PR branches behind,
+        // say so on the diff line — "+0 -0 across 0 files" alone misreads a
+        // productive shelved-with-open-PR wave as "nothing happened".
+        // trace:TASK-1334 | ai:claude
+        let diff_qualifier = if self.open_prs.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " (merged work only — {} open PR branch{} not counted)",
+                self.open_prs.len(),
+                if self.open_prs.len() == 1 { "" } else { "es" }
+            )
+        };
         out.push_str(&format!(
-            "  diff: +{} -{} across {} file{}\n",
+            "  diff: +{} -{} across {} file{}{}\n",
             group_thousands(self.diff.insertions as u64),
             group_thousands(self.diff.deletions as u64),
             self.diff.files_changed,
@@ -167,8 +188,25 @@ impl DrainSummary {
                 ""
             } else {
                 "s"
-            }
+            },
+            diff_qualifier
         ));
+        // TASK-1334: shelved-with-open-PR members get their own line — the
+        // wave's real output when nothing merged. trace:TASK-1334 | ai:claude
+        if !self.open_prs.is_empty() {
+            let listed: Vec<String> = self
+                .open_prs
+                .iter()
+                .map(|o| match &o.spec {
+                    Some(spec) => format!("#{} ({})", o.pr, spec),
+                    None => format!("#{}", o.pr),
+                })
+                .collect();
+            out.push_str(&format!(
+                "  open PRs awaiting review: {}\n",
+                listed.join(" · ")
+            ));
+        }
         out.push_str(&self.render_events_line());
         let triage = t.findings_to_triage();
         if triage > 0 {
@@ -247,6 +285,12 @@ impl DrainSummary {
             "files_changed": self.diff.files_changed,
             "insertions": self.diff.insertions,
             "deletions": self.diff.deletions,
+            // TASK-1334: the open PRs this drain left awaiting review, so a
+            // cost/output reader sees delivered-but-unmerged work instead of
+            // inferring "nothing happened" from zero diff.
+            // trace:TASK-1334 | ai:claude
+            "open_prs": self.open_prs.iter().map(|o| o.pr).collect::<Vec<u32>>(),
+            "open_pr_count": self.open_prs.len(),
             "findings_to_triage": self.tallies.findings_to_triage(),
             "elapsed_secs": self.elapsed_secs,
             // TASK-997: the event-classifier accounting, so `aida usage` can
@@ -357,6 +401,7 @@ mod tests {
             tallies: tallies(3, 0, 0),
             cumulative_tokens: Some(900_000),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
@@ -372,6 +417,7 @@ mod tests {
             tallies: tallies(0, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
@@ -397,6 +443,7 @@ mod tests {
                 insertions: 4210,
                 deletions: 820,
             },
+            open_prs: Vec::new(),
             elapsed_secs: 90,
             events: crate::events::EventTally::default(),
         };
@@ -433,6 +480,7 @@ mod tests {
                 insertions: 3,
                 deletions: 0,
             },
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
@@ -472,6 +520,7 @@ mod tests {
                 insertions: 100,
                 deletions: 40,
             },
+            open_prs: Vec::new(),
             elapsed_secs: 600,
             events: crate::events::EventTally::default(),
         };
@@ -514,6 +563,7 @@ mod tests {
             tallies: tallies(0, 1, 0),
             cumulative_tokens: None,
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 1,
             events: crate::events::EventTally::default(),
         };
@@ -533,6 +583,7 @@ mod tests {
             tallies: tallies(2, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 1,
             events: crate::events::EventTally::default(),
         };
@@ -553,6 +604,7 @@ mod tests {
             tallies: tallies(4, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
                 benign_absorbed: 397,
@@ -580,6 +632,7 @@ mod tests {
             tallies: tallies(2, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
                 benign_absorbed: 8,
@@ -606,6 +659,7 @@ mod tests {
             tallies: tallies(1, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally::default(),
         };
@@ -629,6 +683,7 @@ mod tests {
             tallies: tallies(1, 0, 0),
             cumulative_tokens: Some(0),
             diff: DrainDiffStats::default(),
+            open_prs: Vec::new(),
             elapsed_secs: 0,
             events: crate::events::EventTally {
                 benign_absorbed: 30,
@@ -642,6 +697,111 @@ mod tests {
         assert_eq!(v["events_actionable"], 10);
         assert_eq!(v["events_absorbed_pct"], 75);
         assert_eq!(v["events_window_partial"], true);
+    }
+
+    /// TASK-1334: a wave whose members all end shelved-with-open-PR must not
+    /// render as "nothing happened" — the open PRs get their own line and the
+    /// zero diff is qualified as merged-work-only.
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn render_names_open_prs_and_qualifies_the_merged_only_diff() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 4".into(),
+            outcome: "drained-with-shelved".into(),
+            tallies: tallies(0, 3, 0),
+            cumulative_tokens: None,
+            diff: DrainDiffStats::default(),
+            open_prs: vec![
+                crate::events::OpenDrainPr {
+                    spec: Some("TASK-1328".into()),
+                    pr: 2443,
+                },
+                crate::events::OpenDrainPr {
+                    spec: Some("TASK-1602".into()),
+                    pr: 2444,
+                },
+                crate::events::OpenDrainPr {
+                    spec: None,
+                    pr: 2445,
+                },
+            ],
+            elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
+        };
+        let out = s.render();
+        assert!(
+            out.contains(
+                "diff: +0 -0 across 0 files (merged work only — 3 open PR branches not counted)"
+            ),
+            "got: {out}"
+        );
+        assert!(
+            out.contains("open PRs awaiting review: #2443 (TASK-1328) · #2444 (TASK-1602) · #2445"),
+            "got: {out}"
+        );
+    }
+
+    /// TASK-1334: one open PR singularizes, and a drain with none keeps the
+    /// pre-existing render exactly (no line, no qualifier).
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn render_singularizes_one_open_pr_and_omits_the_line_when_none() {
+        let mut s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 1".into(),
+            outcome: "drained-with-shelved".into(),
+            tallies: tallies(0, 1, 0),
+            cumulative_tokens: Some(0),
+            diff: DrainDiffStats::default(),
+            open_prs: vec![crate::events::OpenDrainPr {
+                spec: Some("TASK-1".into()),
+                pr: 7,
+            }],
+            elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
+        };
+        let out = s.render();
+        assert!(out.contains("1 open PR branch not counted"), "got: {out}");
+        assert!(
+            out.contains("open PRs awaiting review: #7 (TASK-1)"),
+            "got: {out}"
+        );
+
+        s.open_prs.clear();
+        let out = s.render();
+        assert!(out.contains("diff: +0 -0 across 0 files\n"), "got: {out}");
+        assert!(!out.contains("open PRs awaiting review"), "got: {out}");
+    }
+
+    /// TASK-1334: the machine record carries the open-PR set so a
+    /// cost-per-drain reader sees delivered-but-unmerged output.
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn to_usage_value_carries_open_prs() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 4".into(),
+            outcome: "drained-with-shelved".into(),
+            tallies: tallies(0, 3, 0),
+            cumulative_tokens: None,
+            diff: DrainDiffStats::default(),
+            open_prs: vec![
+                crate::events::OpenDrainPr {
+                    spec: Some("TASK-1328".into()),
+                    pr: 2443,
+                },
+                crate::events::OpenDrainPr {
+                    spec: None,
+                    pr: 2445,
+                },
+            ],
+            elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
+        };
+        let v = s.to_usage_value("2026-10-06T06:40:00Z", None, None, "codex", "run-test");
+        assert_eq!(v["open_prs"], serde_json::json!([2443, 2445]));
+        assert_eq!(v["open_pr_count"], 2);
     }
 
     #[test]

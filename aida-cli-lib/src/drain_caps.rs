@@ -244,6 +244,32 @@ fn usage_tokens(v: &serde_json::Value) -> Option<u64> {
     (!values.is_empty()).then(|| values.into_iter().sum())
 }
 
+/// Extract the token count from one codex `turn.completed` event. Codex's
+/// `codex exec --json` stream reports per-turn usage as
+/// `{"type":"turn.completed","usage":{"input_tokens":N,"cached_input_tokens":C,
+/// "output_tokens":M}}` where `cached_input_tokens` is a SUBSET of
+/// `input_tokens` (the token-ledger reads `input_uncached = input - cached`),
+/// so the turn total is `input + output` — adding the cached figure again
+/// would double-count it. Returns `None` when the event carries no readable
+/// usage object.
+// trace:TASK-1334 | ai:claude
+fn codex_turn_usage_tokens(v: &serde_json::Value) -> Option<u64> {
+    let usage = v.get("usage")?;
+    let input = usage
+        .get("input_tokens")
+        .and_then(serde_json::Value::as_u64);
+    let output = usage
+        .get("output_tokens")
+        .and_then(serde_json::Value::as_u64);
+    if input.is_none() && output.is_none() {
+        // Some codex builds report only a rolled-up total.
+        return usage
+            .get("total_tokens")
+            .and_then(serde_json::Value::as_u64);
+    }
+    Some(input.unwrap_or(0).saturating_add(output.unwrap_or(0)))
+}
+
 /// Parse a single line of `claude -p --output-format stream-json` output and
 /// return its cumulative token total, or `None` if the line is not JSON / has
 /// no usage.
@@ -258,12 +284,16 @@ pub(crate) fn parse_usage_tokens(line: &str) -> Option<u64> {
 /// `stream-json` log. Claude's terminal `result` event carries the session's
 /// *cumulative* usage, so we prefer it; absent a result event (a killed /
 /// truncated log) we fall back to the largest per-line usage seen, which is the
-/// best lower bound available. Returns `0` for an empty / non-JSON log (an
-/// interactive phase writes no such log, so it contributes nothing).
+/// best lower bound available. Codex (`codex exec --json`) reports per-turn
+/// usage in `turn.completed` events instead, which are summed (TASK-1334, the
+/// same per-record reading the token ledger uses). Returns `0` for an empty /
+/// non-JSON log (an interactive phase writes no such log, so it contributes
+/// nothing).
 // trace:TASK-966 | ai:claude
 pub(crate) fn tokens_from_log(contents: &str) -> u64 {
     let mut result_tokens: Option<u64> = None;
     let mut max_tokens: u64 = 0;
+    let mut codex_turn_sum: u64 = 0;
     for line in contents.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -272,6 +302,12 @@ pub(crate) fn tokens_from_log(contents: &str) -> u64 {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
+        // trace:TASK-1334 | ai:claude
+        if v.get("type").and_then(serde_json::Value::as_str) == Some("turn.completed") {
+            codex_turn_sum =
+                codex_turn_sum.saturating_add(codex_turn_usage_tokens(&v).unwrap_or(0));
+            continue;
+        }
         if let Some(t) = usage_tokens(&v) {
             max_tokens = max_tokens.max(t);
             if v.get("type").and_then(serde_json::Value::as_str) == Some("result") {
@@ -279,7 +315,11 @@ pub(crate) fn tokens_from_log(contents: &str) -> u64 {
             }
         }
     }
-    result_tokens.unwrap_or(max_tokens)
+    // A log is one vendor's stream, so at most one of these is non-zero in
+    // practice; adding keeps a mixed log a best-effort lower bound.
+    result_tokens
+        .unwrap_or(max_tokens)
+        .saturating_add(codex_turn_sum)
 }
 
 /// A strict, durable measurement for one completed headless log.
@@ -339,6 +379,13 @@ pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
     let mut saw_claude_partial_usage = false;
     let mut first_shape = None;
     let mut result_tokens = None;
+    // TASK-1334: codex headless logs (`codex exec --json`) end each turn with
+    // a `turn.completed` usage event rather than claude's terminal `result`.
+    // Summing the per-turn figures is an exact completed-log measurement (the
+    // token ledger reads the same events per-record), so a codex wave no
+    // longer degrades the whole drain summary to "tokens: unknown".
+    // trace:TASK-1334 | ai:claude
+    let mut codex_turn_total: Option<u64> = None;
     for line in contents.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -348,6 +395,21 @@ pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
             return CompletedLogTokens::Truncated;
         };
         first_shape.get_or_insert_with(|| usage_shape(&v));
+        if v.get("type").and_then(serde_json::Value::as_str) == Some("turn.completed") {
+            match codex_turn_usage_tokens(&v) {
+                Some(tokens) => {
+                    codex_turn_total = Some(codex_turn_total.unwrap_or(0).saturating_add(tokens));
+                }
+                None => {
+                    // A turn.completed whose usage we cannot read means the
+                    // schema moved again — report, don't fabricate.
+                    return CompletedLogTokens::Unrecognized {
+                        shape: usage_shape(&v),
+                    };
+                }
+            }
+            continue;
+        }
         if let Some(tokens) = usage_tokens(&v) {
             match v.get("type").and_then(serde_json::Value::as_str) {
                 Some("result") => result_tokens = Some(tokens),
@@ -361,6 +423,9 @@ pub(crate) fn completed_log_tokens(contents: &str) -> CompletedLogTokens {
         }
     }
     if let Some(tokens) = result_tokens {
+        CompletedLogTokens::Measured(tokens)
+    } else if let Some(tokens) = codex_turn_total {
+        // trace:TASK-1334 | ai:claude
         CompletedLogTokens::Measured(tokens)
     } else if saw_claude_partial_usage {
         CompletedLogTokens::Truncated
@@ -597,14 +662,6 @@ mod tests {
             }
         );
         assert_eq!(
-            completed_log_tokens(
-                r#"{"type":"turn.completed","usage":{"input_tokens":4,"output_tokens":2}}"#
-            ),
-            CompletedLogTokens::Unrecognized {
-                shape: "type=turn.completed".to_string()
-            }
-        );
-        assert_eq!(
             completed_log_tokens(r#"{"type":"assistant","message":{"usage":{"input_tokens":4}}}"#),
             CompletedLogTokens::Truncated
         );
@@ -612,5 +669,57 @@ mod tests {
             completed_log_tokens("{broken"),
             CompletedLogTokens::Truncated
         );
+    }
+
+    /// TASK-1334: a codex `codex exec --json` log ends its turns with
+    /// `turn.completed` usage events — a MEASURED completed log, not an
+    /// unrecognized foreign shape (the regression behind "tokens: unknown
+    /// (collection incomplete)" on a codex wave). `cached_input_tokens` is a
+    /// subset of `input_tokens`, so it must not be added again.
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn completed_log_measures_codex_turn_completed_events() {
+        // One turn: 100 input (40 of them cached) + 7 output = 107.
+        assert_eq!(
+            completed_log_tokens(
+                r#"{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":7}}"#
+            ),
+            CompletedLogTokens::Measured(107)
+        );
+        // Multiple turns in one session sum per-turn (the token ledger's
+        // per-record reading).
+        let log = [
+            r#"{"type":"thread.started","thread_id":"t1"}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":8,"output_tokens":5}}"#,
+        ]
+        .join("\n");
+        assert_eq!(completed_log_tokens(&log), CompletedLogTokens::Measured(40));
+        // A rolled-up-total-only shape still measures.
+        assert_eq!(
+            completed_log_tokens(r#"{"type":"turn.completed","usage":{"total_tokens":42}}"#),
+            CompletedLogTokens::Measured(42)
+        );
+        // A turn.completed with an unreadable usage object is reported, not
+        // guessed at.
+        assert_eq!(
+            completed_log_tokens(r#"{"type":"turn.completed","usage":{"tokens":"many"}}"#),
+            CompletedLogTokens::Unrecognized {
+                shape: "type=turn.completed".to_string()
+            }
+        );
+    }
+
+    /// TASK-1334: the live best-effort scanner sums codex per-turn usage too,
+    /// so budget caps see codex spend instead of zero.
+    // trace:TASK-1334 | ai:claude
+    #[test]
+    fn tokens_from_log_sums_codex_turn_completed_events() {
+        let log = [
+            r#"{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}"#,
+            r#"{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":8,"output_tokens":5}}"#,
+        ]
+        .join("\n");
+        assert_eq!(tokens_from_log(&log), 40);
     }
 }

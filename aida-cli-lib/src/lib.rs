@@ -102918,6 +102918,13 @@ pub(crate) fn finalize_drain_summary(
     let events_tally = drain_root
         .map(|root| events::tally_window(root, started))
         .unwrap_or_default();
+    // TASK-1334: PRs this drain opened and did not merge in its own window —
+    // shelved members' open PRs. Without them the summary reads "0 shipped ·
+    // diff +0 -0" for a wave that produced real PRs. Derived from the same
+    // event window the tally above reads. trace:TASK-1334 | ai:claude
+    let open_prs = drain_root
+        .map(|root| events::open_prs_window(root, started))
+        .unwrap_or_default();
     let summary = drain_summary::DrainSummary {
         kind: kind.to_string(),
         label,
@@ -102925,6 +102932,7 @@ pub(crate) fn finalize_drain_summary(
         tallies,
         cumulative_tokens,
         diff,
+        open_prs,
         elapsed_secs: elapsed.as_secs(),
         events: events_tally,
     };
