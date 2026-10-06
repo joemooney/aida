@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T03:18:03.623343393Z
+modified_at: 2026-10-06T04:08:52.448521560Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-10-06T03:17:37.284003215Z
   modified_at: 2026-10-06T03:17:37.284003215Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a10f66-69e0-71b1-a651-8c62438a9680
+  author: joe
+  content: 'Advisor: REPRODUCED on main-tip binary dafb6643 (wave ef0d5689, drain started 2026-10-05 ~21:05 by operator in advisor role). First wave member TASK-1322 (origin TASK-1-215): parent flipped it InProgress, both phase-1 children (01a10f62 36.7s, 01a10f63 15.1s) printed ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' then refused with ''spec TASK-1-215 is InProgress but no local lease holds it''; spec parked NeedsAttention after attempt 2/2. Same wave''s OTHER members (TASK-1-216, TASK-1588) claimed fine via the ''InProgress — claiming it anyway'' path. So the rebuilt binary does NOT fix it; the orchestrator-ownership handshake is lost specifically for the first member. Note the child resolved the spec by its origin_id alias TASK-1-215 while the parent used TASK-1322 — possible alias-keyed lease/ownership lookup mismatch worth checking first.'
+  created_at: 2026-10-06T04:08:52.448521560Z
+  modified_at: 2026-10-06T04:08:52.448521560Z
+  session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
