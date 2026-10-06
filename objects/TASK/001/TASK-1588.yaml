@@ -17,12 +17,12 @@ description: |
 
   ## Verification
   Add or update deterministic workflow-contract tests for the weekly cron, Windows-only scheduled matrix, main-only manual guard, informational PR path, and issue lifecycle. Verify the Product reminder appears in `aida schedule due --seat product` after its interval is due. Run the Linux CI fast gates and the existing release freshness checks.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T03:56:25.461677267Z
+modified_at: 2026-10-06T04:00:49.213941397Z
 req_type: Task
 tags:
 - ci
@@ -152,6 +152,11 @@ comments:
   created_at: 2026-10-06T03:56:25.461677267Z
   modified_at: 2026-10-06T03:56:25.461677267Z
   session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
+- id: 01a10f5f-0a3d-7690-ac70-a7793155806c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/no-pr: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 3/3). No triage reason was given.'
+  created_at: 2026-10-06T04:00:49.213940120Z
+  modified_at: 2026-10-06T04:00:49.213940120Z
 history:
 - id: 01a104f8-50cb-7093-9110-7706defdfc60
   author: joe
@@ -195,6 +200,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a10f5f-0a3d-7690-ac70-a766113bc90b
+  author: joe
+  timestamp: 2026-10-06T04:00:49.213932250Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 593327e874cd2411aefe2db5b775eb05d3978519
@@ -203,10 +215,3 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 585f46e32a
   vendor: codex
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: no-pr
-  detail: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting (attempt 3/3)
-  recovery_hint: 'The implementer exited without opening a PR — resume the session and run `/aida-pr`: `aida queue work TASK-1588 --resume 01a10f4c21f9`'
-  shelved_at: 2026-10-06T03:44:45.467207897Z
