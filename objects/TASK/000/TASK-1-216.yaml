@@ -7,11 +7,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-06T04:03:00.818711061Z
+modified_at: 2026-10-06T04:03:03.900970728Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a10f61-185c-7753-8c17-ca8084702905
+  author: joe
+  content: 'Advisor verification: confirmed in code — reconstitute.rs:1255-1258, the `_ if real_tests.is_empty()` match guard outranks `Some(e)`, so arm_b_error is swallowed whenever the traced-test denominator is empty. Second half (spawn_vendor_headless_with_seat returning success with zero output, 4x ~1s exit-0 probes with 0-byte logs on aida-monitor) still needs root-causing — likely the same class as TASK-1603''s refusal race. This bug blocks TASK-1523: the north-star measurement cannot be trusted while arm-B failures read as ''unknown denominators''.'
+  created_at: 2026-10-06T04:03:03.900970728Z
+  modified_at: 2026-10-06T04:03:03.900970728Z
+  session_id: c5f9835a-f1fe-4ff3-8dbc-ff7e60aea753
 history:
 - id: 01a10f61-0d1a-7290-b932-07ca5716f4df
   author: joe
