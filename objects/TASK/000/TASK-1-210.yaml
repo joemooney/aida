@@ -6,18 +6,33 @@ description: |-
 
   role_cmd.rs:271: the new inquire::Confirm is a bare confirm, failing context_prompt::story_809_coverage_tests::every_bare_confirm_is_exempted_or_adopted (CI run 04:34Z, 7733 passed / 1 failed). Fix by adopting the house ContextCard prompt surface, or if there is a concrete reason the ContextCard surface does not fit this prompt, add a '?-exempt: <reason>' comment within the two preceding lines stating it. Prefer ContextCard — the gate exists to drive adoption.
   Reviewed sha: eda8fafcd66671a12214e46d9f8c71f2b5d44317
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:42:13.018173748Z
-modified_at: 2026-10-06T02:42:13.018173748Z
+modified_at: 2026-10-06T02:43:55.835936451Z
 req_type: Task
 tags:
 - carried-from:TASK-1597
 - finding-hash:2268e9c1
 - from-review:TASK-1597
 - kind:carried-forward
+comments:
+- id: 01a10f18-a544-77ab-a79e-bfee16aa1777
+  author: joe
+  content: 'Dismissed by joe 2026-10-06: Resolved in PR-2424 rework: the bare inquire::Confirm gained a ?-exempt comment (confirm_with_context writes to stdout, breaking shell eval) and the STORY-809 gate passes; Build green at merged head eda8fafc.'
+  created_at: 2026-10-06T02:43:55.835936451Z
+  modified_at: 2026-10-06T02:43:55.835936451Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+history:
+- id: 01a10f18-a55c-7797-bad4-2cbb779611ba
+  author: joe
+  timestamp: 2026-10-06T02:43:55.868442207Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 2ab2b58d01cda563730a510301298719688a9b81
   branch: main
