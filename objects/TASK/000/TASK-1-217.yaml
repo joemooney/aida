@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:06:36.053741115Z
-modified_at: 2026-10-06T04:49:47.392960739Z
+modified_at: 2026-10-06T04:51:40.410889268Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -19,6 +19,12 @@ relationships:
   target_id: 01a104f7-8772-7472-b36e-62333a0bc367
   created_at: 2026-10-06T04:06:53.991379226Z
   created_by: joe
+comments:
+- id: 01a10f8d-98fa-7711-9fa5-a731add5b581
+  author: joe
+  content: 'Root cause: support::ensure_seat resolves AIDA_USER/USER/USERNAME, but the PTY command overwrote USER with joe when USER was absent. Windows runners commonly supply USERNAME only, so the child requested a seat for an unrostered principal. Fix pins AIDA_USER and fixture roster to one explicit test identity, clears inherited session/managed-agent flags, uses CR for Enter, and includes child diagnostics. No production authority bypass or platform skip.'
+  created_at: 2026-10-06T04:51:40.410889268Z
+  modified_at: 2026-10-06T04:51:40.410889268Z
 history:
 - id: 01a10f64-8fcc-72b3-9268-0f289d8b4c5e
   author: joe
