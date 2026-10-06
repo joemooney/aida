@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T03:31:33.362601099Z
-modified_at: 2026-10-06T03:30:35.541748682Z
+modified_at: 2026-10-06T03:40:05.616087926Z
 req_type: Task
 tags:
 - ci
@@ -89,6 +89,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f35 exited with code 1 after 30658ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1588` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1588 --force-claim` to take over here, or `aida edit TASK-1588 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1588 — the store reports TASK-1588 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
   created_at: 2026-10-06T03:16:50.462933908Z
   modified_at: 2026-10-06T03:16:50.462933908Z
+- id: 01a10f4c-1070-775c-a114-e2e429d214c6
+  author: joe
+  content: 'Advisor (rotation handoff note): two consecutive clean-exit-no-PR implementer runs (attempts 2 and 3 of run 01a10f47). If attempt 3 shelves the same way, do NOT blind-retry a fourth time — read the headless log under .aida/headless-logs/task-1588-* first: the agent is either concluding the ADR-65 weekly Windows workflow needs no code PR (plausible misread for a CI-workflow-only spec) or finishing without /aida-pr. If the work exists on the task-1588 branch, recover via aida pr ship / queue recover rather than a re-run.'
+  created_at: 2026-10-06T03:40:05.616087926Z
+  modified_at: 2026-10-06T03:40:05.616087926Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 history:
 - id: 01a104f8-50cb-7093-9110-7706defdfc60
   author: joe
