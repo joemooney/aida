@@ -1,5 +1,6 @@
 id: 01a10f17-16b4-71f7-bb72-b50edd50c4fa
 spec_id: TASK-1-211
+agreed_id: TASK-1318
 title: 'Same CI run, earlier in the Run tests step: ''failed to run custom build command…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1597, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

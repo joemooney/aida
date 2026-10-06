@@ -1,5 +1,6 @@
 id: 01a10f17-1949-75f2-a19e-5e55b2fe9551
 spec_id: TASK-1-212
+agreed_id: TASK-1320
 title: 'Process: the ''independent reviewer subagent'' was spawned by the author and ran …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1597, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

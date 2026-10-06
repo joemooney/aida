@@ -1,5 +1,6 @@
 id: 01a10f1c-8c1f-7260-8bfb-8fee617937b6
 spec_id: TASK-1-213
+agreed_id: TASK-1321
 title: aida rebase --dry-run --json run inside a linked git worktree (sibling dir from…
 description: 'aida rebase --dry-run --json run inside a linked git worktree (sibling dir from ''git worktree add'') classified against the PRIMARY checkout: reported branch=main ahead=0 behind=0 clean, while the worktree''s actual branch bug-1803 was 1 ahead / 3 behind origin/main with doc conflicts. Reproduced 2026-10-05 in aida-wt-bug-1803-review. Plain git rebase in the same worktree behaved correctly.'
 status: Draft
