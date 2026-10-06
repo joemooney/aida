@@ -1,0 +1,29 @@
+id: 01a111f3-f3fd-7b11-99ea-6ab4ec8868b9
+spec_id: TASK-1-227
+title: 'drain summary under-counts real output: ''0 shipped, diff +0 -0'' on a wave that produced 3 PRs'
+description: |-
+  drain summary under-counts real output — third sighting in 24h, now with a clean repro.
+
+  The 2026-10-06 06:40 wave (next4 --no-human=both, binary cd1aa53848) printed "0 shipped · 3 shelved · diff: +0 -0 across 0 files · tokens: unknown (collection incomplete)" — yet it demonstrably produced PRs 2443 (TASK-1328, later APPROVED), 2444 (TASK-1602), and 2445 (TASK-1603), each with real diffs and green Ubuntu CI. The overnight 2026-10-06 wave had the same signature (summary claimed "diff +0 -0 / 0 shipped" while PRs 2439/2440/2442 existed; noted in the advisor handoff watch notes). Related symptom in the same output: "token usage unrecognized in headless log pr-2443-*.jsonl (shape: type=turn.completed)" — the collector doesn't recognize the current vendor event shape, which may be the same root cause (summary built from a stream parser that no longer matches codex output) or a sibling one.
+
+  Impact: the one artifact an operator reads to judge a wave says nothing happened; trust falls on manual `aida pr list` cross-checks. "Shipped" may be technically narrow (= merged), but then diff/+0-0 and token-unknown still misrepresent delivered work; shelved-with-open-PR members deserve their own line.
+
+  Repro: run any pipelined wave whose members end at verdict shelves with open PRs; compare the summary block to `aida pr list`.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-06T16:02:42.813121277Z
+modified_at: 2026-10-06T16:02:42.813121277Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+filed_at:
+  code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
