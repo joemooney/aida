@@ -10,12 +10,12 @@ description: |-
   Impact: the one artifact an operator reads to judge a wave says nothing happened; trust falls on manual `aida pr list` cross-checks. "Shipped" may be technically narrow (= merged), but then diff/+0-0 and token-unknown still misrepresent delivered work; shelved-with-open-PR members deserve their own line.
 
   Repro: run any pipelined wave whose members end at verdict shelves with open PRs; compare the summary block to `aida pr list`.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T16:02:42.813121277Z
-modified_at: 2026-10-06T18:50:36.506650737Z
+modified_at: 2026-10-06T19:07:26.270005653Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -49,6 +49,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1129d-1277-72a0-b81a-c0d89ae0c066
+  author: aida-auto-bump
+  timestamp: 2026-10-06T19:07:26.200000336Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1129d-12be-7572-a395-8ef822bd60a9
+  timestamp: 2026-10-06T19:07:26.270004256Z
+  agent: aida
+  commit_sha: a874edcc7e8f01141dcbf8bdd35ceeb5910cced2
+  summary: Completed via merge a874edcc
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
@@ -61,3 +74,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T18:50:36.506650737Z
   implemented_by: joe
+  completed_at: 2026-10-06T19:07:26.199977698Z
+  completion_sha: a874edcc7e8f01141dcbf8bdd35ceeb5910cced2
