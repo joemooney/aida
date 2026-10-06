@@ -1,0 +1,20 @@
+id: 01a10f02-a6f0-7216-a69e-2f748f65252c
+spec_id: TASK-1601
+agreed_id: TASK-1601
+title: 'CI gate candidate: compile aida-cli with --no-default-features so the cfg-stub twins (e.g. tui feature) stay buildable'
+description: 'Surfaced during PR 2429 (tui_entry.rs slice-1 module 2): the extracted handle_tui_command carries a cfg(feature = "tui") implementation and a cfg(not(feature = "tui")) stub twin, but CI has no --no-default-features build, so a broken stub only fails for users building without default features. The 2429 self-check caught this and verified the stub compiles manually. A cheap gate (cargo check -p aida-cli --no-default-features, or workspace-wide) closes the gap for all ~45 slice-1 modules and any other feature-gated pair. Candidate for ci-gate-tiers; keep it in the fast tier if check-only.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T02:19:54.480530782Z
+modified_at: 2026-10-06T02:19:54.480530782Z
+req_type: Task
+filed_at:
+  code_sha: 2dc90ca81f5fcf0d38262dae16dadaa7b480eb09
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 62e3374e51
+  vendor: antigravity
+  session: c4533f5c-49cf-4219-829a-015580ac4dc4
