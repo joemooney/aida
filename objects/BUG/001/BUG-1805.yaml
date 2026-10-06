@@ -12,12 +12,12 @@ description: |
   Fix shape: only push the escalate flag into child argv when the resolved no-human mode is Both (mirror the validation), or give EscalateMode an explicit None/absent arm. Regression test: an interactive nextN batch child argv must not contain --escalate-*; a --no-human=both child argv must.
 
   Workaround until fixed: run batch drains with --no-human=both.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T13:40:06.975309028Z
-modified_at: 2026-10-06T13:40:39.541979374Z
+modified_at: 2026-10-06T16:19:59.057829407Z
 req_type: Bug
 history:
 - id: 01a11171-e5f5-78f0-a0e2-818e5e6f49f9
@@ -27,6 +27,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a11203-c3d1-7850-8a8f-978e474d761a
+  author: joe
+  timestamp: 2026-10-06T16:19:59.057826223Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
