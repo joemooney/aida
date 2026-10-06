@@ -1,0 +1,33 @@
+id: 01a11019-9635-7880-a8a4-6e4d1cf592fd
+spec_id: STORY-1533
+agreed_id: STORY-1533
+title: 'Review PR-2441: [AI:codex] ci(cli): check feature-disabled builds (TASK-1601)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a11017`) for branch `task-1601`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2441>
+  - Branch: `task-1601` → `main`
+
+  ## Covers
+
+  - TASK-1601
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2441` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T07:24:34.741211108Z
+modified_at: 2026-10-06T07:24:34.741211108Z
+req_type: Story
+filed_at:
+  code_sha: 357a7a6d0fc156f860ece7e92afadab42cb5d4af
+  branch: task-1601
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: codex
