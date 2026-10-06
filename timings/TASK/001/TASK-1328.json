@@ -1,0 +1,204 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1328",
+  "publishes": [
+    {
+      "at": "2026-10-06T16:04:42.347545622Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T06:46:48.571542646Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a10ff7-01f3-7111-8fca-c88f5f9a1f91",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T06:46:59.117290359Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T06:47:23.016261277Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a10ff7 exited with code 1 after 23797ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-220` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-220 --force-claim` to take over here, or `aida edit TASK-1-220 --s"
+      }
+    },
+    {
+      "ts": "2026-10-06T06:47:23.017212619Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T06:47:43.681360528Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a10ff7-0611-7c40-bf1f-b5878573ee18",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a10ff7 exited with code 1 after 19685ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-220` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-220 --force-claim` to take over here, or `aida edit TASK-1-220 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1328 — the store reports TASK-1328 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1328`."
+      }
+    },
+    {
+      "ts": "2026-10-06T06:57:13.435868685Z",
+      "spec": "TASK-1328",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:02:59.019881499Z",
+      "spec": "TASK-1328",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:19.107259343Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:24.225385644Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T13:47:57.540979676Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11173-32c9-7180-a8e5-6e14aa133ead",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:40.041797023Z",
+      "spec": "TASK-1328",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2443
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:42.876589468Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11184-4276-7610-99ff-545a84e34d2b",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:43.387077433Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11184-4276-7610-99ff-545a84e34d2b",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:49.442351754Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11184-4276-7610-99ff-545a84e34d2b",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:50.567001869Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11184-4276-7610-99ff-545a84e34d2b",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:03:33.983491983Z",
+      "spec": "TASK-1328",
+      "run_uuid": "01a11184-4276-7610-99ff-545a84e34d2b",
+      "kind": {
+        "event": "AdvisorEscalated",
+        "reason": "Full diff reviewed; origin-ID ownership requirement verified by passing PR CI regression tests. No actionable code defects. Required merge-hold gate fails on active supervised hold; merge escalated to human."
+      }
+    },
+    {
+      "ts": "2026-10-06T14:03:33.991070058Z",
+      "spec": "TASK-1328",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2443
+      }
+    },
+    {
+      "ts": "2026-10-06T16:04:42.339376367Z",
+      "spec": "TASK-1328",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "010de0e6894d84ee6d0f1ea848a85b9b1835f71c",
+        "pr": 2443,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
