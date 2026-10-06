@@ -48,3 +48,11 @@
   note: Promoted from finding TASK-1-217 via `aida findings promote`
   added_at: 2026-10-06T04:06:50.882762203Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a10f67-f421-79c2-9a17-68f82790add1
+  position: 15000
+  added_by: joe
+  note: auto-queued by `aida pr` (01a10f63); covers 1 spec
+  added_at: 2026-10-06T04:10:48.387611941Z
+  for_role: reviewer
+  added_by_machine: imac
