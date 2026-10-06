@@ -81,6 +81,14 @@ elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; t
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
   printf '%s\n' '{"title":"[AI:codex] fix(pr): fixture (TASK-1287)","body":""}'
 elif [ "$1 $2" = "pr checks" ] && printf '%s' "$*" | grep -q -- '--json'; then
+  if [ -f "$state/rows" ]; then
+    if printf '%s' "$*" | grep -q -- '--required'; then
+      cat "$state/required"
+    else
+      cat "$state/rows"
+    fi
+    exit 0
+  fi
   if [ -f "$state/label" ]; then
     bucket=fail
   else
@@ -190,10 +198,9 @@ fn no_label_and_no_marker_ships_without_release() {
     let text = output_text(&output);
     assert!(output.status.success(), "{text}");
     assert!(!text.contains("releasing supervised merge-hold"), "{text}");
-    assert_eq!(
-        std::fs::read_to_string(fixture.state.join("events")).unwrap(),
-        "merge\n"
-    );
+    let events = std::fs::read_to_string(fixture.state.join("events")).unwrap();
+    assert!(events.ends_with("merge\n"), "{events}");
+    assert!(!events.contains("release"), "{events}");
 }
 
 // BUG-1532: a merge-hold MARKER binds `aida pr ship` with no drive running
@@ -233,4 +240,65 @@ fn marker_hold_binds_pr_ship_without_a_live_drive() {
         !calls.contains("pr checks") && !calls.contains("pr merge"),
         "refused before the CI watch: {calls:?}"
     );
+}
+
+// trace:TASK-1331 | ai:codex
+#[test]
+fn ship_ignores_pending_informational_jobs_before_coarse_watch() {
+    let fixture = Fixture::new(false);
+    std::fs::create_dir_all(fixture.repo.join(".aida")).unwrap();
+    std::fs::write(
+        fixture.repo.join(".aida/config.toml"),
+        "[ci]\ninformational_workflows = [\"Optional*\"]\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.state.join("required"), "[]").unwrap();
+    std::fs::write(
+        fixture.state.join("rows"),
+        r#"[
+        {"name":"Build (ubuntu-latest)","workflow":"CI","bucket":"pass"},
+        {"name":"Build (windows-latest)","workflow":"Optional platforms","bucket":"pending"},
+        {"name":"Build (macos-latest)","workflow":"Optional platforms","bucket":"fail"}
+    ]"#,
+    )
+    .unwrap();
+    let output = fixture.ship();
+    assert!(output.status.success(), "{}", output_text(&output));
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+    assert!(
+        !calls.contains("--watch"),
+        "must never enter unfiltered watcher: {calls}"
+    );
+    assert!(calls.contains("pr merge"), "{calls}");
+}
+
+// trace:TASK-1331 | ai:codex
+#[test]
+fn ship_still_rejects_required_informational_and_unlisted_failures() {
+    for required in [false, true] {
+        let fixture = Fixture::new(false);
+        let workflow = if required {
+            "Cross-platform nightly"
+        } else {
+            "CI"
+        };
+        let rows = format!(
+            r#"[{{"name":"Build (ubuntu-latest)","workflow":"{workflow}","bucket":"fail"}}]"#
+        );
+        std::fs::write(fixture.state.join("rows"), &rows).unwrap();
+        std::fs::write(
+            fixture.state.join("required"),
+            if required { &rows } else { "[]" },
+        )
+        .unwrap();
+        let output = fixture.ship();
+        assert!(!output.status.success(), "{}", output_text(&output));
+        assert!(
+            output_text(&output).contains("CI is red"),
+            "{}",
+            output_text(&output)
+        );
+        let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+        assert!(!calls.contains("pr merge"), "{calls}");
+    }
 }

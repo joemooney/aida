@@ -392,6 +392,12 @@ Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
 
+GitHub `aida pr ship` waits on classified CI rows for up to 20 minutes. The
+`[ci]` informational allow-list applies to pending as well as failed jobs;
+branch-protection-required checks always take precedence. Unlisted failures
+still block shipping. See [PR lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1331 | ai:codex -->
+
 ## Reconstitution launch limitation
 
 Store-probe failures are surfaced on stderr even when the recall denominator is

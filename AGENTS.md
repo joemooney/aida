@@ -1,3 +1,8 @@
+GitHub `pr ship` polls classified CI rows directly, so pending or failed
+informational workflows do not delay shipping. Required checks override the
+informational allow-list; other unlisted failures still block the merge.
+<!-- trace:TASK-1331 | ai:codex -->
+
 Queue-done ownership accepts a requirement's stored origin ID after its display
 ID is remapped. Every recognized ID in a scoped branch must still belong to
 that requirement; unrelated branches cannot borrow origin-ID commit evidence.

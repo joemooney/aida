@@ -55,7 +55,8 @@ pub enum ShipStep {
     /// Resolve or create the PR. `create_if_needed = true` when no PR
     /// number was supplied and the current branch has no open PR.
     ResolvePr { create_if_needed: bool },
-    /// `gh pr checks <N> --watch`.
+    /// Wait for gating CI checks (GitHub uses informational-aware row polling).
+    // trace:TASK-1331 | ai:codex
     WatchCi,
     /// `gh pr merge <N> --squash [--delete-branch]`.
     Merge { delete_branch: bool },

@@ -2163,8 +2163,8 @@ pub(crate) fn pr_ship_handler(
         );
     } else {
         eprintln!("  step 2: watching CI for PR-{}", pr_number);
-        // STORY-516: route the blocking CI watch through the Forge trait (streams
-        // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
+        // Route registration and check reads through the Forge trait.
+        // trace:STORY-516 trace:TASK-1331 | ai:codex
         let watch_change = crate::forge::ChangeRef {
             id: pr_number,
             url: String::new(),
@@ -2182,28 +2182,39 @@ pub(crate) fn pr_ship_handler(
             std::time::Duration::from_secs(60),
             std::time::Duration::from_secs(10),
         )?;
-        let ci_result = forge.watch_ci(&watch_change);
-        let mut ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
-        // BUG-1180 / ADR-39: a coarse "failed" may be the supervised merge-hold
-        // gate itself (this command releases it at step 3) or an informational
-        // matrix job. Re-read the rows and abort only on a REAL red check.
-        // trace:BUG-1180 | ai:claude
+        // Classify GitHub rows before waiting: the coarse --watch waits for
+        // every job, including hung informational workflows. Required checks
+        // still override the allow-list, and non-informational failures gate.
+        // Other forges retain their pipeline watcher.
+        // trace:TASK-1331 | ai:codex
         let mut red_detail: Option<String> = None;
-        if matches!(ci_result, Ok(crate::forge::CiState::Failed)) {
+        let ci_result = if forge.kind() == crate::forge::ForgeKind::GitHub {
             let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
             label_only_hold = !hold_present
                 && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-            match crate::ci_gate::refine_red(
-                &hold_root,
+            crate::ci_gate::refine_red(
+                &project_root,
                 forge.as_ref(),
                 &watch_change,
                 hold_present,
                 label_only_hold,
                 std::time::Duration::from_secs(20 * 60),
                 std::time::Duration::from_secs(15),
-            ) {
-                Ok(r) if !r.is_real() && !r.has_pending() => {
-                    ci_failed = false;
+            )
+            .map(|r| {
+                if r.is_real() {
+                    red_detail = Some(format!(
+                        "CI is red on PR-{pr_number}: {}",
+                        r.describe(pr_number)
+                    ));
+                    crate::forge::CiState::Failed
+                } else if r.has_pending() {
+                    red_detail = Some(format!(
+                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
+                        r.pending.join(", ")
+                    ));
+                    crate::forge::CiState::Failed
+                } else {
                     let note = r.describe(pr_number);
                     if !note.is_empty() {
                         eprintln!(
@@ -2212,22 +2223,13 @@ pub(crate) fn pr_ship_handler(
                             note
                         );
                     }
+                    crate::forge::CiState::Success
                 }
-                Ok(r) if !r.is_real() => {
-                    red_detail = Some(format!(
-                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
-                        r.pending.join(", ")
-                    ));
-                }
-                Ok(r) => {
-                    red_detail = Some(format!(
-                        "CI is red on PR-{pr_number}: {}",
-                        r.describe(pr_number)
-                    ))
-                }
-                Err(_) => {} // no per-check rows on this forge — keep the coarse verdict
-            }
-        }
+            })
+        } else {
+            forge.watch_ci(&watch_change)
+        };
+        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
         // STORY-1480: the ship's CI wait reached a terminal verdict — emit
         // the same CiTerminal the drain's CI phase emits (empty run_uuid;
         // specs credited from the branch name), covering interactive ships.
