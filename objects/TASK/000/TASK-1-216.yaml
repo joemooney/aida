@@ -3,12 +3,12 @@ spec_id: TASK-1-216
 agreed_id: TASK-1324
 title: aida reconstitute with an empty criterion-traced-test denominator masks arm-B f…
 description: 'aida reconstitute with an empty criterion-traced-test denominator masks arm-B failures: 4 probe runs on aida-monitor 2026-10-05 20:58 each exited 0 in ~1s with ZERO-byte headless logs (vs 83KB for a real 2026-10-04 run), empty scratch dirs, regenerated=0 — the store-probe agent never ran or failed instantly, yet the report shows only ''unknown: no real traced tests to recall'' because the real_tests.is_empty() match arm swallows arm_b_error. Separately: spawn_vendor_headless_with_seat appears to return success with no output in this situation. Repro: aida reconstitute STORY-3 --json --yes in ~/ai/aida-monitor.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-06T07:14:43.731111129Z
+modified_at: 2026-10-06T07:15:37.346019232Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -145,6 +145,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a11011-6302-7bb2-850d-4a909f6cdc6d
+  author: aida-orchestrator
+  timestamp: 2026-10-06T07:15:37.346027236Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main
@@ -153,3 +160,11 @@ filed_at:
   aida_build_sha: dafb66432e
   vendor: antigravity
   session: 8440bd1e-cba5-444c-8d52-5cfa9f3753e2
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: launch-refused
+  detail: 'phase 1 child session 01a11011 exited with code 1 after 19257ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-216` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-216 --force-claim` to take over here, or `aida edit TASK-1-216 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1324 — the store reports TASK-1324 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1324`.'
+  shelved_by: advisor
+  shelved_at: 2026-10-06T07:15:37.346019232Z
