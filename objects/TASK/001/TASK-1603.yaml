@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:36:30.874758482Z
+modified_at: 2026-10-06T14:36:32.699954222Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,58 @@ comments:
   content: 'Phase-1 handoff complete: commit a760a2016b pushed; PR-2445 is open at that exact head. 83 targeted tests plus formatting/diff checks pass. queue done set status Done and removed the role-queue entry. At exit Ubuntu Build and merge-hold-gate are queued; aida pr ship intentionally refused merge for this drive implementer seat. Parent through-ci run retains CI/review responsibility.'
   created_at: 2026-10-06T14:12:09.364831771Z
   modified_at: 2026-10-06T14:12:09.364831771Z
+- id: 01a111a5-103b-7542-b099-6535f0312036
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 3 (reviewer)
+
+    Recorded by `aida queue work TASK-1603 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 3 (reviewer) · kind `verdict:request-changes`
+    - Seat: reviewer (session role: advisor)
+    - Parent spec: TASK-1603
+    - Branch under test: main
+    - Commit under test: cd1aa538485b
+    - Recorded at: 2026-10-06T14:36:32.155137256+00:00
+
+    ### Failure
+
+    reviewer verdict is RequestChanges — not Approved
+
+    Failure kind: `verdict:request-changes`
+
+    ### Recovery hint shown to the operator
+
+    Address the review feedback, then push fixups: `aida queue rework TASK-1603 --work`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T14:36:32.155137256+00:00
+
+    ### Phase durations
+
+      - phase 2 (ci): 7211 ms
+      - phase 3 (reviewer): 345202 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1603","started_at":"2026-10-06T14:30:37.104840931+00:00","completed_at":"2026-10-06T14:36:32.155137256+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":7211},{"phase":3,"slug":"reviewer","elapsed_ms":345202}],"total_ms":353408,"binary_sha":"cd1aa53848"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1603 --title "drain phase 3 (reviewer) failure on TASK-1603" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T14:36:32.699947988Z
+  modified_at: 2026-10-06T14:36:32.699947988Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
