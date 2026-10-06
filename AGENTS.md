@@ -33,6 +33,12 @@ trailer do not grant completion credit. CLI/MCP rework and status edits record
 evidence at or before that SHA. See [git lifecycle](docs/cli/04-git-lifecycle.md).
 <!-- trace:TASK-1600 | ai:codex -->
 
+Reconstitution preserves store-probe failures even with no traced-test denominator.
+Missing or invalid probe artifacts report their output and headless-log paths;
+a successful child exit alone does not establish a successful probe.
+See [reporting](docs/cli/08-reporting.md#aida-reconstitute).
+<!-- trace:TASK-1-216 | ai:codex -->
+
 Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
 mirrored only when origin already advertises the exact SHA; rejected or pending
 pushes are skipped. Mirror-sync ignores and reports local-only default/store

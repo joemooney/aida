@@ -340,6 +340,20 @@ impl ArmScore {
     }
 }
 
+// trace:TASK-1-216 | ai:codex
+fn store_arm_score(
+    matches: &[TestMatch],
+    total: usize,
+    regenerated: usize,
+    error: Option<&str>,
+) -> ArmScore {
+    match error {
+        Some(reason) => ArmScore::unknown("B", "store", total, reason),
+        // `known` handles a zero denominator, but only AFTER launch/output errors.
+        None => ArmScore::known("B", "store", matches, total, regenerated),
+    }
+}
+
 /// Marginal lift in percentage points (arm B − arm A). `None` — unknown — the
 /// moment either arm is unknown; never a guess.
 pub(crate) fn delta_points(arm_a: &ArmScore, arm_b: &ArmScore) -> Option<f64> {
@@ -1013,6 +1027,24 @@ fn criterion_pairs(
         .collect()
 }
 
+// trace:TASK-1-216 | ai:codex
+fn read_probe_output(output: &Path, log: &Path, label: &str) -> Result<Vec<RegeneratedTest>> {
+    let raw = std::fs::read_to_string(output).with_context(|| {
+        format!(
+            "the {label} agent exited successfully but wrote no readable output at {} — see {}",
+            output.display(),
+            log.display()
+        )
+    })?;
+    parse_regenerated(&raw).with_context(|| {
+        format!(
+            "the {label} agent wrote invalid output at {} — see {}",
+            output.display(),
+            log.display()
+        )
+    })
+}
+
 /// Run arm B: the store-only probe, then the matcher. Returns
 /// `(regenerated, pairs, matches)`.
 #[allow(clippy::too_many_arguments)]
@@ -1033,17 +1065,15 @@ fn run_store_arm(
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         display
     );
+    let probe_log = logs.join(format!("probe-{lower}-{stamp}.jsonl"));
     run_headless(
         project_root,
         scratch,
         prompt,
         &format!("probe-{lower}"),
-        &logs.join(format!("probe-{lower}-{stamp}.jsonl")),
+        &probe_log,
     )?;
-    let regenerated = parse_regenerated(
-        &std::fs::read_to_string(probe_out)
-            .with_context(|| format!("the probe wrote no output at {}", probe_out.display()))?,
-    )?;
+    let regenerated = read_probe_output(probe_out, &probe_log, "probe")?;
     let pairs = criterion_pairs(project_root, report, &regenerated);
     let match_out = scratch.join("matches.json");
     let matches =
@@ -1092,17 +1122,15 @@ fn run_baseline_arm(
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
         display
     );
+    let probe_log = logs.join(format!("baseline-{lower}-{stamp}.jsonl"));
     run_headless(
         project_root,
         baseline_scratch,
         prompt,
         &format!("baseline-{lower}"),
-        &logs.join(format!("baseline-{lower}-{stamp}.jsonl")),
+        &probe_log,
     )?;
-    let regenerated =
-        parse_regenerated(&std::fs::read_to_string(out).with_context(|| {
-            format!("the baseline probe wrote no output at {}", out.display())
-        })?)?;
+    let regenerated = read_probe_output(out, &probe_log, "baseline probe")?;
     if regenerated.is_empty() {
         // Nothing regenerated: every real test is missing — a known zero.
         let ms = pairs
@@ -1257,13 +1285,7 @@ pub(crate) fn handle_reconstitute_command(
     };
 
     let (_, total) = score(&matches, real_tests.len());
-    let arm_b = match &arm_b_error {
-        _ if real_tests.is_empty() => {
-            ArmScore::unknown("B", "store", 0, "no real traced tests to recall")
-        }
-        Some(e) => ArmScore::unknown("B", "store", real_tests.len(), e.clone()),
-        None => ArmScore::known("B", "store", &matches, total, regenerated.len()),
-    };
+    let arm_b = store_arm_score(&matches, total, regenerated.len(), arm_b_error.as_deref());
     // Arm A never blocks the report: a failed baseline run is reported as
     // unknown (PRIN-5), and so is the delta. It is skipped when arm B failed,
     // because the delta is unknown either way and the runs cost money.
@@ -1462,7 +1484,7 @@ pub(crate) fn handle_reconstitute_command(
             "\n  {} every real traced test was reproducible — nothing to harvest",
             crate::glyph(crate::glyphs::Glyph::Check).green()
         ),
-        None if real_tests.is_empty() => println!(
+        None if arm_b_error.is_none() && real_tests.is_empty() => println!(
             "\n  {} no real traced tests yet — run `aida criteria {}` and trace tests to criteria first",
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             display
@@ -1966,6 +1988,73 @@ mod tests {
         );
         let err = cost_guard(false, false, 4).unwrap_err().to_string();
         assert!(err.contains("--yes") && err.contains('4'), "{err}");
+    }
+
+    // trace:TASK-1-216 | ai:codex
+    #[test]
+    fn empty_denominator_preserves_store_failure_in_human_and_json_reports() {
+        let arm_a = ArmScore::unknown(
+            "A",
+            "baseline (no store)",
+            0,
+            "no real traced tests to recall",
+        );
+        for total in [0, 3] {
+            for error in [
+                "the probe agent exited with 1",
+                "the probe wrote no output",
+                "invalid regenerated JSON",
+                "the matcher agent exited with 1",
+            ] {
+                let arm_b = store_arm_score(&[], total, 0, Some(error));
+                assert_eq!(arm_b.total, total);
+                assert_eq!(arm_b.matched, None);
+                assert_eq!(arm_b.pct, None);
+                assert!(arm_b.render().contains(error));
+                let json = serde_json::to_value(&arm_b).unwrap();
+                assert_eq!(json["unknown_reason"], error);
+                assert!(json["matched"].is_null() && json["pct"].is_null());
+                assert_eq!(delta_points(&arm_a, &arm_b), None);
+                assert!(delta_unknown_reason(&arm_a, &arm_b)
+                    .unwrap()
+                    .contains(error));
+            }
+        }
+        let successful_empty = store_arm_score(&[], 0, 2, None);
+        assert_eq!(
+            successful_empty.unknown_reason.as_deref(),
+            Some("no real traced tests to recall")
+        );
+        let successful = store_arm_score(&[m("S.AC1", "a", MatchVerdict::Matched, "")], 1, 2, None);
+        assert_eq!(successful.pct, Some(100.0));
+        assert_eq!(successful.regenerated, Some(2));
+    }
+
+    // trace:TASK-1-216 | ai:codex
+    #[test]
+    fn silent_probe_missing_or_invalid_output_is_a_failure_even_without_real_tests() {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("regenerated.json");
+        let log = dir.path().join("headless.jsonl");
+        std::fs::write(&log, "").unwrap();
+        for content in [None, Some(""), Some("not JSON")] {
+            if let Some(content) = content {
+                std::fs::write(&output, content).unwrap();
+            }
+            let error = format!(
+                "{:#}",
+                read_probe_output(&output, &log, "probe").unwrap_err()
+            );
+            assert!(error.contains(&output.display().to_string()));
+            assert!(error.contains(&log.display().to_string()));
+            let arm_b = store_arm_score(&[], 0, 0, Some(&error));
+            assert_eq!(arm_b.unknown_reason.as_deref(), Some(error.as_str()));
+        }
+        // An explicit empty test set is valid output, unlike a missing artifact.
+        std::fs::write(&output, r#"{"tests":[]}"#).unwrap();
+        assert!(read_probe_output(&output, &log, "probe")
+            .unwrap()
+            .is_empty());
     }
 
     // A failed store arm is unknown with an unknown delta — never an abort, never zero.
