@@ -1,0 +1,29 @@
+id: 01a11171-66bf-7830-80c0-b5b1e682a653
+spec_id: BUG-1805
+agreed_id: BUG-1805
+title: 'interactive nextN drain self-destructs: child argv always carries --escalate-blocks, which the child rejects without --no-human=both'
+description: |
+  Every interactive (non `--no-human=both`) `aida queue work nextN --auto-complete` drain fails in seconds: the batch child argv builders (aida-cli-lib/src/lib.rs ~100797 and ~103104) push `--escalate-blocks` or `--escalate-defaults` UNCONDITIONALLY — `auto_complete::EscalateMode` is a two-variant enum with Blocks as default, there is no "absent" arm — while `--no-human` is pushed only `if let Some(...)`. The spawned child then trips the STORY-306 validation in queue_cmd.rs ~6122 ("--escalate-blocks / --escalate-defaults only apply to a fully-headless drain") and exits before any work.
+
+  Reproduced 2026-10-06 06:38 by the operator on binary cd1aa53848 (agent profile, fresh build): `aida queue work next4 --auto-complete --require-head --user role:implementer --role implementer` → two child validation errors, "next 4 drain stopped at TASK-1333 (phase 2 failed)", 0 shipped, 3s elapsed.
+
+  Introduced by de1eb10282 (STORY-1091 pipelined batch legs, 2026-09-12, PR #1787). Masked since then because overnight waves run `--no-human=both`, where the flag pair is legal.
+
+  Fix shape: only push the escalate flag into child argv when the resolved no-human mode is Both (mirror the validation), or give EscalateMode an explicit None/absent arm. Regression test: an interactive nextN batch child argv must not contain --escalate-*; a --no-human=both child argv must.
+
+  Workaround until fixed: run batch drains with --no-human=both.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T13:40:06.975309028Z
+modified_at: 2026-10-06T13:40:06.975309028Z
+req_type: Bug
+filed_at:
+  code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
