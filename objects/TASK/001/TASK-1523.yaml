@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:14.072123334Z
-modified_at: 2026-10-06T02:43:31.234567794Z
+modified_at: 2026-10-06T02:44:06.969571244Z
 req_type: Task
 tags:
 - aida-monitor
@@ -107,6 +107,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f17 exited with code 1 after 13632ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1523` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1523 --force-claim` to take over here, or `aida edit TASK-1523 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1523 — the store reports TASK-1523 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
   created_at: 2026-10-06T02:43:31.234563348Z
   modified_at: 2026-10-06T02:43:31.234563348Z
+- id: 01a10f18-d0b9-7275-bd2e-fbd9e9382f79
+  author: joe
+  content: 'Advisor: pulled from the headless implementer queue after two identical launch refusals in one night (children 01a10eee and 01a10f17: ''InProgress but no local lease holds it'' — note BUG-1803/TASK-1596 hit the same InProgress state and claimed anyway; something about this spec''s cross-project measurement shape makes the drain''s launch path refuse rather than claim). Handoff rule applied: punt to advisor rather than grind. This is attended/guided work on aida-monitor — do not re-queue it for an unattended drain wave.'
+  created_at: 2026-10-06T02:44:06.969571244Z
+  modified_at: 2026-10-06T02:44:06.969571244Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 history:
 - id: 01a10eee-3f59-74fb-8c61-d65972c8abb3
   author: aida-orchestrator-phase1
