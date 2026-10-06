@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:10:26.207431840Z
+modified_at: 2026-10-06T14:11:08.937008138Z
 req_type: Bug
 comments:
 - id: 01a10f37-7d84-7478-9102-2c045a3305fa
@@ -45,6 +45,11 @@ comments:
   content: 'Implemented checked run registration/readback before phase-1 status mutation, preserving UUID+live-PID corroboration. Both pipelined parent paths now let the registered child bump status. Missing/corrupt/unwritable ownership state and dead batch owners fail before phase-child launch. Validation: 68 drain-state tests passed, including first/later batch and nextN members, single runs, invalid snapshots, failed writes, and dead owners; status-gating regression passed; cargo fmt and git diff checks passed. AGENTS.md and OVERVIEW.md updated. Opening PR for the through-ci handoff.'
   created_at: 2026-10-06T14:10:26.207431840Z
   modified_at: 2026-10-06T14:10:26.207431840Z
+- id: 01a1118d-d009-7fa3-b1d0-7b44c106a43a
+  author: joe
+  content: Commit a760a2016b references this requirement
+  created_at: 2026-10-06T14:11:08.937008138Z
+  modified_at: 2026-10-06T14:11:08.937008138Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
