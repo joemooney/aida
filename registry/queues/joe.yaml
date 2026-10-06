@@ -50,7 +50,7 @@
   requirement_id: 01a10f67-f421-79c2-9a17-68f82790add1
   position: 20000
   added_by: joe
-  note: auto-queue retry reused canonical review story; covers 1 spec
-  added_at: 2026-10-06T04:29:11.790839663Z
+  note: 'BUG-1291 recovery: PR #2435 handed off after shelving in phase 3 (reviewer): PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head'
+  added_at: 2026-10-06T04:48:58.716876933Z
   for_role: reviewer
   added_by_machine: imac
