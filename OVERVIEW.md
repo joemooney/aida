@@ -65,6 +65,15 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
 
+**Drain launch ownership.** A single, batch, or nextN member publishes its
+run UUID and zen provenance before the phase-1 status bump and phase-child
+launch. Ownership persistence is required: missing/corrupt batch state or a
+failed write returns a phase-1 failure before that run changes status or
+spawns a phase child. Pipelined parents leave the bump to the registered
+member process. Child corroboration still requires a matching UUID and live
+orchestrator PID; stale or bare environment flags grant no authority.
+<!-- trace:TASK-1603 | ai:codex -->
+
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
 the main checkout's lock, including launches from sibling worktrees. Shared

@@ -99743,21 +99743,6 @@ pub(crate) fn run_auto_complete(
             return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         }
     }
-    // TASK-133: capture the pre-spawn status bump (BUG-369) so the parent can
-    // restore it if phase 1 fails without the child ever acquiring a lease.
-    // `Some((display_id, prior_status))` when a flip happened; `None` when the
-    // spec was already InProgress/Planned and the parent left it untouched.
-    let phase1_bump = match prepare_auto_complete_phase1_status(storage, spec) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!(
-                "{} {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                e
-            );
-            std::process::exit(1);
-        }
-    };
     let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
         Ok(s) => s,
         Err(e) => {
@@ -99847,25 +99832,27 @@ pub(crate) fn run_auto_complete(
         variant,
     );
 
-    // STORY-301: surface the drain so a user inside the spawned Claude session
-    // can see what command launched it, how far it has got, and what happens
-    // when they exit. A single-spec drain owns the file — it writes it now
-    // with the run-UUID + zen flag baked in, and clears it on return; a batch
-    // / nextN member updates the existing file's run-fields via `set_run` (the
-    // batch orchestrator created the file before this member started).
-    // Best-effort: a write failure leaves the drain running, just unobservable
-    // — and crucially, phase children correctly fall back to treating
-    // themselves as interactive when the corroboration check finds no live
-    // drain-state. The zen flag is the carried typed field, not a bare env
-    // re-read (ADR-10). trace:STORY-301 trace:TASK-336 trace:ADR-10 | ai:claude
-    let run_zen = driver.is_zen_run();
+    // trace:TASK-1603 | ai:codex
+    // Publish ownership before changing status or launching any phase child.
+    // This is authority state, not optional telemetry: a missing/failed write
+    // would make the first child apply standalone lease rules to our own bump.
     let owns_drain_state =
         owns_drain_state && std::env::var_os("AIDA_PIPELINED_BATCH_CHILD").is_none();
-    if owns_drain_state {
-        let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
-    } else {
-        drain_state::set_run(&project_root, spec, &run_token, run_zen);
-    }
+    // Retain the prior status for TASK-133's lease-less failure recovery.
+    let phase1_bump = match prepare_registered_auto_complete_phase1(
+        storage,
+        &project_root,
+        spec,
+        &run_token,
+        driver.is_zen_run(),
+        owns_drain_state,
+    ) {
+        Ok(bump) => bump,
+        Err(e) => {
+            eprintln!("could not prepare orchestrator ownership/status for {spec}: {e} — no phase launched");
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
+    };
     // STORY-492: a resume re-entry seeds the driver with the branch + PR the
     // skipped phases would otherwise have discovered, so the resumed phases
     // (CI / reviewer / merge / …) have the context they need.
@@ -100822,15 +100809,9 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
     fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
         let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
         self.next_pipelined_handle += 1;
-        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
-            eprintln!(
-                "{} could not prepare pipelined member {}: {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                spec,
-                e
-            );
-            return handle;
-        }
+        // trace:TASK-1603 | ai:codex
+        // The child registers its run before bumping status. Pre-bumping here
+        // creates an InProgress/no-lease window before it has ownership.
         let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
@@ -103129,15 +103110,9 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
     fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
         let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
         self.next_pipelined_handle += 1;
-        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
-            eprintln!(
-                "{} could not prepare pipelined member {}: {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                spec,
-                e
-            );
-            return handle;
-        }
+        // trace:TASK-1603 | ai:codex
+        // The child registers its run before bumping status. Pre-bumping here
+        // creates an InProgress/no-lease window before it has ownership.
         let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
@@ -105199,6 +105174,21 @@ pub(crate) fn auto_complete_phase1_target_status(
         }
         _ => None,
     }
+}
+
+/// Registration and the status bump share one checked entry point, so an
+/// ownership failure cannot leave Approved work InProgress without a lease.
+// trace:TASK-1603 | ai:codex
+fn prepare_registered_auto_complete_phase1(
+    storage: &Storage,
+    project_root: &std::path::Path,
+    spec: &str,
+    run_token: &str,
+    zen: bool,
+    owns_drain_state: bool,
+) -> Result<Option<(String, RequirementStatus)>> {
+    drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
+    prepare_auto_complete_phase1_status(storage, spec)
 }
 
 /// BUG-369: mark orchestrator-driven phase-1 work as InProgress before the
