@@ -19,7 +19,7 @@ tags:
 comments:
 - id: 01a10f63-8200-7cd2-b6f4-bc9af4a6ce5a
   author: auto-complete
-  content: |
+  content: |-
     <!-- aida:drain-phase-failure -->
     ## Drain phase failure — phase 1 (implementer)
 
@@ -44,8 +44,8 @@ comments:
 
     ## Recurrence
 
-    Attempts: 1
-    Latest recurrence: 2026-10-06T04:05:41.084985098+00:00
+    Attempts: 2
+    Latest recurrence: 2026-10-06T13:41:57.102688517+00:00
 
     ### Phase durations
 
@@ -67,7 +67,7 @@ comments:
     2. `aida add --type bug --priority medium --parent TASK-1322 --title "drain phase 1 (implementer) failure on TASK-1322" --description-from-file /tmp/note.md`
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-06T04:05:42.016525256Z
-  modified_at: 2026-10-06T04:05:42.016525256Z
+  modified_at: 2026-10-06T13:41:58.205904995Z
 - id: 01a10f68-627e-78f1-9897-dfecdc98a419
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone. No triage reason was given.'
