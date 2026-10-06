@@ -1,0 +1,33 @@
+id: 01a11177-a90b-7163-8c1a-46347e6abd27
+spec_id: STORY-1535
+agreed_id: STORY-1535
+title: 'Review PR-2443: [AI:codex] fix(queue): preserve ownership after spec ID remapping (TASK-1328)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a11172`) for branch `task-1328`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2443>
+  - Branch: `task-1328` → `main`
+
+  ## Covers
+
+  - TASK-1328
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2443` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T13:46:57.163094072Z
+modified_at: 2026-10-06T13:46:57.163094072Z
+req_type: Story
+filed_at:
+  code_sha: 00f0fd888ddf0f6de32a7c77e346275b340a9cef
+  branch: task-1328
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: cd1aa53848
+  vendor: codex
