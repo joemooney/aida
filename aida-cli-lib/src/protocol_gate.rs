@@ -91,8 +91,11 @@ pub(crate) enum ChangedFiles {
 }
 
 /// What the branch diff says: every changed path, plus the Rust files whose
-/// hunks touch inline test code (`#[cfg(test)]`, `#[test]`, `mod tests`) —
-/// a bug fix whose regression test lives in the source file still counts.
+/// hunks touch inline test code — either a changed line that mentions a test
+/// marker (`#[cfg(test)]`, `#[test]`, `mod tests`) or a hunk whose lines fall
+/// inside an existing inline test region of the file (an edit to the body of
+/// an existing `#[test]` carries no marker in its hunks — BUG-1804's shape).
+/// A bug fix whose regression test lives in the source file still counts.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct BranchDiff {
     pub(crate) files: Vec<String>,
@@ -247,6 +250,163 @@ pub(crate) fn files_with_test_hunks(patch: &str) -> Vec<String> {
     out
 }
 
+/// Pure scan of Rust source: the 1-based, inclusive line ranges inside an
+/// inline test region. A region opens at a line whose code starts with
+/// `#[cfg(test)]`, `#[test]`, or a `mod tests` header; its item is the first
+/// following line that opens a block (`{`) or ends a non-block item (`;`),
+/// and a block region closes at the first later line that is exactly the
+/// opener's indentation plus `}` — rustfmt's shape for the matching close
+/// brace, which `cargo fmt --check` guarantees here — or at end of file.
+/// A raw-string line that happens to match the close shape only ends the
+/// region early: the scan then fails toward "missing", never toward a false
+/// "met" (PRIN-5).
+// trace:TASK-1322 | ai:claude
+pub(crate) fn inline_test_line_ranges(source: &str) -> Vec<(usize, usize)> {
+    fn is_marker(trimmed: &str) -> bool {
+        if trimmed.starts_with("#[cfg(test)]") || trimmed.starts_with("#[test]") {
+            return true;
+        }
+        for prefix in ["mod tests", "pub mod tests", "pub(crate) mod tests"] {
+            if let Some(rest) = trimmed.strip_prefix(prefix) {
+                if rest
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !c.is_alphanumeric() && c != '_')
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    let lines: Vec<&str> = source.lines().collect();
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0usize;
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = line.trim_start();
+        if !is_marker(trimmed) {
+            i += 1;
+            continue;
+        }
+        let indent = &line[..line.len() - trimmed.len()];
+        let close = format!("{indent}}}");
+        // The marker's item: the first line opening a block or ending a
+        // non-block item (`#[cfg(test)] use …;` must not swallow what
+        // follows it).
+        enum Item {
+            Block(usize),
+            NonBlock(usize),
+            Eof,
+        }
+        let mut item = Item::Eof;
+        for (k, item_line) in lines.iter().enumerate().skip(i) {
+            let t = item_line.trim_end();
+            if t.ends_with('{') {
+                item = Item::Block(k);
+                break;
+            }
+            if t.ends_with(';') {
+                item = Item::NonBlock(k);
+                break;
+            }
+        }
+        let end = match item {
+            Item::NonBlock(k) => k + 1,
+            Item::Eof => lines.len(),
+            Item::Block(open) => lines
+                .iter()
+                .enumerate()
+                .skip(open + 1)
+                .find(|(_, later)| later.trim_end() == close)
+                .map(|(j, _)| j + 1)
+                .unwrap_or(lines.len()),
+        };
+        out.push((i + 1, end));
+        i = end;
+    }
+    out
+}
+
+/// The new-side range of a `-U0` hunk header `@@ -a[,b] +c[,d] @@ …` as
+/// 1-based inclusive lines. A pure deletion (`d` = 0) touches the boundary
+/// at line `c`; it is reported as that single line.
+// trace:TASK-1322 | ai:claude
+fn hunk_new_range(line: &str) -> Option<(usize, usize)> {
+    let rest = line.strip_prefix("@@ ")?;
+    let after_plus = &rest[rest.find('+')? + 1..];
+    let spec = after_plus
+        .split_once(' ')
+        .map_or(after_plus, |(spec, _)| spec);
+    let (start, count) = match spec.split_once(',') {
+        Some((s, c)) => (s.parse().ok()?, c.parse().ok()?),
+        None => (spec.parse().ok()?, 1),
+    };
+    let start = std::cmp::max(start, 1usize);
+    let end = if count == 0 { start } else { start + count - 1 };
+    Some((start, end))
+}
+
+/// Pure scan of a `git diff -U0` patch plus post-image sources: the Rust
+/// files with a hunk whose new-side lines fall inside an inline test region,
+/// even when no changed line mentions a test marker — an edit to the body of
+/// an existing `#[test]` (BUG-1804's shape). `read_source` supplies a file's
+/// post-image text; `None` (deleted or unreadable file) just yields no
+/// regions for it.
+// trace:TASK-1322 | ai:claude
+pub(crate) fn files_with_hunks_in_inline_test_regions(
+    patch: &str,
+    mut read_source: impl FnMut(&str) -> Option<String>,
+) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    // The current file's path and its (lazily read) test regions.
+    let mut current: Option<(String, Option<Vec<(usize, usize)>>)> = None;
+    for line in patch.lines() {
+        if let Some(target) = line.strip_prefix("+++ ") {
+            // `+++ /dev/null` (a deleted file) clears the current file too.
+            current = target
+                .strip_prefix("b/")
+                .filter(|p| p.ends_with(".rs"))
+                .map(|p| (p.to_string(), None));
+            continue;
+        }
+        let Some((path, regions)) = current.as_mut() else {
+            continue;
+        };
+        if out.contains(path) {
+            continue;
+        }
+        let Some((lo, hi)) = hunk_new_range(line) else {
+            continue;
+        };
+        let regions = regions.get_or_insert_with(|| {
+            read_source(path)
+                .map(|src| inline_test_line_ranges(&src))
+                .unwrap_or_default()
+        });
+        if regions.iter().any(|&(a, b)| lo <= b && hi >= a) {
+            out.push(path.clone());
+        }
+    }
+    out
+}
+
+/// A file's content at `HEAD` — the post-image side of the `base...HEAD`
+/// diff the gate inspects, so the region scan sees the same text the hunk
+/// line numbers index into, dirty worktree or not.
+// trace:TASK-1322 | ai:claude
+fn head_file_content(repo: &Path, path: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .arg("show")
+        .arg(format!("HEAD:{path}"))
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 /// The status an ADR is judged by. At `queue done` a leased ADR reads In
 /// Progress (the lease flipped it), so the pre-lease status is recovered from
 /// the spec's recorded history; with no such record the item is UNKNOWN
@@ -371,7 +531,20 @@ pub(crate) fn changed_files_for_branch(repo: &Path) -> ChangedFiles {
     // the inline-test signal, never the file list. The `*.rs` pathspec goes
     // after the range, not before it. trace:BUG-1622 | ai:claude
     let test_hunk_files = crate::harvest::git_diff_base_to_head(repo, &base, &["-U0"], &["*.rs"])
-        .map(|patch| files_with_test_hunks(&patch))
+        .map(|patch| {
+            let mut hits = files_with_test_hunks(&patch);
+            // An edit to the body of an existing inline test carries no
+            // marker in its hunks; find those by the post-image's test
+            // regions. trace:TASK-1322 | ai:claude
+            for file in files_with_hunks_in_inline_test_regions(&patch, |path| {
+                head_file_content(repo, path)
+            }) {
+                if !hits.contains(&file) {
+                    hits.push(file);
+                }
+            }
+            hits
+        })
         .unwrap_or_default();
     ChangedFiles::Known(BranchDiff {
         files,
@@ -676,6 +849,85 @@ mod tests {
             ItemState::Met(detail) => assert!(detail.contains("src/b.rs")),
             other => panic!("inline test change should count: {other:?}"),
         }
+    }
+
+    // trace:TASK-1322 | ai:claude
+    #[test]
+    fn inline_test_regions_cover_cfg_test_mod_to_its_close_brace() {
+        let src = "fn prod() {\n    body();\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn existing() {\n        let cfg = \"enabled = true\";\n        assert!(!cfg.is_empty());\n    }\n}\n";
+        // One region: the attribute line through the mod's close brace.
+        assert_eq!(inline_test_line_ranges(src), vec![(5, 14)]);
+    }
+
+    // trace:TASK-1322 | ai:claude
+    #[test]
+    fn inline_test_region_for_non_block_item_stops_at_its_semicolon() {
+        let src = "#[cfg(test)]\nuse helper::fake;\n\nfn prod() {\n    body();\n}\n";
+        // The region is the attribute and its `use`; `prod` is not swallowed.
+        assert_eq!(inline_test_line_ranges(src), vec![(1, 2)]);
+    }
+
+    // trace:TASK-1322 | ai:claude
+    #[test]
+    fn body_edit_inside_existing_test_counts_without_any_marker_in_the_hunk() {
+        // BUG-1804's shape: the whole diff edits assertions inside an
+        // existing #[test]; no changed line or @@ header mentions a marker.
+        let src = "fn prod() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn existing() {\n        let a = 1;\n        assert_eq!(a, 1);\n    }\n}\n";
+        let patch = "diff --git a/src/sched.rs b/src/sched.rs\n--- a/src/sched.rs\n+++ b/src/sched.rs\n@@ -8 +8,2 @@ enabled = true\n-        assert_eq!(a, 1);\n+        assert_eq!(a, 1);\n+        assert!(a > 0);\n";
+        assert!(files_with_test_hunks(patch).is_empty());
+        let hits = files_with_hunks_in_inline_test_regions(patch, |path| {
+            (path == "src/sched.rs").then(|| src.to_string())
+        });
+        assert_eq!(hits, vec!["src/sched.rs".to_string()]);
+
+        let r = req(RequirementType::Bug, RequirementStatus::InProgress);
+        let changed = ChangedFiles::Known(BranchDiff {
+            files: vec!["src/sched.rs".into()],
+            test_hunk_files: hits,
+        });
+        let report = evaluate_items(&r, &changed);
+        match &report.items[0].state {
+            ItemState::Met(detail) => assert!(detail.contains("src/sched.rs")),
+            other => panic!("body edit inside a test should count: {other:?}"),
+        }
+    }
+
+    // trace:TASK-1322 | ai:claude
+    #[test]
+    fn hunks_outside_test_regions_or_in_unreadable_files_do_not_count() {
+        let src = "fn prod() {\n    body();\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
+        // Hunk on line 2: inside prod(), not a test region.
+        let outside = "+++ b/src/a.rs\n@@ -2 +2 @@\n-    body();\n+    other();\n";
+        assert!(
+            files_with_hunks_in_inline_test_regions(outside, |_| Some(src.to_string())).is_empty()
+        );
+        // Unreadable post-image (deleted file): no regions, never a hit.
+        let inside = "+++ b/src/a.rs\n@@ -7 +7 @@\n-    fn t() {}\n+    fn t2() {}\n";
+        assert!(files_with_hunks_in_inline_test_regions(inside, |_| None).is_empty());
+        // Non-Rust paths are ignored even when the lines would match.
+        let not_rust = "+++ b/notes/a.md\n@@ -7 +7 @@\n-x\n+y\n";
+        assert!(
+            files_with_hunks_in_inline_test_regions(not_rust, |_| Some(src.to_string())).is_empty()
+        );
+        // The same hunk inside the region is a hit (control for the above).
+        assert_eq!(
+            files_with_hunks_in_inline_test_regions(inside, |_| Some(src.to_string())),
+            vec!["src/a.rs".to_string()]
+        );
+    }
+
+    // trace:TASK-1322 | ai:claude
+    #[test]
+    fn hunk_new_range_reads_counts_and_pure_deletions() {
+        assert_eq!(hunk_new_range("@@ -8 +8,2 @@ ctx"), Some((8, 9)));
+        assert_eq!(
+            hunk_new_range("@@ -4199,0 +4200,7 @@ enabled = true"),
+            Some((4200, 4206))
+        );
+        assert_eq!(hunk_new_range("@@ -10,2 +9,0 @@"), Some((9, 9)));
+        assert_eq!(hunk_new_range("@@ -1 +1 @@"), Some((1, 1)));
+        assert_eq!(hunk_new_range("+++ b/src/a.rs"), None);
+        assert_eq!(hunk_new_range("+        assert!(x);"), None);
     }
 
     #[test]
