@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:36:32.699954222Z
+modified_at: 2026-10-06T16:02:19.127429881Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -113,6 +113,19 @@ comments:
     3. `aida edit <NEW-ID> --status approved`
   created_at: 2026-10-06T14:36:32.699947988Z
   modified_at: 2026-10-06T14:36:32.699947988Z
+- id: 01a111f3-9777-7a71-a727-3092ed34fb84
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, from .aida/review-verdicts/PR-2445.json, verdict RequestChanges at a760a2016b1c). The approach (checked pre-registration before the status bump) is accepted — acceptance items 1-5, 8-9 verified by the reviewer. Two P1 races remain; fix both on the same branch task-1603 / PR 2445, no replacement spec.
+
+    P1-1 — Scheduler re-selects a launched member, then wrongly declares exhaustion. Removing the parent pre-bump (start_spec_through_ci in both pipelined paths, lib.rs ~100812/~103113 at reviewed SHA) means next_head re-reads the queue while the child hasn't yet bumped/leased the spec, returns the same member again, and auto_complete.rs ~5046 treats the in-flight duplicate as no_more_heads=true — the drain exits leaving remaining Approved members undrained. Required: reserve launched members independently of spec status (or exclude in-flight members from selection without marking exhaustion). Evidence of done: a regression with a DELAYED child and multiple Approved members, for both batch and nextN paths — the existing mock removes its head synchronously and cannot catch this.
+
+    P1-2 — Shared run_uuid: a later member's registration invalidates an earlier member's authority before its child corroborates. drain_state.rs ~637-646 set_run writes one run_uuid; with pipeline depth 2+, B's register clobbers A's token pre-corroboration, reproducing the exact interactive-fallback refusal this spec exists to fix; additionally run_auto_complete's unconditional clear_run (lib.rs ~100004 region) wipes B's token when A exits. Required: per-active-run ownership tokens (cleanup scoped to the owning token), or serialize registration until the child's lease exists. Evidence of done: a two-active-token test plus a launch/cleanup interleaving test. Note the new sequential test currently ASSERTS the prior token is invalidated — that assertion is itself the bug's spelling and must change for concurrent runs.
+
+    Context for the implementer: this wave reproduced the original race live (member TASK-1322, alias TASK-1-215 — see comment 4), so a live two-member verification run after the fix is the strongest possible evidence.
+  created_at: 2026-10-06T16:02:19.127429881Z
+  modified_at: 2026-10-06T16:02:19.127429881Z
+  session_id: 1ecd0d94-c4b2-4582-8fbe-82ec4f3f2445
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
