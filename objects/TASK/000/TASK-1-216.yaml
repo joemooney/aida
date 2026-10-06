@@ -3,12 +3,12 @@ spec_id: TASK-1-216
 agreed_id: TASK-1324
 title: aida reconstitute with an empty criterion-traced-test denominator masks arm-B f…
 description: 'aida reconstitute with an empty criterion-traced-test denominator masks arm-B failures: 4 probe runs on aida-monitor 2026-10-05 20:58 each exited 0 in ~1s with ZERO-byte headless logs (vs 83KB for a real 2026-10-04 run), empty scratch dirs, regenerated=0 — the store-probe agent never ran or failed instantly, yet the report shows only ''unknown: no real traced tests to recall'' because the real_tests.is_empty() match arm swallows arm_b_error. Separately: spawn_vendor_headless_with_seat appears to return success with no output in this situation. Repro: aida reconstitute STORY-3 --json --yes in ~/ai/aida-monitor.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-06T05:04:38.022291360Z
+modified_at: 2026-10-06T07:14:43.731111129Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -138,6 +138,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a11010-91a6-7123-9831-e772f146a67d
+  author: aida-orchestrator-phase1
+  timestamp: 2026-10-06T07:14:43.750284506Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main
