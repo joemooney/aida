@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T13:16:30.457288851Z
+modified_at: 2026-10-06T13:16:53.886577330Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -98,6 +98,11 @@ comments:
   content: 'Correction to the sandbox blocker notes: retrying standalone git staging and commit succeeded. Fix committed as b9a81b81ca6abe42f24ee32924cc4093e94399ab and pushed to origin/task-1331; gh pr view 2440 confirms that exact PR head. The push also mirrored the confirmed origin ref to GitLab. Only the local remote-tracking ref update was denied (origin/task-1331 remains stale locally); worktree is clean. Final validation: 7 integration tests and 14 classifier tests passed; fmt and diff checks passed. PR body updated with rework behavior and validation. Ready for independent re-review against the new head; existing merge hold is intact.'
   created_at: 2026-10-06T13:16:30.457283295Z
   modified_at: 2026-10-06T13:16:30.457283295Z
+- id: 01a1115c-24fe-79c1-af18-106faa4ab9fe
+  author: mcp
+  content: 'Closeout: fix is committed and pushed at b9a81b81ca6abe42f24ee32924cc4093e94399ab; PR-2440 head verified and body updated. New Ubuntu CI is pending; merge-hold-gate remains red due to the existing hold. Marking Done was blocked: CLI cannot open the store write lock from this sandbox; MCP queue_done was rejected with ''MCP tool call requires approval, but approval policy is never''. No status change was made. Operator/advisor can run aida queue done TASK-1331 from an authorized session, then independently re-review the pushed fix. All local validation passed (7 integration tests, 14 classifier tests, fmt, diff checks).'
+  created_at: 2026-10-06T13:16:53.886572014Z
+  modified_at: 2026-10-06T13:16:53.886572014Z
 history:
 - id: 01a10fe4-0d4f-79c1-8513-6e746727c009
   author: joe
