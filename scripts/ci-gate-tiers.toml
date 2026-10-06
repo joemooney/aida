@@ -52,6 +52,8 @@
 "External-prose classifier inventory" = "fast"
 "Run MCP stdio compatibility tests" = "full"
 "Run history template CLI/config/MCP contract tests" = "full"
+# trace:BUG-1801 | ai:codex
+"Run single-spec show latency regression" = "full"
 "Run MCP doc-consistency test" = "full"
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"

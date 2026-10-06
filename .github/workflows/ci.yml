@@ -212,6 +212,11 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_history_templates.sh
 
+      # trace:BUG-1801 | ai:codex
+      - name: Run single-spec show latency regression
+        if: steps.changes.outputs.full_ci == 'true'
+        run: python3 tests/test_show_latency.py --aida target/debug/aida
+
       # Doc-vs-MCP consistency gate — every tool + argument documented in
       # docs/agents/cross-agent-onboarding.md must appear in `tools/list`.
       # trace:TASK-452 | ai:claude

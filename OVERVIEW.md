@@ -326,6 +326,15 @@ Compatible cache-backed reads coordinate through a canonical `refresh.lock`
 flock. An incremental winner makes one SQLite attempt; other readers poll
 committed metadata for at most `AIDA_CACHE_READ_WAIT_MS` (default 1500ms), shared
 across backend opens in the invocation. Advisory paths use a zero wait budget.
+Single-spec CLI `show` also uses zero wait across human, TOON, JSON, card and
+tree output: a live refresh holder never delays the lookup, and a human TTY
+does not trigger an inline full rebuild. The spec object still comes from
+canonical YAML, while stale derived graph context carries the existing cache
+labels. Missing or incompatible caches and explicit strict overrides retain
+their recovery behavior. `tests/test_show_latency.py` covers held-flock reads,
+TTY delegation and subsequent explicit refresh.
+<!-- trace:BUG-1801 | ai:codex -->
+
 Rows and freshness metadata come from one pinned SQLite snapshot. An invocation
 collector preserves stale observations across later fresh reads; CLI object JSON
 outputs carry `cache`, arrays retain their shape with a stderr note, and MCP
