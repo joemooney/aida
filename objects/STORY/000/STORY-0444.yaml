@@ -1,0 +1,29 @@
+id: 01a10fa3-6c65-7c61-a2a0-a940321569ff
+spec_id: STORY-0444
+title: 'Review PR-2438: [AI:codex] fix(ship): preserve completion intent and deliberate reopen (TASK-1600)'
+description: |-
+  Independent review of https://github.com/joemooney/aida/pull/2438 at 224c235d5e31a86b9043c65a2ab92957df446595. Implements TASK-1600's advisor-approved two-leg sketch. Implementation is Done; do not merge until independent evidence/verdict and CI support it.
+
+  ## Acceptance
+  - Mid-title spec references and body-only prose do not acquire squash completion trailers. Explicit trailing IDs and branch recovery are accepted only when they resolve unambiguously in the store; unknown SLICE-1-style tokens are removed.
+  - Reopening Done/Completed via status edit or CLI/MCP rework records the code HEAD. Live sweeps and manual replay ignore evidence at or before that marker; a genuinely later commit still completes.
+  - Stale candidates cannot move a reopened spec to Done under closure holds or graduate reviews via covers/forge recovery; write-time checks retain concurrent reopen decisions.
+  - Confirm the repeated-completion regression: completion_sha retains the first SHA, so a second merge needs ancestry fencing.
+  - Local validation: 86 auto-bump, 103 ship, 13 completion-seam tests pass (202), formatting and diff whitespace checks pass. Assess CI and any regressions in affected callers.
+
+  MCP intake may leave this review Draft pending advisor triage. The original pooled worktree's Git metadata/role and lease targets are outside this environment's writable roots. Publishing used an exact-copy checkout at /tmp/aida-task-1600-publish; original verified edits and lease were preserved.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T05:15:30.789677412Z
+modified_at: 2026-10-06T05:15:30.789677412Z
+req_type: Story
+tags:
+- from-review:PR-2438
+filed_at:
+  code_sha: 51fe64d5e96431e0103055c132c5cdf5bd5cab6b
+  branch: task-1600
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: dafb66432e
