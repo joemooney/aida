@@ -1,0 +1,33 @@
+id: 01a1100d-d1f0-7472-bbed-1ee985a2fe3e
+spec_id: STORY-1532
+agreed_id: STORY-1532
+title: 'Review PR-2439: [AI:codex] fix(reconstitute): expose pre-spawn failures and document investigation (TASK-1327)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a10ff7`) for branch `task-1327`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2439>
+  - Branch: `task-1327` → `main`
+
+  ## Covers
+
+  - TASK-1327
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2439` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T07:11:43.600087026Z
+modified_at: 2026-10-06T07:11:43.600087026Z
+req_type: Story
+filed_at:
+  code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
