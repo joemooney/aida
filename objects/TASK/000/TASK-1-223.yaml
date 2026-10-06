@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T06:54:17.403044339Z
+modified_at: 2026-10-06T06:54:21.009267251Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -54,3 +54,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-06T06:54:17.403044339Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida pr ship — GitHub CI waits now ignore pending informational jobs while preserving required checks and unlisted failure gates
