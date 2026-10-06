@@ -5,9 +5,52 @@
     {
       "at": "2026-10-06T03:25:44.134501545Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-06T04:09:49.646700853Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-04T21:27:23.641719015Z",
+      "spec": "BUG-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:01:35.609178379Z",
+      "spec": "BUG-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:14.254285152Z",
+      "spec": "BUG-1801",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:20.431503374Z",
+      "spec": "BUG-1801",
+      "run_uuid": "01a10f35-4ec8-70eb-99fb-63f1b648a716",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-06T03:15:41.871170389Z",
       "spec": "BUG-1801",
@@ -16,6 +59,71 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:30:30.307947989Z",
+      "spec": "BUG-1801",
+      "run_uuid": "01a10f36-38da-7652-aa97-a40239045983",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T03:30:31.413303084Z",
+      "spec": "BUG-1801",
+      "run_uuid": "01a10f36-38da-7652-aa97-a40239045983",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "ci",
+        "kind": "ci-unavailable",
+        "detail": "phase-1 PR/MR 2433 head mismatch: produced `a0ca7c41988cf3b3d3fafa181983c673f64946a8`, forge reports `51fb3f4977c34589605c9120b44e838f44f5ff31`",
+        "recovery_hint": "CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1801 --auto-complete`."
+      }
+    },
+    {
+      "ts": "2026-10-06T04:06:23.993022786Z",
+      "spec": "BUG-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2433,
+        "verdict": "APPROVED",
+        "reviewed_sha": "51fb3f4977c34589605c9120b44e838f44f5ff31"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:09:35.174537877Z",
+      "spec": "BUG-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T04:09:43.491440207Z",
+      "spec": "BUG-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2433
+      }
+    },
+    {
+      "ts": "2026-10-06T04:09:49.637197232Z",
+      "spec": "BUG-1801",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "169d0f412a14bd13db7795703c41091f210ec55a",
+        "pr": 2433,
+        "closed_by": "auto-bump"
       }
     }
   ]

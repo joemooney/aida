@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1525",
+  "publishes": [
+    {
+      "at": "2026-10-06T04:09:49.655692425Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T04:09:49.646902509Z",
+      "spec": "STORY-1525",
+      "run_uuid": "01a10f63-9772-7a11-94c2-fbcc43c6f56c",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "169d0f412a14bd13db7795703c41091f210ec55a",
+        "pr": 2433,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
