@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-06T04:48:57.264922079Z
+modified_at: 2026-10-06T04:49:00.125640941Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -45,6 +45,58 @@ comments:
   content: Implemented and pushed commit 9ec89b97b6 in https://github.com/joemooney/aida/pull/2435; review queued as STORY-1528. Verified 19 reconstitute tests, cargo fmt --all -- --check, and git diff --check. queue done refused because canonical ID changed from TASK-1-216 to TASK-1324 while the branch/lease still use the origin ID. Left in-progress; no guard override. Separate live-vendor silent exit investigation filed as TASK-1-219.
   created_at: 2026-10-06T04:11:18.864702272Z
   modified_at: 2026-10-06T04:11:18.864702272Z
+- id: 01a10f8b-26dd-76c0-a196-9f651513be5d
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 3 (reviewer)
+
+    Recorded by `aida queue work TASK-1-216 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 3 (reviewer) · kind `ci-unavailable`
+    - Seat: reviewer (session role: advisor)
+    - Parent spec: TASK-1-216
+    - Branch under test: main
+    - Commit under test: 51fe64d5e964
+    - Recorded at: 2026-10-06T04:48:58.901964486+00:00
+
+    ### Failure
+
+    PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head
+
+    Failure kind: `ci-unavailable`
+
+    ### Recovery hint shown to the operator
+
+    CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work TASK-1-216 --auto-complete`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T04:48:58.901964486+00:00
+
+    ### Phase durations
+
+      - phase 2 (ci): 5204 ms
+      - phase 3 (reviewer): 1187414 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1-216","started_at":"2026-10-06T04:29:03.643942700+00:00","completed_at":"2026-10-06T04:48:58.901964486+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"ci-unavailable","failure_message":"PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":5204},{"phase":3,"slug":"reviewer","elapsed_ms":1187414}],"total_ms":1193600,"binary_sha":"dafb66432e","auto_rebase":[{"phase":3,"pr_number":2435,"outcome":"clean"}]}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1-216 --title "drain phase 3 (reviewer) failure on TASK-1-216" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T04:49:00.125634882Z
+  modified_at: 2026-10-06T04:49:00.125634882Z
 history:
 - id: 01a10f61-0d1a-7290-b932-07ca5716f4df
   author: joe
