@@ -1,0 +1,33 @@
+id: 01a1102d-f47c-7fe3-b217-2a10b521d00c
+spec_id: STORY-1534
+agreed_id: STORY-1534
+title: 'Review PR-2442: [AI:codex] fix(sync): pin orphan-store rebase target (TASK-1604)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a11018`) for branch `task-1604`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2442>
+  - Branch: `task-1604` → `main`
+
+  ## Covers
+
+  - TASK-1604
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2442` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-06T07:46:49.596207079Z
+modified_at: 2026-10-06T07:46:49.596207079Z
+req_type: Story
+filed_at:
+  code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
