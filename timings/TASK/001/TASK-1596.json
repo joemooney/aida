@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1596",
+  "publishes": [
+    {
+      "at": "2026-10-06T02:27:38.398569555Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T01:58:30.043484354Z",
+      "spec": "TASK-1596",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:58:32.859203171Z",
+      "spec": "TASK-1596",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:15:40.560950887Z",
+      "spec": "TASK-1596",
+      "run_uuid": "01a10eef-0d95-7037-919c-44fc0db4d0a0",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T02:24:33.867187383Z",
+      "spec": "TASK-1596",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2430
+      }
+    },
+    {
+      "ts": "2026-10-06T02:24:38.159523775Z",
+      "spec": "TASK-1596",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2430,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d1e836d1cf5ac1ebbb609e9f9556f9bb8f16de3e"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:27:23.472991989Z",
+      "spec": "TASK-1596",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T02:27:32.520585196Z",
+      "spec": "TASK-1596",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2430
+      }
+    },
+    {
+      "ts": "2026-10-06T02:27:38.390732778Z",
+      "spec": "TASK-1596",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2ab2b58d01cda563730a510301298719688a9b81",
+        "pr": 2430,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
