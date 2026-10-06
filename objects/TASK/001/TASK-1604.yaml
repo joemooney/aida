@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:17:44.663524239Z
-modified_at: 2026-10-06T07:28:19.430088543Z
+modified_at: 2026-10-06T07:28:19.613347242Z
 req_type: Bug
 comments:
 - id: 01a1101b-bc08-70b3-80fd-944d7f37914f
@@ -48,6 +48,11 @@ filed_at:
   session: c4533f5c-49cf-4219-829a-015580ac4dc4
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-core git_ops::tests --lib — 56 passed
+    cargo test -p aida-core store_pull_pins_single_branch_and_preserves_shared_fetch_head --lib — passed with tracking-ref assertions
+    cargo test -p aida-cli-lib bug_1500_store_pull_hint_tests --lib — 5 passed
+    cargo fmt --all -- --check and git diff --check — passed
   implemented_at: 2026-10-06T07:28:18.453131747Z
   implemented_by: joe
 interface_changes:
