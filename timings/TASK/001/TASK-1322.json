@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1322",
+  "publishes": [
+    {
+      "at": "2026-10-06T18:16:53.742447894Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T04:04:43.018918117Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a10f62-9b84-7252-b845-a90ab59c6038",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:04:48.303358695Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a10f62-a0aa-7671-b4e8-6f098f11ddaf",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T04:05:25.086733919Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a10f62-a0aa-7671-b4e8-6f098f11ddaf",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a10f62 exited with code 1 after 36745ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:05:25.087355779Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a10f62-a0aa-7671-b4e8-6f098f11ddaf",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T04:05:41.047988471Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a10f62-a0aa-7671-b4e8-6f098f11ddaf",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a10f63 exited with code 1 after 15135ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1322`."
+      }
+    },
+    {
+      "ts": "2026-10-06T04:11:02.498692145Z",
+      "spec": "TASK-1322",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:17.587085773Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a11172-7a8d-7010-862e-fd28a577aa77",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:22.460131058Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:40.620523438Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a11172 exited with code 1 after 18113ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:40.621237488Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T13:41:57.059062884Z",
+      "spec": "TASK-1322",
+      "run_uuid": "01a11172-807d-7150-a9e1-052360ebd24b",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a11172 exited with code 1 after 15542ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1-215` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1-215 --force-claim` to take over here, or `aida edit TASK-1-215 --s. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1322 — the store reports TASK-1322 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1322`."
+      }
+    },
+    {
+      "ts": "2026-10-06T18:16:53.733955375Z",
+      "spec": "TASK-1322",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9c86e9c7ff37151e0301957ce7f61f9b7153146a",
+        "pr": 2447,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
