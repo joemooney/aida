@@ -378,3 +378,13 @@ rebuilds remain strict, as do mutations, gates and explicit cache operations.
 Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
+
+## Reconstitution launch limitation
+
+Store-probe failures are surfaced on stderr even when the recall denominator is
+empty. The current launcher resolves seat authority after entering the isolated
+scratch cwd, which cannot resolve a project roster and can refuse before vendor
+spawn. An exit-zero report therefore does not prove that an agent ran. See the
+[pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
+TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
+<!-- trace:TASK-1327 | ai:codex -->

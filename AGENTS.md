@@ -1,5 +1,11 @@
 # AGENTS.md
 
+Reconstitution can fail before vendor spawn when its empty scratch cwd cannot
+resolve the seat roster. Store-probe failures now also print to stderr; command
+exit 0 does not establish vendor success. See [launch investigation](docs/testing/task-1327-reconstitution-launch.md)
+and TASK-1-224 for the authority-root repair awaiting triage.
+<!-- trace:TASK-1327 | ai:codex -->
+
 Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
 manual dispatches fail before validation. Selected-path Windows PR checks stay
 informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain

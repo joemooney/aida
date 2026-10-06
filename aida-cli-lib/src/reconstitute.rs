@@ -1243,12 +1243,17 @@ pub(crate) fn handle_reconstitute_command(
     );
     let (regenerated, pairs, matches, arm_b_error) = match arm_b_run {
         Ok((regen, pairs, ms)) => (regen, pairs, ms, None),
-        Err(e) => (
-            Vec::new(),
-            criterion_pairs(project_root, &report, &[]),
-            Vec::new(),
-            Some(format!("{e:#}")),
-        ),
+        Err(e) => {
+            // trace:TASK-1327 | ai:codex
+            // A zero denominator must not hide a failure before the vendor starts.
+            eprintln!("  store probe failed: {e:#} — see {}", logs.display());
+            (
+                Vec::new(),
+                criterion_pairs(project_root, &report, &[]),
+                Vec::new(),
+                Some(format!("{e:#}")),
+            )
+        }
     };
 
     let (_, total) = score(&matches, real_tests.len());
