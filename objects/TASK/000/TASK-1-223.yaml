@@ -8,12 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T06:48:30.912851810Z
+modified_at: 2026-10-06T06:52:12.419464174Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:major
+comments:
+- id: 01a10ffb-f303-7b12-a099-747d0683fcfa
+  author: joe
+  content: 'Implementation: GitHub pr ship now enters the existing informational-aware per-check polling directly instead of first blocking in gh pr checks --watch. Required checks override the allow-list, non-informational failures remain blocking, and relevant pending rows have a 20-minute timeout with progress diagnostics. Regression integration coverage passes (5 tests); targeted classifier tests are running. Non-GitHub pipeline watchers remain unchanged.'
+  created_at: 2026-10-06T06:52:12.419464174Z
+  modified_at: 2026-10-06T06:52:12.419464174Z
 history:
 - id: 01a10fe4-0d4f-79c1-8513-6e746727c009
   author: joe
