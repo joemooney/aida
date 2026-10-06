@@ -72,7 +72,7 @@
   requirement_id: 01a1119f-6e13-77e0-b336-ebd9283c9798
   position: 40000
   added_by: joe
-  note: auto-queued by `session end` (01a11187); covers 1 spec
-  added_at: 2026-10-06T14:30:33.846055250Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-06T14:30:47.419680531Z
   for_role: reviewer
   added_by_machine: imac
