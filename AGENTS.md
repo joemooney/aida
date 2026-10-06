@@ -1,3 +1,9 @@
+Queue-done ownership accepts a requirement's stored origin ID after its display
+ID is remapped. Every recognized ID in a scoped branch must still belong to
+that requirement; unrelated branches cannot borrow origin-ID commit evidence.
+See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1328 | ai:codex -->
+
 # AGENTS.md
 
 Reconstitution can fail before vendor spawn when its empty scratch cwd cannot

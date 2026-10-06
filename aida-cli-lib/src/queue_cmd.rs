@@ -5042,6 +5042,10 @@ pub(crate) fn handle_queue_command(
                         commit_evidence.as_ref(),
                         *force,
                         &configured_prefixes,
+                        // The stored origin ID remains authoritative after the
+                        // merge gate assigns a short display ID.
+                        // trace:TASK-1328 | ai:codex
+                        &[spec_id],
                     ) {
                         workflow_hints::QueueDoneOwnership::Proceed => {}
                         workflow_hints::QueueDoneOwnership::Refuse(reason) => {
