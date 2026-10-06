@@ -1,5 +1,11 @@
 # AIDA — Overview
 
+The project schedule runs a read-only merged-worktree guard every 30 days and
+routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+scheduled and headless jobs.
+<!-- trace:TASK-1596 | ai:codex -->
+
 History supports scoped named templates and ordered event fields across CLI/MCP.
 Template parsing, event-local field projection, and config persistence share
 `aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.

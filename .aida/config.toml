@@ -241,6 +241,22 @@ on = ["CronJobFailed:disk-headroom-guard"]
 prompt = "Free disk space dropped below the configured floor. Reclaim stale worktree build caches with `aida worktree reclaim` (dry run by default; `--apply` deletes), remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
 enabled = true
 
+# Monthly read-only check after the merged-worktree backlog slowed pr ship.
+# Cleanup needs a human at a TTY; never schedule worktree gc --force.
+# trace:TASK-1596 | ai:codex
+[[schedule.jobs]]
+name = "merged-worktrees-guard"
+command = "doctor check merged-agent-worktrees --fail-on-findings"
+every = "30d"
+enabled = true
+
+[[schedule.jobs]]
+name = "merged-worktrees-guard-route"
+seats = ["advisor"]
+on = ["CronJobFailed:merged-worktrees-guard"]
+prompt = "Merged agent worktrees are accumulating. Review the routed trip evidence and `aida doctor check merged-agent-worktrees`. Ask the operator to review `aida worktree gc` (dry run), then run `aida worktree gc --yes --force` at an interactive TTY to clean up. Force is refused in unattended contexts; do not run forced cleanup from a scheduled job or headless seat."
+enabled = true
+
 # STORY-1462: the runaway-seat watchdog. BUG-1589 (2026-09-21): two seats
 # answered a mail tick every ~7-10s (~460 wakes and ~700M tokens an hour
 # each) and nobody noticed for ~24h. This job reads new bytes of this

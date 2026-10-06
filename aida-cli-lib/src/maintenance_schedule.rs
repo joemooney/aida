@@ -2904,6 +2904,22 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // Read-only monthly guard; forced cleanup stays with the operator.
+        // trace:TASK-1596 | ai:codex
+        (
+            &["doctor check merged-agent-worktrees --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check merged-agent-worktrees --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "merged-agent-worktrees",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
         // which seat made the store writes; keep it off the per-turn hook path.
         // trace:BUG-1746 | ai:codex
@@ -3492,6 +3508,69 @@ mod tests {
         }
     }
 
+    // trace:TASK-1596 | ai:codex
+    #[test]
+    fn task_1596_monthly_guard_is_read_only_and_routes_to_advisor() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let registry = load_config(repo_root).unwrap().unwrap();
+        let guard = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "merged-worktrees-guard")
+            .unwrap();
+        assert!(guard.enabled);
+        assert_eq!(guard.interval, Some(Duration::days(30)));
+        let command = guard.command.as_ref().unwrap();
+        assert_eq!(
+            command.args,
+            &[
+                "doctor",
+                "check",
+                "merged-agent-worktrees",
+                "--json",
+                "--fail-on-findings"
+            ]
+        );
+        assert!(!command.hook_allowed);
+        assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
+        let route = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "merged-worktrees-guard-route")
+            .unwrap();
+        assert!(route.enabled);
+        assert_eq!(route.seats, vec!["advisor"]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:merged-worktrees-guard"]
+        );
+        assert!(route.command.is_none());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        for now in [
+            at(12),
+            at(12) + Duration::days(29),
+            at(12) + Duration::days(30),
+        ] {
+            tick_with_executor(
+                tmp.path(),
+                config(vec![guard.clone()]),
+                &mut state,
+                now,
+                false,
+                ok_exec(Rc::clone(&seen)),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            seen.borrow().len(),
+            2,
+            "guard runs initially and after 30 days, not after 29"
+        );
+    }
+
     // trace:BUG-1746 | ai:codex
     #[test]
     fn bug_1746_mirror_sync_is_scheduled_but_hook_forbidden() {
@@ -3591,6 +3670,7 @@ mod tests {
             "disk-headroom-guard-route",
             "performance-guard-route",
             "watchdog-route",
+            "merged-worktrees-guard-route",
         ];
         let routes: Vec<Task> = parsed
             .tasks
@@ -3599,8 +3679,8 @@ mod tests {
             .collect();
         assert_eq!(
             routes.len(),
-            4,
-            "all four repository route jobs are in fixture"
+            route_names.len(),
+            "all selected repository route jobs are in fixture"
         );
 
         // The fake executor models an unreachable/rejecting mirror; tick must
@@ -4387,6 +4467,8 @@ enabled = true
             "doctor check stale-remote-branches --fail-on-findings",
             "doctor check disk-headroom --fail-on-findings",
             "doctor check runaway-seats --fail-on-findings",
+            // trace:TASK-1596 | ai:codex
+            "doctor check merged-agent-worktrees --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";
