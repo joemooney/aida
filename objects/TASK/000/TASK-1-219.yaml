@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:10:08.719084873Z
-modified_at: 2026-10-06T06:52:35.842283091Z
+modified_at: 2026-10-06T06:52:54.889867810Z
 req_type: Task
 tags:
 - from-advisor:TASK-1-216
@@ -21,6 +21,12 @@ relationships:
   target_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
   created_at: 2026-10-06T04:12:33.236501509Z
   created_by: joe
+comments:
+- id: 01a10ffc-98e9-7c23-a47d-4af6dc1a6076
+  author: joe
+  content: 'Investigation complete: rebuilt live STORY-3 retry exposes no valid parent seat grant is active before vendor spawn. Empty scratch cwd cannot resolve team roster; exec tracing confirms no vendor launch in the reproduced run. Added unconditional stderr failure diagnostic and pinned investigation docs. Filed TASK-1-224 for authority/config-root repair requiring sketch/sign-off. TASK-1523 remains independently blocked by STORY-1527. Validation: all 17 reconstitution unit tests pass, cargo fmt --all -- --check and git diff --check pass. Orchestrator owns subsequent review/merge.'
+  created_at: 2026-10-06T06:52:54.889867810Z
+  modified_at: 2026-10-06T06:52:54.889867810Z
 history:
 - id: 01a10f69-a925-7f92-ba2a-f4ad9aa4e497
   author: joe
