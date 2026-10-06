@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T07:21:34.058384421Z
+modified_at: 2026-10-06T07:21:36.840612375Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -26,6 +26,58 @@ comments:
   content: 'Implementation: GitHub pr ship now enters the existing informational-aware per-check polling directly instead of first blocking in gh pr checks --watch. Required checks override the allow-list, non-informational failures remain blocking, and relevant pending rows have a 20-minute timeout with progress diagnostics. Regression integration coverage passes (5 tests); targeted classifier tests are running. Non-GitHub pipeline watchers remain unchanged.'
   created_at: 2026-10-06T06:52:12.419464174Z
   modified_at: 2026-10-06T06:52:12.419464174Z
+- id: 01a11016-df48-7ba1-ae23-bd6f8e6fc92e
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 3 (reviewer)
+
+    Recorded by `aida queue work TASK-1331 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 3 (reviewer) · kind `verdict:request-changes`
+    - Seat: reviewer (session role: advisor)
+    - Parent spec: TASK-1331
+    - Branch under test: main
+    - Commit under test: 978c4974292a
+    - Recorded at: 2026-10-06T07:21:35.703786300+00:00
+
+    ### Failure
+
+    reviewer verdict is RequestChanges — not Approved
+
+    Failure kind: `verdict:request-changes`
+
+    ### Recovery hint shown to the operator
+
+    Address the review feedback, then push fixups: `aida queue rework TASK-1331 --work`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-06T07:21:35.703786300+00:00
+
+    ### Phase durations
+
+      - phase 2 (ci): 10033 ms
+      - phase 3 (reviewer): 391737 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1331","started_at":"2026-10-06T07:14:50.213510456+00:00","completed_at":"2026-10-06T07:21:35.703786300+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":2,"slug":"ci","elapsed_ms":10033},{"phase":3,"slug":"reviewer","elapsed_ms":391737}],"total_ms":403485,"binary_sha":"dafb66432e"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1331 --title "drain phase 3 (reviewer) failure on TASK-1331" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-06T07:21:36.840606650Z
+  modified_at: 2026-10-06T07:21:36.840606650Z
 history:
 - id: 01a10fe4-0d4f-79c1-8513-6e746727c009
   author: joe
