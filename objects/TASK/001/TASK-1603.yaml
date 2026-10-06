@@ -3,12 +3,12 @@ spec_id: TASK-1603
 agreed_id: TASK-1603
 title: 'drain launch race: the FIRST batch member''s child starts before the orchestrator run is registered, falls back to interactive rules, and refuses the InProgress-no-lease state the parent just created —'
 description: 'Reproduced on consecutive waves 2026-10-05 (builds 62e3374 and post-887bf7e): wave 1 first member TASK-1523 (children 01a10eee + replacement, both ''spec is InProgress but no local lease holds it'', shelved launch-refused), wave 2 first member TASK-1588 (children 01a10f35 + replacement, identical, shelved) — while every LATER member in both waves (BUG-1803, TASK-1596, BUG-1801, BUG-1804) hit the same InProgress-no-lease precondition and proceeded with ''claiming it anyway''. Wave-1 first-child log shows the smoking gun: ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' — the child launched before the orchestrator''s run record landed, so it applied interactive fail-closed rules to the InProgress bump its own parent had just made. Later children see the live run and claim. Cost: the first spec of every wave burns both launch attempts and shelves; TASK-1523 was wrongly suspected of being undrainable for its cross-project shape. Fix direction: register the run (or hand the child an ownership token) BEFORE the Approved→InProgress bump / child launch, or have the child retry its ownership check briefly instead of refusing on first read.'
-status: Done
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-06T14:30:33.048439797Z
+modified_at: 2026-10-06T14:35:46.661290016Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -97,6 +97,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a111a4-5c65-7292-9356-3b68cb105884
+  author: aida-orchestrator
+  timestamp: 2026-10-06T14:35:46.661325823Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -110,4 +117,12 @@ implementation_info:
   test_coverage_notes: cargo test -p aida-cli-lib --lib drain_state::tests -- --test-threads=1; cargo test -p aida-cli-lib --lib orchestrator::tests -- --test-threads=1; cargo test -p aida-cli-lib --lib phase1_registration_failure_leaves_status_unstarted -- --test-threads=1; cargo test -p aida-cli-lib --lib prepare_auto_complete_phase1_status -- --test-threads=1; cargo fmt --all -- --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Two pipelined defects: delayed startup prematurely exhausts the queue; concurrent members overwrite/clear ownership. Ubuntu CI passes; required merge hold remains active.'
+  recovery_hint: address the review findings, move TASK-1603 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-06T14:35:46.661290016Z
 interface_changes: {}
