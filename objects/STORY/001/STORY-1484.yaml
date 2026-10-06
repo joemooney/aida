@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-03T05:39:34.416501924Z
+modified_at: 2026-10-06T03:14:26.217274120Z
 req_type: Story
 tags:
 - cache
@@ -251,4 +251,10 @@ comments:
   created_at: 2026-10-03T05:39:34.416501924Z
   modified_at: 2026-10-03T05:39:34.416501924Z
   session_id: f3f9422b-b8fc-42bc-91e8-3f7f4bfdd422
+- id: 01a10f34-9329-7336-82f5-53065b9f7d83
+  author: joe
+  content: 'Live evidence 2026-10-05 20:13: cache.db went ''database disk image is malformed'' (SQLite error 11) during the evening''s heaviest concurrency — drain orchestrator + advisor seat + product seat all writing, plus a make build-fast replacing the binary mid-stream. aida cache rebuild recovered fully (4850 specs, verify clean, zero drift), confirming the cache-is-derived design held. But outright corruption, not just slow reads, is now on the cost ledger for the unguarded refresh path this story fixes; BUG-1801''s perf breaches share the same contention window.'
+  created_at: 2026-10-06T03:14:26.217274120Z
+  modified_at: 2026-10-06T03:14:26.217274120Z
+  session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
 execution_mode: guided
