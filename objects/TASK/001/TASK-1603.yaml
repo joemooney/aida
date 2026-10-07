@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T23:52:55.057475425Z
+modified_at: 2026-10-07T23:58:08.841725552Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -437,6 +437,11 @@ comments:
   content: PR-2452 rework accepted on existing fix-day-2026-10-07 worktree and owner lease. Implementing dynamic admission before checked run corroboration with serialized snapshot updates; membership and live-PID checks remain enforced. Attempted Needs Attention -> InProgress transition was refused for advisor authority; status remains unchanged, no role/grant override used. Red/green hermetic batch, nextN, and concurrent admission/cleanup regressions are underway. No real-store drain, merge, or hold clearance.
   created_at: 2026-10-07T23:52:55.057475425Z
   modified_at: 2026-10-07T23:52:55.057475425Z
+- id: 01a118cd-95c9-7313-915d-277bfe66ff51
+  author: joe
+  content: Commit 97c7f59cb6 references this requirement
+  created_at: 2026-10-07T23:58:08.841725552Z
+  modified_at: 2026-10-07T23:58:08.841725552Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
