@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T01:58:56.916126283Z
+modified_at: 2026-10-07T01:58:58.918988682Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -131,6 +131,57 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: reviewer verdict is RequestChanges — not Approved. No triage reason was given.'
   created_at: 2026-10-06T16:06:01.450263255Z
   modified_at: 2026-10-06T16:06:01.450263255Z
+- id: 01a11415-da66-77d2-9da0-410f654ff6b8
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work TASK-1603 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `launch-refused`
+    - Seat: implementer (session role: advisor)
+    - Parent spec: TASK-1603
+    - Branch under test: main
+    - Commit under test: bb5572f36869
+    - Recorded at: 2026-10-07T01:58:57.642595030+00:00
+
+    ### Failure
+
+    phase 1 child session 01a11415 exited with code 1 after 29884ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1603` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1603 --force-claim` to take over here, or `aida edit TASK-1603 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1603 — the store reports TASK-1603 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone
+
+    Failure kind: `launch-refused`
+
+    ### Recovery hint shown to the operator
+
+    The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1603`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-07T01:58:57.642595030+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 44038 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1603","started_at":"2026-10-07T01:58:09.286763934+00:00","completed_at":"2026-10-07T01:58:57.642595030+00:00","outcome":"failed","variant":"through-ci","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 child session 01a11415 exited with code 1 after 29884ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1603` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1603 --force-claim` to take over here, or `aida edit TASK-1603 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1603 — the store reports TASK-1603 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":44038}],"total_ms":47608,"binary_sha":"bb5572f368"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1603 --title "drain phase 1 (implementer) failure on TASK-1603" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-07T01:58:58.918982331Z
+  modified_at: 2026-10-07T01:58:58.918982331Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
