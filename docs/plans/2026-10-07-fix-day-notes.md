@@ -66,3 +66,33 @@ failed; a clean full rerun follows. Both requested real-store status resets
 succeeded using the fresh branch binary. Targeted reconciliation dry-runs
 require default-branch cwd and refused from the feature worktree; repeated
 read-only from main without switching or editing main's checkout.
+
+## Checkpoint 2: TASK-1338 (origin TASK-1-229)
+
+Pushed commit `d7aa7bf252eef32c180e50e61a6dcc6a942cfbaf`.
+Tests: 3 new reopen, 7 TASK-1600, 36 queue/linkage; all exit 0.
+Fresh CLI build and formatting passed; final fast rerun passed 21 gates.
+Real-store Approved resets confirmed by CLI JSON, and targeted read-only
+reconciliation from main found no eligible flips for either spec.
+
+## Item 3 writer evidence
+
+Canonical review recorder rejects empty recorder identity before writing or
+archiving. The shipped review template now uses `aida review record` rather
+than raw verdict-file examples. Actual recorder/time metadata is stamped at
+write time; historical missing provenance still blocks reconciliation.
+`cargo test -p aida-cli-lib --lib review_verdict_tests -- --test-threads=1`:
+exit 0, 76 passed. Includes newly authored current/retained metadata,
+blank-recorder refusal with unchanged bytes, strict malformed-history refusal,
+and template guard. `make check-ci-fast`: exit 0, 21 gates.
+Logs: `/tmp/aida-fix-day-evidence/provenance-{tests,fast}.log`.
+
+PR-2435 live head `6fa035c26b735a9e7afc45bb1d2f0bba706144da` has matching
+recorded approval, green required checks, and no listed merge hold. Shipping
+from fix-day cwd incorrectly applies that checkout's supervised spec gates
+(TASK-1603/TASK-1338) to the explicit PR; no gates cleared. Retry uses the
+existing source branch in a separate administrative worktree. Its local tip
+`9ec89b97b6a9066893618f26fa23c180dc1c912c` differs from the forge head; attempted
+fast-forward refused and the local branch was left unchanged. Explicit ship
+uses forge metadata/approval-at-head, without rewriting or pushing this branch.
+This administrative checkout contains no implementation edits.
