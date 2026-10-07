@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1331",
+  "publishes": [
+    {
+      "at": "2026-10-07T01:03:43.701381337Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T06:47:50.201483959Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a10ff7-f2b3-7de2-afd8-f995dd806bce",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T06:47:59.345014027Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a10ff7-f2b3-7de2-afd8-f995dd806bce",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T06:55:10.933194719Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a10ff7-f2b3-7de2-afd8-f995dd806bce",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:09:29.214616535Z",
+      "spec": "TASK-1331",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2440
+      }
+    },
+    {
+      "ts": "2026-10-06T07:14:50.213487900Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a11010-aadf-7ae2-a096-98a4632d72b4",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:14:51.287424967Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a11010-aadf-7ae2-a096-98a4632d72b4",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:15:01.798432968Z",
+      "spec": "TASK-1331",
+      "run_uuid": "01a11010-aadf-7ae2-a096-98a4632d72b4",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:21:34.553329321Z",
+      "spec": "TASK-1331",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "reviewer verdict is RequestChanges — not Approved",
+        "recovery_hint": "Address the review feedback, then push fixups: `aida queue rework TASK-1331 --work`"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:03:35.132706041Z",
+      "spec": "TASK-1331",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T16:27:42.307057215Z",
+      "spec": "TASK-1331",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1331",
+        "branch": "task-1331",
+        "first_seen": "2026-10-06T16:27:42.306992970+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T00:23:50.870574047Z",
+      "spec": "TASK-1331",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T01:03:27.862879982Z",
+      "spec": "TASK-1331",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T01:03:34.344056398Z",
+      "spec": "TASK-1331",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2440
+      }
+    },
+    {
+      "ts": "2026-10-07T01:03:43.693498247Z",
+      "spec": "TASK-1331",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c89606cd4753c750342e4a1e0df70312a3a05d6f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
