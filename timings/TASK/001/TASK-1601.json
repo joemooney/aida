@@ -5,9 +5,33 @@
     {
       "at": "2026-10-06T07:24:25.539630157Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-07T00:24:28.990804969Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-06T07:21:43.552489233Z",
+      "spec": "TASK-1601",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:21:47.828252125Z",
+      "spec": "TASK-1601",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-06T07:22:25.005831953Z",
       "spec": "TASK-1601",
@@ -16,6 +40,89 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:25:01.356583627Z",
+      "spec": "TASK-1601",
+      "run_uuid": "01a11017-b9b1-7a02-a786-6ea271cb1db2",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T08:55:32.467293530Z",
+      "spec": "TASK-1601",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "ci",
+        "kind": "ci-red",
+        "detail": "CI is red on PR-2441: Build (ubuntu-latest)",
+        "recovery_hint": "CI failed: Build (ubuntu-latest) (run 37429444950; `gh run view 37429444950`). Push fixups to the same branch: `aida queue work TASK-1601 --branch task-1601 --steal`"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:03:59.896428564Z",
+      "spec": "TASK-1601",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:03:59.896579243Z",
+      "spec": "TASK-1601",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T16:27:42.298800907Z",
+      "spec": "TASK-1601",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1601",
+        "branch": "task-1601",
+        "first_seen": "2026-10-06T16:27:42.298742094+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T00:24:12.837194036Z",
+      "spec": "TASK-1601",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T00:24:19.708128572Z",
+      "spec": "TASK-1601",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2441
+      }
+    },
+    {
+      "ts": "2026-10-07T00:24:28.961835586Z",
+      "spec": "TASK-1601",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b42403bd6558cf29a6b7f5b8de918e2d39ce2713",
+        "closed_by": "auto-bump"
       }
     }
   ]
