@@ -1,0 +1,25 @@
+id: 01a11873-bcab-7c73-b023-e4614448bdd9
+spec_id: BUG-1807
+agreed_id: BUG-1807
+title: Use MR identifiers and reliably queue GitLab review handoffs
+description: GitLab implementer completion and handoff output must identify merge requests as MR-N, generate `aida queue work MR-N --role reviewer`, and reliably create the Review MR-N queue story before reporting completion. GitHub must continue to use PR-N. Add forge-specific regression coverage for identifier rendering, commands, and auto-queue behavior. Reproduced from qci#BUG-022 and again on MR !35, where the lifecycle envelope used PR-35 and failed to recognize the existing Review MR-35 story.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T22:20:00.555688987Z
+modified_at: 2026-10-07T22:20:00.555688987Z
+req_type: Bug
+tags:
+- from-qci:BUG-022
+- gitlab
+- handoff
+- review
+execution_mode: drive
+filed_at:
+  code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 887bf7e5fb
+  vendor: codex
