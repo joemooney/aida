@@ -45,6 +45,8 @@
 #     before it. trace:TASK-1567
 [tiers]
 "Build all packages" = "full"
+# Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
+"Check aida-cli without default features" = "fast"
 "TUI seam guard" = "fast"
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
