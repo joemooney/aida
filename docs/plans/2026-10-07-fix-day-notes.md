@@ -10,7 +10,9 @@ Branch: `fix-day-2026-10-07`.
 Base: `738653fb3e6de71d0975047adb143c5f31a25d85` (fetched origin/main).
 Implementation session lease: `01a11713b830` (TASK-1603).
 TASK-1607's lease/worktree is outside scope and untouched.
-Plan saved in commit `e2b39a66d6`.
+Native Codex session: `01a11712-4398-7781-a13c-d53e0e6b7e33` (environment evidence,
+not inferred from the lease PID).
+Plan saved in commit `e2b39a66d6c4181e4f93f3df478e8acbe18bad06`.
 
 ## Checkpoint 1: TASK-1603
 
@@ -55,7 +57,7 @@ backup at `.aida/handoff/advisor/audit/PR-2435-20261007T062120Z/` in the main
 checkout. Do not repair it again or infer provenance. The review skill template
 still demonstrates raw verdict-file writes without recorder/time metadata;
 these become unattributed archived rounds on subsequent canonical recording.
-Writer repair and tests are pending.
+Writer repair and tests are recorded below.
 
 Item 2 targeted results on the working tree: three new TASK-1338 regressions,
 seven TASK-1600 regressions, and 36 queue/linkage tests passed, all exit 0.
@@ -158,3 +160,102 @@ post-setup tail within an error-reporting closure (`git diff -w` shows scope).
 Full workspace verification has started; no final workspace or sandbox success
 is claimed at this checkpoint. PR-2435 is still blocked by supervised/unset-mode
 ship policy. TASK-1607 and its lease remain untouched.
+
+## Pushed code checkpoints
+
+| Item | Full SHA | Targeted evidence |
+|---|---|---|
+| TASK-1603 | `2722961da71e153c83eda06d96d44f328897209a` | 85 tests; 21 fast gates |
+| TASK-1338 | `d7aa7bf252eef32c180e50e61a6dcc6a942cfbaf` | 46 tests; 21 fast gates |
+| Provenance writer | `8ebc929351873b814ce3ffd5303651ae45fbf60d` | 76 tests; 21 fast gates |
+| TASK-1606 | `226616816cd686c4a5255ad6af09b9c5f6404e73` | 137 Rust tests; 11 Python scenarios + help; 21 fast gates |
+| TASK-1337 | `c418c60fe7a58058fbea577b55e85bdbea1e1f65` | 168 tests; 21 fast gates |
+
+These are terminal-reported implementation checkpoints, not advisor approval.
+No independent regression/acceptance seat was launched by this implementer.
+
+## End-of-day measurement blockers
+
+Both sandbox attempts used independent throwaway repositories and git-canonical
+stores, created with `sandbox create --path <absolute-temp-path> --seed` and
+verified to contain three sandbox specs. Fresh build: `cargo build -p aida-cli`
+exit 0; `aida --version` reports `c418c60fe7+dirty` (only the evidence notes changed
+after that code checkpoint). Each attempt invoked `burndown run --tag sandbox
+--max 3 --concurrency 3` with a validated existing sandbox `AIDA_STORE`; each
+exited 1 before launch: starting a drain requires dispatch authority. This
+implementer has no authorized driver grant. No `--force`, manufactured grant,
+role elevation, TTY impersonation, or real-store drain was used.
+
+Artifacts: `/tmp/aida-fix-day-evidence/sandbox-{1,2}.log` and
+`sandbox-results.json`. Sandboxes retained under
+`/tmp/aida-fix-day-sandboxes-484ycwh8/run-{1,2}/`. Outcomes: shipped 0;
+launch-refused **not measured**; other 2 driver-authority refusals before launch.
+This is two blocked attempts, not two successful three-spec end-to-end runs.
+No valid post-fix success-rate comparison to 17 successful / 20 failed of 37
+baseline runs can be made. An authorized driver must perform that measurement.
+
+Whole-branch review/operator merge remain pending; no review verdict inferred.
+PR-2435 also requires an authorized human/advisor ship because its unset /
+supervised mode is preserved. TASK-1338 / TASK-1337 promotion remains advisor
+work. Stretch items were not attempted because item 3 shipping is blocked.
+
+Coordination observation: MCP-created advisory claims recorded branch `main`
+from the server cwd while correctly recording the sibling worktree. The CLI
+implementation lease records `fix-day-2026-10-07`. Those advisory locks are not
+proof of edits on main, and their null PID / `dormant` state is not proof of
+this native session's liveness. No other session or harness lease was repaired,
+pruned, or relabeled. Actual ownership evidence is the operator's sole-owner
+assignment, native session ID, worktree, commit SHAs, and test logs above.
+
+Rebuilt combined-code PR-2435 retry from its administrative source worktree:
+`target/debug/aida pr ship 2435 --no-pull --no-cleanup` now exits **23**,
+explicitly refusing TASK-1-216 unset/supervised auto-merge. Forge verification:
+OPEN, CLEAN, unchanged head `6fa035c26b735a9e7afc45bb1d2f0bba706144da`.
+`pr-2435-ship-final.log` is the final refusal evidence; earlier exit-0 attempts
+predate TASK-1606. This confirms exit-code repair without loosening that gate.
+
+## Workspace verification environment
+
+Initial `cargo test --workspace` inherited this agent launcher's `AIDA_BIN`
+pointing at `/home/joe/ai/aida/target/agent/aida` and native agent identity.
+Output-format, signal/queue child-runner guards and inbox identity tests reported
+failures. Isolated BUG-1745 reproduction exits 101 with the exact guard:
+expected a runner under target/profile/deps, got the foreign agent binary;
+unset AIDA_BIN and re-run. Original evidence is retained in `workspace-final.log`
+and `workspace-failure-1745.log`; those failures are not counted as green.
+A complete `cargo test --workspace` rerun removes inherited `AIDA_*`,
+`CODEX_SESSION_ID`, and `CODEX_THREAD_ID` only in that test process. No production
+environment, grant, roster, gate, or test expectation is changed. Removed variable
+names (no values/secrets) and source SHA are recorded in `workspace-clean-env.json`;
+results are in `workspace-clean.log` and `workspace-clean.exit` when complete.
+Final fast check already passed 21 gates in `fast-final.log`; final formatting and
+whitespace checks passed. The clean workspace result is pending here.
+
+Initial workspace outcome: exit 101; CLI library 7,787 passed, 15 failed,
+2 ignored (all earlier integration suites green). The 15 failures are retained
+in the original log. Clean-environment reruns of all six affected groups passed
+(24 parent tests, exit 0 for every group), including output envelopes, inbox identity,
+real SIGTERM propagation, cross-process global queue locks, and piped inbox
+watermarks. Logs: `workspace-failures-clean.log` and its JSON exit summary.
+The complete clean workspace rerun remains the final broad verification.
+
+Clean workspace CLI library result: 7,802 passed, zero failures, 2 ignored,
+448.76 seconds. Remaining core/workspace crates were still running at this
+observation. End-of-day read-only real-store JSON confirms TASK-1538 and
+STORY-1488 are still Approved (`task-1538-final.json`, `story-1488-final.json`).
+For the authorized sandbox driver and independent regression seat, build this
+branch and pin `AIDA_BIN` to its own absolute `target/debug/aida`; do not inherit
+`/home/joe/ai/aida/target/agent/aida` while claiming this branch's behavior.
+For Rust tests, use the recorded clean environment so the runner resolves its
+own child test executable rather than an agent-launcher binary.
+
+Clean full-workspace run reached core and exited 101 on one genuine integration
+mismatch: `aida_review_embeds_a_parseable_verdict_file_example` still required the
+raw JSON write example removed by the provenance repair. Core otherwise had
+1,319 passed and 2 ignored. Updated that existing embedded-template regression
+to require the canonical recorder command (spec, PR, verdict, exact reviewed
+SHA, summary, blocking findings), provenance/read-back instructions, and absence
+of direct verdict heredocs. BUG-280's write-before-comment guard remains.
+All 23 template tests pass. This is an in-scope provenance integration correction,
+not a skipped test or weakened provenance check. A final complete clean-environment
+workspace rerun will follow the checkpoint; previous green CLI evidence is retained.
