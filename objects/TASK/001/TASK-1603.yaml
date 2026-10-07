@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T15:37:01.711489440Z
+modified_at: 2026-10-07T15:37:02.545444794Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -331,6 +331,11 @@ comments:
     No automatic rollover assumed. Turn ends after recording evidence and releasing advisor verification ownership.
   created_at: 2026-10-07T15:37:01.711489440Z
   modified_at: 2026-10-07T15:37:01.711489440Z
+- id: 01a11702-cf51-7342-a03d-131afd86eb70
+  author: joe
+  content: Advisor verification lease 01a116fea29a released after source verification at eec6fca71808f3d9f67179f1b54fb51260fd90ec. No implementation ownership transferred. 85 targeted tests and formatting passed; combined fix-day branch and sandbox runs remain unverified.
+  created_at: 2026-10-07T15:37:02.545444794Z
+  modified_at: 2026-10-07T15:37:02.545444794Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
