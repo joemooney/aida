@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:43:52.190993729Z
-modified_at: 2026-10-07T16:09:09.089074387Z
+modified_at: 2026-10-07T17:31:45.370874875Z
 req_type: Task
 tags:
 - from-advisor:TASK-1538
@@ -38,6 +38,11 @@ comments:
   content: 'Fix-day checkpoint d7aa7bf252eef32c180e50e61a6dcc6a942cfbaf pushed. Legacy human reopen history fences old replay evidence, ignoring automated overwrite; queue labels reopened old evidence instead of suggesting reconciliation. Tests exit 0: 3 new TASK-1338, 7 TASK-1600, 36 queue/linkage. Fresh CLI build and fmt passed; make check-ci-fast 21 gates passed after correcting a test expectation and rerunning formatting. TASK-1538 and STORY-1488 reset to Approved with fresh branch binary; targeted reconciliation dry-runs from main report no eligible flips and CLI JSON confirms both Approved. Logs /tmp/aida-fix-day-evidence/task-1338-*.log and {task-1538,story-1488}-{before,after}.json. Draft promotion refused advisor gate; advisory ownership 01a11719a179 acquired; status left Draft pending authorized promotion. No gate relaxed.'
   created_at: 2026-10-07T16:09:09.089074387Z
   modified_at: 2026-10-07T16:09:09.089074387Z
+- id: 01a1176b-d55a-70b1-89a4-89a4141afdcc
+  author: mcp
+  content: 'Final sole-implementer verification: source checkpoint 7e007f83dcecced4da73b5f32838a63367db56f3 on fix-day-2026-10-07 passed complete clean-environment cargo test --workspace (exit 0, 9,851 passed, 0 failed, 7 ignored, 51 suites) and make check-ci-fast (exit 0, 21 gates). Final report commit eb96823bda625d6e343d8bfbab996585541d0a79 changes only docs/plans/2026-10-07-fix-day-notes.md; production/test code is identical to verified source. Native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33, sibling /home/joe/ai/aida-fix-day-2026-10-07. Checksum manifest and raw evidence retained privately at /home/joe/ai/aida/.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/. Initial foreign-AIDA_BIN failures and obsolete raw-JSON template guard correction are documented. PR-2435 remains OPEN behind supervised-mode gate (ship exit 23); two sandbox attempts refused driver authority before launch (exit 1), so vendor end-to-end rate is unverified. TASK-1338/TASK-1337 promotion, authorized sandbox measurement, whole-branch advisor review, one PR and operator merge remain pending. No per-fix PR, gate override, real-store drain, completion status, or independent review verdict claimed.'
+  created_at: 2026-10-07T17:31:45.370868097Z
+  modified_at: 2026-10-07T17:31:45.370868097Z
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main
