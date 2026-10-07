@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1536",
+  "publishes": [
+    {
+      "at": "2026-10-07T03:39:57.847820208Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T16:33:10.678878549Z",
+      "spec": "STORY-1536",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-07T03:39:57.839555714Z",
+      "spec": "STORY-1536",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "738653fb3e6de71d0975047adb143c5f31a25d85",
+        "pr": 2444,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
