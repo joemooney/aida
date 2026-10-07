@@ -1,0 +1,40 @@
+id: 01a11412-3e8d-7992-a934-3f7e32a826ee
+spec_id: ADR-67
+agreed_id: ADR-67
+title: 'TASK-1607: seat holder identity = validated grant session + harness anchor process + start identity'
+description: |
+  ## Context
+  STORY-1485 slice A needs one identity for the orchestrator seat holder: liveness probes, dead-holder takeover and demotion tombstones all key on it. SeatGrant (STORY-1473/ADR-66) records no PID, and one `aida role enter orchestrator` grant is inherited by every harness launched from that shell.
+
+  ## Options considered
+  - Grant + harness anchor: holder = validated grant session + anchor process (nearest claude/codex harness ancestor, else the invoking parent shell/loop process) + start identity. A second harness on the same grant is a competing claim.
+  - Grant session only: siblings sharing one grant co-own the seat, which misses the backgrounded-orchestrator case that motivated the story.
+  - Extend SeatGrant with the issuing PID: touches the shipped grant format, and the issuing shell is not the dispatching harness.
+
+  ## Decision
+  Grant + harness anchor (operator choice, guided session 2026-10-06).
+
+  ## Rationale
+  It is the only option under which a backgrounded orchestrator and a new session from the same shell register as competitors, which is the motivating failure of STORY-1485.
+
+  ## Consequences
+  Each protected op walks the process ancestry to resolve its anchor. A missing or unverifiable anchor start identity is Unknown and refuses. SeatGrant format is unchanged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:55:02.413128159Z
+modified_at: 2026-10-07T01:55:02.413128159Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:TASK-1607
+- keystone
+filed_at:
+  code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
+  branch: story-1485
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c89606cd47
+  vendor: antigravity
+  session: 1396dbed-b87b-4ab3-a393-3d8990561c54
