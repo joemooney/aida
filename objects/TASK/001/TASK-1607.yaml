@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T01:49:34.147357229Z
+modified_at: 2026-10-07T01:49:45.524104280Z
 req_type: Task
 tags:
 - guided-lane
@@ -59,6 +59,7 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+execution_mode: guided
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main
