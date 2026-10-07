@@ -96,3 +96,37 @@ existing source branch in a separate administrative worktree. Its local tip
 fast-forward refused and the local branch was left unchanged. Explicit ship
 uses forge metadata/approval-at-head, without rewriting or pushing this branch.
 This administrative checkout contains no implementation edits.
+
+## Checkpoint 3: provenance writer
+
+Pushed `8ebc929351873b814ce3ffd5303651ae45fbf60d`; 76 review-verdict tests
+and 21 fast gates passed. PR-2435 remains OPEN: source-branch ship also refuses
+TASK-1-216's unset/supervised mode. Both old-binary attempts returned exit 0
+without merging; logs explicitly show refusal. No mode, hold, approval, or
+required check was overridden. Human/advisor ship is a concrete blocker;
+TASK-1324 is not claimed Completed. No additional review wait is introduced.
+
+## Item 4: TASK-1606 combined repair
+
+Advisory lease `01a117245df6`. Incorporated source
+`431763d3c83d728d63c297633346060c4e16ccd6` into the single fix-day branch,
+preserving TASK-1602 ownership protections. Merge conflicts resolved by retaining
+both documentation paragraphs and both independent behavior changes. One
+`--wait [SECS]` flag remains: bare means 300 seconds; omitted CI is unbounded,
+drive ownership refuses immediately; drive seats never self-wait. One deadline
+covers ownership and CI registration/settlement. Typed codes preserve fail-closed
+holds/review and distinguish timeout/red/not-mergeable/stale definition.
+
+Targeted results so far: 110 ship unit tests, 15 CI-gate unit tests, and 12
+label/drive/GitLab integration tests passed (exit 0). The original integration
+fixture lacked the new mergeability query; added explicit MERGEABLE response.
+GitLab tests now assert classified jobs before merge and no unbounded watcher;
+failed/unavailable job rows continue to refuse. Shared-deadline regression verifies
+ownership release never grants a second CI allowance. Early compile caught a
+duplicate wait field from the automatic merge; removed it before verification.
+Logs use `task-1606-unit-final.log`, `task-1606-ci-gate.log`, and
+`task-1606-holds-final.log`; preliminary logs are not green evidence.
+
+TASK-1606 final fixture run: all 11 preflight scenarios plus help exit-code
+assertions passed (exit 0). The script now checks optional `--wait [<SECS>]`
+and the 300-second bare-flag default. Full fast rerun: 21 gates passed.

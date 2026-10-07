@@ -441,3 +441,11 @@ spawn. An exit-zero report therefore does not prove that an agent ran. See the
 [pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
 TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
 <!-- trace:TASK-1327 | ai:codex -->
+
+`aida pr ship` checks known review, mergeability, stale CI definition, and hold
+blockers before waiting for CI, and repeats the checks before merge. An optional
+`--wait <secs>` deadline covers registration and settlement; the default is
+unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
+stale definition, and hold refusals for scripts. See
+[git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
+<!-- trace:TASK-1606 | ai:codex -->

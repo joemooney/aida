@@ -388,6 +388,99 @@ pub(crate) fn refine_red(
     }
 }
 
+/// Ship polls snapshots rather than entering a forge's unbounded watcher.
+/// One deadline covers registration and settlement; absent means unbounded.
+// trace:TASK-1606 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn wait_for_ship_ci(
+    project_root: &Path,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    hold_marker_present: bool,
+    hold_label_present: bool,
+    timeout: Option<Duration>,
+    poll_interval: Duration,
+) -> anyhow::Result<crate::forge::CiState> {
+    use crate::forge::{CheckRegistration, CiState, CiTarget, ForgeKind};
+    use crate::pr_ship::ShipRefusal;
+    let started = Instant::now();
+    let cfg = read_ci_gate_config(project_root);
+    let mut pending = "checks have not registered".to_string();
+    loop {
+        if timeout.is_some_and(|budget| started.elapsed() >= budget) {
+            return Err(ShipRefusal::CiTimeout.error(format!(
+                "CI wait timed out for PR-{} — still pending: {pending}",
+                change.id
+            )));
+        }
+        pending = match forge.checks_registered(change)? {
+            CheckRegistration::NoCi => return Ok(CiState::None),
+            CheckRegistration::NotYet => "checks have not registered".to_string(),
+            CheckRegistration::Registered => {
+                let rows = forge.check_rows(change);
+                if rows.is_ok() || forge.kind() == ForgeKind::GitHub {
+                    let rows = rows?;
+                    let required = forge.required_check_names(change);
+                    if timeout.is_some_and(|budget| started.elapsed() >= budget) {
+                        return Err(ShipRefusal::CiTimeout.error(format!(
+                            "CI wait timed out for PR-{} while reading checks",
+                            change.id
+                        )));
+                    }
+                    let result = classify_red(
+                        &rows,
+                        &required,
+                        &cfg,
+                        hold_marker_present,
+                        hold_label_present,
+                    );
+                    if result.is_real() {
+                        return Err(ShipRefusal::CiRed.error(format!(
+                            "CI is red on PR-{}: {}",
+                            change.id,
+                            result.describe(change.id)
+                        )));
+                    }
+                    if !result.has_pending() {
+                        return Ok(CiState::Success);
+                    }
+                    result.pending.join(", ")
+                } else {
+                    let state = forge.ci_status(CiTarget::Change(change.clone()))?.state;
+                    if timeout.is_some_and(|budget| started.elapsed() >= budget) {
+                        return Err(ShipRefusal::CiTimeout.error(format!(
+                            "CI wait timed out for PR-{} while reading pipeline",
+                            change.id
+                        )));
+                    }
+                    match state {
+                        CiState::Success => return Ok(CiState::Success),
+                        CiState::Failed => {
+                            return Err(ShipRefusal::CiRed
+                                .error(format!("CI did not pass for PR-{}", change.id)))
+                        }
+                        _ => "pipeline is pending".to_string(),
+                    }
+                }
+            }
+        };
+        if timeout.is_some_and(|budget| started.elapsed() >= budget) {
+            return Err(ShipRefusal::CiTimeout.error(format!(
+                "CI wait timed out for PR-{} — still pending: {pending}",
+                change.id
+            )));
+        }
+        eprintln!(
+            "  CI pending for PR-{}: {pending} (elapsed {}s)",
+            change.id,
+            started.elapsed().as_secs()
+        );
+        let remaining = timeout.map(|budget| budget.saturating_sub(started.elapsed()));
+        let sleep = poll_interval.min(Duration::from_secs(60));
+        std::thread::sleep(remaining.map_or(sleep, |remaining| sleep.min(remaining)));
+    }
+}
+
 /// After the hold is released (label removed → the gate workflow re-runs),
 /// wait for `merge-hold-gate` to report green before merging. A change with no
 /// such check (no Layer 2, or a forge with no per-check rows) returns
@@ -451,6 +544,34 @@ mod tests {
     }
     fn req(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()
+    }
+
+    // trace:TASK-1606 | ai:codex
+    #[test]
+    fn ship_deadline_includes_registration_and_pending_rows() {
+        use crate::forge::CheckRegistration;
+        for registration in [CheckRegistration::NotYet, CheckRegistration::Registered] {
+            let forge = FakeForge {
+                registrations: std::cell::RefCell::new(vec![registration]),
+                rows: Some(vec![row("Build", "CI", "pending")]),
+                required: vec![],
+                row_reads: std::cell::Cell::new(0),
+            };
+            let root = tempfile::tempdir().unwrap();
+            let start = Instant::now();
+            let error = wait_for_ship_ci(
+                root.path(),
+                &forge,
+                &change(),
+                false,
+                false,
+                Some(Duration::ZERO),
+                Duration::from_secs(15),
+            )
+            .unwrap_err();
+            assert_eq!(crate::exit_code_for_error(&error), 21);
+            assert!(start.elapsed() < Duration::from_secs(1));
+        }
     }
 
     #[test]
