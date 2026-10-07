@@ -1,0 +1,40 @@
+id: 01a11469-1cd4-7240-b917-0750fb6524da
+spec_id: ADR-70
+agreed_id: ADR-70
+title: 'TASK-1607: protected ops commit while holding the seat flock (bounded commitment), not via durable reservations'
+description: |
+  ## Context
+  Signed-off sketch faa07e4acb section 2 chose generation-bound durable reservations: reserve under the seat lock, run the protected op unlocked, finish under the lock. A crash between those steps leaves a committing reservation with a dead executor; the sketch marks it Unknown and blocks transfer, and defines no way to clear it. The 2026-10-03 advisor finding 2 explicitly permitted the alternative of locking through a bounded commitment.
+
+  ## Options considered
+  - Lock through the bounded op: validate holder, generation and grant, then run the queue write, handoff write or spawn() while holding the seat flock, and record the child identity before unlocking. Child completion, mail delivery and grace periods stay unlocked.
+  - Durable reservations plus a new human-at-TTY reconcile command: faithful to the sketch, but adds a state, a command and race surface.
+  - Durable reservations without reconcile: a crash wedges the seat until the record is hand-edited.
+
+  ## Decision
+  Lock through the bounded op (operator choice, guided session 2026-10-06).
+
+  ## Rationale
+  Every protected commitment (queue write, handoff write, Command::spawn) is bounded and waits on no peer. Holding the flock means a crash releases the lock with ownership unchanged, so no crash-Unknown state can wedge the seat.
+
+  ## Consequences
+  Lock order is seat lock, then queue lock, never inverted. The lock is never held across peer waits, mail delivery, child completion or grace periods. Durable state is kept only for what outlives the lock: committed child spawns (listed as in-flight work at takeover) and the pending takeover request. This is a second recorded amendment to the sketch, alongside ADR-68; the slice A PR names both.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T03:29:55.412854422Z
+modified_at: 2026-10-07T03:29:55.412854422Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:TASK-1607
+- keystone
+filed_at:
+  code_sha: faa48cc366eafd2b781cd78a240dc1a467ba386a
+  branch: story-1485
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bb5572f368
+  vendor: antigravity
+  session: 1396dbed-b87b-4ab3-a393-3d8990561c54
