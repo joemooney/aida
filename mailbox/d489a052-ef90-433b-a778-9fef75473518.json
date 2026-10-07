@@ -1,0 +1,18 @@
+{
+  "id": "d489a052-ef90-433b-a778-9fef75473518",
+  "thread_id": "d489a052-ef90-433b-a778-9fef75473518",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791317607910,
+  "body": "Burn-down complete (--status approved), resumed session.\n\nCompleted: none merged this session — both ready specs' PRs are supervised-held and need a human at a terminal.\nLeft for manual merge: #2445 https://github.com/joemooney/aida/pull/2445 (TASK-1603) and #2444 https://github.com/joemooney/aida/pull/2444 (TASK-1602) — both CI-green (Build pass) and MERGEABLE, each red only on merge-hold-gate: autonomy unset => supervised, release via 'aida pr ship <n>' or 'aida merge-hold clear <n>'. Both change the autonomy machinery itself (orchestrator drain / pr ship), so the drain deliberately did not clear the holds.\nCaveats / verifications worth noting: #2445 had a merge conflict against main (both-added OVERVIEW.md paragraphs, TASK-1328 vs TASK-1603); I resolved it keep-both and pushed merge commit f3d923d175 — review it with the PR. Build re-ran green post-resolution. TASK-1603/TASK-1602 still show status=approved while their PRs are open (implementers never flipped them in-progress — BUG-754 shape), so burndown plan keeps re-listing them as ready; only the open-PR filter keeps them from re-fanning.\nHeld / awaiting sign-off (not queued, no action taken): CR-7, TASK-1324, TASK-1321, TASK-1593, TASK-1591, DOC-6, BUG-1802.\nParked (gate): 14 specs — deferred tags, BlockedBy, and 3 epics to decompose; unchanged from the gate's report.\nWorktrees not pruned: nothing merged this session so nothing was eligible; note ~40 accumulated worktrees under ~/ai/aida-* and .claude/worktrees/agent-* from prior sessions that may deserve a sweep.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

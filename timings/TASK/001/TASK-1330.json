@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1330",
+  "publishes": [
+    {
+      "at": "2026-10-06T19:40:44.832276647Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T19:40:44.823767940Z",
+      "spec": "TASK-1330",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9223c82863f693e581a0a7b2fe676e04aa3390de",
+        "pr": 2449,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

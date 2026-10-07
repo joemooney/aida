@@ -1,0 +1,18 @@
+{
+  "id": "64e322b4-cfd6-4a84-82f7-50051a9a14ad",
+  "thread_id": "64e322b4-cfd6-4a84-82f7-50051a9a14ad",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791316155125,
+  "body": "Burn-down complete (--status approved).\n\nCompleted: none merged this run — the entire ready set is supervised-held.\nCaveats / verifications worth noting: both drain specs were already implemented by codex with open PRs (no fan-out needed); Build CI is green on both, but each carries an aida:merge-hold (autonomy unset => supervised), and both change the autonomy machinery itself (drain ownership registration, pr-ship wait behavior), so per guardrail they must ship at the keyboard, not through the drain. No merges happened, so no integrated-main verify was required.\nHeld / awaiting sign-off: PR #2445 (TASK-1603, review spec STORY-1537) and PR #2444 (TASK-1602, review spec STORY-1536) — release via 'aida pr ship <n>' or 'aida merge-hold clear <n>'. Five more codex PRs (#2435, #2437, #2440, #2441, #2442) sit under the same supervised hold with review STORYs in the advisor queue; they were never part of this drain.\nLeft for manual merge: #2445 https://github.com/joemooney/aida/pull/2445, #2444 https://github.com/joemooney/aida/pull/2444 (CI terminal: Build green, merge-hold-gate red by design).\nParked (with reason): 14 from the gate — TASK-735/751 deferred:on-demand, TASK-749 deferred:future-rbac, TASK-1316 deferred:guided-lane, TASK-892 deferred:until-projects-toml-consumed, TASK-1539/1540/1541/1523 BlockedBy, EPIC-61/72/63 need decomposition, STORY-687/688 deferred:cockpit-phase2. Awaiting advisor sign-off (not queued): CR-7, TASK-1324, TASK-1321, TASK-1593, TASK-1591, DOC-6, BUG-1802.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

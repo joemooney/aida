@@ -1,0 +1,18 @@
+{
+  "id": "ac2e4b92-bba5-4e49-b762-796485f37410",
+  "thread_id": "ac2e4b92-bba5-4e49-b762-796485f37410",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791316034750,
+  "body": "Burn-down complete (--status approved).\n\nCompleted: none — no PR was mergeable by the drain this run.\nCaveats / verifications worth noting: Both ready specs (TASK-1603, TASK-1602) already had open codex-authored PRs, so nothing was fanned out; the wave was integration-only. Both PRs are CI-terminal: Build green, merge-hold-gate red by design (specs marked unset/supervised — autonomy-machinery changes to the drain launch path and 'aida pr ship'). The burndown guardrail keeps orchestrator/runner changes at the keyboard, so the drain did not attempt to clear the holds. No merges happened, so no integrated-main verify or worktree pruning applied.\nHeld / awaiting sign-off: PR #2445 (TASK-1603, STORY-1537) and PR #2444 (TASK-1602, STORY-1536) — supervised merge-hold, release via 'aida pr ship <n>' or 'aida merge-hold clear <n>' at a terminal. Five further held PRs (#2435, #2437, #2440, #2441, #2442) have review stories in the advisor queue and were out of this drain's scope.\nLeft for manual merge: #2445 https://github.com/joemooney/aida/pull/2445 and #2444 https://github.com/joemooney/aida/pull/2444 (green Build, blocked only by the human-gated merge-hold).\nParked (with reason): 14 from the gate — TASK-735/751 deferred:on-demand, TASK-749 deferred:future-rbac, TASK-1316 deferred:guided-lane, TASK-892 deferred:until-projects-toml-consumed, TASK-1539/1540/1541/1523 BlockedBy, EPIC-61/72/63 need decomposition, STORY-687/688 deferred:cockpit-phase2. No punt-and-continue parks this run.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

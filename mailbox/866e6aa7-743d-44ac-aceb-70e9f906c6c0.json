@@ -1,0 +1,18 @@
+{
+  "id": "866e6aa7-743d-44ac-aceb-70e9f906c6c0",
+  "thread_id": "866e6aa7-743d-44ac-aceb-70e9f906c6c0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791315748042,
+  "body": "Burn-down complete (--status approved).\n\nCompleted: BUG-1805 → PR #2446, TASK-1322 → PR #2447, TASK-1334 → PR #2448, TASK-1330 → PR #2449 (all squash-merged, auto-bumped Completed, worktrees/branches pruned, integrated-main compile verified after each merge).\n\nReviews delivered on held codex PRs (merge is human-gated by supervised merge-hold; aida pr ship refused non-interactive release): APPROVED #2435 (STORY-1528), #2437 (STORY-1529), #2440 (STORY-1531), #2441 (STORY-1533), #2442 (STORY-1534) — verdicts posted as PR comments (GitHub own-PR rule blocked formal approve); integrator resolved doc-only merge conflicts on #2440 and #2442 so both are merge-clean. CHANGES REQUESTED #2444 (STORY-1536: 2 confirmed P2s — stale already_merged after --wait; racy probe_ship_drive_guard run_uuid attribution) and #2445 (STORY-1537: both P1s from the TASK-1603 rework brief unfixed — pipelined scheduler false-exhaustion; shared run_uuid authority clobber — plus OVERVIEW.md conflict left for rework). Review stories left in-progress with per-story handoff comments; complete them after merging.\n\nCaveats / verifications worth noting: #2446 Build failed once on aida-core flake db::cache_refresh::tests::a_forked_child_holds_the_lock_past_its_guard_until_exec (unrelated to the diff), green on rerun — recurring flake worth a spec. Integrated-main verify was compile-only (cargo build -p aida-cli), not a full test run. hub-drift-guard tripped mid-drain (gitlab aida-store 6 commits behind, fast-forwardable); remediated via aida remote mirror-sync twice, seat job hub-drift-guard-route marked done.\n\nHeld / awaiting sign-off: #2435 #2437 #2440 #2441 #2442 approved and waiting on: aida merge-hold clear <N> && aida pr ship <N>. Awaiting-signoff bucket (never acted on): CR-7, TASK-1324, TASK-1321, TASK-1593, TASK-1591, DOC-6, BUG-1802.\n\nLeft for manual merge: #2435 #2437 #2440 #2441 #2442 (human-gated holds, reviews green); #2444 #2445 blocked on codex rework per posted findings. All four drain-opened PRs (#2446-#2449) merged — none pending.\n\nParked (with reason): TASK-1316 punted per owner routing comment — tagged deferred:guided-lane, fold into the BUG-1802 guided session. Pre-existing parked set unchanged (4 deferred-tag, 4 BlockedBy, 3 epics, 2 cockpit-phase2).\n\nWorktrees not pruned: none from this drain; noting ~14 stale pre-existing /tmp/aida-review-* worktrees from older sessions (left untouched).",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
