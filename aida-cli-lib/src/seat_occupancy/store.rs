@@ -151,6 +151,7 @@ pub(crate) fn main_worktree_root(start: &Path) -> Result<PathBuf> {
 /// `Ok(None)` only when git positively reports that `start` is not inside a
 /// repository; any other failure is an error (fail closed).
 pub(crate) fn main_worktree_root_opt(start: &Path) -> Result<Option<PathBuf>> {
+    // external-prose-classifier: seat_occupancy::store::main_worktree_root_opt
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
@@ -160,6 +161,8 @@ pub(crate) fn main_worktree_root_opt(start: &Path) -> Result<Option<PathBuf>> {
         .context("seat occupancy needs git to locate the main worktree")?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
+        // git exits 128 for every rev-parse failure; its C-locale message is
+        // the only signal that separates "no repository" from a real error.
         if stderr.contains("not a git repository") {
             return Ok(None);
         }
