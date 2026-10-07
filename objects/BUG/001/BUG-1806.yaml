@@ -1,0 +1,25 @@
+id: 01a11873-7791-7462-9f3a-b81a2fb0619e
+spec_id: BUG-1806
+agreed_id: BUG-1806
+title: 'Regression: role-enter shell wrapper evaluates failed CLI diagnostics'
+description: 'The shell wrapper around `aida role enter <seat>` must evaluate only a successful, explicitly delimited environment-update payload. A denied role request containing backticks currently allows diagnostic text to reach eval, producing command substitution. Acceptance: non-zero CLI exits print diagnostics verbatim and never reach eval; a regression test covers a denied advisor request with backticks; the caller role remains unchanged. Reproduced from qci#BUG-020; verify whether TASK-1171 regressed or stale-wrapper compatibility remains unsafe.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T22:19:42.865695554Z
+modified_at: 2026-10-07T22:19:42.865695554Z
+req_type: Bug
+tags:
+- from-qci:BUG-020
+- role
+- security
+- shell-integration
+execution_mode: drive
+filed_at:
+  code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 887bf7e5fb
+  vendor: codex
