@@ -259,3 +259,44 @@ of direct verdict heredocs. BUG-280's write-before-comment guard remains.
 All 23 template tests pass. This is an in-scope provenance integration correction,
 not a skipped test or weakened provenance check. A final complete clean-environment
 workspace rerun will follow the checkpoint; previous green CLI evidence is retained.
+
+## Final verified source checkpoint
+
+`7e007f83dcecced4da73b5f32838a63367db56f3`, pushed to GitHub and mirrored to
+GitLab. This adds the provenance template integration guard to the earlier code
+checkpoint; production code is unchanged from `c418c60fe7`.
+
+- Complete clean-environment `cargo test --workspace`: **exit 0**, 9,851 passed,
+  zero failed, 7 ignored, 51 top-level suites. CLI library 7,802; core 1,320;
+  TUI 561. No tests were newly ignored or skipped to obtain this result.
+- `make check-ci-fast`: **exit 0**, all 21 gates passed at the same SHA.
+- Built CLI reports `sha 7e007f83dc` without a dirty marker. Worktree was clean
+  throughout final verification. Prior failures and their corrections are retained.
+
+Final logs: `workspace-verified.log`, `workspace-verified.exit`,
+`workspace-verified-env.json`, `workspace-verified-summary.json`,
+`fast-verified.log`. Private durable artifact directory (in the main checkout):
+`.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/`.
+Its `manifest.json` records SHA-256 checksums and native session/source identity.
+The directory retains blocked attempts and initial failures as evidence, not pass
+claims; incomplete preliminary TASK-1606 logs were excluded. Public git carries
+this report and reproducible commands, not raw real-store snapshots.
+
+### Handoff status
+
+Implementation and local verification are complete for the listed code fixes.
+PR-2435 shipping is blocked by its preserved unset/supervised mode (final observed
+ship refusal exit 23); TASK-1324 is not Completed. Both requested sandbox launch
+attempts were blocked before launch by driver-authority checks, so end-to-end
+success rate remains **unverified** against the 17/37 baseline. Those refusals
+used the earlier production-identical `c418c60fe7` binary; the authorized driver
+must bind successful end-to-end measurement to this final source checkpoint.
+TASK-1338 / TASK-1337 are still Draft pending advisor promotion. The separate
+whole-branch advisor review, one PR, and operator merge remain pending under the
+plan. No per-fix PR, review approval, merge, real-store drain, gate override, or
+out-of-scope work is claimed. Own implementation/advisory leases are retained
+until shipping/handoff; other agents' leases remain untouched.
+
+A following commit saves only this final evidence report. Verify code/test changes
+against the source SHA above; the report commit does not alter production or test
+code. Original plan commit: `e2b39a66d6c4181e4f93f3df478e8acbe18bad06`.
