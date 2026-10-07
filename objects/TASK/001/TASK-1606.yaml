@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T02:12:35.366228267Z
+modified_at: 2026-10-07T02:12:36.208652006Z
 req_type: Task
 tags:
 - operator-ux
@@ -66,3 +66,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-07T02:12:35.366228267Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida pr ship --wait <SECS> bounds CI registration and settlement; preflight refusals use exit codes 20–25
