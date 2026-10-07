@@ -2,5 +2,6 @@
 joe = [
     "advisor",
     "implementer",
+    "integrator",
     "reviewer",
 ]
