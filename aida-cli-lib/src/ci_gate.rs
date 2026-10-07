@@ -327,7 +327,7 @@ pub(crate) fn wait_for_checks_to_register(
     }
 }
 
-/// Refine a coarse "CI failed" verdict for `change`: classify every row the
+/// Classify CI for `change` (also used directly by GitHub ship): read every row the
 /// forge reports, and — when nothing real is red yet but relevant checks are
 /// still pending (the coarse watcher returned on the first red) — keep polling
 /// until they settle or `settle_timeout` elapses. A timeout leaves the
@@ -376,7 +376,15 @@ pub(crate) fn refine_red(
         if r.is_real() || !r.has_pending() || Instant::now() >= deadline {
             return Ok(r);
         }
-        std::thread::sleep(poll_interval);
+        // Keep bounded ship polling visible to headless watchdogs.
+        // trace:TASK-1331 | ai:codex
+        eprintln!(
+            "  CI pending for {}-{}: {}",
+            forge.kind().change_noun().to_ascii_uppercase(),
+            change.id,
+            r.pending.join(", ")
+        );
+        std::thread::sleep(poll_interval.min(deadline.saturating_duration_since(Instant::now())));
     }
 }
 
@@ -808,6 +816,30 @@ mod tests {
         .is_err());
         assert_eq!(f.row_reads.get(), 3, "a supervised hold retries row reads");
         assert!(wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
+    }
+
+    // trace:TASK-1331 | ai:codex
+    #[test]
+    fn ship_classification_waits_for_relevant_and_required_pending_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        for workflow in ["CI", "Cross-platform nightly"] {
+            let mut f = fake(&[], Some(vec![row("Build", workflow, "pending")]));
+            if workflow.starts_with("Cross-platform") {
+                f.required.push("Build".into());
+            }
+            let r = refine_red(
+                dir.path(),
+                &f,
+                &change(),
+                false,
+                false,
+                Duration::from_millis(3),
+                Duration::from_millis(1),
+            )
+            .unwrap();
+            assert_eq!(r.pending, vec!["Build"]);
+            assert!(f.row_reads.get() > 1, "must poll relevant pending jobs");
+        }
     }
 
     #[test]

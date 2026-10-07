@@ -39,6 +39,14 @@ Keep this table in your head and every command below is obvious.
 
 **What it infers.** If you omit `--spec`, it scans the staged diff for `// trace:SPEC-ID` comments — exactly one distinct spec → it becomes the `(REQ-ID)`; multiple or none → no trailer (fine for chore/docs). The `[AI:tool]` prefix is added only when an AI-authored trace (`trace:ID | ai:...`) is staged, matching the hook's own rule; `--ai <tool>` forces it on, `--no-ai` forces it off. `feat`/`fix` require a REQ-ID, so it errors early with guidance if none can be resolved.
 
+On GitHub, `ship` polls per-check rows with a 20-minute bound, rather than
+waiting for every job through `gh pr checks --watch`. Pending and failed checks
+matching `[ci].informational_workflows` or `informational_checks` are ignored
+unless branch protection requires them. Other pending checks are awaited and
+other failures block shipping, even when branch protection lists no required
+checks. GitLab and other providers retain their existing pipeline watch.
+<!-- trace:TASK-1331 | ai:codex -->
+
 **Gotchas.** `--dry-run` prints the assembled message without committing — use it to preview. Without `-a/--all`, something must be staged. The message is self-checked before the commit fires, so what you see is what the hook will accept.
 
 **Chains with** — `git add` (stage) → `aida commit` → `aida pull` (after merge, auto-bump to Completed).
