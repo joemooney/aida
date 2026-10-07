@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T06:54:47.984456798Z
+modified_at: 2026-10-07T06:55:53.410649632Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -235,6 +235,11 @@ comments:
     Evidence handoffs, not per-fix gates: regression lane records targeted delayed-child/overlap regressions at owner-provided checkpoint SHA, then workspace/fast checks and two sandbox three-spec drains at final SHA, with logs/counts. Code reviewer performs ONE whole-branch review after fixes 1-5 at final SHA, criteria-by-criteria including both TASK-1603 P1s, reopen fence, provenance writer, ship/ownership --wait and queue preflight. Verifier independently checks acceptance/artifact-to-SHA matching and classifies pass/fail/unverified; integrator remains unassigned to merge until primary advisor/operator decision and receives final SHA, verdict, tests, required CI/hold state and explicit authorization. Operator merge remains per plan. All evidence workers use separate worktrees, never implementation owner's checkout; sandbox-only drains. Subsequent implementation order stays TASK-1-229, PR-2435 writer/data path, TASK-1606, TASK-1-230. No overlapping implementation, integration approval, hold clearance or merge.
   created_at: 2026-10-07T06:54:47.984450321Z
   modified_at: 2026-10-07T06:54:47.984450321Z
+- id: 01a11525-ae42-7020-bc91-cb469f928613
+  author: mcp
+  content: 'Operator-confirmed roster 2026-10-06 23:54 MST: implementer backlog-implementer; regression backlog-regression; code review backlog-reviewer; acceptance backlog-verifier-1; integrator backlog-integrator. All CURRENT assignments UNASSIGNED. Actual native session identity/liveness is unverified until each terminal responds; old ended launcher records are historical references only. First assignment PREPARED FOR OPERATOR DELIVERY, not dispatched: sole fix-day implementer, separate fix-day-2026-10-07 worktree off current origin/main; incorporate task-1603 source eec6fca71808f3d9f67179f1b54fb51260fd90ec first, preserve both OVERVIEW.md paragraphs, verify delayed-child batch/nextN selection and concurrent-token cleanup P1s; targeted tests and exact-SHA checkpoint, no per-fix PR/review/CI. Full assignment/evidence handoffs in .aida/handoff/advisor-burndown-coordination/latest.md. No sessions restarted, leases pruned or staffed by inference. Coordination continues; prior rollover request withdrawn.'
+  created_at: 2026-10-07T06:55:53.410643128Z
+  modified_at: 2026-10-07T06:55:53.410643128Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
