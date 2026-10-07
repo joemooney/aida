@@ -1,0 +1,33 @@
+id: 01a11422-8ad4-7810-baa1-12e358e5ac1a
+spec_id: STORY-1538
+agreed_id: STORY-1538
+title: 'Review PR-2450: [AI:codex] fix(ship): preflight gates and bound CI waits (TASK-1606)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a11416`) for branch `task-1606`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2450>
+  - Branch: `task-1606` → `main`
+
+  ## Covers
+
+  - TASK-1606
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2450` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T02:12:50.516046363Z
+modified_at: 2026-10-07T02:12:50.516046363Z
+req_type: Story
+filed_at:
+  code_sha: 431763d3c83d728d63c297633346060c4e16ccd6
+  branch: task-1606
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: bb5572f368
+  vendor: codex
