@@ -165,6 +165,15 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 
 **Mental model.** Symmetric to `push`. The code leg is `git pull --ff-only` *by design* — it refuses to surprise your working tree with an auto-rebase; on divergence it hands you the explicit rebase command rather than guessing. The store leg uses rebase (store conflicts are rare and the worktree is AIDA-managed). **`pull` is also where Done→Completed auto-bump happens** — after the store pulls, it promotes any spec whose referencing commit just landed on main.
 
+Store pulls (`aida pull` and `aida db sync --pull`) fetch only the named branch
+into a temporary ref, resolve its commit, remove the ref, and rebase onto that
+SHA. Concurrent code fetches and overlapping fetch refspecs cannot change the
+chosen rebase target through shared `FETCH_HEAD`. Structural conflict merging
+and plain-pull abort recovery still apply. A failure reports the Git error;
+absence of an active rebase does not imply a transient network problem. This
+target isolation does not serialize concurrent store commits or rebases.
+<!-- trace:TASK-1604 | ai:codex -->
+
 **Reach for it when** — starting work, syncing after others merged, or right after a merge to trigger the auto-bump. The `--dry-run` (and `--json`) variant shows what *would* come down — the safe "what changed upstream?" check.
 
 **Don't reach for it when** — the code leg refuses with "diverged" — that's not a `pull` failure, it's `pull` correctly refusing to auto-rebase. Follow the printed hint (`git pull --rebase` after inspecting) or use `aida rebase`. The `--auto` flag handles *stacked-branch* re-basing specifically; it deliberately refuses anything the classifier flags `diverged-risky`.
