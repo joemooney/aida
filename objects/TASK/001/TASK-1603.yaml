@@ -3,12 +3,12 @@ spec_id: TASK-1603
 agreed_id: TASK-1603
 title: 'drain launch race: the FIRST batch member''s child starts before the orchestrator run is registered, falls back to interactive rules, and refuses the InProgress-no-lease state the parent just created —'
 description: 'Reproduced on consecutive waves 2026-10-05 (builds 62e3374 and post-887bf7e): wave 1 first member TASK-1523 (children 01a10eee + replacement, both ''spec is InProgress but no local lease holds it'', shelved launch-refused), wave 2 first member TASK-1588 (children 01a10f35 + replacement, identical, shelved) — while every LATER member in both waves (BUG-1803, TASK-1596, BUG-1801, BUG-1804) hit the same InProgress-no-lease precondition and proceeded with ''claiming it anyway''. Wave-1 first-child log shows the smoking gun: ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' — the child launched before the orchestrator''s run record landed, so it applied interactive fail-closed rules to the InProgress bump its own parent had just made. Later children see the live run and claim. Cost: the first spec of every wave burns both launch attempts and shelves; TASK-1523 was wrongly suspected of being undrainable for its cross-project shape. Fix direction: register the run (or hand the child an ownership token) BEFORE the Approved→InProgress bump / child launch, or have the child retry its ownership check briefly instead of refusing on first read.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T17:31:42.953202790Z
+modified_at: 2026-10-07T23:36:06.596803393Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -422,6 +422,11 @@ comments:
   content: 'Final sole-implementer verification: source checkpoint 7e007f83dcecced4da73b5f32838a63367db56f3 on fix-day-2026-10-07 passed complete clean-environment cargo test --workspace (exit 0, 9,851 passed, 0 failed, 7 ignored, 51 suites) and make check-ci-fast (exit 0, 21 gates). Final report commit eb96823bda625d6e343d8bfbab996585541d0a79 changes only docs/plans/2026-10-07-fix-day-notes.md; production/test code is identical to verified source. Native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33, sibling /home/joe/ai/aida-fix-day-2026-10-07. Checksum manifest and raw evidence retained privately at /home/joe/ai/aida/.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/. Initial foreign-AIDA_BIN failures and obsolete raw-JSON template guard correction are documented. PR-2435 remains OPEN behind supervised-mode gate (ship exit 23); two sandbox attempts refused driver authority before launch (exit 1), so vendor end-to-end rate is unverified. TASK-1338/TASK-1337 promotion, authorized sandbox measurement, whole-branch advisor review, one PR and operator merge remain pending. No per-fix PR, gate override, real-store drain, completion status, or independent review verdict claimed.'
   created_at: 2026-10-07T17:31:42.953196683Z
   modified_at: 2026-10-07T17:31:42.953196683Z
+- id: 01a118a0-1ee1-7b81-95ae-090dda967b89
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: adopt fix-day-2026-10-07 as the FIRST unit, draft PR-2452 at exact eb96823bda625d6e343d8bfbab996585541d0a79, base 738653fb3e6de71d0975047adb143c5f31a25d85. Source/test SHA 7e007f83dcecced4da73b5f32838a63367db56f3; only evidence docs follow. All 63 evidence-file hashes matched manifest. ONE independent whole-branch review brief saved at /tmp/aida-fix-day-final-review.md; launch fix-day-final-review-2452 refused before vendor spawn because advisor grant lacks reviewer delegation. No review approval claimed. Two sandbox E2E runs remain unmeasured, original authority refusals retained. No holds cleared or authority-sensitive merge performed. Existing PR-2445 and PR-2450 remain open/held until final reviewed adoption/operator decision; avoid redispatching their implementations. Remaining routine backlog decisions authorized by latest operator instruction, superseding earlier no-backlog day scope while preserving one combined fix-day review.'
+  created_at: 2026-10-07T23:08:29.281612210Z
+  modified_at: 2026-10-07T23:08:29.281612210Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
@@ -528,6 +533,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a118b9-68c4-72e1-bf4a-a54751d3c8f3
+  author: aida-orchestrator
+  timestamp: 2026-10-07T23:36:06.596845507Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -543,4 +555,12 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'P1: newly unblocked batch/nextN members fail checked registration before phase entry; see review-2452-verdict.md'
+  recovery_hint: address the review findings, move TASK-1603 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-10-07T23:36:06.596803393Z
 interface_changes: {}
