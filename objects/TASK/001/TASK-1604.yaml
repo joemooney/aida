@@ -3,12 +3,12 @@ spec_id: TASK-1604
 agreed_id: TASK-1604
 title: 'orphan-store pull fails with ''fatal: Cannot rebase onto multiple branches'' — aida-store fetch resolves to multiple refs'
 description: 'Three occurrences 2026-10-05 evening, all during drain pre-pickup pulls (''aida db sync --pull''): wave-1 BUG-1803 pickup, wave-2 TASK-1588/BUG-1801 pickups. git pull --rebase of origin/aida-store fetches FETCH_HEAD with more than one candidate, so rebase refuses. Same window also produced ''fatal: cannot lock ref HEAD: is at 1aaf34fa but expected 0b03629a'' during a ''chore: sync pending changes'' auto-commit — concurrent store writers racing the pull. The CLI labels it ''transient (e.g. network); re-run aida pull'', which is wrong: ''multiple branches'' is a refspec/config shape (duplicate fetch refspec or wildcard matching aida-store twice), not connectivity, and it recurs deterministically under drain concurrency. Pickups proceed on the local view, so the failure is masked rather than harmful tonight, but cross-clone coordination silently degrades. Diagnose: git config --get-all remote.origin.fetch in the affected clones/worktrees; fix the refspec or make db sync pull fetch an explicit single ref (git fetch origin aida-store && rebase FETCH_HEAD).'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:17:44.663524239Z
-modified_at: 2026-10-06T11:01:56.513160595Z
+modified_at: 2026-10-07T01:35:05.325758216Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a113ff-fa63-78a0-93ab-5ecbe10f4966
+  author: aida-auto-bump
+  timestamp: 2026-10-07T01:35:05.315375635Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a113ff-fa6d-7a42-8069-011f8deca828
+  timestamp: 2026-10-07T01:35:05.325756883Z
+  agent: aida
+  commit_sha: 15f0646a9499b8794008c68593161a7abf592d85
+  summary: Completed via merge 15f0646a
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -67,6 +80,8 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check — passed
   implemented_at: 2026-10-06T07:28:18.453131747Z
   implemented_by: joe
+  completed_at: 2026-10-07T01:35:05.315345158Z
+  completion_sha: 15f0646a9499b8794008c68593161a7abf592d85
 interface_changes:
   cli:
   - aida pull / aida db sync --pull — store pulls pin a single fetched commit; failures no longer assume a transient network error
