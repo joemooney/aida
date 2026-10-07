@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T04:05:17.381899675Z
+modified_at: 2026-10-07T06:49:15.434843863Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -212,6 +212,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/stale-base-conflict: HEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603). No triage reason was given.'
   created_at: 2026-10-07T04:05:17.381894806Z
   modified_at: 2026-10-07T04:05:17.381894806Z
+- id: 01a1151f-9baa-7f91-8386-037dfdbc76b0
+  author: mcp
+  content: 'Coordination evidence checkpoint 2026-10-06 23:48 MST; coordination session coord-20261006T2346-MST (conversation-local label, not a lease ID). PR-2445 exact head eec6fca71808f3d9f67179f1b54fb51260fd90ec: Ubuntu Build SUCCESS, run 37568069064; active hold remains. Implementer reports 94 targeted tests (not rerun by coordination seat). Retained actual verdict .aida/review-verdicts/PR-2445.json is RequestChanges at older a760a2016b1c17920a04d068f9dfff989ea22f52. Latest review attempt stopped at OVERVIEW.md rebase conflict before review. Both P1 acceptance obligations (delayed-child batch/nextN selection; concurrent-token registration/cleanup) still need whole-fix-day-branch review evidence. Primary advisor notified via mailbox cda3eac6-ef4e-41e8-be13-a24d869fd4bb. No dispatch, gate approval, hold clearance or merge. Follow fix-day plan: incorporate first, keep both docs paragraphs, sandbox-only drain tests.'
+  created_at: 2026-10-07T06:49:15.434835533Z
+  modified_at: 2026-10-07T06:49:15.434835533Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
