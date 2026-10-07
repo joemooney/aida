@@ -28,4 +28,3 @@ comments:
 deferred: true
 deferred_at: 2026-10-05T04:16:48.441119506Z
 deferred_until: a second human works this repo; seats run on hosts the operator does not control; the product serves external users
-deferred_reason: Decision gate holds BUG-1669; approval IS the operator's authorization act and no revisit trigger has fired (single human, controlled hosts, no external users).

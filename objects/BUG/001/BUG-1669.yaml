@@ -822,7 +822,6 @@ history:
 deferred: true
 deferred_at: 2026-10-05T04:16:47.037770082Z
 deferred_until: 'TASK-1580 gate approval: second human in repo, seats on uncontrolled hosts, external users, or any observed unauthorized full-access launch (incident)'
-deferred_reason: 'Operator deferral 2026-10-04 (advisor concurs): exposure sits inside ADR-66''s conceded same-user boundary; no revisit trigger fired; pre-work (TASK-1549, SPIKE-91, TASK-1550) complete and banked. Full decision trail in comments.'
 implementation_info:
   implemented: false
   reopened_at_sha: ea1c51e5307416cb12bdaa46237c2636a3045fcb
