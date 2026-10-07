@@ -1,3 +1,10 @@
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
 GitHub `pr ship` polls classified CI rows directly, so pending or failed
 informational workflows do not delay shipping. Required checks override the
 informational allow-list; other unlisted failures still block the merge.

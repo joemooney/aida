@@ -868,3 +868,28 @@ fn bug_1594_trace_scan_budget_reports_incomplete() {
     let (_, complete) = scan_trace_graph_bounded(&root, &wanted, Some(std::time::Duration::ZERO));
     assert!(!complete);
 }
+
+// trace:TASK-1338 | ai:codex
+#[test]
+fn task_1338_reopened_merge_is_not_an_auto_bump_missed_hint() {
+    let (_tmp, root) = init_repo();
+    commit(
+        &root,
+        "work.txt",
+        "old",
+        "fix: previous work (TASK-1338) (#7)",
+    );
+    let mut r = req("TASK-1338");
+    r.set_status_from_str("Approved");
+    aida_core::conflict::record_status_transition(&mut r, "joe", &RequirementStatus::Done);
+    // Even an erroneous automatic Done rewrite cannot recommend replay.
+    r.set_status_from_str("Done");
+    aida_core::conflict::record_status_transition(
+        &mut r,
+        aida_core::conflict::AUTO_BUMP_AUTHOR,
+        &RequirementStatus::Approved,
+    );
+    let buckets = classify_in_flight_specs(&[&r], &root);
+    assert!(buckets.stuck.is_empty());
+    assert_eq!(buckets.reopened, ["TASK-1338"]);
+}

@@ -55349,6 +55349,9 @@ pub(crate) struct InFlightBuckets {
     pub(crate) awaiting: std::collections::BTreeMap<String, Vec<String>>,
     /// Done specs with no commit referencing the id yet.
     pub(crate) no_commit: Vec<String>,
+    /// Deliberately reopened after the merged evidence; replay is not recovery.
+    // trace:TASK-1338 | ai:codex
+    pub(crate) reopened: Vec<String>,
 }
 
 /// TASK-234: bucket Done specs by git state. gh-free by design — the
@@ -55390,6 +55393,7 @@ pub(crate) fn classify_in_flight_specs(
     let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new();
     let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut no_commit: Vec<String> = Vec::new();
+    let mut reopened = Vec::new();
 
     for req in specs {
         let id = req
@@ -55423,7 +55427,10 @@ pub(crate) fn classify_in_flight_specs(
             .as_deref()
             .map(|m| is_ancestor(full, m))
             .unwrap_or(false);
-        if on_default {
+        if on_default && auto_bump_evidence_is_stale(project_root, req, full) {
+            // trace:TASK-1338 | ai:codex
+            reopened.push(id);
+        } else if on_default {
             stuck.push((id, parse_squash_pr_number(subject), ago.to_string()));
         } else {
             let contains = git(&[
@@ -55464,6 +55471,7 @@ pub(crate) fn classify_in_flight_specs(
         stuck,
         awaiting,
         no_commit,
+        reopened,
     }
 }
 
@@ -55740,7 +55748,14 @@ pub(crate) fn render_in_flight_grouped(
         stuck,
         awaiting,
         no_commit,
+        reopened,
     } = classify_in_flight_specs(specs, project_root);
+
+    // trace:TASK-1338 | ai:codex
+    if !reopened.is_empty() {
+        println!("  Reopened after merged work: {}", reopened.join(", "));
+        println!("    Next: finish the reopened work; old merge evidence will not close it.");
+    }
 
     // ---- Awaiting merge, grouped by branch ----
     // TASK-250: an open-PR branch is sub-classified into State 1/2/3
@@ -75430,6 +75445,13 @@ pub(crate) fn auto_bump_evidence_is_stale(
     req: &Requirement,
     sha: &str,
 ) -> bool {
+    // trace:TASK-1338 | ai:codex
+    // Older human reopens predate reopened_at_sha. Ignore automated status
+    // rewrites when finding the latest deliberate decision: a replayed bump
+    // must not erase the decision it incorrectly overwrote.
+    if human_reopen_after_evidence(project_root, req, sha) {
+        return true;
+    }
     let Some(info) = req.implementation_info.as_ref() else {
         return false;
     };
@@ -75439,6 +75461,63 @@ pub(crate) fn auto_bump_evidence_is_stale(
     info.reopened_at_sha.as_deref().is_some_and(|reopen_sha| {
         sha.is_empty() || sha_at_or_before_reopen(project_root, sha, reopen_sha)
     })
+}
+
+/// Legacy reopen history fences old evidence even without a SHA marker.
+/// A subsequent deliberate status decision or genuinely later commit permits
+/// progress; automated replay never supersedes a human reopen.
+// trace:TASK-1338 | ai:codex
+fn human_reopen_after_evidence(
+    project_root: &std::path::Path,
+    req: &Requirement,
+    sha: &str,
+) -> bool {
+    let latest = req
+        .history
+        .iter()
+        .filter(|entry| !aida_core::conflict::is_automated_status_author(&entry.author))
+        .filter_map(|entry| {
+            entry
+                .changes
+                .iter()
+                .find(|change| change.field_name == "status")
+                .map(|change| (entry.timestamp, change))
+        })
+        .max_by_key(|(timestamp, _)| *timestamp);
+    let Some((reopened_at, change)) = latest else {
+        return false;
+    };
+    if !matches!(
+        change.old_value.to_ascii_lowercase().as_str(),
+        "done" | "completed"
+    ) || !change.new_value.eq_ignore_ascii_case("approved")
+    {
+        return false;
+    }
+    if !crate::git_arg_guard::is_hex_sha(sha) {
+        return true;
+    }
+    let committed_at = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "show",
+            "-s",
+            "--format=%ct",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            sha,
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<i64>()
+                .ok()
+        });
+    // Unknown evidence cannot override a recorded deliberate reopen.
+    committed_at.is_none_or(|timestamp| timestamp <= reopened_at.timestamp())
 }
 
 // Filter before closure projection so stale evidence cannot move a reopened

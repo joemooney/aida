@@ -4349,3 +4349,116 @@ fn task_1600_reopened_review_and_closure_hold_cannot_override_fresh_copy() {
     assert_eq!(req.status, RequirementStatus::Approved);
     assert!(req.comments.is_empty());
 }
+
+// trace:TASK-1338 | ai:codex
+#[test]
+fn task_1338_legacy_human_reopen_survives_live_and_reconcile_replay() {
+    for closure_hold in [false, true] {
+        let (_tmp, root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "TASK-91338");
+        run_git(
+            &root,
+            &[
+                "commit",
+                "--allow-empty",
+                "-m",
+                &format!("fix: old ({spec_id})"),
+            ],
+        );
+        let storage = Storage::new(&store_path);
+        let mut store = storage.load().unwrap();
+        let r = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.spec_id.as_deref() == Some(&spec_id))
+            .unwrap();
+        r.set_status_from_str("Approved");
+        aida_core::conflict::record_status_transition(r, "joe", &RequirementStatus::Done);
+        // Model the historical auto-bump overwriting a deliberate reopen.
+        r.set_status_from_str("Done");
+        aida_core::conflict::record_status_transition(
+            r,
+            aida_core::conflict::AUTO_BUMP_AUTHOR,
+            &RequirementStatus::Approved,
+        );
+        r.set_status_from_str("Approved");
+        if closure_hold {
+            r.tags.insert("closure:pending".into());
+        }
+        assert!(r
+            .implementation_info
+            .as_ref()
+            .is_none_or(|i| i.reopened_at_sha.is_none()));
+        storage.save(&store).unwrap();
+        assert!(
+            auto_bump_done_to_completed(&root, &store_path, None, &storage)
+                .unwrap()
+                .is_empty()
+        );
+        handle_db_reconcile_status(&store_path, None, Some(&spec_id), false).unwrap();
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id(&spec_id)
+                .unwrap()
+                .status,
+            RequirementStatus::Approved
+        );
+        // A later merge remains valid evidence. Set a distinct committer time
+        // rather than sleeping or depending on wall-clock second boundaries.
+        let future = (chrono::Utc::now() + chrono::Duration::seconds(10)).to_rfc3339();
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .env("GIT_COMMITTER_DATE", &future)
+            .args([
+                "commit",
+                "--allow-empty",
+                "-m",
+                &format!("fix: new ({spec_id})"),
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let flips = auto_bump_done_to_completed(&root, &store_path, None, &storage).unwrap();
+        if !closure_hold {
+            assert!(has_flip(&flips, &spec_id));
+        }
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id(&spec_id)
+                .unwrap()
+                .status,
+            if closure_hold {
+                RequirementStatus::Done
+            } else {
+                RequirementStatus::Completed
+            }
+        );
+    }
+}
+
+// trace:TASK-1338 | ai:codex
+#[test]
+fn task_1338_latest_deliberate_status_decides_legacy_fence() {
+    let (_tmp, root, _) = init_test_project();
+    let sha = run_git(&root, &["rev-parse", "HEAD"]);
+    let mut r = Requirement::new("history".into(), String::new());
+    r.set_status_from_str("Approved");
+    aida_core::conflict::record_status_transition(&mut r, "joe", &RequirementStatus::Completed);
+    assert!(auto_bump_evidence_is_stale(&root, &r, &sha));
+    r.set_status_from_str("InProgress");
+    aida_core::conflict::record_status_transition(&mut r, "joe", &RequirementStatus::Approved);
+    assert!(!auto_bump_evidence_is_stale(&root, &r, &sha));
+    let mut automated = Requirement::new("automatic".into(), String::new());
+    automated.set_status_from_str("Approved");
+    aida_core::conflict::record_status_transition(
+        &mut automated,
+        aida_core::conflict::SUPERVISOR_REQUEUE_AUTHOR,
+        &RequirementStatus::Done,
+    );
+    assert!(!auto_bump_evidence_is_stale(&root, &automated, &sha));
+}

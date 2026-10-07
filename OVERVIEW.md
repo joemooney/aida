@@ -1,3 +1,10 @@
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
 # AIDA — Overview
 
 Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
