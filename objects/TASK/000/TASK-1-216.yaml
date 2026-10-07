@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-07T06:21:21.016570893Z
+modified_at: 2026-10-07T06:49:20.369286387Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -163,6 +163,11 @@ comments:
   content: Operator authorized dropping the unattributed duplicate review round for PR-2435. Removed only rounds[0] from .aida/review-verdicts/PR-2435.json after verifying every substantive field matches the attributed rounds[1] (same reviewed SHA, Approved verdict, acceptance, evidence, CI, empty findings; only summary wording and provenance fields differ). Original and audit note preserved under .aida/handoff/advisor/audit/. Attributed historical round and current verdict unchanged; no inferred attribution, gate relaxation, or merge clearance.
   created_at: 2026-10-07T06:21:21.016570893Z
   modified_at: 2026-10-07T06:21:21.016570893Z
+- id: 01a1151f-aef1-7501-b39b-8c68f5d28e48
+  author: mcp
+  content: Coordination checkpoint 2026-10-06 23:48 MST, coord-20261006T2346-MST. PR-2435 exact head 6fa035c26b735a9e7afc45bb1d2f0bba706144da is OPEN; Ubuntu Build SUCCESS run 37552162422 and merge-hold-gate SUCCESS run 37552162520. Local .aida/review-verdicts/PR-2435.json now has Approved at that head; retained round 0 has recorded_by='codex reviewer', recorded_at='2026-10-06T04:48:12.629207158+00:00'. This contradicts fix-day plan's earlier unstamped-round data blocker. Writer-path repair and successful ship reconciliation were NOT verified by this seat. Candidate recommended to primary advisor for readiness check, not integration-approved or merged. Evidence report mailbox cda3eac6-ef4e-41e8-be13-a24d869fd4bb.
+  created_at: 2026-10-07T06:49:20.369280565Z
+  modified_at: 2026-10-07T06:49:20.369280565Z
 history:
 - id: 01a10f61-0d1a-7290-b932-07ca5716f4df
   author: joe
