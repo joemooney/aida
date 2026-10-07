@@ -1,0 +1,36 @@
+id: 01a113ff-b37a-7e43-9a25-2611b8c00bf2
+spec_id: TASK-1606
+agreed_id: TASK-1606
+title: 'aida pr ship: refuse pre-flight gates before the CI wait, bound the wait, and return per-refusal exit codes'
+description: |
+  Operator observation (2026-10-06, advisor session): a scripted ship loop over PRs 2435/2437/2440/2441/2442 spent ~18 min of CI wait per PR before refusing for reasons that were knowable before the wait. `aida pr ship` already blocks on CI (step 2, pr_cmd.rs) and only returns 0 after merge, so no `--watch` flag is needed; the gap is ordering, boundedness, and scriptable outcomes.
+
+  Observed post-wait refusals that a pre-flight could have raised immediately:
+  - stale approval: approval recorded at 24491f2f, PR head 19a751fe (PR-2435)
+  - stale CI definition: green check predates ci.yml/cross-platform.yml changes on main (PR-2437, PR-2442)
+  - not mergeable: forge reports merge conflict (PR-2442)
+  - verdict corpus unreconcilable: retained round lacks recorded_by (PR-2435)
+
+  ## Acceptance
+  1. Pre-flight: before the step-2 CI wait, `aida pr ship` evaluates every gate that does not depend on CI completion (approval-at-head / verdict reconciliation, forge mergeability, stale-CI-definition rule against the latest completed run, merge-hold state) and refuses immediately with the same message it would give post-wait. The existing post-wait checks remain (state can change during the wait). The --override-stale-check / --override-stale-approval flags apply to the pre-flight identically.
+  2. Bounded wait: a duration flag bounds the CI wait (name aligned with TASK-1602's `--wait <secs>`; one flag, not two divergent spellings). On expiry ship exits with a dedicated non-zero code and nothing is merged. Default remains unbounded.
+  3. Scriptable exit codes: distinct, documented exit codes for at least: CI red, CI wait timed out, needs rebase/not mergeable, needs (re-)review/approval not at head, stale CI definition, merge-hold present. 0 still means merged. Documented in docs/cli and `aida pr ship --help`.
+  4. Tests: one per pre-flight refusal proving no CI wait occurs (e.g. a fake forge whose watch would hang), plus a timeout test and an exit-code table test.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:34:47.162918609Z
+modified_at: 2026-10-07T01:34:47.162918609Z
+req_type: Task
+tags:
+- operator-ux
+- pr-ship
+filed_at:
+  code_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: a36129c0-3fde-4c5c-92a2-908e517184b1
