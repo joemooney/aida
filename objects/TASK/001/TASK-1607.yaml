@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T03:33:58.066382480Z
+modified_at: 2026-10-07T03:53:41.714674778Z
 req_type: Task
 tags:
 - guided-lane
@@ -72,6 +72,14 @@ comments:
   created_at: 2026-10-07T03:33:58.066382480Z
   modified_at: 2026-10-07T03:33:58.066382480Z
   session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
+- id: 01a1147e-e052-7031-bed8-36481d419ff7
+  author: joe
+  content: |-
+    C7 CHECKPOINT: draft PR #2451 opened for early advisor review of the core state machine (steps 1-3: tri-state probe, seat record store, state machine, aida session seat commands). Gateways are NOT wired yet; steps 4-5 wait on this review. make check-ci-fast passed before the push.
+    New this session: ADR-70 records the commitment boundary. Protected ops commit while holding the seat flock (bounded commitment) instead of the sketch's durable unlocked reservations; this is a second sketch amendment, permitted by advisor finding 2. It is Draft and needs advisor approval. C6 follow-ups filed: TASK-1609 (macOS), TASK-1610 (Windows); the refusal text cites them. C1 classification rule is recorded in an earlier comment and tested (drain child own-scope passes; route/spawn/loop/handoff refused).
+  created_at: 2026-10-07T03:53:41.714674778Z
+  modified_at: 2026-10-07T03:53:41.714674778Z
+  session_id: 1396dbed-b87b-4ab3-a393-3d8990561c54
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
