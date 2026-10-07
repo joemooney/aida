@@ -16,12 +16,12 @@ description: |
   2. Bounded wait: a duration flag bounds the CI wait (name aligned with TASK-1602's `--wait <secs>`; one flag, not two divergent spellings). On expiry ship exits with a dedicated non-zero code and nothing is merged. Default remains unbounded.
   3. Scriptable exit codes: distinct, documented exit codes for at least: CI red, CI wait timed out, needs rebase/not mergeable, needs (re-)review/approval not at head, stale CI definition, merge-hold present. 0 still means merged. Documented in docs/cli and `aida pr ship --help`.
   4. Tests: one per pre-flight refusal proving no CI wait occurs (e.g. a fake forge whose watch would hang), plus a timeout test and an exit-code table test.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T02:12:57.526754366Z
+modified_at: 2026-10-07T02:23:17.478239171Z
 req_type: Task
 tags:
 - operator-ux
@@ -65,6 +65,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1142c-1be6-76e2-87a3-7483c7bc1eb2
+  author: aida-orchestrator
+  timestamp: 2026-10-07T02:23:17.478252800Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
   branch: main
@@ -83,6 +90,14 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-07T02:12:35.366228267Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-2450: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed: Build (ubuntu-latest) (run 37560853513; `gh run view 37560853513`). Push fixups to the same branch: `aida queue work TASK-1606 --branch task-1606 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-10-07T02:23:17.478239171Z
 interface_changes:
   cli:
   - aida pr ship --wait <SECS> bounds CI registration and settlement; preflight refusals use exit codes 20–25
