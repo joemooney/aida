@@ -1,0 +1,39 @@
+id: 01a11409-166a-7532-811a-eb943fe701d0
+spec_id: TASK-1607
+agreed_id: TASK-1607
+title: 'STORY-1485 slice A: graceful single-occupancy path (--kill fails closed as scaffolding)'
+description: |
+  Slice A of STORY-1485, per the advisor decision on STORY-1485 (2026-10-05, comment "ADVISOR DECISION — TWO-SLICE BOUNDARY AUTHORIZED") under signed-off sketch faa07e4acb (docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md, branch story-1485).
+
+  Scope: the complete graceful single-occupancy path. Config/CLI; exact identity tri-state probes; permanent sidecar/atomic generation record; persisted caller/child lineage and demotion tombstones; reservation/receipt recovery; all refreshed CLI/MCP/spawn/queue/handoff gateways; notification-only mailbox; validated ack/release; resumable requests and absolute timeouts; silent provably-dead recovery; idempotent event history. `--kill` fails closed everywhere and is explicitly incomplete scaffolding.
+
+  Includes the inventory refresh against 92bd6cb529 (accepted into this slice): supervisor.rs direct backend.queue_add; schedule/backlog/assign/archive/defer/doctor/init queue mutations; queue_cmd GC/prune/reorder/clear and queue_remove_many_if/queue_remove_for_role_if; advisor_watch spawn_claude_headless_resume/spawn_vendor_headless_with_seat. Classification is by persisted caller binding — discovered sites are candidates to classify, not blanket bans on ordinary implementer work.
+
+  ## Acceptance
+  1. Full production/test-site audit of every queue/seat mutation gateway, each classified by persisted caller binding; production activation requires the full inventory, binding and probes together; no env-only compatibility fallback.
+  2. Tests cover: concurrent sibling claims, idempotent reclaims, live refusals/warnings, graceful ack/release, interrupted requests/timeouts, stale/spoofed/mail-only ack, env/seat omission fencing, reservation/transfer/crash races, PID reuse/missing identity/probe errors, ambiguous mappings, dead replacement, history projection, and `--kill` refusals.
+  3. Key refusal tests proven non-vacuous (guard removed → test fails → guard restored). No existing peer process is a test target.
+  4. The PR description states in plain text that hard takeover is NOT delivered and `--kill` is disabled scaffolding.
+  5. Commits and PR carry ONLY this spec's ID in trailers — never (STORY-1485). The parent stays In Progress.
+
+  ## Bounds
+  Guided lane only (no unattended drain, no --auto-complete). Continue on branch story-1485 (merge current origin/main, preserving sketch commits edeac57b63/faa07e4acb; no reset, no force-push). make check-ci-fast before every push. No merge or merge-hold clearance by the implementer; independent advisor review required.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:45:02.314618175Z
+modified_at: 2026-10-07T01:45:02.314618175Z
+req_type: Task
+tags:
+- guided-lane
+- seat-occupancy
+- slice:A
+filed_at:
+  code_sha: bb5572f368699693a012c25cce72fd4e521124cb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: a36129c0-3fde-4c5c-92a2-908e517184b1
