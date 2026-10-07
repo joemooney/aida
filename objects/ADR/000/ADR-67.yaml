@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:55:02.413128159Z
-modified_at: 2026-10-07T01:57:26.533266861Z
+modified_at: 2026-10-07T01:57:29.553605536Z
 req_type: Decision
 tags:
 - adr
@@ -35,6 +35,13 @@ relationships:
   target_id: 01a11409-166a-7532-811a-eb943fe701d0
   created_at: 2026-10-07T01:55:17.059042989Z
   created_by: joe
+comments:
+- id: 01a11414-7d51-7352-923c-e21d29adbd0c
+  author: joe
+  content: Approved by advisor with conditions — see the advisor signoff comment on TASK-1607 (2026-10-06).
+  created_at: 2026-10-07T01:57:29.553605536Z
+  modified_at: 2026-10-07T01:57:29.553605536Z
+  session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
 history:
 - id: 01a11414-7185-7822-811e-a41a7c20493a
   author: joe
