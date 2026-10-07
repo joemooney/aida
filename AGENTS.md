@@ -37,6 +37,16 @@ platform run within 24h. Weekly cadence does not shorten Linux PR CI.
 See [CI policy](docs/agents/aida-repository-guide.md).
 <!-- trace:TASK-1588 | ai:codex -->
 
+Ship ownership refusals exit non-zero. Direct human terminals get owning
+wave/run/phase and member-scoped activity evidence; `pr ship --wait [secs]`
+(default 300) polls every two seconds before continuing through ordinary gates.
+Drive seats/headless callers refuse immediately even with `--wait`; the
+explicit in-drive override never bypasses merge holds. See
+[git lifecycle](docs/cli/04-git-lifecycle.md).
+Wait release refreshes PR metadata; a drive merge takes the sync/cleanup path
+without CI or merge credit. Shared run identity is reported as uncorroborated.
+<!-- trace:TASK-1602 | ai:codex -->
+
 Ship derives completion IDs from an explicit trailing PR-title group, then
 store-resolving branch IDs. Title prose, PR bodies, and an unrelated branch-head
 trailer do not grant completion credit. CLI/MCP rework and status edits record

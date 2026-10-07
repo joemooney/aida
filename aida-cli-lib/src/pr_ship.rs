@@ -16,6 +16,141 @@
 //!
 //! trace:TASK-458 | ai:claude
 
+// trace:TASK-1602 | ai:codex
+#[derive(Debug, Clone)]
+pub(crate) struct ShipDriveBlock {
+    pub(crate) reason: ShipMergeBlockReason,
+    pub(crate) detail: String,
+    pub(crate) timed_out: bool,
+}
+
+/// The existing PR-keyed guard, with evidence tied to the owning member.
+/// Never attribute the current sibling's session/log to a different PR.
+// trace:TASK-1253, TASK-1292, TASK-1602 | ai:codex
+pub(crate) fn probe_ship_drive_guard(
+    root: &std::path::Path,
+    pr: u64,
+    cwd_scope: Option<&str>,
+    drive_seat: bool,
+    allow: bool,
+) -> Option<ShipDriveBlock> {
+    let lock = match crate::drain_lock::probe_lock(root) {
+        crate::drain_lock::LockStatus::Running(lock) => Some(lock),
+        _ => None,
+    };
+    let state = lock
+        .as_ref()
+        .and_then(|_| crate::drain_state::DrainState::read(root));
+    let members = state
+        .as_ref()
+        .map(|s| {
+            s.members
+                .iter()
+                .filter(|m| m.is_running())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let hold = crate::merge_hold::read_hold(root, pr);
+    let owners = members
+        .iter()
+        .filter(|m| {
+            m.pr.map(u64::from) == Some(pr)
+                || hold.as_ref().is_some_and(|reason| reason.contains(&m.spec))
+        })
+        .copied()
+        .collect::<Vec<_>>();
+    let caller =
+        drive_seat || cwd_scope.is_some_and(|scope| members.iter().any(|m| m.spec == scope));
+    let reason = ship_merge_block_reason(caller, !owners.is_empty(), allow)?;
+    let mut detail = String::from("drive seat cannot wait for its own pipeline");
+    if let (Some(lock), Some(state)) = (lock, state.as_ref()) {
+        detail = format!(
+            "live drive PID {} (wave {}); {}",
+            lock.pid,
+            if lock.wave_id.is_empty() {
+                "unknown"
+            } else {
+                &lock.wave_id
+            },
+            lock.command
+        );
+        for member in owners {
+            let current = state.current.as_deref() == Some(member.spec.as_str());
+            let phase = crate::drain_state::drain_phase_display(&member.state);
+            detail.push_str(&format!("; {} phase {phase}", member.spec));
+            if current {
+                // `current` is rewritten at phase entry independently of
+                // `run_uuid`; overlap can leave a sibling's token here.
+                // The snapshot cannot corroborate a spec/run association.
+                // trace:TASK-1602 | ai:codex
+                detail.push_str("; run unavailable (shared run identity is uncorroborated)");
+                let activity = state.current_session_id.as_deref().and_then(|session| {
+                    let vendor = state
+                        .current_vendor
+                        .as_deref()
+                        .and_then(crate::session::HeadlessVendor::parse)
+                        .unwrap_or_else(|| crate::session::resolve_headless_vendor(root));
+                    crate::vendor_activity::snapshot(
+                        vendor,
+                        &crate::vendor_activity::VendorActivityContext::new(root, session),
+                    )
+                    .last_activity
+                });
+                if let Some(age) = activity.and_then(|at| at.elapsed().ok()) {
+                    detail.push_str(&format!(
+                        "; headless activity last written {}s ago",
+                        age.as_secs()
+                    ));
+                } else {
+                    detail.push_str("; headless activity unavailable (PID liveness does not establish progress)");
+                }
+            } else {
+                detail.push_str("; member session/activity unavailable (current session belongs to another member)");
+            }
+        }
+    }
+    Some(ShipDriveBlock {
+        reason,
+        detail,
+        timed_out: false,
+    })
+}
+
+/// A bounded ownership wait. Every iteration observes fresh state and reports
+/// progress; release continues into the ordinary ship gates. Seats fail closed
+/// immediately, including with --wait. The override is handled by the probe.
+// trace:TASK-1602 | ai:codex
+pub(crate) fn wait_for_drive_release(
+    budget: Option<std::time::Duration>,
+    interval: std::time::Duration,
+    mut probe: impl FnMut() -> Option<ShipDriveBlock>,
+    mut progress: impl FnMut(&ShipDriveBlock, f64),
+) -> Result<(), ShipDriveBlock> {
+    let started = std::time::Instant::now();
+    loop {
+        let Some(mut block) = probe() else {
+            return Ok(());
+        };
+        if block.reason == ShipMergeBlockReason::DriveSeat {
+            return Err(block);
+        }
+        let Some(budget) = budget else {
+            return Err(block);
+        };
+        let remaining = budget.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            block.timed_out = true;
+            return Err(block);
+        }
+        progress(&block, remaining.as_secs_f64());
+        std::thread::sleep(
+            interval
+                .min(remaining)
+                .min(std::time::Duration::from_secs(60)),
+        );
+    }
+}
+
 /// Flags / mode the handler resolves from the parsed clap subcommand.
 /// Kept as a value type so dry-run plan formatting can be exercised in
 /// unit tests without invoking the full handler.
@@ -1542,6 +1677,165 @@ mod tests {
     }
 
     use super::*;
+
+    // trace:TASK-1602 | ai:codex
+    fn drive_fixture() -> (tempfile::TempDir, crate::drain_state::DrainState) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida/headless-logs")).unwrap();
+        std::fs::write(
+            crate::drain_lock::drain_lock_path(dir.path()),
+            serde_json::json!({
+                "pid": std::process::id(), "started_at_utc": chrono::Utc::now().to_rfc3339(),
+                "command": "aida queue work --auto-complete", "host": "test", "wave_id": "wave-test"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut state = crate::drain_state::DrainState::new_single("TASK-1602", "run-test", false);
+        state.members[0].state = "in-phase-3".into();
+        state.members[0].pr = Some(1602);
+        state.current_phase = Some("3 (reviewer)".into());
+        state.current_session_id = Some("session-test".into());
+        state.current_vendor = Some("codex".into());
+        std::fs::write(
+            dir.path()
+                .join(".aida/headless-logs/task-1602-session-test.jsonl"),
+            "{}\n",
+        )
+        .unwrap();
+        state.write(dir.path()).unwrap();
+        (dir, state)
+    }
+
+    #[test]
+    fn ship_drive_diagnostics_are_bound_to_owning_member() {
+        let (dir, mut state) = drive_fixture();
+        let probe = || probe_ship_drive_guard(dir.path(), 1602, None, false, false).unwrap();
+        let block = probe();
+        assert_eq!(block.reason, ShipMergeBlockReason::DriveOwnedPr);
+        assert!(block.detail.contains("wave-test"));
+        assert!(block.detail.contains("run unavailable"));
+        assert!(!block.detail.contains("run-test"));
+        assert!(block.detail.contains("3/6 (reviewer)"));
+        assert!(
+            block.detail.contains("activity last written"),
+            "{}",
+            block.detail
+        );
+        state.current = Some("TASK-999".into());
+        state.current_phase = Some("1 (implementer)".into());
+        state.write(dir.path()).unwrap();
+        let block = probe();
+        assert!(block.detail.contains("3/6 (reviewer)"));
+        assert!(!block.detail.contains("activity last written"));
+        assert!(!block.detail.contains("run-test"));
+        assert!(probe_ship_drive_guard(dir.path(), 999, None, false, false).is_none());
+        assert_eq!(
+            probe_ship_drive_guard(dir.path(), 999, Some("TASK-1602"), false, false)
+                .unwrap()
+                .reason,
+            ShipMergeBlockReason::DriveSeat
+        );
+        assert!(probe_ship_drive_guard(dir.path(), 1602, None, true, true).is_none());
+        std::fs::remove_file(crate::drain_lock::drain_lock_path(dir.path())).unwrap();
+        assert!(probe_ship_drive_guard(dir.path(), 1602, None, false, false).is_none());
+    }
+
+    // trace:TASK-1602 | ai:codex
+    #[test]
+    fn ship_run_identity_is_unavailable_after_overlapping_sibling_phase() {
+        let (dir, _) = drive_fixture();
+        crate::drain_state::set_run(dir.path(), "TASK-999", "sibling-run-B", false);
+        crate::drain_state::set_phase_with_tuning(
+            dir.path(),
+            "TASK-1602",
+            3,
+            "reviewer",
+            None,
+            None,
+            None,
+            None,
+            Some(1602),
+        );
+        let state = crate::drain_state::DrainState::read(dir.path()).unwrap();
+        assert_eq!(state.current.as_deref(), Some("TASK-1602"));
+        assert_eq!(state.run_uuid, "sibling-run-B");
+        let block = probe_ship_drive_guard(dir.path(), 1602, None, false, false).unwrap();
+        assert!(block.detail.contains("TASK-1602 phase 3/6 (reviewer)"));
+        assert!(block.detail.contains("run unavailable"));
+        assert!(!block.detail.contains("sibling-run-B"));
+    }
+
+    #[test]
+    fn ship_wait_reprobes_and_continues_only_after_release() {
+        let (dir, mut state) = drive_fixture();
+        let mut polls = 0;
+        let result = wait_for_drive_release(
+            Some(std::time::Duration::from_secs(1)),
+            std::time::Duration::ZERO,
+            || {
+                polls += 1;
+                probe_ship_drive_guard(dir.path(), 1602, None, false, false)
+            },
+            |_, _| {
+                state.members[0].state = "completed".into();
+                state.write(dir.path()).unwrap();
+            },
+        );
+        assert!(result.is_ok());
+        assert_eq!(polls, 2);
+    }
+
+    #[test]
+    fn ship_wait_timeout_and_headless_seat_fail_closed() {
+        let (dir, _) = drive_fixture();
+        let block = wait_for_drive_release(
+            Some(std::time::Duration::ZERO),
+            std::time::Duration::ZERO,
+            || probe_ship_drive_guard(dir.path(), 1602, None, false, false),
+            |_, _| panic!("zero budget cannot wait"),
+        )
+        .unwrap_err();
+        assert!(block.timed_out);
+        let block = wait_for_drive_release(
+            Some(std::time::Duration::from_secs(300)),
+            std::time::Duration::ZERO,
+            || probe_ship_drive_guard(dir.path(), 1602, None, true, false),
+            |_, _| panic!("headless seats cannot wait"),
+        )
+        .unwrap_err();
+        assert_eq!(block.reason, ShipMergeBlockReason::DriveSeat);
+        assert!(!block.timed_out);
+        assert!(wait_for_drive_release(
+            None,
+            std::time::Duration::ZERO,
+            || probe_ship_drive_guard(dir.path(), 1602, None, false, false),
+            |_, _| panic!("no implicit wait")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn ship_wait_cli_accepts_optional_seconds() {
+        use clap::Parser;
+        for (flags, expected) in [
+            (vec![], None),
+            (vec!["--wait"], Some(300)),
+            (vec!["--wait", "0"], Some(0)),
+            (vec!["--wait=12"], Some(12)),
+        ] {
+            let mut args = vec!["aida", "pr", "ship", "1602"];
+            args.extend(flags);
+            let cli = crate::cli::Cli::try_parse_from(args).unwrap();
+            match cli.command {
+                crate::cli::Command::Pr(crate::cli::PrCommand::Ship { wait, .. }) => {
+                    assert_eq!(wait, expected)
+                }
+                _ => panic!("expected pr ship"),
+            }
+        }
+        assert!(crate::cli::Cli::try_parse_from(["aida", "pr", "ship", "--wait", "bad"]).is_err());
+    }
 
     // BUG-1499: a label-only hold is refused even for a HUMAN at a terminal
     // (no clearance record would exist); a marker hold keeps the BUG-1566
