@@ -1,0 +1,26 @@
+id: 01a11874-024a-71b2-935d-56a2a7e89778
+spec_id: BUG-1808
+agreed_id: BUG-1808
+title: Preflight child-seat delegation before queue-work mutations
+description: 'Validate that the active launcher seat may delegate the routed child role before changing requirement status, queue membership, branch/worktree, lease, or manifest state. A refusal must leave all pre-command state unchanged. Add regression coverage for implementer launching implementer-routed work. Diagnostics must distinguish queue selection from child-role delegation and tell an authorized advisor/product/integrator launcher to use an explicit role selector. Reproduced from qci#BUG-021. Authority-class: requires sketch and independent advisor signoff before implementation; never proxy-merge.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T22:20:18.378078722Z
+modified_at: 2026-10-07T22:20:18.378078722Z
+req_type: Bug
+tags:
+- atomicity
+- authority
+- from-qci:BUG-021
+- queue-work
+- roles
+execution_mode: guided
+filed_at:
+  code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 887bf7e5fb
+  vendor: codex
