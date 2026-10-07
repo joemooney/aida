@@ -1,5 +1,6 @@
 id: 01a11408-047e-7db1-ae9c-bd0c629b1ee0
 spec_id: TASK-1-229
+agreed_id: TASK-1338
 title: queue in-flight 'Stuck — PR merged, auto-bump missed' recommends reconcile-status for a deliberately reopened spec
 description: 'aida queue list (advisor, 2026-10-06 18:40) lists TASK-1538 under ''Stuck — PR merged, auto-bump missed (merged 34 hours ago)'' with Next: ''aida db reconcile-status replays the missed bumps to Completed''. TASK-1538 was deliberately REOPENED on 2026-10-05 because pr ship scraped (TASK-1538) into PR 2428''s squash subject and merge-time completion fired with ~1 of ~45 modules split. Following the hint re-completes a spec the operator reopened on purpose and defeats the reopen fence. The in-flight classifier should treat a recorded reopen after the merge (comment/oplog) as authoritative and not suggest reconcile; reconcile-status itself should likely refuse to bump a spec reopened after the referencing merge. Separately: TASK-1538 now reads status ''done'' although the 17:35 advisor handoff recorded it as Approved — provenance of that move unverified.'
 status: Draft
