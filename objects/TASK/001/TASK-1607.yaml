@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T03:53:41.714674778Z
+modified_at: 2026-10-07T04:08:55.673416745Z
 req_type: Task
 tags:
 - guided-lane
@@ -80,6 +80,27 @@ comments:
   created_at: 2026-10-07T03:53:41.714674778Z
   modified_at: 2026-10-07T03:53:41.714674778Z
   session_id: 1396dbed-b87b-4ab3-a393-3d8990561c54
+- id: 01a1148c-d279-7831-91a1-fcba1a3c6597
+  author: joe
+  content: |-
+    C7 EARLY ADVISOR REVIEW — PR-2451 (draft) @ c85ae7eaff, TASK-1607 steps 1-3. Verdict: CHANGES REQUESTED before steps 4-5 (gateway wiring). The core is sound: tri-state probe keyed on boot-id + start time, generation CAS, spoofed/stale ack refusal, --kill refused before reading state, 8-thread claim race, C2/C3/C4 covered. The gaps are at the boundary with real callers — exactly what C7 exists to catch before 30 call sites are wired.
+
+    P1-1 C1 is incomplete: the Child relation passes ONLY a Route whose spec equals own_spec (gate(), Relation::Child arm). Real drain-phase children do more: the implementer's session end auto-queues a review story (Route, spec = the new STORY id); the reviewer phase is PR-scoped (lease scope PR-N / review story) yet records verdicts and routes rework of the TASK (queue rework); punt/advise route to the advisor queue. As written, step 5 breaks every drain. Required: inventory the protected ops each phase ACTUALLY performs (use tonight's drain logs: implementer, reviewer, punt), define own scope as {assigned spec, its review story, the specs of its PR}, and test drain_child_* with those real ops, not only queue done.
+
+    P1-2 Unattended loop launchers are unclassified: the systemd timer aida-tick-2b20e8a3 runs 'aida schedule tick' in this repo with no grant, and supervisor.rs fn launch_redrive spawns 'queue work --auto-complete' (a LoopStart). After wiring, both fail closed. Add both to the sketch inventory with an explicit disposition before step 5. Advisor proposal: refuse-with-diagnosis stays (consistent with the sketch), but redrive must hand the spec to the live holder's loop (enqueue for it) instead of starting its own loop; schedule tick must not start loops itself.
+
+    P2-1 Narrow ADR-68 for plain-shell anchors (behaviour change 1 in your report): a shell lives for days. An implicit claim from a one-shot Route/Spawn by a caller whose anchor is NOT a harness and NOT a loop process should validate the grant and PASS without installing a holder (the sketch's original 'unbound routing requires the validated dispatch grant'). Implicit claims stay for LoopStart and harness-anchored callers, so the backgrounded-orchestrator case ADR-68 targets is still covered. Otherwise one 'aida queue add' turns the operator's shell into the holder and every later Claude session from that shell becomes a child that cannot route. Record this as an ADR-68 refinement comment.
+
+    P2-2 store.rs SeatStore::lock uses blocking lock_exclusive() with no timeout. Under ADR-70 a stalled holder blocks every gated caller indefinitely. Use a bounded try-lock (e.g. 10s, polling), then refuse with a diagnosis.
+
+    P2-3 SeatConfig::load reads the CALLER's worktree .aida/config.toml while the store lives at the main worktree root. Read config from the main worktree root too, so all worktrees agree on single_seats, and classify that read in scripts/config-trust.toml accordingly (this also fixes CI failure 2).
+
+    P3 CI (Build red at this head): (1) regenerate the BUG-1502 format-json audit for the new 'session seat' commands; (2) config-trust inventory (see P2-3); (3) cli.rs:1276 '///' doc comment carries STORY-1485 — move it to a '//' trace marker; (4) the_holders_permit_keeps_the_seat_locked_until_dropped failed after drop(permit). The guard code is correct (the File is dropped, so flock releases); the likely cause is fork inheritance from a parallel test's spawn holding the open file description until exec. Make the test robust (bounded retry, or assert from a separate process) and say in the test why.
+
+    Standing: C8 (only local writes + spawn under the seat lock; no network/forge op) applies to step 5. Resume after addressing P1-1, P1-2 and P2-1 in code+tests, P2-2/P2-3/P3 as fixes; push to the same draft and ping for re-review. — advisor
+  created_at: 2026-10-07T04:08:55.673416745Z
+  modified_at: 2026-10-07T04:08:55.673416745Z
+  session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
