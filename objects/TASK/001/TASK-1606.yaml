@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T02:23:17.478239171Z
+modified_at: 2026-10-07T02:23:19.976848765Z
 req_type: Task
 tags:
 - operator-ux
@@ -43,6 +43,58 @@ comments:
   content: 'Implemented in commit 431763d3c8 and PR https://github.com/joemooney/aida/pull/2450. Validation passed: 125 ship tests, 15 CI-gate tests, 11 isolated CLI scenarios plus help-table check, build, formatting, diff check. Queue done completed successfully. TASK-1-231 records integration of the shared --wait option with open TASK-1602 / PR-2444.'
   created_at: 2026-10-07T02:12:57.526754366Z
   modified_at: 2026-10-07T02:12:57.526754366Z
+- id: 01a1142c-25a8-77a1-a558-26bca11e9c99
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 2 (ci)
+
+    Recorded by `aida queue work TASK-1606 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 2 (ci) · kind `ci-red`
+    - Seat: ci (session role: advisor)
+    - Parent spec: TASK-1606
+    - Branch under test: main
+    - Commit under test: bb5572f36869
+    - Recorded at: 2026-10-07T02:23:18.694057973+00:00
+
+    ### Failure
+
+    CI is red on PR-2450: Build (ubuntu-latest)
+
+    Failure kind: `ci-red`
+
+    ### Recovery hint shown to the operator
+
+    CI failed on run 37560853513 — view it: `gh run view 37560853513`. Push fixups to the same branch: `aida queue work TASK-1606 --branch task-1606 --steal`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-07T02:23:18.694057973+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 1186854 ms
+      - phase 2 (ci): 257613 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"TASK-1606","started_at":"2026-10-07T01:59:08.642016366+00:00","completed_at":"2026-10-07T02:23:18.694057973+00:00","outcome":"failed","variant":"through-ci","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-2450: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1186854},{"phase":2,"slug":"ci","elapsed_ms":257613}],"total_ms":1448654,"binary_sha":"bb5572f368"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent TASK-1606 --title "drain phase 2 (ci) failure on TASK-1606" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-07T02:23:19.976842605Z
+  modified_at: 2026-10-07T02:23:19.976842605Z
 history:
 - id: 01a11400-c877-7e40-a909-567b18abd52c
   author: joe
