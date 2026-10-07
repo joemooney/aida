@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T01:59:33.711061Z
+modified_at: 2026-10-07T03:33:58.066382480Z
 req_type: Task
 tags:
 - guided-lane
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-10-07T01:59:33.711061Z
   modified_at: 2026-10-07T01:59:33.711061Z
   session_id: 1396dbed-b87b-4ab3-a393-3d8990561c54
+- id: 01a1146c-d0b2-7d00-8420-3f57927b290b
+  author: joe
+  content: 'ADVISOR SIGNOFF — ADR-70 (lock through the bounded commitment instead of durable reservations): APPROVED as the second recorded amendment to sketch faa07e4acb section 2. Verified: the 2026-10-03 advisor finding 2 explicitly permitted ''locking through bounded commitment or a generation-bound dispatch reservation''. It removes the crash-Unknown reservation wedge that the sketch left without a recovery path, and keeps the sketch''s rule that no lock spans peer waits, mail delivery, child completion or termination. Condition C8: ''bounded'' means LOCAL only. Under the seat flock: validate holder/generation/grant, then the local queue write, the local handoff write, Command::spawn and recording the child identity. Any network or forge operation — aida-store push/sync, gh/glab calls, git fetch — runs after the unlock. Add a test or debug assertion proving no network/forge call happens while the seat lock is held. Lock order seat->queue is documented at the lock acquisition site. C1-C7 stand unchanged. — advisor'
+  created_at: 2026-10-07T03:33:58.066382480Z
+  modified_at: 2026-10-07T03:33:58.066382480Z
+  session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
