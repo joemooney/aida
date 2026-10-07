@@ -18,12 +18,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:06.737868438Z
-modified_at: 2026-10-07T02:00:06.737868438Z
+modified_at: 2026-10-07T02:00:17.722339278Z
 req_type: Task
 tags:
 - follow-up
 - platform:macos
 - seat-occupancy
+relationships:
+- rel_type: References
+  target_id: 01a11409-166a-7532-811a-eb943fe701d0
+  created_at: 2026-10-07T02:00:17.722335064Z
+  created_by: joe
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
