@@ -1,0 +1,40 @@
+id: 01a11412-5e31-74d0-927a-766c133f0c6a
+spec_id: ADR-69
+agreed_id: ADR-69
+title: 'TASK-1607: seat occupancy fails closed where the identity probe is unsupported'
+description: |
+  ## Context
+  The tri-state probe may be unable to establish process start identity (non-Linux, no /proc start time) or a verified harness mapping. The signed-off sketch forbids activating occupancy without identity, and the acceptance forbids an env-only compatibility fallback.
+
+  ## Options considered
+  - Fail closed: an Unknown anchor refuses protected orchestrator ops with a diagnosis; ordinary implementer work is unaffected.
+  - Implement a macOS probe now: grows slice A and needs macOS CI coverage.
+  - Inert where unsupported: effectively a compatibility fallback, forbidden without re-signoff.
+
+  ## Decision
+  Fail closed: refuse (operator choice, guided session 2026-10-06).
+
+  ## Rationale
+  Matches the fail-closed letter of the signed-off sketch; Linux is the platform the drains run on.
+
+  ## Consequences
+  Orchestrator loops do not run on platforms without a start-identity probe until a follow-up spec adds one. The refusal names the platform and the missing evidence.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:55:10.513142297Z
+modified_at: 2026-10-07T01:55:10.513142297Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:TASK-1607
+- keystone
+filed_at:
+  code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
+  branch: story-1485
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c89606cd47
+  vendor: antigravity
+  session: 1396dbed-b87b-4ab3-a393-3d8990561c54
