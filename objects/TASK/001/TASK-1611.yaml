@@ -1,0 +1,22 @@
+id: 01a11726-87f0-7bb1-94dc-75c40b901e9d
+spec_id: TASK-1611
+agreed_id: TASK-1611
+title: Audit, consolidate, and archive repository documentation after August–October evolution
+description: 'Operator-directed comprehensive documentation cleanup in an isolated worktree. Research git history from 2026-08-01 through 2026-10-07; inventory tracked documentation; reduce navigation and root clutter; archive superseded plans, reports, proposals, and historical guides while preserving provenance and links; revise maintained entry points against current source. Acceptance: an auditable per-file disposition inventory, documented evolution evidence and archive policy, coherent current navigation, no introduced broken local links or build/runtime documentation references, documentation checks pass or baseline failures are recorded, committed and pushed branch with reviewable PR. Preserve generated templates, live agent instructions, normative ADRs, and untracked main-worktree files. Independent review required before merge.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T16:16:03.568950798Z
+modified_at: 2026-10-07T16:16:03.568950798Z
+req_type: Task
+tags:
+- cleanup
+- docs
+filed_at:
+  code_sha: 738653fb3e6de71d0975047adb143c5f31a25d85
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
