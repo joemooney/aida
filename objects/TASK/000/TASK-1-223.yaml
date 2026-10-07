@@ -3,12 +3,12 @@ spec_id: TASK-1-223
 agreed_id: TASK-1331
 title: pr ship CI watch blocks on informational workflows the config already excludes
 description: '2026-10-05 23:25: aida pr ship 2436 sat in its checks-watch loop (gh pr checks --watch shape, 10s refresh) waiting on Cross-platform (nightly)/Build (windows-latest) — a job hung ~2.5h (TASK-1-222) that is (a) not a required check (branch protection requires only Build ubuntu-latest + merge-hold-gate) and (b) explicitly declared informational via [ci] informational_workflows = ["Cross-platform*"] in .aida/config.toml. The ship watch should gate on required checks only, or at minimum filter workflows matching informational_workflows — the operator had to Ctrl+C and gh pr merge --squash by hand. Adjacent to TASK-1602 (ship-on-drive-owned-PR UX) but a distinct defect: this is the CI-wait predicate, not the ownership refusal. Evidence: PR 2436, run 37412494312, job 112103837750.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:25:57.324876090Z
-modified_at: 2026-10-06T13:16:53.886577330Z
+modified_at: 2026-10-07T01:03:42.564173149Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -139,6 +139,21 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a113e3-3fdc-74f2-ae26-55aebfde5363
+  author: aida-auto-bump
+  timestamp: 2026-10-07T01:03:42.556839274Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a113e3-3fe4-7d81-90ce-81b1a3395ca2
+  timestamp: 2026-10-07T01:03:42.564172652Z
+  agent: aida
+  commit_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
+  summary: Completed via merge c89606cd
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 filed_at:
   code_sha: d85605cdfd31b36e3e8b4e159b0ae7d3da85111a
   branch: main
@@ -155,6 +170,8 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check passed
   implemented_at: 2026-10-06T06:54:17.403044339Z
   implemented_by: joe
+  completed_at: 2026-10-07T01:03:42.556814195Z
+  completion_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
 interface_changes:
   cli:
   - aida pr ship — GitHub CI waits now ignore pending informational jobs while preserving required checks and unlisted failure gates
