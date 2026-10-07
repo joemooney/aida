@@ -1,5 +1,6 @@
 id: 01a1141c-c0ee-7aa1-938d-f714176c66aa
 spec_id: TASK-1-231
+agreed_id: TASK-1339
 title: Combine ship ownership and CI budgets when integrating TASK-1602/TASK-1606
 description: TASK-1606 introduces --wait SECS for CI registration and settlement on task-1606. TASK-1602 PR-2444 is still open and independently introduces the same option for ownership release. Preserve one CLI flag during integration and decide/document whether one shared end-to-end deadline spans ownership plus CI. Do not retain duplicate clap fields or two diverging spellings.
 status: Draft
