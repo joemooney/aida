@@ -2634,6 +2634,65 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
     assert_eq!(req.status, RequirementStatus::InProgress);
 }
 
+// trace:TASK-1603 | ai:codex
+#[test]
+fn phase1_registration_failure_leaves_status_unstarted() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().join("requirements.yaml"));
+    let mut req = Requirement::new("first batch member".into(), String::new());
+    req.spec_id = Some("TASK-1603".into());
+    req.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    let token = Uuid::now_v7().to_string();
+    // No batch snapshot: fail before applying the parent's status bump.
+    assert!(prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .is_err());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved,
+    );
+    drain_state::DrainState::new_batch("first-member", &["TASK-1603".into()])
+        .write(dir.path())
+        .unwrap();
+    let bumped = prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        bumped,
+        Some(("TASK-1603".into(), RequirementStatus::Approved))
+    );
+    assert!(orchestrator::run_is_live(dir.path(), &token));
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::InProgress,
+    );
+}
+
 #[test]
 fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
     let _env = quiet_queue_env();

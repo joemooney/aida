@@ -624,18 +624,54 @@ fn predict_next_n(n: usize) -> String {
     )
 }
 
+/// Publish run ownership before phase-1 status mutation or child launch.
+/// Batch/nextN runs must retain their parent's member snapshot; missing or
+/// corrupt state is an error rather than an uncorroborated child launch.
+// trace:TASK-1603 | ai:codex
+pub(crate) fn register_run(
+    project_root: &Path,
+    spec: &str,
+    run_uuid: &str,
+    zen: bool,
+    owns_drain_state: bool,
+) -> std::io::Result<()> {
+    if owns_drain_state {
+        DrainState::new_single(spec, run_uuid, zen).write(project_root)?;
+    } else {
+        set_run(project_root, spec, run_uuid, zen)?;
+    }
+    // Verify exactly the evidence the immediate child will read, including
+    // PID liveness. A stale batch snapshot must not authorize the bump.
+    if !crate::orchestrator::run_is_live(project_root, run_uuid) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "persisted run does not corroborate a live orchestrator",
+        ));
+    }
+    Ok(())
+}
+
 /// TASK-336: record the orchestrator run that is starting for `spec` — its
 /// per-run UUID (the BUG-233 corroboration token) and its `--zen` flag (the
 /// BUG-237 zen-provenance anchor). A phase child carrying
 /// `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` corroborates against [`DrainState::
 /// run_uuid`] read back from the file; the [`DrainState::zen`] flag plays the
 /// same role [`crate::orchestrator::RunMarker::zen`] used to play for
-/// `AIDA_ZEN`. Best-effort — a missing file is a no-op (the drain still runs,
-/// just unobservable). trace:TASK-336 | ai:claude
-pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool) {
-    let Some(mut state) = DrainState::read(project_root) else {
-        return;
-    };
+/// `AIDA_ZEN`. Registration errors must stop launch: children depend on this
+/// file for authority.
+// trace:TASK-336 trace:TASK-1603 | ai:codex
+pub(crate) fn set_run(
+    project_root: &Path,
+    spec: &str,
+    run_uuid: &str,
+    zen: bool,
+) -> std::io::Result<()> {
+    let mut state = DrainState::read(project_root).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "batch drain state is missing or unreadable",
+        )
+    })?;
     state.current = Some(spec.to_string());
     state.run_uuid = run_uuid.to_string();
     state.zen = zen;
@@ -645,7 +681,7 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
             .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
         member.finished_at = None;
     }
-    let _ = state.write(project_root);
+    state.write(project_root)?;
     // TASK-993: bound the event stream — rotate at this run-started boundary if
     // it has outgrown the size cap, so it can't grow unbounded across many
     // drains. Rotating only here (a drain/member boundary, never mid-phase)
@@ -662,6 +698,7 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
             crate::events::EventKind::RunStarted,
         ),
     );
+    Ok(())
 }
 
 /// STORY-712: best-effort snapshot of the live drain's current spec + run uuid,
@@ -2630,15 +2667,15 @@ mod tests {
         assert_eq!(read.phase_started_at, None);
     }
 
-    // set_phase / set_member_outcome / set_run / clear_run on a project with
+    // set_phase / set_member_outcome / clear_run on a project with
     // no file are silent no-ops.
     #[test]
     fn updates_are_noops_without_a_file() {
         let dir = tempfile::tempdir().unwrap();
         set_phase(dir.path(), "STORY-1", 1, "implementer");
         set_member_outcome(dir.path(), "STORY-1", true, None);
-        // TASK-336: same no-op semantics for set_run / clear_run.
-        set_run(dir.path(), "STORY-1", "tok", true);
+        // Run ownership is required even though phase telemetry is optional.
+        assert!(set_run(dir.path(), "STORY-1", "tok", true).is_err());
         clear_run(dir.path());
         assert_eq!(probe(dir.path()), DrainStatus::None);
     }
@@ -2660,13 +2697,85 @@ mod tests {
     fn set_run_records_current_run_uuid_and_zen() {
         let dir = tempfile::tempdir().unwrap();
         batch_state().write(dir.path()).unwrap();
-        set_run(dir.path(), "STORY-285", "live-token", true);
+        set_run(dir.path(), "STORY-285", "live-token", true).unwrap();
         let read = DrainState::read(dir.path()).unwrap();
         assert_eq!(read.current.as_deref(), Some("STORY-285"));
         assert_eq!(read.run_uuid, "live-token");
         assert!(read.zen);
         let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
         assert!(member.started_at.is_some());
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_corroborates_first_and_later_members_before_phase_entry() {
+        for batch in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let specs = vec!["TASK-1603".to_string(), "TASK-1604".to_string()];
+            let initial = if batch {
+                DrainState::new_batch("launch-race", &specs)
+            } else {
+                DrainState::new_next_n(2, &specs)
+            };
+            initial.write(dir.path()).unwrap();
+            let mut previous: Option<String> = None;
+            for spec in &specs {
+                let token = uuid::Uuid::now_v7().to_string();
+                assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+                register_run(dir.path(), spec, &token, true, false).unwrap();
+                // A child can corroborate immediately, without phase telemetry
+                // or a predecessor member having populated the snapshot.
+                assert!(crate::orchestrator::run_is_live(dir.path(), &token));
+                let state = DrainState::read(dir.path()).unwrap();
+                assert_eq!(state.current.as_deref(), Some(spec.as_str()));
+                assert!(state.current_phase.is_none());
+                assert_eq!(state.members.len(), 2);
+                assert!(state.zen);
+                if let Some(stale) = previous {
+                    assert!(!crate::orchestrator::run_is_live(dir.path(), &stale));
+                }
+                previous = Some(token);
+            }
+        }
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_single_corroborates_immediately() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        register_run(dir.path(), "TASK-1603", &token, false, true).unwrap();
+        assert!(crate::orchestrator::run_is_live(dir.path(), &token));
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_rejects_missing_corrupt_or_unwritable_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, false).is_err());
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(drain_state_path(dir.path()), "corrupt").unwrap();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, false).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+        std::fs::remove_file(drain_state_path(dir.path())).unwrap();
+        // A directory at the destination reliably fails atomic replacement,
+        // including when tests run as root and permission bits don't protect it.
+        std::fs::create_dir(drain_state_path(dir.path())).unwrap();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, true).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_rejects_dead_batch_owner() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = batch_state();
+        state.orchestrator_pid = u32::MAX - 1;
+        state.write(dir.path()).unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        assert!(register_run(dir.path(), "STORY-285", &token, false, false).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
     }
 
     // trace:STORY-975 | ai:codex
@@ -2703,7 +2812,7 @@ mod tests {
     fn clear_run_wipes_run_uuid_and_zen() {
         let dir = tempfile::tempdir().unwrap();
         batch_state().write(dir.path()).unwrap();
-        set_run(dir.path(), "STORY-285", "live-token", true);
+        set_run(dir.path(), "STORY-285", "live-token", true).unwrap();
         set_phase(dir.path(), "STORY-285", 3, "reviewer");
         clear_run(dir.path());
         let read = DrainState::read(dir.path()).unwrap();
