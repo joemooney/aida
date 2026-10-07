@@ -16,12 +16,12 @@ description: |
   2. Bounded wait: a duration flag bounds the CI wait (name aligned with TASK-1602's `--wait <secs>`; one flag, not two divergent spellings). On expiry ship exits with a dedicated non-zero code and nothing is merged. Default remains unbounded.
   3. Scriptable exit codes: distinct, documented exit codes for at least: CI red, CI wait timed out, needs rebase/not mergeable, needs (re-)review/approval not at head, stale CI definition, merge-hold present. 0 still means merged. Documented in docs/cli and `aida pr ship --help`.
   4. Tests: one per pre-flight refusal proving no CI wait occurs (e.g. a fake forge whose watch would hang), plus a timeout test and an exit-code table test.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T03:37:28.971458111Z
+modified_at: 2026-10-07T03:38:18.515558195Z
 req_type: Task
 tags:
 - operator-ux
@@ -143,6 +143,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a11470-ca13-7a72-9e7b-665abfead1fd
+  author: aida-orchestrator
+  timestamp: 2026-10-07T03:38:18.515566757Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
   branch: main
@@ -161,6 +168,14 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-07T02:12:35.366228267Z
   implemented_by: joe
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: launch-refused
+  detail: 'phase 1 child session 01a11470 exited with code 1 after 19641ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1606` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1606 --force-claim` to take over here, or `aida edit TASK-1606 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1606 — the store reports TASK-1606 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  recovery_hint: 'The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1606`.'
+  shelved_by: advisor
+  shelved_at: 2026-10-07T03:38:18.515558195Z
 interface_changes:
   cli:
   - aida pr ship --wait <SECS> bounds CI registration and settlement; preflight refusals use exit codes 20–25
