@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:51:55.840375581Z
-modified_at: 2026-10-07T01:51:55.840375581Z
+modified_at: 2026-10-07T16:36:10.604037394Z
 req_type: Task
 tags:
 - from-advisor:TASK-1607
@@ -20,6 +20,12 @@ tags:
 - queue-work
 - seat-grants
 - severity:major
+comments:
+- id: 01a11738-f2ec-7700-ade7-bdd14a9fd75d
+  author: mcp
+  content: 'Sole fix-day checkpoint c418c60fe7a58058fbea577b55e85bdbea1e1f65, branch fix-day-2026-10-07 sibling /home/joe/ai/aida-fix-day-2026-10-07; advisorylease01a1172cc702. Read-only plan/role/branch/delegation preflight before implicit queue/calibration/setup writes; manual continuation on returned postsetup errors. 152 queue tests,1 authority test,15 Linux pickup integrations and21 fastgates passed,fmt/diffclean. Logs /tmp/aida-fix-day-evidence/task-1337-{queue,authority,integration-final,fast}.log. Canonical spec Draft: advisor promotion remains prerequisite; no gatebypass. Full workspace and sandbox pending, no review verdict claimed.'
+  created_at: 2026-10-07T16:36:10.604030474Z
+  modified_at: 2026-10-07T16:36:10.604030474Z
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main
