@@ -19,12 +19,12 @@ description: |
 
   ## Consequences
   The claim transition is recorded in the event outbox/history like an explicit claim. Callers whose validated grant seat is single-occupancy are classified orchestrator-origin; bound/tombstoned lineage is fenced regardless of env labels.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:55:06.323856188Z
-modified_at: 2026-10-07T01:55:17.974539117Z
+modified_at: 2026-10-07T01:57:27.341197542Z
 req_type: Decision
 tags:
 - adr
@@ -35,6 +35,14 @@ relationships:
   target_id: 01a11409-166a-7532-811a-eb943fe701d0
   created_at: 2026-10-07T01:55:17.974532888Z
   created_by: joe
+history:
+- id: 01a11414-74ad-79c3-b6a6-ea131d8809ea
+  author: joe
+  timestamp: 2026-10-07T01:57:27.341193492Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
