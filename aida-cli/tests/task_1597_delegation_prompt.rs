@@ -4,6 +4,40 @@ use std::path::Path;
 
 mod support;
 
+// trace:TASK-1325 | ai:codex
+// Pin the roster and every child to the same identity. Windows runners may
+// provide USERNAME without USER; never substitute a different PTY-only user.
+const TEST_USER: &str = "delegation-test";
+const SESSION_ENV: &[&str] = &[
+    "AIDA_SESSION_GRANT",
+    "AIDA_SESSION_ROLE",
+    "AIDA_AGENT_NAME",
+    "AIDA_AGENT_TYPE",
+    "AIDA_HEADLESS",
+];
+
+fn command(bin: &str, home: &Path, repo: &Path) -> std::process::Command {
+    let mut cmd = std::process::Command::new(bin);
+    for key in SESSION_ENV {
+        cmd.env_remove(key);
+    }
+    cmd.env("HOME", home)
+        .env("AIDA_USER", TEST_USER)
+        .current_dir(repo);
+    cmd
+}
+
+fn tty_command(bin: &str, home: &Path, repo: &Path) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new(bin);
+    for key in SESSION_ENV {
+        cmd.env_remove(key);
+    }
+    cmd.env("HOME", home);
+    cmd.env("AIDA_USER", TEST_USER);
+    cmd.cwd(repo);
+    cmd
+}
+
 fn setup_repo(home: &Path, repo: &Path) {
     std::fs::create_dir_all(home).unwrap();
     std::fs::create_dir_all(repo).unwrap();
@@ -29,15 +63,14 @@ fn setup_repo(home: &Path, repo: &Path) {
         .unwrap();
 
     let bin = env!("CARGO_BIN_EXE_aida");
-    std::process::Command::new(bin)
+    let init = command(bin, home, repo)
         .args(["init", "--no-skills", "--no-hooks", "--no-agent-config"])
-        .env("HOME", home)
         .env("AIDA_HEADLESS", "1")
-        .current_dir(repo)
         .output()
         .unwrap();
+    assert!(init.status.success(), "init failed: {init:?}");
 
-    support::ensure_seat(home, repo, "advisor", &[]);
+    support::ensure_seat_for(home, repo, TEST_USER, "advisor", &[]);
 }
 
 #[test]
@@ -50,13 +83,11 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     let bin = env!("CARGO_BIN_EXE_aida");
 
     // 1. Headless no-prompt check
-    let headless = std::process::Command::new(bin)
+    let headless = command(bin, &home, &repo)
         .arg("role")
         .arg("enter")
         .arg("advisor")
         .env("AIDA_HEADLESS", "1")
-        .env("HOME", &home)
-        .current_dir(&repo)
         .output()
         .unwrap();
     let stderr = String::from_utf8(headless.stderr).unwrap();
@@ -80,16 +111,10 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
         })
         .unwrap();
 
-    let mut cmd = CommandBuilder::new(bin);
+    let mut cmd = tty_command(bin, &home, &repo);
     cmd.arg("role");
     cmd.arg("enter");
     cmd.arg("advisor");
-    cmd.env("HOME", &home);
-    cmd.env(
-        "USER",
-        std::env::var("USER").unwrap_or_else(|_| "joe".to_string()),
-    );
-    cmd.cwd(&repo);
 
     let mut child = pair.slave.spawn_command(cmd).unwrap();
     drop(pair.slave);
@@ -101,12 +126,8 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
         // Sleep briefly to let the prompt render
         std::thread::sleep(std::time::Duration::from_millis(500));
         // Decline the prompt
-        writer
-            .write_all(
-                b"n
-",
-            )
-            .unwrap();
+        // CR is Enter on both Unix PTYs and Windows ConPTY.
+        writer.write_all(b"n\r").unwrap();
         // Drop writer so EOF is sent
         drop(writer);
     });
@@ -114,17 +135,22 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     let mut output = String::new();
     reader.read_to_string(&mut output).unwrap();
 
-    assert!(child.wait().unwrap().success());
+    let status = child.wait().unwrap();
+    assert!(
+        status.success(),
+        "TTY role enter failed: {status:?}\n{output}"
+    );
     assert!(
         output.contains("TTY-issued delegation"),
-        "should prompt at TTY"
+        "should prompt at TTY: {output}"
     );
 
     // Verify recovery hint on sub-launch failure
     let mut grant_id = String::new();
     for line in output.lines() {
-        if let Some(rest) = line.strip_prefix("export AIDA_SESSION_GRANT='") {
-            if let Some(id) = rest.strip_suffix("'") {
+        // ConPTY can prefix a rendered line with terminal control sequences.
+        if let Some((_, rest)) = line.split_once("export AIDA_SESSION_GRANT='") {
+            if let Some((id, _)) = rest.split_once("'") {
                 grant_id = id.to_string();
                 break;
             }
@@ -132,28 +158,25 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     }
     assert!(
         !grant_id.is_empty(),
-        "could not find AIDA_SESSION_GRANT in pty output"
+        "could not find AIDA_SESSION_GRANT in pty output: {output}"
     );
 
-    std::process::Command::new(bin)
+    let added = command(bin, &home, &repo)
         .args([
             "add", "--type", "task", "--title", "test", "--status", "approved",
         ])
-        .env("HOME", &home)
         .env("AIDA_SESSION_ROLE", "advisor")
         .env("AIDA_SESSION_GRANT", &grant_id)
-        .current_dir(&repo)
-        .status()
+        .output()
         .unwrap();
+    assert!(added.status.success(), "add failed: {added:?}");
 
-    let sub = std::process::Command::new(bin)
+    let sub = command(bin, &home, &repo)
         .arg("questions")
         .arg("clarify")
         .arg("TASK-1") // The first spec added above
         .env("AIDA_SESSION_ROLE", "advisor")
         .env("AIDA_SESSION_GRANT", &grant_id)
-        .env("HOME", &home)
-        .current_dir(&repo)
         .output()
         .unwrap();
 
@@ -172,17 +195,11 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
             pixel_height: 0,
         })
         .unwrap();
-    let mut cmd2 = CommandBuilder::new(bin);
+    let mut cmd2 = tty_command(bin, &home, &repo);
     cmd2.arg("role");
     cmd2.arg("enter");
     cmd2.arg("advisor");
-    cmd2.env("HOME", &home);
     cmd2.env("AIDA_AGENT_NAME", "codex");
-    cmd2.env(
-        "USER",
-        std::env::var("USER").unwrap_or_else(|_| "joe".to_string()),
-    );
-    cmd2.cwd(&repo);
 
     let mut child2 = pair2.slave.spawn_command(cmd2).unwrap();
     drop(pair2.slave);
@@ -196,11 +213,11 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
     assert!(!status2.success(), "should exit with non-zero status");
     assert!(
         !output2.contains("Include it in the TTY-issued delegation set?"),
-        "should not prompt managed agents"
+        "should not prompt managed agents: {output2}"
     );
     assert!(
         output2.contains("AIDA-managed agent sessions cannot issue direct TTY grants"),
-        "should show the managed agent refusal message"
+        "should show the managed agent refusal message: {output2}"
     );
 
     assert!(sub_stdout.contains("aida role enter advisor --delegate-seat advisor"));
