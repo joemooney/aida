@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T16:01:38.294848363Z
+modified_at: 2026-10-07T16:32:15.625607333Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -351,6 +351,19 @@ comments:
   content: Combined checkpoint 2722961da71e153c83eda06d96d44f328897209a pushed to origin/fix-day-2026-10-07. 85 targeted tests passed (69 drain-state, 14 orchestrator, delayed batch/nextN 1, phase1 registration failure 1); cargo fmt exit 0; make check-ci-fast exit 0, 21 gates. Logs /tmp/aida-fix-day-evidence/task-1603-{drain-state,orchestrator,delayed,phase1,fmt,fast}.log. Source tests are now re-run on combined branch; sandbox/vendor end-to-end remains unverified. Continuing plan item 2; no per-fix PR or review.
   created_at: 2026-10-07T16:01:38.294848363Z
   modified_at: 2026-10-07T16:01:38.294848363Z
+- id: 01a11735-5d09-79c0-9f3a-37e447f1c732
+  author: joe
+  content: |
+    Coordination ownership update 2026-10-07 09:31 MST, same coordination conversation.
+    Operator confirms backlog-implementer-v3 has acknowledged implementer instructions and is the SOLE fix-day owner. Earlier implementation sessions, including backlog-implementer and intermediate replacements, are superseded. Do not send further checkpoint requests or work to superseded sessions. This records explicit operator transfer; no registry inference.
+    Current v3 native session ID, owned lease, worktree/base SHA and reported checkpoint SHA remain pending terminal evidence. No v3 checkpoint found in local mailbox inspection. Branch fix-day-2026-10-07 exists locally now; observed ref is not a terminal-reported testing checkpoint.
+
+    Prepared testing handoffs: backlog-regression targets each v3-reported FULL checkpoint SHA in a separate pinned worktree, records targeted TASK-1603 delayed-child batch/nextN and concurrent-token/cleanup tests, then workspace/fast tests and two sandbox three-spec drains at FINAL SHA. backlog-verifier-1 maps completed spec acceptance to the same FULL SHA and independent artifacts, classifies pass/fail/unverified; verify gate preservation and later reopen/provenance/ship/preflight criteria as v3 reports those items. No edits/shared-branch pushes, no real-store drains, no per-fix review/CI gate.
+    No testing assignment delivered yet: target SHA has not been reported by v3. Operator can deliver preparation/acknowledgment instructions without registry repair, then bind execution to the received SHA. One final whole-branch backlog-reviewer review remains planned after fixes 1-5 at FINAL SHA. Integrator remains unassigned pending primary-advisor/operator authorization.
+    PR-2435 unattributed duplicate was removed with audit backup; no provenance inferred. Harness leases remain untouched; no sessions restarted/pruned. Fix-day plan remains controlling: sole implementation branch/session, no backlog/slice A/new specs/findings.
+    Next: collect v3 checkpoint with actual session identity, ownership/worktree, base/full target SHA, completed items, commands/results/artifacts, blockers and next action. Persist SHA-bound evidence on owning AIDA specs, then provide pinned regression/acceptance briefs for operator delivery. No rollout/rollover request, integration approval, clearance or merge.
+  created_at: 2026-10-07T16:32:15.625607333Z
+  modified_at: 2026-10-07T16:32:15.625607333Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
