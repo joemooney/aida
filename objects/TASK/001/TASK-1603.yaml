@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T06:49:15.434843863Z
+modified_at: 2026-10-07T06:54:47.984456798Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -217,6 +217,24 @@ comments:
   content: 'Coordination evidence checkpoint 2026-10-06 23:48 MST; coordination session coord-20261006T2346-MST (conversation-local label, not a lease ID). PR-2445 exact head eec6fca71808f3d9f67179f1b54fb51260fd90ec: Ubuntu Build SUCCESS, run 37568069064; active hold remains. Implementer reports 94 targeted tests (not rerun by coordination seat). Retained actual verdict .aida/review-verdicts/PR-2445.json is RequestChanges at older a760a2016b1c17920a04d068f9dfff989ea22f52. Latest review attempt stopped at OVERVIEW.md rebase conflict before review. Both P1 acceptance obligations (delayed-child batch/nextN selection; concurrent-token registration/cleanup) still need whole-fix-day-branch review evidence. Primary advisor notified via mailbox cda3eac6-ef4e-41e8-be13-a24d869fd4bb. No dispatch, gate approval, hold clearance or merge. Follow fix-day plan: incorporate first, keep both docs paragraphs, sandbox-only drain tests.'
   created_at: 2026-10-07T06:49:15.434835533Z
   modified_at: 2026-10-07T06:49:15.434835533Z
+- id: 01a11524-aeb0-77e3-a44e-cd3fbbd9891e
+  author: mcp
+  content: |-
+    Continuing existing coordination session per operator; previous rollover request is withdrawn (no measured context pressure or operator rollover instruction). Ambiguous harness leases remain untouched. PR-2435 CORRECTION: unattributed duplicate was removed with audit backup, no provenance inferred. Independently verified audit.md and original.json at .aida/handoff/advisor/audit/PR-2435-20261007T062120Z; corrected TASK-1324 comments.
+
+    Terminal roster (latest named launcher records, not proof of current activity):
+    implementer: backlog-implementer, registry identity codex-26083, pts/6; ended_at recorded, no native session ID in record; assignment UNASSIGNED.
+    regression tester: backlog-regression, registry identity codex-25819, pts/1; ended_at recorded, no native session ID in record; assignment UNASSIGNED.
+    code reviewer: backlog-reviewer, registry identity codex-29424, pts/2; ended_at recorded, no native session ID in record; assignment UNASSIGNED.
+    verifier: backlog-verifier-1, registry identity codex-30036, pts/4; ended_at recorded, no native session ID in record; assignment UNASSIGNED.
+    integrator: backlog-integrator, registry identity codex-26372, pts/3; ended_at recorded, no native session ID in record; assignment UNASSIGNED.
+    All five records refer to /home/joe/ai/aida at launch build 738653fb3e. No current lane assignment or replacement native identity is established. Do not use old launcher PID as proof a replacement owns work. Need explicit named-session confirmation before staffing; no registration or dispatch performed.
+
+    Recommended FIRST assignment, not dispatched: existing operator-designated implementer owns TASK-1603 on ONE separate fix-day-2026-10-07 worktree off current origin/main, incorporate task-1603 exact source head eec6fca71808f3d9f67179f1b54fb51260fd90ec first and keep both OVERVIEW.md paragraphs. Check delayed startup does not exhaust batch/nextN and independent member tokens survive registration/cleanup interleavings; preserve registration-before-status/launch and all authority gates. Commit/backup, hand off exact combined SHA, base/source SHA, worktree, commands/results, changed tests and remaining blockers to coordination.
+
+    Evidence handoffs, not per-fix gates: regression lane records targeted delayed-child/overlap regressions at owner-provided checkpoint SHA, then workspace/fast checks and two sandbox three-spec drains at final SHA, with logs/counts. Code reviewer performs ONE whole-branch review after fixes 1-5 at final SHA, criteria-by-criteria including both TASK-1603 P1s, reopen fence, provenance writer, ship/ownership --wait and queue preflight. Verifier independently checks acceptance/artifact-to-SHA matching and classifies pass/fail/unverified; integrator remains unassigned to merge until primary advisor/operator decision and receives final SHA, verdict, tests, required CI/hold state and explicit authorization. Operator merge remains per plan. All evidence workers use separate worktrees, never implementation owner's checkout; sandbox-only drains. Subsequent implementation order stays TASK-1-229, PR-2435 writer/data path, TASK-1606, TASK-1-230. No overlapping implementation, integration approval, hold clearance or merge.
+  created_at: 2026-10-07T06:54:47.984450321Z
+  modified_at: 2026-10-07T06:54:47.984450321Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
