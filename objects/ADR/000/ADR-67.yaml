@@ -24,12 +24,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:55:02.413128159Z
-modified_at: 2026-10-07T01:55:02.413128159Z
+modified_at: 2026-10-07T01:55:17.059047685Z
 req_type: Decision
 tags:
 - adr
 - from-guided-implement:TASK-1607
 - keystone
+relationships:
+- rel_type: References
+  target_id: 01a11409-166a-7532-811a-eb943fe701d0
+  created_at: 2026-10-07T01:55:17.059042989Z
+  created_by: joe
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
