@@ -135,8 +135,10 @@ fn forced_reopen_runs_the_approval_authority_predicate() {
             !(authorized || !status_advance_requires_advisor_authority(&from, &S::Approved)),
             "{from} -> Approved must refuse without authority"
         );
-        // Legitimate path: an interactive human or the advisor seat.
-        assert!(advisor_authority_from("implementer", true, false));
+        // Legitimate path: the advisor seat (grant-resolved). ADR-66: a TTY
+        // only issues grants and is no longer an authority source, so an
+        // interactive implementer stays refused. trace:STORY-1473 | ai:claude
+        assert!(!advisor_authority_from("implementer", true, false));
         assert!(advisor_authority_from("advisor", false, false));
     }
     // Closing and idempotent re-flips stay free, so `--force` recovery that

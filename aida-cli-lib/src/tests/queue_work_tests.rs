@@ -429,6 +429,8 @@ fn role_scope_default_non_pr_is_implementer() {
 fn auto_complete_head_skips_entries_routed_to_other_roles() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-943".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("reviewer".to_string()),
@@ -438,6 +440,8 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-944".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -449,6 +453,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("implementer drain should find the implementer-routed item");
     assert_eq!(pick.spec, "TASK-944");
     assert_eq!(
@@ -462,6 +467,8 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
 fn auto_complete_head_skips_deferred_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1205".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -471,6 +478,8 @@ fn auto_complete_head_skips_deferred_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1208".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -482,6 +491,7 @@ fn auto_complete_head_skips_deferred_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("drain should skip deferred rows and pick the next drivable item");
     assert_eq!(pick.spec, "TASK-1208");
     assert_eq!(pick.deferred_skipped, vec!["TASK-1205".to_string()]);
@@ -494,6 +504,8 @@ fn auto_complete_head_skips_deferred_candidates() {
 fn auto_complete_head_skips_release_tagged_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-1125".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -505,6 +517,8 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1126".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -516,6 +530,7 @@ fn auto_complete_head_skips_release_tagged_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("headless drain should skip release tasks and pick normal drainable work");
 
     assert_eq!(pick.spec, "TASK-1126");
@@ -531,6 +546,8 @@ fn auto_complete_head_skips_release_tagged_candidates() {
 fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     let candidates = vec![
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "STORY-1120".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -540,6 +557,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1121".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -549,6 +568,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1122".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -558,6 +579,8 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             blocked: None,
         },
         AutoCompleteHeadCandidate {
+            deferred_reason: None,
+            deferred_until: None,
             id: "TASK-1123".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
@@ -569,6 +592,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     ];
 
     let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .unwrap()
         .expect("drain should skip interactive/blocking modes and pick drainable work");
 
     assert_eq!(pick.spec, "TASK-1123");
@@ -583,6 +607,25 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
     assert!(pick.status_skipped.is_empty());
     assert!(pick.role_skipped.is_empty());
     assert!(pick.deferred_skipped.is_empty());
+}
+
+// trace:BUG-1793 | ai:antigravity
+#[test]
+fn auto_complete_head_refuses_held_candidates() {
+    let candidates = vec![AutoCompleteHeadCandidate {
+        deferred_until: None,
+        id: "STORY-1".to_string(),
+        status: RequirementStatus::Approved,
+        for_role: Some("implementer".to_string()),
+        deferred: true,
+        deferred_reason: Some("wait for infra".to_string()),
+        execution_mode: Some(aida_core::ExecutionMode::Drain),
+        tags: Default::default(),
+        blocked: None,
+    }];
+
+    let err = pick_auto_complete_head_for_role(&candidates, "implementer").unwrap_err();
+    assert!(err.to_string().contains("wait for infra"));
 }
 
 /// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH
@@ -3274,6 +3317,102 @@ fn a_child_that_reported_a_real_ci_failure_still_travels_the_shelvable_path() {
     );
 }
 
+/// BUG-1805: the batch / `nextN` child argv builders pushed `--escalate-blocks`
+/// (or `--escalate-defaults`) UNCONDITIONALLY — `EscalateMode` has no "absent"
+/// arm — while `--no-human` was pushed only when set. The spawned child then
+/// tripped the STORY-306 kickoff validation ("--escalate-blocks /
+/// --escalate-defaults only apply to a fully-headless drain") and exited
+/// before any work, so every interactive `aida queue work nextN
+/// --auto-complete` drain failed in seconds. The escalate flag pair must
+/// appear in child argv exactly when the resolved no-human mode is `both`.
+// trace:BUG-1805 | ai:claude
+#[test]
+fn interactive_pipelined_child_argv_carries_no_escalate_flags() {
+    use crate::auto_complete::{AutoCompleteVariant, EscalateMode, NoHumanMode};
+
+    let has_escalate = |args: &[String]| args.iter().any(|a| a.starts_with("--escalate"));
+
+    // The reproduced failure: interactive (no --no-human at all) drain with
+    // the default EscalateMode::Blocks. The child would reject --escalate-*.
+    for escalate in [EscalateMode::Blocks, EscalateMode::Defaults] {
+        let args = crate::pipelined_child_common_args(
+            "TASK-1333",
+            AutoCompleteVariant::ThroughCi,
+            false,
+            None,
+            None,
+            escalate,
+            false,
+            false,
+            false,
+            false,
+        );
+        assert!(
+            !has_escalate(&args),
+            "an interactive child argv must not carry an escalate flag the \
+             child's kickoff validation rejects: {args:?}"
+        );
+    }
+
+    // --no-human=reviewer-only is still not fully headless; the validation
+    // rejects the pair there too.
+    let reviewer_only = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::ReviewerOnly),
+        EscalateMode::Blocks,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        !has_escalate(&reviewer_only),
+        "--no-human=reviewer-only is not fully headless; no escalate flag: \
+         {reviewer_only:?}"
+    );
+
+    // A fully-headless (--no-human=both) child MUST still get the resolved
+    // escalate mode — that is where the advisor tier lives.
+    let both_blocks = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::Both),
+        EscalateMode::Blocks,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        both_blocks.contains(&"--no-human=both".to_string())
+            && both_blocks.contains(&"--escalate-blocks".to_string()),
+        "a --no-human=both child must carry --escalate-blocks: {both_blocks:?}"
+    );
+
+    let both_defaults = crate::pipelined_child_common_args(
+        "TASK-1333",
+        AutoCompleteVariant::ThroughCi,
+        false,
+        None,
+        Some(NoHumanMode::Both),
+        EscalateMode::Defaults,
+        false,
+        false,
+        false,
+        false,
+    );
+    assert!(
+        both_defaults.contains(&"--escalate-defaults".to_string()),
+        "a --no-human=both child must carry the resolved --escalate-defaults: \
+         {both_defaults:?}"
+    );
+}
+
 /// BUG-1515: a `Done` spec whose recorded review verdict is a still-live
 /// refusal (RequestChanges/Rejected, never closed by a later merge) must
 /// classify as `AwaitingRework`, not `AwaitingMerge` — the drain, `aida
@@ -3741,10 +3880,12 @@ fn drain_preview_reports_blocked_dependent_as_skipped_not_a_member() {
 // trace:STORY-1429 | ai:claude
 #[test]
 fn requeued_spec_reenters_queue_wide_drain_head() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, true);
     // Anchor the cache-path walk-up to this tempdir (BUG-1598).
     std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "advisor", &[]);
     bug_1608_set_status(&storage, "STORY-52", RequirementStatus::NeedsAttention);
     let (pick, _role, _blocked) = resolve_next_n_head(&storage, "u", Some("implementer"));
     assert_eq!(
@@ -3780,9 +3921,11 @@ fn requeued_spec_reenters_queue_wide_drain_head() {
 // trace:STORY-1429 | ai:claude
 #[test]
 fn requeued_dependent_still_skipped_by_blocked_by_gate() {
-    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_ROLE", "advisor")]);
     let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
     std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    // ADR-66: advisor authority now needs a validated session grant, not an
+    // env role. trace:STORY-1473 | ai:claude
+    let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(dir.path(), "advisor", &[]);
     bug_1608_set_status(&storage, "NFR-56", RequirementStatus::NeedsAttention);
 
     let store = storage.load().unwrap();

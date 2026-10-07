@@ -210,23 +210,44 @@ pub(crate) fn our_clone_path(store_root: &Path) -> String {
 // caveat is surfaced in `aida team set-role` --help, its output, and the docs.
 // trace:STORY-646 | ai:claude
 
+// trace:STORY-1473 | ai:codex
 /// The shared per-user role roster — `registry/team.toml` on the `aida-store`
-/// branch. Maps a `user_id` (the person, per `current_user_id`) to a role
-/// string. An absent file / absent user = unranked → falls back to
-/// `AIDA_SESSION_ROLE` / the current default (backward-compatible).
+/// branch. Maps each person to allowed seats. Legacy scalar values are read as
+/// singleton sets; writes always use arrays.
 ///
 /// ```toml
 /// [members]
-/// alice = "advisor"
-/// bob   = "implementer"
+/// alice = ["advisor", "reviewer"]
+/// bob   = "implementer" # legacy singleton
 /// ```
-/// trace:STORY-646 | ai:claude
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(transparent)]
+struct SeatList(Vec<String>);
+
+impl<'de> serde::Deserialize<'de> for SeatList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum Input {
+            Legacy(String),
+            Many(Vec<String>),
+        }
+        Ok(Self(match Input::deserialize(deserializer)? {
+            Input::Legacy(role) => vec![role],
+            Input::Many(roles) => roles,
+        }))
+    }
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct TeamRoster {
-    /// user_id -> role string. `BTreeMap` keeps the file deterministically
+    /// user_id -> allowed seats. `BTreeMap` keeps the file deterministically
     /// sorted so a CAS round-trip is stable across writers.
     #[serde(default)]
-    pub members: BTreeMap<String, String>,
+    members: BTreeMap<String, SeatList>,
 }
 
 impl TeamRoster {
@@ -250,17 +271,37 @@ impl TeamRoster {
         toml::from_str(&content).unwrap_or_default()
     }
 
-    /// The roster role for `user_id`, if one is recorded.
+    /// The allowed seats for `user_id`, if one is recorded.
+    pub(crate) fn seats_for(&self, user_id: &str) -> Option<&[String]> {
+        self.members.get(user_id).map(|seats| seats.0.as_slice())
+    }
+
+    pub(crate) fn entries(&self) -> Vec<(String, Vec<String>)> {
+        self.members
+            .iter()
+            .map(|(user, seats)| (user.clone(), seats.0.clone()))
+            .collect()
+    }
+
+    /// Compatibility accessor for old display-only callers.
     pub(crate) fn role_for(&self, user_id: &str) -> Option<&str> {
-        self.members.get(user_id).map(String::as_str)
+        self.seats_for(user_id)
+            .and_then(|seats| seats.first().map(String::as_str))
     }
 
     /// Set (or replace) a user's role and serialize to TOML. The CAS write now
     /// lives in `aida_core::team::set_role_cas`; this remains for the round-trip
     /// unit test below. trace:STORY-650 | ai:claude
     #[cfg(test)]
-    fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
-        self.members.insert(user_id.to_string(), role.to_string());
+    pub(crate) fn with_role_set(mut self, user_id: &str, role: &str) -> Self {
+        self.members
+            .insert(user_id.to_string(), SeatList(vec![role.to_string()]));
+        self
+    }
+
+    fn with_seats(mut self, user_id: &str, roles: &[String]) -> Self {
+        self.members
+            .insert(user_id.to_string(), SeatList(roles.to_vec()));
         self
     }
 }
@@ -293,6 +334,9 @@ pub(crate) fn resolve_effective_role(
 /// trace:STORY-646 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RoleSource {
+    // trace:STORY-1473 | ai:codex
+    /// From a validated, session-bound grant.
+    Grant,
     /// From `registry/team.toml` (the durable team role).
     Roster,
     /// From the `AIDA_SESSION_ROLE` env var (per-shell, self-declared).
@@ -301,15 +345,26 @@ pub(crate) enum RoleSource {
     Default,
 }
 
+pub(crate) fn allowed_seats_for_user(store_root: &Path, user_id: &str) -> Vec<String> {
+    TeamRoster::load(store_root)
+        .seats_for(user_id)
+        .unwrap_or_default()
+        .iter()
+        .map(|role| super::canonical_role_name(role))
+        .collect()
+}
+
 /// Resolve the effective role for `user_id` against the store at `store_root`,
 /// reading `AIDA_SESSION_ROLE` from the process env. Best-effort: an
 /// unreachable / unreadable store yields an empty roster, so resolution falls
 /// straight through to the env / default (never blocks). trace:STORY-646
 pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (String, RoleSource) {
-    let roster = TeamRoster::load(store_root);
-    let roster_role = roster.role_for(user_id).map(str::to_string);
-    let env_role = std::env::var("AIDA_SESSION_ROLE").ok();
-    resolve_effective_role(roster_role.as_deref(), env_role.as_deref())
+    let _ = user_id;
+    store_root
+        .parent()
+        .and_then(crate::seat_authority::current_seat)
+        .map(|seat| (seat, RoleSource::Grant))
+        .unwrap_or_else(|| ("implementer".to_string(), RoleSource::Default))
 }
 
 /// Write `user_id = role` into `registry/team.toml` on the store with a
@@ -334,10 +389,28 @@ pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result
         .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
 }
 
+pub(crate) fn allow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> anyhow::Result<()> {
+    aida_core::team::allow_seat_cas(store_root, user_id, seat)
+        .map_err(|e| anyhow::anyhow!("allowing team seat failed: {}", e))
+}
+
+pub(crate) fn disallow_seat_cas(
+    store_root: &Path,
+    user_id: &str,
+    seat: &str,
+) -> anyhow::Result<bool> {
+    aida_core::team::disallow_seat_cas(store_root, user_id, seat)
+        .map_err(|e| anyhow::anyhow!("removing team seat failed: {}", e))
+}
+
 /// A roster member row joined with the role recorded for its user_id, for the
 /// extended `aida team` view. trace:STORY-646 | ai:claude
 pub(crate) fn roles_by_user(store_root: &Path) -> BTreeMap<String, String> {
-    TeamRoster::load(store_root).members
+    TeamRoster::load(store_root)
+        .members
+        .into_iter()
+        .map(|(user, roles)| (user, roles.0.join(", ")))
+        .collect()
 }
 
 #[cfg(test)]
@@ -468,7 +541,10 @@ mod tests {
         assert_eq!(parsed.role_for("carol"), None);
         // `[members]` section is the on-disk shape the design doc specifies.
         assert!(toml_str.contains("[members]"), "got: {toml_str}");
-        assert!(toml_str.contains("alice = \"advisor\""), "got: {toml_str}");
+        assert!(
+            toml_str.contains("alice = [\"advisor\"]"),
+            "got: {toml_str}"
+        );
     }
 
     #[test]
@@ -496,9 +572,12 @@ mod tests {
     #[test]
     fn dashboard_person_key_role_is_read_by_effective_role() {
         // The crux of STORY-653: the dashboard groups/keys on the person key
-        // (`aida_core::team::person_key`), and a role written under that key is
-        // exactly what `effective_role_for_user` reads back — so a role set in
-        // the UI actually enforces. trace:STORY-653
+        // (`aida_core::team::person_key`), and a roster entry written under
+        // that key is exactly what authority resolution validates against.
+        // ADR-66 (STORY-1473) made the roster a CEILING: the active seat comes
+        // from a validated session grant, and the roster entry under the
+        // person key is what keeps that grant alive — so a role set in the UI
+        // still actually enforces. trace:STORY-653 trace:STORY-1473 | ai:claude
         let entry = NodeRegistryEntry {
             id: "1".to_string(),
             user_id: 1, // the OLD cryptic integer the bug keyed on
@@ -516,30 +595,38 @@ mod tests {
         );
 
         let dir = tempfile::tempdir().unwrap();
-        let registry = dir.path().join("registry");
-        std::fs::create_dir_all(&registry).unwrap();
-        // The UI writes the role under the person key (what TeamMemberDto.user_id
-        // now carries).
+        let root = dir.path();
+        // The UI writes the roster entry under the person key (what
+        // TeamMemberDto.user_id now carries); the person's grant validates
+        // against it.
+        let grant_id =
+            crate::seat_authority::test_support::mint_grant_for(root, &key, "advisor", &[]);
+        let store = crate::detect_distributed_store_from(root).expect("fixture store detected");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_USER", Some(key.as_str())),
+            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+        ]);
+
+        // effective_role_for_user resolves the granted seat, kept alive by the
+        // roster entry under the same person key.
+        let (role, src) = effective_role_for_user(&store, &key);
+        assert_eq!(role, "advisor");
+        assert_eq!(src, RoleSource::Grant);
+
+        // A roster keyed on the OLD integer (the bug) does NOT keep the grant
+        // alive — proving the enforcing key is the person key, not luck.
         std::fs::write(
-            registry.join("team.toml"),
-            format!("[members]\n{key} = \"advisor\"\n"),
+            store.join("registry").join("team.toml"),
+            "[members]\n\"1\" = [\"advisor\"]\n",
         )
         .unwrap();
-
-        // effective_role_for_user, called with the same person key, reads it.
-        let (role, src) = effective_role_for_user(dir.path(), &key);
-        assert_eq!(role, "advisor");
-        assert_eq!(src, RoleSource::Roster);
-
-        // The OLD integer key (the bug) does NOT resolve — proving the fix is the
-        // key, not luck.
-        let (role_int, src_int) = effective_role_for_user(dir.path(), "1");
+        let (role_int, src_int) = effective_role_for_user(&store, "1");
         assert_ne!(
             src_int,
-            RoleSource::Roster,
-            "integer key is not in the roster"
+            RoleSource::Grant,
+            "integer key must not validate the person-key grant"
         );
-        let _ = role_int;
+        assert_ne!(role_int, "advisor");
     }
 
     #[test]

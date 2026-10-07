@@ -90,11 +90,7 @@ codex --cd /path/to/aida-project
 
 The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
 
-Advisor-gated MCP tools use the role inherited by the `aida mcp-serve` process, not a later shell banner in the calling agent. If an MCP refusal reports `server role=(none)` or any non-advisor role while your interactive shell says `AIDA_SESSION_ROLE=advisor`, restart/reconnect the MCP server with the role in its launch environment:
-
-```bash
-AIDA_SESSION_ROLE=advisor aida mcp-serve
-```
+Advisor-gated MCP tools use the validated session grant captured by the `aida mcp-serve` process. If the server started without an advisor grant, enter advisor at an interactive TTY with `eval "$(aida role enter advisor)"`, then restart the MCP server and reconnect the client. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority.
 
 `aida status`, the `status_unified` MCP tool, and `aida://project/summary` surface the MCP server authority line when a server is registered. Refusals for advisor-gated MCP actions also name the server role, the caller role when the transport supplied one, and the relaunch command. trace:BUG-1043
 
@@ -387,7 +383,7 @@ the first refresh brings it current and saves the previous copy alongside as
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
-- MCP role authority is process-scoped: configure advisor authority by launching the server with `AIDA_SESSION_ROLE=advisor`, then reconnect the client. `role_enter` is peek-only from MCP and cannot elevate an already-running server. trace:BUG-1043
+- MCP authority is process-scoped: enter advisor at an interactive TTY, then restart the server and reconnect the client so it captures the validated grant. `role_enter` is peek-only from MCP and cannot elevate an already-running server. trace:STORY-1473
 - Project-local Codex registration is scaffolded only when explicitly requested with `aida init --with-mcp` (a `.codex/config.toml` with an `[mcp_servers.aida]` block). Manual `codex mcp add aida -- aida mcp-serve` remains available for existing projects or a personal `~/.codex/config.toml`. trace:TASK-0424 trace:STORY-1129
 - The default invisible-memory path is CLI/TOON; MCP is optional. The
   scaffolded Codex config sets `AIDA_AGENT_OUTPUT=toon` for the AIDA server

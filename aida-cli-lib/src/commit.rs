@@ -142,6 +142,13 @@ pub(crate) fn handle_commit_command(args: &CommitArgs) -> Result<()> {
     // trace:TASK-1140 | ai:claude
     crate::locking_gate::enforce_at_commit(&root)?;
 
+    // TASK-1330: identity hygiene gate. Refuse assembling a commit whose
+    // effective author/committer email is outside `[identity] allowed_emails`
+    // (.aida/config.toml). Silent when no allowlist is configured; the
+    // pre-push gate (`aida identity check-push`) backstops raw `git commit`.
+    // trace:TASK-1330 | ai:claude
+    crate::identity_gate::enforce_at_commit(&root)?;
+
     run_git_commit(&root, &message, args.all)?;
     println!(
         "{} committed: {}",

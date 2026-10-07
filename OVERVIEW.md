@@ -1,5 +1,33 @@
 # AIDA — Overview
 
+Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
+workspace build so feature-disabled stubs stay buildable. This check-only guard
+uses the existing full-CI filter and skips docs-only changes.
+<!-- trace:TASK-1601 | ai:codex -->
+
+Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
+manual dispatches fail before validation. Selected-path Windows PR checks stay
+informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
+required. Product's 24h weekly-windows-triage reminder records the tracking issue
+or no-issue result without queuing implementation. Releases still require a green
+platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+See [CI policy](docs/agents/aida-repository-guide.md).
+<!-- trace:TASK-1588 | ai:codex -->
+
+
+Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
+mirrored only when origin already advertises the exact SHA; rejected or pending
+pushes are skipped. Mirror-sync ignores and reports local-only default/store
+commits while fetching and pushing origin's SHA. See
+[git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
+<!-- trace:BUG-1803 | ai:codex -->
+
+The project schedule runs a read-only merged-worktree guard every 30 days and
+routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+scheduled and headless jobs.
+<!-- trace:TASK-1596 | ai:codex -->
+
 History supports scoped named templates and ordered event fields across CLI/MCP.
 Template parsing, event-local field projection, and config persistence share
 `aida-cli-lib/src/history_layout.rs`; builtin full/oneline keep legacy CLI modes.
@@ -41,6 +69,14 @@ The defensible niche is the **agent-collaboration layer**: stable spec IDs, type
 **The concrete embodiment.** `aida why <file:line>` answers why a line exists from a trace comment or conventionally trailered commit. `aida graph impact <id>` shows what a requirement touches. `aida compete` can run a spec through multiple vendors in isolated worktrees and let objective gates plus review pick the strongest result. `aida spec dryrun` and `aida spec interview` tighten specs before implementation. The wedge is practical and machine-checkable: stable IDs, typed relationships, lifecycle state, and inline `// trace:SPEC-ID` links that connect code back to intent.
 
 **Type protocols.** AIDA stores concise work contracts for spikes, bugs, stories, tasks, decisions, and docs as editable META requirements, with optional `research`, `docs`, and `keystone` lane overlays. Interactive pickup and headless implementer/reviewer prompts inject the resolved protocol before work begins, cite its META ids, cap the combined body at 40 lines, and label the precedence `type < lane < spec acceptance`; a leased session receives the compact type reminder again in its per-turn notice. Inspect them with `aida protocol show <type> [--lane <lane>]`; MCP clients read the identical text at `aida://protocol/<type>[/<lane>]`, and editing either META body changes the next pickup without rebuilding AIDA.
+
+<!-- trace:TASK-1328 | ai:codex -->
+**Queue completion ownership.** `aida queue done` uses both the current display
+ID and the stored origin ID from the resolved requirement. Remapping an ID
+mid-session therefore preserves ownership of an existing branch and its commit
+trailers. Mixed branches naming unrelated requirements remain refused, even
+when their commits name an accepted alias; unscoped branches retain the existing
+commit-evidence and ledgered `--force` rules.
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
@@ -169,7 +205,8 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
 - **Branch:** `aida-store` on origin
 - **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; auto-rebuilt when the cache's recorded HEAD doesn't match the orphan's HEAD
-- **Sync:** `aida db sync --pull --push` (uses `git pull --rebase` under the hood for linear orphan history)
+- **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
+<!-- trace:TASK-1604 | ai:codex -->
 
 The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
@@ -182,6 +219,25 @@ Each clone of an AIDA-using project gets a unique **node id** and writes its ide
 - **Pre-allocated blocks** (`FR-2-005`) let a clone reserve a contiguous range of agreed ids up front so trace comments can use the short form immediately, even offline. `aida node acquire` auto-allocates the first FR block.
 - **`[id_format]` policy** in `.aida/config.toml`: `node-aware-only` | `blocks-then-fallback` (default) | `blocks-only`.
 - **`aida init` post-clone bootstrap**: when origin already has the `aida-store` branch, `aida init` fetches it, sets up the worktree, and prompts for node-id acquisition.
+
+### Completion intent and deliberate reopen
+
+`aida pr ship` derives completion credit from an explicit trailing title group,
+then branch-name recovery, and accepts only IDs that resolve unambiguously in
+the canonical store. References in title prose and PR bodies remain descriptive;
+a partial-work PR with a neutral branch can ship without completing its owner.
+When a title is present, an older branch-head trailer cannot supply missing
+credits. When the title is empty, the branch-head subject supplies the title.
+
+Status edits and CLI/MCP rework record the code-repository HEAD when a spec
+leaves Done or Completed for further work. Live auto-bump and manual
+`reconcile-status` reject commits equal to or ancestral to that reopen marker,
+including closure-held landings and review propagation. A new later commit
+may complete the spec. `completion_sha` remains independent: it is retained
+across reopen, while the stale completion date is cleared. The marker is
+best-effort if the code repository is unavailable; existing squash-body
+constituent commit trailers still participate in the landing scan.
+<!-- trace:TASK-1600 | ai:codex -->
 
 ### Surfaces
 
@@ -313,6 +369,15 @@ Compatible cache-backed reads coordinate through a canonical `refresh.lock`
 flock. An incremental winner makes one SQLite attempt; other readers poll
 committed metadata for at most `AIDA_CACHE_READ_WAIT_MS` (default 1500ms), shared
 across backend opens in the invocation. Advisory paths use a zero wait budget.
+Single-spec CLI `show` also uses zero wait across human, TOON, JSON, card and
+tree output: a live refresh holder never delays the lookup, and a human TTY
+does not trigger an inline full rebuild. The spec object still comes from
+canonical YAML, while stale derived graph context carries the existing cache
+labels. Missing or incompatible caches and explicit strict overrides retain
+their recovery behavior. `tests/test_show_latency.py` covers held-flock reads,
+TTY delegation and subsequent explicit refresh.
+<!-- trace:BUG-1801 | ai:codex -->
+
 Rows and freshness metadata come from one pinned SQLite snapshot. An invocation
 collector preserves stale observations across later fresh reads; CLI object JSON
 outputs carry `cache`, arrays retain their shape with a stderr note, and MCP
@@ -327,3 +392,19 @@ rebuilds remain strict, as do mutations, gates and explicit cache operations.
 Missing/unreadable cache and incompatible-schema paths retain their strict/error
 handling; no incompatible rows are served. Durable requests, worker scheduling,
 and the separately bounded single-spec show path are separate work.
+
+GitHub `aida pr ship` waits on classified CI rows for up to 20 minutes. The
+`[ci]` informational allow-list applies to pending as well as failed jobs;
+branch-protection-required checks always take precedence. Unlisted failures
+still block shipping. See [PR lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1331 | ai:codex -->
+
+## Reconstitution launch limitation
+
+Store-probe failures are surfaced on stderr even when the recall denominator is
+empty. The current launcher resolves seat authority after entering the isolated
+scratch cwd, which cannot resolve a project roster and can refuse before vendor
+spawn. An exit-zero report therefore does not prove that an agent ran. See the
+[pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
+TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
+<!-- trace:TASK-1327 | ai:codex -->

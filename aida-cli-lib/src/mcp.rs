@@ -713,15 +713,11 @@ fn canonical_light_role_name(raw: &str) -> String {
     }
 }
 
-/// The active shell role, read from `AIDA_SESSION_ROLE` (canonicalized). This is
-/// the *MCP server process's* environment — it reflects the launching shell's
-/// role only when the agent's `aida mcp-serve` was started under an active role.
-/// trace:EPIC-27
+// trace:STORY-1473 | ai:codex
+/// The validated grant captured by this MCP server process. The role env is
+/// only a display hint and cannot authorize tools.
 fn role_active_env() -> Option<String> {
-    std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .map(|v| canonical_light_role_name(&v))
+    crate::seat_authority::current_seat(&crate::statusline_project_root())
 }
 
 fn mcp_server_role_label() -> String {
@@ -740,7 +736,7 @@ fn mcp_authority_line_for(server_role: Option<&str>, caller_role: Option<&str>) 
         .unwrap_or_else(|| "unknown over stdio MCP".to_string());
     let advisor = crate::advisor_authority_from(&server_role, false, false);
     format!(
-        "MCP authority: server role={} (advisor authority: {}); caller shell role={}; relaunch for advisor authority: AIDA_SESSION_ROLE=advisor aida mcp-serve",
+        "MCP authority: server seat={} (advisor authority: {}); caller shell hint={}; enter advisor at a TTY, then restart the MCP server",
         server_role,
         if advisor { "yes" } else { "no" },
         caller_role
@@ -753,7 +749,7 @@ fn mcp_authority_line() -> String {
 
 fn mcp_advisor_refusal_guidance(caller_role: Option<&str>) -> String {
     format!(
-        "{}. The MCP server's environment is the authority boundary; a caller shell banner can differ from the already-running server. Relaunch the MCP server with advisor authority and reconnect the client: `AIDA_SESSION_ROLE=advisor aida mcp-serve`.",
+        "{}. The MCP server uses its validated startup grant; a caller shell hint cannot elevate an already-running server. Enter advisor at a TTY, restart the MCP server, and reconnect the client.",
         mcp_authority_line_for(role_active_env().as_deref(), caller_role)
     )
 }
@@ -2199,8 +2195,8 @@ impl<'a> McpServer<'a> {
 
         // STORY-776: execution_mode — the advisor's routing classification.
         // Same advisor-authority gate as the CLI `aida edit --mode`: an MCP
-        // seat holds it only when its launching shell is the advisor
-        // (AIDA_SESSION_ROLE=advisor). Non-advisor seats are refused, mirroring
+        // seat holds it only when its process has a validated advisor grant.
+        // Non-advisor seats are refused, mirroring
         // the BUG-449 status-gate principle. trace:STORY-776 | ai:claude
         if let Some(mode_arg) = args.get("execution_mode").and_then(|v| v.as_str()) {
             if !crate::has_advisor_authority() {
@@ -4570,7 +4566,11 @@ impl<'a> McpServer<'a> {
                             // reopen a Completed spec — clear the stale
                             // completed_at so the next completion stamps a
                             // fresh date. trace:TASK-1477 | ai:claude
-                            crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                            crate::completion::record_reopen(
+                                r,
+                                &current_status,
+                                Some(&project_root),
+                            );
                         })
                         .map_err(|e| e.to_string())?;
                     if let Some(actual) = moved_to {
@@ -6209,16 +6209,14 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
     }
 }
 
+// trace:TASK-1594 | ai:claude
 /// BUG-486: whether the current MCP caller holds advisor authority, routed
 /// through the SAME predicate the CLI uses (`advisor_authority_from`) so the two
 /// surfaces can't drift — the CLI↔MCP inconsistency *was* the bug. The MCP
 /// server runs non-TTY and is never orchestrator-corroborated, so the only axis
 /// that can grant authority here is the resolved role. Role resolution:
-/// `role_active_env()` (the canonicalized `AIDA_SESSION_ROLE` the server
-/// inherited from the launching shell) is the source — `role_enter` (STORY-534)
-/// is a peek that sets exactly that shell env, so the entered session role and
-/// the env fallback are one and the same value seen by this process. An agent
-/// that has not entered an advisor role resolves to non-advisor and is refused,
+/// `role_active_env()` (the validated grant via `current_seat()`) is the source.
+/// An agent that has not entered an advisor role resolves to non-advisor and is refused,
 /// matching the headless / non-TTY default. trace:BUG-486 | ai:claude
 fn mcp_caller_has_advisor_authority() -> bool {
     // trace:BUG-486
@@ -6266,7 +6264,7 @@ fn mcp_queue_authority_message_for(caller_has_dispatch: bool) -> Option<String> 
 /// CLI uses (`status_advance_requires_advisor_authority` + `advisor_authority_from`
 /// via `mcp_caller_has_advisor_authority`), so an MCP session that has entered an
 /// advisor role may make the advisor-gated transitions exactly as the CLI does
-/// under `AIDA_SESSION_ROLE=advisor`. Before BUG-486 this gate ignored the
+/// under a validated session grant. Before BUG-486 this gate ignored the
 /// caller's role and refused unconditionally even for a genuine advisor session —
 /// the CLI↔MCP inconsistency the bug names. A caller WITHOUT advisor authority
 /// still hits the refusal.
@@ -6326,9 +6324,9 @@ fn mcp_status_gate_message_for(
     // `role_enter` is PEEK-ONLY — it cannot set the shell's AIDA_SESSION_ROLE for
     // the running MCP server, so it can never unlock this gate for the same
     // session (steering an agent into role_enter just loops). The only working
-    // unlock for an MCP caller is launching `aida mcp-serve` with
-    // AIDA_SESSION_ROLE=advisor in its environment; the fallback is to leave the
-    // status to the advisor (file it / have the advisor act). trace:BUG-589 | ai:claude
+    // unlock for an MCP caller is launching `aida mcp-serve` with a valid grant;
+    // the fallback is to leave the status to the advisor (file it / have the
+    // advisor act). trace:STORY-1473
     match to {
         RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
             "Cannot set status to {to} via MCP: approving or planning a spec is the \
@@ -6463,6 +6461,7 @@ fn build_summaries(store: &aida_core::RequirementsStore) -> Vec<aida_core::Requi
                 deferred: r.deferred,
                 deferred_at: r.deferred_at.map(|dt| dt.to_rfc3339()),
                 deferred_until: r.deferred_until.clone(),
+                deferred_reason: r.deferred_reason.clone(),
                 in_degree: d.in_degree,
                 out_degree: d.out_degree,
                 heft: d.heft,
@@ -7297,7 +7296,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "execution_mode": {
                         "type": "string",
-                        "description": "The advisor's bless-time classification of HOW this spec runs when dispatched by `aida do` (STORY-776). ADVISOR-AUTHORITY WRITE: refused unless this MCP server was launched from an advisor seat (AIDA_SESSION_ROLE=advisor) — same gate as the CLI `aida edit --mode`. An empty string clears back to ungroomed.",
+                        "description": "The advisor's bless-time classification of HOW this spec runs when dispatched by `aida do` (STORY-776). ADVISOR-AUTHORITY WRITE: refused unless this MCP server carries a validated advisor grant — same gate as the CLI `aida edit --mode`. An empty string clears back to ungroomed.",
                         "enum": ["drain", "drive", "guided", "operator", "decide", ""],
                         "example": "drive"
                     },
@@ -12663,9 +12662,7 @@ mod tests {
             assert!(result["structuredError"]["message"]
                 .as_str()
                 .unwrap()
-                .starts_with(
-                    "AIDA_SESSION_ROLE=guest is a least-privilege stakeholder role; refusing"
-                ));
+                .starts_with("The 'guest' role is a least-privilege stakeholder role; refusing"));
         }
         let read = server
             .handle_tools_call(&json!(3), &json!({"name": "list_requirements"}))
@@ -13374,24 +13371,30 @@ mod tests {
     fn mcp_authority_refusal_names_roles_and_relaunch_command() {
         use RequirementStatus::*;
 
+        // ADR-66: the server's seat comes from its validated startup grant;
+        // the caller's env role is only a hint, and the recovery path is TTY
+        // issuance + restart — never an env-var relaunch.
+        // trace:STORY-1473 | ai:claude
         let line = mcp_authority_line_for(Some("implementer"), Some("advisor"));
-        assert!(line.contains("server role=implementer"), "{line}");
-        assert!(line.contains("caller shell role=advisor"), "{line}");
+        assert!(line.contains("server seat=implementer"), "{line}");
+        assert!(line.contains("caller shell hint=advisor"), "{line}");
         assert!(line.contains("advisor authority: no"), "{line}");
         assert!(
-            line.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            line.contains("enter advisor at a TTY, then restart the MCP server"),
             "{line}"
         );
+        assert!(!line.contains("AIDA_SESSION_ROLE"), "{line}");
 
         let msg = mcp_status_gate_message_for(&Draft, &Approved, false)
             .expect("non-advisor MCP server must refuse advisor-gated transition");
         assert!(msg.contains("MCP authority:"), "{msg}");
-        assert!(msg.contains("server role="), "{msg}");
-        assert!(msg.contains("caller shell role="), "{msg}");
+        assert!(msg.contains("server seat="), "{msg}");
+        assert!(msg.contains("caller shell hint="), "{msg}");
         assert!(
-            msg.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            msg.contains("Enter advisor at a TTY, restart the MCP server"),
             "{msg}"
         );
+        assert!(!msg.contains("AIDA_SESSION_ROLE"), "{msg}");
     }
 
     #[test]

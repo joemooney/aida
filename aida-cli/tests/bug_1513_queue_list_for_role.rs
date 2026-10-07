@@ -18,6 +18,10 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+// STORY-1473 / ADR-66: env roles confer no authority; dispatch-gated setup
+// steps ride a validated advisor seat grant.
+mod support;
+
 fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_aida"))
         .current_dir(repo)
@@ -107,13 +111,17 @@ fn queue_list_for_role_excludes_callers_own_mismatched_role_row() {
         (implementer_spec.as_str(), "implementer"),
     ] {
         // Routing `--for implementer` is an execution-dispatch route and
-        // needs dispatch authority — wear `advisor` for the add so both
-        // fixture rows can be seeded regardless of role.
+        // needs dispatch authority — carry a granted `advisor` seat for the
+        // add so both fixture rows can be seeded regardless of role (ADR-66:
+        // the role env alone confers nothing). trace:STORY-1473 | ai:claude
+        let grant = support::ensure_seat(&home, &repo, "advisor", &[])
+            .expect("fixture repo is initialized");
         let out = Command::new(env!("CARGO_BIN_EXE_aida"))
             .current_dir(&repo)
             .env("HOME", &home)
             .env("AIDA_TELEMETRY", "0")
             .env("AIDA_SESSION_ROLE", "advisor")
+            .env("AIDA_SESSION_GRANT", &grant)
             .env_remove("AIDA_AGENT_OUTPUT")
             .env_remove("AIDA_OUTPUT_FORMAT")
             .args(["queue", "add", spec, "--for", role, "--user", "bug1513user"])

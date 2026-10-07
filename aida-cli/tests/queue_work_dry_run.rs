@@ -20,6 +20,16 @@
 use std::path::Path;
 use std::process::Command;
 
+// STORY-1473 / ADR-66: env roles confer no authority; dispatch-gated setup
+// steps ride a validated advisor seat grant (delegating the work seats the
+// launch paths may issue to children).
+mod support;
+
+fn advisor_grant(repo: &Path, home: &Path) -> String {
+    support::ensure_seat(home, repo, "advisor", &["implementer", "reviewer"])
+        .expect("fixture repo is initialized")
+}
+
 fn aida(repo: &Path, home: &Path) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     cmd.current_dir(repo);
@@ -80,6 +90,7 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -106,6 +117,127 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
 }
 
 #[test]
+fn reasoned_hold_refuses_queue_pickup_and_direct_session_start() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+
+    let defer = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        // ADR-66: setting an operator hold needs a granted product seat; the
+        // role env alone confers nothing. trace:STORY-1473 | ai:claude
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&home, &repo, "product", &[])
+                .expect("fixture repo is initialized"),
+        )
+        .args([
+            "defer",
+            &spec,
+            "--reason",
+            "waiting for operator clearance",
+            "--until",
+            "the dependency decision lands",
+        ])
+        .output()
+        .expect("set operator hold");
+    assert!(
+        defer.status.success(),
+        "defer failed: {}",
+        String::from_utf8_lossy(&defer.stderr)
+    );
+
+    let pickup = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--dry-run"])
+        .output()
+        .expect("attempt queue pickup");
+    let pickup_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&pickup.stdout),
+        String::from_utf8_lossy(&pickup.stderr)
+    );
+    assert!(
+        !pickup.status.success(),
+        "held pickup unexpectedly succeeded: {}",
+        String::from_utf8_lossy(&pickup.stdout)
+    );
+    assert!(
+        pickup_message.contains("waiting for operator clearance"),
+        "pickup error omitted hold reason: {pickup_message}"
+    );
+    assert!(
+        pickup_message.contains("the dependency decision lands"),
+        "pickup error omitted revisit trigger: {pickup_message}"
+    );
+
+    let path = base_dir.join("held-worktree");
+    let path_string = path.to_string_lossy().into_owned();
+    let start = aida(&repo, &home)
+        .args([
+            "session",
+            "start",
+            "--owns",
+            &spec,
+            "--role",
+            "implementer",
+            "--base",
+            "main",
+            "--path",
+            &path_string,
+        ])
+        .output()
+        .expect("attempt direct session start");
+    let start_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&start.stdout),
+        String::from_utf8_lossy(&start.stderr)
+    );
+    assert!(
+        !start.status.success(),
+        "held session start unexpectedly succeeded: {start_message}"
+    );
+    assert!(
+        start_message.contains("waiting for operator clearance"),
+        "session start error omitted hold reason: {start_message}"
+    );
+    assert!(!path.exists(), "held start created a worktree");
+
+    let unauthorized = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .args(["undefer", &spec])
+        .output()
+        .expect("attempt unauthorized hold release");
+    assert!(!unauthorized.status.success());
+    let unauthorized_message = format!(
+        "{}{}",
+        String::from_utf8_lossy(&unauthorized.stdout),
+        String::from_utf8_lossy(&unauthorized.stderr)
+    );
+    assert!(
+        unauthorized_message.contains("only the product"),
+        "unauthorized release did not name the seat gate: {unauthorized_message}"
+    );
+
+    let release = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        // ADR-66: lifting the hold needs the granted product seat, same as
+        // setting it. trace:STORY-1473 | ai:claude
+        .env(
+            "AIDA_SESSION_GRANT",
+            support::ensure_seat(&home, &repo, "product", &[])
+                .expect("fixture repo is initialized"),
+        )
+        .args(["undefer", &spec])
+        .output()
+        .expect("release operator hold");
+    assert!(
+        release.status.success(),
+        "authorized release failed: {}",
+        String::from_utf8_lossy(&release.stderr)
+    );
+}
+
+#[test]
 fn defer_removes_queued_rows_across_queue_identities() {
     let base = tempfile::tempdir().expect("tempdir");
     let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
@@ -113,6 +245,7 @@ fn defer_removes_queued_rows_across_queue_identities() {
 
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "queue",
             "add",
@@ -207,6 +340,7 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     // (TASK-647); the rest of the test runs role-free.
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -440,6 +574,7 @@ fn no_launch_with_custom_base_populates_submodules() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -539,6 +674,7 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -564,6 +700,7 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
 
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &spec])
         .output()
         .expect("run aida queue add");
@@ -690,6 +827,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let add_reviewer = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -715,6 +853,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let add_impl = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -740,6 +879,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
 
     let queue_reviewer = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &reviewer_spec, "--for", "reviewer"])
         .output()
         .expect("run aida queue add reviewer");
@@ -750,6 +890,7 @@ fn drain_dry_run_skips_reviewer_routed_head() {
     );
     let queue_impl = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &impl_spec, "--for", "implementer"])
         .output()
         .expect("run aida queue add implementer");
@@ -835,6 +976,7 @@ fn interactive_dry_run_autopicks_codex_only_enabled_profile() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -991,6 +1133,7 @@ fn interactive_work_refuses_all_disabled_profile_before_state() {
 
     let add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args([
             "add",
             "--type",
@@ -1015,6 +1158,7 @@ fn interactive_work_refuses_all_disabled_profile_before_state() {
         .to_string();
     let queue_add = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "add", &spec, "--for", "implementer"])
         .output()
         .expect("run aida queue add");

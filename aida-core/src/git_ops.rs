@@ -291,19 +291,60 @@ pub fn reject_option_like(what: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-/// Pull with rebase from remote.
-pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
-    // `--end-of-options` only ends `git pull`'s own option parsing: pull
-    // hands the remote and branch to `git fetch` without the marker, so a
-    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
-    // fetch option. Refuse it before git runs; the marker stays for pull's
-    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
+/// Fetch one branch into an invocation-private ref and pin its commit before
+/// rebasing. FETCH_HEAD is shared mutable state: another fetch (including a
+/// code fetch in the same clone) can replace it with multiple branch entries.
+/// Keep configured tracking-ref updates, but never read or write FETCH_HEAD.
+// trace:TASK-1604 | ai:codex
+fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String> {
     reject_option_like("remote", remote)?;
     reject_option_like("branch", branch)?;
-    let result = git(
-        repo,
-        &["pull", "--rebase", "--end-of-options", remote, branch],
-    )?;
+    let source = format!("refs/heads/{branch}");
+    let valid = git(repo, &["check-ref-format", &source])?;
+    anyhow::ensure!(valid.success, "invalid branch `{branch}`: {}", valid.stderr);
+    let target = format!("refs/aida/store-pull/{}", uuid::Uuid::new_v4());
+    let refspec = format!("{source}:{target}");
+    let result = (|| {
+        let fetched = git(
+            repo,
+            &[
+                "fetch",
+                "--no-write-fetch-head",
+                "--no-tags",
+                remote,
+                &refspec,
+            ],
+        )?;
+        anyhow::ensure!(fetched.success, "store fetch failed: {}", fetched.stderr);
+        let commit = git(
+            repo,
+            &["rev-parse", "--verify", &format!("{target}^{{commit}}")],
+        )?;
+        anyhow::ensure!(
+            commit.success,
+            "resolve store fetch target failed: {}",
+            commit.stderr
+        );
+        Ok(commit.stdout)
+    })();
+    // The resolved SHA remains an object even after its temporary ref is gone.
+    // Cleanup also runs when fetch fails, without masking the original error.
+    let cleanup = git(repo, &["update-ref", "-d", &target]);
+    let sha = result?;
+    let cleanup = cleanup?;
+    anyhow::ensure!(
+        cleanup.success,
+        "clean up store fetch ref failed: {}",
+        cleanup.stderr
+    );
+    Ok(sha)
+}
+
+/// Pull with rebase from remote.
+pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
+    // trace:TASK-1604 | ai:codex
+    let target = fetch_rebase_target(repo, remote, branch)?;
+    let result = git(repo, &["rebase", "--end-of-options", &target])?;
     if !result.success {
         // A failed pull may have started a rebase and detached HEAD.  Never
         // leave the managed store in that state: later writers could commit
@@ -352,17 +393,9 @@ pub enum StorePullOutcome {
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
 #[cfg(feature = "native")]
 pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
-    // `--end-of-options` only ends `git pull`'s own option parsing: pull
-    // hands the remote and branch to `git fetch` without the marker, so a
-    // dash-led value such as `--upload-pack=<cmd>` would still be read as a
-    // fetch option. Refuse it before git runs; the marker stays for pull's
-    // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
-    reject_option_like("remote", remote)?;
-    reject_option_like("branch", branch)?;
-    let result = git(
-        repo,
-        &["pull", "--rebase", "--end-of-options", remote, branch],
-    )?;
+    // trace:TASK-1604 | ai:codex
+    let target = fetch_rebase_target(repo, remote, branch)?;
+    let result = git(repo, &["rebase", "--end-of-options", &target])?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -6023,6 +6056,137 @@ mod tests {
         // trace:BUG-1283 | ai:claude
         let restored_blob = git(&second, &["show", "HEAD:shared.yaml"]).unwrap().stdout;
         assert_eq!(restored_blob, "value: local");
+    }
+
+    // trace:TASK-1604 | ai:codex
+    #[test]
+    fn store_pull_pins_single_branch_and_preserves_shared_fetch_head() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        std::fs::create_dir_all(&hub).unwrap();
+        assert!(git(&hub, &["init", "--bare"]).unwrap().success);
+        let first = dir.path().join("first");
+        init(&first).unwrap();
+        configure_user(&first, "Test", "test@example.com").unwrap();
+        assert!(
+            git(&first, &["checkout", "-b", "aida-store"])
+                .unwrap()
+                .success
+        );
+        std::fs::write(first.join("seed"), "seed").unwrap();
+        add_all(&first, ".").unwrap();
+        commit(&first, "seed").unwrap();
+        assert!(
+            git(&first, &["remote", "add", "origin", hub.to_str().unwrap()])
+                .unwrap()
+                .success
+        );
+        assert!(push(&first, "origin", "aida-store").unwrap());
+        assert!(
+            git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"])
+                .unwrap()
+                .success
+        );
+        assert!(
+            git(dir.path(), &["clone", hub.to_str().unwrap(), "second"])
+                .unwrap()
+                .success
+        );
+        let second = dir.path().join("second");
+        configure_user(&second, "Test", "test@example.com").unwrap();
+        // A wildcard plus a second mapping for the store must not broaden
+        // the rebase target. Also leave two merge candidates in FETCH_HEAD.
+        assert!(
+            git(
+                &second,
+                &[
+                    "config",
+                    "--add",
+                    "remote.origin.fetch",
+                    "+refs/heads/aida-store:refs/remotes/origin/store-copy"
+                ]
+            )
+            .unwrap()
+            .success
+        );
+        assert!(git(&first, &["checkout", "-b", "main"]).unwrap().success);
+        std::fs::write(first.join("code-only"), "code").unwrap();
+        add_all(&first, ".").unwrap();
+        commit(&first, "code change").unwrap();
+        assert!(push(&first, "origin", "main").unwrap());
+        assert!(git(&first, &["checkout", "aida-store"]).unwrap().success);
+        std::fs::write(first.join("store-only"), "store").unwrap();
+        add_all(&first, ".").unwrap();
+        commit(&first, "store change").unwrap();
+        assert!(push(&first, "origin", "aida-store").unwrap());
+        let expected = head_sha(&first).unwrap();
+        assert!(
+            git(&second, &["fetch", "origin", "main", "aida-store"])
+                .unwrap()
+                .success
+        );
+        let fetch_head = second.join(".git/FETCH_HEAD");
+        let shared = std::fs::read(&fetch_head).unwrap();
+        assert_eq!(String::from_utf8_lossy(&shared).lines().count(), 2);
+
+        // Pin the store, then simulate a concurrent code fetch before rebase.
+        let pinned = fetch_rebase_target(&second, "origin", "aida-store").unwrap();
+        assert_eq!(pinned, expected);
+        for tracking in [
+            "refs/remotes/origin/aida-store",
+            "refs/remotes/origin/store-copy",
+        ] {
+            assert_eq!(
+                git(&second, &["rev-parse", tracking]).unwrap().stdout,
+                expected
+            );
+        }
+        assert_eq!(std::fs::read(&fetch_head).unwrap(), shared);
+        assert!(git(&second, &["fetch", "origin", "main"]).unwrap().success);
+        assert!(git(&second, &["rebase", &pinned]).unwrap().success);
+        assert_eq!(head_sha(&second).unwrap(), expected);
+        assert!(!second.join("code-only").exists());
+
+        // Both public pull paths leave another caller's FETCH_HEAD alone.
+        assert!(
+            git(&second, &["fetch", "origin", "main", "aida-store"])
+                .unwrap()
+                .success
+        );
+        let shared = std::fs::read(&fetch_head).unwrap();
+        pull_rebase(&second, "origin", "aida-store").unwrap();
+        pull_rebase_auto_merge(&second, "origin", "aida-store").unwrap();
+        assert_eq!(std::fs::read(&fetch_head).unwrap(), shared);
+        assert_eq!(head_sha(&second).unwrap(), expected);
+        assert!(git(
+            &second,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/aida/store-pull/"
+            ]
+        )
+        .unwrap()
+        .stdout
+        .is_empty());
+        let before = head_sha(&second).unwrap();
+        assert!(pull_rebase(&second, "origin", "missing")
+            .unwrap_err()
+            .to_string()
+            .contains("store fetch failed"));
+        assert_eq!(head_sha(&second).unwrap(), before);
+        assert!(!rebase_in_progress(&second));
+        assert!(git(
+            &second,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/aida/store-pull/"
+            ]
+        )
+        .unwrap()
+        .stdout
+        .is_empty());
     }
 
     /// `git pull` forwards its remote and branch to `git fetch` without

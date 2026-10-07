@@ -45,18 +45,26 @@
 #     before it. trace:TASK-1567
 [tiers]
 "Build all packages" = "full"
+# Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
+"Check aida-cli without default features" = "fast"
 "TUI seam guard" = "fast"
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
 "GitLab live-smoke workflow guard" = "fast"
+# trace:TASK-1588 | ai:codex
+"Weekly Windows workflow contract" = "fast"
 "External-prose classifier inventory" = "fast"
 "Run MCP stdio compatibility tests" = "full"
 "Run history template CLI/config/MCP contract tests" = "full"
+# trace:BUG-1801 | ai:codex
+"Run single-spec show latency regression" = "full"
 "Run MCP doc-consistency test" = "full"
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
 "Run shipped full-access launch refusal fixtures" = "fast"
+"Run no-origin pull warning fixture" = "full"
+"Run normal two-remote pull byte identical fixture" = "full"
 "Run advisor-code-gate substrate test" = "full"
 "Run pre-commit provenance move-detection test" = "fast"
 "Run agent-skill-hook installer fixtures" = "fast"

@@ -195,3 +195,4 @@ __pycache__/
 
 # codegraph index (local tooling, not part of the repo)
 .codegraph/
+scripts/split-lib/golden/

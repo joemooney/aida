@@ -55,7 +55,8 @@ pub enum ShipStep {
     /// Resolve or create the PR. `create_if_needed = true` when no PR
     /// number was supplied and the current branch has no open PR.
     ResolvePr { create_if_needed: bool },
-    /// `gh pr checks <N> --watch`.
+    /// Wait for gating CI checks (GitHub uses informational-aware row polling).
+    // trace:TASK-1331 | ai:codex
     WatchCi,
     /// `gh pr merge <N> --squash [--delete-branch]`.
     Merge { delete_branch: bool },
@@ -146,12 +147,24 @@ pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
     out
 }
 
-/// Derive the best spec-id set to preserve in a squash subject. Priority:
-/// PR title, then branch name, then PR body.
-// trace:SPEC-410 | ai:codex
-pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, pr_body: &str) -> Vec<String> {
-    for source in [pr_title, branch, pr_body] {
-        let ids = extract_spec_ids_from_text(source);
+/// Derive completion intent from an explicit title trailer, then the branch.
+/// PR body prose and mid-title references are never completion directives.
+// trace:SPEC-410 TASK-1600 | ai:codex
+pub fn derive_squash_subject_spec_ids(pr_title: &str, branch: &str, _pr_body: &str) -> Vec<String> {
+    derive_squash_subject_spec_ids_resolving(pr_title, branch, |_| true)
+}
+
+// trace:TASK-1600 | ai:codex
+pub(crate) fn derive_squash_subject_spec_ids_resolving(
+    pr_title: &str,
+    branch: &str,
+    resolves: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    for ids in [
+        extract_trailing_spec_ids_from_subject(pr_title),
+        extract_spec_ids_from_text(branch),
+    ] {
+        let ids: Vec<String> = ids.into_iter().filter(|id| resolves(id)).collect();
         if !ids.is_empty() {
             return ids;
         }
@@ -197,21 +210,57 @@ pub fn derive_squash_subject(
     pr_body: &str,
     branch_head_commit_message: &str,
 ) -> Option<String> {
-    let pr_title_subject = derive_pr_title_from_commit(pr_title);
-    let branch_subject = derive_pr_title_from_commit(branch_head_commit_message);
-    let mut ids = derive_squash_subject_spec_ids(pr_title, branch, pr_body);
-    if ids.is_empty() {
-        ids = extract_spec_ids_from_text(&branch_subject);
-    }
-    let base = if pr_title_subject.is_empty() {
-        branch_subject
+    derive_squash_subject_resolving(
+        pr_title,
+        branch,
+        pr_body,
+        branch_head_commit_message,
+        |_| true,
+    )
+}
+
+/// The shipping path supplies store resolution so ID-shaped prose such as
+/// SLICE-1 cannot acquire completion authority. Remove unresolved IDs even
+/// when they already appear in a title trailer.
+// trace:TASK-1600 | ai:codex
+pub(crate) fn derive_squash_subject_resolving(
+    pr_title: &str,
+    branch: &str,
+    _pr_body: &str,
+    branch_head_commit_message: &str,
+    resolves: impl Fn(&str) -> bool,
+) -> Option<String> {
+    let title = derive_pr_title_from_commit(pr_title);
+    let base = if title.is_empty() {
+        derive_pr_title_from_commit(branch_head_commit_message)
     } else {
-        pr_title_subject
+        title
     };
     if base.is_empty() {
         return None;
     }
-    Some(squash_subject_with_spec_ids(&base, &ids))
+    let ids = derive_squash_subject_spec_ids_resolving(&base, branch, resolves);
+    let clean_base = without_spec_trailer(&base);
+    Some(squash_subject_with_spec_ids(&clean_base, &ids))
+}
+
+fn without_spec_trailer(subject: &str) -> String {
+    let (tail, suffix) = match trailing_paren_group(subject) {
+        Some((head, inner))
+            if inner
+                .strip_prefix('#')
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit())) =>
+        {
+            (head.trim_end(), format!(" ({inner})"))
+        }
+        _ => (subject, String::new()),
+    };
+    match trailing_paren_group(tail) {
+        Some((head, inner)) if !parse_spec_id_group(inner).is_empty() => {
+            format!("{}{suffix}", head.trim_end())
+        }
+        _ => subject.to_string(),
+    }
 }
 
 /// Extract the exact shape the auto-bump scanner recognizes: a trailing
@@ -560,9 +609,17 @@ pub fn merge_error_landed_despite_failure(pr_is_merged_after_error: Option<bool>
 
 /// Build the `gh pr merge` argv. Kept pure so SPEC-410 can pin the
 /// contract that the wrapper passes `--subject` when it repairs a squash
-/// subject.
+/// subject. TASK-1330: an explicit `body` (the identity-sanitized squash
+/// body) is passed as `--body`, which also suppresses GitHub's auto-derived
+/// `Co-authored-by:` trailers.
 // trace:SPEC-410 | ai:codex
-pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) -> Vec<String> {
+// trace:TASK-1330 | ai:claude
+pub fn merge_args(
+    pr_number: u64,
+    delete_branch: bool,
+    subject: Option<&str>,
+    body: Option<&str>,
+) -> Vec<String> {
     let mut args = vec![
         "pr".to_string(),
         "merge".to_string(),
@@ -575,6 +632,10 @@ pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) ->
     if let Some(subject) = subject {
         args.push("--subject".to_string());
         args.push(subject.to_string());
+    }
+    if let Some(body) = body {
+        args.push("--body".to_string());
+        args.push(body.to_string());
     }
     args
 }
@@ -691,6 +752,7 @@ pub fn dry_run_merge_cmd(forge: crate::forge::ForgeKind, delete_branch: bool) ->
             let opts = crate::forge::MergeOptions {
                 method: crate::forge::MergeMethod::Squash,
                 squash_subject: None,
+                squash_body: None, // trace:TASK-1330 | ai:claude
                 delete_branch,
                 match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
             };
@@ -2333,7 +2395,7 @@ mod tests {
     }
 
     #[test]
-    fn squash_subject_can_recover_spec_id_from_branch_head() {
+    fn squash_subject_does_not_credit_branch_head_when_title_is_present() {
         let branch_head = "[AI:codex] fix(pr-ship): preserve subject (TASK-140)";
         assert_eq!(
             derive_squash_subject(
@@ -2342,7 +2404,68 @@ mod tests {
                 "",
                 branch_head,
             ),
-            Some("[AI:codex] fix(pr-ship): preserve subject (TASK-140)".to_string())
+            Some("[AI:codex] fix(pr-ship): preserve subject".to_string())
+        );
+    }
+
+    // trace:TASK-1600 | ai:codex
+    #[test]
+    fn task_1600_incident_titles_and_bodies_do_not_grant_completion() {
+        let title = "[AI:codex] docs: BUG-1802 prose layer — clarify lifecycle";
+        assert_eq!(
+            derive_squash_subject_resolving(
+                title,
+                "prose-layer",
+                "BUG-1802",
+                "fix: old (BUG-1802)",
+                |_| true
+            ),
+            Some(title.into())
+        );
+        let title = "[AI:codex] refactor: pure move, 57 lines";
+        assert_eq!(
+            derive_squash_subject_resolving(
+                title,
+                "module-one",
+                "SLICE-1 STORY-1488 TASK-1538",
+                "old (TASK-1538)",
+                |_| true
+            ),
+            Some(title.into())
+        );
+        assert!(
+            derive_squash_subject_spec_ids("fix: BUG-1802 prose", "prose-layer", "TASK-1599")
+                .is_empty()
+        );
+    }
+
+    // trace:TASK-1600 | ai:codex
+    #[test]
+    fn task_1600_only_store_resolving_trailers_and_branch_recovery_survive() {
+        let resolves = |id: &str| matches!(id, "TASK-1599" | "TASK-1600");
+        assert_eq!(
+            derive_squash_subject_resolving(
+                "docs: BUG-1802 prose layer (SLICE-1 TASK-1599) (#2426)",
+                "task-1600",
+                "BUG-1802",
+                "",
+                resolves
+            ),
+            Some("docs: BUG-1802 prose layer (TASK-1599) (#2426)".into())
+        );
+        assert_eq!(
+            derive_squash_subject_resolving(
+                "fix: prose (SLICE-1)",
+                "neutral",
+                "TASK-1599",
+                "",
+                resolves
+            ),
+            Some("fix: prose".into())
+        );
+        assert_eq!(
+            derive_squash_subject_resolving("fix: prose", "task-1600", "TASK-1599", "", resolves),
+            Some("fix: prose (TASK-1600)".into())
         );
     }
 
@@ -2352,6 +2475,7 @@ mod tests {
             201,
             false,
             Some("[AI:codex] feat(store): add cadence (STORY-284)"),
+            None,
         );
         assert_eq!(
             args,
@@ -2368,10 +2492,29 @@ mod tests {
 
     #[test]
     fn merge_args_without_repair_keep_existing_shape() {
-        let args = merge_args(197, true, None);
+        let args = merge_args(197, true, None, None);
         assert_eq!(
             args,
             vec!["pr", "merge", "197", "--squash", "--delete-branch"]
+        );
+    }
+
+    // TASK-1330: an identity-sanitized squash body rides along as --body,
+    // which also suppresses GitHub's auto-derived Co-authored-by trailers.
+    // trace:TASK-1330 | ai:claude
+    #[test]
+    fn merge_args_pass_sanitized_squash_body() {
+        let args = merge_args(202, false, None, Some("* feat: one (TASK-1)\n\nBody."));
+        assert_eq!(
+            args,
+            vec![
+                "pr",
+                "merge",
+                "202",
+                "--squash",
+                "--body",
+                "* feat: one (TASK-1)\n\nBody."
+            ]
         );
     }
 
@@ -2579,6 +2722,7 @@ mod tests {
                 &crate::forge::MergeOptions {
                     method: crate::forge::MergeMethod::Squash,
                     squash_subject: None,
+                    squash_body: None, // trace:TASK-1330 | ai:claude
                     delete_branch,
                     match_head: Some(DRY_RUN_PIN_PLACEHOLDER.to_string()),
                 },
@@ -2586,7 +2730,7 @@ mod tests {
             // Same shape as merge_args, then the pin.
             assert_eq!(
                 &real[..real.len() - 2],
-                merge_args(4242, delete_branch, None).as_slice()
+                merge_args(4242, delete_branch, None, None).as_slice()
             );
             let expected = format!("3. gh {}", real.join(" ").replace("4242", "<N>"));
             let steps = vec![

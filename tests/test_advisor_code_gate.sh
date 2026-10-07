@@ -36,9 +36,19 @@ echo seed >seed.txt
 git add seed.txt
 git commit -qm "chore: seed"
 
+# STORY-1473 / ADR-66: the role env is only a hint — the gate resolves the
+# seat from a validated session grant. Seed this throwaway repo with a store
+# roster + grant record so the ADVISOR cases resolve as a real granted
+# advisor seat (the implementer cases ride the least-privilege default).
+# Subject is "default": `env -i` strips USER, so that is what the invoked
+# binary resolves. trace:STORY-1473 | ai:claude
+# shellcheck source=lib/seat_grant.sh
+source "$SCRIPT_DIR/lib/seat_grant.sh"
+ADVISOR_GRANT=$(aida_seat_grant "$TMP" "$FAKEHOME" default advisor)
+
 # gate <ROLE> [EXTRA_ENV...] — stage what's already `git add`-ed and run the
 # gate with a fresh, isolated env (FAKEHOME so no real solo.toml leaks in;
-# AIDA_SESSION_ROLE drives the effective role since this repo has no store).
+# the advisor cases pass their validated grant as EXTRA_ENV).
 gate() {
     local role="$1"
     shift
@@ -68,15 +78,15 @@ stage() {
 
 # 1. advisor stages CODE → REFUSED (exit non-zero).
 stage src/feature.rs
-assert_exit "advisor staging code is refused" 1 "$(gate advisor)"
+assert_exit "advisor staging code is refused" 1 "$(gate advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 2. advisor stages only DOCS/SPECS/CONFIG → ALLOWED.
 stage README.md docs/plan.md .aida/notes.toml
-assert_exit "advisor staging docs/config is allowed" 0 "$(gate advisor)"
+assert_exit "advisor staging docs/config is allowed" 0 "$(gate advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 3. advisor stages mixed docs + one code file → REFUSED.
 stage README.md src/lib.rs
-assert_exit "advisor staging mixed (one code file) is refused" 1 "$(gate advisor)"
+assert_exit "advisor staging mixed (one code file) is refused" 1 "$(gate advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 4. IMPLEMENTER stages code → ALLOWED (the sanctioned coder).
 stage src/feature.rs
@@ -84,15 +94,15 @@ assert_exit "implementer staging code is allowed" 0 "$(gate implementer)"
 
 # 5. advisor + AIDA_AUTO_COMPLETE (drain child) staging code → ALLOWED.
 stage src/feature.rs
-assert_exit "advisor in --auto-complete drain is allowed" 0 "$(gate advisor AIDA_AUTO_COMPLETE=1)"
+assert_exit "advisor in --auto-complete drain is allowed" 0 "$(gate advisor AIDA_AUTO_COMPLETE=1 AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 6. advisor + explicit escape hatch staging code → ALLOWED.
 stage src/feature.rs
-assert_exit "advisor with AIDA_ALLOW_ADVISOR_CODE=1 is allowed" 0 "$(gate advisor AIDA_ALLOW_ADVISOR_CODE=1)"
+assert_exit "advisor with AIDA_ALLOW_ADVISOR_CODE=1 is allowed" 0 "$(gate advisor AIDA_ALLOW_ADVISOR_CODE=1 AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 7. advisor + nothing staged → ALLOWED (empty index never refuses).
 git reset -q
-assert_exit "advisor with empty stage is allowed" 0 "$(gate advisor)"
+assert_exit "advisor with empty stage is allowed" 0 "$(gate advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT")"
 
 # 8. The pre-commit hook wiring binds a raw `git commit` (no Claude hook).
 #    Install the scaffolded pre-commit hook and prove an advisor `git commit`
@@ -111,7 +121,7 @@ chmod +x .git/hooks/pre-commit
 
 stage src/via_hook.rs
 set +e
-env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor \
+env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT" \
     git -c user.email=t@t.t -c user.name=t commit -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
 hook_rc=$?
 set -e
@@ -120,7 +130,7 @@ assert_exit "raw git commit by advisor is aborted by pre-commit hook" 1 "$hook_r
 # 9. Same commit with --no-verify (git-native escape) → succeeds (proves the
 #    escape hatch exists and is honored).
 set +e
-env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor \
+env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT" \
     git -c user.email=t@t.t -c user.name=t commit --no-verify -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
 noverify_rc=$?
 set -e

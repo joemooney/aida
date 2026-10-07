@@ -39,6 +39,14 @@ Keep this table in your head and every command below is obvious.
 
 **What it infers.** If you omit `--spec`, it scans the staged diff for `// trace:SPEC-ID` comments — exactly one distinct spec → it becomes the `(REQ-ID)`; multiple or none → no trailer (fine for chore/docs). The `[AI:tool]` prefix is added only when an AI-authored trace (`trace:ID | ai:...`) is staged, matching the hook's own rule; `--ai <tool>` forces it on, `--no-ai` forces it off. `feat`/`fix` require a REQ-ID, so it errors early with guidance if none can be resolved.
 
+On GitHub, `ship` polls per-check rows with a 20-minute bound, rather than
+waiting for every job through `gh pr checks --watch`. Pending and failed checks
+matching `[ci].informational_workflows` or `informational_checks` are ignored
+unless branch protection requires them. Other pending checks are awaited and
+other failures block shipping, even when branch protection lists no required
+checks. GitLab and other providers retain their existing pipeline watch.
+<!-- trace:TASK-1331 | ai:codex -->
+
 **Gotchas.** `--dry-run` prints the assembled message without committing — use it to preview. Without `-a/--all`, something must be staged. The message is self-checked before the commit fires, so what you see is what the hook will accept.
 
 **Chains with** — `git add` (stage) → `aida commit` → `aida pull` (after merge, auto-bump to Completed).
@@ -48,6 +56,15 @@ Keep this table in your head and every command below is obvious.
 ### `aida done`
 
 *(Covered in [Chapter 1](01-getting-started.md#aida-done).)* The newcomer shortcut — "I finished it." Once you're on a real pipeline, **stop using it** and use `aida queue done` (lands **Done**, the precise "finished on a branch" state) so the merge can earn **Completed**. `aida done`'s simplicity is also its limitation: it doesn't know where in the lifecycle you are.
+
+<!-- trace:TASK-1328 | ai:codex -->
+`aida queue done` recognizes both the resolved requirement's display ID and its
+stored origin ID when checking branch ownership and commit evidence. A session
+can finish on its original branch after the store assigns a new display ID.
+Every recognized requirement ID in a scoped branch must belong to that same
+requirement (including existing dashed child variants); an unrelated branch
+cannot gain ownership through an alias in a commit trailer. No branch rename
+or forced completion is needed for an ID remapping.
 
 ---
 
@@ -66,6 +83,15 @@ Keep this table in your head and every command below is obvious.
 **Don't reach for it when** — the work needs **review**. `aida pr ship` *skips* the reviewer phase by design; for work that should be reviewed, use `aida queue work PR-N --auto-complete` (the full reviewer pipeline) instead. Shipping unreviewed code is the right tool only when a human already approved it.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
+
+**Completion credit.** Ship uses an explicit trailing `(REQ-ID …)` title group,
+then branch-name recovery; each ID must resolve unambiguously in the store.
+Mid-title references and PR-body prose do not become completing trailers.
+An older branch-head trailer is ignored when the PR has a title. For partial
+work, use a descriptive title and neutral branch without completion IDs; ship
+preserves the title without adding a trailer. Existing constituent commit
+trailers in squash bodies remain landing evidence for the auto-bump scanner.
+<!-- trace:TASK-1600 | ai:codex -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
 
@@ -139,6 +165,15 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 
 **Mental model.** Symmetric to `push`. The code leg is `git pull --ff-only` *by design* — it refuses to surprise your working tree with an auto-rebase; on divergence it hands you the explicit rebase command rather than guessing. The store leg uses rebase (store conflicts are rare and the worktree is AIDA-managed). **`pull` is also where Done→Completed auto-bump happens** — after the store pulls, it promotes any spec whose referencing commit just landed on main.
 
+Store pulls (`aida pull` and `aida db sync --pull`) fetch only the named branch
+into a temporary ref, resolve its commit, remove the ref, and rebase onto that
+SHA. Concurrent code fetches and overlapping fetch refspecs cannot change the
+chosen rebase target through shared `FETCH_HEAD`. Structural conflict merging
+and plain-pull abort recovery still apply. A failure reports the Git error;
+absence of an active rebase does not imply a transient network problem. This
+target isolation does not serialize concurrent store commits or rebases.
+<!-- trace:TASK-1604 | ai:codex -->
+
 **Reach for it when** — starting work, syncing after others merged, or right after a merge to trigger the auto-bump. The `--dry-run` (and `--json`) variant shows what *would* come down — the safe "what changed upstream?" check.
 
 **Don't reach for it when** — the code leg refuses with "diverged" — that's not a `pull` failure, it's `pull` correctly refusing to auto-rebase. Follow the printed hint (`git pull --rebase` after inspecting) or use `aida rebase`. The `--auto` flag handles *stacked-branch* re-basing specifically; it deliberately refuses anything the classifier flags `diverged-risky`.
@@ -149,6 +184,13 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 - `--auto` — auto-rebase tracked *stacked* branches whose base just merged. Narrow, powerful, and self-limiting (refuses risky cases into `/aida-rebase`).
 
 **Gotchas.** If the auto-bump "misses" (the YAML was unreadable at pull time, or the spec flipped to Done *after* its commit already landed), recover with `aida db reconcile-status` — a manual replay of the same scan over a wider window. You don't hand-set Completed; you re-run the bump.
+
+**Deliberate reopen.** A status edit or CLI/MCP rework out of Done/Completed
+records the code-repository HEAD. Both pull-time auto-bump and manual replay
+ignore completion evidence at or before that reopen point, including closure
+holds and review propagation. A genuinely later commit can complete the spec.
+The marker is best-effort when the code repository cannot be read.
+<!-- trace:TASK-1600 | ai:codex -->
 
 ### `aida push`
 
@@ -191,9 +233,25 @@ Here's the thing raw git doesn't know about your AIDA project: **there are two b
 
 **Gotchas.** Non-interactive (no TTY, no route flag) it prints the manual recipe and exits cleanly rather than hanging — so it's CI-safe. Pre-select a route (`--github` / `--gitlab <host>` / `--attach <url>`) to stay scriptable.
 
-**Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook. The hook itself is generated once, at `aida remote mirror` time: `aida doctor` (category `mirror-hook-drift`) compares the installed hook against the current script and reports when a re-run of `aida remote mirror <name>` is needed to pick up hook fixes — it recognizes only AIDA's own hook and never flags a custom pre-push hook. <!-- trace:BUG-1738 | ai:claude -->
+**Mirror hubs.** A project can keep a second hub (for example a GitLab mirror) level with `origin`. `aida remote mirror-sync` pushes origin's default branch and spec store to every mirror listed in `[store.sync] mirror_remotes`, one line per hub and branch (`--json` for scripts). It fetches and pushes origin's observed SHA, ignoring and reporting local-only commits even if a protected origin has rejected them. The pre-push hook only mirrors a proposed ref when origin already advertises that exact SHA; pending or rejected updates are skipped. A later mirror-sync catches up the default branch and store; `aida push` fans out code branches after origin accepts them. Raw `git push` of feature branches or tags requires retrying the mirror hook plumbing once origin confirms the ref. <!-- trace:BUG-1803 | ai:codex --> It only fast-forwards: a hub that has diverged is reported, left untouched, and the command exits non-zero. `aida pull` runs the same sync quietly after a successful pull, because a merge done on the forge never fires the local pre-push mirror hook. The hook itself is generated once, at `aida remote mirror` time: `aida doctor` (category `mirror-hook-drift`) compares the installed hook against the current script and reports when a re-run of `aida remote mirror <name>` is needed to pick up hook fixes — it recognizes only AIDA's own hook and never flags a custom pre-push hook. <!-- trace:BUG-1738 | ai:claude -->
 
 **Chains with** — typically right after `aida init` on a project with no remote; then `aida push` works.
+
+---
+
+### `aida identity`
+
+**One line** — the project's email allowlist: refuse commits and pushes that would publish a non-allowlisted author, committer, or Co-authored-by email. <!-- trace:TASK-1330 | ai:claude -->
+
+**Mental model.** A work machine whose git config carries an employer address will happily sign every commit with it, and nothing in stock git objects. Declare the addresses this project may publish under `[identity] allowed_emails` in `.aida/config.toml`; from then on `aida identity check` reports the identity a commit made here would carry, `aida commit` refuses to assemble a commit under any other address, and the pre-push hook installed by `aida identity install-hook` refuses a push that introduces *any* commit — author, committer, or `Co-authored-by:` trailer — outside the allowlist. The push gate is fail-closed: if the gate cannot run (unreadable config, missing subcommand) while an allowlist is configured, the push is refused rather than waved through. `aida pr ship` closes the last gap: when a squash merge's body would carry a non-allowlisted co-author trailer, the body is replaced with the branch's commit messages with the offending trailers stripped. The `link` / `list` / `show` subcommands are a different concern sharing the namespace: the shared person-alias registry that collapses one human's several identity strings into one canonical person.
+
+**Reach for it when** — a machine's git config might carry an identity this repository must never publish (work laptop, shared box), or right after an identity leak while you rewrite history — this is the recurrence guard.
+
+**Don't reach for it when** — no allowlist is configured: every check is silent, so there is nothing to bypass or tune. The gate is opt-in per project.
+
+**Gotchas.** The installer never clobbers a custom pre-push hook — it prints the lines to paste instead. Repos running the mirror fan-out hook get the gate embedded in that same hook (git only runs one pre-push hook); re-running `aida identity install-hook` or `aida remote mirror <name>` refreshes an older gate-less install in place. `aida doctor` (category `identity`) reports a git identity outside the allowlist and a pre-push hook that does not run the gate. A deliberate bypass is `git push --no-verify` — loud, explicit, and on you.
+
+**Chains with** — `aida commit` (commit-time enforcement point), `aida remote mirror` (shared pre-push hook), `aida doctor` (drift reporting), `aida pr ship` (squash-body sanitizer).
 
 ---
 

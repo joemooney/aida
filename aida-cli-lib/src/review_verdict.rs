@@ -171,6 +171,10 @@ pub struct RecordedVerdict {
     pub review_comment: Option<String>,
     /// Optional structured findings, preserved when a newer reviewer writes it.
     pub findings: Vec<String>,
+    /// BUG-1799: True if the findings in this round were inherited verbatim from
+    /// the previous round without being explicitly re-recorded.
+    // trace:BUG-1799 | ai:antigravity
+    pub inherited_findings: bool,
     /// STORY-1391: findings that also appeared in the PREVIOUS round. Empty on
     /// a first round, and empty when every finding is new. Populated by
     /// [`parse_recorded_verdict`] from the retained `rounds`, so every caller
@@ -443,6 +447,10 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
     } else {
         first_of(SHA_KEYS)
     };
+    let inherited_findings = obj
+        .get("inherited_findings")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
@@ -457,6 +465,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         review_comment: str_field("review_comment")
             .or_else(|| str_field("comment_body"))
             .or_else(|| str_field("body")),
+        inherited_findings,
         surviving_findings: surviving_against_previous_round(obj, &findings),
         findings,
     })
@@ -1226,6 +1235,13 @@ pub(crate) fn build_verdict_object(
         // `review_classes::apply_finding_classes`.
         // trace:STORY-1417 | ai:claude
         obj.remove("finding_classes");
+        obj.remove("inherited_findings");
+    } else if obj.contains_key("findings") {
+        // trace:BUG-1799 | ai:antigravity
+        obj.insert(
+            "inherited_findings".to_string(),
+            serde_json::Value::Bool(true),
+        );
     }
     Ok(obj)
 }
@@ -2117,6 +2133,26 @@ pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
         })
         .collect();
     out.sort_by(|a, b| a.file.cmp(&b.file));
+    out
+}
+
+pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, RecordedVerdict)> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .filter_map(|p| {
+            let spec = p.file_stem()?.to_str()?.to_string();
+            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let verdict = parse_recorded_verdict(&body)?;
+            Some((spec, verdict))
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
     out
 }
 

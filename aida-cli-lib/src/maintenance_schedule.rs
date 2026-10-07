@@ -2904,6 +2904,22 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // Read-only monthly guard; forced cleanup stays with the operator.
+        // trace:TASK-1596 | ai:codex
+        (
+            &["doctor check merged-agent-worktrees --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check merged-agent-worktrees --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "merged-agent-worktrees",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
         // which seat made the store writes; keep it off the per-turn hook path.
         // trace:BUG-1746 | ai:codex
@@ -3492,6 +3508,69 @@ mod tests {
         }
     }
 
+    // trace:TASK-1596 | ai:codex
+    #[test]
+    fn task_1596_monthly_guard_is_read_only_and_routes_to_advisor() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let registry = load_config(repo_root).unwrap().unwrap();
+        let guard = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "merged-worktrees-guard")
+            .unwrap();
+        assert!(guard.enabled);
+        assert_eq!(guard.interval, Some(Duration::days(30)));
+        let command = guard.command.as_ref().unwrap();
+        assert_eq!(
+            command.args,
+            &[
+                "doctor",
+                "check",
+                "merged-agent-worktrees",
+                "--json",
+                "--fail-on-findings"
+            ]
+        );
+        assert!(!command.hook_allowed);
+        assert!(parse_scheduled_command("worktree gc --yes --force").is_err());
+        let route = registry
+            .tasks
+            .iter()
+            .find(|t| t.name == "merged-worktrees-guard-route")
+            .unwrap();
+        assert!(route.enabled);
+        assert_eq!(route.seats, vec!["advisor"]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:merged-worktrees-guard"]
+        );
+        assert!(route.command.is_none());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        for now in [
+            at(12),
+            at(12) + Duration::days(29),
+            at(12) + Duration::days(30),
+        ] {
+            tick_with_executor(
+                tmp.path(),
+                config(vec![guard.clone()]),
+                &mut state,
+                now,
+                false,
+                ok_exec(Rc::clone(&seen)),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            seen.borrow().len(),
+            2,
+            "guard runs initially and after 30 days, not after 29"
+        );
+    }
+
     // trace:BUG-1746 | ai:codex
     #[test]
     fn bug_1746_mirror_sync_is_scheduled_but_hook_forbidden() {
@@ -3591,6 +3670,7 @@ mod tests {
             "disk-headroom-guard-route",
             "performance-guard-route",
             "watchdog-route",
+            "merged-worktrees-guard-route",
         ];
         let routes: Vec<Task> = parsed
             .tasks
@@ -3599,8 +3679,8 @@ mod tests {
             .collect();
         assert_eq!(
             routes.len(),
-            4,
-            "all four repository route jobs are in fixture"
+            route_names.len(),
+            "all selected repository route jobs are in fixture"
         );
 
         // The fake executor models an unreachable/rejecting mirror; tick must
@@ -4117,8 +4197,16 @@ enabled = true
     fn tick_bounds_global_schedule_log_for_timer_but_not_hook_invocation() {
         let tmp = tempfile::tempdir().unwrap();
         let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", tmp.path());
+        // trace:BUG-1804 | ai:codex
+        // The log is already test-local. Use separate project locks: a parallel
+        // subprocess spawn can retain the hook's flock briefly after it returns
+        // (see tick_lock_is_nonblocking_and_reusable), making a timer tick on the
+        // same root skip housekeeping. Both projects still share this temp home.
+        let hook_root = tmp.path().join("hook-project");
+        let timer_root = tmp.path().join("timer-project");
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         let log = tmp.path().join(".aida").join("schedule-tick.log");
+        assert_eq!(global_schedule_log_path().as_deref(), Some(log.as_path()));
         let line = "error: unsupported\n";
         let big = line.repeat((GLOBAL_SCHEDULE_LOG_MAX_BYTES as usize / line.len()) + 100);
         let big_len = big.len() as u64;
@@ -4127,7 +4215,8 @@ enabled = true
         // meant to stay minimal, and the installed hook script redirects
         // its own output to /dev/null anyway.
         std::fs::write(&log, &big).unwrap();
-        let _ = tick(tmp.path(), true, None).unwrap();
+        let hook_lines = tick(&hook_root, true, None).unwrap();
+        assert!(hook_lines.is_empty(), "hook tick must run: {hook_lines:?}");
         let after_hook = std::fs::metadata(&log).unwrap().len();
         assert_eq!(
             after_hook, big_len,
@@ -4136,7 +4225,11 @@ enabled = true
 
         // A timer/cron-shaped tick (hook = false — the shape the installed
         // crontab entry uses) bounds it.
-        let _ = tick(tmp.path(), false, None).unwrap();
+        let timer_lines = tick(&timer_root, false, None).unwrap();
+        assert!(
+            timer_lines.is_empty(),
+            "timer tick must run: {timer_lines:?}"
+        );
         let after_timer = std::fs::metadata(&log).unwrap().len();
         assert!(
             after_timer <= GLOBAL_SCHEDULE_LOG_MAX_BYTES,
@@ -4387,6 +4480,8 @@ enabled = true
             "doctor check stale-remote-branches --fail-on-findings",
             "doctor check disk-headroom --fail-on-findings",
             "doctor check runaway-seats --fail-on-findings",
+            // trace:TASK-1596 | ai:codex
+            "doctor check merged-agent-worktrees --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";

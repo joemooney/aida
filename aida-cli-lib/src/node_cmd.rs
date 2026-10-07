@@ -470,6 +470,12 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 Some(TeamCommand::UnsetRole { user }) => {
                     team_cmd::handle_team_unset_role(store_path, user)
                 }
+                Some(TeamCommand::AllowSeat { user, seat }) => {
+                    team_cmd::handle_team_allow_seat(store_path, user, seat)
+                }
+                Some(TeamCommand::DisallowSeat { user, seat }) => {
+                    team_cmd::handle_team_disallow_seat(store_path, user, seat)
+                }
             };
         }
 

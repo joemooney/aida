@@ -404,24 +404,51 @@ pub(crate) fn branch_belongs_to_spec_with_prefixes(
     spec: &str,
     configured_prefixes: &[String],
 ) -> bool {
-    let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
-        return false;
-    };
-    let prefixes = recognised_prefixes(Some(&target_prefix), configured_prefixes);
+    branch_belongs_to_spec_with_aliases(branch, spec, configured_prefixes, &[])
+}
+
+// Accept only aliases supplied by the resolved requirement, never the caller's
+// input or a lease's unverified scope. Every branch ID must belong to this same
+// requirement (or one of its existing dashed child variants).
+// trace:TASK-1328 | ai:codex
+fn branch_belongs_to_spec_with_aliases(
+    branch: &str,
+    spec: &str,
+    configured_prefixes: &[String],
+    aliases: &[&str],
+) -> bool {
+    let targets: Vec<_> = std::iter::once(spec)
+        .chain(aliases.iter().copied())
+        .filter_map(requirement_id_parts)
+        .collect();
+    let mut prefixes = recognised_prefixes(None, configured_prefixes);
+    prefixes.extend(targets.iter().map(|(prefix, _)| prefix.clone()));
     let ids = branch_requirement_ids(branch, &prefixes);
     !ids.is_empty()
         && ids.iter().all(|(prefix, numeric_core)| {
-            prefix == &target_prefix
-                && (numeric_core == &target_numeric_core
-                    || numeric_core
-                        .strip_prefix(&target_numeric_core)
-                        .is_some_and(|suffix| suffix.starts_with('-')))
+            targets.iter().any(|(target_prefix, target_numeric_core)| {
+                prefix == target_prefix
+                    && (numeric_core == target_numeric_core
+                        || numeric_core
+                            .strip_prefix(target_numeric_core)
+                            .is_some_and(|suffix| suffix.starts_with('-')))
+            })
         })
 }
 
-fn branch_names_requirement(branch: &str, spec: &str, configured_prefixes: &[String]) -> bool {
+fn branch_names_requirement(
+    branch: &str,
+    spec: &str,
+    configured_prefixes: &[String],
+    aliases: &[&str],
+) -> bool {
     let target_prefix = requirement_id_parts(spec).map(|(prefix, _)| prefix);
-    let prefixes = recognised_prefixes(target_prefix.as_deref(), configured_prefixes);
+    let mut prefixes = recognised_prefixes(target_prefix.as_deref(), configured_prefixes);
+    prefixes.extend(
+        aliases
+            .iter()
+            .filter_map(|id| requirement_id_parts(id).map(|(prefix, _)| prefix)),
+    );
     !branch_requirement_ids(branch, &prefixes).is_empty()
 }
 
@@ -452,19 +479,21 @@ pub(crate) fn queue_done_ownership(
     commit_evidence: Option<&QueueDoneCommitEvidence>,
     force: bool,
     configured_prefixes: &[String],
+    aliases: &[&str],
 ) -> QueueDoneOwnership {
-    if branch_belongs_to_spec_with_prefixes(branch, spec, configured_prefixes) {
+    // trace:TASK-1328 | ai:codex
+    if branch_belongs_to_spec_with_aliases(branch, spec, configured_prefixes, aliases) {
         return QueueDoneOwnership::Proceed;
     }
-    let foreign_branch = branch_names_requirement(branch, spec, configured_prefixes);
+    let foreign_branch = branch_names_requirement(branch, spec, configured_prefixes, aliases);
     if !foreign_branch {
         if let Some(evidence) = commit_evidence {
             if evidence.commits_seen == 0
                 || evidence.spec_ids.is_empty()
-                || evidence
-                    .spec_ids
-                    .iter()
-                    .any(|id| id.eq_ignore_ascii_case(spec))
+                || evidence.spec_ids.iter().any(|id| {
+                    id.eq_ignore_ascii_case(spec)
+                        || aliases.iter().any(|alias| id.eq_ignore_ascii_case(alias))
+                })
             {
                 return QueueDoneOwnership::Proceed;
             }
@@ -1473,11 +1502,11 @@ mod tests {
         assert!(!branch_belongs_to_spec("story-1221", "BUG-1628"));
         // queue-done ownership proceeds on the custom-prefix branch.
         assert_eq!(
-            queue_done_ownership("spec-016", "SPEC-016", None, false, &[]),
+            queue_done_ownership("spec-016", "SPEC-016", None, false, &[], &[]),
             QueueDoneOwnership::Proceed
         );
         assert!(matches!(
-            queue_done_ownership("spec-9", "SPEC-016", None, false, &[]),
+            queue_done_ownership("spec-9", "SPEC-016", None, false, &[], &[]),
             QueueDoneOwnership::Refuse(reason) if reason.contains("different requirement")
         ));
     }
@@ -1515,7 +1544,7 @@ mod tests {
             spec_ids: vec![],
         };
         assert!(matches!(
-            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &configured),
+            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &configured, &[]),
             QueueDoneOwnership::Refuse(reason) if reason.contains("different requirement")
         ));
         assert!(!branch_belongs_to_spec_with_prefixes(
@@ -1526,12 +1555,12 @@ mod tests {
         // Without the configured prefix the branch is unscoped and passes on
         // empty commit evidence — the disagreement this fix removes.
         assert_eq!(
-            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &[]),
+            queue_done_ownership("qx-7", "SPEC-016", Some(&evidence), false, &[], &[]),
             QueueDoneOwnership::Proceed
         );
         // Mixed branch naming both the target and a configured foreign ID.
         assert!(matches!(
-            queue_done_ownership("spec-016-qx-7", "SPEC-016", None, false, &configured),
+            queue_done_ownership("spec-016-qx-7", "SPEC-016", None, false, &configured, &[]),
             QueueDoneOwnership::Refuse(_)
         ));
     }
@@ -1579,6 +1608,114 @@ mod tests {
         assert!(!missing.exists(), "a missing store is never created");
     }
 
+    // trace:TASK-1328 | ai:codex
+    #[test]
+    fn task_1328_queue_done_accepts_stored_origin_and_display_ids() {
+        let aliases = ["TASK-1-216"];
+        for branch in [
+            "task-1324",
+            "task-1-216",
+            "fix/task-1-216-reconstitution",
+            "task-1-216-2",
+            "task-1324-task-1-216",
+        ] {
+            assert_eq!(
+                queue_done_ownership(branch, "TASK-1324", None, false, &[], &aliases),
+                QueueDoneOwnership::Proceed,
+                "{branch}"
+            );
+        }
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["task-1-216".into()],
+        };
+        assert_eq!(
+            queue_done_ownership(
+                "feature/reconstitution",
+                "TASK-1324",
+                Some(&evidence),
+                false,
+                &[],
+                &aliases
+            ),
+            QueueDoneOwnership::Proceed
+        );
+    }
+
+    // trace:TASK-1328 | ai:codex
+    #[test]
+    fn task_1328_queue_done_origin_alias_does_not_authorize_foreign_branches() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["TASK-1-216".into()],
+        };
+        for branch in [
+            "task-1-217",
+            "task-1325",
+            "task-1-216-task-1325",
+            "task-1-2160",
+        ] {
+            let result = queue_done_ownership(
+                branch,
+                "TASK-1324",
+                Some(&evidence),
+                false,
+                &[],
+                &["TASK-1-216"],
+            );
+            assert!(
+                matches!(result, QueueDoneOwnership::Refuse(_)),
+                "{branch}: {result:?}"
+            );
+        }
+        assert!(matches!(
+            queue_done_ownership("task-1-216", "TASK-1324", Some(&evidence), false, &[], &[]),
+            QueueDoneOwnership::Refuse(_)
+        ));
+        // A stored custom prefix is also scoped, even without project config.
+        assert!(matches!(
+            queue_done_ownership(
+                "qx-7-task-1325",
+                "TASK-1324",
+                Some(&evidence),
+                false,
+                &[],
+                &["QX-7"]
+            ),
+            QueueDoneOwnership::Refuse(_)
+        ));
+        assert_eq!(
+            queue_done_ownership("qx-7", "TASK-1324", None, false, &[], &["QX-7"]),
+            QueueDoneOwnership::Proceed
+        );
+        let foreign = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["TASK-1-217".into()],
+        };
+        assert!(matches!(
+            queue_done_ownership(
+                "feature/reconstitution",
+                "TASK-1324",
+                Some(&foreign),
+                false,
+                &[],
+                &["TASK-1-216"]
+            ),
+            QueueDoneOwnership::Refuse(_)
+        ));
+        assert!(matches!(
+            queue_done_ownership(
+                "task-1325",
+                "TASK-1324",
+                Some(&evidence),
+                true,
+                &[],
+                &["TASK-1-216"]
+            ),
+            QueueDoneOwnership::Forced(_)
+        ));
+    }
+
     #[test]
     fn queue_done_ownership_accepts_target_branch_variants() {
         assert!(branch_belongs_to_spec("bug-1244", "BUG-1244"));
@@ -1621,6 +1758,7 @@ mod tests {
                     }),
                     false,
                     &[],
+                    &[],
                 ),
                 QueueDoneOwnership::Proceed
             );
@@ -1634,6 +1772,7 @@ mod tests {
                     }),
                     false,
                     &[],
+                    &[],
                 ),
                 QueueDoneOwnership::Proceed
             );
@@ -1646,7 +1785,7 @@ mod tests {
             commits_seen: 1,
             spec_ids: vec!["STORY-1221".into()],
         };
-        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false, &[]);
+        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false, &[], &[]);
         let QueueDoneOwnership::Refuse(reason) = outcome else {
             panic!("queue done must refuse, got {outcome:?}");
         };
@@ -1661,7 +1800,7 @@ mod tests {
             spec_ids: vec!["STORY-1221".into(), "BUG-1236".into()],
         };
         assert!(matches!(
-            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false, &[]),
+            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false, &[], &[]),
             QueueDoneOwnership::Refuse(_)
         ));
     }
@@ -1673,7 +1812,14 @@ mod tests {
             spec_ids: vec![],
         };
         assert_eq!(
-            queue_done_ownership("feature/no-spec", "BUG-1236", Some(&evidence), false, &[]),
+            queue_done_ownership(
+                "feature/no-spec",
+                "BUG-1236",
+                Some(&evidence),
+                false,
+                &[],
+                &[]
+            ),
             QueueDoneOwnership::Proceed
         );
     }
@@ -1681,10 +1827,10 @@ mod tests {
     #[test]
     fn queue_done_command_force_explicitly_overrides_unreadable_evidence() {
         assert!(matches!(
-            queue_done_ownership("main", "BUG-1236", None, false, &[]),
+            queue_done_ownership("main", "BUG-1236", None, false, &[], &[]),
             QueueDoneOwnership::Refuse(_)
         ));
-        let outcome = queue_done_ownership("main", "BUG-1236", None, true, &[]);
+        let outcome = queue_done_ownership("main", "BUG-1236", None, true, &[], &[]);
         let QueueDoneOwnership::Forced(reason) = outcome else {
             panic!("--force must produce a recorded override, got {outcome:?}");
         };

@@ -325,6 +325,7 @@ fn merge_via_forge(
         &MergeOptions {
             method: MergeMethod::Squash,
             squash_subject: None,
+            squash_body: None, // trace:TASK-1330 | ai:claude
             delete_branch: false,
             match_head: None,
         },
@@ -381,6 +382,7 @@ fn github_merge_change_runs_the_corpus_gate_before_gh() {
             &MergeOptions {
                 method: MergeMethod::Squash,
                 squash_subject: None,
+                squash_body: None, // trace:TASK-1330 | ai:claude
                 delete_branch: false,
                 match_head: Some(HEAD.to_string()),
             },

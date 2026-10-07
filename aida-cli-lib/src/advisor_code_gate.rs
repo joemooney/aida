@@ -75,6 +75,8 @@
 //! trace:STORY-684 | ai:claude
 
 use std::path::Path;
+#[cfg(windows)]
+use std::path::PathBuf;
 use std::process::Command;
 
 /// Env var: explicit, auditable opt-out of the advisor code-commit gate for the
@@ -341,6 +343,7 @@ fn effective_role_for_commit_with_fallback(
 
 fn role_with_source(role: String, source: crate::team::RoleSource) -> (String, &'static str) {
     let source = match source {
+        crate::team::RoleSource::Grant => "validated session grant",
         crate::team::RoleSource::Roster => "shared team roster",
         crate::team::RoleSource::Env => "AIDA_SESSION_ROLE environment",
         crate::team::RoleSource::Default => "default role",
@@ -385,33 +388,47 @@ mod tests {
         let root = dir.path();
         let worktree = root.join("worker");
         std::fs::create_dir_all(&worktree).unwrap();
+        // Windows `canonicalize()` returns an extended-length path such as
+        // `\\?\C:\...`, while older lease files can retain the ordinary
+        // spelling. Keep that mismatch in this behavior-level regression.
+        #[cfg(windows)]
+        let lease_worktree = {
+            let canonical = worktree.canonicalize().unwrap();
+            let text = canonical.to_string_lossy();
+            let ordinary = text
+                .strip_prefix(r"\\?\UNC\")
+                .map(|unc| format!(r"\\{unc}"))
+                .or_else(|| text.strip_prefix(r"\\?\").map(str::to_string))
+                .unwrap_or_else(|| text.into_owned());
+            PathBuf::from(ordinary)
+        };
+        #[cfg(not(windows))]
+        let lease_worktree = worktree.clone();
         let sessions = root.join(".aida/sessions");
         std::fs::create_dir_all(&sessions).unwrap();
         std::fs::write(
             sessions.join("lease-1.toml"),
-            format!("id='lease-1'\nscope='BUG-1'\nslug='bug-1'\nowner='test'\nworktree_path='{}'\nbranch='bug-1'\nstarted_at='2026-01-01T00:00:00Z'\nhostname='test'\nrole='implementer'\n", worktree.display()),
+            format!("id='lease-1'\nscope='BUG-1'\nslug='bug-1'\nowner='test'\nworktree_path='{}'\nbranch='bug-1'\nstarted_at='2026-01-01T00:00:00Z'\nhostname='test'\nrole='implementer'\n", lease_worktree.display()),
         ).unwrap();
+        // ADR-66 (STORY-1473): the ambient advisor seat is a validated session
+        // grant (the roster is only its ceiling), and the worktree lease must
+        // still take precedence over it for the commit gate.
+        // trace:STORY-1473 | ai:claude
         let user = crate::current_user_id(None);
-        let store = root.join(".aida-store");
-        let registry = store.join("registry");
-        std::fs::create_dir_all(&registry).unwrap();
-        let roster = crate::team::TeamRoster {
-            members: [(user.clone(), "advisor".to_string())]
-                .into_iter()
-                .collect(),
-        };
-        std::fs::write(
-            registry.join("team.toml"),
-            toml::to_string(&roster).unwrap(),
-        )
-        .unwrap();
-        let roster_role = crate::team::effective_role_for_user(&store, &user);
+        let grant_id =
+            crate::seat_authority::test_support::mint_grant_for(root, &user, "advisor", &[]);
+        let store = crate::detect_distributed_store_from(root).expect("fixture store detected");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(
+            crate::seat_authority::GRANT_ENV,
+            Some(grant_id.as_str()),
+        )]);
+        let granted_role = crate::team::effective_role_for_user(&store, &user);
         assert_eq!(
-            roster_role,
-            ("advisor".into(), crate::team::RoleSource::Roster)
+            granted_role,
+            ("advisor".into(), crate::team::RoleSource::Grant)
         );
         let leased_role =
-            effective_role_for_commit_with_fallback(root, &worktree, roster_role.clone());
+            effective_role_for_commit_with_fallback(root, &worktree, granted_role.clone());
         assert_eq!(
             leased_role,
             ("implementer".into(), "worktree session lease")
@@ -427,8 +444,8 @@ mod tests {
         )
         .is_none());
 
-        let operator_role = effective_role_for_commit_with_fallback(root, root, roster_role);
-        assert_eq!(operator_role, ("advisor".into(), "shared team roster"));
+        let operator_role = effective_role_for_commit_with_fallback(root, root, granted_role);
+        assert_eq!(operator_role, ("advisor".into(), "validated session grant"));
         let message = refusal(
             &operator_role.0,
             operator_role.1,
@@ -439,7 +456,7 @@ mod tests {
             false,
         )
         .unwrap();
-        assert!(message.contains("role decided by shared team roster"));
+        assert!(message.contains("role decided by validated session grant"));
     }
 
     // ── file classification ──

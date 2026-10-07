@@ -86,7 +86,7 @@ fn guest_refuses_write_commands() {
         .expect("run guest add");
     assert!(!add.status.success(), "guest add must be refused");
     let err = String::from_utf8_lossy(&add.stderr);
-    assert!(err.contains("AIDA_SESSION_ROLE=guest"), "{err}");
+    assert!(err.contains("The 'guest' role"), "{err}");
     assert!(err.contains("least-privilege"), "{err}");
 }
 
@@ -112,8 +112,14 @@ fn role_list_surfaces_stakeholder_personas_without_role_files() {
     assert!(out.contains("requester"), "{out}");
     assert!(out.contains("least-privilege"), "{out}");
     assert!(out.contains("not a build seat"), "{out}");
-    assert!(out.contains("AIDA_SESSION_ROLE=guest"), "{out}");
-    assert!(out.contains("AIDA_SESSION_ROLE=requester"), "{out}");
+    // ADR-66: the persona hint points at `aida role enter`, never an env-var
+    // override (env roles confer nothing). trace:STORY-1473 | ai:claude
+    assert!(out.contains("aida role enter guest"), "{out}");
+    assert!(out.contains("aida role enter requester"), "{out}");
+    assert!(
+        !out.contains("is a least-privilege stakeholder role"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -226,10 +232,7 @@ fn requester_refuses_non_add_writes_and_build_loop_routing() {
         .expect("run requester edit");
     assert!(!edit.status.success(), "requester edit must be refused");
     let edit_err = String::from_utf8_lossy(&edit.stderr);
-    assert!(
-        edit_err.contains("AIDA_SESSION_ROLE=requester"),
-        "{edit_err}"
-    );
+    assert!(edit_err.contains("The 'requester' role"), "{edit_err}");
 
     let queue = aida(&repo, &home)
         .env("AIDA_SESSION_ROLE", "advisor")

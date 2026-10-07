@@ -1,4 +1,61 @@
+GitHub `pr ship` polls classified CI rows directly, so pending or failed
+informational workflows do not delay shipping. Required checks override the
+informational allow-list; other unlisted failures still block the merge.
+<!-- trace:TASK-1331 | ai:codex -->
+
+Store pulls fetch one explicit branch into an invocation-private ref and rebase
+onto its resolved commit, leaving shared `FETCH_HEAD` untouched. Both plain and
+structural auto-merge paths use this helper; failures preserve the Git error
+without assuming a network problem. See [git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
+<!-- trace:TASK-1604 | ai:codex -->
+
+Queue-done ownership accepts a requirement's stored origin ID after its display
+ID is remapped. Every recognized ID in a scoped branch must still belong to
+that requirement; unrelated branches cannot borrow origin-ID commit evidence.
+See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1328 | ai:codex -->
+
 # AGENTS.md
+
+Reconstitution can fail before vendor spawn when its empty scratch cwd cannot
+resolve the seat roster. Store-probe failures now also print to stderr; command
+exit 0 does not establish vendor success. See [launch investigation](docs/testing/task-1327-reconstitution-launch.md)
+and TASK-1-224 for the authority-root repair awaiting triage.
+<!-- trace:TASK-1327 | ai:codex -->
+
+Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
+workspace build so feature-disabled stubs stay buildable. This check-only guard
+uses the existing full-CI filter and skips docs-only changes.
+<!-- trace:TASK-1601 | ai:codex -->
+
+Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
+manual dispatches fail before validation. Selected-path Windows PR checks stay
+informational, macOS stays disabled, and Ubuntu Build plus merge-hold-gate remain
+required. Product's 24h weekly-windows-triage reminder records the tracking issue
+or no-issue result without queuing implementation. Releases still require a green
+platform run within 24h. Weekly cadence does not shorten Linux PR CI.
+See [CI policy](docs/agents/aida-repository-guide.md).
+<!-- trace:TASK-1588 | ai:codex -->
+
+Ship derives completion IDs from an explicit trailing PR-title group, then
+store-resolving branch IDs. Title prose, PR bodies, and an unrelated branch-head
+trailer do not grant completion credit. CLI/MCP rework and status edits record
+`reopened_at_sha` when reopening Done/Completed; live and replay scans reject
+evidence at or before that SHA. See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1600 | ai:codex -->
+
+Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
+mirrored only when origin already advertises the exact SHA; rejected or pending
+pushes are skipped. Mirror-sync ignores and reports local-only default/store
+commits while fetching and pushing origin's SHA. See
+[git lifecycle](docs/cli/04-git-lifecycle.md#aida-pull).
+<!-- trace:BUG-1803 | ai:codex -->
+
+The project schedule runs a read-only merged-worktree guard every 30 days and
+routes failures to the advisor. The operator reviews `aida worktree gc` and
+runs `aida worktree gc --yes --force` at a TTY; forced cleanup stays outside
+scheduled and headless jobs.
+<!-- trace:TASK-1596 | ai:codex -->
 
 History supports scoped named templates and ordered event fields across CLI/MCP.
 Template parsing, event-local field projection, and config persistence share
@@ -14,6 +71,12 @@ persistent `aida:merge-hold-recorded` label; local event history reports marker
 deletion without clearance. The same-user/admin-token limit and protected-broker
 boundary are documented in [reporting](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:BUG-1693 | ai:codex -->
+
+Reasoned `aida defer --reason` holds are enforced by pickup and direct session
+start; only product/advisor or the unseated operator can lift them. Legacy
+deferrals without a reason retain their existing view behavior. See
+[lifecycle](docs/lifecycle.md#status-vs-workable--pickability-and-the-queue).
+<!-- trace:BUG-1793 | ai:codex -->
 
 Guidance for Codex and MCP-compatible coding agents working in the AIDA
 repository. Read this as instructions-to-self: coordinate through AIDA,
@@ -32,6 +95,13 @@ context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
 ## Cache read behavior
+
+Single-spec `show` uses a zero refresh-wait budget on every CLI format,
+including human TTY output. It reads the canonical object and labels stale
+derived cache context; full rebuilds are delegated through the existing worker
+protocol. Explicit cache operations remain strict. See
+[latency regression](tests/test_show_latency.py).
+<!-- trace:BUG-1801 | ai:codex -->
 
 Compatible read snapshots use a single refresh flock and a shared bounded wait.
 Before the detached worker slice lands, non-TTY full-rebuild reads report

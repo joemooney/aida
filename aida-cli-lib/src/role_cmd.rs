@@ -23,7 +23,15 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             cd,
             no_resume,
             no_title,
-        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume, *no_title),
+            delegate_seats,
+        } => handle_role_enter(
+            &project_root,
+            name.as_deref(),
+            *cd,
+            *no_resume,
+            *no_title,
+            delegate_seats,
+        ),
         RoleCommand::Add {
             name,
             purpose,
@@ -174,13 +182,17 @@ fn handle_role_enter(
     cd: bool,
     no_resume: bool,
     no_title: bool,
+    delegate_seats: &[String],
 ) -> Result<()> {
     // BUG-1196: stakeholder personas are shell identities, not persisted role
     // files or build seats.  Handle an explicit persona before role lookup so
     // it has the same outcome as choosing that tagged row in the picker.
     // trace:BUG-1196 | ai:codex
     if let Some(persona) = name.and_then(stakeholder_persona_name) {
-        emit_persona_enter_eval(project_root, persona);
+        let grant =
+            crate::seat_authority::issue_direct(project_root, persona, delegate_seats.to_vec())?;
+        crate::seat_authority::revoke_current()?;
+        emit_persona_enter_eval(project_root, persona, &grant.id);
         return Ok(());
     }
 
@@ -196,7 +208,13 @@ fn handle_role_enter(
                 match pick_role_interactively(project_root, explicit)? {
                     Some(chosen) => {
                         if let Some(persona) = stakeholder_persona_name(&chosen) {
-                            emit_persona_enter_eval(project_root, persona);
+                            let grant = crate::seat_authority::issue_direct(
+                                project_root,
+                                persona,
+                                delegate_seats.to_vec(),
+                            )?;
+                            crate::seat_authority::revoke_current()?;
+                            emit_persona_enter_eval(project_root, persona, &grant.id);
                             return Ok(());
                         }
                         chosen
@@ -223,15 +241,56 @@ fn handle_role_enter(
             }
         }
     };
+    // trace:TASK-1594 | ai:claude
     let (mut state, _) = load_role(project_root, &resolved).map_err(|_| {
         anyhow::anyhow!(
-            "No such role: {}\n\
-             Create it with: `aida role add {}`\n\
+            "No such role: {}
+\
+             Create it with: `aida role add {}`
+\
              See available roles with: `aida role list`",
             resolved,
             resolved
         )
     })?;
+
+    let mut final_delegate_seats = delegate_seats.to_vec();
+    let seat_name = canonical_role_name(&resolved);
+
+    use std::io::IsTerminal;
+    let is_direct_tty = std::io::stdin().is_terminal() && std::io::stderr().is_terminal();
+    let is_managed_agent = ["AIDA_AGENT_NAME", "AIDA_AGENT_TYPE"].iter().any(|key| {
+        std::env::var(key)
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+    });
+
+    if seat_name == "advisor"
+        && final_delegate_seats.is_empty()
+        && is_direct_tty
+        && !is_managed_agent
+    {
+        // trace:TASK-1597 | ai:claude
+
+        if crate::seat_authority::roster_allows(
+            project_root,
+            &crate::current_user_id(None),
+            "advisor",
+        ) {
+            let prompt = "The advisor role spawns headless sub-launches (questions_clarify, intake, harvest, reconstitute) which require the `advisor` seat.
+Include it in the TTY-issued delegation set?";
+            // inquire writes to stderr and reads from /dev/tty properly.
+            // ?-exempt: cannot use confirm_with_context because it writes to stdout, breaking shell eval
+            let include = inquire::Confirm::new(prompt).with_default(false).prompt()?; // Returns Err on Ctrl-C / interrupt, which is the desired abort behavior
+            if include {
+                final_delegate_seats.push("advisor".to_string());
+            }
+        }
+    }
+
+    let grant =
+        crate::seat_authority::issue_direct(project_root, &seat_name, final_delegate_seats)?;
+    crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
@@ -261,6 +320,7 @@ fn handle_role_enter(
         resume,
         no_title,
         Some(&registry_entry),
+        Some(&grant.id),
     );
     Ok(())
 }
@@ -286,7 +346,7 @@ fn eval_comment_text(value: &str) -> String {
     value.replace(['\n', '\r'], " ")
 }
 
-fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str) {
+fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str, grant_id: &str) {
     let _eval = crate::shell_eval::EvalBlock::open();
     // Every value is quoted: this block is eval'd by the caller's shell.
     // trace:BUG-1624 | ai:claude
@@ -295,6 +355,7 @@ fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str) {
         eval_comment_text(persona)
     );
     println!("export AIDA_SESSION_ROLE='{}'", sh_single_quote(persona));
+    println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id));
     println!("unset AIDA_SESSION_PURPOSE");
     println!(
         "export AIDA_SESSION_PROJECT='{}'",
@@ -436,6 +497,27 @@ fn handle_role_add(
         launch_prompt: None,
         launch_prompt_spec: None,
     };
+    // ADR-66: a role record is a label; only the seat GRANT carries
+    // authority, and minting one requires a controlling TTY plus a roster
+    // ceiling that allows the seat. When issuance is unavailable (headless
+    // caller, or a custom label outside the roster), still create the record
+    // and enter it label-only — the emitted hint confers no authority, and
+    // `aida role enter <seat>` at a human TTY remains the issuance path.
+    // trace:STORY-1473 | ai:claude
+    let grant_id = match crate::seat_authority::issue_direct(
+        project_root,
+        &canonical_role_name(name),
+        Vec::new(),
+    ) {
+        Ok(grant) => {
+            crate::seat_authority::revoke_current()?;
+            Some(grant.id)
+        }
+        Err(reason) => {
+            eprintln!("note: no seat grant issued ({reason}); the role is a label without authority. Enter it at an interactive TTY to establish the seat.");
+            None
+        }
+    };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
     emit_role_enter_eval(
@@ -446,6 +528,7 @@ fn handle_role_add(
         None,
         /* no_title */ false,
         None,
+        grant_id.as_deref(),
     );
     Ok(())
 }
@@ -517,6 +600,7 @@ fn emit_role_enter_eval(
     resume_session_id: Option<String>,
     no_title: bool,
     registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
+    grant_id: Option<&str>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -562,6 +646,16 @@ fn emit_role_enter_eval(
         "export AIDA_SESSION_ROLE='{}'",
         sh_single_quote(&state.name)
     );
+    // ADR-66: the grant handle is the seat; the role env above is only a
+    // display/routing hint. A label-only enter (no grant) must also shed any
+    // stale grant so the shell cannot keep a previous seat's authority under
+    // the new label. trace:STORY-1473 | ai:claude
+    match grant_id {
+        Some(grant_id) => {
+            println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id))
+        }
+        None => println!("unset AIDA_SESSION_GRANT"),
+    }
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
     } else {
@@ -735,8 +829,9 @@ fn role_enter_launch_title(
 /// role is active so shell guards like `[ -n "$(aida role active)" ]`
 // work without parsing. trace:TASK-42 | ai:claude
 fn handle_role_active() -> Result<()> {
-    match std::env::var("AIDA_SESSION_ROLE") {
-        Ok(role) if !role.is_empty() => {
+    let project_root = statusline_project_root();
+    match crate::seat_authority::current_seat(&project_root) {
+        Some(role) if !role.is_empty() => {
             println!("{}", role);
             Ok(())
         }
@@ -752,7 +847,7 @@ fn handle_role_active() -> Result<()> {
 // can capture the value and branch on exit code separately.
 // trace:STORY-64 | ai:claude
 fn handle_role_current(check: bool) -> Result<()> {
-    let role = std::env::var("AIDA_SESSION_ROLE").unwrap_or_default();
+    let role = crate::seat_authority::current_seat(&statusline_project_root()).unwrap_or_default();
     println!("{}", role);
     if check && role.is_empty() {
         std::process::exit(1);
@@ -761,6 +856,7 @@ fn handle_role_current(check: bool) -> Result<()> {
 }
 
 fn handle_role_end() -> Result<()> {
+    crate::seat_authority::revoke_current()?;
     // Use a uniquely-named env var rather than `local` so the eval works
     // both at the shell top level and inside a wrapper function.
     // trace:TASK-1171 | ai:claude
@@ -780,7 +876,9 @@ fn handle_role_end() -> Result<()> {
     println!("    done");
     println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
-    println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
+    println!(
+        "unset AIDA_SESSION_ROLE AIDA_SESSION_GRANT AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT"
+    );
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
     println!(
         "    echo \"{} Deactivated role: $__AIDA_ROLE_END_PREV\"",
@@ -795,7 +893,7 @@ fn handle_role_end() -> Result<()> {
 
 fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
     let roles = list_roles(project_root)?;
-    let active = std::env::var("AIDA_SESSION_ROLE").ok();
+    let active = crate::seat_authority::current_seat(project_root);
     if roles.is_empty() {
         println!("(no roles defined for {})", project_root.display());
         println!(
@@ -861,7 +959,7 @@ fn print_stakeholder_personas(active: Option<&str>) {
             marker,
             name.bold(),
             label,
-            format!("AIDA_SESSION_ROLE={name}").cyan()
+            format!("aida role enter {name}").cyan()
         );
     }
 }
@@ -869,7 +967,7 @@ fn print_stakeholder_personas(active: Option<&str>) {
 fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
     let resolved = match name {
         Some(n) => n.to_string(),
-        None => std::env::var("AIDA_SESSION_ROLE").map_err(|_| {
+        None => crate::seat_authority::current_seat(project_root).ok_or_else(|| {
             anyhow::anyhow!(
                 "No role active and no name given. Use `aida role list` to see options."
             )
@@ -1184,6 +1282,7 @@ mod tests {
             cd: false,
             no_resume: false,
             no_title,
+            ..
         }) = cli.command
         else {
             panic!("expected role enter command");
@@ -1191,6 +1290,36 @@ mod tests {
 
         assert_eq!(name.as_deref(), Some("advisor"));
         assert!(no_title);
+    }
+
+    // trace:TASK-1592 | ai:antigravity
+    #[test]
+    fn parses_role_enter_delegate_seat() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "role",
+            "enter",
+            "advisor",
+            "--delegate-seat",
+            "implementer",
+            "--delegate-seat",
+            "reviewer",
+        ])
+        .expect("parse role enter");
+        let Command::Role(RoleCommand::Enter {
+            name,
+            delegate_seats,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected role enter command");
+        };
+
+        assert_eq!(name.as_deref(), Some("advisor"));
+        assert_eq!(
+            delegate_seats,
+            vec!["implementer".to_string(), "reviewer".to_string()]
+        );
     }
 
     // trace:STORY-994 | ai:codex
@@ -1239,7 +1368,7 @@ mod tests {
 
     // trace:STORY-994 | ai:codex
     #[test]
-    fn role_enter_handler_persists_terminal_identity() {
+    fn role_enter_refuses_to_issue_a_grant_without_a_tty() {
         let dir = tempfile::tempdir().unwrap();
         let state = role_state_fixture("advisor");
         let save_path = role_save_path(dir.path(), &state).expect("role path");
@@ -1249,29 +1378,16 @@ mod tests {
             ("TERMINATOR_UUID", "role-handler-term-994"),
         ]);
 
-        handle_role_enter(
+        let error = handle_role_enter(
             dir.path(),
             Some("advisor"),
             /* cd */ false,
             /* no_resume */ true,
             /* no_title */ true,
+            &[],
         )
-        .expect("role enter");
-
-        let agents_dir = dir.path().join(".aida").join("agents");
-        let mut entries = std::fs::read_dir(&agents_dir)
-            .expect("agents dir")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("agent entries");
-        entries.sort_by_key(|entry| entry.path());
-        assert_eq!(entries.len(), 1);
-        let persisted = std::fs::read_to_string(entries[0].path()).expect("registry entry");
-
-        assert!(persisted.contains("source = \"role-enter\""));
-        assert!(persisted.contains("role = \"advisor\""));
-        assert!(persisted.contains("[terminal]"));
-        assert!(persisted.contains("emulator = \"terminator\""));
-        assert!(persisted.contains("terminator_uuid = \"role-handler-term-994\""));
+        .expect_err("non-TTY role entry must not issue authority");
+        assert!(error.to_string().contains("interactive TTY"));
     }
 
     // trace:BUG-840 | ai:codex

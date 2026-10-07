@@ -85,12 +85,24 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     let capture = tmp.path().join("captured-argv.txt");
     let mock = write_argv_capture_mock(tmp.path(), &capture);
 
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        (crate::seat_authority::GRANT_ENV, None),
     ]);
+    // ADR-66: the standalone reviewer launch issues the child a scoped
+    // reviewer grant, so the launcher needs an active grant delegating
+    // `reviewer`. Minted AFTER the guard so the record lands under the
+    // fixture AIDA_HOME the launch resolves. trace:STORY-1473 | ai:claude
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &crate::current_user_id(None),
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
     crate::session::set_headless_vendor_override(None);
 
     // Resolve the vendor from the REAL codex-only project config — the same
@@ -185,12 +197,30 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     let capture = tmp.path().join("captured-argv.txt");
     let mock = write_argv_capture_mock(tmp.path(), &capture);
 
-    let _env = crate::test_env::EnvVarsGuard::apply(&[
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS_VENDOR", None),
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        (crate::seat_authority::GRANT_ENV, None),
     ]);
+    // ADR-66: the reviewer launch issues a scoped child grant validated
+    // against the project root (pinned through the ambient seam), so the
+    // launcher needs a grant delegating `reviewer`. Minted AFTER the guard so
+    // the record lands under the fixture AIDA_HOME.
+    // trace:STORY-1473 | ai:claude
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &crate::current_user_id(None),
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: project.clone(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+    }));
     crate::session::set_headless_vendor_override(None);
 
     // The exact resolution `handle_review_spec` runs before acquiring its
@@ -201,8 +231,9 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     assert_eq!(vendor, crate::session::HeadlessVendor::Codex);
 
     let prompt = "/aida-review --pr 52";
-    let status = review_spec_launch_reviewer(vendor, "review-story-52", prompt, "session-52")
-        .expect("launch with a reachable mock must succeed");
+    let launch = review_spec_launch_reviewer(vendor, "review-story-52", prompt, "session-52");
+    crate::test_ambient::replace(outer);
+    let status = launch.expect("launch with a reachable mock must succeed");
     assert!(status.success());
 
     let argv = read_captured_argv(&capture);

@@ -704,6 +704,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1330: identity hygiene. 2026-10-05: an employer-identifying email
+    // reached public history because a work machine's git config used it and
+    // nothing refused it. When `[identity] allowed_emails` is configured,
+    // report a git identity outside the allowlist and a pre-push hook that
+    // does not run the gate. Silent when the project opted out (no
+    // allowlist). One git config read + one file read; kept in the opt-in
+    // append path with its neighbours. trace:TASK-1330 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "identity")? {
+        findings.extend(scan_identity_hygiene(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1527 (amendment A7): the detached-refresh health report. Silent
     // when no request is pending or a fresh request is simply in flight;
     // reports a crash-looped worker (readers are falling back to strict
@@ -1784,6 +1796,176 @@ fn mirror_hook_drift_finding(hooks_dir: &std::path::Path) -> Option<DoctorFindin
             .to_string(),
         safe_heal: false,
     })
+}
+
+/// TASK-1330: identity hygiene scan. Gathers the live inputs (allowlist,
+/// effective `git config user.email`, installed pre-push hook body) and
+/// hands them to the pure `identity_hygiene_findings` core.
+// trace:TASK-1330 | ai:claude
+fn scan_identity_hygiene(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    let allowlist = match crate::identity_gate::read_allowed_emails(project_root) {
+        Ok(list) => list,
+        Err(err) => {
+            return vec![DoctorFinding {
+                category: "identity".to_string(),
+                id: "identity-config-unreadable".to_string(),
+                summary: format!(
+                    "could not read [identity] allowed_emails from .aida/config.toml ({err:#}) — \
+                     the push-time identity gate refuses pushes while the config is unreadable"
+                ),
+                action: "fix the TOML syntax in .aida/config.toml so the allowlist loads"
+                    .to_string(),
+                safe_heal: false,
+            }];
+        }
+    };
+    let user_email = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["config", "user.email"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let hook_body = std::fs::read_to_string(
+        crate::remote_create::repo_hooks_dir(project_root).join("pre-push"),
+    )
+    .ok();
+    identity_hygiene_findings(&allowlist, user_email.as_deref(), hook_body.as_deref())
+}
+
+/// The tempdir-testable core of the `identity` scan.
+///
+/// Silent when no allowlist is configured — the gate is opt-in per project.
+/// Once configured, two findings cover the two ways the 2026-10-05 incident
+/// could recur: the commit identity itself is wrong (`git config user.email`
+/// outside the allowlist), and the recurrence guard is not wired (no
+/// pre-push hook running `aida identity check-push`). Report-only: both
+/// remedies touch the operator's git config / `.git/hooks/`, writes outside
+/// the store.
+// trace:TASK-1330 | ai:claude
+fn identity_hygiene_findings(
+    allowlist: &[String],
+    user_email: Option<&str>,
+    hook_body: Option<&str>,
+) -> Vec<DoctorFinding> {
+    if allowlist.is_empty() {
+        return Vec::new();
+    }
+    let mut findings = Vec::new();
+    match user_email {
+        Some(email) if crate::identity_gate::email_allowed(email, allowlist) => {}
+        other => {
+            let observed = match other {
+                Some(email) => format!("`{email}`"),
+                None => "unset".to_string(),
+            };
+            findings.push(DoctorFinding {
+                category: "identity".to_string(),
+                id: "git-user-email-not-allowlisted".to_string(),
+                summary: format!(
+                    "git user.email is {observed}, which is not in [identity] allowed_emails \
+                     ({}) — commits made here would carry a non-allowlisted identity",
+                    allowlist.join(", ")
+                ),
+                action: "run `git config user.email <allowed-address>` (and fix any \
+                         GIT_AUTHOR_EMAIL/GIT_COMMITTER_EMAIL overrides)"
+                    .to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+    let gate_wired = hook_body
+        .map(|body| body.contains(crate::identity_gate::IDENTITY_HOOK_MARKER))
+        .unwrap_or(false);
+    if !gate_wired {
+        findings.push(DoctorFinding {
+            category: "identity".to_string(),
+            id: "identity-pre-push-hook-missing".to_string(),
+            summary: "[identity] allowed_emails is configured but the repository's pre-push \
+                      hook does not run `aida identity check-push` — a push from a \
+                      misconfigured machine would publish non-allowlisted emails unchallenged"
+                .to_string(),
+            action: "run `aida identity install-hook` (refreshes AIDA's own hooks in place; \
+                     prints the lines to add when the hook is custom)"
+                .to_string(),
+            safe_heal: false,
+        });
+    }
+    findings
+}
+
+#[cfg(test)]
+mod task_1330_identity_hygiene_tests {
+    use super::*;
+
+    fn allow(emails: &[&str]) -> Vec<String> {
+        emails.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn no_allowlist_means_no_findings() {
+        assert!(identity_hygiene_findings(&[], Some("anyone@anywhere.com"), None).is_empty());
+    }
+
+    #[test]
+    fn allowlisted_email_and_wired_hook_are_silent() {
+        let hook = crate::identity_gate::identity_pre_push_hook_script();
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(&hook),
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn the_gate_embedded_in_the_mirror_hook_counts_as_wired() {
+        let hook = crate::remote_create::mirror_pre_push_hook_script();
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(&hook),
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+    }
+
+    #[test]
+    fn non_allowlisted_email_and_missing_hook_are_both_reported() {
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("joe@work.example.com"),
+            None,
+        );
+        let ids: Vec<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "git-user-email-not-allowlisted",
+                "identity-pre-push-hook-missing"
+            ]
+        );
+        assert!(findings.iter().all(|f| !f.safe_heal));
+    }
+
+    #[test]
+    fn unset_user_email_is_reported() {
+        let findings = identity_hygiene_findings(&allow(&["good@example.org"]), None, None);
+        assert_eq!(findings[0].id, "git-user-email-not-allowlisted");
+        assert!(findings[0].summary.contains("unset"));
+    }
+
+    #[test]
+    fn a_custom_hook_running_the_gate_counts_as_wired() {
+        let hook = "#!/bin/sh\nrefs=$(cat)\nprintf '%s\\n' \"$refs\" | \
+                    aida identity check-push \"$1\" || exit 1\n";
+        let findings = identity_hygiene_findings(
+            &allow(&["good@example.org"]),
+            Some("good@example.org"),
+            Some(hook),
+        );
+        assert!(findings.is_empty());
+    }
 }
 
 #[cfg(test)]
@@ -4707,11 +4889,28 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
         .into_iter()
         .filter(|r| r != "all")
         .collect();
-    if remotes.len() < 2 {
-        return Vec::new();
-    }
-
     let mut findings = Vec::new();
+    // BUG-1796: a single origin is enough to strand canonical store commits;
+    // report the count from the local origin tracking ref even when there are
+    // no mirror remotes to compare.
+    let store_path = project_root.join(".aida-store");
+    if let Some((ahead, _)) = crate::orphan_branch_sync_state(&store_path) {
+        if ahead > 0 {
+            findings.push(DoctorFinding {
+                category: "remote-drift".to_string(),
+                id: "orphan-store-ahead-of-origin".to_string(),
+                summary: format!(
+                    "orphan store is {ahead} commit{} ahead of origin ({ahead} unpushed)",
+                    if ahead == 1 { "" } else { "s" }
+                ),
+                action: "run `aida push` to publish the orphan store commits".to_string(),
+                safe_heal: false,
+            });
+        }
+    }
+    if remotes.len() < 2 {
+        return findings;
+    }
     for branch in ["main", "aida-store"] {
         // (remote, short-sha) for every remote that currently has the branch.
         let tips: Vec<(String, String)> = remotes
@@ -4803,6 +5002,85 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
         }
     }
     findings
+}
+
+#[cfg(test)]
+mod bug_1796_orphan_store_doctor_tests {
+    use super::*;
+    use std::process::Command;
+
+    fn git(path: &std::path::Path, args: &[&str]) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn doctor_reports_orphan_store_ahead_commit_count() {
+        // trace:BUG-1796.ac18732d | ai:codex
+        let temp = tempfile::tempdir().unwrap();
+        let remote = temp.path().join("remote.git");
+        let seed = temp.path().join("seed");
+        let project = temp.path().join("project");
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(&remote).unwrap();
+        std::fs::create_dir_all(&seed).unwrap();
+        git(
+            &remote,
+            &["init", "--bare", "--initial-branch=aida-store", "--quiet"],
+        );
+        git(&seed, &["init", "--initial-branch=aida-store", "--quiet"]);
+        git(&seed, &["config", "user.email", "test@example.com"]);
+        git(&seed, &["config", "user.name", "Test"]);
+        std::fs::write(seed.join("base"), "base\n").unwrap();
+        git(&seed, &["add", "."]);
+        git(&seed, &["commit", "-m", "base", "--quiet"]);
+        git(
+            &seed,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        git(&seed, &["push", "-u", "origin", "aida-store", "--quiet"]);
+        git(
+            &project,
+            &[
+                "clone",
+                remote.to_str().unwrap(),
+                store.to_str().unwrap(),
+                "--quiet",
+            ],
+        );
+        git(&store, &["config", "user.email", "test@example.com"]);
+        git(&store, &["config", "user.name", "Test"]);
+        for n in 1..=3 {
+            std::fs::write(store.join(format!("local-{n}")), "local\n").unwrap();
+            git(&store, &["add", "."]);
+            git(&store, &["commit", "-m", &format!("local {n}"), "--quiet"]);
+        }
+
+        let finding = scan_remote_drift(&project)
+            .into_iter()
+            .find(|finding| finding.id == "orphan-store-ahead-of-origin")
+            .expect("doctor reports the local store commits missing from origin");
+        assert!(
+            finding.summary.contains("3 commits ahead"),
+            "{}",
+            finding.summary
+        );
+        assert!(
+            finding.summary.contains("3 unpushed"),
+            "{}",
+            finding.summary
+        );
+    }
 }
 
 /// TASK-717: scan stale `origin/*` branches and classify each under the
@@ -4981,7 +5259,7 @@ fn heal_doctor_stale_remote_branch(
 }
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 // trace:BUG-1719 | ai:codex
 pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
@@ -4996,6 +5274,38 @@ fn agent_worktree_keep_action(actionable: bool) -> String {
         "operator decision: review and keep, open a PR, or remove by hand".to_string()
     } else {
         "no action required — kept because batched content is undecidable".to_string()
+    }
+}
+
+// BUG-1800: Cache per-worktree verdicts keyed by branch tip SHA so expensive
+// content verification probes only run once per un-updated undecidable tree.
+// trace:BUG-1800 | ai:antigravity
+fn worktree_verdicts_cache_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida/cache/worktree-verdicts.json")
+}
+
+fn load_worktree_verdicts(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, AgentWorktreeVerdict> {
+    let path = worktree_verdicts_cache_path(project_root);
+    if let Ok(data) = std::fs::read_to_string(path) {
+        if let Ok(parsed) = serde_json::from_str(&data) {
+            return parsed;
+        }
+    }
+    std::collections::HashMap::new()
+}
+
+fn save_worktree_verdicts(
+    project_root: &std::path::Path,
+    verdicts: &std::collections::HashMap<String, AgentWorktreeVerdict>,
+) {
+    let path = worktree_verdicts_cache_path(project_root);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(data) = serde_json::to_string_pretty(verdicts) {
+        let _ = std::fs::write(path, data);
     }
 }
 
@@ -5479,7 +5789,6 @@ fn patch_id_pairs(project_root: &std::path::Path, log_p_output: &[u8]) -> Option
 /// (flagged for the operator, never auto-removed). The project's own worktree
 // and the `aida-store` worktree are skipped. trace:TASK-878
 // trace:BUG-1719 | ai:codex
-#[cfg(test)]
 pub(crate) fn scan_merged_agent_worktrees(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     scan_merged_agent_worktrees_with_count(project_root).findings
 }
@@ -5524,6 +5833,8 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         .unwrap_or_else(|_| project_root.to_path_buf());
 
     let leases = list_leases(project_root);
+    let mut verdicts_cache = load_worktree_verdicts(project_root);
+    let mut cache_modified = false;
 
     let mut findings = Vec::new();
     let mut reclaimable_count = 0;
@@ -5676,32 +5987,70 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
             false
         };
 
-        let merge_signal = pr_merged || spec_trailer_on_main;
+        let tip_sha_opt = PCmd::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["rev-parse", branch])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 
-        // Only pay for the content probe when it could actually change the
-        // verdict: a confirmed merged PR or spec landing trailer with a
-        // positive (ancestry-only) commit count is exactly the case ancestry
-        // can never clear on its own. `branch_content_fully_landed` proves
-        // patch-id equivalence; `branch_paths_match_default` proves per-path
-        // equivalence when batched squashes combine multiple specs into one commit.
-        // trace:TASK-1534 | ai:antigravity
-        let content_fully_landed = if merge_signal && unique_unmerged_commits > 0 {
-            branch_content_fully_landed(project_root, &default_ref, branch)
-                || branch_paths_match_default(project_root, &default_ref, branch)
+        let cached_verdict = if !dirty {
+            if let Some(ref sha) = tip_sha_opt {
+                verdicts_cache.get(sha).cloned()
+            } else {
+                None
+            }
         } else {
-            false
+            None
         };
 
-        let facts = AgentWorktreeFacts {
-            dirty,
-            ancestor_of_main,
-            pr_merged,
-            unique_unmerged_commits,
-            content_fully_landed,
-            spec_trailer_on_main,
+        let verdict = if let Some(v) = cached_verdict {
+            v
+        } else {
+            let merge_signal = pr_merged || spec_trailer_on_main;
+
+            // Only pay for the content probe when it could actually change the
+            // verdict: a confirmed merged PR or spec landing trailer with a
+            // positive (ancestry-only) commit count is exactly the case ancestry
+            // can never clear on its own. `branch_content_fully_landed` proves
+            // patch-id equivalence; `branch_paths_match_default` proves per-path
+            // equivalence when batched squashes combine multiple specs into one commit.
+            // trace:TASK-1534 | ai:antigravity
+            let content_fully_landed = if merge_signal && unique_unmerged_commits > 0 {
+                branch_content_fully_landed(project_root, &default_ref, branch)
+                    || branch_paths_match_default(project_root, &default_ref, branch)
+            } else {
+                false
+            };
+
+            let facts = AgentWorktreeFacts {
+                dirty,
+                ancestor_of_main,
+                pr_merged,
+                unique_unmerged_commits,
+                content_fully_landed,
+                spec_trailer_on_main,
+            };
+
+            let calculated_verdict = classify_agent_worktree(&facts);
+            // Cache if it's undecidable (which means we did the expensive work and it didn't land)
+            if !dirty {
+                if let AgentWorktreeVerdict::Keep {
+                    actionable: false, ..
+                } = &calculated_verdict
+                {
+                    if let Some(ref sha) = tip_sha_opt {
+                        verdicts_cache.insert(sha.clone(), calculated_verdict.clone());
+                        cache_modified = true;
+                    }
+                }
+            }
+            calculated_verdict
         };
 
-        match classify_agent_worktree(&facts) {
+        match verdict {
             AgentWorktreeVerdict::Removable(reason) => {
                 reclaimable_count += 1;
                 findings.push(DoctorFinding {
@@ -5740,6 +6089,9 @@ fn scan_merged_agent_worktrees_with_count(project_root: &std::path::Path) -> Age
         }
     }
     findings.sort_by(|a, b| a.id.cmp(&b.id));
+    if cache_modified {
+        save_worktree_verdicts(project_root, &verdicts_cache);
+    }
     AgentWorktreeScan {
         findings,
         reclaimable_count,

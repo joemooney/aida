@@ -17,7 +17,7 @@ import sys
 import tempfile
 import tomllib
 
-from test_mcp_stdio import McpClient, content_text, parse_spec_id
+from test_mcp_stdio import McpClient, content_text, mint_seat_grant, parse_spec_id
 
 
 def main():
@@ -42,7 +42,10 @@ def main():
         spec = parse_spec_id(created.stdout, "seed")
         run("edit", spec, "--title", "After", "--priority", "high")
         # Give approval filters a real transition for the date parity checks.
-        run("edit", spec, "--status", "approved", extra={"AIDA_SESSION_ROLE": "advisor"})
+        # STORY-1473 / ADR-66: the env role is only a hint — carry a validated
+        # seat grant minted into this hermetic fixture.
+        run("edit", spec, "--status", "approved",
+            extra={"AIDA_SESSION_ROLE": "advisor", **mint_seat_grant(root, "advisor")})
         run("comment", "add", spec, "A comment body which must never be exposed by the layout")
         base = ["history", "--all", "--include-meta", "--limit", "100", "--max-commits", "500"]
         original = run(*base, "--full", "--json").stdout

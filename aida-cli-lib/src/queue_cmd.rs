@@ -388,11 +388,9 @@ pub(crate) fn advance_dispatch(
                 && !has_advisor_authority()
             {
                 println!(
-                    "  {} approving {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor aida queue advance {}`.{}",
+                    "  {} approving {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
-                    display,
                     roleless_recovery_sentence()
                 );
                 return Ok(());
@@ -444,8 +442,7 @@ pub(crate) fn advance_dispatch(
                     && !has_advisor_authority()
                 {
                     println!(
-                        "  {} rejecting {} needs the advisor role. \
-                         Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
+                        "  {} rejecting {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                         display.bold(),
                         roleless_recovery_sentence()
@@ -518,8 +515,7 @@ pub(crate) fn advance_dispatch(
                 && !has_advisor_authority()
             {
                 println!(
-                    "  {} closing {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
+                    "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
                     roleless_recovery_sentence()
@@ -5046,6 +5042,10 @@ pub(crate) fn handle_queue_command(
                         commit_evidence.as_ref(),
                         *force,
                         &configured_prefixes,
+                        // The stored origin ID remains authoritative after the
+                        // merge gate assigns a short display ID.
+                        // trace:TASK-1328 | ai:codex
+                        &[spec_id],
                     ) {
                         workflow_hints::QueueDoneOwnership::Proceed => {}
                         workflow_hints::QueueDoneOwnership::Refuse(reason) => {
@@ -8195,14 +8195,11 @@ pub(crate) fn handle_queue_rework(
             && !has_advisor_authority()
         {
             println!(
-                "  {} reworking {} from {} to {} needs the advisor role (or an \
-                 interactive terminal). Re-run as advisor: \
-                 `AIDA_SESSION_ROLE=advisor aida queue rework {}`.{}",
+                "  {} reworking {} from {} to {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                 display_id.bold(),
                 current_status,
                 new_status,
-                display_id,
                 roleless_recovery_sentence()
             );
             return Ok(());
@@ -8298,7 +8295,11 @@ pub(crate) fn handle_queue_rework(
                     // (Completed -> InProgress is `rework_smart_target`'s
                     // default) — clear the stale completed_at so the next
                     // completion stamps a fresh date. trace:TASK-1477 | ai:claude
-                    crate::completion::clear_completed_at_on_reopen(r, &current_status);
+                    crate::completion::record_reopen(
+                        r,
+                        &current_status,
+                        Some(&requeue_project_root(storage)),
+                    );
                 })?;
                 if let Some(actual) = moved_to {
                     anyhow::bail!(
@@ -9008,6 +9009,15 @@ pub(crate) fn resolve_queue_work_plan(
 
     if let Some(arg_str) = arg {
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
+            // A deferred spec is an explicit operator hold. Refuse before
+            // queue synthesis or other pickup side effects. trace:BUG-1793
+            if req.deferred && req.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    req.spec_id.as_deref().unwrap_or(arg_str),
+                    req.deferred_reason.as_deref(),
+                    req.deferred_until.as_deref(),
+                ));
+            }
             // trace:BUG-1106 | ai:codex
             // A phase child is assigned by the live orchestrator, not by its
             // temporary phase role. If the reviewer phase is asked to pick up
@@ -10740,6 +10750,25 @@ pub(crate) fn handle_queue_work(
         },
     };
 
+    // Recheck the resolved anchor, including no-argument queue-head pickup.
+    // This runs before launch resolution, calibration, worktree creation, or
+    // lease acquisition, so held work cannot be picked indirectly. trace:BUG-1793
+    if let Some(req) = storage
+        .load()?
+        .requirements
+        .into_iter()
+        .find(|r| spec_matches(r, &plan.anchor_display))
+    {
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+            return Err(crate::defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
+        }
+    }
+
     // TASK-304: on a no-arg head pickup, surface the ultraplan suggestion
     // for a chunky head spec under `[ultraplan] mode = "suggested"`. Only
     // the no-arg form (the operator hasn't already chosen a spec) gets the
@@ -12264,6 +12293,16 @@ pub(crate) fn handle_queue_work(
             launch_vendor,
         );
     }
+    // trace:TASK-1594 | ai:claude
+    let mut child_grant_id = None;
+    if !no_human {
+        let child_grant = crate::seat_authority::issue_child(
+            &project_root,
+            &crate::canonical_role_name(&role),
+            &crate::current_user_id(None),
+        )?;
+        child_grant_id = Some(child_grant.id);
+    }
     // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
     // no caller-minted session id / AIDA-addressable resume, and the interactive
     // tab launch is never `--no-human` (the headless drain resolves its own
@@ -12291,7 +12330,12 @@ pub(crate) fn handle_queue_work(
             )
             .cyan()
         );
-        return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
+        return session::exec_codex_session(
+            &prompt,
+            codex_bypass,
+            resolved_model.as_deref(),
+            child_grant_id.as_deref(),
+        );
     }
     // BUG-1607: an interactive Agy launch is now refused by
     // `preflight_launch_vendor` above, BEFORE `session_start` minted the
@@ -12342,6 +12386,7 @@ pub(crate) fn handle_queue_work(
                     &lease.worktree_path,
                     &tee_opts,
                     contained,
+                    &role,
                 )?;
                 std::process::exit(status.code().unwrap_or(1));
             }
@@ -12358,7 +12403,12 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
-            session::exec_claude_resume(&id, permission_mode.as_deref(), contained)
+            session::exec_claude_resume(
+                &id,
+                permission_mode.as_deref(),
+                contained,
+                child_grant_id.as_deref(),
+            )
         }
         QueueWorkLaunch::Fresh(id) => {
             let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
@@ -12442,6 +12492,7 @@ pub(crate) fn handle_queue_work(
                 &id,
                 contained,
                 resolved_model.as_deref(),
+                child_grant_id.as_deref(),
             )
         }
     }
@@ -12516,7 +12567,7 @@ pub(crate) fn run_standalone_reviewer(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
                 let status = session::spawn_claude_headless_resume(
-                    prompt, &id, &log_path, worktree, &tee_opts, contained,
+                    prompt, &id, &log_path, worktree, &tee_opts, contained, "reviewer",
                 )?;
                 (status, Some(log_path))
             } else {
@@ -12643,7 +12694,7 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let status = session::spawn_reviewer_launch_plan(&plan)?;
+                let status = session::spawn_reviewer_launch_plan(&plan, project_root)?;
                 (status, None)
             }
         }
@@ -12768,6 +12819,8 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) status: RequirementStatus,
     pub(crate) for_role: Option<String>,
     pub(crate) deferred: bool,
+    pub(crate) deferred_reason: Option<String>,
+    pub(crate) deferred_until: Option<String>,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
     pub(crate) tags: std::collections::HashSet<String>,
     /// BUG-1608: the STORY-333 pickability verdict, resolved against the
@@ -12837,10 +12890,11 @@ pub(crate) fn effective_auto_complete_role(role_override: Option<&str>) -> Strin
 /// session type for them. Unrouted entries remain drivable by the effective
 /// role for backwards compatibility.
 // trace:BUG-862 | ai:codex
+// trace:BUG-1793 | ai:antigravity
 pub(crate) fn pick_auto_complete_head_for_role(
     candidates: &[AutoCompleteHeadCandidate],
     effective_role: &str,
-) -> Option<AutoCompleteHeadPick> {
+) -> anyhow::Result<Option<AutoCompleteHeadPick>> {
     let effective_role = canonical_role_name(effective_role);
     let mut status_skipped = Vec::new();
     let mut role_skipped = Vec::new();
@@ -12857,6 +12911,13 @@ pub(crate) fn pick_auto_complete_head_for_role(
             }
         }
         if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
             deferred_skipped.push(candidate.id.clone());
             continue;
         }
@@ -12885,7 +12946,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 blocked_skipped.push((candidate.id.clone(), reason.clone()));
                 continue;
             }
-            return Some(AutoCompleteHeadPick {
+            return Ok(Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
                 role_skipped,
@@ -12893,11 +12954,11 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 guided_or_operator_skipped,
                 release_skipped,
                 blocked_skipped,
-            });
+            }));
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
     }
-    None
+    Ok(None)
 }
 
 pub(crate) fn auto_complete_head_candidates_with_roles(
@@ -12927,6 +12988,8 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     status: r.status.clone(),
                     for_role: e.for_role.clone(),
                     deferred: r.deferred,
+                    deferred_reason: r.deferred_reason.clone(),
+                    deferred_until: r.deferred_until.clone(),
                     execution_mode: r.execution_mode,
                     tags: r.tags.clone(),
                     // BUG-1608: PRIN-5 fail closed — `pickability` treats a
@@ -12957,30 +13020,41 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
     role_override: Option<&str>,
 ) -> Result<Vec<(String, RequirementStatus, Option<String>)>> {
     let effective_role = effective_auto_complete_role(role_override);
-    Ok(
+    let mut out = Vec::new();
+    for candidate in
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
-            .into_iter()
-            .filter(|candidate| {
-                !matches!(
-                    candidate.execution_mode,
-                    Some(
-                        aida_core::ExecutionMode::Guided
-                            | aida_core::ExecutionMode::Operator
-                            | aida_core::ExecutionMode::Decide
-                    )
-                )
-            })
-            .filter(|candidate| !candidate.is_release_task())
-            .filter(|candidate| {
-                candidate
-                    .for_role
-                    .as_deref()
-                    .map(|r| canonical_role_name(r) == effective_role)
-                    .unwrap_or(true)
-            })
-            .map(|candidate| (candidate.id, candidate.status, candidate.blocked))
-            .collect(),
-    )
+    {
+        if matches!(
+            candidate.execution_mode,
+            Some(
+                aida_core::ExecutionMode::Guided
+                    | aida_core::ExecutionMode::Operator
+                    | aida_core::ExecutionMode::Decide
+            )
+        ) {
+            continue;
+        }
+        if candidate.is_release_task() {
+            continue;
+        }
+        if let Some(for_role) = candidate.for_role.as_deref() {
+            if canonical_role_name(for_role) != effective_role {
+                continue;
+            }
+        }
+        if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
+            continue;
+        }
+        out.push((candidate.id, candidate.status, candidate.blocked));
+    }
+    Ok(out)
 }
 
 /// Build the `(display_id, status)` candidate list for the active role's
@@ -13021,7 +13095,7 @@ pub(crate) fn resolve_auto_complete_head(
     let role_label = effective_auto_complete_role(role_override);
     let candidates = auto_complete_head_candidates_with_roles(storage, user_id, Some(&role_label))?;
 
-    match pick_auto_complete_head_for_role(&candidates, &role_label) {
+    match pick_auto_complete_head_for_role(&candidates, &role_label)? {
         Some(pick) => {
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");

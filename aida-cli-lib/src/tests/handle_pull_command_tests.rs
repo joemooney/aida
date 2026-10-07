@@ -1,5 +1,15 @@
 use super::*;
 
+#[test]
+fn bug_1796_skipped_pull_legs_are_labeled_as_warnings() {
+    // trace:BUG-1796.ac5879d3 | ai:codex
+    for leg in ["code", "store"] {
+        let line = pull_skip_warning(&format!("skipping {leg} pull"));
+        assert!(line.contains("Warning:"), "{line}");
+        assert!(line.contains(&format!("skipping {leg} pull")), "{line}");
+    }
+}
+
 fn run_git_in(repo: &std::path::Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .arg("-C")

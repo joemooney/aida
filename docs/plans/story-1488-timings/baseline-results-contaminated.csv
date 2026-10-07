@@ -1,0 +1,4 @@
+scenario,run,seconds,exit
+clean_dev,1,158.0,0
+clean_release,1,392.5,143
+test_norun_clean,1,341.0,0

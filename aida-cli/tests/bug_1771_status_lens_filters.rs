@@ -20,6 +20,10 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
+// STORY-1473 / ADR-66: env roles confer no authority; the builder rides a
+// validated advisor seat grant for the advisor-gated setup steps.
+mod support;
+
 struct Fixture {
     _tmp: tempfile::TempDir,
     repo: std::path::PathBuf,
@@ -35,15 +39,18 @@ fn git(dir: &Path, args: &[&str]) -> Output {
 }
 
 fn aida(fixture: &Fixture, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aida"))
-        .current_dir(&fixture.repo)
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+    cmd.current_dir(&fixture.repo)
         .env("HOME", &fixture.home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
-        .env("NO_COLOR", "1")
-        .args(args)
-        .output()
-        .expect("run aida")
+        .env("NO_COLOR", "1");
+    // ADR-66: the role env is only a hint; advisor-gated setup writes ride a
+    // validated seat grant. trace:STORY-1473 | ai:claude
+    if let Some(grant) = support::ensure_seat(&fixture.home, &fixture.repo, "advisor", &[]) {
+        cmd.env("AIDA_SESSION_GRANT", grant);
+    }
+    cmd.args(args).output().expect("run aida")
 }
 
 fn ok(label: &str, out: Output) -> String {

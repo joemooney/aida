@@ -1056,6 +1056,14 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// List recorded review verdicts.
+    // trace:TASK-1590 | ai:antigravity
+    List {
+        /// Emit the list as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Count review findings per defect class across every recorded verdict,
     /// including archived rounds. Alias of `aida findings classes`.
     // trace:STORY-1417 | ai:claude
@@ -2256,6 +2264,12 @@ pub enum RoleCommand {
         // trace:STORY-994 | ai:codex
         #[clap(long)]
         no_title: bool,
+
+        /// Explicitly allow this session to issue child grants for this seat.
+        /// May be repeated; omitted means this session cannot delegate seats.
+        // trace:STORY-1473, TASK-1592 | ai:antigravity
+        #[clap(long = "delegate-seat")]
+        delegate_seats: Vec<String>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -2290,16 +2304,16 @@ pub enum RoleCommand {
     Repair { name: Option<String> },
 
     /// Print the active role's name and exit, or exit 1 with empty
-    /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
+    /// stdout when no role is active. Resolves the validated grant
     /// — no project-store load. Shell-friendly counterpart to
     /// `git branch --show-current`.
-    // trace:TASK-42 | ai:claude
+    // trace:TASK-42 trace:TASK-1594 | ai:claude
     Active,
 
     /// Print the active role's name on stdout (empty line when no role is
     /// active) and exit 0 either way. With `--check`, exit 1 instead when
-    /// no role is active (still printing the name when one is). A pure read
-    /// of `$AIDA_SESSION_ROLE` — no project-store load. Scripting-friendly
+    /// no role is active (still printing the name when one is). Resolves
+    /// the validated grant — no project-store load. Scripting-friendly
     /// surface for agents without direct env access.
     // trace:STORY-64 | ai:claude
     Current {
@@ -2996,6 +3010,20 @@ pub enum WorktreeCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+    },
+
+    /// Disposition a worktree whose content is undecidable (e.g. batched
+    /// integration). Archives the branch tip under refs/archive/, removes the
+    /// worktree and branch, and ledgers the operator decision.
+    // trace:BUG-1800 | ai:antigravity
+    Dismiss {
+        /// Path to the specific worktree to dismiss.
+        #[clap(value_name = "PATH")]
+        path: Option<String>,
+
+        /// Dismiss all worktrees in this category (e.g., `batched-undecidable`).
+        #[clap(long)]
+        category: Option<String>,
     },
 
     /// Reclaim disk by deleting stale `target/` build caches inside this
@@ -4066,6 +4094,14 @@ pub enum TeamCommand {
         role: String,
     },
 
+    /// Add one seat to a user's allowed-seat set. Requires a human at a TTY.
+    // trace:STORY-1473 | ai:codex
+    AllowSeat { user: String, seat: String },
+
+    /// Remove one seat from a user's allowed-seat set. Requires a human at a TTY.
+    // trace:STORY-1473 | ai:codex
+    DisallowSeat { user: String, seat: String },
+
     /// Show YOUR effective role: the roster role for your user id if present,
     /// else `AIDA_SESSION_ROLE`, else the default. Says where it came from.
     // trace:STORY-646 | ai:claude
@@ -4128,6 +4164,34 @@ pub enum IdentityCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Check the identity a commit made here would carry (author + committer,
+    /// honoring GIT_AUTHOR_EMAIL/GIT_COMMITTER_EMAIL overrides) against the
+    /// project's `[identity] allowed_emails` allowlist in .aida/config.toml.
+    /// Exits non-zero on a violation; a project with no allowlist passes with
+    /// a hint on how to enable the gate.
+    // trace:TASK-1330 | ai:claude
+    Check,
+
+    /// (plumbing) The fail-closed pre-push identity gate. Reads the ref lines
+    /// git feeds a pre-push hook on stdin, inspects every commit the push
+    /// would introduce on the named remote, and exits non-zero when any
+    /// carries an author, committer, or Co-authored-by email outside
+    /// `[identity] allowed_emails`. Silent no-op when no allowlist is
+    /// configured.
+    // trace:TASK-1330 | ai:claude
+    #[clap(hide = true)]
+    CheckPush {
+        /// The remote the triggering push targets (hook argument $1).
+        pushed_remote: String,
+    },
+
+    /// Install the identity gate into the repo's pre-push hook. Idempotent:
+    /// refreshes AIDA's own hooks in place (including the mirror fan-out
+    /// hook, which embeds the gate) and never clobbers a custom pre-push
+    /// hook (prints the lines to add instead).
+    // trace:TASK-1330 | ai:claude
+    InstallHook,
 }
 
 #[derive(Subcommand, Debug)]
@@ -9538,10 +9602,12 @@ pub enum Command {
         /// so load-bearing specs surface at the top; `weight` = heaviest
         /// user-set numeric weight/score first (unweighted specs sort last);
         /// `created` = newest-created first; `completed` = most-recently-
-        /// completed first (specs with no completion date sort last).
+        /// completed first (specs with no completion date sort last);
+        /// `id` = alphabetical by requirement ID.
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         // trace:FR-283 | ai:claude — adds the `weight` order.
         // trace:TASK-1464 | ai:claude — adds the `created` / `completed` orders.
+        // trace:TASK-1587 | ai:antigravity — adds the `id` order.
         #[clap(long, value_name = "ORDER", default_value = "modified")]
         sort: String,
 
@@ -9839,9 +9905,15 @@ pub enum Command {
         #[clap(long)]
         json: bool,
 
-        /// Print the probe brief and exit without launching anything.
+        /// Print the probe briefs and exit without launching anything.
         #[clap(long)]
         dry_run: bool,
+
+        /// Confirm launching the headless agent runs when stdin is not a
+        /// terminal (unattended runs refuse without it).
+        // trace:STORY-1425 | ai:claude
+        #[clap(long)]
+        yes: bool,
     },
 
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
@@ -10283,7 +10355,8 @@ pub enum Command {
     /// default open-work view but not filed away the way archive is.
     ///
     /// Defer is a view-level flag distinct from status (it does not touch the
-    /// lifecycle state machine). Use `--until` to record the revisit trigger —
+    /// lifecycle state machine). Use `--reason` to record why this is an
+    /// operator hold and `--until` to record the revisit trigger —
     /// the free-text condition that brings the spec back (e.g.
     /// `--until "when a slice verb ships"`). That trigger is the one thing
     /// distinguishing deferred (prospective, primed) from archived
@@ -10302,6 +10375,11 @@ pub enum Command {
         // trace:BUG-1294 | ai:claude
         #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
         until: Option<String>,
+
+        /// Why the work is being held. Required for a durable operator hold;
+        /// legacy deferrals may omit it.
+        #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
+        reason: Option<String>,
     },
 
     /// Inverse of `aida defer` — clears the deferred flag (and its revisit
@@ -10908,7 +10986,11 @@ pub enum Command {
     /// strings one human registers under across machines (`joe`,
     /// `joe.mooney@gmail.com`) so the queue, team roster, and block list
     /// collapse them to one canonical person. Composes with the case-fold.
+    /// Also hosts the identity hygiene gate (`check`, `install-hook`): the
+    /// `[identity] allowed_emails` allowlist that refuses commits/pushes
+    /// carrying any other author, committer, or Co-authored-by email.
     // trace:TASK-845 | ai:claude
+    // trace:TASK-1330 | ai:claude
     Identity {
         #[clap(subcommand)]
         cmd: IdentityCommand,

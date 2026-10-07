@@ -83,15 +83,12 @@ and the Claude Code skills. The full inventory of what `aida init` writes is in
 <!-- trace:BUG-597 -->
 
 > **A note on roles before you start.** A fresh `aida init` seats you as the
-> **implementer** role — the seat that files and *implements* work. Two things in
-> this walkthrough — promoting a spec to *Approved* (Steps 1–3) and routing it to
-> a queue (Step 5) — are gated to the **advisor** role (or an interactive
-> session); the implementer can't do them. Since you're driving this whole
-> project solo, you wear both hats: prefix those commands with
-> `AIDA_SESSION_ROLE=advisor` and they go through. Every command below that needs
-> it is shown with the prefix already in place. (The prefix also prints a
-> one-line `ℹ You're operating as advisor…` reminder — harmless, just
-> informational; it's elided from the sample output below.)
+> **implementer** role — the seat that files and *implements* work. This
+> walkthrough also promotes specs and routes work, which require advisor
+> authority. Since you're driving this project solo, enter that seat at your
+> terminal before those steps: `eval "$(aida role enter advisor)"`. The grant
+> stays in this shell session; a new terminal must enter its own seat.
+> `AIDA_SESSION_ROLE` by itself is only a display/routing hint.
 
 ## Step 1 — File the epic
 
@@ -99,7 +96,7 @@ Everything in AIDA starts as a spec. The epic is the umbrella the stories hang
 off.
 
 ```
-$ AIDA_SESSION_ROLE=advisor aida add --title "TODO CLI" \
+$ aida add --title "TODO CLI" \
            --type epic --status approved --feature todo
 Added: EPIC-1 - TODO CLI
 ```
@@ -119,22 +116,22 @@ Four stories, each filed as a **child of EPIC-1** in the same command via
 `--parent`:
 
 ```
-$ AIDA_SESSION_ROLE=advisor aida add --title "Add and list tasks" --type story --status approved \
+$ aida add --title "Add and list tasks" --type story --status approved \
            --feature todo --parent EPIC-1
 Added: STORY-1 - Add and list tasks
   Linked: EPIC-1 → parent of STORY-1
 
-$ AIDA_SESSION_ROLE=advisor aida add --title "Mark a task done" --type story --status approved \
+$ aida add --title "Mark a task done" --type story --status approved \
            --feature todo --parent EPIC-1
 Added: STORY-2 - Mark a task done
   Linked: EPIC-1 → parent of STORY-2
 
-$ AIDA_SESSION_ROLE=advisor aida add --title "Persist tasks to a JSON file" --type story --status approved \
+$ aida add --title "Persist tasks to a JSON file" --type story --status approved \
            --feature todo --parent EPIC-1
 Added: STORY-3 - Persist tasks to a JSON file
   Linked: EPIC-1 → parent of STORY-3
 
-$ AIDA_SESSION_ROLE=advisor aida add --title "Filter tasks by status and tag" --type story --status approved \
+$ aida add --title "Filter tasks by status and tag" --type story --status approved \
            --feature todo --parent EPIC-1
 Added: STORY-4 - Filter tasks by status and tag
   Linked: EPIC-1 → parent of STORY-4
@@ -158,7 +155,7 @@ File a bug, then link it to the story it touches with a `references` edge — th
 second way to create relationships, after `--parent`:
 
 ```
-$ AIDA_SESSION_ROLE=advisor aida add --title "Listing crashes on an empty data file" \
+$ aida add --title "Listing crashes on an empty data file" \
            --type bug --priority high --status approved \
            --feature todo --parent EPIC-1
 Added: BUG-1 - Listing crashes on an empty data file
@@ -221,10 +218,10 @@ remembering.
 A spec being *Approved* means it's agreed — not that anyone is doing it. Work
 gets *routed* by putting it on a role's queue. Queue STORY-1 and STORY-2 for the
 **implementer** role (routing work to a queue is an advisor act, so the
-`AIDA_SESSION_ROLE=advisor` prefix from Step 1 is back):
+advisor grant from Step 1 remains active):
 
 ```
-$ AIDA_SESSION_ROLE=advisor aida queue add STORY-1 --for implementer
+$ aida queue add STORY-1 --for implementer
 ✓ Added STORY-1 (Add and list tasks) to queue [for:implementer]
   Destination:
     identity: role:implementer
@@ -233,7 +230,7 @@ $ AIDA_SESSION_ROLE=advisor aida queue add STORY-1 --for implementer
     observe: aida queue list --user role:implementer --for implementer
     pickup: aida queue work STORY-1 --user role:implementer --role implementer
 
-$ AIDA_SESSION_ROLE=advisor aida queue add STORY-2 --for implementer
+$ aida queue add STORY-2 --for implementer
 ✓ Added STORY-2 (Mark a task done) to queue [for:implementer]
   Destination:
     identity: role:implementer

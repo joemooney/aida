@@ -2163,8 +2163,8 @@ pub(crate) fn pr_ship_handler(
         );
     } else {
         eprintln!("  step 2: watching CI for PR-{}", pr_number);
-        // STORY-516: route the blocking CI watch through the Forge trait (streams
-        // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
+        // Route registration and check reads through the Forge trait.
+        // trace:STORY-516 trace:TASK-1331 | ai:codex
         let watch_change = crate::forge::ChangeRef {
             id: pr_number,
             url: String::new(),
@@ -2182,28 +2182,45 @@ pub(crate) fn pr_ship_handler(
             std::time::Duration::from_secs(60),
             std::time::Duration::from_secs(10),
         )?;
-        let ci_result = forge.watch_ci(&watch_change);
-        let mut ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
-        // BUG-1180 / ADR-39: a coarse "failed" may be the supervised merge-hold
-        // gate itself (this command releases it at step 3) or an informational
-        // matrix job. Re-read the rows and abort only on a REAL red check.
-        // trace:BUG-1180 | ai:claude
+        // Classify GitHub rows before waiting: the coarse --watch waits for
+        // every job, including hung informational workflows. Required checks
+        // still override the allow-list, and non-informational failures gate.
+        // Other forges retain their pipeline watcher and refine failed results.
+        // trace:TASK-1331 | ai:codex
         let mut red_detail: Option<String> = None;
-        if matches!(ci_result, Ok(crate::forge::CiState::Failed)) {
+        let github = forge.kind() == crate::forge::ForgeKind::GitHub;
+        let coarse_result = if github {
+            Ok(crate::forge::CiState::Pending)
+        } else {
+            forge.watch_ci(&watch_change)
+        };
+        let ci_result = if github || matches!(coarse_result, Ok(crate::forge::CiState::Failed)) {
             let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
             label_only_hold = !hold_present
                 && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-            match crate::ci_gate::refine_red(
-                &hold_root,
+            let refined = crate::ci_gate::refine_red(
+                &project_root,
                 forge.as_ref(),
                 &watch_change,
                 hold_present,
                 label_only_hold,
                 std::time::Duration::from_secs(20 * 60),
                 std::time::Duration::from_secs(15),
-            ) {
-                Ok(r) if !r.is_real() && !r.has_pending() => {
-                    ci_failed = false;
+            )
+            .map(|r| {
+                if r.is_real() {
+                    red_detail = Some(format!(
+                        "CI is red on PR-{pr_number}: {}",
+                        r.describe(pr_number)
+                    ));
+                    crate::forge::CiState::Failed
+                } else if r.has_pending() {
+                    red_detail = Some(format!(
+                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
+                        r.pending.join(", ")
+                    ));
+                    crate::forge::CiState::Failed
+                } else {
                     let note = r.describe(pr_number);
                     if !note.is_empty() {
                         eprintln!(
@@ -2212,22 +2229,20 @@ pub(crate) fn pr_ship_handler(
                             note
                         );
                     }
+                    crate::forge::CiState::Success
                 }
-                Ok(r) if !r.is_real() => {
-                    red_detail = Some(format!(
-                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
-                        r.pending.join(", ")
-                    ));
-                }
-                Ok(r) => {
-                    red_detail = Some(format!(
-                        "CI is red on PR-{pr_number}: {}",
-                        r.describe(pr_number)
-                    ))
-                }
-                Err(_) => {} // no per-check rows on this forge — keep the coarse verdict
+            });
+            // A forge without per-check rows keeps its coarse failed verdict.
+            // trace:BUG-1180 trace:TASK-1331 | ai:codex
+            if !github && refined.is_err() {
+                coarse_result
+            } else {
+                refined
             }
-        }
+        } else {
+            coarse_result
+        };
+        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
         // STORY-1480: the ship's CI wait reached a terminal verdict — emit
         // the same CiTerminal the drain's CI phase emits (empty run_uuid;
         // specs credited from the branch name), covering interactive ships.
@@ -2437,9 +2452,40 @@ pub(crate) fn pr_ship_handler(
         // its own provider's merge. The unified contract returns Err (with stderr)
         // on a failed merge, which we map to the existing activity-log + recovery
         // hint + bail. trace:STORY-516 | ai:claude
+        // TASK-1330: identity hygiene — when the project allowlists emails
+        // and the default squash body would carry a non-allowlisted one
+        // (an explicit Co-authored-by trailer, or a commit author/committer
+        // the forge would auto-derive a trailer from), replace the body with
+        // the sanitized commit messages. Fail-closed: an unreadable config or
+        // uninspectable branch refuses the merge rather than publishing an
+        // unchecked body. trace:TASK-1330 | ai:claude
+        let identity_allowlist = crate::identity_gate::read_allowed_emails(&project_root)?;
+        let sanitized_squash_body = crate::identity_gate::squash_coauthor_body_override(
+            &project_root,
+            &retarget_base,
+            head_sha.as_deref().unwrap_or(&ship_branch),
+            &identity_allowlist,
+        )?;
+        let sanitized_squash_body = sanitized_squash_body.map(|(body, violations)| {
+            eprintln!(
+                "  step 3: identity gate — stripping {} non-allowlisted email reference(s) \
+                 from the squash body:",
+                violations.len()
+            );
+            for v in &violations {
+                eprintln!(
+                    "    {} {} {}",
+                    &v.sha[..v.sha.len().min(10)],
+                    v.role,
+                    v.email
+                );
+            }
+            body
+        });
         let mut merge_opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Squash,
             squash_subject: explicit_squash_subject.clone(),
+            squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude
             delete_branch,
             match_head, // trace:TASK-1458 | ai:claude
         };
@@ -2711,7 +2757,7 @@ pub(crate) fn pr_ship_handler(
     }
 
     // STORY-439: ship-side calibration capture. Resolve every spec the PR
-    // credits (title → branch → body, the same precedence the squash
+    // credits (explicit title trailer → branch, the same precedence the squash
     // subject repair already uses) and write a ship slot per spec — the
     // implementer's self-assessed complexity + the punt count
     // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
@@ -2727,8 +2773,16 @@ pub(crate) fn pr_ship_handler(
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
-        let spec_ids =
-            pr_ship::derive_squash_subject_spec_ids(&pr_meta.title, &branch, &pr_meta.body);
+        // Use the same store-qualified completion intent as the squash subject.
+        // trace:TASK-1600 | ai:codex
+        let spec_ids = Storage::new(main_worktree.join(".aida-store"))
+            .load()
+            .map(|store| {
+                pr_ship::derive_squash_subject_spec_ids_resolving(&pr_meta.title, &branch, |id| {
+                    matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
+                })
+            })
+            .unwrap_or_default();
         pr_merged_spec_ids = spec_ids.clone();
         for spec in &spec_ids {
             let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
@@ -3525,16 +3579,17 @@ pub(crate) fn derive_pr_ship_squash_subject(
         )
     })?;
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
-    let normalized = pr_ship::derive_squash_subject(&pr.title, branch, &pr.body, &commit_msg)
+    // A store read is required before granting an ID completion authority.
+    // trace:TASK-1600 | ai:codex
+    let store_root = main_worktree_root_from(project_root);
+    let store = Storage::new(store_root.join(".aida-store")).load()?;
+    let normalized =
+        pr_ship::derive_squash_subject_resolving(&pr.title, branch, &pr.body, &commit_msg, |id| {
+            matches!(store.get_requirement_unambiguous(id), Ok(Some(_)))
+        })
         .unwrap_or_default();
     if normalized.is_empty() {
         return Ok(None);
-    }
-    if pr_ship::extract_trailing_spec_ids_from_subject(&normalized).is_empty() {
-        anyhow::bail!(
-            "final squash subject would lack a trailing `(SPEC-ID)` and no spec ID could be derived from PR title, branch name, PR body, or branch head: `{}`",
-            normalized
-        );
     }
     if normalized == current_subject {
         Ok(None)
@@ -4774,7 +4829,7 @@ mod pr_ship_environment_tests {
 
         let delete_branch = pr_ship::should_delete_branch(branch_in_sibling, 0, 0, false);
         assert!(!delete_branch);
-        let merge_args = pr_ship::merge_args(732, delete_branch, None);
+        let merge_args = pr_ship::merge_args(732, delete_branch, None, None);
         assert!(!merge_args.iter().any(|arg| arg == "--delete-branch"));
     }
 
