@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-07T06:53:44.082505417Z
+modified_at: 2026-10-07T06:54:45.490506782Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -173,6 +173,11 @@ comments:
   content: 'CORRECTION to coordination checkpoint (coord-20261006T2346-MST), operator clarification 2026-10-06 23:52 MST: PR-2435''s unattributed duplicate round was REMOVED with an audit backup. No provenance was inferred or added to that duplicate. My previous wording that round 0 was now stamped described the retained attributed round after removal, not how the defect was repaired. Exact PR head remains 6fa035c26b735a9e7afc45bb1d2f0bba706144da at inspection. The source for removal/backup is the operator; backup location not independently verified here. This supersedes any implication in the earlier spec comment, mailbox report, or coordination handoff that provenance was inferred/stamped onto the unattributed round. Remain coordination-only; no integration approval.'
   created_at: 2026-10-07T06:53:44.082476130Z
   modified_at: 2026-10-07T06:53:44.082476130Z
+- id: 01a11524-a4f2-7221-82c8-a9bef2f56ef5
+  author: mcp
+  content: 'Audit backup independently verified after operator correction: .aida/handoff/advisor/audit/PR-2435-20261007T062120Z/audit.md records operator-authorized removal of rounds[0], identical to retained rounds[1] except summary/recorded_by/recorded_at; original.json preserves the original corpus. Original SHA256 fe3483621c674f5556f6ff1dd18702e758f3be7bacf2cfee90678d24fcc0bb2d. Both old rounds reviewed 24491f2ffef679764cecafdd3630c763c0cab667; current top-level verdict/head 6fa035c26b735a9e7afc45bb1d2f0bba706144da unchanged. No inferred provenance. Coordination record corrected; no gate/clearance/merge action.'
+  created_at: 2026-10-07T06:54:45.490500056Z
+  modified_at: 2026-10-07T06:54:45.490500056Z
 history:
 - id: 01a10f61-0d1a-7290-b932-07ca5716f4df
   author: joe
