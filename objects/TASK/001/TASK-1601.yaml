@@ -3,12 +3,12 @@ spec_id: TASK-1601
 agreed_id: TASK-1601
 title: 'CI gate candidate: compile aida-cli with --no-default-features so the cfg-stub twins (e.g. tui feature) stay buildable'
 description: 'Surfaced during PR 2429 (tui_entry.rs slice-1 module 2): the extracted handle_tui_command carries a cfg(feature = "tui") implementation and a cfg(not(feature = "tui")) stub twin, but CI has no --no-default-features build, so a broken stub only fails for users building without default features. The 2429 self-check caught this and verified the stub compiles manually. A cheap gate (cargo check -p aida-cli --no-default-features, or workspace-wide) closes the gap for all ~45 slice-1 modules and any other feature-gated pair. Candidate for ci-gate-tiers; keep it in the fast tier if check-only.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:19:54.480530782Z
-modified_at: 2026-10-06T13:08:46.945014559Z
+modified_at: 2026-10-07T00:24:27.995944958Z
 req_type: Task
 relationships:
 - rel_type:
@@ -128,6 +128,21 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a113bf-5253-7cb1-bf37-165840700b7c
+  author: aida-auto-bump
+  timestamp: 2026-10-07T00:24:27.987992372Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a113bf-525b-7203-995e-1e910e1af6c5
+  timestamp: 2026-10-07T00:24:27.995944194Z
+  agent: implementer
+  commit_sha: b42403bd6558cf29a6b7f5b8de918e2d39ce2713
+  summary: Completed via merge b42403bd
+  punted:
+  - 'punted: CI is red on PR-2441: Build (ubuntu-latest)'
 filed_at:
   code_sha: 2dc90ca81f5fcf0d38262dae16dadaa7b480eb09
   branch: main
@@ -145,4 +160,6 @@ implementation_info:
     python3 scripts/check-docs-guards-scheduled.py; git diff --check
   implemented_at: 2026-10-06T07:24:25.291411045Z
   implemented_by: joe
+  completed_at: 2026-10-07T00:24:27.987968501Z
+  completion_sha: b42403bd6558cf29a6b7f5b8de918e2d39ce2713
 interface_changes: {}
