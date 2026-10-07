@@ -27180,6 +27180,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             })
         }
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
+        // trace:TASK-1607 | ai:claude
+        SessionCommand::Seat { cmd } => seat_occupancy::cmd::dispatch(cmd),
     }
 }
 

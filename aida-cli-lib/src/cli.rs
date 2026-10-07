@@ -1272,6 +1272,82 @@ pub enum LockCommand {
 }
 
 // trace:FR-1-043 | ai:claude
+
+/// `aida session seat` subcommands (STORY-1485 slice A).
+// trace:TASK-1607 | ai:claude
+#[derive(Subcommand, Debug, Clone)]
+pub enum SeatCommand {
+    /// Claim an empty seat, or one whose holder has provably exited. Holding
+    /// it already is fine. `--force` asks a live holder to hand it over.
+    Claim {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Request a graceful takeover from a live holder (same as `takeover --force`).
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS", requires = "force")]
+        grace_secs: Option<i64>,
+        /// Send the request and return without waiting.
+        #[clap(long, requires = "force")]
+        no_wait: bool,
+    },
+    /// Show the holder, its liveness, any pending takeover and in-flight work.
+    Status {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        json: bool,
+    },
+    /// Give the seat up. Only the current holder can, at its current
+    /// generation; with a pending takeover, pass its request ID to hand over.
+    Release {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long)]
+        generation: u64,
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+    },
+    /// Ask the live holder to hand the seat over, and wait for its
+    /// acknowledgment. Nothing is stopped if it does not answer in time.
+    Takeover {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        /// Required: a takeover asks another session to stand down.
+        #[clap(long)]
+        force: bool,
+        /// Hard takeover. Not available yet: always refused.
+        #[clap(long, requires = "force")]
+        kill: bool,
+        /// Seconds to wait for the holder to acknowledge (1-3600).
+        #[clap(long, value_name = "SECS")]
+        grace_secs: Option<i64>,
+        /// Resume your own interrupted request (keeps its original deadline).
+        #[clap(long, value_name = "UUID")]
+        request: Option<String>,
+        /// Send the request and return without waiting.
+        #[clap(long)]
+        no_wait: bool,
+    },
+    /// As the holder: confirm you wrote your handoff and stopped dispatching,
+    /// and hand the seat to the pending requester.
+    Ack {
+        #[clap(long, default_value = "orchestrator")]
+        seat: String,
+        #[clap(long, value_name = "UUID")]
+        request: String,
+        #[clap(long)]
+        generation: u64,
+        /// Confirms the handoff is written and no new dispatch will start.
+        #[clap(long)]
+        safe_to_stop: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
     /// List recent Claude Code conversations for this project (cwd)
@@ -1801,6 +1877,14 @@ pub enum SessionCommand {
         // trace:STORY-1464 | ai:claude
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
+    },
+
+    /// Single-occupancy seats: see who drives the orchestrator loop, claim
+    /// or release it, and hand it over gracefully.
+    // trace:TASK-1607 | ai:claude
+    Seat {
+        #[command(subcommand)]
+        cmd: SeatCommand,
     },
 
     /// Manage the planned-cluster manifest for the active session

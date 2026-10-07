@@ -41,6 +41,13 @@ impl SeatStore {
         })
     }
 
+    /// Like [`SeatStore::for_project`], but `Ok(None)` outside any repository.
+    pub fn for_project_opt(start: &Path) -> Result<Option<Self>> {
+        Ok(main_worktree_root_opt(start)?.map(|root| SeatStore {
+            dir: root.join(".aida").join(DIR),
+        }))
+    }
+
     /// A store at an explicit directory (tests).
     pub fn at(dir: impl Into<PathBuf>) -> Self {
         SeatStore { dir: dir.into() }
@@ -133,25 +140,43 @@ fn read_record(path: &Path, seat: &str) -> Result<SeatRecord> {
 /// this never falls back to `start`: a per-worktree record would let two
 /// sibling worktrees each hold the seat.
 pub(crate) fn main_worktree_root(start: &Path) -> Result<PathBuf> {
+    main_worktree_root_opt(start)?.with_context(|| {
+        format!(
+            "seat occupancy cannot locate the main worktree: {} is not inside a git repository",
+            start.display()
+        )
+    })
+}
+
+/// `Ok(None)` only when git positively reports that `start` is not inside a
+/// repository; any other failure is an error (fail closed).
+pub(crate) fn main_worktree_root_opt(start: &Path) -> Result<Option<PathBuf>> {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
         .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .env("LC_ALL", "C")
         .output()
         .context("seat occupancy needs git to locate the main worktree")?;
     if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if stderr.contains("not a git repository") {
+            return Ok(None);
+        }
         bail!(
             "seat occupancy cannot locate the main worktree from {}: {}",
             start.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
+            stderr.trim()
         );
     }
     let common = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
     match common.file_name().and_then(|n| n.to_str()) {
-        Some(".git") => Ok(common
-            .parent()
-            .map(Path::to_path_buf)
-            .context("git common dir has no parent")?),
+        Some(".git") => Ok(Some(
+            common
+                .parent()
+                .map(Path::to_path_buf)
+                .context("git common dir has no parent")?,
+        )),
         _ => bail!(
             "seat occupancy needs a non-bare repository with a main worktree (git common dir: {})",
             common.display()

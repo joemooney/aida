@@ -27,7 +27,9 @@
 //!
 //! trace:TASK-1607 trace:ADR-67 trace:ADR-68 trace:ADR-69 trace:ADR-70 | ai:claude
 
+pub(crate) mod cmd;
 pub(crate) mod config;
+pub(crate) mod runtime;
 pub(crate) mod store;
 
 use aida_core::process_probe::{Probe, ProcFacts, ProcessIdentity};
