@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1-217",
+  "publishes": [
+    {
+      "at": "2026-10-07T01:36:33.737178952Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T01:36:33.725753218Z",
+      "spec": "TASK-1-217",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bb5572f368699693a012c25cce72fd4e521124cb",
+        "pr": 2437,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

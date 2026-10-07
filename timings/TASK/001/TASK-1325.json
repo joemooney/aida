@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1325",
+  "publishes": [
+    {
+      "at": "2026-10-07T01:36:33.719308414Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T04:49:05.246520798Z",
+      "spec": "TASK-1325",
+      "run_uuid": "01a10f8b-3ad8-7162-8987-91661965bdd9",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:49:08.214820590Z",
+      "spec": "TASK-1325",
+      "run_uuid": "01a10f8b-3ad8-7162-8987-91661965bdd9",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T05:00:35.122001248Z",
+      "spec": "TASK-1325",
+      "run_uuid": "01a10f8b-3ad8-7162-8987-91661965bdd9",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T05:10:11.408216242Z",
+      "spec": "TASK-1325",
+      "run_uuid": "01a10f8b-3ad8-7162-8987-91661965bdd9",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T05:10:21.245705382Z",
+      "spec": "TASK-1325",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2437
+      }
+    },
+    {
+      "ts": "2026-10-06T16:27:42.312092754Z",
+      "spec": "TASK-1325",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1325",
+        "branch": "task-1325",
+        "first_seen": "2026-10-06T16:27:42.312051046+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T00:23:33.276610552Z",
+      "spec": "TASK-1325",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T01:03:22.746043068Z",
+      "spec": "TASK-1325",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-07T01:36:17.371436593Z",
+      "spec": "TASK-1325",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T01:36:26.030087845Z",
+      "spec": "TASK-1325",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2437
+      }
+    },
+    {
+      "ts": "2026-10-07T01:36:33.707434598Z",
+      "spec": "TASK-1325",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bb5572f368699693a012c25cce72fd4e521124cb",
+        "pr": 2437,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
