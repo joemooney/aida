@@ -75,6 +75,13 @@ comments:
   created_at: 2026-10-08T05:27:41.624278444Z
   modified_at: 2026-10-08T05:27:41.624278444Z
 history:
+- id: 01a11874-fbf5-77f2-8cec-e208fba8d039
+  author: aida-session-start
+  timestamp: 2026-10-07T22:21:22.293053855Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
   timestamp: 2026-10-08T02:10:55.536091773Z
