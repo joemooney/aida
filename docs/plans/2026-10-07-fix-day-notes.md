@@ -130,3 +130,31 @@ Logs use `task-1606-unit-final.log`, `task-1606-ci-gate.log`, and
 TASK-1606 final fixture run: all 11 preflight scenarios plus help exit-code
 assertions passed (exit 0). The script now checks optional `--wait [<SECS>]`
 and the 300-second bare-flag default. Full fast rerun: 21 gates passed.
+
+## Item 5: TASK-1337 (TASK-1-230) pickup preflight
+
+Advisory lease `01a1172cc702`; the canonical spec remains Draft because promotion
+requires advisor authority. Explicit operator assignment covers implementation;
+no promotion gate was bypassed. Pickup first synthesizes its plan read-only,
+reports existing role precedence and shell mismatch, checks occupied explicit /
+review branches, and validates interactive child delegation without minting a
+grant. Only then does it persist a synthesized queue row and perform setup.
+An idle, clean, unlocked, unleased checkout gets a manual removal offer; locked,
+dirty, leased, or live-agent checkouts never do. The existing grant issuer repeats
+validation at issuance. Any returned error after session setup prints worktree
+entry and guided continuation. Successful exec still replaces the launcher.
+
+Verification: 152 queue unit tests, 1 authority test, and all 15 Linux pickup
+integration tests passed (exit 0). Black-box tests prove no queue row, lease, or
+status mutation on branch/delegation refusal, and a manual command after failed
+exec. Initial fixture errors inspected only stderr and allowed missing-interpreter
+exec to fall through to the real Codex later on PATH; final fixtures inspect both
+streams and exclude real Codex directories. Final logs: `task-1337-queue.log`,
+`task-1337-authority.log`, `task-1337-integration-final.log`. All 21 fast gates
+passed in `task-1337-fast.log`. Formatting and diff whitespace checks passed.
+The large queue-command diff is primarily rustfmt indentation of the existing
+post-setup tail within an error-reporting closure (`git diff -w` shows scope).
+
+Full workspace verification has started; no final workspace or sandbox success
+is claimed at this checkpoint. PR-2435 is still blocked by supervised/unset-mode
+ship policy. TASK-1607 and its lease remain untouched.

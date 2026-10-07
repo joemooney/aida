@@ -1,3 +1,10 @@
+Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+delegation before persisting an implicit queue row or changing calibration, lease,
+worktree, or spec state. Occupied branches receive a manual retirement offer only
+when idle, clean, unlocked, and unleased. Setup failures retain a manual
+`aida worktree enter` and guided-session continuation.
+<!-- trace:TASK-1337 | ai:codex -->
+
 Reconciliation and live auto-bump honor legacy human reopen history as well as
 SHA markers. The latest deliberate Done/Completed → Approved decision fences
 old merge evidence even if an automated bump subsequently overwrote status;

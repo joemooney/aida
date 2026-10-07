@@ -1351,3 +1351,148 @@ fn list_session_files(repo: &Path) -> Vec<String> {
     found.sort();
     found
 }
+
+// trace:TASK-1337 | ai:codex
+fn assert_pickup_unstarted(repo: &Path, home: &Path, spec: &str) {
+    let show = aida(repo, home)
+        .env("AIDA_HOME", home)
+        .args(["show", spec, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(
+        show.status.success(),
+        "{}",
+        String::from_utf8_lossy(&show.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&show.stdout).unwrap();
+    assert_eq!(value["status"], "Approved");
+    let sessions = repo.join(".aida/sessions");
+    assert!(
+        !sessions.exists() || std::fs::read_dir(sessions).unwrap().next().is_none(),
+        "preflight must not mint a lease"
+    );
+    let queue = aida(repo, home)
+        .env("AIDA_HOME", home)
+        .args(["queue", "list", "--all"])
+        .output()
+        .unwrap();
+    assert!(
+        !String::from_utf8_lossy(&queue.stdout).contains(spec),
+        "preflight must not persist auto-queue synthesis"
+    );
+}
+
+#[test]
+fn task_1337_delegation_refuses_before_any_pickup_mutation() {
+    let base = tempfile::tempdir().unwrap();
+    let (repo, home, spec) = init_codex_only_project(base.path());
+    let grant = support::grant_seat(&home, &repo, "implementer", &[]);
+    let output = aida(&repo, &home)
+        .env("AIDA_HOME", &home)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env("AIDA_SESSION_GRANT", grant)
+        .args(["queue", "work", &spec, "--guided", "--fresh", "--no-pull"])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("does not delegate `implementer`"), "{text}");
+    assert_pickup_unstarted(&repo, &home, &spec);
+}
+
+#[test]
+fn task_1337_held_branch_refuses_before_any_pickup_mutation() {
+    let base = tempfile::tempdir().unwrap();
+    let (repo, home, spec) = init_codex_only_project(base.path());
+    let held = base.path().join("held");
+    git(
+        &repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "held",
+            held.to_str().unwrap(),
+        ],
+    );
+    let output = aida(&repo, &home)
+        .env("AIDA_HOME", &home)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .args([
+            "queue",
+            "work",
+            &spec,
+            "--guided",
+            "--fresh",
+            "--no-pull",
+            "--branch",
+            "held",
+        ])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{text}");
+    assert!(
+        text.contains("idle, clean, and unleased") && text.contains("git worktree remove"),
+        "{text}"
+    );
+    assert!(held.exists());
+    assert_pickup_unstarted(&repo, &home, &spec);
+}
+
+#[test]
+fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = tempfile::tempdir().unwrap();
+    let (repo, home, spec) = init_codex_only_project(base.path());
+    let bin = base.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let codex = bin.join("codex");
+    // Executable exists for preflight but its missing interpreter fails exec.
+    std::fs::write(&codex, "#!/nonexistent/aida-test-interpreter\n").unwrap();
+    let mut permissions = std::fs::metadata(&codex).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&codex, permissions).unwrap();
+    let path = std::env::join_paths(
+        std::iter::once(bin).chain(
+            std::env::split_paths(&std::env::var_os("PATH").unwrap())
+                .filter(|dir| !dir.join("codex").exists()),
+        ),
+    )
+    .unwrap();
+    let output = aida(&repo, &home)
+        .env("AIDA_HOME", &home)
+        .env("PATH", path)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
+        .args(["queue", "work", &spec, "--guided", "--fresh", "--no-pull"])
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{text}");
+    assert!(
+        text.contains(&format!("aida worktree enter {spec}")),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("claude \"/aida-guided-implement {spec}\"")),
+        "{text}"
+    );
+    assert!(
+        repo.join(".aida/sessions").exists(),
+        "setup should have succeeded before launch failed"
+    );
+}

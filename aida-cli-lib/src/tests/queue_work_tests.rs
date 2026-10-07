@@ -4053,3 +4053,55 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
         "{blocked:?} {blocked_after:?}"
     );
 }
+
+// trace:TASK-1337 | ai:codex
+#[test]
+fn pickup_role_conflict_reports_which_role_wins() {
+    let message =
+        queue_work_role_mismatch("advisor", "cluster-derived", Some("implementer")).unwrap();
+    assert!(message.contains("cluster-derived wins before setup"));
+    assert!(message.contains("--role implementer"));
+    assert!(queue_work_role_mismatch("advisor", "cluster-derived", Some("advisor")).is_none());
+    let override_message =
+        queue_work_role_mismatch("reviewer", "--role flag", Some("implementer")).unwrap();
+    assert!(override_message.contains("--role flag wins"));
+}
+
+// trace:TASK-1337 | ai:codex
+#[test]
+fn held_branch_preflight_offers_retirement_only_when_clean_unleased_unlocked() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    let other = tmp.path().join("other");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "held",
+            other.to_str().unwrap(),
+        ],
+    );
+    let clean = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(clean.contains("idle, clean, and unleased"));
+    assert!(other.exists(), "offer must not remove the worktree");
+    git(&root, &["worktree", "lock", other.to_str().unwrap()]);
+    let locked = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(!locked.contains("git worktree remove"));
+    git(&root, &["worktree", "unlock", other.to_str().unwrap()]);
+    std::fs::write(other.join("dirty"), "keep me").unwrap();
+    let dirty = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(!dirty.contains("git worktree remove"));
+    assert!(preflight_queue_work_branch(&root, Some("available")).is_ok());
+}
