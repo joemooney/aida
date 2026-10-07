@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T02:12:36.208652006Z
+modified_at: 2026-10-07T02:12:36.369263175Z
 req_type: Task
 tags:
 - operator-ux
@@ -64,6 +64,12 @@ filed_at:
   session: a36129c0-3fde-4c5c-92a2-908e517184b1
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo build -p aida-cli
+    cargo test -p aida-cli-lib --lib pr_ship (125 passed)
+    cargo test -p aida-cli-lib --lib ci_gate::tests (15 passed)
+    python3 tests/test_pr_ship_preflight.py --aida <built-aida> (11 scenarios and help table passed)
+    cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-07T02:12:35.366228267Z
   implemented_by: joe
 interface_changes:
