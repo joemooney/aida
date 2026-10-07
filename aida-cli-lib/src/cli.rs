@@ -2114,7 +2114,15 @@ pub enum PrCommand {
     // trace:TASK-458 | ai:claude
     // trace:BUG-286 | ai:claude
     // trace:TASK-487 | ai:claude
+    #[clap(
+        after_help = "Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI red; 21 CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24 stale CI definition; 25 merge-hold present."
+    )]
     Ship {
+        /// Bound the CI wait in seconds, including check registration. Default: unbounded.
+        // trace:TASK-1606 | ai:codex
+        #[clap(long, value_name = "SECS")]
+        wait: Option<u64>,
+
         /// PR number to ship. When omitted, the command resolves the
         /// PR open on the current branch (or creates one if none
         /// exists).

@@ -107183,6 +107183,10 @@ pub(crate) fn classify_rebase_subprocess_exit(
 /// reads on the consumer side.
 // trace:BUG-1295 | ai:claude
 pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
+    // trace:TASK-1606 | ai:codex
+    if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
+        return failure.reason as i32;
+    }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| sig.code)
         .unwrap_or(1)

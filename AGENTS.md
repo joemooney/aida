@@ -1,3 +1,9 @@
+`pr ship` preflights review/corpus, mergeability, stale-definition, and hold
+gates before CI, then checks again under the merge lease. `--wait <secs>`
+bounds CI registration plus settlement; omitted means unbounded. Typed exit
+codes 20–25 distinguish refusals. See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1606 | ai:codex -->
+
 GitHub `pr ship` polls classified CI rows directly, so pending or failed
 informational workflows do not delay shipping. Required checks override the
 informational allow-list; other unlisted failures still block the merge.

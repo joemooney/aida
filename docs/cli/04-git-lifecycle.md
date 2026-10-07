@@ -84,6 +84,33 @@ or forced completion is needed for an ID remapping.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+**Preflight and CI deadline.** Ship checks mergeability, approval at the current
+head, verdict reconciliation, review-in-progress, merge-holds (including a
+label without a local marker), and stale CI definitions before watching CI.
+It checks again before merging because the head and gates can change during
+the wait. The stale-check and stale-approval overrides apply in both phases;
+they do not bypass verdict reconciliation or holds.
+
+`aida pr ship [N] --wait <SECS>` bounds registration plus CI settlement with
+one deadline. Omit `--wait` for an unbounded wait. Pending state is printed
+on each poll; expiry leaves the PR open. Informational checks remain excluded
+unless required by branch protection.
+
+| Exit | Outcome |
+| --- | --- |
+| 0 | Merged or already merged (dry-run only previews) |
+| 1 | Other command/forge error |
+| 20 | CI red |
+| 21 | CI wait timed out |
+| 22 | Needs rebase / forge reports not mergeable |
+| 23 | Needs review, approval at head, or verdict repair |
+| 24 | Stale CI definition |
+| 25 | Merge-hold present |
+
+Draft-only, supervised, and drive-owned review handoffs return 23, leaving
+the PR open. Scripts can branch on these codes instead of parsing messages.
+<!-- trace:TASK-1606 | ai:codex -->
+
 **Completion credit.** Ship uses an explicit trailing `(REQ-ID …)` title group,
 then branch-name recovery; each ID must resolve unambiguously in the store.
 Mid-title references and PR-body prose do not become completing trailers.
