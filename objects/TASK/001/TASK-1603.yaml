@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T23:37:40.205706683Z
+modified_at: 2026-10-07T23:52:55.057475425Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -432,6 +432,11 @@ comments:
   content: 'Independent PR-2452 review at eb96823bda625d6e343d8bfbab996585541d0a79: REQUEST_CHANGES. Concrete rework handoff saved at .aida/handoff/orchestrator/review-2452-rework.md; full verdict at .aida/handoff/orchestrator/review-2452-verdict.md. Preserve current fix-day branch/worktree. Attempt to queue rework was refused: reworking queued work needs dispatch authority. No force, borrowed grant, competing worker, hold clearance, or merge used. Review is recorded; queue routing remains outstanding.'
   created_at: 2026-10-07T23:37:11.911444927Z
   modified_at: 2026-10-07T23:37:11.911444927Z
+- id: 01a118c8-cc11-7250-9400-e16377190576
+  author: joe
+  content: PR-2452 rework accepted on existing fix-day-2026-10-07 worktree and owner lease. Implementing dynamic admission before checked run corroboration with serialized snapshot updates; membership and live-PID checks remain enforced. Attempted Needs Attention -> InProgress transition was refused for advisor authority; status remains unchanged, no role/grant override used. Red/green hermetic batch, nextN, and concurrent admission/cleanup regressions are underway. No real-store drain, merge, or hold clearance.
+  created_at: 2026-10-07T23:52:55.057475425Z
+  modified_at: 2026-10-07T23:52:55.057475425Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
