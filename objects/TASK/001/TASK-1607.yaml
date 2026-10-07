@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T01:57:28.752223867Z
+modified_at: 2026-10-07T01:59:33.711061Z
 req_type: Task
 tags:
 - guided-lane
@@ -53,6 +53,19 @@ comments:
   created_at: 2026-10-07T01:57:28.752223867Z
   modified_at: 2026-10-07T01:57:28.752223867Z
   session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
+- id: 01a11416-624f-71c3-a7cf-2f838abb9069
+  author: joe
+  content: |-
+    Decision (C1, drain-child classification, guided 2026-10-06): a caller is classified by (anchor, grant, persisted child record), never by env labels.
+    1. HOLDER: caller anchor == the seat record's holder anchor (pid + start identity) AND validated grant session == holder grant session -> protected ops pass under a reservation.
+    2. CHILD: caller's ancestry contains a bound/holder or tombstoned anchor, but its own anchor differs (drain-spawned headless implementer/reviewer: its own claude/codex process, usually no grant). Own-scope ops pass with no claim and no reservation: queue done/dequeue/status edits/comments/commits on its own spec, where 'own spec' is the spec recorded on the committed spawn reservation for that child (falling back to the child's registered session lease scope). Protected ops (start a loop, route or enqueue other specs, spawn peers) refuse: a delegated worker cannot use its parent's occupancy.
+    3. DEMOTED: caller anchor == a tombstoned anchor (former holder still alive) -> every protected op refuses, including an implicit claim of a fresh generation (C4); only explicit `aida session seat takeover --force` from a fresh anchor, or the tombstoned process dying, clears it.
+    4. ORCHESTRATOR-GRANT, NOT HOLDER: validated grant seat is single-occupancy, anchor is not the holder -> implicit claim (ADR-68) if the seat is empty or provably dead, else a refusal naming the holder (C3).
+    5. ORDINARY: none of the above -> unaffected.
+    Required test (C1): drain-shaped parent->child where the child completes its own scope (queue done + status edit) while the parent holds the seat, and the same child is refused when it enqueues another spec.
+  created_at: 2026-10-07T01:59:33.711061Z
+  modified_at: 2026-10-07T01:59:33.711061Z
+  session_id: 1396dbed-b87b-4ab3-a393-3d8990561c54
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
