@@ -1,0 +1,40 @@
+id: 01a11412-4dd3-77a3-8af3-7d03b54f7143
+spec_id: ADR-68
+agreed_id: ADR-68
+title: 'TASK-1607: single-occupancy seat holders claim implicitly on the first protected op'
+description: |
+  ## Context
+  Slice A must decide when a claim is required. Protected ops: loop start (burndown run, queue work --auto-complete/drive), orchestrator-origin spawn, queue routing/mutation, handoff --write. Ordinary implementers without an orchestrator grant or orchestrator lineage are unaffected in every option.
+
+  ## Options considered
+  - Implicit claim on first protected op: an empty or provably dead seat is claimed as an explicit recorded transition; a live or Unknown competitor refuses; bound/tombstoned lineage stays fenced even if env/grant is dropped.
+  - Explicit claim required: every orchestrator skill/loop must add a claim step, and any that miss it break.
+  - Loop starts only: leaves single queue mutations/spawns by an unclaimed orchestrator unfenced, conflicting with the advisor-accepted inventory refresh.
+
+  ## Decision
+  Implicit claim on the first protected op (operator choice, guided session 2026-10-06). `aida session seat claim` remains available as an explicit surface.
+
+  ## Rationale
+  Closes the backgrounded-orchestrator routing gap without requiring every existing orchestrator skill to change in this PR.
+
+  ## Consequences
+  The claim transition is recorded in the event outbox/history like an explicit claim. Callers whose validated grant seat is single-occupancy are classified orchestrator-origin; bound/tombstoned lineage is fenced regardless of env labels.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:55:06.323856188Z
+modified_at: 2026-10-07T01:55:06.323856188Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:TASK-1607
+- keystone
+filed_at:
+  code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
+  branch: story-1485
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c89606cd47
+  vendor: antigravity
+  session: 1396dbed-b87b-4ab3-a393-3d8990561c54
