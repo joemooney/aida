@@ -1,0 +1,12 @@
+scope = "BUG-1806"
+node_id = "3"
+clone_path = "/home/joe.mooney/ai/aida_github"
+host = "spock"
+pid = 3778635
+pid_start_time = "2026-10-07T22:21:10+00:00"
+agent = "implementer"
+started_at = "2026-10-07T22:21:20.593980004+00:00"
+heartbeat_at = "2026-10-07T22:21:20.593980004+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
