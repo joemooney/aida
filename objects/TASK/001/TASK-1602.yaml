@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T02:43:51.039322739Z
-modified_at: 2026-10-07T02:06:18.479374082Z
+modified_at: 2026-10-07T02:06:49.072857392Z
 req_type: Task
 relationships:
 - rel_type:
@@ -119,6 +119,11 @@ comments:
   content: 'Round 2 addresses both PR-2444 P2 findings in new commit e147661860ec, pushed to task-1602 / https://github.com/joemooney/aida/pull/2444. Finding 1: refresh forge metadata after --wait release; OPEN→MERGED uses existing sync/cleanup path without CI watch, second merge, PrMerged event, or merge credit. CLI regression covers both pass/fail CI rows and synchronizes on ownership wait. Finding 2: shared snapshot run_uuid is never attributed to the member; report unavailable/uncorroborated. Regression executes set_run(B) then set_phase_with_tuning(A) and rejects sibling-run-B in diagnostics. Validation: 109 pr_ship unit tests and all 11 CLI hold/drive/TTY regressions passed; cargo fmt --all -- --check and git diff --check passed. Integrated the prior PR branch with current main, retaining both sides of docs/test conflicts. Fake forge now supports metadata resolver version check and is pinned explicitly. PR remains open for independent review; no headless merge or CI callback wait attempted.'
   created_at: 2026-10-07T02:06:18.479347081Z
   modified_at: 2026-10-07T02:06:18.479347081Z
+- id: 01a1141d-06f0-7021-be84-90ffaf0c4de5
+  author: mcp
+  content: 'Handoff bookkeeping: `aida queue done TASK-1602` refused because this orchestrator-created session branch is task-1602-2, while the existing authoritative PR #2444 is on task-1602. The new commit was pushed directly to the existing PR branch; `gh pr view 2444 --json headRefOid,state` confirms OPEN at e147661860ecae796a6284b37195c557f1983007. No duplicate PR was opened and no completion gate override used. Both review findings are implemented and tested; requirement remains InProgress pending branch-aware queue handoff/review.'
+  created_at: 2026-10-07T02:06:49.072810510Z
+  modified_at: 2026-10-07T02:06:49.072810510Z
 history:
 - id: 01a10f72-0aa0-7513-a223-e328f25b5822
   author: joe
