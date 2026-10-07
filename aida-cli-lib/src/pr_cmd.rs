@@ -38,6 +38,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             no_trailer_check,
             override_stale_check,
             override_stale_approval,
+            wait,
         } => pr_ship_handler(
             *n,
             *no_pull,
@@ -49,6 +50,7 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             *no_trailer_check,
             *override_stale_check,
             *override_stale_approval,
+            *wait,
         ),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
@@ -1421,6 +1423,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                 opts.no_trailer_check, // no_trailer_check
                 false,                 // override_stale_check — not exposed on `aida ship` yet
                 false, // override_stale_approval — not exposed on `aida ship` (TASK-1448)
+                None,  // wait — not exposed on `aida ship`
             )
         }
     }
@@ -1621,6 +1624,7 @@ pub(crate) fn pr_ship_handler(
     no_trailer_check: bool,
     override_stale_check: bool,
     override_stale_approval: bool,
+    wait: Option<u64>,
 ) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
@@ -1910,94 +1914,70 @@ pub(crate) fn pr_ship_handler(
         return Ok(());
     }
 
-    // TASK-1253: distinguish the drive's seat/PR from an unrelated merger. A
-    // live drain lock alone must not freeze every `pr ship` in the repository;
-    // unrelated mergers serialize safely on the merge lease. trace:TASK-1253 | ai:codex
-    let in_headless_drive = std::env::var("AIDA_HEADLESS")
-        .map(|v| v == "1")
-        .unwrap_or(false);
-    let has_orchestrator_envelope = std::env::var(orchestrator::AUTO_COMPLETE_ENV)
-        .ok()
-        .is_some_and(|v| !v.trim().is_empty());
-    let live_drive = matches!(
-        drain_lock::probe_lock(&main_worktree),
-        drain_lock::LockStatus::Running(_)
+    // Reprobe the PR binding and caller on every poll; --wait never grants
+    // authority to a drive seat or bypasses a merge hold.
+    // trace:TASK-1602 | ai:codex
+    let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE").is_ok_and(|v| v == "1");
+    let drive_seat = std::env::var("AIDA_HEADLESS").is_ok_and(|v| v == "1")
+        || std::env::var(orchestrator::AUTO_COMPLETE_ENV).is_ok_and(|v| !v.trim().is_empty());
+    let direct_human = crate::seat_authority::require_direct_human().is_ok() && !drive_seat;
+    let result = pr_ship::wait_for_drive_release(
+        wait.map(std::time::Duration::from_secs),
+        std::time::Duration::from_secs(2),
+        || {
+            let scope = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| active_lease_for_cwd(&main_worktree, &cwd))
+                .map(|lease| lease.scope);
+            pr_ship::probe_ship_drive_guard(
+                &main_worktree,
+                pr_number,
+                scope.as_deref(),
+                drive_seat,
+                allow_in_drive,
+            )
+        },
+        |block, remaining| {
+            eprintln!(
+                "  PR-{pr_number} waiting for drive release ({remaining:.0}s remaining): {}",
+                block.detail
+            );
+        },
     );
-    let drive_state = live_drive
-        .then(|| drain_state::DrainState::read(&main_worktree))
-        .flatten();
-    let drive_specs: Vec<&str> = drive_state
-        .as_ref()
-        .map(|state| {
-            state
-                .members
-                .iter()
-                .filter(|member| member.is_running())
-                .map(|member| member.spec.as_str())
-                .collect()
-        })
-        .unwrap_or_default();
-    let cwd_lease_scope = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| active_lease_for_cwd(&main_worktree, &cwd))
-        .map(|lease| lease.scope);
-    let worktree_belongs_to_drive = cwd_lease_scope
-        .as_deref()
-        .is_some_and(|scope| drive_specs.contains(&scope));
-    let caller_is_drive_seat =
-        in_headless_drive || has_orchestrator_envelope || worktree_belongs_to_drive;
-    // TASK-1292: PR-keyed, not spec-keyed. Scan every drive member's LIVE
-    // phase binding for this PR number, regardless of which spec's run it
-    // belongs to — a reviewer phase bound to PR-N under spec A must block a
-    // ship of PR-N even when the drive's "current spec" is B. Before
-    // TASK-1292 this asked "does the drive's current spec own this PR",
-    // which missed exactly that sibling-spec case (2026-09-18 near-miss on
-    // PR #1948: the live reviewer was running under BUG-1236 while the
-    // drive's bookkeeping pointed at the shelved STORY-1221).
-    // trace:TASK-1292 | ai:claude
-    let reviewer_live_here = drive_state.as_ref().is_some_and(|state| {
-        pr_ship::reviewer_liveness_for_pr(
-            state
-                .members
-                .iter()
-                .map(|member| (member.is_running(), member.pr)),
-            pr_number as u32,
-        ) == pr_ship::ReviewerLiveness::OnThisPr
-    });
-    // Drive-ownership tier only (TASK-1253). A hold binds `pr ship` on its
-    // own, drive or no drive, at the BUG-1532 gate below.
-    let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)
-        .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));
-    let pr_is_drive_owned = reviewer_live_here || hold_matches_drive_spec;
-    let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE")
-        .map(|v| v == "1")
-        .unwrap_or(false);
-    if let Some(reason) =
-        pr_ship::ship_merge_block_reason(caller_is_drive_seat, pr_is_drive_owned, allow_in_drive)
-    {
-        let reason_text = match reason {
+    if let Err(block) = result {
+        let reason_text = match block.reason {
             pr_ship::ShipMergeBlockReason::DriveSeat => {
                 "caller is a drive implementer/reviewer seat"
             }
             pr_ship::ShipMergeBlockReason::DriveOwnedPr => "target PR is owned by the live drive",
         };
-        eprintln!(
-            "{} PR-{} left OPEN — `aida pr ship` refused: {}. The orchestrator's \
-             independent reviewer gates the merge. (Deliberate in-drive direct-publish? set \
-             AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 — it never bypasses a merge-hold.)",
-            "⏸".yellow().bold(),
-            pr_number,
-            reason_text,
-        );
+        if direct_human {
+            eprintln!("  {}", block.detail);
+            eprintln!("  The drive's independent reviewer gates the merge; on completion it merges if authorized or escalates the merge decision to you. No completion-time estimate is available.");
+            eprintln!(
+                "  Retry with `aida pr ship {pr_number} --wait 300` (bounded wait; no prompt)."
+            );
+        }
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &pr_ship::ShipStep::Merge { delete_branch },
-            &pr_ship::StepOutcome::Skipped(format!(
-                "{reason_text} — the reviewer gates the merge (TASK-1253)"
-            )),
+            &pr_ship::StepOutcome::Skipped(block.detail.clone()),
         );
-        return Ok(());
+        anyhow::bail!(
+            "PR-{pr_number} left OPEN — `aida pr ship` refused: {reason_text}. {} \
+             Deliberate in-drive direct-publish: AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 (never bypasses a merge-hold).",
+            if block.timed_out { "Drive ownership wait timed out." } else { "The independent reviewer gates the merge." },
+        );
+    }
+
+    // Ownership may have been released because the drive merged the PR.
+    // Refresh forge metadata before selecting the CI/merge or sync-only path.
+    // trace:TASK-1602 | ai:codex
+    if wait.is_some() && !already_merged {
+        let mut probe_sink = crate::network_retry::NoopSink;
+        already_merged =
+            pr_is_merged_with_sink(&project_root, pr_number as u32, &mut probe_sink) == Some(true);
     }
 
     // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or

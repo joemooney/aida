@@ -141,12 +141,9 @@ pub(crate) fn require_direct_tty() -> Result<()> {
     Ok(())
 }
 
-// trace:STORY-1473, TASK-1592 | ai:antigravity
-pub(crate) fn issue_direct(
-    project_root: &Path,
-    seat: &str,
-    delegable_seats: Vec<String>,
-) -> Result<SeatGrant> {
+// Shared by direct seat issuance and operator-only ship explanations.
+// trace:TASK-1602 | ai:codex
+pub(crate) fn require_direct_human() -> Result<()> {
     require_direct_tty()?;
     if ["AIDA_AGENT_NAME", "AIDA_AGENT_TYPE"].iter().any(|key| {
         std::env::var(key)
@@ -155,6 +152,16 @@ pub(crate) fn issue_direct(
     }) {
         bail!("AIDA-managed agent sessions cannot issue direct TTY grants; request a scoped child seat from the launcher");
     }
+    Ok(())
+}
+
+// trace:STORY-1473, TASK-1592 | ai:antigravity
+pub(crate) fn issue_direct(
+    project_root: &Path,
+    seat: &str,
+    delegable_seats: Vec<String>,
+) -> Result<SeatGrant> {
+    require_direct_human()?;
     // trace:TASK-1594 | ai:claude
     let subject = crate::current_user_id(None);
     let principal = subject.clone();

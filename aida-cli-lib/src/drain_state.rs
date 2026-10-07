@@ -275,7 +275,7 @@ pub(crate) fn live_drain_spec(project_root: &Path, spec: &str) -> Option<LiveDra
     })
 }
 
-fn drain_phase_display(raw: &str) -> String {
+pub(crate) fn drain_phase_display(raw: &str) -> String {
     let number = raw
         .strip_prefix("in-phase-")
         .or_else(|| raw.split_whitespace().next())

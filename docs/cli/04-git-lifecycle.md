@@ -84,6 +84,28 @@ or forced completion is needed for an ID remapping.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+**Drive-owned PRs.** A live drive's PR remains protected by its independent
+reviewer. A direct human terminal invocation reports the owning wave/PID
+and phase, plus recent headless activity when that member's session is known.
+Activity from another member is never attributed to this PR. Missing activity
+is reported as unavailable; a live PID alone does not establish progress.
+The explanation describes the outcome: the drive merges if authorized or
+escalates the merge decision to the operator. It does not prompt.
+
+Use `aida pr ship <N> --wait 120` to poll ownership every two seconds for up to
+120 seconds; bare `--wait` uses 300 seconds. Release continues through the
+ordinary CI, approval, and merge-hold gates after refreshing PR metadata. If
+the drive merged while waiting, ship runs post-merge sync/cleanup without
+watching CI, merging again, or claiming merge credit. Shared run identity is
+reported unavailable because phase entry can leave a sibling run UUID in the
+snapshot. Timeout and ownership refusals
+exit non-zero. Drive seats (including headless callers) refuse immediately,
+even with `--wait`, so they cannot wait on their own pipeline. The explicit
+`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1` override remains available and never bypasses
+merge holds. Operator explanations use the same direct-TTY/non-managed-agent
+predicate as direct role grants.
+<!-- trace:TASK-1602 | ai:codex -->
+
 **Completion credit.** Ship uses an explicit trailing `(REQ-ID …)` title group,
 then branch-name recovery; each ID must resolve unambiguously in the store.
 Mid-title references and PR-body prose do not become completing trailers.
