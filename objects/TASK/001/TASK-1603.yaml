@@ -3,12 +3,12 @@ spec_id: TASK-1603
 agreed_id: TASK-1603
 title: 'drain launch race: the FIRST batch member''s child starts before the orchestrator run is registered, falls back to interactive rules, and refuses the InProgress-no-lease state the parent just created —'
 description: 'Reproduced on consecutive waves 2026-10-05 (builds 62e3374 and post-887bf7e): wave 1 first member TASK-1523 (children 01a10eee + replacement, both ''spec is InProgress but no local lease holds it'', shelved launch-refused), wave 2 first member TASK-1588 (children 01a10f35 + replacement, identical, shelved) — while every LATER member in both waves (BUG-1803, TASK-1596, BUG-1801, BUG-1804) hit the same InProgress-no-lease precondition and proceeded with ''claiming it anyway''. Wave-1 first-child log shows the smoking gun: ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' — the child launched before the orchestrator''s run record landed, so it applied interactive fail-closed rules to the InProgress bump its own parent had just made. Later children see the live run and claim. Cost: the first spec of every wave burns both launch attempts and shelves; TASK-1523 was wrongly suspected of being undrainable for its cross-project shape. Fix direction: register the run (or hand the child an ownership token) BEFORE the Approved→InProgress bump / child launch, or have the child retry its ownership check briefly instead of refusing on first read.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T04:02:59.796964144Z
+modified_at: 2026-10-07T04:05:17.381899675Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -207,6 +207,11 @@ comments:
   content: "<!-- aida:drain-phase-failure -->\n## Drain phase failure — phase 3 (reviewer)\n\nRecorded by `aida queue work TASK-1603 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.\n\n- Signature: phase 3 (reviewer) · kind `stale-base-conflict`\n- Seat: reviewer (session role: advisor)\n- Parent spec: TASK-1603\n- Branch under test: main\n- Commit under test: 738653fb3e6d\n- Recorded at: 2026-10-07T04:02:58.488273109+00:00\n\n### Failure\n\nHEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603)\nAuto-merging AGENTS.md\nAuto-merging OVERVIEW.md\nCONFLICT (content): Merge conflict in OVERVIEW.md\nAuto-merging aida-cli-lib/src/drain_state.rs\nAuto-merging aida-cli-lib/src/lib.rs\nAuto-merging aida-cli-lib/src/tests/queue_work_tests.rs\nerror: \"rebase aborted due to conflicts\"\nPreparing worktree (checking out 'pr-2445')\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2445. Mount that gitdir path into dev containers so git commands work inside the worktree.\nRebasing (1/2)\rerror: could not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nResolved 'OVERVIEW.md' using previous resolution.\nCould not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\n    OVERVIEW.md\n\nManual recipe:\n  gh pr checkout 2445\n  git fetch origin\n  git rebase origin/main\n  # resolve conflicts, then `git rebase --continue`\n  git push --force-with-lease\n\nManual recovery: `aida pr rebase 2445 --interactive`\n\nFailure kind: `stale-base-conflict`\n\n### Recovery hint shown to the operator\n\nAddress the review feedback, then push fixups: `aida queue rework TASK-1603 --work`\n\n## Recurrence\n\nAttempts: 1\nLatest recurrence: 2026-10-07T04:02:58.488273109+00:00\n\n### Phase durations\n\n  - phase 2 (ci): 5803 ms\n  - phase 3 (reviewer): 7477 ms\n\n### Telemetry entry\n\nThe line appended to `~/.aida/auto-complete.jsonl` for this run:\n\n```json\n{\"spec_id\":\"TASK-1603\",\"started_at\":\"2026-10-07T04:02:42.659100543+00:00\",\"completed_at\":\"2026-10-07T04:02:58.488273109+00:00\",\"outcome\":\"failed\",\"variant\":\"full\",\"failed_phase\":3,\"failure_kind\":\"stale-base-conflict\",\"failure_message\":\"HEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603)\\nAuto-merging AGENTS.md\\nAuto-merging OVERVIEW.md\\nCONFLICT (content): Merge conflict in OVERVIEW.md\\nAuto-merging aida-cli-lib/src/drain_state.rs\\nAuto-merging aida-cli-lib/src/lib.rs\\nAuto-merging aida-cli-lib/src/tests/queue_work_tests.rs\\nerror: \\\"rebase aborted due to conflicts\\\"\\nPreparing worktree (checking out 'pr-2445')\\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2445. Mount that gitdir path into dev containers so git commands work inside the worktree.\\nRebasing (1/2)\\rerror: could not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\\nhint: Resolve all conflicts manually, mark them as resolved with\\nhint: \\\"git add/rm <conflicted_files>\\\", then run \\\"git rebase --continue\\\".\\nhint: You can instead skip this commit: run \\\"git rebase --skip\\\".\\nhint: To abort and get back to the state before \\\"git rebase\\\", run \\\"git rebase --abort\\\".\\nResolved 'OVERVIEW.md' using previous resolution.\\nCould not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\\n    OVERVIEW.md\\n\\nManual recipe:\\n  gh pr checkout 2445\\n  git fetch origin\\n  git rebase origin/main\\n  # resolve conflicts, then `git rebase --continue`\\n  git push --force-with-lease\\n\\nManual recovery: `aida pr rebase 2445 --interactive`\",\"phase_durations\":[{\"phase\":2,\"slug\":\"ci\",\"elapsed_ms\":5803},{\"phase\":3,\"slug\":\"reviewer\",\"elapsed_ms\":7477}],\"total_ms\":14259,\"binary_sha\":\"bb5572f368\",\"auto_rebase\":[{\"phase\":3,\"pr_number\":2445,\"outcome\":\"conflict\"}]}\n```\n\n### Promoting this to its own spec\n\nIf this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):\n\n1. Save this note's text to a file, e.g. `/tmp/note.md`.\n2. `aida add --type bug --priority medium --parent TASK-1603 --title \"drain phase 3 (reviewer) failure on TASK-1603\" --description-from-file /tmp/note.md`\n3. `aida edit <NEW-ID> --status approved`\n"
   created_at: 2026-10-07T04:02:59.796957802Z
   modified_at: 2026-10-07T04:02:59.796957802Z
+- id: 01a11489-7dc5-7300-ae4f-a868a950d6f3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/stale-base-conflict: HEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603). No triage reason was given.'
+  created_at: 2026-10-07T04:05:17.381894806Z
+  modified_at: 2026-10-07T04:05:17.381894806Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
@@ -299,6 +304,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a11489-7dc5-7300-ae4f-a857ce6aeaee
+  author: joe
+  timestamp: 2026-10-07T04:05:17.381887200Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -314,12 +326,4 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: stale-base-conflict
-  detail: "HEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603)\nAuto-merging AGENTS.md\nAuto-merging OVERVIEW.md\nCONFLICT (content): Merge conflict in OVERVIEW.md\nAuto-merging aida-cli-lib/src/drain_state.rs\nAuto-merging aida-cli-lib/src/lib.rs\nAuto-merging aida-cli-lib/src/tests/queue_work_tests.rs\nerror: \"rebase aborted due to conflicts\"\nPreparing worktree (checking out 'pr-2445')\nwarning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree's .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2445. Mount that gitdir path into dev containers so git commands work inside the worktree.\nRebasing (1/2)\rerror: could not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\nhint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nhint: You can instead skip this commit: run \"git rebase --skip\".\nhint: To abort and get back to the state before \"git rebase\", run \"git rebase --abort\".\nResolved 'OVERVIEW.md' using previous resolution.\nCould not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603)\n✗ rebase hit 1 conflict(s) — aborted, worktree cleaned\n    OVERVIEW.md\n\nManual recipe:\n  gh pr checkout 2445\n  git fetch origin\n  git rebase origin/main\n  # resolve conflicts, then `git rebase --continue`\n  git push --force-with-lease\n\nManual recovery: `aida pr rebase 2445 --interactive`"
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1603 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-10-07T04:02:57.135285560Z
 interface_changes: {}
