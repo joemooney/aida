@@ -43,6 +43,9 @@ before launch; pipelined parents leave the bump to the registered child.
 Concurrent members use independent UUID records in `.aida/orchestrator-runs/`
 with live member/parent PID checks and token-scoped cleanup. A duplicate
 in-flight queue head waits for child progress without declaring exhaustion.
+Refreshed batch/nextN members join the snapshot during checked registration,
+before phase entry. Snapshot updates share a permanent write-lock sidecar so
+concurrent admission and cleanup retain sibling membership and tokens.
 <!-- trace:TASK-1603 | ai:codex -->
 
 Reconstitution can fail before vendor spawn when its empty scratch cwd cannot

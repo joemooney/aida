@@ -300,3 +300,44 @@ until shipping/handoff; other agents' leases remain untouched.
 A following commit saves only this final evidence report. Verify code/test changes
 against the source SHA above; the report commit does not alter production or test
 code. Original plan commit: `e2b39a66d6c4181e4f93f3df478e8acbe18bad06`.
+
+
+## PR-2452 TASK-1603 review rework
+
+Reviewed source: `eb96823bda625d6e343d8bfbab996585541d0a79`.
+Existing branch and TASK-1603 owner lease retained. Both refreshed batch and
+nextN tests start with eligible membership `[A]`, complete A to unblock B,
+select B through the real resolver, and call the production checked
+registration/status helper before a hermetic phase-one launch callback.
+Both fail on the reviewed production source with the reported ownership
+corroboration error. The concurrent dynamic-admission test also fails there.
+Test-only red patches and logs are retained; initial fixture compile/assertion
+mistakes are separately recorded and excluded from the red/green evidence.
+
+Registration now admits the selected member before publishing/corroborating
+its UUID. Parent PID liveness is checked before snapshot mutation. All snapshot
+read/modify/write updates and clearing share the permanent
+`.aida/drain-state-write.lock` sidecar; concurrent admission, phase/outcome
+updates, and cleanup retain membership. Child membership and both PID checks,
+per-token zen, checked-before-bump ordering, missing/corrupt-state refusal,
+and independent ownership records remain enforced. Other four fix-day fixes
+are preserved, and both OVERVIEW paragraphs remain.
+
+Corrected-tree evidence: **738 passing targeted test executions** (filters
+overlap), zero failures. Drain-state 70, orchestrator 14, dynamic selectors 2,
+delayed-child 1, registration-before-bump 1, auto-complete 238, queue-work 154,
+queue-command 50, drain-command 4, reopen 3, verdict 76, CI gate 15, ship 110.
+Compilation command: `cargo test -p aida-cli-lib --lib drain_state::tests:: -- --test-threads=1`.
+Remaining filters used that freshly compiled test executable; exact commands,
+exit codes, and binary SHA-256 are in the evidence manifest. Test subprocesses
+remove inherited `AIDA_*`, `CODEX_SESSION_ID`, and `CODEX_THREAD_ID`, with
+`RUST_MIN_STACK=16777216`. `cargo fmt --all -- --check` passed; all 21
+`make check-ci-fast` gates passed, including the feature-disabled check.
+No new full-workspace result or vendor end-to-end success is claimed.
+
+Durable artifacts: `/home/joe/ai/aida/.aida/handoff/orchestrator/review-2452-rework-evidence-20261007T235741Z`. Its `commit.json` pins the pushed full SHA;
+`SHA256SUMS` covers the logs, commands, red patches, and final diff.
+The Needs Attention → InProgress status edit was refused for advisor authority;
+status remains unchanged and the refusal is recorded on TASK-1603. No grant or
+role override, real-store drain, merge, or hold clearance was performed.
+<!-- trace:TASK-1603 | ai:codex -->

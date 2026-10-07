@@ -115,7 +115,13 @@ current-run snapshot fields are telemetry only. Cleanup revokes only the
 exiting member's UUID, so overlapping members keep authority. A delayed
 child may leave its queue head Approved briefly; the scheduler waits for
 progress and retries selection without treating that duplicate as exhaustion.
-Stale or bare environment flags grant no authority.
+Stale or bare environment flags grant no authority. Refreshed batch/nextN
+selection can admit newly unblocked or newly tagged members; checked run
+registration adds them to the parent snapshot before token corroboration.
+Snapshot read/modify/write updates serialize on the permanent
+`.aida/drain-state-write.lock` sidecar, preserving dynamic membership through
+concurrent phase updates and sibling cleanup. The child still requires both
+live PIDs and recorded membership.
 <!-- trace:TASK-1603 | ai:codex -->
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
