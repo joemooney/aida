@@ -1,0 +1,37 @@
+id: 01a11409-2802-7722-a7c6-3379c00d9ed2
+spec_id: TASK-1608
+agreed_id: TASK-1608
+title: 'STORY-1485 slice B: direct-human hard takeover'
+description: |
+  Slice B of STORY-1485, per the advisor decision on STORY-1485 (2026-10-05, "ADVISOR DECISION — TWO-SLICE BOUNDARY AUTHORIZED") under signed-off sketch faa07e4acb (docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md). Depends on slice A.
+
+  Scope: direct-human hard takeover. Direct non-child TTY-issued roster grant and target confirmation; post-grace revalidation; exact-target stop adapters with verified daemon mapping/pidfd where supported; stopping recovery; dirty worktree reporting/preservation; positive termination proof and CAS transfer. No trusted-kill config.
+
+  ## Acceptance
+  1. Tests prove a real authorized direct stop using controlled processes (never an existing peer session).
+  2. Tests prove refusal for managed/MCP/headless callers and for ambiguous mappings.
+  3. Tests cover stop failure / Unknown recovery and dirty-worktree reporting with preservation.
+  4. Key refusal tests proven non-vacuous (guard removed → test fails → guard restored).
+  5. Commits and PR carry ONLY this spec's ID in trailers — never (STORY-1485). STORY-1485 completes only after this merges AND the 2026-09-26 operator acceptance AND independent advisor review of both slice PRs.
+
+  ## Bounds
+  Guided lane only. make check-ci-fast before every push. No merge or merge-hold clearance by the implementer.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-07T01:45:06.818167687Z
+modified_at: 2026-10-07T01:45:06.818167687Z
+req_type: Task
+tags:
+- guided-lane
+- seat-occupancy
+- slice:B
+filed_at:
+  code_sha: bb5572f368699693a012c25cce72fd4e521124cb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 978c497429
+  vendor: antigravity
+  session: a36129c0-3fde-4c5c-92a2-908e517184b1
