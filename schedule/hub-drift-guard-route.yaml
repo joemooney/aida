@@ -6,3 +6,5 @@ last_by:
   vendor: antigravity
 result: done
 note: 'Burn-down session remediated: aida-store on gitlab was 6 commits behind origin (fast-forwardable, no divergence); ran aida remote mirror-sync twice (874eb85e105b then 8c7fada444ce), mirror now at origin tip. No force-push. Residual trailing during active sessions is expected; 6h guard will re-check.'
+due_since: 2026-10-07T01:25:20.635980496Z
+due_reason: on CronJobFailed:hub-drift-guard
