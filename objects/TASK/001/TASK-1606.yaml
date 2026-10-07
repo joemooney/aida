@@ -21,11 +21,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T02:12:36.369263175Z
+modified_at: 2026-10-07T02:12:56.562708048Z
 req_type: Task
 tags:
 - operator-ux
 - pr-ship
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a11422-8ad4-7810-baa1-12e358e5ac1a
+  created_at: 2026-10-07T02:12:56.562704443Z
+  created_by: joe
 comments:
 - id: 01a1141a-d09c-7550-8c2f-521e4d6668aa
   author: joe
