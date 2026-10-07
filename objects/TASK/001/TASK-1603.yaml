@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T06:55:53.410649632Z
+modified_at: 2026-10-07T07:06:20.977339071Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -240,6 +240,45 @@ comments:
   content: 'Operator-confirmed roster 2026-10-06 23:54 MST: implementer backlog-implementer; regression backlog-regression; code review backlog-reviewer; acceptance backlog-verifier-1; integrator backlog-integrator. All CURRENT assignments UNASSIGNED. Actual native session identity/liveness is unverified until each terminal responds; old ended launcher records are historical references only. First assignment PREPARED FOR OPERATOR DELIVERY, not dispatched: sole fix-day implementer, separate fix-day-2026-10-07 worktree off current origin/main; incorporate task-1603 source eec6fca71808f3d9f67179f1b54fb51260fd90ec first, preserve both OVERVIEW.md paragraphs, verify delayed-child batch/nextN selection and concurrent-token cleanup P1s; targeted tests and exact-SHA checkpoint, no per-fix PR/review/CI. Full assignment/evidence handoffs in .aida/handoff/advisor-burndown-coordination/latest.md. No sessions restarted, leases pruned or staffed by inference. Coordination continues; prior rollover request withdrawn.'
   created_at: 2026-10-07T06:55:53.410643128Z
   modified_at: 2026-10-07T06:55:53.410643128Z
+- id: 01a1152f-41b1-7613-8de8-faee0701e301
+  author: joe
+  content: |
+    # Advisor session handoff — fix day
+
+    Date: 2026-10-07 (America/Phoenix)
+    Spec: TASK-1603
+    Codex thread: 01a1151b-77c6-7d53-9c30-0a49caeda829
+    Active role: advisor
+    Ownership: no live implementation lease acquired; TASK-1603 Approved, owner empty.
+    Current checkout: /home/joe/ai/aida, main, HEAD 738653fb3e6de71d0975047adb143c5f31a25d85.
+    `aida session show` resolves an old harness lease abf9f7f087dbb254e-c3a7f12a9af4d18b (102 days old), not a confirmed current-thread ownership lease.
+    Source SHA: eec6fca71808f3d9f67179f1b54fb51260fd90ec (TASK-1603 rework).
+    Result SHA: none; no code edited, no worktree created, no commit/push/ship/approval.
+
+    ## Commands and results
+
+    - `aida session show`: old main-checkout harness lease, no live Claude detected.
+    - `aida session leases`: only live listed scope TASK-1607, lease 01a1140e, unrelated; leave untouched.
+    - `aida ps`: TASK-1607 dormant; no TASK-1603 session confirmed.
+    - `aida show TASK-1603 --full`: Approved; race description read; no separate Acceptance section displayed.
+    - `git status --short --branch`: main; existing untracked files belonging to other work left untouched.
+    - `git worktree list --porcelain`: no fix-day worktree found.
+    - `git branch --list fix-day-2026-10-07`: no local branch found at inspection.
+    - `git show --stat eec6fca71808`: exact source commit available locally; seven files changed.
+    - `cat docs/plans/2026-10-07-fix-day.md`: approved order and constraints read.
+    - `aida awaiting`: TASK-1603 PR-2445 has supervision hold; rework at specified head remains unreviewed.
+
+    Checks: no build, test, formatting, or behavioral verification run. Delayed-child batch/nextN selection and concurrent-token registration/cleanup remain unverified.
+
+    ## Blocker and decision
+
+    Developer-provided active role is advisor: independent judgment gate, route implementation to doers. Do not take implementation ownership or perform fix-day code changes in this advisor session. No automatic rollover assumed.
+
+    ## Next action / explicit ownership
+
+    Start a fresh implementer session with the operator assignment. It must explicitly acquire TASK-1603 AIDA ownership before acting; no ownership is transferred by this artifact because this advisor holds none. Create a separate sibling worktree on fix-day-2026-10-07 from confirmed origin/main; never switch or edit another session checkout. Incorporate TASK-1603 through source SHA eec6fca71808f3d9f67179f1b54fb51260fd90ec, retain both OVERVIEW.md paragraphs, verify delayed-child batch/nextN and concurrent-token registration/cleanup. Commit/push with spec trailers; record exact resulting SHA and check evidence. Continue the approved fix-day order on that same branch: TASK-1-229, PR-2435 provenance, TASK-1606, TASK-1-230. Follow plan sandbox restriction and preserve all unresolved gates. PR-2435 data repair requires the operator decision specified in the plan. No self-approval or shipping implementation.
+  created_at: 2026-10-07T07:06:20.977339071Z
+  modified_at: 2026-10-07T07:06:20.977339071Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
