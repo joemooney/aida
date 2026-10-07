@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:00:08.578937316Z
-modified_at: 2026-10-07T06:49:20.369286387Z
+modified_at: 2026-10-07T06:53:44.082505417Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -168,6 +168,11 @@ comments:
   content: Coordination checkpoint 2026-10-06 23:48 MST, coord-20261006T2346-MST. PR-2435 exact head 6fa035c26b735a9e7afc45bb1d2f0bba706144da is OPEN; Ubuntu Build SUCCESS run 37552162422 and merge-hold-gate SUCCESS run 37552162520. Local .aida/review-verdicts/PR-2435.json now has Approved at that head; retained round 0 has recorded_by='codex reviewer', recorded_at='2026-10-06T04:48:12.629207158+00:00'. This contradicts fix-day plan's earlier unstamped-round data blocker. Writer-path repair and successful ship reconciliation were NOT verified by this seat. Candidate recommended to primary advisor for readiness check, not integration-approved or merged. Evidence report mailbox cda3eac6-ef4e-41e8-be13-a24d869fd4bb.
   created_at: 2026-10-07T06:49:20.369280565Z
   modified_at: 2026-10-07T06:49:20.369280565Z
+- id: 01a11523-b512-73b0-a74e-7c1d1c94be11
+  author: mcp
+  content: 'CORRECTION to coordination checkpoint (coord-20261006T2346-MST), operator clarification 2026-10-06 23:52 MST: PR-2435''s unattributed duplicate round was REMOVED with an audit backup. No provenance was inferred or added to that duplicate. My previous wording that round 0 was now stamped described the retained attributed round after removal, not how the defect was repaired. Exact PR head remains 6fa035c26b735a9e7afc45bb1d2f0bba706144da at inspection. The source for removal/backup is the operator; backup location not independently verified here. This supersedes any implication in the earlier spec comment, mailbox report, or coordination handoff that provenance was inferred/stamped onto the unattributed round. Remain coordination-only; no integration approval.'
+  created_at: 2026-10-07T06:53:44.082476130Z
+  modified_at: 2026-10-07T06:53:44.082476130Z
 history:
 - id: 01a10f61-0d1a-7290-b932-07ca5716f4df
   author: joe
