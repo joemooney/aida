@@ -3,12 +3,12 @@ spec_id: TASK-1-217
 agreed_id: TASK-1325
 title: 'Windows: task_1597_delegation_prompt test fails on first cross-platform run'
 description: 'test_task_1597_delegation_prompt_and_recovery_hint (aida-cli/tests/task_1597_delegation_prompt.rs:117) fails on windows-latest: assertion failed: child.wait().unwrap().success(), suite 0 passed/1 failed in 1.61s — looks deterministic, not flaky. Test added tonight in b8b16f5e (TASK-1597 TTY seat-delegation prompt); run 37408907677 at 51fb3f49 was its FIRST Windows exercise, so main is now Windows-red independent of any PR. Same family as BUG-1794 (Windows advisor_code_gate worktree-lease failure) but a different test. Blocks TASK-1588 (ADR-65 weekly Windows validation on main) from ever being green. Rerun: cargo test -p aida-cli --test task_1597_delegation_prompt on Windows.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:06:36.053741115Z
-modified_at: 2026-10-06T04:54:06.937867558Z
+modified_at: 2026-10-07T01:36:32.553575170Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -52,6 +52,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a11401-4f1f-7f22-a01a-e90fc56384d6
+  author: aida-auto-bump
+  timestamp: 2026-10-07T01:36:32.543353580Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a11401-4f29-7801-be0b-adeb1fd7f1bf
+  timestamp: 2026-10-07T01:36:32.553574046Z
+  agent: aida
+  commit_sha: bb5572f368699693a012c25cce72fd4e521124cb
+  summary: Completed via merge bb5572f3
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main
@@ -68,4 +81,6 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check (passed)
   implemented_at: 2026-10-06T04:54:02.517277201Z
   implemented_by: joe
+  completed_at: 2026-10-07T01:36:32.543324011Z
+  completion_sha: bb5572f368699693a012c25cce72fd4e521124cb
 interface_changes: {}
