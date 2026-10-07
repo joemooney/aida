@@ -20,6 +20,9 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 Drain run ownership is persisted before the phase-1 status bump and child
 launch. Missing/corrupt batch state or failed ownership writes stop the member
 before launch; pipelined parents leave the bump to the registered child.
+Concurrent members use independent UUID records in `.aida/orchestrator-runs/`
+with live member/parent PID checks and token-scoped cleanup. A duplicate
+in-flight queue head waits for child progress without declaring exhaustion.
 <!-- trace:TASK-1603 | ai:codex -->
 
 Reconstitution can fail before vendor spawn when its empty scratch cwd cannot

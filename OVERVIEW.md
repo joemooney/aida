@@ -83,8 +83,14 @@ run UUID and zen provenance before the phase-1 status bump and phase-child
 launch. Ownership persistence is required: missing/corrupt batch state or a
 failed write returns a phase-1 failure before that run changes status or
 spawns a phase child. Pipelined parents leave the bump to the registered
-member process. Child corroboration still requires a matching UUID and live
-orchestrator PID; stale or bare environment flags grant no authority.
+member process. Each active member publishes an independent UUID record in
+`.aida/orchestrator-runs/`, including its PID and zen provenance. Children
+require that record, a live member PID and a live parent drain snapshot;
+current-run snapshot fields are telemetry only. Cleanup revokes only the
+exiting member's UUID, so overlapping members keep authority. A delayed
+child may leave its queue head Approved briefly; the scheduler waits for
+progress and retries selection without treating that duplicate as exhaustion.
+Stale or bare environment flags grant no authority.
 <!-- trace:TASK-1603 | ai:codex -->
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start

@@ -100057,14 +100057,10 @@ pub(crate) fn run_auto_complete(
         }
     }
 
-    // TASK-336: the run-UUID is no longer needed once `orchestrate` has
-    // returned — every phase child has been spawned and reaped. Clear it on
-    // the drain-state file so a would-be straggler child carrying this token
-    // no longer corroborates against the file (especially between batch
-    // members, where the file lives on until the batch ends). For a single-
-    // spec drain the file is removed entirely just below; this clear is
-    // belt-and-braces in case the removal races a final child probe.
-    drain_state::clear_run(&project_root);
+    // trace:TASK-1603 | ai:codex
+    // All this run's children have been reaped. Revoke its token only;
+    // concurrent members must retain authority through their later phases.
+    drain_state::clear_run(&project_root, &run_token);
 
     // TASK-266: log the run to `~/.aida/auto-complete.jsonl` and, on a phase
     // failure, auto-draft a Draft BUG so the friction surfaces back to the
@@ -105281,7 +105277,11 @@ fn prepare_registered_auto_complete_phase1(
     owns_drain_state: bool,
 ) -> Result<Option<(String, RequirementStatus)>> {
     drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
-    prepare_auto_complete_phase1_status(storage, spec)
+    let result = prepare_auto_complete_phase1_status(storage, spec);
+    if result.is_err() {
+        drain_state::clear_run(project_root, run_token);
+    }
+    result
 }
 
 /// BUG-369: mark orchestrator-driven phase-1 work as InProgress before the

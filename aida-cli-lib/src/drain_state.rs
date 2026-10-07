@@ -179,17 +179,13 @@ pub(crate) struct DrainState {
     /// Plain-language prediction of the post-drain state — which queue items
     /// will and won't be auto-picked-up once the drain ends.
     pub(crate) on_drain_complete: String,
-    /// TASK-336: the orchestrator's per-run UUID for the *current* spec's
-    /// orchestration. A phase child carrying `AIDA_AUTO_COMPLETE_TOKEN=<uuid>`
-    /// trusts orchestrator-mode only when this value matches the env-passed
-    /// token and [`Self::orchestrator_pid`] is alive. Empty between batch
-    /// members and before the first member starts.
+    /// Current-run telemetry UUID, empty between sequential members. Child
+    /// authority uses independent records in `.aida/orchestrator-runs/`.
+    // trace:TASK-1603 | ai:codex
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(crate) run_uuid: String,
-    /// TASK-336 / BUG-237: whether the current spec's orchestration was
-    /// started under `--zen`. A phase child trusts an inherited
-    /// `AIDA_ZEN=1` only when [`Self::run_uuid`] corroborates *and* this is
-    /// true.
+    /// Current-run zen telemetry; each active run's authority record carries
+    /// its own zen provenance for child corroboration.
     #[serde(default, skip_serializing_if = "is_false")]
     pub(crate) zen: bool,
     /// BUG-286: orchestrator-side gh/git retry attempts during phases 3-6,
@@ -640,9 +636,23 @@ pub(crate) fn register_run(
     } else {
         set_run(project_root, spec, run_uuid, zen)?;
     }
+    let state = DrainState::read(project_root).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "drain state is unreadable")
+    })?;
+    crate::orchestrator::publish_run(
+        project_root,
+        run_uuid,
+        &crate::orchestrator::RunMarker {
+            pid: std::process::id(),
+            spec: spec.to_string(),
+            started_at: state.started_at,
+            zen,
+        },
+    )?;
     // Verify exactly the evidence the immediate child will read, including
     // PID liveness. A stale batch snapshot must not authorize the bump.
     if !crate::orchestrator::run_is_live(project_root, run_uuid) {
+        crate::orchestrator::remove_run(project_root, run_uuid);
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "persisted run does not corroborate a live orchestrator",
@@ -651,14 +661,9 @@ pub(crate) fn register_run(
     Ok(())
 }
 
-/// TASK-336: record the orchestrator run that is starting for `spec` — its
-/// per-run UUID (the BUG-233 corroboration token) and its `--zen` flag (the
-/// BUG-237 zen-provenance anchor). A phase child carrying
-/// `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` corroborates against [`DrainState::
-/// run_uuid`] read back from the file; the [`DrainState::zen`] flag plays the
-/// same role [`crate::orchestrator::RunMarker::zen`] used to play for
-/// `AIDA_ZEN`. Registration errors must stop launch: children depend on this
-/// file for authority.
+/// Update the current-run telemetry in the parent snapshot. Authority and zen
+/// provenance are published separately by `register_run`, per active token.
+/// Registration errors must stop launch.
 // trace:TASK-336 trace:TASK-1603 | ai:codex
 pub(crate) fn set_run(
     project_root: &Path,
@@ -713,17 +718,19 @@ pub(crate) fn current_context(project_root: &Path) -> (Option<String>, String) {
     }
 }
 
-/// TASK-336: clear the run-scoped fields a child uses to corroborate — the
-/// per-run UUID and the `--zen` flag — when the current spec's orchestration
-/// returns. Between batch members the drain-state file lives on, but a
-/// would-be child carrying a now-stale token must no longer corroborate
-/// against it (it was minted by a sibling member that has finished).
-/// `current_phase` is also cleared so a stale phase string does not outlive
-/// the run that set it. Best-effort. trace:TASK-336 | ai:claude
-pub(crate) fn clear_run(project_root: &Path) {
+/// Revoke only this run's authority. Clear telemetry only if it still names
+/// this token; a concurrent member's telemetry belongs to that member.
+// trace:TASK-336 trace:TASK-1603 | ai:codex
+pub(crate) fn clear_run(project_root: &Path, token: &str) {
+    // trace:TASK-1603 | ai:codex
+    // Authority lives in independent records; snapshot writes cannot revive it.
+    crate::orchestrator::remove_run(project_root, token);
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
+    if state.run_uuid != token {
+        return;
+    }
     state.run_uuid.clear();
     state.zen = false;
     state.current_phase = None;
@@ -2676,7 +2683,7 @@ mod tests {
         set_member_outcome(dir.path(), "STORY-1", true, None);
         // Run ownership is required even though phase telemetry is optional.
         assert!(set_run(dir.path(), "STORY-1", "tok", true).is_err());
-        clear_run(dir.path());
+        clear_run(dir.path(), "live-token");
         assert_eq!(probe(dir.path()), DrainStatus::None);
     }
 
@@ -2732,10 +2739,56 @@ mod tests {
                 assert_eq!(state.members.len(), 2);
                 assert!(state.zen);
                 if let Some(stale) = previous {
-                    assert!(!crate::orchestrator::run_is_live(dir.path(), &stale));
+                    assert!(crate::orchestrator::run_is_live(dir.path(), &stale));
                 }
                 previous = Some(token);
             }
+        }
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn concurrent_run_launch_and_cleanup_preserves_sibling_authority() {
+        for batch in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let specs = vec!["TASK-A".into(), "TASK-B".into()];
+            let state = if batch {
+                DrainState::new_batch("overlap", &specs)
+            } else {
+                DrainState::new_next_n(2, &specs)
+            };
+            state.write(dir.path()).unwrap();
+            let a = uuid::Uuid::now_v7().to_string();
+            let b = uuid::Uuid::now_v7().to_string();
+            register_run(dir.path(), "TASK-A", &a, true, false).unwrap();
+            register_run(dir.path(), "TASK-B", &b, false, false).unwrap();
+            // Both phase children can start after both registrations.
+            assert!(crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            assert!(
+                crate::orchestrator::read_live_run(dir.path(), &a)
+                    .unwrap()
+                    .zen
+            );
+            assert!(
+                !crate::orchestrator::read_live_run(dir.path(), &b)
+                    .unwrap()
+                    .zen
+            );
+            clear_run(dir.path(), &a);
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            assert_eq!(DrainState::read(dir.path()).unwrap().run_uuid, b);
+            // Repeated cleanup cannot revoke B. Snapshot rewrites cannot
+            // resurrect A, even if they restore its stale telemetry UUID.
+            clear_run(dir.path(), &a);
+            let mut stale = DrainState::read(dir.path()).unwrap();
+            stale.run_uuid = a.clone();
+            stale.write(dir.path()).unwrap();
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            clear_run(dir.path(), &b);
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &b));
         }
     }
 
@@ -2814,7 +2867,7 @@ mod tests {
         batch_state().write(dir.path()).unwrap();
         set_run(dir.path(), "STORY-285", "live-token", true).unwrap();
         set_phase(dir.path(), "STORY-285", 3, "reviewer");
-        clear_run(dir.path());
+        clear_run(dir.path(), "live-token");
         let read = DrainState::read(dir.path()).unwrap();
         assert!(read.run_uuid.is_empty());
         assert!(!read.zen);
