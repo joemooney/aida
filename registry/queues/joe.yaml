@@ -29,18 +29,18 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1119f-6e13-77e0-b336-ebd9283c9798
-  position: 40000
-  added_by: joe
-  note: 'BUG-1291 recovery: PR #2445 handed off after shelving in phase 3 (reviewer): reviewer verdict is RequestChanges — not Approved'
-  added_at: 2026-10-06T14:36:31.960985888Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a11422-8ad4-7810-baa1-12e358e5ac1a
   position: 41000
   added_by: joe
   note: 'BUG-1291 recovery: PR #2450 handed off after shelving in phase 2 (ci): CI is red on PR-2450: Build (ubuntu-latest)'
   added_at: 2026-10-07T02:23:18.407703453Z
+  for_role: reviewer
+  added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1119f-6e13-77e0-b336-ebd9283c9798
+  position: 42000
+  added_by: joe
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-07T04:02:51.467245546Z
   for_role: reviewer
   added_by_machine: imac
