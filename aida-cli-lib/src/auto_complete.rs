@@ -5025,7 +5025,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 break;
             };
             if in_flight.iter().any(|m| m.spec == head) {
-                no_more_heads = true;
+                // trace:TASK-1603 | ai:codex
+                // The child may not have bumped/leased this head yet. Wait
+                // for progress, then select again; this is not exhaustion.
                 break;
             }
             if shipped.iter().any(|s| s == &head) {
@@ -11463,6 +11465,7 @@ mod tests {
         /// shelve is requeued (put back at the head), as a triage would.
         reshelve: std::collections::HashMap<String, usize>,
         handle_spec: std::collections::HashMap<usize, String>,
+        delayed_child: bool,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11477,6 +11480,7 @@ mod tests {
                 events: Vec::new(),
                 reshelve: std::collections::HashMap::new(),
                 handle_spec: std::collections::HashMap::new(),
+                delayed_child: false,
             }
         }
 
@@ -11519,7 +11523,9 @@ mod tests {
 
         fn start_spec_through_ci(&mut self, spec: &str) -> PipelinedHandle {
             self.events.push(format!("start:{spec}"));
-            self.heads.retain(|h| h != spec);
+            if !self.delayed_child {
+                self.heads.retain(|h| h != spec);
+            }
             let handle = PipelinedHandle(self.next_handle);
             self.next_handle += 1;
             let result = match self.reshelve.get_mut(spec) {
@@ -11539,6 +11545,10 @@ mod tests {
 
         fn wait_spec_through_ci(&mut self, handle: PipelinedHandle) -> OrchestrationResult {
             self.events.push(format!("wait:{}", handle.0));
+            if self.delayed_child {
+                let spec = &self.handle_spec[&handle.0];
+                self.heads.retain(|h| h != spec);
+            }
             let result = self
                 .through_ci_results
                 .remove(&handle.0)
@@ -11558,6 +11568,33 @@ mod tests {
         fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult {
             self.events.push(format!("finish:{spec}"));
             self.finish_by_spec.remove(spec).unwrap_or_else(ok_result)
+        }
+    }
+
+    // Both batch and nextN use this scheduler; nextN adds a launch limit.
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn pipelined_delayed_child_does_not_exhaust_batch_or_next_n() {
+        for limit in [None, Some(3)] {
+            let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B", "TASK-C"], 2);
+            driver.delayed_child = true;
+            let result = drain_batch_pipelined_with_caps(
+                &mut driver,
+                limit,
+                None,
+                &crate::drain_caps::DrainCaps::default(),
+                std::time::Instant::now(),
+                &mut None,
+            );
+            assert_eq!(result.shipped, vec!["TASK-A", "TASK-B", "TASK-C"]);
+            assert_eq!(
+                driver
+                    .events
+                    .iter()
+                    .filter(|e| e.starts_with("start:"))
+                    .count(),
+                3
+            );
         }
     }
 

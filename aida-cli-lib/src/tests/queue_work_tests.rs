@@ -1081,9 +1081,8 @@ fn orchestrated_reviewer_can_pick_current_implementer_routed_spec() {
         "role:implementer",
         "implementer",
     );
-    crate::drain_state::DrainState::new_single("BUG-1106", &token, false)
-        .write(dir.path())
-        .unwrap();
+    // trace:TASK-1603 | ai:codex
+    crate::drain_state::register_run(dir.path(), "BUG-1106", &token, false, true).unwrap();
     let store = storage.load().unwrap();
     let req = store
         .requirements
@@ -2632,6 +2631,87 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
     let updated = storage.load().unwrap();
     let req = updated.get_requirement_by_spec_id("BUG-369").unwrap();
     assert_eq!(req.status, RequirementStatus::InProgress);
+}
+
+// trace:TASK-1603 | ai:codex
+#[test]
+fn phase1_registration_failure_leaves_status_unstarted() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().join("requirements.yaml"));
+    let mut req = Requirement::new("first batch member".into(), String::new());
+    req.spec_id = Some("TASK-1603".into());
+    req.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    let token = Uuid::now_v7().to_string();
+    // No batch snapshot: fail before applying the parent's status bump.
+    assert!(prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .is_err());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved,
+    );
+    drain_state::DrainState::new_batch("first-member", &["TASK-1603".into()])
+        .write(dir.path())
+        .unwrap();
+    // An ownership-record write failure also stops before the status bump.
+    let records = dir.path().join(".aida/orchestrator-runs");
+    std::fs::write(&records, "blocks directory creation").unwrap();
+    assert!(prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .is_err());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved
+    );
+    std::fs::remove_file(records).unwrap();
+    let bumped = prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        bumped,
+        Some(("TASK-1603".into(), RequirementStatus::Approved))
+    );
+    assert!(orchestrator::run_is_live(dir.path(), &token));
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::InProgress,
+    );
 }
 
 #[test]
