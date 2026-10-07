@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T15:34:09.146137085Z
+modified_at: 2026-10-07T15:37:01.711489440Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -284,6 +284,53 @@ comments:
   content: 'Coordination update 2026-10-07 08:33 MST, same coordination conversation: operator confirms primary advisor assigned backlog-implementer the SOLE fix-day implementation lane. Assignment authority is the operator report; actual terminal acknowledgment/session ID/worktree/result checkpoint SHA not yet received in inspected mail. Existing PR-2445 source eec6fca71808f3d9f67179f1b54fb51260fd90ec is not a newly reported fix-day checkpoint. Acknowledgment/checkpoint request sent to backlog-implementer; no new implementation dispatch. Regression/acceptance assignments prepared for operator delivery once a full reported checkpoint SHA exists; registry repair does not block delivery. Keep one final whole-branch review and all other implementation lanes unassigned. Harness leases untouched.'
   created_at: 2026-10-07T15:34:09.146129386Z
   modified_at: 2026-10-07T15:34:09.146129386Z
+- id: 01a11702-cc0f-70e3-a498-04cae18a49ee
+  author: joe
+  content: |
+    # TASK-1603 source verification checkpoint
+
+    Date: 2026-10-07, America/Phoenix
+    Native Codex thread: 01a1151b-77c6-7d53-9c30-0a49caeda829
+    Terminal roster name: not independently confirmed; prepared assignment addresses backlog-implementer.
+    Governing developer role: advisor. User explicitly assigned sole fix-day implementation; governing advisor role still conflicts with performing that implementation. No role override inferred from local files.
+    Advisor verification lease: 01a116fea29a, acquired for TASK-1603; released after verification (release result recorded on spec).
+    Separate detached worktree: /home/joe/ai/aida-review-task-1603-01a1151b
+    Exact verified HEAD/source SHA: eec6fca71808f3d9f67179f1b54fb51260fd90ec
+    Main HEAD inspected: 738653fb3e6de71d0975047adb143c5f31a25d85
+    Resulting implementation/combined checkpoint SHA: none. No fix-day branch created, plan committed, source incorporated, code edited, commit pushed, approval issued, hold cleared, or real-store drain run.
+
+    ## Newly run commands and results
+
+    All cargo commands ran in the separate detached worktree, with default features:
+
+    - cargo test -p aida-cli-lib --lib drain_state::tests:: -- --test-threads=1 — exit 0; compiled library/test harness; 69 passed, 0 failed. Includes concurrent_run_launch_and_cleanup_preserves_sibling_authority and registration failure/dead owner regressions.
+    - cargo test -p aida-cli-lib --lib orchestrator::tests:: -- --test-threads=1 — exit 0; 14 passed, 0 failed.
+    - cargo test -p aida-cli-lib --lib pipelined_delayed_child_does_not_exhaust_batch_or_next_n -- --test-threads=1 — exit 0; 1 passed, 0 failed, exercises both batch and nextN launch limit.
+    - cargo test -p aida-cli-lib --lib phase1_registration_failure_leaves_status_unstarted -- --test-threads=1 — exit 0; 1 passed, 0 failed, persistence failure precedes status bump.
+    - cargo fmt --all -- --check — exit 0.
+    - git status --short --branch — clean detached HEAD.
+
+    85 targeted tests newly passed; distinct from previous implementer's 94-test claim. Logs under /home/joe/ai/aida/.aida/handoffs/: task-1603-eec6fca-drain-state.log, task-1603-eec6fca-orchestrator.log, task-1603-eec6fca-delayed.log, task-1603-eec6fca-phase1.log, task-1603-eec6fca-fmt.log.
+
+    ## P1 evidence and limits
+
+    Delayed-child selection: source regression passes. Scheduler breaks refill on in-flight duplicate without setting permanent exhaustion, waits for progress and retries. Mock deliberately retains eligible head until wait; batch and nextN proceed through A/B/C. Real vendor/sandbox drain and combined-branch behavior are unverified.
+    Concurrent-member authority: source interleaving regression passes. A and B get independent UUID files; both corroborate after B registration; cleanup A preserves B; stale snapshot UUID cannot resurrect A. set_phase_inner_with_tuning modifies telemetry/member phase without replacing UUID records. Test is deterministic interleaving, not a stress test of simultaneous process writes. Combined-branch behavior unverified.
+    Checked registration still precedes phase-1 status mutation; missing/corrupt/unwritable state and dead owner fail before launch. No gate modifications performed.
+
+    ## Documents read
+
+    - docs/plans/2026-10-07-fix-day.md
+    - .aida/handoff/advisor-burndown-coordination/latest.md, including First assignment prepared
+    - .aida/review-verdicts/PR-2445.json and PR-2445.md: original two P1 findings at old a760a2016b1c17920a04d068f9dfff989ea22f52, not this source SHA.
+
+    ## Blocker and next action
+
+    The developer-provided advisor role requires independent judgment and routing implementation to doers. This session cannot become the sole fix-day implementer through a local role edit. Start/route to a session whose governing role permits implementation; explicitly assign sole ownership, then acquire its lease before editing. This handoff does not transfer implementation ownership; none held. Preserve main's uncommitted plan as the first commit in the new separate sibling fix-day worktree from current origin/main. Incorporate source SHA retaining both OVERVIEW.md paragraphs. Run combined-branch checks and checkpoint/push before continuing TASK-1-229, PR-2435 provenance writer, TASK-1606, TASK-1-230 on the same branch. PR-2435 duplicate data repair is already done per coordination handoff; do not infer/stamp provenance. No per-fix PR/review waits, no gate loosening, no real-store drains.
+
+    No automatic rollover assumed. Turn ends after recording evidence and releasing advisor verification ownership.
+  created_at: 2026-10-07T15:37:01.711489440Z
+  modified_at: 2026-10-07T15:37:01.711489440Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
