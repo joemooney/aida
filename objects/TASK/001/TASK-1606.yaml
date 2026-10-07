@@ -21,11 +21,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T01:59:47.843516361Z
+modified_at: 2026-10-07T02:04:24.091997333Z
 req_type: Task
 tags:
 - operator-ux
 - pr-ship
+comments:
+- id: 01a1141a-d09c-7550-8c2f-521e4d6668aa
+  author: joe
+  content: 'Implementation in task-1606: sharing preflight/post-wait gates, typed ship refusals 20–25, and a single --wait SECS deadline covering CI registration and settlement. TASK-1602 PR-2444 is still open; both changes use the same --wait spelling, so integration must combine the ownership wait and CI wait rather than expose a second flag. Regression fixtures are isolated and assert no CI reads for each early refusal.'
+  created_at: 2026-10-07T02:04:24.091997333Z
+  modified_at: 2026-10-07T02:04:24.091997333Z
 history:
 - id: 01a11400-c877-7e40-a909-567b18abd52c
   author: joe
