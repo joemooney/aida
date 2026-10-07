@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T16:32:15.625607333Z
+modified_at: 2026-10-07T16:51:31.551887102Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -364,6 +364,59 @@ comments:
     Next: collect v3 checkpoint with actual session identity, ownership/worktree, base/full target SHA, completed items, commands/results/artifacts, blockers and next action. Persist SHA-bound evidence on owning AIDA specs, then provide pinned regression/acceptance briefs for operator delivery. No rollout/rollover request, integration approval, clearance or merge.
   created_at: 2026-10-07T16:32:15.625607333Z
   modified_at: 2026-10-07T16:32:15.625607333Z
+- id: 01a11742-3c8c-75a2-9eb0-b49338e19dbc
+  author: joe
+  content: |
+    # Two sandbox drain measurements — coordination owner
+    2026-10-07 09:42 MST. Coordination owns arranging the two measurements, not production implementation or integration. backlog-implementer-v3 retains sole fix-day implementation ownership.
+
+    ## Obtained evidence
+    Read implementer worktree notes docs/plans/2026-10-07-fix-day-notes.md and /tmp/aida-fix-day-evidence/sandbox-{1,2}.log, sandbox-results.json.
+    Reported last code checkpoint c418c60fe7a58058fbea577b55e85bdbea1e1f65. Binary /home/joe/ai/aida-fix-day-2026-10-07/target/debug/aida --version reports c418c60fe7+dirty, built 2026-10-07 09:38:10 -07:00; notes attribute dirty to evidence notes only. No clean-source binary claim. Need v3 confirmation final checkpoint/freeze and runnable fixture before rerunning.
+    Run 1 repo /tmp/aida-fix-day-sandboxes-484ycwh8/run-1/repo, AIDA_STORE /tmp/aida-fix-day-sandboxes-484ycwh8/run-1/store.
+    Run 2 repo /tmp/aida-fix-day-sandboxes-484ycwh8/run-2/repo, AIDA_STORE /tmp/aida-fix-day-sandboxes-484ycwh8/run-2/store.
+    Each ran final branch binary: burndown run --tag sandbox --max 3 --concurrency 3. Both exit 1: starting an autonomous drain needs dispatch authority (product, advisor, or integrator role, or a live orchestrator).
+    Actual aggregate outcomes: shipped 0; launch-refused NOT MEASURED (no phase-one child launched); other 2 driver-authority refusals. Two blocked attempts are not completed three-spec drains. Do not manufacture six member failures or a success-rate comparison.
+
+    ## Dispatch/delegation preflight
+    Source has_dispatch_authority requires validated product/advisor/integrator seat or corroborated live orchestrator; companion role is refused. AIDA_SESSION_ROLE display alone does not grant authority. Choose authoritative advisor driver at HUMAN terminal for sandbox only.
+    Current coordination grant is advisor but delegates only advisor. It lacks implementer/reviewer/integrator child delegation and cannot be repaired by this managed agent. Standard role enter issuance requires direct human TTY and refuses managed-agent issuance. Do not mint grant records, --force, spoof TTY, bypass roster/email checks, clear holds or use real store.
+    Headless phase launcher calls seat_authority::issue_child for its actual seat; child grants default to empty delegation. Before launch verify actual child seat chain and inherited delegations; granting a root seat must not be misrepresented as proving grandchildren work. Prepare advisor, implementer, reviewer, integrator ceilings/delegations via supported human-terminal commands, report any narrower/deeper chain refusal rather than relaxing checks.
+
+    ## Fixture blockers independently observed
+    Existing repos have no remote. Seeded store specs are lifecycle/relationship tutorials (e.g. TASK-016 asks to walk statuses, TASK-017 asks to inspect dependency graph), not three concrete ship-capable code tasks. Store list shows queued=false. Thus authority repair alone does NOT establish three-spec shipped measurement. Need independent disposable runnable fixtures, isolated queue/store/forge setup and exact selection/child-chain preflight. Never borrow real store/queue/specs or push a sandbox branch to production remote.
+
+    ## Arrangement and handoffs
+    Ask v3 to confirm exact final code SHA, binary version/build SHA and dirty scope, sandbox paths, exact prior commands/refusal logs, full native session identity, whether fixtures were meant only as launch probes, and whether binary may be frozen/copied for measurements.
+    Ask backlog-regression to prepare measurement recipe/fixtures against that checkpoint, with sandbox-only queue and throwaway forge/remote, real authority gates intact; report direct-human grant/child-chain requirements and dry-run ready set before launch. This testing work must not modify implementation worktree or share its branch. Coordinate two sequential independent sandbox runs only after authorized driver/grant and three runnable selected specs are established.
+    Acceptance backlog-verifier-1 receives exact binary/source SHA plus two raw run logs and per-member outcomes; classify shipped, launch-refused and other from actual phase telemetry/receipts, including driver preflight outcomes separately. One final whole-branch review remains unchanged.
+
+    ## Exact human-terminal authority/preflight action (run separately for N=1 and N=2)
+    Use a NORMAL human shell, not managed-agent shell. The command is sandbox-local; no production authority mutation.
+    cd /tmp/aida-fix-day-sandboxes-484ycwh8/run-1/repo
+    export AIDA_STORE=/tmp/aida-fix-day-sandboxes-484ycwh8/run-1/store
+    export PATH=/home/joe/ai/aida-fix-day-2026-10-07/target/debug:$PATH
+    aida team allow-seat joe advisor
+    aida team allow-seat joe implementer
+    aida team allow-seat joe reviewer
+    aida team allow-seat joe integrator
+    eval "$(aida role enter advisor --no-resume --delegate-seat advisor --delegate-seat implementer --delegate-seat reviewer --delegate-seat integrator)"
+    aida --version
+    aida burndown run --tag sandbox --max 3 --concurrency 3 --dry-run
+
+    Replace run-1 with run-2 for second sandbox. Run only after binary/fixture confirmation; record role issuance and dry-run output. The CURRENT tutorial fixtures/unqueued selection/no remote are not ready for E2E shipping. After authorized recipe confirms three ship-capable selected specs and child delegation, actual run command is:
+    aida burndown run --tag sandbox --max 3 --concurrency 3 --verbose
+    Capture full output/exit code without a pipe masking exit; return logs, run IDs, binary/source SHA and all member outcomes. No success claimed until measured. Exact role-issuance command above requires human because seat_authority.rs require_direct_human enforces direct TTY, non-managed agent; no automatic review rejection occurred.
+
+    ## Next action
+    Confirm v3 final checkpoint and get regression fixture/seat-chain recipe. Supply operator concrete runnable final commands for two runs. Record outcomes on TASK-1603 and this handoff; no overlapping implementation, no integration approval/merge/hold clearance, no lease pruning.
+  created_at: 2026-10-07T16:46:19.276799923Z
+  modified_at: 2026-10-07T16:46:19.276799923Z
+- id: 01a11747-005f-7022-b76c-23345c75d693
+  author: mcp
+  content: 'Terminal-reported sole implementer identity: native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33 (CODEX_THREAD_ID / CODEX_SESSION_ID), CLI lease 01a11713b830, sibling /home/joe/ai/aida-fix-day-2026-10-07, branch fix-day-2026-10-07, fetched base 738653fb3e6de71d0975047adb143c5f31a25d85. Latest pushed code checkpoint c418c60fe7a58058fbea577b55e85bdbea1e1f65 covers all planned code changes, with targeted suites and 21 fast gates passing. Workspace verification is still running; initial run inherited a foreign AIDA_BIN and a complete test-process-only clean-environment rerun is underway. Two isolated three-spec sandbox launch attempts refused dispatch authority before launch, exit 1; this is not an end-to-end success measurement. Rebuilt PR-2435 ship refuses supervised mode, exit 23, PR remains open. No independent review verdict or merge claimed. Durable notes: docs/plans/2026-10-07-fix-day-notes.md; logs /tmp/aida-fix-day-evidence/.'
+  created_at: 2026-10-07T16:51:31.551879993Z
+  modified_at: 2026-10-07T16:51:31.551879993Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
