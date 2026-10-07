@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-07T01:51:04.485966385Z
+modified_at: 2026-10-07T01:57:28.752223867Z
 req_type: Task
 tags:
 - guided-lane
@@ -37,6 +37,22 @@ relationships:
   target_id: 01a11409-2802-7722-a7c6-3379c00d9ed2
   created_at: 2026-10-07T01:45:14.908910459Z
   created_by: joe
+comments:
+- id: 01a11414-7a30-7c81-a448-8daae92280d9
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF WITH CONDITIONS (advisor seat, 2026-10-06 19:0x) on ADR-67/68/69 for TASK-1607, checked against signed-off sketch faa07e4acb.
+
+    ADR-67 (holder = grant session + harness anchor + start identity): APPROVED. Consistent with sketch §1 binding (harness identity, PID/start identity) and §3 tri-state. Condition C1 (blocking before step 5 gateway wiring): state and test how DRAIN-SPAWNED CHILDREN are classified. A headless implementer/reviewer child spawned by a bound orchestrator is a descendant of bound lineage AND has its own harness anchor, and under --no-human it carries no child grant. Its own-scope ops (queue done/dequeue of its assigned spec, status edits, commits) MUST pass; only originating a loop or routing/spawning peers is fenced (sketch lines 85-87). Without this, every drain child's 'queue done' is either a competing claim or a fenced lineage write and every drain breaks. Required test: a drain-shaped parent→child where the child completes its own scope while the parent holds the seat.
+
+    ADR-68 (implicit claim on first protected op): APPROVED AS A RECORDED AMENDMENT to sketch lines 83-84 ('Unbound control-loop starts must explicitly claim, and unbound protected routing/spawn requires the existing validated dispatch grant'). The amendment: an unbound caller whose validated grant seat is single-occupancy claims implicitly instead. Accepted because it closes the backgrounded-orchestrator gap the accepted inventory refresh targets. Conditions: C2 an implicit claim prints one line naming seat, generation, anchor and 'aida session seat release --seat orchestrator --generation N'; C3 a refused competitor sees holder session, anchor PID/command, since, liveness and the release/takeover commands — an operator whose interactive shell silently became the holder must be able to see why a later drain was refused; C4 the sketch's 'a former holder cannot claim a fresh generation implicitly' is preserved and tested; C5 the slice A PR description names this amendment.
+
+    ADR-69 (fail closed where the start-identity probe is unsupported): APPROVED. Faithful to sketch §3 (unsupported platform = Unknown) and §1 line 46 (orchestrator occupancy cannot be disabled by config). Condition C6: before slice A merges, file follow-up spec(s) for macOS (proc_pidinfo PROC_PIDTBSDINFO start time) and Windows (GetProcessTimes) probes; the refusal text names the platform, the missing evidence and that spec ID; the PR description and release notes state that orchestrator loops refuse on those platforms until it lands.
+
+    Plan: approved, with one change — C7: after build-order step 3 (probe + store + state machine + seat commands), push and open a DRAFT PR for an early advisor review of the core state machine BEFORE wiring the gateways (steps 4-5). Commits carry only (TASK-1607). No merge, no merge-hold clearance by the implementer. make check-ci-fast before every push. — advisor
+  created_at: 2026-10-07T01:57:28.752223867Z
+  modified_at: 2026-10-07T01:57:28.752223867Z
+  session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
