@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:43:52.190993729Z
-modified_at: 2026-10-07T01:43:52.190993729Z
+modified_at: 2026-10-07T03:32:49.548062225Z
 req_type: Task
 tags:
 - from-advisor:TASK-1538
@@ -19,6 +19,13 @@ tags:
 - reconcile
 - reopen-fence
 - severity:major
+comments:
+- id: 01a1146b-c50c-72a0-a546-e4a445ba968a
+  author: joe
+  content: 'Root cause found (advisor, 2026-10-06 20:35): TASK-1538 and STORY-1488 have flipped Done<->Approved six times since 10-05. Every Approved->Done flip is authored by ''aida-auto-bump'' (e.g. store commit 557428ff6e, 2026-10-06 10:29, change 01a11242). Merge-time auto-bump re-fires on each pull because a merged commit (PR 2428) carries (TASK-1538), and it does not respect a later deliberate reopen. The closure:pending tag only downgrades the bump to Done instead of Completed; it does not stop it. So the reopen fence cannot hold: any manual reset is undone at the next pull. Fix: auto-bump must skip a spec whose latest status change after the referencing merge is a human reopen (or which carries an explicit reopen marker).'
+  created_at: 2026-10-07T03:32:49.548062225Z
+  modified_at: 2026-10-07T03:32:49.548062225Z
+  session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main
