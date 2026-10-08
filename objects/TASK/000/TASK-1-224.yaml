@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-10-06T13:38:02.570402969Z
+modified_at: 2026-10-08T16:48:45.513239488Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
@@ -21,6 +21,80 @@ relationships:
   target_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
   created_at: 2026-10-06T11:01:55.751241467Z
   created_by: joe
+comments:
+- id: 01a11c6a-d3c9-7191-a9db-6b3792fa1294
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1333 — separate parent authority root from isolated probe execution
+
+    Author: Codex store-reconcile-sketch-author, separate AUTHOR advisor, 2026-10-08. Requires a NEW DIFFERENT advisor; no self-signoff. Exact proposed canonical comment body for root relay under companion read/converse/draft boundary. NOT posted canonically. No code, reconstitution/live vendor experiment, grant, launch, production activation, status/queue change or merge.
+
+    ## Identity, history and verified present seam
+
+    Read full canonical TASK-1333, origin TASK-1-224, UUID 01a10ffb-7469-7fa0-96ac-b030c8c0fc28; saved in store-reconcile-evidence/TASK-1333.json. Canonical read returned no comments. Preserve the finding from TASK-1327, its TASK-1523 blocks edge and independent STORY-1527 measurement dependency. InProgress comes from a recorded orchestrator phase-1 change at 2026-10-06T13:38:02; it is NOT evidence of an existing live doer. Queue/cache context is stale derived information and neither creates nor disproves a live owner. No ownership, lease or competing session is claimed here.
+
+    Main/HEAD/local origin-main b46aec1e674baae5a329416d4119e67b59200a88 was inspected. reconstitute.rs::run_headless(project_root,cwd,...) resolves vendor using project_root, changes the PROCESS global cwd, then calls session::spawn_vendor_headless_with_seat with Advisor and contained=false. The shared launcher creates log/tee, resolves tuning and wait ceiling using headless_worktree_root(), issues the child there, and exports AIDA_DRIVE_ROOT derived there. headless_worktree_root discovers from ambient cwd and falls back to cwd. seat_authority::{current_grant,roster_allows,validate_child_delegation,issue_child} require actual parent grant and roster; scratch is not a trusted authority root. Do not “repair” that refusal by allowing missing rosters or copying a role label.
+
+    Historical docs/testing/task-1327-reconstitution-launch.md pins monitor code aadafa46101198f4d794a6e7a7a5fa4b6d53b4d6, monitor store fbed31b886bea8d80e72a5648759e7f334d98309 and rebuilt investigation 978c497429. It records pre-vendor grant refusal and a separate strace with no vendor exec. Zero log and report exit 0 are not vendor success. Those are prior reported experiments, not rerun here. TASK-1-216/TASK-1327 reporting work remains intact.
+
+    ## Owner / trigger / proposed surface
+
+    reconstitute owns the read-only two-arm plan and isolated input/output layout. BUG-1808 owns the ONE common launch publisher and actual-child release. TASK-1607 contributes occupancy through that publisher; TASK-1612 supplies only the reviewed transport primitive, with production release unavailable. This task consumes those seams after their prerequisites exist; it must not add a parallel grant issuer, special “reconstitute spawn,” env-based release permission or alternate waiting-child protocol.
+
+    Resolve and validate the canonical project/config authority root once at the parent entrypoint before creating probe artifacts or changing execution context. Use canonical repository/store discovery and the active parent grant/roster, not a caller-supplied scratch path or AIDA_DRIVE_ROOT as authority. Carry two distinct parent-only values through the shared launch plan: authority/config identity and per-child execution cwd. Proposed API vocabulary, not existing implementation: an immutable prepared probe execution description attached to the common launch plan; no second persistent schema. It includes arm kind, exact cwd object identity, permitted input/output surface and selected sanitized runtime configuration. Parent validates child delegation for Advisor; no automatic role substitution or additional delegable seats. A valid advisor parent that lacks advisor delegation still refuses.
+
+    Remove std::env::set_current_dir from run_headless. Shared command/adapter construction sets the child's cwd explicitly from the execution description. Vendor/model/effort/wait ceiling are resolved in the parent against the trusted config root and reduced to allowed runtime values; config text, arbitrary project hooks, project MCP servers or a project-root path must not be inherited as “configuration.” Existing ordinary callers continue to describe their usual worktree as execution cwd through the SAME launcher. No global cwd save/restore or process-global root override is acceptable: concurrent probe/matcher/ordinary launch can interleave, and error restoration is currently best-effort.
+
+    ## Baseline isolation is an actual dependency
+
+    An empty cwd is not filesystem isolation. The current contained=false launch can read absolute paths through inherited HOME, environment, vendor configuration or tools. Merely passing the real root to issue_child while putting it in AIDA_DRIVE_ROOT would repair discovery by leaking the withheld context. That is rejected by this sketch.
+
+    Arm A gets only the existing sanitized baseline inputs (bounded git subjects, README excerpt, names) plus its own fresh empty execution/output directory. Arm B gets only its deliberate store-derived prompt plus its distinct output directory; neither gets live source/store access as a side effect of authority resolution. Matchers remain distinct invocations with their explicitly supplied comparison pairs; no matcher/arm-B directory is visible to arm A. Keep BASELINE_WITHHELD and subject/README sanitizers; do not add spec IDs/criteria/ADRs/graph to baseline prompts, filenames, argv, log labels or runtime metadata visible to the leaf.
+
+    Require the signed common containment adapter's strict-read profile, configured to expose only independently prepared runtime/vendor bytes and per-arm input/output/scratch. Broad read-only access to the host is insufficient. Parent authority root, real store, project source, other arms, canonical HOME/AIDA_HOME, project instruction/config files, parent cwd/root descriptors, host proc root/fd aliases and inherited project MCP sockets/endpoints must not be visible to the leaf. Use a per-arm minimal runtime home and explicit environment/FD allowlist in the common execution description; it must preserve the actual vendor's required supported runtime behavior without copying the project's agent context. Runtime credentials need an already-reviewed isolated delivery mechanism; this sketch does not authorize mounting all real HOME or inventing a credential broker.
+
+    The real child grant/assignment remains scoped and validated by the parent/common publisher, and tied to the exact project, selected seat and actual child identity. No new child ability to delegate or discover arbitrary stores is granted. Parent retains the canonical grant/manifest/receipt and reports project-linked results outside the baseline. Do not export authority root as AIDA_DRIVE_ROOT, AIDA_AGENT_CONTEXT_FILE, cwd, extra writable path or “helpful” MCP config to the probe. If a common launcher contract currently requires the leaf to discover the live store to consume its grant, that is a concrete incompatibility: remain unsupported until the common owner provides a reviewed parent-only validation/leaf execution profile. Do not conceal it by copying roster/store context into scratch. A read-only grant identity alone is not proof of access isolation.
+
+    This is narrower than a general adversarial vendor sandbox: network/model interaction retains the accepted adapter policy, but no ambient project/store tool endpoint or local filesystem alias may defeat the baseline's explicit surface. The tests must establish that local withheld context cannot be reached; this proposal makes no claim to stop a malicious model from knowing external public facts.
+
+    ## Signed contracts, precedence and real blockers
+
+    Incorporate the existing signed owner/consumer contracts in full, with independent binding amendments superior to author prose. Preserve every earlier sketch/finding; this task does not supersede them:
+
+    - BUG-1808 callback v5 body 01a119a4-4908-7501-9c79-a18348497504 and approval 01a119af-a347-7961-b01d-66603478a59b; shared sealed Git callback-origin mechanism remains separate from vendor release. V4 F1 was resolved only at design level under those amendments.
+    - Common launch body 01a119ac-133b-7580-9381-e1febdeb8849, owner approval 01a119b5-ea32-7ed0-b5e9-11858700f78b; TASK-1607 consumer 01a119ac-15f8-7141-a1dd-87492a75b840 and approval 01a119b5-f471-7621-aaa3-5a649fa5c9a2. Exact body/report hashes are retained in the evidence index and readiness manifest.
+    - Pane/containment owner body 01a119c7-6694-7192-9b58-fc3da9298094 and approval 01a119d7-0711-7613-9c2a-c0643b331549; TASK-1607 consumer body 01a119c7-7ee6-72d0-8b37-8d02e1a6d693 and approval 01a119d7-1315-7171-bdfd-f2901ac9b751. Read actual PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md: PANE-1, CONT-1/2/3 and six binding owner conditions persist.
+    - TASK-1607 C7 F1/F2 deadline/requester and F3 fresh holder fixes remain binding; checkpoint approval at 56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f does not approve gateway/history production integration.
+    - Latest BUG-1808 disposition 01a11c3e-ab3f-7542-9b8c-e37baa8de847 accepts inactive infrastructure checkpoint 6a1733a134b2e63f3adfd8e24606965a5d702f91, explicitly leaving eight production gates open. Earlier F1 owner-readable-mode and F2 retained-chain findings are preserved, not erased by checkpoint acceptance.
+    - TASK-1612 canonical acceptance forbids production release, live caller wiring and an external release constructor. Latest comment 01a11c4c-b88b-78f0-bde2-8fbe2fb5e508 records REQUEST_CHANGES at 17b6ac3ecaafd158bdff1553bb43b4c5ca149780: F1 HostProfile::probe assumes PID1 instead of qualifying the actual nearer adopter. Preserve run-20261008/task1612-rework.md and .aida/handoff/task1612/CHECKPOINT_INDEPENDENT_REVIEW.md. No unreviewed dependency is supplied by that checkpoint.
+
+    Actual main inspection found the old session launcher; the proposed common publisher/transport surfaces are not production-capable there. Therefore TASK-1333 implementation/activation is blocked on independently accepted TASK-1612 transport, BUG-1808 common publisher/CommittedDispatch and the qualified strict-read vendor adapter with TASK-1607 occupancy integration. Design review may proceed now. Do not treat the current InProgress source status as dependency satisfaction. If the common owner lacks the parent-only authority/isolated runtime profile above, route that precise adapter gap for separate independent design disposition; no new operator question and no parallel implementation. TASK-1523 remains separately blocked by STORY-1527 even after a launch repair.
+
+    ## Races / refusal / exact future touch points
+
+    Before shared setup, validate trusted authority/config root and distinct scratch roots; pin actual object identity, reject symlink/rename substitution, root mismatch, scratch nested under source/store or overlapping arms. Revalidate current authority/roster and assignment generation at the common P4 sample after actual waiting child READY, before immutable C. A revoke, expiry, roster loss or occupancy transfer that wins before C cancels without lifecycle residue, preserving peers. After C the original live bound immediate dispatch consumes once under the signed historical semantics; do not add current-authority revalidation that contradicts that contract. New/delayed/recovered attempts need fresh authority. Lost acknowledgement is possible execution, never permission to reissue.
+
+    Use the signed sealed image and actual PID/start/thread/parent/FD joins, finite readiness/deadline, same-PID returned-ETXTBSY retry and owned cancellation/adopter qualification. Unknown image/runtime/host/userns/proc access or unsupported isolation refuses BEFORE grant/manifest/status/occupancy publication. No ordinary CLI bootstrap, child store lookup, network/forge wait or Rust lock crossing exec; wait/callback processing outside seat. One publication contributes grant, manifest, assignment, actual child occupancy and receipt. No source probing in the parent launch description beyond already authorized input gathering.
+
+    Files/symbols: reconstitute.rs::{run_headless,run_store_arm,run_baseline_arm,gather_baseline_inputs,build_baseline_prompt,BASELINE_WITHHELD}; session.rs::{spawn_vendor_headless_with_seat,headless_worktree_root,resolve_headless_vendor,resolve_agent_tuning,compose_headless_command}; seat_authority.rs validation interfaces consumed by the common owner; common BUG-1808 PreparedLaunchAdapter/WaitingChild/CommittedDispatch and TASK-1607 ChildSpawn after-image are PROPOSED integration contracts, not new code to implement here. Keep reporting via read_probe_output/unknown_reason and historical launch documentation honest. The concrete adapter files belong to their owners and must be rechecked when available.
+
+    ## Required meaningful isolated witnesses (proposed, NOT RUN)
+
+    Use disposable repo/store, fake HOME/AIDA_HOME, compiled fake vendor, real eventual reconstitute entrypoint/common adapter, deterministic barriers and owned processes only. No real vendor/reconstitution run in the live project. An unavailable production dependency means tests pending, not mocked pass.
+
+    1. trusted_root_empty_cwd: valid delegating parent/roster at project A plus empty arm scratch launches exactly once through common publisher; leaf records scratch cwd and sanitized tuning. Pair no grant, wrong project B, missing/corrupt roster, unauthorized Advisor child and nondelegating parent: zero vendor sentinel and unchanged grants/leases/occupancy/manifests/specs/history. Never make empty scratch itself a roster source.
+    2. baseline_surface_has_no_authority_root: sentinel secret criteria/source/store/other-arm artifacts at real roots; compiled leaf attempts absolute paths, relative traversal, symlink aliases, inherited FD/proc root, HOME config and project MCP endpoint. Every route to withheld context fails; allowed baseline prompt and own output work. Arm B gets exactly its explicit store prompt; matcher gets explicit pairs; neither accidentally leaks into A. Inspect actual argv/env/FD/mount/config footprint, not just prompt text. Include required supported strict-read runtime positive; blanket refusal fails acceptance.
+    3. no_process_cwd_race: run two differently rooted probes and an ordinary launch concurrently through the common plan with barriers; each observes its own root/config/cwd and parent's cwd is unchanged on success, refusal and spawn failure. Paired ordinary launcher compatibility proves no global override.
+    4. authority_and_cwd_change_at_p4: replace scratch/config root or revoke/transfer/expire before C; fail without leaf execution and preserve unrelated peer state. Pair unchanged valid root; post-C original immediate dispatch remains single-use under the signed rule, while new invalid attempt refuses. Snapshot common receipt and immutable C, not just exit code.
+    5. no_forged_or_duplicate_release: forged grant env, copied receipt, wrong waiting child, missing/truncated READY and lost ACK produce no extra dispatch. Controlled parent/creating-thread death before exec prevents sentinel; raced exec retains possible-execution evidence. TASK-1612 public-profile actual-adopter and supported dynamic runtime positives remain mandatory, not replaced by a declared PID1 or test-private profile.
+    6. output_truth_survives_launch_failure: pre-exec refusal, zero-byte log, exit-zero/no JSON, malformed output, empty traced-test denominator and matcher failure retain unknown_reason, stderr and exact artifact/log paths; never claim vendor ran from report exit 0. Pair valid regenerated/matched output and clean exit yielding scored result in a fixture with actual traced denominator. Preserve TASK-1-216/TASK-1327 coverage.
+
+    ## Out of scope and stop boundary
+
+    No alternate launcher, grant widening, protected broker, new production activation, pane policy redesign, general adversarial sandbox, score/metric rewrite or live north-star rerun. No changes to TASK-1593/TASK-1591/BUG-1811/BUG-1812 external reservations. Independent design signoff, dependency acceptance, real adapter positives and later exact-head review are distinct outstanding gates. Final authority-sensitive merge remains Joe/operator-owned. Authoring this sketch clears none of them.
+  created_at: 2026-10-08T16:48:45.513239488Z
+  modified_at: 2026-10-08T16:48:45.513239488Z
+  relayed_from: store-reconcile-sketch-author
 history:
 - id: 01a110e0-8876-74d3-87d1-91763f517baf
   author: joe
