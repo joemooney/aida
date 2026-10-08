@@ -1135,7 +1135,14 @@ impl GitBackend {
     /// holds it across its read-modify-write window.
     // trace:BUG-1612 | ai:claude
     pub(crate) fn lock_store(&self) -> Result<super::store_lock::StoreWriteGuard> {
-        super::store_lock::acquire(&self.root)
+        let guard = super::store_lock::acquire(&self.root)?;
+        // trace:TASK-1717 | ai:claude — callers check the store state before
+        // waiting; a sync holding the lock can leave a failed rebase behind
+        // in between, so the outermost holder checks again once it owns it.
+        if guard.is_outermost() {
+            crate::git_ops::ensure_store_write_safe(&self.root)?;
+        }
+        Ok(guard)
     }
 
     // Serialize a queue-file read-modify-write (registry/queues/<user>.yaml)
@@ -5386,5 +5393,55 @@ mod tests {
             .expect("queue writers deadlocked against the caller's own store lock");
         handle.join().unwrap();
         assert_eq!(result.unwrap(), 2);
+    }
+
+    // trace:TASK-1717 | ai:claude — a writer checks the store state before it
+    // waits for the lock; the holder can leave a rebase behind in between (a
+    // sync whose own clean-up failed). The writer checks again once it owns
+    // the lock and refuses, instead of writing onto the rebase HEAD.
+    #[test]
+    fn task_1717_writer_rechecks_store_state_after_acquiring_the_lock() {
+        use std::process::Command;
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        std::fs::create_dir_all(&root).unwrap();
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.email", "t@example.com"],
+            &["config", "user.name", "t"],
+            &["commit", "-q", "--allow-empty", "-m", "seed"],
+        ] {
+            assert!(Command::new("git")
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let backend = bug1677_backend(&root);
+        let guard = backend.lock_store().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let r2 = root.clone();
+        let handle = std::thread::spawn(move || {
+            let b = bug1677_backend(&r2);
+            tx.send(b.queue_add(sample_queue_entry("fay", 1))).unwrap();
+        });
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(rx.try_recv().is_err(), "the writer waits for the lock");
+        std::fs::create_dir_all(root.join(".git").join("rebase-merge")).unwrap();
+        drop(guard);
+        let result = rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("writer never finished");
+        handle.join().unwrap();
+        let err = result.expect_err("a rebase left behind must be refused");
+        assert!(
+            err.to_string().contains("refusing AIDA store write"),
+            "{err:#}"
+        );
+        std::fs::remove_dir_all(root.join(".git").join("rebase-merge")).unwrap();
+        assert!(backend.queue_list("fay", false).unwrap().is_empty());
     }
 }

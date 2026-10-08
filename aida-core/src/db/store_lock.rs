@@ -172,11 +172,57 @@ pub(super) fn holding_write() -> bool {
     HELD.with(|held| !held.borrow().is_empty())
 }
 
+impl StoreWriteGuard {
+    /// True for the guard that owns the file lock (the outermost acquisition
+    /// on this thread), false for a re-entrant level.
+    // trace:TASK-1717 | ai:claude
+    pub(crate) fn is_outermost(&self) -> bool {
+        self.file.is_some()
+    }
+}
+
+/// Run `f` as one store-writer transaction: take the store write lock for the
+/// git store at `root`, check that the store is safe to write while holding
+/// it, then run `f` and release on return. Everything a caller does inside
+/// `f` (reading the branch, index, HEAD or canonical files, staging,
+/// committing, rebasing and its own cleanup) is serialized with every other
+/// writer of the same store, including `GitBackend`'s spec and queue writes.
+///
+/// The lock is the one `GitBackend` uses (same file, same canonical root,
+/// re-entrant on this thread), so `f` may call backend writers or nest this
+/// function. It is not handed to child processes: the lock file is opened
+/// close-on-exec, so a hook or `git` child neither holds nor inherits it.
+/// Do not run network pushes, forge calls or cache refreshes inside `f`.
+// trace:TASK-1717 | ai:claude
+pub fn with_store_write_lock<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let _guard = acquire(root)?;
+    crate::git_ops::ensure_store_write_safe(root)?;
+    f()
+}
+
+/// Whether this thread holds the store write lock for `root`.
+// trace:TASK-1717 | ai:claude
+pub fn store_write_lock_held(root: &Path) -> bool {
+    let key = lock_key(root);
+    HELD.with(|held| held.borrow().get(&key).is_some_and(|n| *n > 0))
+}
+
+/// Whether this thread holds the store write lock for any store.
+// trace:TASK-1717 | ai:claude
+pub fn any_store_write_lock_held() -> bool {
+    holding_write()
+}
+
+/// Path of the store write lock file for the store rooted at `root`.
+// trace:TASK-1717 | ai:claude
+pub fn store_write_lock_path(root: &Path) -> PathBuf {
+    root.join(".aida").join(STORE_WRITE_LOCK_FILE)
+}
+
 /// Whether this thread currently holds the store write lock for `root`.
 #[cfg(test)]
 pub(crate) fn held_by_this_thread(root: &Path) -> bool {
-    let key = lock_key(root);
-    HELD.with(|held| held.borrow().get(&key).is_some_and(|n| *n > 0))
+    store_write_lock_held(root)
 }
 
 #[cfg(test)]
@@ -293,5 +339,102 @@ mod tests {
         let acquired = rx.recv().unwrap();
         handle.join().unwrap();
         assert!(acquired >= released);
+    }
+
+    // trace:TASK-1717 | ai:claude
+    #[test]
+    fn task_1717_closure_nests_and_excludes_other_threads_until_it_returns() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let (tx, rx) = mpsc::channel();
+        let r2 = root.clone();
+        let entered = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let entered2 = entered.clone();
+        let other = std::thread::spawn(move || {
+            entered2.wait();
+            with_store_write_lock(&r2, || {
+                tx.send(Instant::now()).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        let released = with_store_write_lock(&root, || {
+            // Same-thread nesting works and keeps the outer hold.
+            with_store_write_lock(&root, || {
+                assert!(store_write_lock_held(&root));
+                Ok(())
+            })?;
+            assert!(store_write_lock_held(&root));
+            entered.wait();
+            std::thread::sleep(Duration::from_millis(200));
+            assert!(rx.try_recv().is_err(), "another thread waits");
+            Ok(Instant::now())
+        })
+        .unwrap();
+        assert!(!store_write_lock_held(&root));
+        let acquired = rx.recv_timeout(Duration::from_secs(30)).unwrap();
+        other.join().unwrap();
+        assert!(acquired >= released);
+    }
+
+    // trace:TASK-1717 | ai:claude — a symlinked path to the store names the
+    // same lock (same file, same inode), and a different store does not wait.
+    #[cfg(unix)]
+    #[test]
+    fn task_1717_symlinked_root_shares_the_lock_and_other_stores_do_not_wait() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        std::fs::create_dir_all(&root).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&root, &link).unwrap();
+        let other = dir.path().join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        let guard = acquire(&root).unwrap();
+        {
+            use std::os::unix::fs::MetadataExt;
+            let a = std::fs::metadata(store_write_lock_path(&root)).unwrap();
+            let b = std::fs::metadata(store_write_lock_path(&link)).unwrap();
+            assert_eq!(a.ino(), b.ino());
+        }
+        let (tx, rx) = mpsc::channel();
+        let l2 = link.clone();
+        let o2 = other.clone();
+        let handle = std::thread::spawn(move || {
+            with_store_write_lock(&o2, || Ok(())).unwrap();
+            tx.send("other").unwrap();
+            with_store_write_lock(&l2, || Ok(())).unwrap();
+            tx.send("link").unwrap();
+        });
+        assert_eq!(rx.recv_timeout(Duration::from_secs(30)).unwrap(), "other");
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(rx.try_recv().is_err(), "the symlinked path waits");
+        drop(guard);
+        assert_eq!(rx.recv_timeout(Duration::from_secs(30)).unwrap(), "link");
+        handle.join().unwrap();
+    }
+
+    // trace:TASK-1717 | ai:claude — the safety check runs after the lock is
+    // taken, and the closure never runs on an unsafe store.
+    #[test]
+    fn task_1717_closure_refuses_a_store_mid_rebase_without_running() {
+        use std::process::Command;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert!(Command::new("git")
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap()
+            .success());
+        std::fs::create_dir_all(root.join(".git").join("rebase-merge")).unwrap();
+        let mut ran = false;
+        let err = with_store_write_lock(root, || {
+            ran = true;
+            Ok(())
+        })
+        .unwrap_err();
+        assert!(!ran);
+        assert!(err.to_string().contains("rebase in progress"), "{err:#}");
+        assert!(!store_write_lock_held(root), "released on refusal");
     }
 }

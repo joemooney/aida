@@ -63,6 +63,11 @@ pub use migration::{migrate_from_postgres, migrate_to_postgres};
 pub use postgres_backend::PostgresBackend;
 #[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
+// trace:TASK-1717 | ai:claude
+#[cfg(feature = "native")]
+pub use store_lock::{
+    any_store_write_lock_held, store_write_lock_held, store_write_lock_path, with_store_write_lock,
+};
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
 #[cfg(feature = "native")]
 pub use yaml_backend::YamlBackend;

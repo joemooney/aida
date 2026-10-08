@@ -276,6 +276,35 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     }
 }
 
+/// Push exactly commit `sha` to `remote`'s `branch` (`<sha>:refs/heads/<branch>`).
+/// Returns true on success, false if rejected (non-fast-forward), like
+/// [`push`]. Store writers capture `sha` under the store write lock and push
+/// it after releasing the lock, so a later local commit is never published
+/// by accident. Never call this while holding a store write lock: the push
+/// runs hooks and network I/O.
+// trace:TASK-1717 | ai:claude
+#[cfg(feature = "native")]
+pub fn push_exact(repo: &Path, remote: &str, sha: &str, branch: &str) -> Result<bool> {
+    // external-prose-classifier: git_ops::push
+    debug_assert!(
+        !crate::db::any_store_write_lock_held(),
+        "store push must run outside the store write lock"
+    );
+    reject_option_like("branch", branch)?;
+    let refspec = format!("{sha}:refs/heads/{branch}");
+    let result = git(repo, &["push", "--end-of-options", remote, &refspec])?;
+    if result.success {
+        Ok(true)
+    } else if crate::external_tool_output::contains_any_case_insensitive(
+        &result.stderr,
+        crate::external_tool_output::GIT_PUSH_REJECTED,
+    ) {
+        Ok(false)
+    } else {
+        anyhow::bail!("git push failed: {}", result.stderr);
+    }
+}
+
 /// Refuse a dash-led `value` that git would read as an option. Used where
 /// `--end-of-options` is not honored end to end, e.g. `git pull`, which
 /// forwards its remote and branch to `git fetch` without the marker.
@@ -3585,7 +3614,16 @@ pub fn collect_taken_short_ids(
     taken
 }
 
+/// Assign agreed ids to every object that lacks one, and commit the result.
+/// The whole run (counter read, object scan, writes, stage and commit) is one
+/// store-writer transaction; called from inside an enclosing one (a pull)
+/// it nests on the same lock.
+// trace:TASK-1717 | ai:claude
 pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
+    crate::db::with_store_write_lock(store_path, || merge_gate_locked(store_path))
+}
+
+fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
     use crate::node::AgreedCounters;
     use crate::object_store;
 
@@ -3767,27 +3805,45 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     Ok(assignments)
 }
 
+/// Commit pending `objects/` and `metadata.yaml` changes and publish them.
+///
+/// Stage and commit run under the store write lock, which also captures the
+/// exact commit to push. The push runs after the lock is released and names
+/// that commit, never the moving branch. On rejection the lock is taken
+/// again, the current store is rebased onto the remote (keeping any commit
+/// another writer made meanwhile), and the new head is pushed. A writer
+/// that changes store files must do so before calling, or inside its own
+/// enclosing store-writer transaction.
+// trace:TASK-1717 | ai:claude
 pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
-    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+    let committed = crate::db::with_store_write_lock(aida_repo, || {
+        let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
-    // Stage all changes in objects/ and metadata.yaml
-    add_all(aida_repo, "objects")?;
-    if aida_repo.join("metadata.yaml").exists() {
-        add(aida_repo, &["metadata.yaml"])?;
-    }
+        // Stage all changes in objects/ and metadata.yaml
+        add_all(aida_repo, "objects")?;
+        if aida_repo.join("metadata.yaml").exists() {
+            add(aida_repo, &["metadata.yaml"])?;
+        }
 
-    // Commit
-    let committed = commit(aida_repo, message)?;
-    if !committed {
-        return Ok(false); // nothing to sync
-    }
+        // Commit
+        if !commit(aida_repo, message)? {
+            return Ok(None); // nothing to sync
+        }
+        Ok(Some((branch, head_sha(aida_repo)?)))
+    })?;
+    let Some((branch, mut sha)) = committed else {
+        return Ok(false);
+    };
 
     // Push — retry with pull on rejection
     for _attempt in 0..MAX_CAS_RETRIES {
-        match push(aida_repo, "origin", &branch)? {
+        match push_exact(aida_repo, "origin", &sha, &branch)? {
             true => return Ok(true),
             false => {
-                pull_rebase(aida_repo, "origin", &branch)?;
+                sha = crate::db::with_store_write_lock(aida_repo, || {
+                    pull_rebase(aida_repo, "origin", &branch)?;
+                    head_sha(aida_repo)
+                })?;
             }
         }
     }
@@ -6263,5 +6319,106 @@ mod tests {
         // An ordinary pull still works.
         pull_rebase(&repo, "origin", "aida-store").unwrap();
         assert!(reject_option_like("branch", "main").is_ok());
+    }
+
+    // trace:TASK-1717 | ai:claude — the gate is one store-writer transaction:
+    // with another writer holding the lock it creates, reads and writes
+    // nothing (not even the registry dir) until the lock is free.
+    #[test]
+    fn task_1717_merge_gate_waits_for_the_store_lock_before_touching_anything() {
+        use crate::models::{Requirement, RequirementType};
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+        let mut pending = Requirement::new("TASK-2-001".into(), String::new());
+        pending.spec_id = Some("TASK-2-001".into());
+        pending.req_type = RequirementType::Task;
+        crate::object_store::write_object(&objects, &pending).unwrap();
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        let (held_tx, held_rx) = mpsc::channel();
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let s2 = store.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&s2, || {
+                held_tx.send(()).unwrap();
+                go_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        held_rx.recv().unwrap();
+        let s3 = store.clone();
+        let gate = std::thread::spawn(move || tx.send(merge_gate(&s3)).unwrap());
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(rx.try_recv().is_err(), "the gate waits for the lock");
+        assert!(
+            !store.join("registry").exists(),
+            "nothing created before the lock"
+        );
+        go_tx.send(()).unwrap();
+        holder.join().unwrap();
+        let assignments = rx.recv_timeout(Duration::from_secs(30)).unwrap().unwrap();
+        gate.join().unwrap();
+        assert_eq!(assignments.len(), 1);
+        assert!(store.join("registry/agreed_counters.toml").exists());
+        assert!(
+            !has_changes(&store).unwrap(),
+            "counters and objects committed"
+        );
+    }
+
+    // trace:TASK-1717 | ai:claude — `sync_objects` commits under the lock and
+    // pushes the captured commit after releasing it: a pre-push hook finds the
+    // lock free, and origin receives exactly that commit.
+    #[cfg(unix)]
+    #[test]
+    fn task_1717_sync_objects_pushes_the_captured_commit_outside_the_lock() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        run_git(
+            dir.path(),
+            &["init", "-q", "--bare", "-b", "main", "origin.git"],
+        );
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        run_git(&repo, &["push", "-q", "origin", "main"]);
+        // Lock files stay out of commits, like a real store's .gitignore.
+        std::fs::write(repo.join(".gitignore"), ".aida/*.lock\n").unwrap();
+        run_git(&repo, &["add", ".gitignore"]);
+        run_git(&repo, &["commit", "-qm", "ignore"]);
+        let log = dir.path().join("prepush.log");
+        let hook = repo.join(".git/hooks/pre-push");
+        std::fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh\nif flock -n '{}' true; then echo free; else echo held; fi >> '{}'\ncat >> '{}'\n",
+                crate::db::store_write_lock_path(&repo).display(),
+                log.display(),
+                log.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::create_dir_all(repo.join("objects")).unwrap();
+        std::fs::write(repo.join("objects/a.yaml"), "a: 1\n").unwrap();
+
+        assert!(sync_objects(&repo, "chore: sync objects").unwrap());
+        let head = run_git(&repo, &["rev-parse", "HEAD"]);
+        let log = std::fs::read_to_string(&log).unwrap();
+        assert!(log.starts_with("free\n"), "{log}");
+        assert!(log.contains(&head), "pushed the captured commit: {log}");
+        assert_eq!(run_git(&bare, &["rev-parse", "refs/heads/main"]), head);
     }
 }

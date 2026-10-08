@@ -1143,6 +1143,119 @@ mod task_1450_edit_event_tests {
     }
 }
 
+/// What `aida db sync`'s locked local window produced.
+// trace:TASK-1717 | ai:claude
+struct DbSyncWindow {
+    branch: String,
+    /// The store commit to push: HEAD as the window closed.
+    head: Option<String>,
+    /// Conflicts with what the pull brought in; `None` when nothing was pulled.
+    conflicts: Option<Vec<aida_core::conflict::RequirementConflict>>,
+}
+
+/// `aida db sync`'s local transaction: commit pending changes, then pull
+/// --rebase, then scan the result. The caller holds the store write lock for
+/// the whole call, so reads here are canonical (the object files, never the
+/// cache) and a failed rebase is cleaned up by `pull_rebase` before the lock
+/// is released.
+// trace:TASK-1717 | ai:claude
+fn db_sync_local_window(
+    store_path: &std::path::Path,
+    pull: bool,
+    push: bool,
+    message: Option<&str>,
+) -> Result<DbSyncWindow> {
+    let branch =
+        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "main".to_string());
+
+    // ── Order matters: commit local first, THEN pull --rebase ──
+    // Rebase requires a clean working tree, so we have to commit
+    // any pending edits (typically from `aida edit` paths that
+    // didn't auto-commit, or manual file edits) before pulling.
+    // Old order was pull → commit, which failed when there were
+    // unstaged changes — git rebase refuses, and the follow-up
+    // commit ran on a partial-rebase state with a confusing
+    // empty error. trace:BUG-1-051 | ai:claude
+
+    // Step 1: stage and commit any pending changes.
+    //
+    // Stage everything in the worktree (`git add -A .`) instead
+    // of cherry-picking specific subdirs like `objects/`. The
+    // orphan branch's own .gitignore already excludes runtime
+    // artifacts (cache.db, lock files); whatever's left modified
+    // is canonical state — including `.aida/dispenser.toml`,
+    // which gets dirtied by ID dispensing and would otherwise be
+    // skipped by an objects-only stage. Without this, has_changes
+    // could report "yes" while nothing gets staged, and the
+    // follow-up `git commit` would fail with an empty error.
+    // trace:BUG-1-051 | ai:claude
+    let has_changes = aida_core::git_ops::has_changes(store_path)?;
+    if has_changes {
+        let msg = message.unwrap_or("chore: sync pending changes");
+        aida_core::git_ops::add_all(store_path, ".")?;
+        aida_core::git_ops::commit(store_path, msg)?;
+        println!("Committed: {}", msg);
+    } else if !pull && !push {
+        println!("Nothing to commit.");
+    }
+
+    // Step 2: pull --rebase. Bare `git pull` fails on divergent
+    // branches when the user has no `pull.rebase` / `pull.ff`
+    // config — the orphan-store model wants linear history
+    // anyway (replay local commits on top of remote), so
+    // rebase is the right default.
+    let mut conflicts = None;
+    if pull && !aida_core::git_ops::has_remote(store_path, "origin") {
+        // BUG-432: local-only / fresh-init projects have no `origin`
+        // yet (the aida-demo + pre-remote flow). The pull is a graceful
+        // skip, not a fatal — otherwise `aida queue work`'s startup sync
+        // (and a standalone `aida db sync --pull`) die before a remote
+        // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
+        // trace:BUG-432 | ai:claude
+        println!("  No `origin` remote — skipping pull (local-only project).");
+    } else if pull {
+        // Snapshot local state before pull for conflict detection
+        let canonical = aida_core::GitBackend::new(store_path)?;
+        let local_reqs = canonical.load().map(|s| s.requirements).unwrap_or_default();
+
+        println!("Pulling from origin/{}...", branch);
+        if let Err(e) = aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
+            // A failed rebase leaves the repo in a partial
+            // state — but only advise `git rebase --abort`
+            // when a rebase is actually in progress; a
+            // transient failure (e.g. a network 502) with no
+            // rebase in flight is a different situation.
+            // Reuses the same check as `aida pull`'s
+            // store-leg hint so both emission sites agree.
+            // trace:BUG-1500 | ai:claude
+            anyhow::bail!(
+                "Pull failed: {}",
+                crate::store_pull_failure_hint(store_path, &e.to_string())
+            );
+        }
+        println!("  Pull complete.");
+        let remote = canonical.load()?;
+        let collisions = crate::find_spec_id_collisions(&remote);
+        if !collisions.is_empty() {
+            anyhow::bail!(
+                "{}",
+                crate::spec_id_collision_recovery_message(&collisions, store_path)
+            );
+        }
+        // Detect conflicts with remote changes
+        conflicts = Some(aida_core::conflict::detect_store_conflicts(
+            &local_reqs,
+            &remote.requirements,
+        ));
+    }
+
+    Ok(DbSyncWindow {
+        branch,
+        head: aida_core::git_ops::head_sha(store_path).ok(),
+        conflicts,
+    })
+}
+
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
@@ -7748,155 +7861,110 @@ pub(crate) fn handle_git_backend_command(
                 anyhow::bail!("Not a git repository: {}", store_path.display());
             }
 
-            let branch = aida_core::git_ops::current_branch(store_path)
-                .unwrap_or_else(|_| "main".to_string());
+            // trace:TASK-1717 | ai:claude — the pending commit, the pull
+            // --rebase and its own cleanup, the collision scan and the
+            // capture of the commit to push are ONE store-writer transaction
+            // under the store write lock, so no spec edit, queue write,
+            // mailbox digest or second sync can touch the index/HEAD between
+            // them. The push, mirrors, auto-bump and maintenance run after
+            // the lock is released.
+            let window = aida_core::db::with_store_write_lock(store_path, || {
+                db_sync_local_window(store_path, *pull, *push, message.as_deref())
+            })?;
+            let branch = window.branch.clone();
+            let mut push_sha = window.head;
 
-            // ── Order matters: commit local first, THEN pull --rebase ──
-            // Rebase requires a clean working tree, so we have to commit
-            // any pending edits (typically from `aida edit` paths that
-            // didn't auto-commit, or manual file edits) before pulling.
-            // Old order was pull → commit, which failed when there were
-            // unstaged changes — git rebase refuses, and the follow-up
-            // commit ran on a partial-rebase state with a confusing
-            // empty error. trace:BUG-1-051 | ai:claude
-
-            // Step 1: stage and commit any pending changes.
-            //
-            // Stage everything in the worktree (`git add -A .`) instead
-            // of cherry-picking specific subdirs like `objects/`. The
-            // orphan branch's own .gitignore already excludes runtime
-            // artifacts (cache.db, lock files); whatever's left modified
-            // is canonical state — including `.aida/dispenser.toml`,
-            // which gets dirtied by ID dispensing and would otherwise be
-            // skipped by an objects-only stage. Without this, has_changes
-            // could report "yes" while nothing gets staged, and the
-            // follow-up `git commit` would fail with an empty error.
-            // trace:BUG-1-051 | ai:claude
-            let has_changes = aida_core::git_ops::has_changes(store_path)?;
-            if has_changes {
-                let msg = message.as_deref().unwrap_or("chore: sync pending changes");
-                aida_core::git_ops::add_all(store_path, ".")?;
-                aida_core::git_ops::commit(store_path, msg)?;
-                println!("Committed: {}", msg);
-            } else if !*pull && !*push {
-                println!("Nothing to commit.");
-            }
-
-            // Step 2: pull --rebase. Bare `git pull` fails on divergent
-            // branches when the user has no `pull.rebase` / `pull.ff`
-            // config — the orphan-store model wants linear history
-            // anyway (replay local commits on top of remote), so
-            // rebase is the right default.
-            if *pull && !aida_core::git_ops::has_remote(store_path, "origin") {
-                // BUG-432: local-only / fresh-init projects have no `origin`
-                // yet (the aida-demo + pre-remote flow). The pull is a graceful
-                // skip, not a fatal — otherwise `aida queue work`'s startup sync
-                // (and a standalone `aida db sync --pull`) die before a remote
-                // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
-                // trace:BUG-432 | ai:claude
-                println!("  No `origin` remote — skipping pull (local-only project).");
-            } else if *pull {
-                // Snapshot local state before pull for conflict detection
-                let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
-
-                println!("Pulling from origin/{}...", branch);
-                match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
-                    Ok(()) => {
-                        println!("  Pull complete.");
-                        ensure_no_spec_id_collisions(store_path)?;
-
-                        // Detect conflicts with remote changes
-                        let remote_reqs =
-                            backend.load().map(|s| s.requirements).unwrap_or_default();
-
-                        let conflicts =
-                            aida_core::conflict::detect_store_conflicts(&local_reqs, &remote_reqs);
-
-                        if !conflicts.is_empty() {
-                            println!();
-                            println!("{}", "Conflicts detected:".red().bold());
-                            for conflict in &conflicts {
-                                println!();
-                                print!("{}", conflict);
-                            }
-                            println!();
-                            println!(
-                                "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
-                            );
-                        }
-
-                        // STORY-86: also scan the code repo's default
-                        // branch for any spec-referencing commits that
-                        // arrived (possibly via a separate `git pull`)
-                        // and bump matching Done specs. `db sync --pull`
-                        // is decoupled from `git pull`, so we don't know
-                        // a pre_sha here — fall back to HEAD~50. The
-                        // `status == Done` guard inside the helper keeps
-                        // this idempotent. trace:STORY-86 | ai:claude
-                        if auto_bump_enabled() {
-                            if let Some(project_root) = store_path.parent() {
-                                let storage = Storage::new(store_path);
-                                match auto_bump_done_to_completed(
-                                    project_root,
-                                    store_path,
-                                    None,
-                                    &storage,
-                                ) {
-                                    Ok(flips) => print_auto_bump_summary(&flips),
-                                    Err(e) => {
-                                        eprintln!(
-                                            "  {} auto-bump failed: {}",
-                                            "Warning:".yellow().bold(),
-                                            e
-                                        );
-                                    }
-                                }
-                            }
-                        }
+            if let Some(conflicts) = &window.conflicts {
+                if !conflicts.is_empty() {
+                    println!();
+                    println!("{}", "Conflicts detected:".red().bold());
+                    for conflict in conflicts {
+                        println!();
+                        print!("{}", conflict);
                     }
-                    Err(e) => {
-                        // A failed rebase leaves the repo in a partial
-                        // state — but only advise `git rebase --abort`
-                        // when a rebase is actually in progress; a
-                        // transient failure (e.g. a network 502) with no
-                        // rebase in flight is a different situation.
-                        // Reuses the same check as `aida pull`'s
-                        // store-leg hint so both emission sites agree.
-                        // trace:BUG-1500 | ai:claude
-                        anyhow::bail!(
-                            "Pull failed: {}",
-                            crate::store_pull_failure_hint(store_path, &e.to_string())
-                        );
+                    println!();
+                    println!(
+                        "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
+                    );
+                }
+
+                // STORY-86: also scan the code repo's default
+                // branch for any spec-referencing commits that
+                // arrived (possibly via a separate `git pull`)
+                // and bump matching Done specs. `db sync --pull`
+                // is decoupled from `git pull`, so we don't know
+                // a pre_sha here — fall back to HEAD~50. The
+                // `status == Done` guard inside the helper keeps
+                // this idempotent. trace:STORY-86 | ai:claude
+                if auto_bump_enabled() {
+                    if let Some(project_root) = store_path.parent() {
+                        let storage = Storage::new(store_path);
+                        match auto_bump_done_to_completed(project_root, store_path, None, &storage)
+                        {
+                            Ok(flips) => print_auto_bump_summary(&flips),
+                            Err(e) => {
+                                eprintln!(
+                                    "  {} auto-bump failed: {}",
+                                    "Warning:".yellow().bold(),
+                                    e
+                                );
+                            }
+                        }
                     }
                 }
             }
 
             if *push {
                 println!("Pushing to origin/{}...", branch);
-                let origin_ok = match aida_core::git_ops::push(store_path, "origin", &branch) {
+                // trace:TASK-1717 | ai:claude — push the commit captured under
+                // the lock, by SHA. A rejection retakes the lock, rebases the
+                // CURRENT store (keeping any commit another writer made since)
+                // and pushes the new head once; a second rejection fails.
+                let pushed = match push_sha.as_deref() {
+                    None => Err(anyhow::anyhow!("store has no commit to push")),
+                    Some(sha) => aida_core::git_ops::push_exact(store_path, "origin", sha, &branch),
+                };
+                let origin_sha = match pushed {
                     Ok(true) => {
                         println!("  Push complete.");
-                        true
+                        push_sha.clone()
                     }
                     Ok(false) => {
                         println!("  Push rejected. Pulling and retrying...");
-                        aida_core::git_ops::pull_rebase(store_path, "origin", &branch)?;
-                        aida_core::git_ops::push(store_path, "origin", &branch)?;
+                        let sha = aida_core::db::with_store_write_lock(store_path, || {
+                            aida_core::git_ops::pull_rebase(store_path, "origin", &branch)
+                                .map_err(|e| {
+                                    anyhow::anyhow!(
+                                        "Pull failed: {}",
+                                        crate::store_pull_failure_hint(store_path, &e.to_string())
+                                    )
+                                })?;
+                            crate::ensure_no_spec_id_collisions_canonical(store_path)?;
+                            aida_core::git_ops::head_sha(store_path)
+                        })?;
+                        if !aida_core::git_ops::push_exact(store_path, "origin", &sha, &branch)? {
+                            anyhow::bail!(
+                                "Push rejected again after rebasing onto origin/{branch}; \
+                                 your commits are kept locally. Re-run `aida db sync --pull --push`."
+                            );
+                        }
                         println!("  Push complete after rebase.");
-                        true
+                        push_sha = Some(sha);
+                        push_sha.clone()
                     }
                     Err(e) => {
                         eprintln!("  Push failed: {}", e);
-                        false
+                        None
                     }
                 };
 
                 // TASK-1096: fan out the store push to every configured mirror
                 // remote so a clone can't silently leave one hub behind — the
                 // drift-prevention leg. trace:TASK-1096 | ai:claude
-                if origin_ok {
+                // trace:TASK-1717 | ai:claude — only the commit origin accepted.
+                if let Some(sha) = origin_sha {
                     if let Some(project_root) = store_path.parent() {
-                        fan_out_mirror_push(store_path, &branch, project_root);
+                        crate::fan_out_store_mirror_push(store_path, &branch, &sha, project_root);
                     }
                 }
             }

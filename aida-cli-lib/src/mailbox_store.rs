@@ -90,16 +90,33 @@ pub(crate) fn read_canonical_messages(store_root: &Path) -> Result<Vec<Message>>
 ///   agents digesting concurrently merge without edit conflict. Returns the count
 ///   newly written; the CALLER stages + commits the orphan-store change.
 ///   trace:TASK-605 | ai:claude
+#[cfg(test)]
 pub(crate) fn digest_local_to_canonical(store_root: &Path, project_root: &Path) -> Result<usize> {
-    use std::collections::HashMap;
     let local = read_local_messages(project_root)?;
+    digest_snapshot_to_canonical(store_root, &local)
+}
+
+/// Write the already-read local messages `local` into the canonical layer,
+/// comparing each against the canonical copy re-read under the store write
+/// lock: a message is written only when it is new or carries a higher state
+/// rank (a newer canonical tombstone is never overwritten by stale local
+/// state). Takes the store write lock itself (re-entrant), so a direct call
+/// cannot write canonical files outside a store-writer transaction; callers
+/// that also stage and commit hold the lock across both.
+// trace:TASK-1717 | ai:claude
+pub(crate) fn digest_snapshot_to_canonical(store_root: &Path, local: &[Message]) -> Result<usize> {
+    aida_core::db::with_store_write_lock(store_root, || write_snapshot_locked(store_root, local))
+}
+
+fn write_snapshot_locked(store_root: &Path, local: &[Message]) -> Result<usize> {
+    use std::collections::HashMap;
     let canonical_by_id: HashMap<String, Message> = read_canonical_messages(store_root)?
         .into_iter()
         .map(|m| (m.id.clone(), m))
         .collect();
     let cdir = canonical_dir(store_root);
     let mut written = 0usize;
-    for msg in &local {
+    for msg in local {
         let should_write = match canonical_by_id.get(&msg.id) {
             None => true,
             Some(canonical) => message_state_rank(msg) > message_state_rank(canonical),
