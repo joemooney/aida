@@ -1,0 +1,19 @@
+{
+  "id": "5ffcec62-ae64-4bcd-ba6c-73c24825feaf",
+  "thread_id": "5ffcec62-ae64-4bcd-ba6c-73c24825feaf",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1321-recovery-claude"
+  },
+  "timestamp": 1791480324427,
+  "body": "Root read currentfullworkspaceprocess2978379 environment: fake HOME/AIDA_HOME and TMPDIR under scratch fence, GIT_CONFIG_NOSYSTEM1, privateCargo target, no grant/context. Actualcwd remains shared linkedWTpool0, no GIT_DIR/WORK_TREE override. This does not prove independentGit/store isolation because AIDA canonicalroot can resolve main from linkedworktree. Preserve real command results but do NOT claim fullindependentstore/Git fence from fakeHOME alone. No livewritefindingalleged. Report this precise limitation; don't rerunfullworkspaceunnecessarily, rootintegrationexportwill coverapplicablebroadchecks. Future potentially stateful witnesses must use actualprivateexport/repo/store andguardedforge/vendor boundaries. Currentnormalboundedrunisn't beingcancelledbyroot basedonlyhypotheticaleffects; don't widenidentity/env to makeitpass.\n",
+  "subject": "Full-run isolation attribution: private HOME but linked Git/store still present",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

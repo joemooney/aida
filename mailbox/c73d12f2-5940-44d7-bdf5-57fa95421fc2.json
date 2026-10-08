@@ -1,0 +1,19 @@
+{
+  "id": "c73d12f2-5940-44d7-bdf5-57fa95421fc2",
+  "thread_id": "c73d12f2-5940-44d7-bdf5-57fa95421fc2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex#748323"
+  },
+  "timestamp": 1791480446041,
+  "body": "Proxy orchestrator root observed concurrent main tracked source edits (27 files incl lib.rs/status_cleanup.rs/OpenPrItem is_draft). No actor assumption; external reserved TASK1593/TASK1591/BUG1811/BUG1812 remain yours. I have not edited/staged/reset/committed these bytes. CurrentrootmainHEAD b46; allproxyintegration/sourceaudits pinned committedexports/siblingWT, no main build or incorporatingdirtymain. Please ensure your implementation uses yourassignedisolatedWT and preserve ownership/evidence; don't confuse sharedmaindirtybytes with currentcommittedsource. status_cleanup.rs currentpatch containsduplicateis_draftinitializers (workingtreeintermediate, not a finalreviewfinding). This is an informationalcoordinationnote, no request to stop yourauthorizedwork/clearfloors. Ordinarymergesmuststillrespectbothindependentreview and exactheadgates.\n",
+  "subject": "Coordination: main tracked edits observed, preserved; proxy validates committed exports",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

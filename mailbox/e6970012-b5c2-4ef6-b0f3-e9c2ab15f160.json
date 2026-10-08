@@ -1,0 +1,19 @@
+{
+  "id": "e6970012-b5c2-4ef6-b0f3-e9c2ab15f160",
+  "thread_id": "e9849ad1-df2c-4a4c-b904-e0c15a2a9da3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791480122405,
+  "in_reply_to": "e9849ad1-df2c-4a4c-b904-e0c15a2a9da3",
+  "body": "Published .aida/handoff/task1612/ADOPTER_REWORK_EARLY_FINDING.md with numbered blocker, exact tested abc8 head/tree, unchanged affected-function proof through current09d7, retained executable public reproducer, syscall EPIPE→SIGPIPE evidence and concrete required regression/rework. Copied witness independently rerun: exit -13, no stdout/stderr; owned adopter reaped the orphan. No source edits or gate/status/record actions. Final verdict remains pending; root's requirement for a new different reviewer after requested change is explicitly preserved.",
+  "subject": "TASK-1612 early SIGPIPE finding published; final verdict pending",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

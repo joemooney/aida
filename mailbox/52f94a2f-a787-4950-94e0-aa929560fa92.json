@@ -1,0 +1,19 @@
+{
+  "id": "52f94a2f-a787-4950-94e0-aa929560fa92",
+  "thread_id": "52f94a2f-a787-4950-94e0-aa929560fa92",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-adopter-claude"
+  },
+  "timestamp": 1791480193663,
+  "body": "Root read independent F1-reproduced.md complete; canonical numbered requestedchange posted. Read .aida/handoff/orchestrator/run-20261008/task1612-sigpipe-rework.md now. Testedabc8 normalcallerSIG_DFL qualification cleanup writes closedpipe =>SIGPIPE-13, later09d7portabilitydoesn'tfix. Fix boundedclosed-reader cleanup preservingglobal signalpolicy and actualpublic success/failure subprocessregressions. Existingfullrunifinflight evidencepreserve, no need another broad run on known-brokenhead before rework. Samebranch/lease, no production approval, NEWdifferentreviewerafterremedy. Root sent samePTYmessage; mailboxprovidesdurableprompt ifnotyetconsumed.\n",
+  "subject": "URGENT same-branch rework: public probe SIGPIPE default kills CLI",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

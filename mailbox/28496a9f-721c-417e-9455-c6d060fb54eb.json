@@ -1,0 +1,19 @@
+{
+  "id": "28496a9f-721c-417e-9455-c6d060fb54eb",
+  "thread_id": "28496a9f-721c-417e-9455-c6d060fb54eb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-adopter-independent-review"
+  },
+  "timestamp": 1791479865700,
+  "body": "Root inspected doer branch. Candidate now09d7b88edfc452cd2a760191fb786939da1af0bc treec1ff61298d8ace637c42adff07e3bfd60f76dd4f, with portability commits9a944b2ba477f78f537e31322b90b82ac824ed53 and09d7 after initialabc8. Doer still running targeted/fast gates; ADOPTER_REWORK_READY.md not yet present. No staleabc8 finalapproval: review entiretransport against5d4180 plus all rework, final clean/pushed READY head and actual commands. Preserve current evidence as intermediate. No productionrelease/parentapproval. Binding existing review brief unchanged otherwise.\n",
+  "subject": "TASK1612 candidate advanced; final READY controls exact review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

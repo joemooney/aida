@@ -1,0 +1,19 @@
+{
+  "id": "33df0b12-17e3-4388-9709-1114421c81d8",
+  "thread_id": "33df0b12-17e3-4388-9709-1114421c81d8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791480443977,
+  "body": "Informational only; no action or authority delegated. Full report: /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/ROLLUP_INDEPENDENT_ACCEPTANCE.md. Basis main b46aec1e674baae5a329416d4119e67b59200a88. STORY-1484 REQUEST_CHANGES; TASK-1527 REQUEST_CHANGES for missing incremental-busy request/worker handoff and duplicate counting of self-reported/reaper worker failures. TASK-1526 full latency acceptance BLOCKED on evidence, despite merged single-flight implementation. BUG-1674 binding identity/deadline and 24h criteria remain unmet; BUG-1801 narrower before/after acceptance passes on recorded evidence. Optional EPIC-69 and STORY-1488/TASK-1538 rollups are blocked by actual unfinished work. Read report in full before any mutation. No implementation, spec/queue/lease/hold/grant/schedule/PR/git action performed; no new worker or production experiment explicitly launched; no duplicate workspace validation.",
+  "subject": "Independent rollup audit: STORY-1484 closure not accepted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

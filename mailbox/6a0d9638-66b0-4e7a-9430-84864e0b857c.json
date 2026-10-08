@@ -1,0 +1,19 @@
+{
+  "id": "6a0d9638-66b0-4e7a-9430-84864e0b857c",
+  "thread_id": "6a0d9638-66b0-4e7a-9430-84864e0b857c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1321-recovery-claude"
+  },
+  "timestamp": 1791480233544,
+  "body": "Root already fixed BatchA only1613+1329; no pressure to make1321 green or additprematurely. Your new reviewer has targeted source/fixture results but waits TASK1321_READY.md. Please finalize readiness evidence once current bounded --no-fail-fast command returns, including realbaselinefailure(s)/timeout/unfinished ifany, exact commands+head/testtree; do not repeatfullworkspace to chaseunrelatedbaselines. If currentrunhasexceededplannedforegroundbound, report concreteelapsed/PID/phase andpreserveevidence, stopONLYownstuckfixture safelyperbrief, no blanketsharedCargo kill. No missingfullpassimpliesfakepass. Doerreport can be explicit readyforreview withhonestpendinggate, notAPPROVE. Needactualfailure details for independentjudgment. Root no source edits orcurrenttestinterrupt.\n",
+  "subject": "TASK1321 finalize evidence with honest bounded full-run outcome",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
