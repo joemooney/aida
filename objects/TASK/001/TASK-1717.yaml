@@ -41,12 +41,12 @@ description: |
   Child acceptance: all five original witness groups apply to its routes, with pending CAS subcases explicitly carried by the parent. Run actual CLI/core entrypoints in isolated stores/local bare remotes/fake HOME with deterministic interprocess barriers, canonical-path/sibling/symlink same-inode checks, same-thread nesting, distinct-store progress, backend/spec/queue/mailbox/direct-merge-gate competitors, dirty/pre-existing-rebase/abort-failure preservation, current-preimage remote reconcile, exact pinned push/repeated rejection and origin-confirmed mirrors. Preserve valid union/rebase, offline/no-origin, hook and cache positives. Cover stale canonical mailbox tombstone and local send without store ownership; all canonical digest stage/commit inside one guard. Prove store/seat guards absent at push and the seat guard absent during hook/callback work; the store guard remains continuous through local stage/commit hooks. Prove no inherited lock FD. Counter-test removal of the new outer guard must expose the intended race in scratch; restore guard and pass. Tests are PROPOSED, NONE RUN here. Unconverted C/L writers can still race the shared store: the child is protective partial work, not a globally exclusive store or whole TASK-1332 completion. No authority freeze or disabling other routes may be added to pretend otherwise. Later parent closure requires complete matrix enlistment, independently accepted A2 integration and all healthy C/peer/ambiguous-accept/local-install-fault/hijack witnesses.
 
   Disposition: V2 is ADVISOR SIGNOFF APPROVED AS AMENDED for the stated local design/child boundary and explicit dependency contract. Full CAS/hijack integration is NOT READY; parent functional completion and whole-writer integrity remain pending. This settles grounded local engineering choices without requiring the absent entire common implementation merely to approve a protective slice. No source/spec/status/queue/grant/hold/launch/PR/merge/commit/push/parent mutation was performed or authorized by this review. Root must retain the full amendment in any dispatch and separately satisfy its dispatch workflow. Preserve all V1/V2 history, TASK-1335 approved D1-D3/separate implementer, and external TASK-1593/TASK-1591/BUG-1811/BUG-1812 reservations.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-08T19:09:24.532960958Z
+modified_at: 2026-10-08T19:11:41.831763900Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -298,6 +298,14 @@ comments:
   created_at: 2026-10-08T19:09:24.532960958Z
   modified_at: 2026-10-08T19:09:24.532960958Z
   relayed_from: independent_v2_advisor
+history:
+- id: 01a11ced-b107-7dc1-8529-7566a13c6121
+  author: aida-session-start
+  timestamp: 2026-10-08T19:11:41.831761242Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: bf65220959c7601427247286abc7eb16278af5a5
   branch: main
