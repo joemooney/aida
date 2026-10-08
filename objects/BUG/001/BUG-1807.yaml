@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T04:01:28.225250748Z
+modified_at: 2026-10-08T04:01:28.525942325Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -52,6 +52,11 @@ comments:
     PROXY DECISION: independent ENUMERATION_INDEPENDENT_REVIEW.md and actual canonical approval cover exact e9533b55deddfdf81d7267f8f6d091ae54e0fa41. All reproduced strict-inventory failure-to-absence findings are resolved, with six actual fired IO faults and preserved object/queue bytes. Accept the branch for a one-item integration PR; mark Done pending remote required CI and merge. Main advanced to5d4180e5ded8a55ad1b02beac5571c190d3da0ac through independently reviewed BUG1806; git merge-tree reports no conflict/no source resolution. No authority-model expansion or gate override.
   created_at: 2026-10-08T03:49:38.774606299Z
   modified_at: 2026-10-08T03:49:38.774606299Z
+- id: 01a119ac-5bb7-7ae0-b3b8-b8d5b03063d6
+  author: joe
+  content: 'PROXY DECISION: PR #2454 required Ubuntu run 37724570741 failed the config-trust inventory guard: lib.rs has 48 config.toml sites, inventory records 47. Strict review-story canonical-store probe is the new site. Route bounded trust classification/inventory correction to a separate doer, preserve actual guard, run full checks, then fresh exact-head independent review; no CI waiver. Brief: .aida/handoff/orchestrator/bug1807-ci-inventory-rework.md; actual log: .aida/handoff/bug1807/ci-37724570741-failed.log.'
+  created_at: 2026-10-08T04:01:28.503408099Z
+  modified_at: 2026-10-08T04:01:28.503408099Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
