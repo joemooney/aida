@@ -21,8 +21,87 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-10-08T05:19:06.906787276Z
+modified_at: 2026-10-08T19:22:33.158391950Z
 req_type: Task
+comments:
+- id: 01a11cf7-a146-7782-b29f-a9c76e58bee3
+  author: joe
+  content: |
+    # TASK-1715 whole-delivery independent audit
+
+    **VERDICT: REQUEST CHANGES.** The Done delivery is not supported by the actual shared branch. This is a new, bounded TASK-1715 judgment, separate from old Batch A and its source/merge-gate disposition. No machine review record, merge permission, CI credit or authority clearance is supplied.
+
+    ## Inputs and exact scope
+
+    Read the complete [assignment](task1715-delivery-audit.md), the full TASK-1715 MCP show including verbose linkage (twice; retained [response](task1715-delivery-independent-evidence/TASK1715-show.json)), existing AGENTS guidance, two-seat protocol, rework-brief craft and recovery playbooks. The requirement says Done and requires all six acceptance bullets assessed below. Its linkage lists two commits; that list is not proof they coexist in the delivery ancestry.
+
+    | Object | Exact commit | Tree / parent |
+    |---|---|---|
+    | Shared `feat-task-1715`, `/home/joe/ai/aida-TASK-1715` | `42d8338a5eedb7e56c955be8117434e781f3efb4` | tree `b25337cda63fb91187804fb00eb0e1152a3fd1cf`; parent `0b39702e81132b3cb93e738386325049bf7af8a9` |
+    | TASK-1715 audit-row commit | `0b39702e81132b3cb93e738386325049bf7af8a9` | tree `94cbc7a0dca1a2499f4f2f33cc7eb58944592e29`; parent `5d4180e5ded8a55ad1b02beac5571c190d3da0ac` |
+    | Shared branch merge base with pinned main | `5d4180e5ded8a55ad1b02beac5571c190d3da0ac` | tree `c4990b72b1703eedd37d736557db21b46f49562e` |
+    | Main at review | `bf65220959c7601427247286abc7eb16278af5a5` | tree `77bdc293f818c791ffd9b6a26e4e8552722ce5ca` |
+    | Separate real alias implementation, `task-1715`, `/home/joe/ai/aida-worktrees/aida-task-1715` | `74c9ad174f7c4cf2ab323f2a30f43d2874468e72` | tree `30443e22364c2745d3f27326fbe39d49f992ba13`; parent `8ea2fe47c0e6128127a67251ad4545a412fb5d28` |
+
+    Both named TASK-1715 worktrees were clean; all three reviewed branch/main refs remained at these pins at final inspection. The separate implementation is also reachable from local `pr-2457`; neither that name nor local linkage establishes a remote delivery. It is **not** an ancestor of shared delivery or pinned main (both ancestry commands exit 1). Do not conclude there is no implementation anywhere: one exists on this separate local line, but was not delivered through the claimed shared line.
+
+    The complete shared merge-base-to-head diff is two files: three reserved BUG-1811 shell-wrapper lines in `aida-cli-lib/src/dev_cmd.rs`, and one TASK-1715 table row in `docs/cli-format-json-audit.md:380`. The predecessor TASK-1715 commit contains only that one row. No parser, dispatcher, queue, test, lifecycle doc or template changes occur in this delivery. Reserved shell code was inspected only to establish scope, not approved or rejected as BUG-1811 work.
+
+    PR 2458's BUG-1811 title/branch reservation and reported open/dirty state are assignment evidence, not a fresh forge observation by this reviewer. Root will not modify that shared PR. This audit performed no forge calls and authorizes no change to PR 2458 or its branch.
+
+    ## Parser/remapping examination before judgment
+
+    Immutable selected source files were exported with `git show <full-SHA>:<path>` into reviewer scratch `/tmp/task1715-audit-nr9i9dti`, with no `.git`, store, session links or live runtime linkage. See [numbered immutable excerpts](task1715-delivery-independent-evidence/numbered-source-excerpts.md) and [input hashes](task1715-delivery-independent-evidence/export-sha256.json).
+
+    For the delivery, `aida-cli/src/main.rs:4` calls the sole `main_entry`; `lib.rs:1096` leads to `run` at 3728. Before clap, tiered-help interception does not intercept `pr review`. The actual rewrite chain at 3828–3838 is user aliases, personal-view aliases, advisor-assess, list lenses, default agent new, default queue list and deprecated groom spelling. Their predicates do not transform `pr review`. `user_alias.rs:333` gates expansion to interactive humans, and `expand_inner:346` only expands the first token and stops on real commands; the real top-level `pr` cannot be shadowed. The alias registry is not another parser. JSON capability handling runs after the initial clap parse and cannot introduce a missing verb. The full `PrCommand` declaration at `cli.rs:2011` has AutoQueueReview/List/Rebase/Ship/Hold/Gc but no Review variant or alias for it; the dispatcher at `pr_cmd.rs:12` has the same existing cases. Delivery `lib.rs:5312` dispatches every `Command::Pr` directly; no alternate review dispatch exists. Equivalent checks on pinned main likewise find no TASK-1715 parser or dispatch. Thus absence is established through the actual entry and rewrite paths, not just a failed text search for `PrCommand::Review`.
+
+    ## Blocking findings and bounded rework
+
+    ### 1. Delivery does not contain the requested alias (AC 1–3, 6)
+
+    **Important / delivery blocker.** At exact shared head, `cli.rs::PrCommand`, `lib.rs::run` and `pr_cmd.rs::handle_pr_command` lack the new verb. `docs/cli-format-json-audit.md:380` records a command classification without delivering that command. Done cannot be accepted for this whole delivery. This is not a finding of intentional falsification or an attribution to an operator.
+
+    Reproduction: `git diff 5d4180e5ded8a55ad1b02beac5571c190d3da0ac 42d8338a5eedb7e56c955be8117434e781f3efb4`; inspect the complete PrCommand and pre-clap rewrite chain above. Compare `git show 74c9ad174f7c4cf2ab323f2a30f43d2874468e72`, and run `git merge-base --is-ancestor 74c9ad174f7c4cf2ab323f2a30f43d2874468e72 42d8338a5eedb7e56c955be8117434e781f3efb4` (actual exit 1). This statically proves non-delivery without running a potentially mismatched installed binary.
+
+    Remedy: root must reopen/hand off **the same TASK-1715** through the authorized canonical path, then assign routine bounded work to a Sonnet implementer in a **fresh isolated branch**. Preserve both existing lines and PR 2458. Salvage/reconcile the real implementation selectively only after fixing findings 2–3; do not move the whole unrelated parent history or overwrite a peer branch. Required proof: new exact source head/tree and full diff, parsing N/PR-N/MR-N, equivalent shared queue-work dispatch, isolated refusal coverage, and a fresh different independent reviewer after the fix. This audit does not perform reopening, queueing or implementation.
+
+    ### 2. Existing separate implementation does not resolve numeric identifiers by configured forge (AC 1, 2, 6)
+
+    **Important / salvage blocker.** At separate commit 74c9ad174f, `lib.rs:6350` synthesizes `queue work id.clone() --auto-complete` without converting numeric input to a configured-forge change ID. Its `queue_cmd.rs:5899–5971` calls `parse_pr_arg(s)`; `lib.rs:92807` accepts a bare number, whereas `parse_review_scope:37475` requires PR-/MR- and returns None for that number. The queued-review-story lookup therefore has no typed forge for N. With the ordinary envelope unset it falls through to `resolve_pr_to_spec` (`queue_cmd.rs:5960`), whose source at `lib.rs:93100–93178` scans PR review titles and invokes `resolve_gh_binary` / `gh pr view`. It does not resolve the configured forge. A GitLab project's numeric N can therefore take GitHub backing-spec resolution instead of becoming MR-N; a matching GitHub backing spec can also replace the requested numeric scope with an implementation spec. If the envelope guard applies, the same absent typed lookup can refuse instead. These are static conditional paths, not claimed live subprocess outcomes.
+
+    Explicit PR-N and MR-N are forwarded into the existing queue pipeline, which is the correct direction for reuse. MR-N does not match `parse_pr_arg`, and remains available to existing typed review-scope logic. No blanket assertion that GitLab support is wholly absent is warranted. The defect is the required numeric configured-forge mapping; delegation alone does not repair the identifier.
+
+    Remedy: normalize bare numeric input with the existing configured-forge machinery into PR-N/MR-N before the common queue-work path, retain explicit identifiers consistently, and keep all gates shared. Do not add another lifecycle, shell recipe, authority override or new forge default. Required tests: number under GitHub and configured/self-hosted GitLab, explicit PR-N/MR-N, collision/lookup-failure cases as relevant, and equivalent queue arguments plus gate refusal. These tests must use private fake forge/store/config/runtime and assert no unexpected gh path for numeric GitLab. No runtime test was executed here.
+
+    ### 3. Help, documentation/templates and coverage do not fulfill whole acceptance (AC 4–6)
+
+    **Important / acceptance blocker.** Shared delivery has none of these changes. Even the separate implementation changes only three Rust files: `cli.rs:2037–2045` describes review but incorrectly calls `pr ship` “shipping merged code”, omits that authorized review can proceed to merge, and omits the `ship --no-merge` distinction. It adds just `cli.rs:16247::pr_review_alias_parses_properly`, asserting one PR-123 parse. No numeric/configured-forge/GitLab dispatch-equivalence or shared-refusal test is added. No lifecycle guidance or normal-generation review/aida-pr template updates exist in that commit. The shared table row is not that documentation or coverage.
+
+    Remedy: complete the requested help distinctions, lifecycle guidance and relevant source templates, coordinate with the actual TASK-1613 compatibility refresh without undoing its thin delegation/--no-merge/explicit-autoqueue guidance, then generate outputs through the normal tooling. Keep `queue work PR-N --auto-complete` compatible. Add meaningful parser/dispatch tests for GitHub and GitLab plus representative existing refusal behavior using the shared gate path. Run focused existing checks, generation consistency and formatting on the eventual source head; attach actual commands/exits. No broad workspace suite is requested by this finding, and no existing full CI result transfers to the future head.
+
+    ## Whole acceptance disposition
+
+    | Acceptance | Exact shared delivery | Separate implementation qualification |
+    |---|---|---|
+    | 1: N/PR-N/MR-N; configured forge and GitLab | FAIL: command absent | Partial explicit-ID parser; numeric mapping fails finding 2 |
+    | 2: same queue-work auto-complete path | FAIL: alias absent | Synthetic Cli parse calls existing handle_queue_command; no duplicate shell pipeline; target normalization incomplete |
+    | 3: independent review/leases/holds/supervision/rework/merge authorization preserved | NOT DEMONSTRATED for alias | Existing queue gate path reused statically, no added grant/force bypass observed; runtime preservation unverified |
+    | 4: accurate help and three-way distinction | FAIL | Incomplete/inaccurate help, finding 3 |
+    | 5: old spelling compatible; lifecycle docs/templates; TASK-1613 coordination | FAIL as whole bullet | Existing queue implementation unchanged by separate diff; required docs/template coordination missing |
+    | 6: parser/dispatch equivalence and shared-refusal checks/formatting | FAIL | One PR-only parser test, unrun here; no required cross-forge/dispatch coverage or qualified check evidence |
+
+    ## Actual commands, exits and limitations
+
+    The read-only Git driver used an allowlisted environment: private HOME/AIDA_HOME/XDG config/runtime, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, PATH `/usr/bin:/bin`; no token/identity/grant selector was copied. No CLI/forge/vendor was executed, so no refusing stubs or private writable Git/store fixture was needed. This is static inspection isolation, not an OS/network sandbox claim. Initial read-only orientation used the session environment; it ran no dispatch or mutation.
+
+    Exact Git argv/exits are retained in [commands.json](task1715-delivery-independent-evidence/commands.json), with full diff/history/search/blob logs beside it. Pin reads, full shared diff, full alternate commit diff, object exports and history all exit 0. Both alternate-to-delivery and alternate-to-main ancestry checks exit 1 (expected negative ancestry). Immutable scoped searches exit 0 for delivery (audit row only), 1 for main (no match), 0 for alternate (real implementation). Final ref/status checks exit 0 with unchanged heads/clean named worktrees; `git diff --exit-code <base> <delivery> -- <parser/dispatch/queue/templates/lifecycle/tests paths>` exits 0, establishing no change in those selected inputs. Mechanical Python assertions about exported source structure exit 0; these are not executable parser or pipeline tests. One exploratory rg used a nonexistent `forge/*.rs` glob (diagnostic), later corrected by exporting the actual `forge.rs`; no conclusion relies on that failed search.
+
+    **No build, parser binary execution, formatting check, test suite, CI/workspace pass, native Windows validation, fresh forge/PR verification or runtime gate proof is claimed.** No source-qualified existing executable was established for the delivery; therefore no installed `pr review --help` probe was used. Conclusive source absence supports this request-changes verdict without a new build. The separate implementation has been inspected to qualify non-delivery and identify concrete salvage blockers, not approved as a replacement delivery. Unrelated BUG-1811/TASK-1591/BUG-1812 work and old A remain outside this audit.
+
+    No canonical edits, status/queue/review record, mailbox write, grant/role/activation/recovery, PR/push/merge/install, source fix, branch cleanup or shared-branch mutation occurred. Only requested local audit/evidence and reviewer scratch were written. Root notification through the Codex thread channel was attempted during review but returned `thread/resume failed: already has an active writer`; that attempt did not establish delivery. The final notification attempt to root thread `01a11c32-8794-7720-a688-beba1b734725` returned the same active-writer error (JSON-RPC -32600). Notification delivery is **not established**; the written artifact and user-visible final response are available for root to read. No mailbox fallback was used, honoring the assignment’s no-mail constraint.
+  created_at: 2026-10-08T19:22:33.158391950Z
+  modified_at: 2026-10-08T19:22:33.158391950Z
+  relayed_from: batch-a-independent-reviewer
 history:
 - id: 01a119ea-3e16-7a33-8411-ac7968b10987
   author: aida-session-start
