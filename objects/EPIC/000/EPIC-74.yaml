@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T17:29:13.654825041Z
+modified_at: 2026-10-08T19:04:51.171996580Z
 req_type: Epic
 tags:
 - architecture
@@ -686,6 +686,31 @@ comments:
   created_at: 2026-10-08T17:29:13.654825041Z
   modified_at: 2026-10-08T17:29:13.654825041Z
   relayed_from: answered-design-sketch-author
+- id: 01a11ce7-6ce4-7ac3-9c8a-976c7911bc99
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED — EPIC-74 full V3 composite/ADR and combined positive child amendment.
+
+    Independent V3 reviewer: Codex answered-v3-independent-advisor; neither sketch author, coordinating author/root session nor V1/V2 reviewer. Pinned committed reference b46aec1e674baae5a329416d4119e67b59200a88; concurrent main working edits excluded. All five new V3 body hashes and exact canonical readbacks independently verified; all 26 recorded source hashes and 16 preserved-input hashes verified.
+
+    ADVISOR SIGNOFF: APPROVED AS AMENDED — only the bounded protective first-slice DESIGN specified by S1–S4 in the full report. Implementation NOT READY until actual checked persistence, committed reads, required hook-safe adapter and all-writer/admission closure exist and pass independent verification. This is not approval of the full unamended V3 or authorization to dispatch.
+
+    F1 sole common publisher and signed home→repo→seats→store→queues→drain→manifests→verdict→merge→Git composition are corrected. Reservation is constraints only, never a grant/C/release. F3 Ordinary absence, old+candidate ancestry/descendant predicates and declaration-vs-inflight closure are corrected design directions. Durable reservation, not the volatile merge lease, fences the cooperative preflight/request gap. F2 Pending retention and strict committed reads are correct directions; missing current implementation alone is not a design failure.
+
+    Remaining numbered correctness findings:
+    1. ADR sections 2–4 require exact output bytes/digests before actual common child/receipt or forge result identities exist. Specify finite typed predeclared output slots/budget, sole-owner binding of actual results, exact resulting after-image validation and digest phases. Define acyclic receipt storage/readback; a record cannot require the exact commit/tree hash of its own containing commit. No arbitrary same-object exemption or second publisher.
+    2. ADR sections 2/5/7 need explicit declaration/verified-clear transitions versus input-preserving projection. Clear changes reserved declaration/context and must not blanket-exempt itself or drop protection before current inventory validation. Specify a locked fresh clear after settled landing, or one precisely validated atomic terminal transition, preserving peer reservations and all history. New child/reopen/live work blocks clear; generic force and unlanded release remain unauthorized.
+
+    The independently signed narrow slice uses: S1 one locked store-only declaration transition validating all peers/inflight work, no self-conflicting Ordinary reservation or lifecycle effects; S2 checked receipt returned from committed payload, backward references only, uncertain readback never replaying external effects; S3 truthful ordinary/subtree selection and refusal of unsupported lifecycle/forge/completion/clear paths, with ordinary admissions not exempted; S4 actual persistence/snapshot/hook/writer closure before positive declaration. This is finite protective design, not full original 1481 AC4/5 or whole-epic credit. Future unlanded-release authority alone does not block it.
+
+    Retain R1–R4: actual handler/alias guards; immutable original evidence/coverage predecessor IDs; exact narrow squash reviewed-base ancestry, first-parent/base equality, result-tree equality and confirmed default result; parent Option/no-sync semantics; AIDA-cooperative versus raw-forge boundary. No invented release policy, backend, operator answer or floor waiver.
+
+    Full binding review and proposed witnesses: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V3_INDEPENDENT_REVIEW.md
+    SHA-256: 65400759950fa8e3ab3072b23d9e6c72409a0e15098baabfdea45f1de87c1a0e
+    All tests proposed, none run. Exact canonical IDs/hashes and attribution are in answered-v3-independent-evidence/canonical-relay-readback.json and integrity.json. Prior V1/V2 verdicts/history preserved. Sidefile for coordinator relay only; no canonical/status/queue/authority/source/PR/merge writes by reviewer. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 untouched.
+  created_at: 2026-10-08T19:04:51.171996580Z
+  modified_at: 2026-10-08T19:04:51.171996580Z
+  relayed_from: answered-v3-independent-advisor
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
