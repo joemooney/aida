@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T20:09:52.425440411Z
+modified_at: 2026-10-08T20:37:27.344702561Z
 req_type: Bug
 tags:
 - atomicity
@@ -1772,6 +1772,221 @@ comments:
   created_at: 2026-10-08T20:09:52.425433615Z
   modified_at: 2026-10-08T20:09:52.425433615Z
   relayed_from: bug1808-store-cas-owner-join-author
+- id: 01a11d3c-34b0-7ac0-aaee-a1ba5496a7d0
+  author: mcp
+  content: |
+    PROXY EVIDENCE RELAY — fresh independent design verdict, FULL report below. Root read the entire report and checked the cited submitted-design/source seams. CHANGES REQUESTED; no whole-design release, production credit, protected review record or new code dispatch. Same existing design author will receive numbered design-only rework; all earlier artifacts/failures preserved.
+
+    # BUG-1808 / TASK-1332 A2 store-CAS owner join — independent review
+
+    **Binding disposition: CHANGES REQUESTED.** 2026-10-08, America/Phoenix. This is a fresh, user-assigned independent Codex advisor review of the owner-join sketch and READY, not a review by their author, the coordinating root, or the prior TASK-1332/common design reviewers. No authenticated implementation-review grant is asserted. The tool runtime calls this conversation `/root`; that is not evidence of identity with the external coordinating root. This session has authored neither the submitted design nor its predecessors.
+
+    The private-candidate direction is sound, but the submitted composition does not yet supply A2. In particular, the push classifier mistakes an indeterminate remote outcome for proved rejection; unreferenced transport objects can disappear; local identity effects precede their ownership check; recovery is not durably discoverable across the acceptance/crash window; and Stage B enables imports before their home-first owner exists. The peer marker conditions also do not establish ownership. These are concrete joins, not a request for a broker, new schema, issuer, distributed transaction, authority freeze, process-identity scheme, or changed product acceptance.
+
+    Root must read this entire report before relaying or requesting a revision. Root alone relays canonical evidence. No component dispatch, production activation, parent completion, PR, merge, or authority-sensitive approval follows from this review. The smallest next step is a revised, inactive owner-join design addressing findings 1–9 and the exact family matrix below. Do not ask the human to choose a relaxed acceptance contract.
+
+    ## 1. Exact review binding and evidence limits
+
+    | Item | Exact pin |
+    |---|---|
+    | Submitted sketch | `BUG1808_STORE_CAS_OWNER_JOIN_SKETCH.md`, 53,274 bytes; SHA256 `4f20ee848da54457d809fb6197d9d67589e52ea2ffacb8028290a371d224f00b` |
+    | Submitted READY | `BUG1808_STORE_CAS_OWNER_JOIN_READY.md`, 6,532 bytes; SHA256 `77dfb3d9291723ef71ef96694a600fa1df1b215f63f6eac89071a35b95e92dc4` |
+    | Author's source base | `bf65220959c7601427247286abc7eb16278af5a5` |
+    | Actual current main inspected | `c67728c1dcaf8a577539d920bdc6a3c86126cebb` |
+    | Original inactive common checkpoint | `6a1733a134b2e63f3adfd8e24606965a5d702f91`, tree `b8545647645319e3d1ef09da8e358b6768488e34` |
+    | Checkpoint base | `5d4180e5ded8a55ad1b02beac5571c190d3da0ac` |
+    | TASK-1332 V2 | 32,977 bytes; `b6c367d14a87c09a5ee054203313e7b6047863808b1dab44b3f313080c507d82` |
+    | Full V2 independent report | 33,789 bytes; `25e4da169b0f5fc26bc21638b0b086dd92e633c73dc3763e9efc8cae1f8ae042` |
+    | Common v3 | 60,505 bytes; `d9d115040cc34d7dddec7826b1aacc24099c2fcd03f9cc4f010702253fe091de` |
+    | Common v4 | 26,107 bytes; `7ed0561699c5f184572612e03f19b72aa3e06cf049eb4ea6958ef45da369e4f2` |
+    | Common v5 | 32,963 bytes; `8c356c47fd5fd7aaf65b7e87ee679d0586819775e9063d59ef0940785244b5d5` |
+    | Launch addendum | 31,707 bytes; `4d67af90b7320da207c7f1181ff7ab95d52d27d0fe5e4890be256d1afbf571ec` |
+    | Pane addendum | 45,822 bytes; `2a0c2bf1d4a900edc0838b79e78e89a30b542221ba085b1eec85b0decaba5b12` |
+    | v3 independent report | `26b81ae84016cde9b8107c125c9e02d8de0c1d1a0e9c3d60703b21acce24127d` |
+    | v4 independent report | `b9d7b4a582feb388bbbc32e35a0b38e708d51f7b5d9fa74162ed846c443af2bf` |
+    | v5 independent report | `0360a9b91f1c8092458e890c936425802702f813ce06a5a26b9e35026de54852` |
+    | Launch independent report | `f77fb2b49e605dbdc2a2afeae3112642d7211f6da1dd3d9fbbf42e59d8fcd658` |
+    | Pane independent report | `b7606d575fd6a2b812244b4761e2f161f462a3a3497109807ac4a990c33402e5` |
+    | Common implementation brief | `af04dc576a7bd2b0eb07b1e3fe721b3c9aad2c8b616eee5f63a592b376e61af8` |
+    | Earlier blocked checkpoint report | `8224cffcca2da75bacba3846557c53386155cdb4bb4e129e5058323ddb7733cc` |
+    | Inactive infrastructure rework verdict | `dd7bff4f93bd0ae661cdfb6447d1c4fa789b1fe08bad89a390dab8fe38da4f51` |
+    | Transport SIGPIPE rework verdict | `6ae86ba389f9f014de2ff346b364059dbb2514e7e482b805b316ee74850180e6` |
+
+    Full canonical BUG-1808 and TASK-1332 were obtained through normal MCP `show_requirement`, including comments; TASK-1717's protective scope and embedded full V2/signoff were read. The complete signed v3–v5, launch and pane bodies/matrices and independent conditions govern, including explicit supersessions. Byte-identical embedded copies were reused rather than treated as new decisions. TASK-1332's display-ID remapping does not change its A2 obligations. Evidence text envelopes and file/source hashes are retained in `bug1808-cas-independent-evidence/` beside this report.
+
+    Supplemental normal CLI reads, including the stable `target/agent/aida`, failed with `database disk image is malformed`. Their error outputs are preserved; the files ending `.json` for those attempts are error evidence, not successful JSON snapshots. No raw canonical YAML, SQLite fallback, repair, rebuild, or bypass was used. Successful normal MCP reads supply the canonical evidence. This is not a claim that the failing CLI was healthy.
+
+    The relevant current source was read, not inferred from shared symbol names. The author-base/current-main comparison did not supply a missing C adapter. The intervening role prompt change is outside this review's implementation scope. The checkpoint's `publication::{records,durable,effects,observations,preflight}` and `git_publication::callback_input` supply private primitives, not a current publisher. In particular, `VerifiedFileSet` expressly requires its caller's durable journal and held exclusion; pure preflight requires a caller-provided authority snapshot; callback parsing supplies no origin proof. Neither main nor checkpoint supplies the asserted network-free TASK-1717 install adapter, complete sealed Git owner, or production home-first coordinator merely by sharing those names.
+
+    This is source/design analysis. All counterexamples below are reasoned schedules, not executed reproductions. **No builds, Cargo commands, tests, check-ci, full-workspace checks, live Git mutation, vendor launch, canonical write, queue/mail/grant/hold mutation, activation, PR, commit, push, merge, global configuration or user-state change was performed for this review.** Only the requested draft/evidence files were written. Existing reports and reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 remain untouched.
+
+    ## 2. Binding findings and requested rework
+
+    ### 1 — `!` is not proved rejection
+
+    **File/symbol:** sketch §§5 S5/S8, 10; proposed `RemoteObservation` classifier. Actual transport boundary is `aida-core/src/git_ops.rs::push`; the replacement proposes porcelain parsing rather than that helper's Boolean/error result.
+
+    **Counterexample:** origin installs C, but receive-pack's status response is lost. Git 2.43's `transport.c::print_one_push_report` maps `REF_STATUS_EXPECTING_REPORT` to porcelain `!`, with remote-failure status. The sketch maps every `!` for the target to `RejectedProved`. It can discard acceptance evidence or take a retry/error path as if C definitely never landed. An exit failure also does not prove nonacceptance. This is directly grounded in [Git 2.43 transport source](https://github.com/git/git/blob/v2.43.0/transport.c#L649-L727), not a guessed network behavior.
+
+    **Required outcome:** classify the exact target/ref and full candidate identity, distinguish known client/server rejection from missing/indeterminate status, and retain Unknown until observation resolves it. Choose a bounded, version-pinned status decoder; the flag alone is insufficient. If the selected observable format cannot distinguish a case reliably, conservatively keep it Unknown. A known pre-push refusal can avoid retry, but cannot be inferred from every nonzero exit. Preserve successful ` `, `*`, and exact up-to-date cases with their complete joins.
+
+    The expected-old ref check prevents two concurrent updates from the *same unchanged remote value*; it is not global exactly-once execution. The push advertises afresh, and remote ABA (R→C→R) makes a later R observation consistent with prior acceptance. A detected non-ancestor rewind is useful but does not detect ABA. Do not relabel `NotObservedAfterExit` as proof of never accepted. Retain candidate lineage across retries; rerun fresh predicates and adopt an observed prior winner. Unsupported ambiguous history remains unknown rather than silently allocating again. No remote transaction broker is required or authorized.
+
+    **Proposed tests:** `store_cas_porcelain_remote_failure_is_unknown`, actual Git/receive-pack with update then lost status; known hook/client rejection paired with normal acceptance; exact `=` candidate adoption; delayed first receive-pack versus second candidate; observed rewind and ABA uncertainty controls. Assert one reported acquisition/range, no local identity on unresolved outcome, no false rejection, and retained recoverable evidence. These tests have not run.
+
+    ### 2 — Object lifetime and actual hook context are not closed
+
+    **File/symbol:** sketch S1b/S2/S4 and §9; `git_ops::fetch_rebase_target`, commit/push helpers; `remote_create::mirror_pre_push_hook_script`, `identity_gate::parse_pre_push_ref_lines`; checkpoint `git_publication` module.
+
+    **Counterexample:** S1b deletes its only operation ref before L/R's independent closure exists. Shared pruning can remove R before S2 copies it. Later S4 imports C objects without any ref and pushes from the shared gitdir; pruning/repack can remove the transport copy while the private hardlinks remain intact. The private copy does not make the shared Git child's object lookup succeed. The proposed witness explicitly tolerates this as Unknown/retry, which does not establish the requested healthy object-lifetime positive. Concurrent local cloning also needs a complete, verified snapshot, not an assumption that every pack was hardlinked successfully.
+
+    **Required outcome:** specify one continuous operation-owned object-lifetime chain from fetch through private preparation, transport, local install and durable recovery. Fetching into the private repository is a grounded way to remove the first gap. For the push, either use the pinned private object database with the exact native hook logical context, or explicitly retain the shared object closure without making C publishable through canonical/wildcard refs. Name the mechanism, acquisition/release boundaries, crash retention and size limits; no maintenance freeze or hidden canonical candidate ref. Copy/hardlink and verify full reachable closure before dropping its predecessor ownership. Failed closure construction refuses before publication and is not an ordinary-positive pass.
+
+    Private transport must still execute the actual supported pre-push gate with exact C and original remote/ref context. The generated hook unsets `GIT_DIR`/`GIT_WORK_TREE`, reads stdin, invokes the identity gate and mirror CLI, and inspects the parent command for dry-run. The identity gate does inspect store commits even though mirror ref parsing skips the store branch. An installed mirror-only profile is different from the generated identity-plus-mirror profile. Merely naming a digest or `PreparedGitStep` does not bind the subprocess's repository discovery after those unsets. Resolve effective fetch/push endpoint, ref, config and hook bytes as part of the selected profile; `has_remote("origin")` and a branch string are not a frozen endpoint binding.
+
+    **Proposed tests:** prune/repack barriers before copy, after import and during transport; verify uninterrupted successful C push/install; exact pre-push stdin and allowed/forbidden identity; installed and generated hook positives separately; endpoint/config/hook replacement between plan and spawn; independent private closure after shared source disappearance; no canonical/ref/index visibility and no later accidental sync of rejected C. Retain real commit-message, sentinel, rewrite and service callback effects. No hooks-off or hand-built `commit-tree` substitute.
+
+    ### 3 — S6 checks the successor after applying identity effects
+
+    **File/symbol:** sketch S6 and §7 rows 9/11/13/16; `git_ops::{register_node_full_identity,set_node_identity_field,hijack_node}`, `node::{NodeConfig,HijackMarker}`, block allocation in `aida-cli-lib/src/lib.rs`.
+
+    **Counterexample:** after S3, a supported local writer commits a same-family successor H. C is then accepted remotely. S6 rebases current H onto T, applies node.toml/dispenser/own-marker effects, and only *then* re-verifies identity. Even if the import preserves H perfectly, the subsequent check is too late to prevent the losing invocation from installing its identity or clearing the winner's marker. A conflict on another path can also leave partial local work unless the complete install has owned before/after evidence. On the clean-success path `Accepted{tip=C}` is historical evidence of acceptance, not evidence that C remains the remote tip at S6.
+
+    **Required outcome:** compute the intended current install from current locked H and the accepted/observed tip; validate the current family record, local identity and all dependent before-images before the first local effect. Revalidate immediately at the owning install boundary, then install the finite verified set through the existing common owner. Known successors yield a superseded/incomplete outcome without reclaim or node/dispenser/marker change. Preserve unrelated local commits and same-family peer intent; a generic structural rebase is not a semantic proof for registries lacking union rules. Define the observation horizon: acceptance is historical, current ownership is checked against a named observed state, and later remote changes cannot be excluded by a local lock. Do not promise perpetual remote ownership.
+
+    **Proposed tests:** local same-family successor after S3; unrelated H advance; remote successor after positive push report and before install; own config already changed; install failure at every effect boundary; conflict/dirty/pre-existing-rebase cases. Positives must install the accepted ID/range exactly once. Negatives must leave successor config, marker, counter and peer commits intact. No reset to L/C and no old snapshot overwrite.
+
+    ### 4 — Accepted/incomplete recovery has no complete durable admission/discovery protocol
+
+    **File/symbol:** sketch §§4, 11, 15; proposed `AttemptIdentity`, `AdoptPrior`, `AcceptedInstallIncomplete`; checkpoint `publication::observations::{ObservationKind,ObservationPlan}` and `records`/`effects`.
+
+    **Counterexample:** origin accepts C; the client dies before it receives success or writes the proposed incomplete record/bundle. A later invocation constructs a new UUID/time and cannot find the old operation merely by running the same family command. A retained payload after failure is too late. An ordinary S pull imports bytes but does not recover which logical operation owned them. For automatic ranges, the sketch calls the range a frozen stamp while also recomputing it on each base. Multiple candidates for one logical request therefore need an explicit retained mapping. Deletion/no-op families lack a surviving record on which to match an invocation stamp.
+
+    **Required outcome:** inside the already approved common evidence design, specify the exact pre-send durable preparation, operation-to-attempt mapping, candidate/ref/endpoint/object pins, ownership/preimages, bounded observations, discovery and settlement rules. The complete closure must be durable **before acceptance becomes possible**, with parent-directory durability, and remain discoverable after a crash before any response. Record each candidate's existing-field stamp, not a fictitious range known before allocation. Recovery first resolves historical acceptance and current successor state; it does not rerun a scheduler job, issue a new grant, allocate another range or reclaim a slot. Ambiguous evidence stays blocked/incomplete. Corrupt/missing evidence cannot authorize restoration or success.
+
+    The existing namespace is the right owner/location, but the exact checkpoint does not implement this protocol: `ObservationKind` has GitCallback, InstallVerification, PossibleExecution, SendOutcome, Cancellation and Settlement, not a complete remote-CAS admission/recovery decoder. Arbitrary bytes in a payload are not typed validation, discovery or authority. R-2 cannot certify a missing protocol as already supplied merely by naming the namespace. Map proposed payloads to existing owner records and validation; do not add a parallel global ledger/schema. Recovery is required for every family whose result can be accepted and locally incomplete, not only rows 9/13/16.
+
+    **Proposed tests:** death immediately before send, after server acceptance/before response, after response/before observation durability, after every local effect, and before settlement; fresh invocation with original process gone; B/outside-project home recovery; missing object/payload/tail; two unresolved candidates; automatic range and node adoption; deletion acceptance plus later successor. Assert retained independent evidence, truthful incomplete state, no duplicate allocation, no blind replay and successful uncontended recovery.
+
+    ### 5 — Home-first authority is optional in the proposed production stage
+
+    **File/symbol:** sketch §§5 S6, 6, 8, 9, 15; `team::{set_allowed_seats_cas,update_seats_cas,unset_role_cas}`, `team_cmd::{handle_team_allow_seat,handle_team_disallow_seat}`, `seat_authority::{require_direct_tty,roster_allows}`, `git_ops::pull_rebase_auto_merge`.
+
+    **Counterexample:** a Stage B alias/ledger/node operation imports a remote tip containing a roster change while the common home-first publisher is unavailable. Whole-store import changes the authority-bearing roster regardless of which family triggered it. A grant reader/P4 can see that change outside the signed common exclusion/recovery boundary. S6 says HOME only “when enlisted”; §9 defers the common install until later. TASK-1717's ordinary protective rebase is not the missing common service publication and currently embeds fetch/rebase behavior rather than the specified network-free install API.
+
+    A second boundary error is calling `require_direct_tty` an immutable proof of a human writer. Its source checks terminal descriptors. Core roster CAS functions are public and have no such check. The source has a separate stronger direct-human predicate; its existence does not automatically enlist these calls. A PTY property and wrapper convention cannot prove every CLI/MCP/core producer has the signed writer authority. This observation authorizes no new issuer or tightened unrelated product policy.
+
+    **Required outcome:** make the existing common owner mandatory at authority-bearing import/publication boundaries, including imports triggered by every C family. Name actual reader/writer/core/MCP seams and authority provenance, rather than classifying authority only by the requested path. HOME discovery/recovery precedes repo and lower locks. Retain HOME across provisional state; never acquire it late beneath STORE, and never solve hooks by dropping it around provisional effects. The actual service adapter must supply finite network-free import and hook-safe callback handling. Plain ordinary S/L can retain its separately approved protective scope; A2 production cannot borrow that scope as common acceptance.
+
+    For each remote predicate, distinguish local invocation authorization, existing clone ownership, current remote content precondition, and local P4 consumer authority. Git's expected-old update can serialize predicates encoded in its compared remote history. It does not serialize a mutable local grant, local node identity, TTL clock or process liveness after S3 unlock. When the contract requires such current authority through remote acceptance, either supply the grounded existing-owner composition or identify the precise unsupported join. Relabeling records “not AIDA authority” does not discharge their ownership/lifecycle conditions.
+
+    **Proposed tests:** each C family imports a concurrent roster change while a home reader/P4 and foreign-repo recovery run; direct core and MCP producers; current grant/roster revoke after S3; local clone identity change during push; real supported home-aware ref hooks; assert no inversion, no provisional exposure, no unauthorized remote-success claim and healthy home-first positives. Missing owner must not enable an optional fallback.
+
+    ### 6 — Peer and own HIJACKED marker predicates do not prove ownership
+
+    **File/symbol:** sketch §12 and S6/S7; `git_ops::hijack_node` at current main around 3322; `node::HijackMarker` around 627; local NodeConfig installation.
+
+    **Counterexample:** A's takeover is accepted. B subsequently takes the same node and writes a newer marker in A's clone. A resumes S6 and clears its own marker because only `node_id == target` is required. B's marker has the same node ID and is erased by the loser. For a peer marker, comparing `registered_at` to the accepted stamp is not an ownership order: current source creates local NodeConfig timestamps separately from remote registry registration, and clocks need not order independent clones. Reusing the same node ID/path is not proof of the same registration. Capturing a pathname at S0 does not pin the peer root against replacement.
+
+    **Required outcome:** keep marker installation after observed acceptance. Bind the old peer root and exact current marker/config before-images to the existing accepted owner/attempt evidence; re-resolve under that root's permanent lock and prove it is the same root. Install/replace only an absent or exactly owned expected image. Clear an own marker only when the accepted current ownership and exact marker image establish that this operation may clear it. Preserve unrelated/newer/ambiguous same-ID markers. Use retained existing Git/registration evidence and exact bytes, not wall-clock ordering or a new process identity. No own/peer nested locks. A delayed peer notification is advisory evidence, not authority to overwrite a newer peer.
+
+    Specify crash closure: remote accepted before own install, own install before peer marker, marker installed before settlement, and recovery seeing a successor. There is no pre-accept marker to restore in the chosen ordering. If a later finite local operation requires rollback, restore only its exact owned after-image while preserving a differing peer; never pathname-delete. Missing/unreachable peer may be a reported notification failure while remote ownership remains accepted; it cannot be presented as successful peer notification.
+
+    **Proposed tests:** A→B repeated hijack of same ID, changed peer path/root, equal/backward/skewed registration clocks, peer reacquisition, pre-existing unrelated marker, death at each ordering boundary, inaccessible peer and own-marker replacement after acceptance. Paired healthy takeover must update accepted registry, own identity and the correct old peer marker. No marker churn before acceptance and no erase of B's marker by A.
+
+    ### 7 — F-1 is a bounded counterexample, not permission for an implicit product fork
+
+    **File/symbol:** sketch §13; `coordination::{acquire_claim,acquire_lock_claim}`, `lib.rs::session_start` around 38500–38670, drain/solo shared-claim ordering.
+
+    **Counterexample confirmed for the proposed order:** remote claim C is accepted before final local P4. A winning revoke/expiry then requires strict no-residue refusal; origin is unreachable. A local journal cannot remove the already accepted remote claim. Even a later compensating deletion would retain history. Holding a local guard does not prevent expiry or make a remote ref transaction part of local COMMIT. Thus this *particular pre-P4 claim schedule* does not satisfy all signed constraints.
+
+    This does not prove a universal impossibility theorem for every future composition. It also does not permit excluding claims from strict snapshots, adding a new claim command, moving the policy boundary, or treating the claim as advisory. Those are acceptance changes. D-F1a is not adopted. Existing A–E remain binding; no human prompt is needed.
+
+    The declaration that plain session start/MCP/solo are all resolved is too broad. Current `session_start` calls shared acquire before status/ambiguous-spec and live-local-claim refusals; drain/solo also decide local occupancy after the shared claim. These actual triggers need a caller-by-caller matrix. Absence of a function literally named P4 does not prove absence of later refusal or lifecycle effects. Conversely, ordinary operations outside the strict contract must not silently inherit new refusal policy.
+
+    **Required bounded next step:** retain claim production integration as unresolved, remove the blanket exemption, and revise only the existing owner/caller ordering and exact failure boundary. Preserve the strict acceptance and all ordinary positive policies. If no grounded ordering supplies that join, state precisely which covered entrypoints remain unsupported at design level; do not dispatch them or pretend refusal completes their healthy acceptance. This review authorizes neither a replacement feature nor a general freeze.
+
+    **Proposed tests:** claim accepted then pre-C revoke/expiry plus unreachable origin; real queue/headless/resume/reviewer/no-launch/TUI/phase/admission consumers; session-start status/local-claim refusal after claim; solo/drain local-occupancy race. Full lifecycle/history snapshots, peer preservation and no vendor before committed release are required, alongside valid assigned nondelegating and ordinary successful starts. A TTL eventually expiring is not no-residue rollback.
+
+    ### 8 — Stage B collapses distinct production gates
+
+    **File/symbol:** sketch §15 and READY gating table; current main versus checkpoint owner boundaries.
+
+    Stage B offers production rows 3–16 with Git gate 3 plus an accepted TASK-1717 head, and limits durable recovery gating to selected allocators. This is inconsistent with the same submission saying all eight production gates remain open. Whole-store imports and current-owner local effects require common root/recovery/enlistment, not just private Git. The active transport's own PARTIAL verdict is not an accepted dependency. An inactive helper checkpoint does not supply a publication owner or production-release capability.
+
+    **Required outcome:** replace Stage B/C prerequisites with the distinct gate ledger in section 4. Inactive pure work may be separately considered only after a corrected design; this review does not dispatch even Stage A. A later independent exact-head component acceptance is evidence for its own scope only. Parent/common production and authority-sensitive merge remain unapproved.
+
+    **Proposed evidence:** eventual composition review must follow each actual CLI/MCP/core path from preflight through native hooks/subprocesses, remote observation, home-first install, current owner validation, retained recovery and final result. No successful helper-only or TASK-1717 S/L fixture can stand in for that trace. Required CI remains future implementation evidence, not something run to approve this sketch.
+
+    ### 9 — Family tests need concrete closure, not a shared “CAS passed” label
+
+    **File/symbol:** sketch §§7/16 and family functions listed in section 3 below.
+
+    Preserve the proposed tests, but bind them to the actual distinct predicates and subprocess profiles. A acquire/release/heartbeat, roster mutation, ledger observation and node/range takeover are not interchangeable CAS operations. Current release helpers sample ownership before pull; heartbeat and stale release have different refresh predicates; ledger offline retention is deliberately different from a lost acquisition. Generic success/rejection tests cannot detect a wrapper that bypasses the owner or a local effect performed before the successor check.
+
+    **Required outcome:** the revised design must state owner, trigger, read/write/evidence surfaces, pre-send and acceptance predicates, retry/adoption identity, native hooks and install/recovery closure for every row below. Test the real public core route as well as CLI/MCP where exposed; adapters cannot be secured only at a CLI wrapper. All negative cases need the healthy matching positive and a guard-removal/restoration nonvacuity plan. Specify tests now, execute them only during a later authorized implementation/review.
+
+    ## 3. Exact family and scope table
+
+    The owner for proposed C preparation/transport/recovery is BUG-1808's existing common Git/publication owner; family functions remain the semantic decision owners. Current functions below are source seams, **not accepted adapters**. TASK-1717 owns only its separately approved ordinary protective S/P scope. `N` below means actual native commit/rebase/reference-transaction/prepare-message/commit-message/post-commit/post-rewrite behavior through the signed sealed SERVICE profile; `P` means real installed or generated pre-push plus exact-C transport; `I` means the mandatory common home-first service import and current locked finite local effects. These abbreviations are a matrix index, not permission to omit any hook's selected digest, actual subprocess context or effects.
+
+    | Row / actual source trigger | Predicate and authority surfaces | Required positive and refusal/race closure | Native interaction / exact scope |
+    |---|---|---|---|
+    | 1 `coordination::acquire_claim` (676), session/queue/MCP consumers | Scope, current clone/path, started/PID-start/session probe, heartbeat/TTL, force intent; remote claim and local lease/status/assignment are separate surfaces | One real winner and foreign live refusal; stale reclaim and authorized force; same-attempt adoption; post-accept status/P4 refusal remains F-1; preserve remote successor | N+P+I; no-remote/unreachable remains truthful existing Unavailable, not Acquired; C integration **not approved** |
+    | 2 `acquire_lock_claim` (1072), drain/solo | Kind, clone/process-backed ownership, TTL, local lock/marker and heartbeat thread | Drain and solo each win/refuse appropriately; local occupancy after remote acceptance; heartbeat/drop ordering, no inherited lock | N+P+I; do not confuse logical run marker with held drain critical flock; strict consumers remain F-1 |
+    | 3 `release_claim` (839) | Fresh remote clone ownership after refresh, not old pre-pull sample; deletion and local completion evidence | Owned deletion, absent no-op, foreign successor preserved; lost response followed by successor does not delete successor | N+P+I; unreachable best-effort failure leaves ownership evidence; no speculative local deletion |
+    | 4 `release_stale_foreign_claim` (893) | Exact expected clone **and heartbeat** on fresh base | Matching stale record deleted; renewed heartbeat or replaced owner returns false; replay after crash cannot delete renewal | N+P+I; actual stale-release core path, not ordinary release substituted |
+    | 5 `heartbeat_lock_claim` (1275) | Current clone/lock identity and fresh heartbeat target | Owned tick, successor/no-op, delayed tick after release/reacquire; no rejected heartbeat later synced | N+P+I; actual heartbeat thread and stop/join before owner/store lock; no global freeze |
+    | 6 `release_lock_claim` (1311) | Current owner after refresh; exact lock kind | Both drain and solo release; peer reacquisition retained; accepted deletion/incomplete import recovered without new deletion | N+P+I; no-network no-origin return and best-effort reporting preserved |
+    | 7 `team::{set_allowed_seats_cas,update_seats_cas,unset_role_cas}` plus delegating wrappers | Actual caller authorization; current roster/nodes for migration; member/seat replace/add/remove intent; all roster readers and imported changes | Disjoint members, concurrent add/remove, empty/unset and migration; current authority race; direct core/MCP entry cannot borrow TTY wrapper proof | N+P+I; remote-first C direction retained, no-origin L remains; HOME mandatory, rejected C never canonical |
+    | 8 `alias::link_cas` (219) | Fresh AliasRegistry union/redundancy, imported whole-store authority side effects | Real union and redundant no-op; peer alias retained, concurrent roster import enlisted | N+P+I; existing no-origin L preserved; display-only requested field does not exempt whole-store import |
+    | 9 `git_ops::register_node_full_identity` (2877), requested/automatic registration | Nodes **and blocks**, requested occupancy, exact accepted registration stamp, local node.toml before-image | Requested free succeeds/occupied refuses; auto allocates once across unknown and restart; successor prevents local identity install | N+P+I; existing no-origin L supported with identity install; accepted/incomplete independent evidence mandatory |
+    | 10 `register_node_remote_only` (3078), block-only backfill | Fresh block-only backfill condition, registry record with no local identity | Healthy backfill and concurrent registration; no local node.toml creation; retry/adoption exact | N+P+I; preserve remote-only semantics and no-origin behavior; no row-9 local effect borrowed |
+    | 11 `set_node_identity_field` (3189) | Target exists; exact field intent; current local self identity before local config change | Self and nonself positives; missing target refusal; peer/self identity changes survive | N+P+I; local config only for still-current self, checked before effect; L branch preserved |
+    | 12 `unregister_node` (3492) | Current target existence/intent, accepted deletion and later successor | Existing target delete, absent no-op; lost reply/current successor; no reinstall/delete replay | N+P+I; R-3 pre-mutation no-origin error for actual changing request; preserve absent no-op |
+    | 13 `lib.rs::handle_block_command` Claim (21244), `auto_allocate_block_inner` (21965) | Current node identity, block registry/type, counter floor, active-block OnAcquire vs OnThresholdCross, exact per-attempt range and allocation stamp | Nonoverlap, explicit/manual and automatic positives; threshold new block, acquire reuse; ambiguous acceptance adopts one range; local successor/dispenser race | N+P+I; STORE before `blocks.lock`; refill outside dispenser guard; automatic no-origin L stays, manual changing no-origin refusal; no extra allocation during recovery |
+    | 14 `schedule_ledger::write_cas_opts` (340) | Bound observation and `mutate`/debounce on current ledger; no job reexecution | Actual tick/ledger positive, debounce no-op; concurrent peer fields and offline retention; rejected C not ownership success | N+P+I online; existing push=false/no-origin L and configured-unreachable local retention preserved with truthful local-only result |
+    | 15 `write_batch_cas_opts` (460) | Exact original changed-field delta, current entries and bound batch observations | Multi-entry peer field preservation; reapply delta only; crash/unknown does not rerun scheduled jobs or widen delta | N+P+I online; L behavior as row14; tick→store order retained with no new reverse home/tick edge |
+    | 16 `git_ops::hijack_node` (3322) | Accepted current registry ownership, own config/marker exact images, old peer root/config/marker, retained candidate lineage | Healthy takeover and peer notification; A→B same-ID race, peer replacement, inaccessible peer, crash every boundary | N+P+I then separate peer STORE; no nested own/peer locks; marker after acceptance, exact-owned clear/restore only; no-origin changing request refuses |
+    | 17 `suggest_free_node_id` (2802) | Advisory current registry read/sync only | Preserve its ordinary S behavior | **Excluded A2 S row**; TASK-1332 closure inventory, not a seventeenth accepted C family |
+
+    For all N profiles, preserve actual installed/template prepare-message differences, store trailer binding to the right repository snapshot, pre-commit sentinel and missing/stale post-commit sentinel behavior, literal commit-config parsing, native reference-transaction inputs, post-rewrite and exact notes-copy no-op/editor conditions. Executable/custom unsupported profiles refuse before mutation with a named reason; a supported ordinary profile must still succeed. For P, record the real child, deadline, stdin/ref/OID and endpoint; no hook callback authority may be manufactured by an environment variable or an external helper. For I, STORE remains continuous through owned finite install while the common pump avoids recursive HOME acquisition; no network, READY, wait, callback or reap under SEAT. Recovery uses a fresh qualified Git execution domain, never an inherited Rust guard or stale release capability.
+
+    Full closure snapshots for these proposed tests cover origin and local refs/reflogs/index/worktree, store bytes/history, roster and grants where enlisted, node config, counter/block files, own/peer markers, private evidence/object pins, permanent lock inodes and retained receipts. Include safe-state read **after** lock acquisition; dirty and pre-existing rebase preservation; no stale abort/reset; same canonical root through sibling/symlink paths; distinct-store progress; and real backend/P/S competitors. A removal/restoration counter-test must expose the intended race without being merely a compile failure. All tests remain proposed, none run in this review.
+
+    ## 4. Eight production gates — distinct and still open
+
+    | Gate | Required closure | Disposition for this submission |
+    |---|---|---|
+    | 1 | Home/root discovery, permanent exclusion, complete durable journal/immutable C/receipts, finite object closure and cross-repo recovery/history | OPEN. Pre-send CAS evidence and S6 recovery cannot be replaced by checkpoint storage primitives |
+    | 2 | Actual identity/authority/assignment joins, current predicates and strict refusal | OPEN. TTY inference, S3 unlock gap, S6 ordering and F-1 unresolved |
+    | 3 | Closed sealed Git domain, authentic bounded pump, real hooks/effects and quiescence | OPEN. Signed design names are not an implementation; object/native pre-push closure needs revision |
+    | 4 | Full CLI/MCP/core/backend readers/writers/history enlisted | OPEN. Optional HOME and whole-store imports prevent Stage B exemption |
+    | 5 | Independently accepted exact TASK-1612 transport, then private publisher P4/CommittedDispatch integration | OPEN. `a5e1bc4f18aee6fb642b8c2d272b35e94b98ec68` has PARTIAL evidence, not accepted production dependency; Git SERVICE cannot release vendors |
+    | 6 | Actual foreground/headless/no-launch/TUI/phase/admission/pane/contained adapters and lifetime/FD/group behavior | OPEN. Launch/pane design approval is not native adapter acceptance; current A2 work neither completes nor supersedes it |
+    | 7 | Complete healthy and refusal/race/crash/native-hook/peer/nonvacuity witnesses, regressions and required CI | OPEN. This design review deliberately runs no implementation tests/CI |
+    | 8 | Fresh final exact-head composition review, final CI and operator authority-sensitive merge | OPEN. This report requests changes; predecessor approvals do not waive this gate |
+
+    TASK-1717 remains only the protective ordinary sync/direct merge-gate/canonical mailbox child with original P safe-state and core-lock obligations. Its unreviewed source/head or eventual ordinary S/L proof cannot supply A2/common acceptance. It does not include fresh node/block/claim/roster/alias/hijack C, runtime authority integration, the full doctor/init/dispenser/compaction inventory, release policy, or parent closure. Existing no-origin sync remains a positive. Do not alter its doer, queue or scope from this review.
+
+    ## 5. Grounded decisions and cold-session handoff
+
+    **R-1:** retain remote-first private C as the selected roster design direction, with the bounded exception to v4's retained-local-on-rejection behavior for that conditional roster path. Rejected roster C must not become canonical later through ordinary sync. This settles direction only; it does not accept the claimed immutable human proof or optional home-first install. Existing local no-origin roster semantics remain, and exact member/seat intent/migration positives are required.
+
+    **R-2:** use the existing common owner's retained evidence namespace; do not create another schema/ledger. The proposed recovery protocol is incomplete and is not accepted merely as “typed payload kinds.” Revise its field mapping, bounded validators, pre-send durability, discovery, candidate lineage and current-owner recovery against the actual checkpoint and signed common records. Independent evidence must survive remote acceptance/local failure without depending on the dead invocation's memory.
+
+    **R-3:** for genuinely changing hijack, unregister and explicit block-claim operations without origin, refuse before mutation; do not invent new offline ownership semantics. Preserve an already-absent unregister no-op and the existing registration/identity/automatic-block/ledger/roster/alias L branches. Configured-but-unreachable is not no-origin. Existing documented best-effort claim Unavailable remains distinct from acquired ownership.
+
+    **F-1:** do not adopt the advisory exclusion or any of the implicit product forks. Keep the confirmed pre-P4 counterexample and narrow unresolved consumers explicit. A revised owner design may demonstrate a grounded existing-contract composition; if it cannot, leave that exact production integration blocked. No human question, remote broker, new issuer, authority freeze, new process identity or distributed transaction is proposed.
+
+    The revision owner is the existing BUG-1808 common design author, through coordinating root. Requested artifact: a new version of this owner-join sketch plus READY, preserving current files and this report. It must resolve findings 1–6 concretely, correct the F-1 caller boundary and stage ledger in 7–8, and carry all row-specific witnesses in 9. Include an explicit state transition table for normal success, true rejection, Unknown, accepted/incomplete, superseded and recovery; name actual source/API owner for every transition. Do not substitute a successful name match, a newly invented capability, or refusal-only fixtures for an accepted production dependency.
+
+    A fresh independent advisor must review that exact revision. The revised sketch need not implement or build the missing common owner to be reviewable, but it must specify its integration faithfully and keep production gates honest. No code work or test run is requested by this handoff. The normal discipline's brief/requeue/mail steps are intentionally not performed because this assignment explicitly restricts writes to scratch/report evidence and makes root the sole canonical relay.
+
+    **Root handoff:** CHANGES REQUESTED for the exact sketch/READY hashes above. Full report is ready for canonical relay by root after full read. This reviewer waits for a root-directed fresh revision; no independent canonical notification or queue action has been sent. Parent production and authority-sensitive merge remain unapproved.
+  created_at: 2026-10-08T20:37:27.344695793Z
+  modified_at: 2026-10-08T20:37:27.344695793Z
+  relayed_from: 01a11d24-376e-77b3-887e-946317ac0777
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
