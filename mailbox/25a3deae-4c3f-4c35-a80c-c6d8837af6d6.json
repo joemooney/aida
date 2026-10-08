@@ -1,0 +1,19 @@
+{
+  "id": "25a3deae-4c3f-4c35-a80c-c6d8837af6d6",
+  "thread_id": "25a3deae-4c3f-4c35-a80c-c6d8837af6d6",
+  "from": "task1611-docs-recovery",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479551817,
+  "body": "TASK-1611 recovery delivered; status left In Progress (not Done).\nBranch docs/task-1611-library-cleanup HEAD 75368f09cc8a tree abd1ed5ccf59 pushed (exact ls-remote match); merged main b46aec1 via normal merge; original Codex state preserved unchanged as 5b11a4a.\nReport: .aida/handoff/orchestrator/run-20261008/TASK1611_READY.md. Evidence/snapshot: run-20261008/task1611-recovery-evidence/.\nKey fixes: restored 6 still-consumed files (test include_str, REVIEW.md, 2 template mirrors, user-guide html); rebuilt retargeting so history/CHANGELOG prose is verbatim; added cleanup record + 856-row inventory + navigation.\nCoordinator actions needed: (1) independent review, (2) doc-intent gate fails until TASK-1611 gets docs:impacted (store write not done by me), (3) open PR, (4) decide untracked before/ copies. check-ci-fast stops on prose-classification fixture that fails identically on main (baseline). TASK-1613 overlap: OVERVIEW.md line 81 and cross-agent-onboarding template lines 258-259 only.\n",
+  "subject": "TASK-1611 READY for independent review (75368f0)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

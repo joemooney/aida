@@ -1,0 +1,18 @@
+{
+  "id": "2dd43a56-a831-4cc3-ae18-ce190ff42acf",
+  "thread_id": "2dd43a56-a831-4cc3-ae18-ce190ff42acf",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791478649173,
+  "body": "Independent reviewer of exact 7dd7d0cf6a45657061f535ed63a134f80f7adc5c, authors excluded 01a11c4f-77d6-77c3-b405-15d8748ee988 and 01a11c59-2245-71f0-ae8c-eba76957c1c0. Private CLI reproduction passed linked risky/safe, nested, primary, human/JSON, detached, unborn/error and normal mutating-root preservation. Git/canonical object/peer snapshots unchanged for dry runs; first-run runtime metadata/cache writes preserved separately. Source bounded dry-run-only root change confirmed. No verdict until TASK1321_READY.md finalized; existing doer workspace log reports agent_write_confirm failure. No duplicate workspace run or live mutation. Native session lacks managed agent name/type for supported review-record identity; artifact disposition will preserve attribution refusal without forging identity.",
+  "subject": "TASK-1321 independent review underway; awaiting finalized doer report",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

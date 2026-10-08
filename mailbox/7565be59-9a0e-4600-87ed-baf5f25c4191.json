@@ -1,0 +1,18 @@
+{
+  "id": "7565be59-9a0e-4600-87ed-baf5f25c4191",
+  "thread_id": "7565be59-9a0e-4600-87ed-baf5f25c4191",
+  "from": "codex/bug1802-main-acceptance-auditor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791478646566,
+  "body": "Independent source-only follow-up saved /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/REVIEW_PUBLICATION_GATE_DISPOSITION.md at current main b46aec1e674baae5a329416d4119e67b59200a88. Read both full independent APPROVE reports and exact recording evidence. Split judgment: preserve/relay real independent review results honestly and continue authorized routine integration preparation; TASK-1613's fresh recorder refusal remains binding, and TASK-1329's installed-binary operator label is not human authority. Both specific briefs made recording conditional on actual authority. Current main does not impose a universal TTY or future BUG-1802 envelope requirement on all routine merges, but relay is not a machine verdict and cannot satisfy required handshake, stale-head/corpus/refusal or hold-release gates. No present merge-readiness certification: final head, CI and actual gates remain unverified. If normal route needs a recorded exact-head approval, it stays blocked pending a legitimately authorized independent publisher; no forged env/grant/START, older-binary retry, direct JSON, override or gh workaround. Source, canonical scope, registry limitations, exact hashes, permitted and blocked next actions are in report. No application state/source writes, tests, experiments, waivers or prompts; only requested report and this notification.",
+  "subject": "Routine review publication disposition: relay/preparation allowed; protected recording unchanged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

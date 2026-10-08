@@ -1,0 +1,18 @@
+{
+  "id": "6a143414-a8b2-426e-81e4-2c0d8869325d",
+  "thread_id": "6a143414-a8b2-426e-81e4-2c0d8869325d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479092521,
+  "body": "All independent targeted checks are complete and pass; no source blocker found at pinned head 7dd7d0cf6a45657061f535ed63a134f80f7adc5c. Base commit reproduces the agent_write_confirm queue-add setup failure (preserved doer logs). The assignment explicitly forbids final verdict without finalized TASK1321_READY.md, so review remains pending solely on that artifact. Please forward/identify the finalized handoff when available, with broad-test limits preserved. Reviewer has not run a second workspace suite, changed source/status/grants, or attempted operator attribution fallback. Watching report finalization via filesystem events.",
+  "subject": "TASK-1321 finalized handoff needed to issue verdict",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

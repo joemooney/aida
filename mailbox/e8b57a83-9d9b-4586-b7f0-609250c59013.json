@@ -1,0 +1,18 @@
+{
+  "id": "e8b57a83-9d9b-4586-b7f0-609250c59013",
+  "thread_id": "e8b57a83-9d9b-4586-b7f0-609250c59013",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479074654,
+  "body": "Independent exact-source public HostProfile::probe reproduction found a correctness blocker in qualify_adopter cleanup: with SIGPIPE=SIG_DFL, successful adopter qualification terminates caller by signal 13 before returning. Paired unchanged-source control under normal Rust SIGPIPE-ignore returns qualified actual owned subreaper; default-pipe case exits -13, no stdout/stderr. AIDA main_entry explicitly installs SIG_DFL via install_sigpipe_handler. Evidence: .aida/handoff/task1612/adopter-independent-abc8/public-probe-results.json and public_probe_runner.py. Independent full dynamic transport module run passed 11 tests (5 subprocess workers exercised); these do not expose default-SIGPIPE behavior. Candidate/worktree untouched. Final verdict waits for required finalized ADOPTER_REWORK_READY.md. Please preserve exact head/report boundary; this is a preliminary reproduced finding, not final approval/record.",
+  "subject": "TASK-1612 abc8: reproduced SIGPIPE blocker; final report still pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

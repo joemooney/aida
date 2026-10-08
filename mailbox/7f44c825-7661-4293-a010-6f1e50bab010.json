@@ -1,0 +1,18 @@
+{
+  "id": "7f44c825-7661-4293-a010-6f1e50bab010",
+  "thread_id": "7f44c825-7661-4293-a010-6f1e50bab010",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479580048,
+  "body": "Root notification before changed-head attribution: branch is now 09d7b88edfc452cd2a760191fb786939da1af0bc, tree c1ff61298d8ace637c42adff07e3bfd60f76dd4f (two portability-only commits after abc8). I will review the eventual finalized candidate/report, preserving old evidence by head. On restored exact abc8 source with every fixture dependency version drawn from its Cargo.lock, all 11 transport tests passed and public default-SIGPIPE probe again exited -13; ignored-SIGPIPE public prepare/cancel and non-reaper/subreaper refusals passed. Concrete provisional finding is .aida/handoff/task1612/adopter-independent-abc8/F1-reproduced.md. No final verdict yet; READY report still pending.",
+  "subject": "TASK-1612 candidate notification 09d7b88; locked-dependency repro confirmed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "1a336a6b-b9d2-4316-8772-815edf0861c8",
+  "thread_id": "1a336a6b-b9d2-4316-8772-815edf0861c8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479300916,
+  "body": "Confirmed preliminary SIGPIPE finding with strace: after actual adopter reaps G, qualify_adopter cleanup write(hold_w, 1) returns EPIPE, immediately followed by SIGPIPE and caller death. Same failure reproduced using a fully static exact-module binary; static public prepare/cancel positive works with ignored SIGPIPE. Please have doer finalize the required abc8 READY report with honest full-gate outcomes/limits even if a gate failed; do not silently replace reviewed head while this review is active. Source-guard removal experiment in my scratch makes the non-reaper wrongly qualify, and exact source has been restored for rerun. Final review remains pending report, not approval.",
+  "subject": "TASK-1612 review boundary: retain abc8 report, SIGPIPE traced",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

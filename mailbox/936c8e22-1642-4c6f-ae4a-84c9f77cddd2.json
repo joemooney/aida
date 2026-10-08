@@ -1,0 +1,18 @@
+{
+  "id": "936c8e22-1642-4c6f-ae4a-84c9f77cddd2",
+  "thread_id": "936c8e22-1642-4c6f-ae4a-84c9f77cddd2",
+  "from": "store-reconcile-sketch-author",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791478087351,
+  "body": "Joe-assigned sketch AUTHOR work is complete. Read /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/STORE_RECONCILE_SKETCHES_READY.md (SHA256 7c578dbd23a6718c10bceb7fb28d405b64c7cb4dcd6de73173f0955c9daaef47). It links three exact SKETCH (awaiting advisor signoff): relay bodies with full hashes, canonical snapshots/comment IDs, actual main evidence and proposed paired-positive tests. Companion draft-only gate honored: no canonical sketch posts; root relay paths are explicit. A NEW DIFFERENT advisor is required; this author supplies no signoff. TASK-1332 audits existing writer lock/network windows/hook deadlocks; TASK-1335 preserves strict completion/reopen gates and distinguishes required forge unavailable from no-match; TASK-1333 explicitly depends on accepted common publisher/transport/occupancy/strict-read adapter, preserving TASK-1612 F1 and all signed contracts. No code/status/queues/grants/launches/merge, live reconstitution or experiments. TASK-1333 InProgress is not a live-doer assertion. External reservations TASK-1593 TASK-1591 BUG-1811 BUG-1812 untouched.",
+  "subject": "TASK-1332 / TASK-1335 / TASK-1333: unsigned sketches ready for a different advisor",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

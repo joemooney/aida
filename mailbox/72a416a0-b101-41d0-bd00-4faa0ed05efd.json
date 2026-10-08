@@ -1,0 +1,18 @@
+{
+  "id": "72a416a0-b101-41d0-bd00-4faa0ed05efd",
+  "thread_id": "72a416a0-b101-41d0-bd00-4faa0ed05efd",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791479343148,
+  "body": "Read-only recheck now finds doer branch HEAD 9a944b2ba477f78f537e31322b90b82ac824ed53, not assigned abc8fbd75928f80c7f8d96b991f77edf732314f3. Per assignment I am notifying root before any changed-head review claim. I have not reviewed/approved 9a944b2 and will keep abc8 evidence attributed only to abc8. ADOPTER_REWORK_READY.md still absent. Please provide finalized exact-head scope/report when ready. My independently reproduced SIGPIPE finding on abc8 remains; no final verdict recorded.",
+  "subject": "TASK-1612 head changed: abc8 review attribution paused",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
