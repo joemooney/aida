@@ -87,7 +87,7 @@
  "rules": [
   {
    "bucket": "artifacts",
-   "match": "lockfiles; any path segment generated/vendor/vendored/node_modules/dist/target; aida-store/, .aida-store/, data/; requirements*.yaml, default_requirements.yaml, sample_project.yaml; minified/map/db/wasm/log/font/image files"
+   "match": "lockfiles; any path segment generated/vendor/vendored/node_modules/dist/target; aida-store/, .aida-store/, data/; requirements*.yaml, default_requirements.yaml, sample_project.yaml; minified/map/db/wasm/log/font/image files; this tool's own generated exports under docs/analytics/code-growth/"
   },
   {
    "bucket": "tests_automation",
@@ -8959,6 +8959,10 @@
    "async": 0,
    "rstest": 0,
    "total": 42,
+   "charted_plain": 42,
+   "charted_async": 0,
+   "charted_rstest": 0,
+   "charted_total": 42,
    "by_bucket": {
     "cli": {
      "plain": 0,
@@ -8988,6 +8992,10 @@
    "async": 0,
    "rstest": 0,
    "total": 77,
+   "charted_plain": 77,
+   "charted_async": 0,
+   "charted_rstest": 0,
+   "charted_total": 77,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9035,6 +9043,10 @@
    "async": 1,
    "rstest": 0,
    "total": 79,
+   "charted_plain": 78,
+   "charted_async": 1,
+   "charted_rstest": 0,
+   "charted_total": 79,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9082,6 +9094,10 @@
    "async": 1,
    "rstest": 0,
    "total": 79,
+   "charted_plain": 78,
+   "charted_async": 1,
+   "charted_rstest": 0,
+   "charted_total": 79,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9135,6 +9151,10 @@
    "async": 1,
    "rstest": 0,
    "total": 176,
+   "charted_plain": 175,
+   "charted_async": 1,
+   "charted_rstest": 0,
+   "charted_total": 176,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9188,6 +9208,10 @@
    "async": 1,
    "rstest": 0,
    "total": 1950,
+   "charted_plain": 1949,
+   "charted_async": 1,
+   "charted_rstest": 0,
+   "charted_total": 1950,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9241,6 +9265,10 @@
    "async": 9,
    "rstest": 0,
    "total": 4594,
+   "charted_plain": 4585,
+   "charted_async": 9,
+   "charted_rstest": 0,
+   "charted_total": 4594,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9294,6 +9322,10 @@
    "async": 9,
    "rstest": 0,
    "total": 5736,
+   "charted_plain": 5727,
+   "charted_async": 9,
+   "charted_rstest": 0,
+   "charted_total": 5736,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9347,6 +9379,10 @@
    "async": 9,
    "rstest": 0,
    "total": 5848,
+   "charted_plain": 5839,
+   "charted_async": 9,
+   "charted_rstest": 0,
+   "charted_total": 5848,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9400,6 +9436,10 @@
    "async": 12,
    "rstest": 0,
    "total": 9388,
+   "charted_plain": 9376,
+   "charted_async": 12,
+   "charted_rstest": 0,
+   "charted_total": 9388,
    "by_bucket": {
     "artifacts": {
      "plain": 0,
@@ -9453,6 +9493,10 @@
    "async": 12,
    "rstest": 0,
    "total": 9882,
+   "charted_plain": 9870,
+   "charted_async": 12,
+   "charted_rstest": 0,
+   "charted_total": 9882,
    "by_bucket": {
     "artifacts": {
      "plain": 0,

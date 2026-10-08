@@ -44,7 +44,7 @@ tip reconciliation fails (`--allow-mismatch` overrides).
 
 | Order | Bucket | Rule |
 |---|---|---|
-| 1 | Generated, vendored & data artifacts | lockfiles; any `generated/`, `vendor/`, `vendored/`, `node_modules/`, `dist/`, `target/` segment; `aida-store/`, `.aida-store/`, `data/`; `requirements*.yaml`, `default_requirements.yaml`, `sample_project.yaml`; minified/map/db/wasm/log/font/image files |
+| 1 | Generated, vendored & data artifacts | lockfiles; any `generated/`, `vendor/`, `vendored/`, `node_modules/`, `dist/`, `target/` segment; `aida-store/`, `.aida-store/`, `data/`; `requirements*.yaml`, `default_requirements.yaml`, `sample_project.yaml`; minified/map/db/wasm/log/font/image files; this tool's own generated exports in `docs/analytics/code-growth/` (JSON/CSV/PNG; the authored README stays Documentation) |
 | 2 | Tests & automation | any `tests/`, `test/`, `__tests__/`, `benches/`, `*fixtures/` directory; root `bench/`, `scripts/`, `ci/`, `.github/`; `.gitlab-ci.yml`, `Makefile` |
 | 3 | Documentation | `.aida/discipline/` |
 | 4 | Packaging & integration | `aida-core/templates/`, `templates/`, `.claude/`, `.claude-plugin/`, `.codex/`, `.antigravity/`, `.gemini/`, `.aida/`, `plugins/`, `docker/`, `.cargo/` |
@@ -74,11 +74,11 @@ table is `classify()` in the script and is echoed in the JSON `rules` array.
 | `code-growth.json` | the same rows plus `samples`, `buckets`, `rules`, `delivery`, `rust_tests`, `reconciliation`, Tokei version/args |
 | `code-growth-embedded.csv` | embedded-language blobs (see below), never summed into the CSV totals |
 | `delivery-cadence.csv` | per-period first-parent commits and unique subject-inferred PRs |
-| `rust-test-markers.csv` | per-sample Rust test attribute counts |
+| `rust-test-markers.csv` | per-sample Rust test attribute counts: raw `plain/async/rstest/total` plus `charted_*` (artifact bucket excluded); per-bucket evidence is in the JSON |
 | `production-growth.png` | stacked production code by component (Tokei `code`) |
 | `supporting-growth.png` | stacked tests/docs/packaging/uncategorized (`lines`, because Tokei counts Markdown prose as comments, so `code` would hide documentation) |
 | `delivery-cadence.png` | commits and PRs per period, incomplete period shaded |
-| `rust-test-growth.png` | Rust test attributes per sample |
+| `rust-test-growth.png` | Rust test attributes per sample, artifact-excluded (`charted_*`) |
 
 ## Assumptions and exclusions
 
@@ -95,7 +95,11 @@ table is `classify()` in the script and is echoed in the JSON `rules` array.
   separately in `code-growth-embedded.csv` and never added to totals.
 - **Generated, vendored & data artifacts** are kept in the CSV/JSON and in the
   reconciliation, but excluded from all presentation charts; each chart
-  states this in its footer.
+  states this in its footer. Generated server code with `#[test]` markers, for
+  example, is counted in the raw/per-bucket Rust evidence but not plotted. The
+  supporting chart additionally notes that legacy requirement data
+  (`aida-store/`) moved off the code branch, which explains why that data is
+  not part of the supporting corpus.
 - Inline `#[cfg(test)]` modules inside production files stay in their
   component bucket; only separate test files and directories count as tests.
   The Rust test chart covers that gap from the other side.
@@ -108,8 +112,13 @@ Commit counts are exact first-parent commits. PR counts are **inferred from
 commit subjects** (`(#N)` suffix, `Merge pull request #N`, `(!N)`,
 `See merge request ...!N`), de-duplicated per period. Work merged without such
 a subject, and early history before PR-style subjects were used, is
-undercounted (the first months show zero PRs). The period containing the tip
-is marked partial when the tip falls before the period's last day.
+undercounted (the first months show zero PRs; the chart footer says so
+explicitly, derived from the data, and it is not a delivery pause). Periods are enumerated
+over the finite calendar range between the earliest and latest period seen,
+so backdated or out-of-order first-parent dates never drop commits (idle
+periods show zero). A period is marked partial when it ends after the date of
+the actual ref tip (date-as-of semantics; a backdated tip also marks
+later-dated periods partial). The chart title names the selected ref.
 
 ## Rust test markers (heuristic)
 

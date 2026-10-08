@@ -103,6 +103,14 @@ class ClassifyTest(unittest.TestCase):
             "./aida-tui/src/lib.rs": "tui",
         })
 
+    def test_generated_analytics_exports_are_artifacts_but_readme_is_docs(self):
+        base = "docs/analytics/code-growth/"
+        for n in ("code-growth.json", "code-growth.csv", "code-growth-embedded.csv", "delivery-cadence.csv",
+                  "rust-test-markers.csv", "production-growth.png"):
+            self.assertEqual(mod.classify(base + n), "artifacts", n)
+        self.assertEqual(mod.classify(base + "README.md"), "docs")
+        self.assertNotEqual(mod.classify("docs/analytics/other/code-growth.csv"), "artifacts")
+
     def test_every_rule_target_is_a_declared_bucket(self):
         for bucket, _ in mod.RULE_DOCS:
             self.assertTrue(bucket in mod.BUCKET_INFO or bucket == "<component>", bucket)
@@ -161,6 +169,23 @@ class ParsingTest(unittest.TestCase):
         d = mod.delivery_cadence(commits, "month")
         self.assertEqual([(r["period"], r["commits"], r["prs"], r["partial"]) for r in d],
                          [("2026-01", 2, 1, False), ("2026-02", 1, 1, True)])
+
+    def test_delivery_out_of_order_dates_keep_every_commit_and_terminate(self):
+        for order in ([(1, 5), (3, 5), (2, 5)], [(3, 5), (2, 5)], [(1, 5), (3, 6), (3, 7), (2, 5)]):
+            commits = fake_commits([utc(2026, m, d) for m, d in order])
+            for cadence in mod.CADENCES:
+                d = mod.delivery_cadence(commits, cadence)
+                self.assertEqual(sum(r["commits"] for r in d), len(commits), (order, cadence))
+                self.assertEqual(len({r["period"] for r in d}), len(d))
+        d = mod.delivery_cadence(fake_commits([utc(2026, 1, 5), utc(2026, 3, 5), utc(2026, 2, 5)]), "month")
+        self.assertEqual([(r["period"], r["commits"], r["partial"]) for r in d],
+                         [("2026-01", 1, False), ("2026-02", 1, True), ("2026-03", 1, True)])
+
+    def test_early_zero_pr_note(self):
+        d = [{"period": "2026-01", "prs": 0}, {"period": "2026-02", "prs": 0}, {"period": "2026-03", "prs": 4}]
+        self.assertIn("2026-01 to 2026-02 show 0 PRs", mod.early_zero_pr_note(d))
+        self.assertEqual(mod.early_zero_pr_note(d[2:]), "")
+        self.assertEqual(mod.early_zero_pr_note(d[:2]), "")
 
     def test_delivery_fills_idle_periods_with_zero(self):
         commits = fake_commits([utc(2026, 1, 3), utc(2026, 4, 2)])
@@ -328,6 +353,76 @@ class EndToEndTest(unittest.TestCase):
 
     def test_repo_is_untouched(self):
         self.assertEqual(self.git("status", "--porcelain").strip(), "")
+
+
+@unittest.skipUnless(TOKEI, "tokei binary not on PATH; skipping Tokei-backed tests")
+class BackdatedAndGeneratedTest(unittest.TestCase):
+    """R1/R2: non-chronological first-parent dates and generated-export exclusion."""
+
+    def build(self, tmp, dates):
+        repo = tmp / "repo"
+        repo.mkdir()
+        env = {**os.environ, "HOME": str(tmp / "home"), "AIDA_HOME": str(tmp / "home"),
+               "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        (tmp / "home").mkdir()
+        base = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
+        subprocess.run([*base, "init", "-q", "-b", "main"], env=env, check=True)
+        for i, when in enumerate(dates):
+            files = {"aida-core/src/lib.rs": f"pub fn a{i}() {{}}\n",
+                     "aida-server/src/generated/api.rs": "#[test]\nfn gen() {}\n" * (i + 1),
+                     "docs/analytics/code-growth/code-growth.csv": "a,b\n" * (i + 1),
+                     "docs/analytics/code-growth/README.md": f"# R{i}\n"}
+            for rel, text in files.items():
+                p = repo / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(text)
+            e = {**env, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+            subprocess.run([*base, "add", "-A"], env=e, check=True)
+            subprocess.run([*base, "commit", "-q", "-m", f"c{i} (#{i + 1})"], env=e, check=True, capture_output=True)
+        return repo
+
+    def test_both_orders_preserve_all_commits_for_all_cadences(self):
+        orders = {
+            "jan-mar-feb": ["2026-01-05T12:00:00+00:00", "2026-03-05T12:00:00+00:00", "2026-02-05T12:00:00+00:00"],
+            "mar-feb": ["2026-03-05T12:00:00+00:00", "2026-02-05T12:00:00+00:00"],
+        }
+        for name, dates in orders.items():
+            with tempfile.TemporaryDirectory(prefix="cg-order-") as t:
+                tmp = pathlib.Path(t)
+                repo = self.build(tmp, dates)
+                for cadence in mod.CADENCES:
+                    scratch = tmp / f"s-{cadence}"
+                    scratch.mkdir()
+                    r = mod.analyze(str(repo), "main", cadence, 1, TOKEI, scratch, progress=lambda m: None)
+                    self.assertEqual(sum(x["commits"] for x in r["delivery"]), len(dates), (name, cadence))
+                    self.assertEqual(sum(x["prs"] for x in r["delivery"]) >= 1, True)
+                    self.assertEqual(r["samples"][-1]["revision"],
+                                     subprocess.run(["git", "-C", str(repo), "rev-parse", "main"], capture_output=True,
+                                                    text=True, env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull}).stdout.strip())
+                    self.assertTrue(r["reconciliation"]["ok"])
+
+    def test_generated_exports_and_server_markers_are_not_charted(self):
+        with tempfile.TemporaryDirectory(prefix="cg-gen-") as t:
+            tmp = pathlib.Path(t)
+            repo = self.build(tmp, ["2026-01-05T12:00:00+00:00", "2026-02-05T12:00:00+00:00"])
+            scratch = tmp / "s"
+            scratch.mkdir()
+            r = mod.analyze(str(repo), "main", "month", 1, TOKEI, scratch, progress=lambda m: None)
+            tip = r["tip"]
+            by = {(x["bucket"], x["language"]): x for x in r["rows"] if x["revision"] == tip}
+            self.assertEqual({b for b, _ in by if b == "docs"}, {"docs"})  # README only
+            self.assertEqual(by[("docs", "Markdown")]["files"], 1)
+            self.assertFalse([k for k in by if k[0] == "docs" and k[1] != "Markdown"])
+            last = r["rust_tests"][-1]
+            self.assertEqual(last["total"], 2)            # raw: both generated #[test] markers kept as evidence
+            self.assertEqual(last["by_bucket"]["artifacts"]["total"], 2)
+            self.assertEqual(last["charted_total"], 0)    # but not plotted
+            out = tmp / "out"
+            mod.write_outputs(r, out, charts=True)
+            with open(out / "rust-test-markers.csv") as fh:
+                row = list(csv.DictReader(fh))[-1]
+            self.assertEqual((row["total"], row["charted_total"]), ("2", "0"))
+            self.assertEqual(r["reconciliation"]["ok"], True)
 
 
 if __name__ == "__main__":

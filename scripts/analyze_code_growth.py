@@ -66,6 +66,10 @@ ARTIFACT_DIRS = {"generated", "vendor", "vendored", "node_modules", "dist", "tar
 ARTIFACT_PREFIXES = ("aida-store/", ".aida-store/", "data/")
 ARTIFACT_SUFFIXES = (".min.js", ".min.css", ".map", ".db", ".sqlite", ".wasm", ".log", ".ttf", ".woff", ".woff2",
                      ".png", ".jpg", ".jpeg", ".gif", ".ico", ".lock")
+# This tool's own generated exports (exact paths); the authored README beside
+# them stays documentation.
+GENERATED_EXPORTS = {f"docs/analytics/code-growth/{n}" for n in (
+    "code-growth.json", "code-growth.csv", "code-growth-embedded.csv", "delivery-cadence.csv", "rust-test-markers.csv")}
 ARTIFACT_NAME_RE = re.compile(r"^(requirements.*|default_requirements|sample_project)\.ya?ml(\.backup)?$|^requirements\.yaml\.backup$")
 TEST_DIR_RE = re.compile(r"(^|/)(tests?|__tests__|benches|([^/]*-)?fixtures?)/")
 TEST_ROOT_PREFIXES = ("bench/", "scripts/", "ci/", ".github/")
@@ -93,7 +97,7 @@ COMPONENT_PREFIXES = [
 RULE_DOCS = [
     ("artifacts", "lockfiles; any path segment generated/vendor/vendored/node_modules/dist/target; "
                   "aida-store/, .aida-store/, data/; requirements*.yaml, default_requirements.yaml, sample_project.yaml; "
-                  "minified/map/db/wasm/log/font/image files"),
+                  "minified/map/db/wasm/log/font/image files; this tool's own generated exports under docs/analytics/code-growth/"),
     ("tests_automation", "any tests/test/__tests__/benches/*fixtures/ directory; root bench/, scripts/, ci/, .github/; "
                          ".gitlab-ci.yml, Makefile"),
     ("docs", ".aida/discipline/ (before the generic .aida/ packaging rule)"),
@@ -118,7 +122,7 @@ def classify(path: str) -> str:
     low = p.lower()
     # 1. artifacts
     if (name in LOCKFILES or any(seg in ARTIFACT_DIRS for seg in parts[:-1])
-            or p.startswith(ARTIFACT_PREFIXES) or ARTIFACT_NAME_RE.match(name)
+            or p.startswith(ARTIFACT_PREFIXES) or p in GENERATED_EXPORTS or ARTIFACT_NAME_RE.match(name)
             or low.endswith(ARTIFACT_SUFFIXES)):
         return "artifacts"
     # 2. directory-based tests/automation
@@ -387,7 +391,10 @@ def rust_markers_for_tree(tree: Path, files: list[dict]) -> dict:
             total[k] += v
             by_bucket[bucket][k] += v
     total["total"] = sum(total.values())
-    return {"total": total, "by_bucket": {b: dict(v, total=sum(v.values())) for b, v in sorted(by_bucket.items())}}
+    art = by_bucket.get(ARTIFACT_BUCKET, {"plain": 0, "async": 0, "rstest": 0})
+    charted = {k: total[k] - art[k] for k in ("plain", "async", "rstest")}
+    charted["total"] = sum(charted.values())
+    return {"total": total, "charted": charted, "by_bucket": {b: dict(v, total=sum(v.values())) for b, v in sorted(by_bucket.items())}}
 
 
 # --------------------------------------------------------------------------
@@ -422,18 +429,21 @@ def delivery_cadence(commits: list[dict], cadence: str) -> list[dict]:
         p["commits"] += 1
         p["prs"].update(parse_prs(c["subject"]))
     out = []
-    if periods:  # fill calendar gaps so idle periods render as zero, not as missing
-        first = commits[0]["when"]
-        label, end = period_of(first, cadence)
-        last_label = period_of(commits[-1]["when"], cadence)[0]
-        while True:
-            p = periods.get(label, {"commits": 0, "prs": set(), "end": end})
+    if periods:
+        # First-parent order is not chronological when commits are backdated, so
+        # enumerate the finite calendar range between the earliest and latest
+        # period actually seen, independent of walk order.  A period is partial
+        # when it ends after the date of the actual ref tip (date-as-of
+        # semantics: a backdated tip marks later-dated periods partial too).
+        first_end = min(p["end"] for p in periods.values())
+        last_end = max(p["end"] for p in periods.values())
+        end = first_end
+        while end <= last_end:
+            label, end = period_of(dt.datetime.combine(end, dt.time(12), tzinfo=dt.timezone.utc), cadence)
+            p = periods.get(label, {"commits": 0, "prs": set()})
             out.append({"period": label, "commits": p["commits"], "prs": len(p["prs"]),
                         "period_end": end.isoformat(), "partial": bool(tip_date and tip_date < end)})
-            if label == last_label:
-                break
-            nxt = dt.datetime.combine(end + dt.timedelta(days=1), dt.time(12), tzinfo=dt.timezone.utc)
-            label, end = period_of(nxt, cadence)
+            end += dt.timedelta(days=1)
     return out
 
 
@@ -498,6 +508,7 @@ def analyze(repo: str, ref: str, cadence: str, every: int, tokei: str, scratch: 
                 "code": sum(r["code"] for r in rows), "lines": sum(r["lines"] for r in rows)}
         sample_meta.append(meta)
         rust.append({"revision": s["sha"], "date": date, "period": s["period"], **markers["total"],
+                     **{f"charted_{k}": v for k, v in markers["charted"].items()},
                      "by_bucket": markers["by_bucket"]})
         progress(f"[{i}/{len(samples)}] {s['period']} {s['sha'][:10]} code={meta['code']}")
         if s["kind"] == "tip":
@@ -549,7 +560,7 @@ def write_outputs(result: dict, out_dir: Path, charts: bool = True) -> list[Path
     p = out_dir / "delivery-cadence.csv"
     write_csv(p, ["period", "period_end", "commits", "prs", "partial"], result["delivery"]); written.append(p)
     p = out_dir / "rust-test-markers.csv"
-    write_csv(p, ["revision", "date", "period", "plain", "async", "rstest", "total"], result["rust_tests"]); written.append(p)
+    write_csv(p, ["revision", "date", "period", "plain", "async", "rstest", "total", "charted_plain", "charted_async", "charted_rstest", "charted_total"], result["rust_tests"]); written.append(p)
     if charts:
         written.extend(render_charts(result, out_dir))
     return written
@@ -568,6 +579,17 @@ CADENCE_ADJ = {"day": "daily", "week": "weekly", "month": "monthly", "quarter": 
 PALETTE = ["#2f6db5", "#e07b39", "#3a9d8f", "#9a5fb4", "#d4a72c", "#c8483f", "#6b7b8c", "#8a9a3b"]
 
 
+def early_zero_pr_note(delivery: list[dict]) -> str:
+    """Chart note for a leading run of zero-PR periods (pre-PR-subject history)."""
+    run = 0
+    while run < len(delivery) and delivery[run]["prs"] == 0:
+        run += 1
+    if run == 0 or run == len(delivery):
+        return ""
+    return (f"{delivery[0]['period']} to {delivery[run - 1]['period']} show 0 PRs because mainline subjects of "
+            "that era carry no PR marker; that is not a delivery pause. ")
+
+
 def render_charts(result: dict, out_dir: Path) -> list[Path]:
     import matplotlib
     matplotlib.use("Agg")
@@ -583,16 +605,18 @@ def render_charts(result: dict, out_dir: Path) -> list[Path]:
     written = []
 
     def finish(fig, ax, title, note, name):
+        import textwrap
         fig.suptitle(title, x=0.06, ha="left", fontsize=17, fontweight="bold")
         fig.text(0.06, 0.915, subtitle, fontsize=9.5, color="#555555", ha="left")
-        fig.text(0.06, 0.02, note, fontsize=8.5, color="#555555", ha="left")
-        fig.subplots_adjust(left=0.08, right=0.97, top=0.86, bottom=0.17)
+        fig.text(0.06, 0.015, "\n".join(textwrap.wrap(note, 150)), fontsize=8.5, color="#555555", ha="left",
+                 va="bottom")
+        fig.subplots_adjust(left=0.08, right=0.97, top=0.86, bottom=0.2)
         path = out_dir / name
         fig.savefig(path, dpi=160)
         plt.close(fig)
         written.append(path)
 
-    def stacked(buckets, metric, ylabel, title, name):
+    def stacked(buckets, metric, ylabel, title, name, extra_note=""):
         dates, series = bucket_series(result, buckets, metric)
         fig, ax = plt.subplots(figsize=(12, 6.5))
         labels = [BUCKET_INFO[b]["label"] for b in buckets]
@@ -605,12 +629,13 @@ def render_charts(result: dict, out_dir: Path) -> list[Path]:
         ax.set_ylabel(ylabel)
         ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{int(v):,}"))
         ax.legend(loc="upper left", frameon=False, fontsize=9, ncol=2)
-        finish(fig, ax, title, excl + " Latest total labelled.", name)
+        finish(fig, ax, title, excl + (extra_note and " " + extra_note) + " Latest total labelled.", name)
 
     stacked(PRODUCT_BUCKETS, "code", "Lines of code (Tokei, excluding comments and blanks)",
             "Production code growth by component", "production-growth.png")
     stacked(SUPPORT_BUCKETS, "lines", "Total lines (code + comments + blanks)",
-            "Supporting corpus growth", "supporting-growth.png")
+            "Supporting corpus growth", "supporting-growth.png",
+            extra_note="Legacy requirement data (aida-store/) moved off the code branch and is excluded as an artifact.")
 
     # delivery cadence
     d = result["delivery"]
@@ -625,22 +650,25 @@ def render_charts(result: dict, out_dir: Path) -> list[Path]:
     ax.set_xticks(xs); ax.set_xticklabels([r["period"] for r in d], rotation=45, ha="right", fontsize=8)
     ax.set_ylabel(f"Count per {result['cadence']}")
     ax.legend(loc="upper left", frameon=False)
-    finish(fig, ax, "Delivery cadence on main",
-           "PR counts are inferred from first-parent commit subjects ((#N), 'Merge pull request #N') and undercount "
+    early = early_zero_pr_note(d)
+    finish(fig, ax, f"Delivery cadence on {result['ref']}",
+           early + "PR counts are inferred from first-parent commit subjects ((#N), 'Merge pull request #N') and undercount "
            "work merged without such a subject. Shaded period is incomplete.", "delivery-cadence.png")
 
     # rust tests
     rt = result["rust_tests"]
     dates = [dt.date.fromisoformat(r["date"]) for r in rt]
     fig, ax = plt.subplots(figsize=(12, 6.5))
-    ax.stackplot(dates, [[r["plain"] for r in rt], [r["async"] for r in rt], [r["rstest"] for r in rt]],
+    ax.stackplot(dates, [[r["charted_plain"] for r in rt], [r["charted_async"] for r in rt],
+                         [r["charted_rstest"] for r in rt]],
                  labels=["#[test]", "async #[<path>::test]", "#[rstest]"], colors=PALETTE[:3], alpha=0.95)
-    ax.annotate(f"{rt[-1]['total']:,}", (dates[-1], rt[-1]["total"]), textcoords="offset points", xytext=(-4, 8),
+    ax.annotate(f"{rt[-1]['charted_total']:,}", (dates[-1], rt[-1]["charted_total"]), textcoords="offset points", xytext=(-4, 8),
                 ha="right", fontweight="bold")
-    ax.set_ylabel("Test attributes in Rust sources")
+    ax.set_ylabel("Test attributes in Rust sources (artifacts excluded)")
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{int(v):,}"))
     ax.legend(loc="upper left", frameon=False)
     finish(fig, ax, "Rust test attribute growth",
+           "Excludes generated, vendored, and data artifacts (raw and per-bucket counts retained in CSV/JSON). "
            "Heuristic: counts line-leading #[test], #[<path>::test] and #[rstest] attributes outside // comments; "
            "parameterised #[case] rows are not multiplied.", "rust-test-growth.png")
     return written
