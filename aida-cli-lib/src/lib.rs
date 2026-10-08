@@ -53238,11 +53238,12 @@ pub(crate) fn effective_role_resolved() -> (String, bool) {
     resolve_effective_role(std::env::var("AIDA_SESSION_ROLE").ok().as_deref())
 }
 
-// trace:STORY-1473 | ai:codex
 /// Resolve the authorization seat only from a validated grant. The roster is
 /// a ceiling, not an active seat; the environment role remains display/routing
 /// metadata. Missing or invalid grants get the least-privilege implementer
 /// baseline.
+// trace:STORY-1473 | ai:codex
+// trace:TASK-1593 | ai:antigravity
 pub(crate) fn effective_role_with_roster() -> (String, team::RoleSource) {
     match find_project_root() {
         Ok(root) => match seat_authority::current_seat(&root) {
@@ -95559,7 +95560,7 @@ mod task_1450_review_verdict_event_tests {
     #[test]
     fn review_record_emits_seat_tagged_spec_pr_verdict_and_sha() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "reviewer");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "reviewer", &[]);
 
         emit_review_verdict_recorded(
             tmp.path(),

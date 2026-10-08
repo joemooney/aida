@@ -110,7 +110,8 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         branch,
         started_at: chrono::Utc::now(),
         hostname: hostname(),
-        role: std::env::var("AIDA_SESSION_ROLE").ok(),
+        // trace:TASK-1593 | ai:antigravity
+        role: crate::seat_authority::current_seat(&project_root),
         creator_pid: my_pid,
         creator_pid_start_time: my_pid.and_then(process_probe::process_start_identity),
         active_pid: None,
