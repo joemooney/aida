@@ -472,3 +472,9 @@ without changing tolerant readers elsewhere or falling back to legacy state
 when configured canonical storage is unavailable. The CI
 checkpoint confirms the queue operation even when resuming without a lease.
 <!-- trace:BUG-1807 | ai:codex -->
+
+Review-story creation uses strict fallible object enumeration; missing roots,
+iteration failures, symlinked type/shard directories, and invalid YAML filenames
+refuse handoff without authorizing absence. Tolerant bulk readers retain their
+existing behavior.
+<!-- trace:BUG-1807 | ai:codex -->

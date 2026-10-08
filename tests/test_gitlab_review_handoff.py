@@ -9,11 +9,13 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import subprocess
+import sys
 
 from test_cache_refresh_outputs import require, run
 
 
-def check(binary, forge, fail_first=False):
+def check(binary, forge, fail_first=False, enumeration_shim=None):
     with tempfile.TemporaryDirectory(prefix="aida-review-handoff-") as temp:
         root, home, bins = (Path(temp) / n for n in ("project", "home", "bin"))
         for path in (root, home, bins):
@@ -99,6 +101,30 @@ def check(binary, forge, fail_first=False):
             print(f"PASS {noun} {label}: exit={result.returncode}, objects={len(objects)} unchanged", flush=True)
             print(output, flush=True)
 
+        if enumeration_shim:
+            # Fail the actual iterator after preliminary CLI work and one
+            # successful directory entry; prove the injected fault was consumed.
+            for target in (root / ".aida-store/objects", stories[0].parent):
+                before = {p: p.read_bytes() for p in objects}
+                queue_before = queue.read_bytes() if queue.exists() else None
+                env.update(LD_PRELOAD=str(enumeration_shim),
+                           BUG1807_READDIR_FAULT_PATH=str(target))
+                try:
+                    result = run([binary, "pr", "auto-queue-review", "--branch", "bug-fixture"], root, env)
+                finally:
+                    env.pop("LD_PRELOAD")
+                    env.pop("BUG1807_READDIR_FAULT_PATH")
+                output = result.stdout + result.stderr
+                assert "BUG1807 FIXTURE: injected EIO readdir64 after entry" in result.stderr, output
+                assert result.returncode != 0, output
+                assert "Cannot read entry in" in output and "Input/output error" in output, output
+                assert "reviewer handoff not confirmed" in output, output
+                assert all(x not in output for x in ("✓ filed", "reuses canonical", "→ reviewer queue")), output
+                assert set((root / ".aida-store/objects").rglob("*.yaml")) == set(objects)
+                assert all(p.read_bytes() == data for p, data in before.items())
+                assert (queue.read_bytes() if queue.exists() else None) == queue_before
+                print(f"PASS {noun} actual enumeration fault: exit={result.returncode}, objects/queue unchanged\n{output}", flush=True)
+
         malformed = original + b"\ninvalid: [unterminated\n"
         stories[0].write_bytes(malformed)
         refused_inventory("malformed canonical story")
@@ -158,7 +184,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--aida", type=Path, required=True)
     binary = parser.parse_args().aida.resolve()
-    for forge in ("gitlab", "github"):
-        check(binary, forge)
-
-    check(binary, "gitlab", fail_first=True)
+    with tempfile.TemporaryDirectory(prefix="bug1807-shim-") as temp:
+        shim = None
+        if sys.platform == "linux":
+            shim = Path(temp) / "readdir_fault.so"
+            subprocess.run(["cc", "-shared", "-fPIC", "-o", str(shim),
+                            str(Path(__file__).parent / "fixtures/bug1807_readdir_fault.c"),
+                            "-ldl"], check=True)
+        else:
+            print("SKIP LD_PRELOAD enumeration witness: requires Linux", flush=True)
+        for forge in ("gitlab", "github"):
+            check(binary, forge, enumeration_shim=shim)
+        check(binary, "gitlab", fail_first=True, enumeration_shim=shim)

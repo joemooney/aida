@@ -46658,12 +46658,8 @@ mod task_192_fail_closed_fact_tests {
 fn load_review_story_inventory(project_root: &std::path::Path) -> Result<RequirementsStore> {
     if let Some(store_path) = detect_distributed_store_from(project_root) {
         let objects = store_path.join("objects");
-        // list_objects treats a missing root as empty. Require readable storage
-        // first, without GitBackend::new's directory-creation side effect.
-        std::fs::read_dir(&objects)
-            .with_context(|| format!("Cannot enumerate {}", objects.display()))?;
         let mut store = aida_core::GitBackend::read_metadata_only(&store_path)?;
-        store.requirements = aida_core::object_store::list_objects(&objects)?
+        store.requirements = aida_core::object_store::list_objects_strict(&objects)?
             .into_iter()
             .map(|(_, path)| aida_core::object_store::read_object_from_path(&path))
             .collect::<Result<Vec<_>>>()?;
