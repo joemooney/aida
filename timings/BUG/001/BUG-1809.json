@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1809",
+  "publishes": [
+    {
+      "at": "2026-10-08T07:05:18.809329159Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T06:30:05.402727288Z",
+      "spec": "BUG-1809",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T06:30:25.033198171Z",
+      "spec": "BUG-1809",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T06:44:55.019300559Z",
+      "spec": "BUG-1809",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2459
+      }
+    },
+    {
+      "ts": "2026-10-08T07:04:47.920360297Z",
+      "spec": "BUG-1809",
+      "seat": "product",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-08T07:04:57.128928103Z",
+      "spec": "BUG-1809",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2459
+      }
+    },
+    {
+      "ts": "2026-10-08T07:05:18.797262690Z",
+      "spec": "BUG-1809",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "345b3948ae07dc8887de3824c4bf44c2b7f5450c",
+        "pr": 2459,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
