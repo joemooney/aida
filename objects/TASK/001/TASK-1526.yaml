@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-08T19:29:41.876703270Z
+modified_at: 2026-10-08T19:56:50.160611241Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -1129,6 +1129,246 @@ comments:
   created_at: 2026-10-08T19:29:41.876703270Z
   modified_at: 2026-10-08T19:29:41.876703270Z
   relayed_from: task1526-latency-design-author
+- id: 01a11d17-0472-7ee3-b416-21108a4fd31d
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): fresh independent design gate CHANGES REQUESTED. Same design author revises exact R1-R3 and non-vacuity/accounting requirements; no code authorization. E1 D1 is attribution only; original AC1 FAIL remains. Keep TASK-1527 blocked and all parent/strict gates. Full independent report follows unchanged; evidence receipts under task1526-latency-attribution/.
+
+    # TASK-1526 latency rework — independent design disposition
+
+    **CHANGES REQUESTED. No implementation authorization.** E1 was independently executed exactly once, after correcting its isolation and accounting specification, and reached **D1 (sync-dominated)**. That discharges the attribution prerequisite for considering a sync remedy. It does not approve L1's scope, restoration design, auto-checkpoint policy, or tests, and supplies **no AC1 acceptance credit**. L2(a) is accepted as the accounting interpretation specified below. A revised explicit durability fork on the same TASK-1526, followed by an independent design disposition, is required before code dispatch. No human question is needed.
+
+    Prepared 2026-10-08 by the newly assigned independent design advisor. This session is not the sketch author, coordinating root, original evidence author, previous TASK-1527 gate, or eventual implementer. The runtime name `/root` does not identify this session with the earlier coordinating root. Root remains the sole canonical relay owner. This is a local full verdict, not a canonical approval, protected review record, lifecycle operation, queue handoff, merge permission, or activation.
+
+    ## 1. Exact inputs and current authority
+
+    Reviewed in full:
+
+    | Input | Bytes | SHA-256 |
+    | --- | ---: | --- |
+    | TASK1526_LATENCY_REWORK_SKETCH.md | 33352 | 82443dbd17caff3210fb7602fb00af80d0101ae6c164fbef074efdc4d03ca4a8 |
+    | TASK1526_LATENCY_SKETCH_READY.md | 7146 | Recorded in final integrity receipt |
+    | TASK1526_DEFAULT_BUDGET_INDEPENDENT_EVIDENCE.md | 20194 | 69fca7b9e755e34c3902688ce0949eaa88bde33f4ca864007661ff923a05387d |
+    | TASK1527_REWORK_SKETCH_V2.md | 63551 | f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7 |
+    | TASK1527_REWORK_SKETCH_V2_READY.md | 10314 | c33a623d17c912b25505c0df5fd746751cd434f63279c1b1b2f10e218c625509 |
+    | TASK1527_REWORK_SKETCH_V2_INDEPENDENT_REVIEW.md | 31460 | 733fb4ace28da60c0272847e9e9bb3e76c78ee8f06c89daf67452b7568f0eb55 |
+
+    AGENTS.md and `.aida/discipline/{two-seat-protocol,rework-brief-craft,seat-recovery-playbooks}.md` were read in full. The requested local-only boundary supersedes the normal rework discipline's canonical brief/queue mechanics: this report supplies the concrete handoff, and this advisor does not send or queue it.
+
+    Fresh full `mcp__aida__show_requirement` calls were made for TASK-1526, STORY-1484 and TASK-1527, with their full descriptions, comments, relationships and returned linkage. Complete returned Markdown bodies are preserved in `task1526-latency-independent-review-inputs/`. Large bodies were read in contiguous pieces; repeated embedded artifacts were verified byte-identical to the complete local bodies read. `verification.json` proves that the exact full first evidence and latency sketch occur in fresh TASK-1526, and the exact full V2, READY and 31460-byte review occur in fresh TASK-1527. No raw canonical-object fallback, stale protected-floor retry, alternate API, or environment-identity substitution was used.
+
+    Fresh state differs from the sketch's earlier read: TASK-1526 has 21 comments, including the root reopening decision and exact proposed sketch relay; TASK-1527 has 3 comments and now also a child edge to STORY-1484. Both are Approved. TASK-1527 remains **blocked-by TASK-1526**. STORY-1484 remains Approved, closure pending. Historical shipped linkage does not close the reopened acceptance failure. MCP linkage reports its own time-budget incompleteness; no completeness claim is inferred from that section.
+
+    Binding precedence retained:
+
+    * Parent original sketch `01a0df08-c181-7530-b249-2740141c2a0b`, under signoff `01a0df0d-f964-78f3-a715-046e37e50915`, all A1–A13 and Q1–Q6.
+    * TASK-1526 decision `01a0e0fb-8d6b-7790-b04b-f808236dbe2d`, all B1–B6 and named tests, adopted by `01a0e0fd-bc48-7600-bc20-b0a8f781d0f7`.
+    * Parent's signed BUG-1674 companion `01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105`: show's narrower deadline/identity exceptions are not rescinded by later implementation narratives.
+    * TASK-1527 V2's complete independent APPROVED-AS-AMENDED gate governs its future implementation. This report neither replaces nor reinterprets it.
+    * Root's fresh reopening decision expressly preserves two seconds/default 1500ms, single-flight, useful snapshot, no load filtering/repeated-green selection, no new authority, and no implementation before a new independent design disposition. Relaying a proposal is not signing its scope expansion.
+
+    ## 2. First failure is preserved, without qualification
+
+    The binding first zero-delay measurement remains **FAIL**: winner reader 3 took **2.648286s**, versus the strict **<2s** criterion, at the actual **1500ms default**. It performed one incremental refresh and one actual SQLite write attempt, with no retry sleep. The three losers took 1.528038–1.528182s, returned 256 useful old rows, and carried the correct old head/time plus WorkerRunning. The zero-delay fixture reached its path/provenance/count assertions before failing AC1.
+
+    Earlier V2 short/expired runs and all four V1 setup timeouts remain historical artifacts, not replacements, discounted samples, or acceptance passes. Intentional holds are never subtracted from acceptance clocks. The existing 60s counter test is unchanged and is not a latency certificate. KeepCurrentBudget is no waiver. E1's later pass is expressly diagnostic and does not erase, supersede, or retry-green this failure.
+
+    ## 3. Source verification and actual contracts
+
+    Evidence source pin: `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. Observed HEAD and main: `bf65220959c7601427247286abc7eb16278af5a5`. The complete `git diff ff9ac13c4f bf65220959 -- aida-core` is empty. All nine core/history blobs below equal current workfile bytes. The complete lib.rs blob differs at unrelated later locations; the scope/command-classification symbols inspected at 1124 and 3845–3875 are unchanged. No substantive review or action was taken on reserved work represented by that unrelated diff.
+
+    `task1526-latency-independent-review-inputs/verification.json` records full blob IDs, hashes, and equality checks. Relevant SHA-256 values:
+
+    | Path | SHA-256 at ff9ac |
+    | --- | --- |
+    | aida-core/src/db/cached_git_backend.rs | 544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7 |
+    | aida-core/src/db/cache.rs | 5b5975cb16fb37b9658d26eebffce27db9458260ac4754020aefd45f27798973 |
+    | aida-core/src/db/cache_refresh.rs | b83d380c8bd641c402290bb042fdd9de8cddd857979ec61f8817090b5d45764e |
+    | aida-core/src/db/cache_lock.rs | f1c5228c7c2bfc958b72f8c82b38a5868db9711a12f7b2159aa2d6806f9c049d |
+    | aida-core/src/db/refresh_request.rs | 4b473062d1f95180244c639867fde1beef9dab3714bd7e56da7d9948d2e9bbdf |
+    | aida-core/src/db/refresh_worker.rs | 04239c61fed979aa14044b8070c9617cbdc04463f134b90022abc878eeedc40a |
+    | aida-core/src/db/git_backend.rs | 962004d4098db98b2ce6c89f25a258468cbb92ba4887bd2f76740b9afe4dd31c |
+    | aida-core/src/git_ops.rs | b7a82077d3df0ae3a8f542f09ae962aefd87b57a559c1b7d7f07d3720beddaec |
+    | aida-cli-lib/src/history_cache.rs | 1ee91ea6ec2e2f9dc747b034eea548dc1c8db37140b655b1a00ee8f254a474c9 |
+    | aida-cli-lib/src/lib.rs | a43f01cb4c7d18bc940a8a00bbc1beae3d3f1783cfcf51f9fe371562f766e4b1 |
+
+    Inspection covered the full touched functions and their relevant calling/exit contracts, not just declaration snippets. Complete-file hashing is not claimed as an exhaustive audit of every unrelated function.
+
+    | Symbols read | Verified implication |
+    | --- | --- |
+    | Cache::open/open_at; open_connection_with_retry/open_connection_inner, cache.rs:666–747,1165–1386 | Open precedes the refresh race; healthy open avoids schema writes but uses the existing retry wrapper. Read-only/corruption/missing/empty migration paths have explicit existing behavior. Do not alter them by globally configuring NORMAL or truncating their patience. |
+    | ReadRefreshAttempt/HoldingWrite, with_cache_write, with_cache_retry_observed, cache_retry_delays, cache.rs:602–633,807–900 | The flag is thread-local and restores its prior boolean. It is a retry policy, not proof of tolerant ownership of a particular connection. with_cache_write can return before a write-attempt counter (read-only or sidecar error). |
+    | Cache::apply_incremental, refresh_head_reached, cache.rs:1769–1803,576–597 | Migration decline precedes mutex acquisition. The mutex covers with_cache_write, IMMEDIATE transaction, in-transaction head check, closure, stamp and commit. Early reached-head success drops an uncommitted transaction; closure false/error rolls back by Drop. Source-head lineage checks may run Git children under the transaction; they remain correctness guards. |
+    | CachedGitBackend::with_inner, ensure_cache_fresh, freshen_for_read, file_and_spawn_refresh, tolerant_read_with_budget, schema retry wrappers, cached_git_backend.rs:40–47,376–737,755–862 | Constructor and query can refresh separately. Strict errors and tolerant typed-busy differ. The current TTY branch wraps ensure_cache_fresh in ReadRefreshAttempt; a boolean therefore includes more than the proposed ordinary winner. Existing C helper can enter strict no-detach/suppression fallback. V2, not this correction, owns its phase repair. |
+    | try_incremental_update and refresh_parent_epic_status_in, cached_git_backend.rs:878–1026 | Changed-object reads and pre-resolution precede apply_incremental. INCREMENTAL_ERROR is at 952, BEFORE entering apply_incremental. A real epic miss inside the closure can produce a rollback decline. Missing targeted spec files can fall through GitBackend's agreed-ID scan; the simple fixture's two present files do not. |
+    | Cache::read_snapshot, cache.rs:1391; tolerant_read_with_budget | A separate read-only connection begins DEFERRED, checks schema and reads rows/head/time together. Changing writer sync does not justify moving labels outside this snapshot or serving incompatible rows. |
+    | rebuild_projection, full_rebuild, rebuild_after_cache_schema_drift, upsert/delete | Strict rebuild/migration/write-through keep their own connection/transaction paths. Success/false/error and schema retry must not inherit a weakened setting from an earlier call. |
+    | RefreshLock::try_acquire, Drop, held_by_current_thread; CacheReadScope/read_policy/wait_remaining/may_wait | Canonical sidecar plus process-global thread-owned registry; nested same-thread short circuit; independent threads contend; shared deadline is polling budget. No store/SQLite-write-lock blocking wait. Losers can lose in the registry without making a flock syscall. |
+    | refresh_request load/file/write/clear/RMW; refresh_worker spawn/run/result; cache_cmd worker route | Existing hint degradation and serialized permanent RequestLock remain. Request write is tmp+rename, not fsync. Actual current worker constructor can run tolerant work before its explicit strict body; a test invoking only run_refresh_worker is not proof that the entire worker invocation stayed strict. V2's early dispatch/admission work must remain separate. |
+    | lib.rs scope and actual Command::Show classification | Every command gets a scope; that does not establish read intent for Cache::open. Show has zero cache wait/noninteractive classification, including TTY. No budget-equality identity or new environment authority is allowed. |
+
+    The pinned dependency is rusqlite 0.31.0 with bundled libsqlite3-sys 0.28.0. The bundled C source defaults synchronous and WAL synchronous to 2 absent overrides; cache open sets WAL/busy_timeout=0 but no synchronous override. Build scripts permit compile overrides, so a future implementation test must read actual settings, not infer every executable's runtime PRAGMA from this source alone. E1 directly witnesses the retained executable's sync calls.
+
+    The local SQLite `PragTyp_SYNCHRONOUS` implementation rejects changing the safety level inside a transaction. rusqlite's `Transaction::commit` consumes the transaction; its Drop calls finish/rollback but **discards the returned error**. Thus “transaction dropped” is not sufficient proof that the connection is in autocommit or that a later PRAGMA restore succeeded. The cache mutex uses `.lock().unwrap()`, so an unwind while holding it poisons it; a successful post-panic same-handle strict call is not currently guaranteed.
+
+    SQLite documents that WAL/NORMAL preserves atomicity and consistency but may lose committed transactions on power/OS failure; it does not imply fsync-free execution. WAL header reuse and checkpoints may still synchronize. FULL adds a WAL sync at commit. [SQLite synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous). Auto-checkpoint is a per-connection commit callback; setting zero disables it and replaces a prior WAL hook. Restoring its threshold is not executing a checkpoint. [SQLite auto-checkpoint API](https://www.sqlite.org/c3ref/wal_autocheckpoint.html). A pinned WAL reader has a fixed transaction end mark, consistent with the existing row/provenance requirement. [SQLite WAL concurrency](https://www.sqlite.org/wal.html#concurrency).
+
+    ## 4. R1 — scope fork: L1 is not within the existing signed exclusion
+
+    **Blocking.** The parent expressly excludes changing WAL alongside busy_timeout and the retry delays. No A/Q/B amendment read here narrows that exclusion to the literal journal_mode string or authorizes weaker durability/checkpoint scheduling. L1 changes both, even if journal_mode remains WAL. The source's derived-cache status makes a scoped durability tradeoff plausible; it does not silently amend the signed scope. No code may rely on the sketch author's narrow reading.
+
+    Disposition: require a **separately explicit, independently approved durability/checkpoint fork on the same TASK-1526 and its parent contract**, not another worker feature and not necessarily another requirement. The revised sketch must state what portion of the original exclusion it replaces, the exact connection/operation boundary, the power-loss durability tradeoff, checkpoint/lifetime limits, restoration failure semantics and the tests below. Root can relay that complete proposal; root or its author cannot sign it. This report does not yet approve that fork because R2–R4 remain substantive design gaps. E1 D1 makes the sync direction grounded; it does not resolve those gaps.
+
+    The original “WAL stays bounded exactly as today” assertion is false as a general guarantee. A long-lived handle can execute repeated read-refresh transactions, each disabling automatic checkpoint during its commit. Restoring 1000 afterward does not checkpoint immediately; there may be no later strict commit or final close for a long time. Long readers can also prevent checkpoint completion. No new worker/checkpointer is authorized to paper over this. The next sketch must either omit wal_autocheckpoint=0 and state remaining behavior, or explicitly design and obtain approval for the bounded existing-lifecycle checkpoint consequence. E1 did not observe an in-window database-file checkpoint sync; it does not establish that disabling auto-checkpoint is needed for this fixture.
+
+    Do not promise `commits_without_durable_sync` from a NORMAL observation. E1 contains two in-window WAL fsyncs plus a directory sync; available source makes WAL-header/commit effects plausible, but this trace does not identify every SQLite phase or prove which sync a proposed remedy removes. A remedy has not been run. Preserve atomic rows/stamp and freshness recovery; describe weakened durability honestly rather than calling all protection unchanged.
+
+    ## 5. R2 — operation boundary, nested strict calls and Q1
+
+    **Blocking.** Reusing READ_REFRESH_ATTEMPT alone as the durability selector is insufficient. It is ambient on the thread, spans changed-object preparation, and is also armed around the TTY ensure_cache_fresh call. A nested strict refresh before the outer connection mutex is acquired can inherit it on the same handle or another handle. `guard.is_nested()` only short-circuits nested tolerant freshening; direct strict ensure_cache_fresh does not use that check. The proposed “if prior NORMAL, restore NORMAL” protects value restoration but does not prove that strict work executed FULL.
+
+    Binding correction for the revised proposal: select weaker durability only by explicit internal authorization for the actual tolerant incremental operation on its connection; an unrelated/nested strict call must not inherit it from the retry flag. This is an implementation-local operation distinction, not a new public API, policy environment variable, lease, authority key, or C phase implementation. State how same-handle sequential strict calls, nested strict-before-acquire, distinct-handle same-thread calls and concurrent-thread strict calls behave. Do not recursively lock the same non-reentrant mutex inside its transaction to manufacture a nesting test; that would test a deadlock, not restoration.
+
+    Q1 ruling: the ordinary tolerant incremental attempt is the same category at human TTY and non-TTY; a future expressly approved fork may cover that category in both. It must **not automatically cover apply_incremental called by Q1's strict ensure_cache_fresh fallback**, ordinary no-detach/suppression strict preselection, a worker's strict body, migration/schema repair, or explicit commands. Their strict durability remains unchanged. Current TTY source has a one-attempt retry flag, but ensure_cache_fresh can still perform multiple logical incremental attempts on moving HEAD or fall back to rebuild. A retry flag alone does not certify one whole-operation attempt or make a strict path tolerant. Preserve current TTY one-attempt lock behavior; do not restore the long ladder or introduce C's future phases here.
+
+    V2's approved ordinary strict preselection and post-attempt observe-only interpretation remain intact. Future C integration must deliberately preserve the approved durability boundary, not infer it from a now-overloaded boolean. A worker's ambient constructor is a separate current-source limitation: its end-to-end strict invariant must be tested at actual entry, and cannot be claimed proven merely by observing its later strict body. Do not implement V2 early to satisfy T2.
+
+    ## 6. R3 — restoration is a fallible state transition
+
+    **Blocking.** The proposal names “restore on all exits” but leaves crucial error paths undefined. A best-effort destructor cannot promise exact restoration, propagate errors normally, or make failed rollback disappear.
+
+    The revised design must specify this finite transition table before implementation:
+
+    | State/event | Required behavior |
+    | --- | --- |
+    | Read either original PRAGMA fails | No weak-mode transaction starts; surface the original error. |
+    | First setting succeeds, second setting fails | Restore the setting already changed; attempt every necessary restoration even if one fails; no transaction starts. Preserve both the primary and restoration diagnostic if applicable. |
+    | Both settings applied, BEGIN returns real busy/locked | No application closure ran. Restore outside transaction, then permit the existing typed WriterBusy fallback only if connection state is safe. Wrong/missing sidecar cannot select the result. |
+    | Reached-head skip, real decline, closure/SQL/stamp error, commit success/error | Complete or roll back the transaction, confirm autocommit, then restore exact prior values while retaining exclusive access to this handle. Do not add a second transaction/write retry. |
+    | Rollback/autocommit confirmation or either restore fails | Do not advertise a safely restored reusable handle, treat it as ordinary WriterBusy, or feed it to generic schema/full-rebuild recovery. Specify explicit error precedence and fail-closed connection retirement/unusable state before any later strict work. A successful commit followed by restoration failure cannot be described as a rolled-back transaction. |
+    | Unwind | Rollback precedes restore; cleanup does not double-panic or mask the original panic. Define what happens to a poisoned mutex/connection; later strict work must not unknowingly reuse NORMAL. Drop is a backstop, not the sole fallible success path. |
+    | Process abort/kill | RAII cannot run; the connection dies. Rely only on the declared SQLite transactional/durability model, never an all-exits restoration claim across process death. |
+
+    Exact prior-value restoration and strict FULL are different assertions. Default fixture values should be 2/1000; a separate nondefault-prior test proves exact restoration. Do not accept a pre-existing unexpected NORMAL as evidence that strict FULL was preserved. A general connection/WAL-hook policy change is not hidden in numeric threshold restoration; verify there is no custom hook on the eligible handle or explicitly exclude that case.
+
+    The design may keep the transaction and mutex boundaries structurally unchanged, but must make restore failure observable and prevent later strict reuse. That choice needs a concrete reviewed design; this report does not supply speculative product code. Arbitrary PRAGMA/I/O errors are not licenses for stale success. B1/B2's compatible snapshot/error classification and schema exceptions remain binding.
+
+    ## 7. L2(a) — accepted accounting, no deadline waiver
+
+    Accept option **(a)** for this correction: the existing pre-race healthy-open ladder is not the post-race loser's prohibited refresh/write ladder. A13 resolves the original acceptance contradiction at the race; B3's lost-race path still never calls with_cache_write or retries SQLite refresh. Constructor work remains part of the whole reader's AC1 clock. A slow constructor can therefore fail AC1 even when every post-race assertion passes. The ladder's configured delay sum is about 25.5 seconds, not a universal bound on open work, filesystem calls or the whole command.
+
+    The decisive original failure has zero retry sleeps, so L2 is not its fix. V2's constructor retries are consistent with open contention; the old aggregate counter does not establish the exact SQL statement. No broad claim that every constructor is safe or fast follows.
+
+    Binding test-accounting amendments:
+
+    1. Preserve the existing `retry_sleep` aggregate semantics for retained tests; add explicit open/write/other categorization rather than silently redefining the old counter. Tag the actual operation/phase, not merely `!holding_write()` (not every nonwrite retry is open). Reconcile aggregate == all categories and retain raw per-reader counts.
+    2. Count from before Cache::open through query/provenance. No post-constructor reset, no hidden other bucket, no elapsed subtraction. Empty-map observation before a fresh reader scope is a fixture assertion; do not use destructive counter reads mid-measurement.
+    3. Add a with_cache_write **entry** witness. Existing write_attempt is counted deeper inside the retry wrapper; zero attempts cannot prove the wrapper was never called when read-only/sidecar failure returns earlier. Each loser must have zero wrapper entries, write attempts, incremental/full-rebuild attempts and post-race retry sleeps.
+    4. New T4 may distinguish genuine pre-race open retries from prohibited write retries, but must retain them in elapsed time and reporting. This is a stated contract interpretation, not “promote V3 unchanged”: V3's auxiliary all-retry-zero assertion is stricter, and the test change must be explicit. No existing assertion is weakened in place.
+    5. A read-specific constructor deadline, option (b), remains a separately designed change requiring actual read intent and preservation of strict open behavior. Do not retrofit it from CacheReadScope existence or budget==0, and do not bring it into L1.
+
+    ## 8. T1–T4 and M1–M6: meaningful evidence requirements
+
+    All remedy tests remain **proposed/unrun**. E1 runs the original immutable probe, not these tests. The following corrections are binding on a revised proposal; they are not code authorization.
+
+    | Test/control | Disposition and required non-vacuity |
+    | --- | --- |
+    | T1 weak-mode/restoration | Retain success and real epic-miss decline. Observe entry after setting but before BEGIN as well as the actual transaction connection after BEGIN. Busy never reaches the latter, so require zero transaction-observer hits and a real one-attempt busy witness. Replace INCREMENTAL_ERROR as restoration evidence: it fires before apply_incremental. Add an in-scope SQL/stamp failure, partial-setting failures, both restore failures, commit/rollback failure handling, and unwind. Assert restored values or explicit unusability, not a silent fallback. Release the real external writer only after useful busy result/state assertions and before the strict follow-up write. |
+    | T2 strict durability | A single observer inside apply_incremental does not observe upsert/delete/rebuild/schema repair. Place test-only observations on each actual writing connection and prove each named path reached its operation. Include same-handle follow-up, nested strict-before-acquire, same-thread other handle and concurrent other thread. Distinguish actual worker entry from its strict body and the future V2 gate. Nondefault prior restoration is separate from default FULL strict controls. |
+    | T3 atomicity/provenance | Existing TASK-1515 assertions remain. Exercise through the eligible read winner with proof weak-mode transaction observer fired. A direct apply_incremental call with no read policy may just retest FULL. Require actual concurrent snapshots, changed rows, stamp-abort rollback, reached-head skip that never runs the stale closure, and real in-transaction decline. Normal-mode consistency is not power-loss durability proof. |
+    | T4 latency | Keep actual 1500ms default/unset override, 256 meaningful rows, one changed commit/two titles, four pre-acquire arrivals, real refresh-held path, zero deliberate hold, constructor-inclusive clocks/counters and pinned head/time. Exactly one real refresh/write, no full rebuild/request in this fixture, every reader <2,000,000us. Accept either correct fresh or correct stale rows, not all-fresh. Include L2 categories and wrapper entries. New independent measurement on actual implementation, first result, no host-load selection. Existing 60s test unchanged. |
+    | M1 remove L1 | Must reach the real eligible transaction, then fail expected PRAGMA observation. Renaming the test or a setup failure is not detection. A PRAGMA assertion proves setting, not zero fsyncs. |
+    | M2 NORMAL at open | Reach each strict write and fail its actual connection setting assertion. A fixture refusing to build because its own open assertion fails is not adequate T2 evidence. |
+    | M3 skip restoration | Separate branch mutants for real in-transaction decline/error, real busy, partial-setting failure and restore-failure handling. Require an armed-settings witness first. Pre-apply INCREMENTAL_ERROR cannot kill an omitted restoration. Include both settings and nondefault original values. |
+    | M4 skip_refresh | Retain the existing counter/path mutation: useful rows can return, but real held-path witness must fail. Do not claim historical V2 mutation proves a newly changed T4 automatically. |
+    | M5 serialize | Retain four-way readiness failure at NONVACUITY. Exactly-one counter alone must not pass serialized readers. Preserve readiness timeout as a failure, not a reason to retry. |
+    | M6 arm L1 for losers | **Insufficient as written.** Changing a flag/PRAGMA on a loser does not make it call apply_incremental/with_cache_write. Add zero L1-entry/PRAGMA-change observations for losers; this mutant must fail those. Separately force loser wrapper entry and require the new wrapper-entry assertion to fail, even if it returns before a write attempt. The current reader_path_never_calls_with_cache_write test only checks write_attempt and cannot establish the stronger entry claim. |
+
+    Retain the full B1–B6/A-series named coverage: stale rows/labels from one snapshot, strict mutation/revalidation, shared budget across opens, same-thread nesting and independent-thread contention, no blocking under write locks, migration/schema refusal, unsupported-flock strict exception, reached-head skip, refill skip, head recapture, epic pre-resolution and output collector reset. BUG-1778 structural hint-write degradation and BUG-1779 RMW/newer-request protection remain unchanged. A real separate SQLite BEGIN IMMEDIATE holder must still be held at the busy response in absent and misleading/Unknown sidecar variants; sidecar contents never witness SQLite contention.
+
+    ## 9. E1: correction, one actual execution, D1 and limits
+
+    The original E1 could not be run literally and produce its promised evidence:
+
+    * `/evidence/../task1526-latency-attribution/strace.txt` resolves outside the only bound evidence directory; the old sandbox has no such output mount.
+    * Binding the old evidence directory writable would allow fixture/cwd changes to preserved inputs. A new private root is required.
+    * Identifying the winner by a later fsync is circular: a nonsync winner could never be classified. The original filter omitted clone/fork and output writes, so parent-thread/child/result attribution was underspecified.
+    * “Last traced syscall before PROBE_READER” is not useful-result completion and can omit untraced work. Summed child lifetimes plus wait times would double-count elapsed intervals.
+
+    These were corrected **before execution** in `task1526-latency-attribution/PREDECLARATION.md`. The exact executable was read-only mounted at its original namespace path inside a NEW private `/evidence`; only the new directory was writable. Old fixture/code directories were never exposed writable. The original allow-listed namespace environment was reused with new private HOME/AIDA/XDG/TMP targets. Refusal launchers and independent cwd were copied (symlinks rejected); there was no canonical-store/shared-git link. Bubblewrap retained unshare-all, private proc/dev/tmp, read-only /usr, absent /home/joe, and network isolation. Ordinary fixture Git baseline/stale commits were made only inside the new private test store, as required by the existing probe. No repository branch/index/commit operation occurred.
+
+    One invocation, no discovery rerun and no retry, was supervised with the original 45s limit and owned process-group cleanup. It exited normally, so no signal cleanup was needed. Child completion was awaited; Git child creation and reaping are retained in the trace. No Cargo, build, installation, activation or canonical operation was used for E1. Binary SHA-256 before and after:
+
+    `8b262e2cb3b4f724b793bb29b366c784a12290d36cd4c2f8886850f1331fa87a`
+
+    Exact argv/environment are in `start.json` and `result.json`; the single executed driver is `run_once.py`. The trace command was:
+
+    ```text
+    /usr/bin/strace -f -ttt -T -yy -s 8192 -o /evidence/strace.txt \
+      -e trace=%process,fsync,fdatasync,sync_file_range,flock,write,writev \
+      /evidence/target/debug/deps/aida_core-0a54d692a9eb69e2 \
+      db::cached_git_backend::tests::independent_default_budget_zero_delay \
+      --exact --nocapture --test-threads=1
+    ```
+
+    It ran once through the bubblewrap argv in the receipt. `STARTED` guards against driver reuse. The driver was not rerun. Analysis of retained trace is not another measurement.
+
+    **First actual result:** exit **0**, libtest 1 passed / 0 failed / 1322 filtered, 36.48s libtest duration; supervised invocation elapsed **36.900748s**. This is the honest diagnostic outcome, not AC1 acceptance. Host snapshot before preparation: 19:44:53.254388Z, load 23.875/17.576/14.690, Dirty 1,989,672kB, Writeback 3,580kB; after command: 19:46:05.313787Z, load 23.752/18.799/15.337, Dirty 2,886,160kB, Writeback 700kB. Affinity all six CPUs. The first host snapshot precedes integrity hashing/private setup and is not misrepresented as a syscall-exact launch timestamp. No load window was selected.
+
+    | Reader | TID in private namespace | Elapsed seconds | Witness |
+    | --- | ---: | ---: | --- |
+    | 0 | 26 | 1.560143 | 256 old rows; WorkerRunning; no refresh/write/retry counts |
+    | 1 | 27 | 1.558041 | Same correct old snapshot/provenance |
+    | 2 | 28 | 1.553477 | Same correct old snapshot/provenance |
+    | 3, winner | 29 | 1.955642 | 256 rows, two new titles, fresh new head, incremental=1/write_attempt=1 |
+
+    PROBE_READY showed all four before acquire; PROBE_HELD identified reader 3, real held refresh flock, zero hold, zero completed readers. Its emitted PROBE_READER write maps reader 3 to TID29 without relying on whether it synchronizes. TID29's measurement flock succeeded at 1791488760.135316, completing at **1791488760.135325**. Window end is the printed useful-result utc_end **1791488762.079137292** (19:46:02.079137292Z), not the last selected syscall.
+
+    | Attribution in that window | Seconds |
+    | --- | ---: |
+    | W, flock completion through useful-result end | 1.943812 |
+    | S, two successful cache-WAL fsync syscall durations | **1.571231** |
+    | G, union of nine winner Git child creation-to-reaped-wait intervals | 0.038968 |
+    | G alternative exec-to-wait lower accounting | 0.036981 |
+    | Other uncovered wall time | 0.333613 |
+    | Directory fsync, included in Other, not added to S | 0.314588 |
+
+    S/W = **80.832%**. S is greater than half W and larger than either disjoint other component: **D1**. The two WAL syncs were 0.692232s and 0.878999s, both successful. Analysis resolves unfinished/resumed syscalls, pairs each winner-created Git child with its successful exec and matching nonzero-PID wait return, excludes WNOHANG=0 and setup children, and verifies the intervals do not overlap. It does not add parent wait duration to a child lifetime. The directory sync is deliberately excluded from predeclared cache-file S; including it is unnecessary to D1.
+
+    The fixture baseline hash, SQLite integrity, 256-row count, all result generations and pinned metadata were independently checked by `analyze.py`; details and exact syscall line references are in `analysis.json`. Cache baseline head was `a85117ae09b8c39099c3dcfd900b2553b44b55a6`; new head `0176bafcfe4e8b496a06b7ce5eaa70ced0dd35ed`. The 112 old evidence-manifest entries were hashed before and after: **zero mismatches**, old integrity receipt unchanged (`d36266b870ee8072fdd9bc47aa74ac145a465c44176362e2b512088cef2a1d48`). The original report and first failure remain unchanged.
+
+    Limits are binding:
+
+    * D1 attributes this later instrumented run, not the exact original 2.648286s run. It corroborates a sync bottleneck; it does not retrospectively prove that run's phase times.
+    * Syscall duration includes scheduling/tracing effects; Other is uncovered wall time, not CPU time. UTC endpoint rounding/trace-resume differences are tens of microseconds here, far too small to change D1. No CPU starvation/storage root cause is proven from Dirty/load alone.
+    * The trace does not contain SQL phase labels or every pwrite/checkpoint boundary. It cannot assert both WAL syncs disappear with NORMAL, identify an auto-checkpoint in this window, or certify the proposed remedy.
+    * After the useful-result clock, TID29 made additional WAL/database syncs of **0.601683s and 2.505229s**. They are excluded from W by the predeclared metric, not subtracted from AC1. They show why no whole-command/show latency claim follows and why close-time checkpoint cost cannot be ignored in that separate contract.
+    * T1's proposed name “without durable sync” remains too strong. NORMAL may still sync. No NORMAL/auto-checkpoint mutation was tested.
+    * No second E1 is authorized or needed. D2/D3/D4 did not occur. Had setup/trace failed, the predeclared result would have been D4 with no retry. The original AC1 FAIL remains controlling despite this diagnostic libtest pass.
+
+    ## 10. History-cache precedent and authority
+
+    Verified `HistoryCache::open`, `no_checkpoint_on_close`, `bound_wal` and `open_existing` at history_cache.rs:1081–1142. `open` sets NORMAL. The helper disables **both** close-time checkpoint and automatic checkpoint, and `bound_wal` explicitly runs a size-triggered TRUNCATE checkpoint under the index holder. `open_existing` invokes the no-checkpoint helper but does not itself set NORMAL. Therefore “history cache already does it” is a limited engineering precedent, not an identical guard/restoration design or universal setting on every history handle.
+
+    Its lifecycle differs materially from L1. Importing only two PRAGMAs does not import its WAL size management, scope approval, or performance result. Do not copy NO_CKPT_ON_CLOSE or its checkpoint policy into the main cache without a separately explicit design disposition. No authority-bearing configuration, runtime token, lock identity, sidecar trust or canonical-state semantics changes are authorized by this review or E1.
+
+    ## 11. Concrete next handoff and sequencing
+
+    Root should relay this full verdict and E1 receipts as evidence on the existing TASK-1526. No implementation dispatch yet. Route a bounded **design revision**, with these completion conditions:
+
+    1. Replace the journal-mode-only scope reading with an explicit requested durability/checkpoint exception to the signed parent exclusion. Use D1's actual numbers and limits, not the diagnostic pass as acceptance. Choose a concrete auto-checkpoint policy; no claim of unchanged WAL bounds without a mechanism/limit.
+    2. Specify operation-scoped eligibility that cannot weaken nested strict calls or Q1/worker/explicit strict paths. Address the current TTY retry-flag reuse and worker constructor without preemptively implementing C.
+    3. Complete the R3 partial-setting/rollback/restore-error/unwind table, including error precedence and prevention of unsafe strict reuse. Avoid broad no-failure/all-exits promises.
+    4. Revise T1–T4/M1–M6 exactly where their current observers/mutations are vacuous, preserving all existing signed assertions and L2 constructor-inclusive accounting. No build is needed merely to write this revision.
+    5. Obtain a new independent disposition of that complete revision before code. If it is then implemented, a different independent measurement session owes first-result T4 on the actual remedy. There is no automatic implementation release from E1 D1 alone.
+
+    Keep TASK-1527 blocked by TASK-1526; remove no dependency. Its approved V2 R1–R6 design remains unchanged: explicit phase preselection/late-suppression boundary, real worker versus launch diagnostics, witnessed terminal outcomes, bounded early admission/cap, honest identity, first-failure timestamps, bounded retention and serialized RMW. No new worker, preemptive C implementation, phase bypass or replacement backoff is allowed here. After B's remedy is accepted and integrated, the actual later C winner path must be **remeasured independently**: V2 adds request-summary/RMW work before the SQLite attempt, so B's eventual timing result is not portable acceptance for C.
+
+    BUG-1674/TASK-1674 full-show identity/provenance, operational/external ceilings, default linkage and complete fresh post-activation in-lineage **24h** gates remain separate and unmet. Preserve both doctor limbs and all failure samples. STORY-1484 closure remains pending. No quiet substitute, budget waiver, counter reset, retry-to-green or timing subtraction is accepted.
+
+    Only local review inputs, this report and the isolated E1 evidence were intentionally written. No product edit, Cargo/workspace build, check-CI, repository commit/push/PR/merge, canonical write, mailbox, queue, grant, hold, activation, install or recovery was performed. Reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 and C/D branches were not modified. No subagent was used. Root is notified through this session's final handoff; no mailbox message is sent. Await root's next authorized design handoff.
+  created_at: 2026-10-08T19:56:50.160611241Z
+  modified_at: 2026-10-08T19:56:50.160611241Z
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
