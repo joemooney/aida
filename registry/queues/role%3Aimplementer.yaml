@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a11409-166a-7532-811a-eb943fe701d0
+  position: 301000
+  added_by: role:implementer
+  note: 'PROXY DECISION: independent C7 review at11efa4a218 reproduced F1 expired-request transfer and F2 revoked-requester transfer. Fix existing lifecycle contract per C7_INDEPENDENT_REVIEW.md and numbered rework brief, preserve eight passed criteria. No gateway activation/holdclearance/merge. Continue same preserved branch and worktree, fresh independent review required.'
+  added_at: 2026-10-08T02:23:57.180622632Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a10fe3-ea4c-7fd3-9561-6e545a5806d6
   position: 302000
   added_by: role:implementer
@@ -58,14 +65,6 @@
   position: 442000
   added_by: role:implementer
   added_at: 2026-10-06T16:30:11.995281223Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a11409-166a-7532-811a-eb943fe701d0
-  position: 444000
-  added_by: role:implementer
-  note: Guided lane only. Continue on branch story-1485 (sketch faa07e4acb). Child-ID-only trailers.
-  added_at: 2026-10-07T01:49:36.224688699Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
