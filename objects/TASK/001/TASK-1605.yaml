@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T18:53:37.922387427Z
-modified_at: 2026-10-08T17:06:53.128531482Z
+modified_at: 2026-10-08T17:26:47.819106564Z
 req_type: Task
 tags:
 - analytics
@@ -68,6 +68,12 @@ comments:
   created_at: 2026-10-08T17:06:53.128531482Z
   modified_at: 2026-10-08T17:06:53.128531482Z
   relayed_from: task1605-final-independent-review
+- id: 01a11c8d-a70b-7f70-944f-dc4bf17ce6f7
+  author: joe
+  content: 'Rework R1-R3 complete on task-1605: commit affb9ff195 (tree a24aa8e1dd), pushed, predecessor d32d759f31 evidence preserved. Calendar-range delivery enumeration (no dropped commits/hang for backdated first-parent), generated analytics exports are artifacts and the Rust chart is artifact-excluded (raw kept), supporting/delivery chart notes restored. 28 tests OK, tip reconciliation unchanged (526,337 code; CSV byte-identical). check-ci-fast cargo step waited on a slot, not bypassed. Handoff: run-20261008/TASK1605_REWORK_READY.md'
+  created_at: 2026-10-08T17:26:47.819106564Z
+  modified_at: 2026-10-08T17:26:47.819106564Z
+  session_id: 01a11c53-f32b-7f50-ba3a-f83ee0e470ab
 history:
 - id: 01a1189e-31b3-7c63-8e8f-2866bbe8944f
   author: joe
