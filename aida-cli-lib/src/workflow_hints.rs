@@ -824,6 +824,8 @@ fn session_end_pr_hint_lines(
     // branch, so the delete's local-cleanup step would fail — and in an `&&`
     // chain that silently drops the `aida pull` auto-bump. Branch deletion is
     // deferred to worktree cleanup. trace:BUG-758 | ai:claude
+    // trace:BUG-1807 | ai:codex
+    let noun = kind.change_noun();
     let merge_cmd = kind
         .change_cmd_hint("merge", &format!("{} --squash", pr_number))
         .unwrap_or_else(|| "merge it to your default branch".to_string());
@@ -837,7 +839,7 @@ fn session_end_pr_hint_lines(
         // `;` not `&&`: the pull auto-bump must run even if a merge-side
         // cleanup step is refused. trace:BUG-758 | ai:claude
         return vec![format!(
-            "PR #{} next: `aida queue work PR-{}` → `{}` → `aida pull` \
+            "{noun} #{} next: `aida queue work {noun}-{} --role reviewer` → `{}` → `aida pull` \
              (or self-merge: `{}; aida pull`).",
             pr_number, pr_number, merge_cmd, merge_cmd
         )];
@@ -845,9 +847,9 @@ fn session_end_pr_hint_lines(
     // trace:TASK-840 | ai:claude — route the primary-action marker through the registry.
     let active = crate::glyphs::Glyph::FlowActive.render(crate::glyphs::active_profile(None));
     vec![
-        format!("Next steps for PR #{}:", pr_number),
+        format!("Next steps for {noun} #{}:", pr_number),
         format!(
-            "  1. {active} {:<14}   aida queue work PR-{}",
+            "  1. {active} {:<14}   aida queue work {noun}-{} --role reviewer",
             "Start review", pr_number
         ),
         format!("  2. ↓ {:<14}   {}", "After approval", merge_cmd),
@@ -1835,5 +1837,32 @@ mod tests {
             panic!("--force must produce a recorded override, got {outcome:?}");
         };
         assert!(reason.contains("could not be read"), "{reason}");
+    }
+}
+
+// trace:BUG-1807 | ai:codex
+#[cfg(test)]
+mod bug_1807_handoff_tests {
+    use super::*;
+
+    #[test]
+    fn gitlab_mr35_handoff_and_github_parity_on_both_surfaces() {
+        for (kind, noun, cli) in [
+            (crate::forge::ForgeKind::GitLab, "MR", "glab mr"),
+            (crate::forge::ForgeKind::GitHub, "PR", "gh pr"),
+        ] {
+            for tty in [false, true] {
+                let rendered = session_end_pr_hint_lines(kind, 35, &[], tty).join("\n");
+                assert!(rendered.contains(&format!("{noun} #35")), "{rendered}");
+                assert!(
+                    rendered.contains(&format!("aida queue work {noun}-35 --role reviewer")),
+                    "{rendered}"
+                );
+                assert!(rendered.contains(&format!("{cli} merge 35")), "{rendered}");
+                if noun == "MR" {
+                    assert!(!rendered.contains("PR"), "{rendered}");
+                }
+            }
+        }
     }
 }

@@ -473,3 +473,25 @@ unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
 stale definition, and hold refusals for scripts. See
 [git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
 <!-- trace:TASK-1606 | ai:codex -->
+
+Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
+`PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
+existing canonical review story in distributed or legacy stores; an unreadable
+store or failed queue insertion cannot establish a successful handoff. The
+creation gate requires every canonical object to be readable and parseable,
+without changing tolerant readers elsewhere or falling back to legacy state
+when configured canonical storage is unavailable. The CI
+checkpoint confirms the queue operation even when resuming without a lease.
+<!-- trace:BUG-1807 | ai:codex -->
+
+Review-story creation uses strict fallible object enumeration; missing roots,
+iteration failures, symlinked type/shard directories, and invalid YAML filenames
+refuse handoff without authorizing absence. Tolerant bulk readers retain their
+existing behavior.
+<!-- trace:BUG-1807 | ai:codex -->
+
+The review-story config probe validates TOML before legacy fallback and refuses
+configured but unavailable canonical storage. Its mode policy and existing
+store-location checks are covered by `scripts/config-trust.toml`; the probe adds
+no executable, command, or credential selection.
+<!-- trace:BUG-1807 | ai:codex -->
