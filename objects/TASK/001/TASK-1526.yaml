@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-08T21:11:57.456780117Z
+modified_at: 2026-10-08T21:35:56.245272305Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -3003,6 +3003,640 @@ comments:
   created_at: 2026-10-08T21:11:57.456773416Z
   modified_at: 2026-10-08T21:11:57.456773416Z
   relayed_from: task1526-latency-v3-fresh-design-gate
+- id: 01a11d71-bf55-7933-bf02-0b9f5c2241e4
+  author: mcp
+  content: |
+    SKETCH (awaiting independent advisor signoff) — successor design-owner V4, design only. Root full-read sketch/READY, preserving original authorship. The V4 note about the 51599-byte relay refers to the EARLIER checkpoint: the complete 52409-byte final V3 review was subsequently relayed and exact-readback verified by root. This historical checkpoint difference is not an outstanding final canonical omission. No code dispatch, test execution, acceptance credit, dependency release or approval arises from this relay.
+
+    # TASK-1526 latency rework sketch V4 — owned connection slot, witnessed barriers, split admission counts
+
+    **DESIGN ONLY. Not approved or implemented, and not released for code dispatch.** No test has been written, built or run, and no pass is claimed. Every test, observer, fault seam and mutant below is proposed and unrun. V4 is a complete replacement *proposal* for the next gate. It answers the four blockers (F1–F4) and the §4 wiring notes of the V3 independent review.
+
+    **Actual new code dispatch is refused.** A later approval of this design, or of any design, does not release that refusal. §11's sequencing is a list of prerequisites. It is not dispatch authority.
+
+    ## 0. Authorship, continuity and inputs
+
+    ### 0.1 Who wrote this
+
+    This V4 was written by a **successor design-owner runtime**. It is not the original author runtime (`01a11ceb-3fa0-7c20-8a2c-8d8c0cc7290f`, name `task1526-latency-design-author`), which has ended. AIDA's normal `--resume NAME` returned "no ended resumable agent found". No `aida session resume` or extra resume flag was used, and the known DOC6 resume-authority inheritance gap was not relied on. This runtime does not compete with any active author. It continues the existing design commission only.
+
+    V1, V2 and V3 remain the original author's work and evidence. V4 builds on them and does not rewrite them. Everything the original author recorded (the first failure, E1, every hash and every limited approval) is carried forward unchanged.
+
+    ### 0.2 Full reads
+
+    The following were read in full before rework:
+
+    - V1, V2 and V3 and their three READY notes.
+    - All three independent reports. The V3 report was read in two forms, described in §0.3.
+    - All four numbered rework briefs (V1, V2, V3 and V4).
+    - The original 20194-byte default-budget evidence report.
+    - The retained owning bodies for TASK-1526, STORY-1484 and TASK-1527. These are the qualified MCP bodies retained in `task1526-latency-independent-review-inputs/`. Their structure was read, along with the binding decision `01a0e0fb…` (B1–B6 and the named tests) and the parent clauses A13 and Out of scope. Embedded artifact copies were taken as the standalone files already read.
+
+    These retained bodies are historical observations. They do not certify present canonical freshness. No fresh canonical read, raw fallback or cache heal was used.
+
+    | Input | Bytes | SHA-256 |
+    | --- | ---: | --- |
+    | TASK1526_LATENCY_REWORK_SKETCH_V3_INDEPENDENT_REVIEW.md (local) | 52409 | 7c33cab619bf78fd807f5a04ca3223f3b2c5deee85180ff453fede3204324a73 |
+    | TASK1526_V3_REVIEW_RELAYED_CHECKPOINT.md | 51600 | 8c47be9289e615a770a92001bd702b06c45f7f4b3914c520de62ae9e21c37f7f |
+    | …its first 51599 bytes (the relayed body) | 51599 | 862faad41d902c3567b51b8330588580c7a23a4510268f56f03ee180fe2f76e7 |
+    | task1526-latency-v3-independent-review-integrity.json | — | f62e50a42b7f139598da80702f9c217962edf5ee29e8d1f4ab0e23344f837574 |
+    | task1526-latency-numbered-design-rework-v4.md | 3537 | 839b23eaf7c75773e0eeb06adb5bb1daaa467eef077cdde4f81d27d6062c4f4c |
+    | TASK1526_LATENCY_REWORK_SKETCH_V3.md | 38256 | 39bf6ab177e03ca47bd7d370ebdf8cd9592c659a7ed6f5ea4502b009f0799ad7 |
+    | TASK1526_LATENCY_SKETCH_V3_READY.md | 5629 | e1638b1d5834599640eed5617ba8ef45ad125e8c1373086fa7d833ffd2811923 |
+    | V2 / V2 READY | 42407 / 7334 | 0631ffdd…1790 / 75b424a2…94df |
+    | V1 / V1 READY | 33352 / 7146 | 82443dbd…a4a8 / ceab9d2a…eba3 |
+    | Review 1 / Review 2 | 39627 / 45264 | 8fa4466c…a95f / ee1a7da9…4945 |
+    | Original evidence report / its artifact-integrity.json | 20194 / — | 69fca7b9…387d / d36266b8…1a48 |
+    | E1 analysis.json | 8781 | bae8be7d…e11 |
+    | Retained TASK-1526.md / STORY-1484.md / TASK-1527.md | 103543 / 39051 / 109510 | 88b54111…aa7d / 191bc728…1f66 / f07637fe…bd8 |
+
+    ### 0.3 The two forms of the V3 report
+
+    The brief cites the V3 report as **51599 bytes**, canonically relayed with an exact read-back. The local file is **52409 bytes**, which is the size its integrity receipt records. Byte comparison shows that the 51599-byte relayed body is the local report **minus one paragraph**: the one in §4 that begins "O-change must report the real post-set PRAGMA readback…" (810 bytes). It also lacks the final newline.
+
+    V4 answers **both** forms. The extra paragraph's requirements are met by §6.3 and rows E11–E17 of §6.2. No byte of either form was modified. Root should know about this relay/local difference. This author performs no relay or correction.
+
+    ### 0.4 Source pins (re-verified for V4)
+
+    - Immutable basis: `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. HEAD and main: `c67728c1dcaf8a577539d920bdc6a3c86126cebb`. `git diff ff9ac13c4f HEAD -- aida-core` is empty.
+    - The current `aida-core/src/db/cache.rs` (blob `01cadb5c…`) has SHA-256 `5b5975cb…7973` both at the pin and in the working tree.
+    - Since the pin, `aida-cli-lib/src/lib.rs` and `git_backend_cmd.rs` changed only in unrelated places: a `gh` JSON field, seat-authority traces and test fixture guards. The classifier (`lib.rs:3838–3868`), `run` (`:3728`), `main_entry` scope (`:1124`) and the ambient constructor (`git_backend_cmd.rs:1202`) are unchanged in substance. The `cache_cmd.rs`, `mcp.rs` and `refresh_worker.rs` files are unchanged.
+    - **rusqlite 0.31.0** (`lib.rs` `10de785a…`, `inner_connection.rs` `b8512b74…`):
+      - `Connection::close(self) -> Result<(), (Connection, Error)>` (`lib.rs:792`) flushes the prepared-statement cache, then calls `InnerConnection::close`. On error it returns the still-open `Connection`.
+      - `InnerConnection::close` (`:152`) calls `ffi::sqlite3_close` (not `_v2`). It takes rusqlite's internal `interrupt_lock` with `.unwrap()` and asserts that the lock is non-null.
+      - `impl Drop for Connection` (`:384`) only flushes the statement cache. `impl Drop for InnerConnection` (`:385–390`) calls `close()` and discards the result (`#[allow(unused_must_use)]`).
+      - No crate in aida-core or aida-cli-lib calls `get_interrupt_handle` (0 matches).
+    - **Bundled libsqlite3-sys 0.28.0** `sqlite3.c` (`7956a38f…`):
+      - `sqlite3_close` is `sqlite3Close(db, 0)` (`:179430`). With unfinalized statements or backups it returns `SQLITE_BUSY` and leaves the connection open (`:179333–179366`).
+      - Actual destruction runs `sqlite3RollbackAll` (`:179465`).
+      - The synchronous and WAL single-writer facts are as review 2 §2 records them.
+    - **Current strict upsert** (`cache.rs:1823–1832`): it acquires the mutex, then calls `with_cache_write(… || upsert_requirement_on(&conn, req))`. Neither wrapper issues `BEGIN`. `upsert_requirement_on` (`:2944`) first reads (`SELECT in_degree … .ok()` swallows errors, then `blocked_from_cache`). Its **first modifying statement** is `DELETE FROM requirements_cache WHERE id = ?1` inside `delete_one_uncommitted` (`:3086`).
+      - In WAL mode with `busy_timeout=0`, that DELETE returns `SQLITE_BUSY` while another connection holds the write lock.
+      - `with_cache_retry_observed` (`:849`) classifies that error with `is_sqlite_lock_error` and re-runs the **whole closure** after its ladder delay.
+    - **The read-only wrapper** (`with_cache_write`, `:807–829`) returns `CacheReadOnly` before `HoldingWrite`, the sidecar claim and `write_attempt`.
+    - `apply_incremental` (`:1769–1803`) creates `Transaction::new_unchecked(&conn, Immediate)` **inside** the `with_cache_write` closure. `rebuild_projection` (`:1623`) does the same. `truncate` (`:1518`) runs `SCHEMA_SQL` and then a DELETE batch, with no BEGIN.
+
+    ## 1. Binding limited approvals, first failure and E1 (unchanged)
+
+    These are binding design amendments **only**. They are not a whole-design approval, a performance pass or a code release.
+
+    - **DX-1.** One admitted ordinary read-winner incremental transaction may run at `synchronous=NORMAL` on its own connection. Afterward it restores the exact prior level, or the handle retires. Automatic and close-time checkpoints stay unchanged. The power-loss tradeoff is accepted for the Git-derived projection: committed refresh rows and their stamp may be lost together after an OS crash or power loss, and staleness recovery re-derives them. This is not equivalent to FULL. It makes no fsync-free claim, no <2s claim and no corruption claim.
+    - **R2.** A private non-Clone/non-Copy `ReadWinnerTxn` is passed as `IncrementalDurability::ReadWinner`. Every other call site passes `Strict`. A deny-only `WeakCommitPolicy` applies before every constructor. `Allow` grants nothing.
+    - **R3 parts.** These parts are accepted:
+      - checked finish;
+      - autocommit confirmation;
+      - exact restore with verification;
+      - error precedence `CacheHandleRetired > WeakCommitPrepare > primary > Ok`;
+      - `committed:true` after a commit that succeeds and is then followed by a failed restore;
+      - unwind always retires;
+      - no RAII promise on abort.
+    - **L2(a).** The aggregate `retry_sleep` is unchanged. The `Open`, `Write` and `Other` categories must sum to it exactly. `write_wrapper_entry` sits at the first line of `with_cache_write`. Each reader's clock includes its constructor. Option (b) is out of scope.
+
+    The controlling first failure is unchanged: winner reader 3 at **2.648286s**, FAIL, with `incremental:1`, `write_attempt:1` and zero retries. The losers took 1.528038–1.528182s and returned useful old rows. E1 ran once and is diagnostic only: D1, S=1.571231s of W=1.943812s (80.832%). Its winner time of 1.955642s is **not** AC1 credit. No rerun, no second E1 and no new attribution is requested.
+
+    ## 2. Response map
+
+    | V3 review item | V4 answer | Where |
+    | --- | --- | --- |
+    | F1: swap-and-drop retirement lacks a fallible close and ownership outcome | The placeholder allocation is gone. A per-handle `ConnSlot` with an explicit `Retired` state. Explicit ordinary `close()` with its Result observed. Stated resource order. A close error quarantines the returned connection, which is never served again. Logical retirement is mandatory; physical release is reported as confirmed or unconfirmed. Poison never re-retires and never overwrites the first cause or count. | §3 |
+    | F2: M9 is inconsistent with the placeholder; the barrier is underspecified | The barrier sits after a **witnessed live precheck**, immediately before `lock()`. The target is an exposure observer at the one post-acquire gate, plus a typed Result. M9 deletes exactly that gate. The text explains why no remaining guard makes it equivalent. No schema is manufactured and no write is mocked. The positive restore variant and the independent M10 are kept. | §4 |
+    | F3: S-b's BEGIN witness is absent from the upsert | S-b keeps the actual strict upsert and its unchanged autocommit statements. O-write(upsert) fires only after a **successful modifying attempt**. BUSY is witnessed from the actual first DELETE through the real retry ladder. An own PRAGMA read while held is recorded separately from the after-release observer. No production transaction change and no join while the winner is held. | §5 |
+    | F4: admission cases are merged; mutant reach overpromised | Separate rows for: the eligible winner; an invalid token on a writable autocommit handle (identity, thread, missing retry scope); a read-only forced seam (no prep, transaction or closure); and a not-in-autocommit retirement. A closure-issued ROLLBACK fixture is distinguished from an engine automatic rollback. M6-ii accepts tx ∈ {0,1} and is detected only by the loser's zero-weak-prep assertion. Real set and read-back rules: unknown state → restore and verify, or retire. | §6 |
+    | §4 wiring notes | Probe at the ambient constructor for every CLI arm. A per-call MCP scope-entry probe (so the second `list_requirements` call has its own). A stop-before-watchdog worker entry witness, with zero watchdog spawns. P6 gets its own stale input. The S-nd fixture is specified. F-snap failure precedence. | §§3.6, 5, 7 |
+
+    ## 3. F1 — retirement through an owned, bounded connection slot
+
+    ### 3.1 Representation (internal to `cache.rs`, no framework)
+
+    ```text
+    Cache {
+        conn: Mutex<ConnSlot>,          // was Mutex<Connection>
+        retired: AtomicBool,            // pre-lock fence only (F-entry, F-snap, has_usable_snapshot)
+        retire_cause: AtomicU8,         // copy of the first cause, for pre-lock errors
+        …unchanged fields…
+    }
+    enum ConnSlot { Live(Connection), Retired(RetiredSlot) }
+    struct RetiredSlot {
+        cause: RetireCause,             // Copy
+        close: CloseOutcome,            // Copy: NotAttempted | Closed | CloseFailed { code: i32, injected: bool }
+        quarantined: Option<Connection>,
+    }
+    ```
+
+    - `RetireCause` is one of: `RestoreFailed`, `RestoreVerifyMismatch`, `RollbackFailed`, `AutocommitUnconfirmed`, `AdmissionNotAutocommit`, `PrepareRestoreFailed`, `Unwind` or `Poisoned`, plus `TestInjected` under cfg(test).
+    - The `Live → Retired` transition is an in-place `std::mem::replace` of the slot. It needs **no replacement connection**, no `open_in_memory` and no fallible SQLite allocation. The slot's size is fixed by the enum. `Option<Connection>` is the bounded optional slot.
+    - Snapshot handles built by `read_snapshot` wrap their own connection as `ConnSlot::Live` and follow the same rules on their own handle.
+
+    ### 3.2 The single post-acquire gate: `lock_conn`
+
+    `lock_conn(&self) -> Result<LiveConn<'_>>`, where `LiveConn` wraps the `MutexGuard<'_, ConnSlot>` and dereferences to `Connection`. In order:
+
+    1. **Precheck (an optimization only).** If `retired` is set, return `CacheHandleRetired{cause: retire_cause}` without locking.
+    2. **H-prelock (cfg(test), one-shot).** Runs only after step 1 observed live. It records `precheck_live=true` with the cache and thread IDs, then signals. It sits **immediately before** `self.conn.lock()`.
+    3. **`lock()`.** On `Err(PoisonError)`, take `into_inner()` and continue to step 4 with `poisoned=true`.
+    4. **The gate.** Match on the slot discriminant:
+       - `Live` and not poisoned: build `LiveConn` (O-expose records `Live`).
+       - `Live` and poisoned: retire in place with cause `Poisoned` (§3.3), then return Retired.
+       - `Retired`: return `CacheHandleRetired{cause: slot.cause, close: slot.close, first_report:false}`. Nothing is re-retired, the count does not change and the slot is never replaced.
+    5. `LiveConn` is built **only** in the first arm of step 4. Its `Deref` matches `Live` and treats any other state as an internal invariant violation. That is unreachable while the gate exists, because only `retire(self: LiveConn, …)`, which consumes the guard, can change the slot while a `LiveConn` lives.
+
+    **There is exactly one post-acquire check: the slot discriminant.** The `retired` AtomicBool is **not** re-read after acquisition. Code review must reject a second post-acquire check, because it would make M9 (§4) equivalent.
+
+    `recheck_migration` uses a non-erroring variant:
+
+    - `Live`: query as today.
+    - `Retired`: return `migration_pending()` without querying.
+    - `Live` and poisoned: retire with cause `Poisoned`, then return the flag.
+
+    All 20 production lock sites (V3 §2.1 inventory, unchanged) call `lock_conn`. The 6 test sites use `lock_conn` or a cfg(test) accessor built on it.
+
+    ### 3.3 The retirement procedure and resource order
+
+    `retire(slot: &mut ConnSlot, cause) -> RetireReport` is called only while the guard is held exclusively. It runs in this order:
+
+    1. **Resource-order precondition, enforced by the borrow checker.** `retire` needs `&mut ConnSlot`, which is unavailable while any `Transaction<'_>`, `CacheTx<'_>`, `Statement<'_>` or `&Connection` derived from the slot is alive. So by this point the eligible path has finished its transaction (checked commit or rollback), or dropped it with `DropBehavior::Ignore`. `Connection::close` then flushes rusqlite's statement cache itself.
+    2. **Logical retirement, which always happens.**
+       - `let old = mem::replace(slot, Retired(RetiredSlot{cause, close: NotAttempted, quarantined: None}))`.
+       - Then `retire_cause.store(cause)` and `retired.store(true, SeqCst)`.
+       - cfg(test) O-retire increments by one with the cause.
+       - If the slot was already `Retired`, nothing happens: the existing cause is returned and the count does not change.
+    3. **Explicit ordinary close, with its result observed.** `match old { Live(c) => c.close(), … }`. There is exactly one close call site.
+       - `Ok(())` → `close = Closed`. SQLite destroyed the connection. By `sqlite3.c:179465`, any transaction still open was rolled back, and this connection's locks are released.
+       - `Err((c, e))` → `close = CloseFailed{code: e's extended code, injected}` and `quarantined = Some(c)`. The connection is still open. Whether its transaction and write lock were released is **unconfirmed**.
+    4. The report carries `cause`, `close` and the close error text to the caller. The first caller's error carries the full diagnostics: primary, rollback, restore and close. Later callers receive the Copy cause and close outcome only (§3.5).
+
+    **Quarantine.** A quarantined connection stays inside the `Retired` slot. It is unreachable through every `Cache` API: `lock_conn` never builds a `LiveConn` from `Retired`, and no accessor returns it. It is never restored to service and nothing loops over it. There is no cleanup thread, service or timer, and no raw `sqlite3_close_v2`. It is dropped only when the `Cache` handle drops. At that point rusqlite's `InnerConnection::Drop` makes one more close attempt and discards the result, which is rusqlite's own behavior and not a design promise. If that attempt also fails, the SQLite handle stays open until the process exits. Meanwhile, other connections may see `SQLITE_BUSY` and take today's honest strict-ladder or WriterBusy paths.
+
+    **Why close is expected to succeed, with no guarantee claimed.** `sqlite3_close` refuses (BUSY) only while unfinalized statements, backups or blobs exist. Cache code creates statements only through borrows of the connection, which step 1 forces to have ended, and the statement cache is flushed inside `close`. Cache code creates no backups or blobs. A failure therefore needs an outside cause, such as a leaked statement or an I/O-level close error. That branch is defensive. It is tested by an **injected** refusal and labelled as such. No measured SQLite close failure is claimed.
+
+    **rusqlite-internal panics, declared rather than assumed away.** `InnerConnection::close` calls `.unwrap()` on its internal interrupt lock and asserts that the lock is non-null. Only rusqlite's interrupt-handle machinery uses that lock, and no aida code calls `get_interrupt_handle`. The design relies on rusqlite's invariant here. It does not claim close can never panic.
+
+    ### 3.4 Ordinary, unwind and poison paths
+
+    | Path | When retirement runs | Close | Physical release | Returned |
+    | --- | --- | --- | --- | --- |
+    | Ordinary: rows 8, 9a, 9b, 9c and A5 (§8.1, §6.2) | In the eligible `apply_incremental`, after checked finish or a refused admission, before the guard drops | Explicit `close()`, result observed | `Closed`: **confirmed**. `CloseFailed`: **unconfirmed**, connection quarantined | `Err(CacheHandleRetired{…, close, physical_release})` with all diagnostics |
+    | Unwind (row 10) | `WeakCommitScope::drop` while panicking. The scope **owns** the `MutexGuard` (§3.7), so its `Drop` runs after the transaction (`Ignore`) has dropped and before the guard drops. | One best-effort `close()` | Recorded in the slot and in O-retire only; nothing is claimed to the caller | The panic propagates. No unwrap or double panic in our code. The guard drop poisons the mutex. |
+    | Poison found by a later caller (a panic elsewhere while the mutex was held) | The first `lock_conn` that sees `PoisonError` with a `Live` slot | Explicit `close()` | As in the ordinary row | `Err(Retired{cause: Poisoned, first_report:true})` |
+    | Every later call on a poisoned or retired handle | — | — | — | `Err(Retired{cause: <first cause>, first_report:false})`; count unchanged; no swap |
+
+    The poison flag is never cleared (`clear_poison` is not used). Retirement already makes the handle unusable, so later `PoisonError`s only lead to the existing `Retired` arm.
+
+    ### 3.5 Errors, precedence and classification
+
+    `CacheHandleRetired` has these fields:
+
+    - `cause` and `first_report`;
+    - `committed: bool`;
+    - `rolled_back` ∈ {`Yes`, `No`, `Unknown`, `NotStarted`, `ByClose`};
+    - `close: CloseOutcome` and `physical_release` ∈ {`Confirmed`, `Unconfirmed`, `NotApplicable`};
+    - `primary`, `rollback`, `restore` and `close_error`, each an `Option<String>`.
+
+    `rolled_back = ByClose` is reported **only** when all three hold: the checked rollback failed or was unconfirmed, `COMMIT` was never executed, and `close == Closed`. When close failed it stays `Unknown`.
+
+    `source()` is `None`; inner diagnostics are rendered into the message. The precedence `CacheHandleRetired > WeakCommitPrepare > primary > Ok` is unchanged. Close diagnostics live **inside** the Retired error. They add no recovery class.
+
+    Every classifier (`is_cache_lock_error`, `is_cache_schema_drift_error`, `is_cache_read_only_error`, `is_cache_unwritable_error`) first returns false when `chain().any(is CacheHandleRetired || is WeakCommitPrepare)`. That holds even under `.context(…)` wrappers whose text contains "no such column" or "database is locked". So `with_cache_schema_retry` never rebuilds a retired handle, and `freshen_for_read` never reports WriterBusy for one. Because there is no placeholder connection, no "missing table" error can come out of a retired handle in the first place.
+
+    A commit that succeeds and is then followed by retirement stays `committed:true`. The rows are durable at DX-1's level and visible to new handles.
+
+    ### 3.6 Non-lock entries (V3 kept, with failure precedence completed)
+
+    - **F-entry.** `ensure_live()` reads `retired` (SeqCst) as the first statement of `source_head_sha`, `search`, `apply_incremental` and `rebuild_projection`. A call that passed its check before retirement and exits without touching the connection is linearized before retirement.
+    - **F-snap.** `read_snapshot` runs in this order:
+      1. `ensure_live()`.
+      2. H-snap-premint (cfg(test)).
+      3. Open the read-only connection, then `BEGIN DEFERRED`, then the schema check.
+      4. Recheck `retired`. If it is set, drop the new snapshot and return Retired.
+      - **On failure in step 3:** check `retired` before returning. If it is set, return Retired, with the step's error rendered as `mint_failed_at=<open|begin|schema>`. Otherwise return that step's error unchanged.
+      - The structural-drift branch still sets `migration_pending` as today. An early error is never reported as a completed post-mint check: O-snap records one of `minted_live`, `minted_then_retired`, `mint_failed(step)` or `mint_failed_retired(step)`.
+      - A snapshot minted live before retirement is an independent handle on committed data and stays usable.
+    - **Exempt getters.** `path()`, `lock_info_path()`, `is_read_only()` and `migration_pending()` still work on a retired handle. `has_usable_snapshot()` returns false once retired. `recheck_migration` is covered in §3.2.
+
+    ### 3.7 How the weak path holds the guard
+
+    `apply_incremental(…, ReadWinner(tok), …)` calls `lock_conn` and moves the `LiveConn` into `WeakCommitScope { live: LiveConn, done: bool }`. Admission, preparation and restore use `scope.conn()`. The `with_cache_write` closure borrows `scope.conn()` immutably to create the transaction (`Transaction::new_unchecked`, as today). The transaction uses `DropBehavior::Ignore`, and every finish is explicit and checked.
+
+    After `with_cache_write` returns, the borrow ends. The checked finish outcome, autocommit confirmation and restore then run on `scope.conn()`. Retirement consumes the scope's guard through `retire`. On normal completion `done = true`, so `Drop` does nothing. If `done` is false while not panicking (an early `?` return through an unhandled path), `Drop` retires with cause `AutocommitUnconfirmed`. That path is unreachable when every exit is explicit, and it exists only as a backstop. Strict calls keep today's structure, with `lock_conn` in place of `.lock().unwrap()`.
+
+    ## 4. F2 — S-d, M9 and M10 with witnessed barriers
+
+    ### 4.1 S-d schedule (one handle A, threads W = winner and V)
+
+    1. W runs the real winner branch on a stale one-commit fixture and pauses at **H-tx**: O-tx has fired at value 1 and `BEGIN IMMEDIATE` is held, with A's mutex held by W's scope.
+    2. The H-tx hook starts thread V, which calls `A.upsert_requirement(unrelated row)`. V's `lock_conn` precheck sees live. **H-prelock** then records `precheck_live=true` for V and signals "attempting", immediately before `lock()`. V blocks on A's mutex.
+    3. The H-tx hook waits for "attempting" (bounded at 8s; a timeout is a **test failure**, never a detection) and then returns. W continues:
+       - **Restore variant:** W commits, restores to P=2, verifies and returns `Ok(true)`, releasing the guard.
+       - **Retire variant (FAIL_RESTORE armed on W):** W commits, the restore fails, W retires `RestoreFailed` (close `Closed`) under its guard, and returns `Err(Retired{committed:true})`.
+    4. Only after W's `freshen_for_read` has returned does the test thread join V. No join happens while the winner is held.
+
+    **Declared assertions:**
+
+    | Variant | V's Result | O-expose(V) | write_wrapper_entry(V) | O-write(upsert, V) | Other |
+    | --- | --- | --- | --- | --- | --- |
+    | Restore (positive) | `Ok(())` | 1, slot `Live` | 1 | 1 at value **2** | Exact P on A afterward |
+    | Retire | `Err` whose chain has `CacheHandleRetired{cause: RestoreFailed, first_report:false}` | **0** | **0** (`upsert_requirement` calls `lock_conn` before `with_cache_write`) | **0** | `full_rebuild=0`; no lock, drift or read-only classification; O-retire = 1 (W's) |
+
+    ### 4.2 M9: the post-acquire gate removed
+
+    - **Exact edit.** In `lock_conn`, step 4 is replaced by building `LiveConn` without inspecting the slot discriminant. The precheck, H-prelock, poison mapping, F-entry and F-snap are all left as they are.
+    - **Reach.** In the retire variant, V's precheck saw live (witnessed by H-prelock) before W retired. The mutex was not poisoned because W did not panic. `upsert_requirement` has no F-entry. So V reaches the mutated point holding a guard over a `Retired` slot.
+    - **Detection.** O-expose(V) records one exposure with the slot state `Retired`, so the declared `O-expose(V) == 0` fails. Under the mutant, V's later `Deref` hits the invariant violation (a panic in V). That is recorded but is **not** the detection point. Detection is the exposure assertion, evaluated before the Result assertion.
+    - **Why no remaining guard makes M9 equivalent.**
+      - The precheck has already passed (witnessed).
+      - Poison is not set in this schedule.
+      - There is no F-entry on this function.
+      - The `retired` AtomicBool is not re-read after acquisition (§3.2 rule).
+      - There is no placeholder that could make "absence" an implicit second check: an absent slot is the `Retired` variant, which only the deleted gate inspects.
+    - **Not claimed.** M9 is not detected by a successful stale-file write, by a fake PRAGMA, by a schema error or by a timeout.
+
+    ### 4.3 M10: the snapshot fence removed (independent of M9)
+
+    - **Exact edit.** Delete F-snap step 4 (the post-mint recheck) and the post-failure recheck.
+    - **Schedule.** Arm H-snap-premint. It calls `cache.retire_for_test()`, a cfg(test) accessor that takes the real `lock_conn` and invokes the real `retire(TestInjected)`, so close outcome `Closed` is recorded. The hook then returns and `read_snapshot` proceeds.
+    - **Preconditions asserted.** The fixture schema is healthy (no drift branch). O-retire = 1 is recorded **before** O-snap. The precheck saw live (H-snap-premint runs only after the precheck).
+    - **Expected.** `Err(CacheHandleRetired{cause: TestInjected})` and O-snap `minted_then_retired`. **Under M10** a usable snapshot is returned, so the assertion fails.
+    - **Positive companion.** A snapshot minted before `retire_for_test` still lists the committed rows after retirement.
+
+    ## 5. F3 — S-b and the complete schedule set
+
+    ### 5.1 S-b: other thread, same database, during the winner's transaction (strict upsert kept)
+
+    The chosen witness is the **actual strict upsert**. Its autocommit statements are not changed. The strict-incremental BEGIN witness is covered separately (S-a2, S-k2, S-q, P1/P3/P5) and is never relabelled as upsert coverage.
+
+    1. W pauses at **H-tx** (BEGIN IMMEDIATE held on A).
+    2. Thread T opens handle C, a separate `Cache::open` on the **same** `cache.db`. Thread T has the default strict ladder: `READ_REFRESH_ATTEMPT` is false on T, fast-fail is off, and `AIDA_CACHE_RETRY_COUNT`/`_MS` are unset.
+    3. T reads **its own** `PRAGMA synchronous` through a cfg(test) read accessor on C. It records this as `own_setting_while_held = 2`. This is a separate record, **not** an O-write.
+    4. T calls `C.upsert_requirement(unrelated row)`:
+       - `write_wrapper_entry(T) = 1`, then the sidecar claim, then `write_attempt(T) = 1`.
+       - The reads in `upsert_requirement_on` succeed under WAL, so O-upsert-read(T) is ≥ 1. (This is a cfg(test) counter under the upsert label scope; it shows that the reads ran.)
+       - The **first modifying statement**, `DELETE FROM requirements_cache`, returns `SQLITE_BUSY`.
+       - `with_cache_retry_observed` classifies the lock error. Its cfg(test) one-shot **RETRY_WRITE_CALLBACK** fires at the first `Write`-category retry, before sleeping, with `(action="upsert cached requirement", code=DatabaseBusy)`. The callback signals. `retry_sleep` and `retry_sleep_write` each go up by 1.
+    5. The H-tx hook waits for that signal (bounded at 8s; a timeout is a failure). While W is still held, it asserts `O-write(upsert, T) == 0` from the shared test sink. Then the hook returns. W proceeds to commit and restore, and T's retry re-runs the whole closure.
+    6. **O-write(upsert)** sits in `Cache::upsert_requirement`'s closure **after `upsert_requirement_on` returns `Ok`**: after the first modifying statement and every later statement of that attempt have succeeded. It reads `PRAGMA synchronous` on C's connection. Expected: exactly 1, at value **2**. If W has not committed by T's first retry, more BUSY retries are allowed and recorded (`retry_sleep_write` ≥ 1).
+    7. T is joined only after W has returned.
+
+    Records: `(cache_id, db_path, conn_id, thread_id, label, value, barrier order)` for A and C.
+
+    **Not claimed.** That two same-database writers overlap. That the held-period PRAGMA read is an O-write. That a timeout is a detection.
+
+    **M2 / M7 under S-b.** M2 (NORMAL at open) makes `own_setting_while_held` and O-write(upsert) read 1, so the value-2 assertions fail inside a feasible operation. M7 is **not** detected by S-b, because T's retry flag is never set. S-b is an unaffected control for M7.
+
+    ### 5.2 O-write placement per mandatory strict label (cfg(test), actual connection)
+
+    A cfg(test) thread-local label scope is set by each public strict entry. Observers in shared helpers record only under their label.
+
+    | Label | Exact placement |
+    | --- | --- |
+    | `strict_incremental` | `apply_incremental` with `Strict`, immediately after a successful `Transaction::new_unchecked(Immediate)` (the same point as O-tx) |
+    | `upsert` | `Cache::upsert_requirement` closure, after `upsert_requirement_on` returns `Ok` |
+    | `delete` | `Cache::delete_requirement` closure, after `delete_requirement_on` returns `Ok` |
+    | `set_meta` | `Cache::set_meta` closure, after `set_meta_on` returns `Ok` |
+    | `truncate` | `Cache::truncate` closure, after the `DELETE FROM requirements_cache; DELETE FROM requirements_fts;` batch returns `Ok` (not after `SCHEMA_SQL`) |
+    | `rebuild_for_refresh`, `rebuild_from_store`/`rebuild_cache`, `schema_drift_rebuild` | `rebuild_projection`, immediately after a successful `BEGIN IMMEDIATE`, before the refill-skip check; the label is set by the public caller |
+
+    Each mandatory label must fire at value 2 in its own sub-test. An absent label fails the test.
+
+    ### 5.3 All schedules
+
+    | Schedule | Order (no cyclic wait; every bounded wait that times out is a failure) | Required counts and outcomes | M7 |
+    | --- | --- | --- | --- |
+    | **S-a1** | W pauses at H-armed (verified NORMAL, before `with_cache_write`). On the same thread, open B (same DB) and run a strict upsert of an unrelated row. Resume W. | B O-write(upsert) = 1 at 2. W: tx 1 (1), closure 1, commit. `weak_commit_refused` = 0. | Detected (the flag is live on this thread) |
+    | **S-a2** | As a1, but B runs `ensure_cache_fresh` (strict incremental) | B `strict_incremental` = 1 at 2. W: tx 1 (1), closure **0**, reached-head skip, `Ok(true)` | Detected |
+    | **S-b** | §5.1 | §5.1 | Unaffected control |
+    | **S-c** | At H-tx, thread U on handle D (**a different database file**, labelled `different_database_control`) runs a strict upsert to completion; then W is released | D O-write(upsert) = 1 at 2, no BUSY | Unaffected control |
+    | **S-d** | §4.1 | §4.1 | Unaffected control |
+    | **S-k1** | At the existing one-shot AFTER_READS hook (before W acquires A's mutex; flag live): strict upsert on the **same** handle A | A O-write(upsert) = 1 at 2; then W prep 1, tx 1 (1), closure 1 | Detected |
+    | **S-k2** | Same hook: `ensure_cache_fresh` on handle B | B `strict_incremental` = 1 at 2; W tx 1 (1), closure 0 (skip) | Detected |
+    | **S-q** | Interactive scope with `task_1515_move_head_during_reads`: W declines with `Ok(false)` before `apply_incremental` (prep 0). It takes the Q1 branch, which wraps `ensure_cache_fresh` in `ReadRefreshAttempt`. A separate non-ancestor fixture goes to full rebuild. | `strict_incremental` = 1 at 2; `rebuild_for_refresh` = 1 at 2; weak counts 0 | Detected (flag live around the Q1 `ensure_cache_fresh`) |
+    | **S-nd1** | Non-interactive, `AIDA_CACHE_NO_DETACH` set in-test, **non-ancestor recorded head**. The incremental branch is skipped because `is_ancestor` is false, so no token is ever built. `file_and_spawn_refresh` → `no_detach()` → strict `ensure_cache_fresh` → full rebuild. | `rebuild_for_refresh` = 1 at 2; weak 0; no spawn | Unaffected control |
+    | **S-nd2** | Non-interactive, no-detach, with the head moved during reads. W declines **before** `apply_incremental` (prep 0), then `drop(attempt)`, then `file_and_spawn_refresh` → strict incremental at the new head. | `strict_incremental` = 1 at 2; weak 0 | Unaffected control (flag already dropped) |
+    | **S-nd3** | Suppression: pre-seeded suppressed request in the existing format, SPAWN_LOG armed, non-ancestor fixture | `rebuild_for_refresh` = 1 at 2; zero SPAWN_LOG entries | Unaffected control |
+
+    No-detach alone does **not** veto the ordinary winner. S-nd fixtures are chosen so that no eligible attempt occurs, which makes weak = 0 true.
+
+    ## 6. F4 — admission cases, complete counts, preparation truth
+
+    ### 6.1 Admission (under the guard, in this order)
+
+    1. Token identity == `self`.
+    2. Token thread == current thread.
+    3. `READ_REFRESH_ATTEMPT` is live.
+    4. Not read-only.
+    5. `conn.is_autocommit()`.
+
+    Checks 1–4 failing → `refused{reason}`, then the **Strict** path, nothing else changed. Check 5 failing → retire `AdmissionNotAutocommit` before prep. The token is consumed by the call and never stored, cloned or rebuilt.
+
+    **The only ordinary creator** is the winner branch of `freshen_for_read`. Deliberately invalid admissions are reached **only** through a narrow cfg(test) seam, `apply_incremental_with_token_for_test`, and every such row is labelled **SEAM**. The ordinary read-only backend returns at `freshen_for_read`'s first read-only check and cannot naturally create a token.
+
+    ### 6.2 Complete per-branch counts (declared before any execution)
+
+    The columns are: admit, prep, change, armed, tx (value), closure, finish, explicit ROLLBACK issued, restore, retire / close, inner result, and public result (non-interactive, SPAWN_LOG armed). Rows E1–E24 run through the **ordinary winner branch** of `freshen_for_read` on a real stale one-commit fixture. P = 2 unless noted.
+
+    | # | Branch / fault (exact real action) | adm | prep | chg | arm | tx | clo | finish | RB | restore | ret/close | inner | public |
+    | --- | --- | :-: | :-: | :-: | :-: | :-: | :-: | --- | :-: | --- | --- | --- | --- |
+    | E1 | Success | 1 | 1 | 1 | 1 | 1(1) | 1 | committed | 0 | restored_verified(P) | 0 | Ok(true) | Fresh |
+    | E2 | Reached-head skip (S-a2) | 1 | 1 | 1 | 1 | 1(1) | **0** | rolled_back_explicit | 1 | restored_verified | 0 | Ok(true) | Fresh |
+    | E3 | Real epic-miss decline | 1 | 1 | 1 | 1 | 1(1) | 1 | rolled_back_explicit | 1 | restored_verified | 0 | **Ok(false)** | `Requested`, 1 SPAWN_LOG; rollback witness at H-after-restore |
+    | E4 | FAIL_IN_TXN_SQL: an injected `Err` returned by the closure after its first real upsert (transaction still open) | 1 | 1 | 1 | 1 | 1(1) | 1 | rolled_back_explicit | 1 | restored_verified | 0 | Err(primary) | Err(primary) |
+    | E5 | Real stamp failure: the existing TASK-1515 `RAISE(ABORT, …)` trigger on the stamp write. A statement abort; the transaction stays open. | 1 | 1 | 1 | 1 | 1(1) | 1 | rolled_back_explicit | 1 | restored_verified | 0 | Err(primary) | Err(primary) |
+    | E6 | **Closure-issued ROLLBACK fixture**: the closure executes a real `ROLLBACK`, then returns `Err` | 1 | 1 | 1 | 1 | 1(1) | 1 | **already_autocommit** | **0** | restored_verified | 0 | Err(primary) | Err(primary) |
+    | E7 | FAIL_COMMIT: an injected `Err` returned instead of executing COMMIT (transaction open) | 1 | 1 | 1 | 1 | 1(1) | 1 | rolled_back_explicit | 1 | restored_verified | 0 | Err(commit) | Err(commit) |
+    | E8 | Real busy: a separate `BEGIN IMMEDIATE` holder; sidecar absent, misleading or Unknown | 1 | 1 | 1 | 1 | **0** | 0 | not_started | 0 | restored_verified | 0 | Err(lock) | **WriterBusy**, useful old rows/head/`built_at` |
+    | E9 | FAIL_BEGIN_NONLOCK: an injected non-lock `Err` in place of BEGIN | 1 | 1 | 1 | 1 | 0 | 0 | not_started | 0 | restored_verified | 0 | Err(begin) | Err(begin), not WriterBusy |
+    | E10 | FAIL_SIDECAR_CREATE: an injected `Err` at `write_lock_info_at` (wrapper entry 1, `write_attempt` 0) | 1 | 1 | 1 | 1 | 0 | 0 | not_started | 0 | restored_verified | 0 | Err(sidecar) | Err(sidecar) |
+    | E11 | FAIL_PRAGMA_READ: an injected `Err` at the P read; **no set issued** | 1 | 1 | 0 | 0 | 0 | 0 | not_started | 0 | **no_set_issued** | 0 | Err(Prepare) | Err(Prepare) |
+    | E12 | FAIL_SET_BEFORE: an injected `Err` returned **instead of** executing the set; then a real read-back | 1 | 1 | 0 | 0 | 0 | 0 | not_started | 0 | **verified_unchanged** (real read-back == P) | 0 | Err(Prepare) | Err(Prepare) |
+    | E13 | SET_THEN_ERR: the real set to NORMAL executes, then an injected `Err`; real read-back = 1 | 1 | 1 | **1** | 0 | 0 | 0 | not_started | 0 | restored_verified | 0 | Err(Prepare) | Err(Prepare) |
+    | E14 | SET_WRONG_VALUE: a real `PRAGMA synchronous=OFF` executes in place of NORMAL; real read-back 0 ≠ 1 | 1 | 1 | 1 | 0 | 0 | 0 | not_started | 0 | restored_verified | 0 | Err(Prepare) | Err(Prepare) |
+    | E15 | VERIFY_READ_FAIL: the real set executes; the verification read returns an injected `Err` → state **unknown** | 1 | 1 | **unknown** | 0 | 0 | 0 | not_started | 0 | restored_verified (real set P, real read == P) | 0 | Err(Prepare) | Err(Prepare) |
+    | E16 | E15 + FAIL_RESTORE (an injected `Err` in place of the restore set) | 1 | 1 | unknown | 0 | 0 | 0 | not_started | 0 | restore_failed | 1 / Closed | Err(Retired{PrepareRestoreFailed, committed:false, NotStarted}) | Err(Retired) |
+    | E17 | E13 + RESTORE_READ_FAIL (the restore executes; the verification read is an injected `Err`) | 1 | 1 | 1 | 0 | 0 | 0 | not_started | 0 | restore_unverified | 1 / Closed | Err(Retired{PrepareRestoreFailed}) | Err(Retired) |
+    | E18 | FAIL_ROLLBACK with FAIL_IN_TXN_SQL: an injected `Err` in place of executing ROLLBACK (transaction still open) | 1 | 1 | 1 | 1 | 1(1) | 1 | rollback_failed | 1 (failed) | not attempted for reuse | 1 / Closed | Err(Retired{RollbackFailed, committed:false, **ByClose**}) | Err(Retired); new snapshot shows old rows |
+    | E19 | Success + FAIL_RESTORE | 1 | 1 | 1 | 1 | 1(1) | 1 | committed | 0 | restore_failed | 1 / Closed | Err(Retired{RestoreFailed, **committed:true**}) | Err(Retired); new snapshot shows fresh rows |
+    | E20 | Success + RESTORE_WRONG_VALUE (a real restore set to 0 instead of P; real verify ≠ P) | 1 | 1 | 1 | 1 | 1(1) | 1 | committed | 0 | verify_mismatch | 1 / Closed | Err(Retired{RestoreVerifyMismatch, committed:true}) | Err(Retired) |
+    | E21 | Busy + FAIL_RESTORE | 1 | 1 | 1 | 1 | 0 | 0 | not_started | 0 | restore_failed | 1 / Closed | Err(Retired) — **not** WriterBusy | Err(Retired) |
+    | E22 | Any of E16–E21 + FAIL_CLOSE (an injected `Err((conn, e))` in place of `close()`) | as the base row | | | | | | | | | 1 / **CloseFailed(injected)**, quarantined | Err(Retired{…, close: CloseFailed, physical_release: Unconfirmed; E18 → rolled_back: Unknown}) | Err(Retired) |
+    | E23 | PANIC_IN_CLOSURE (unwind) | 1 | 1 | 1 | 1 | 1(1) | 1 | not finished (Ignore) | 0 | none | 1 / best-effort close recorded | panic propagates | panic propagates; later calls → Retired{Unwind} |
+    | E24 | E23 + FAIL_CLOSE | as E23 | | | | | | | | | 1 / CloseFailed(injected), quarantined; no double panic | panic propagates | as E23 |
+    | A1 | **SEAM** identity mismatch, writable autocommit handle, retry scope live | refused(identity) | 0 | 0 | 0 | strict_tx 1 (P=2) | 1 | as Strict | — | — | 0 | as Strict (Ok(true)) | n/a (seam) |
+    | A2 | **SEAM** thread mismatch (token built on thread X, used on Y) | refused(thread) | 0 | 0 | 0 | strict_tx 1 (2) | 1 | as Strict | — | — | 0 | as Strict | n/a |
+    | A3 | **SEAM** missing retry scope (no `ReadRefreshAttempt`) | refused(no_retry_scope) | 0 | 0 | 0 | strict_tx 1 (2), default ladder | 1 | as Strict | — | — | 0 | as Strict | n/a |
+    | A4 | **SEAM** read-only forced: token on a read-only handle | refused(read_only) | 0 | 0 | 0 | **0** | **0** | — | — | — | 0 | Err(CacheReadOnly); wrapper_entry 1, write_attempt 0 | n/a |
+    | A5 | **SEAM** not in autocommit: a real `BEGIN DEFERRED` opened on the handle's connection by a cfg(test) accessor before the call | **retire** | 0 | 0 | 0 | 0 | 0 | — | — | — | 1 / Closed (the open DEFERRED transaction ends with the connection) | Err(Retired{AdmissionNotAutocommit, committed:false, NotStarted}) | n/a |
+
+    **Rules the table encodes:**
+
+    - **Engine automatic rollback versus the closure-issued fixture.** E6 is a **closure-issued `ROLLBACK`** fixture. It proves the already-in-autocommit cleanup branch: the finish step issues **no** ROLLBACK, and the outcome is recorded as `already_autocommit`, never as `rolled_back_explicit`. An SQL-engine automatic rollback (for example after `SQLITE_FULL`, an IOERR or an interrupt) is **not** produced; no supported non-raw seam exists. The branch is keyed on the real `is_autocommit()`, so it covers either cause, but no evidence row is labelled "engine rollback".
+    - **E5** is a real statement abort that leaves the transaction open, so an explicit ROLLBACK is issued and counted.
+    - **No mocked values.** Fault seams inject an `Err` at a call boundary, or **substitute a different real SQL action** (E14 and E20 execute a real PRAGMA with another value). Every PRAGMA value recorded by O-change, O-armed, O-tx, O-restore and O-write is read from the real connection. No seam returns a PRAGMA value.
+
+    ### 6.3 Preparation truth (answers the relayed-only O-change paragraph too)
+
+    - **O-change** increments by 1 **iff** a real read-back after a set attempt returned a value ≠ P. It records `unknown` when that read-back errors. It is separate from O-armed, which means verified NORMAL only. A real change followed by a failed verification is change ≥ 1 (or unknown) with armed 0. It is never a successful admission.
+    - **After any possibly effective set** (E12–E17), read the actual state:
+      - == P → `verified_unchanged`, recorded only with that read-back as evidence;
+      - ≠ P → restore P and verify;
+      - unreadable → restore P and verify;
+      - restore fails or verification is unreadable or mismatched → retire under §3.
+    - **No set issued** (E11) is a code-path fact: the set statement was never sent. It is not inferred from a missing observation. It is recorded as `no_set_issued` and **no** restoration is claimed.
+    - There is no `not_needed` value anywhere in V4.
+    - A failed preparation never reaches BEGIN or the application closure. The preparation error stays primary, and restore and retire details are kept inside it (or inside Retired when retirement occurs).
+
+    ### 6.4 Mutants (actual edits, reach and declared first failing assertion)
+
+    A setup failure, a timeout, or a failure before the named assertion is **not** a detection. Each test checks the path first, then the named assertion, then everything else.
+
+    | Mutant | Exact edit | Reach witness | First failing assertion |
+    | --- | --- | --- | --- |
+    | M1a | Delete the read/set/verify block, O-change, O-armed and the weak restore that depends on them. Keep admission, O-prep and O-tx. | E1: admit 1, tx 1 | O-tx value == 1 (reads 2) |
+    | M1b-control | Replace the set with a no-op; keep verification | E13-like: change 0, armed 0 | Expects `WeakCommitPrepare`; a refusal control, not a detection |
+    | M2 | NORMAL at `Cache::open` | Every strict label in §5.2 and §5.3 (S-b included) | Each O-write == 2; S-b's `own_setting_while_held` == 2 |
+    | M3a | Skip restore after commit | E1, P=2 and P=3 | Exact-P read on the same handle |
+    | M3b | Skip restore after a real decline or an in-transaction error | E3, E4, E5 | Exact P |
+    | M3c | Skip restore after real busy | E8: armed 1, tx 0 | Exact P (the external holder is released first) |
+    | M3d | Skip restore in SET_THEN_ERR | E13: change 1, armed 0 | Exact-P read (reads 1) |
+    | M3e | Treat FAIL_RESTORE as success | E19 | Expects `Err(Retired{committed:true})` and O-retire = 1 |
+    | M4 | `skip_refresh` (retained) | New T4 | `PATH_WITNESS` (re-run, not assumed) |
+    | M5 | `serialize` (retained) | New T4 | `NONVACUITY`; a readiness timeout is a failure |
+    | M6-i-control | A loser builds a token with **no** `ReadRefreshAttempt` and calls `try_incremental_update` | O-admit refused(no_retry_scope) | Proves zero weak prep. **Not a weak-mode mutation.** T4 separately fails on loser `write_wrapper_entry`. |
+    | M6-ii | A loser builds a `ReadRefreshAttempt` **and** a token, then calls `try_incremental_update` | Loser admitted; prep ≥ 1, change ≥ 1, armed ≥ 1; **tx ∈ {0, 1}** (0 if BEGIN is BUSY while the winner holds the lock, 1 with a reached-head skip after the winner commits). No tx value is required. | Loser `weak_prep_attempt == 0` (T4 checks it **first**, then records all violations) |
+    | M6b | A loser calls `with_cache_write` on a read-only handle | wrapper 1, write_attempt 0 | Loser `write_wrapper_entry == 0`; extended `reader_path_never_calls_with_cache_write` |
+    | M7 | `READ_REFRESH_ATTEMPT` alone selects NORMAL | S-a1, S-a2, S-k1, S-k2, S-q (flag live) | The value-2 assertions there. S-b, S-c, S-d and S-nd are declared unaffected controls. |
+    | M8 | The classifier maps `cache refresh --worker` to Allow | §7.1 classifier test; core control with the policy forced to the classifier's output | The classifier assertion. Core: constructor `weak_prep_attempt` ≥ 1 where 0 was required. |
+    | M9 | §4.2 | §4.2 | O-expose(V) == 0 |
+    | M10 | §4.3 | §4.3 | `read_snapshot` returns Retired |
+
+    ## 7. Invocation policy, actual entry map and worker phases
+
+    ### 7.1 Policy (V3 kept)
+
+    - **Sticky Deny.** `CacheReadScope::new()` inherits the enclosing `weak_commit` value. Today `new()` resets `Collected` to default, so this inheritance is a required change. `configure_read_policy` may tighten Allow → Deny but never loosen. Dropping a scope restores the caller's value. `reset_cache_read_observations` never touches the policy. A read-only getter, `weak_commit_policy()`, carries no authority.
+    - **The single classifier helper.** `lib.rs:3838–3868` is extracted into `configure_invocation_cache_policy(&cli, &raw_args)`, and `run` calls exactly that helper. Every `Command::Cache(..)` (rebuild, status, verify, and refresh in plain, `--worker` and `--if-requested` forms) maps to Deny.
+    - **Per-call MCP policy.** `handle_tools_call` (`mcp.rs:1088`) calls `mcp_call_weak_commit_policy(tool_name)` right after its per-call `CacheReadScope::new()`. `cache_status` maps to Deny; every other tool keeps Allow.
+
+    ### 7.2 Actual-entry witnesses (cfg(test) in aida-cli-lib; local probes, no public knob)
+
+    | Probe | Exact location | Proves |
+    | --- | --- | --- |
+    | **W-amb** | `git_backend_cmd.rs::handle_git_backend_command`, immediately **before** `CachedGitBackend::with_inner(inner, &cache_path)` (`:1202`). Records `(command label, weak_commit_policy())`. | Every CLI arm reaches the ambient constructor under the dispatcher-installed policy. Every `Command::Cache` arm goes through this constructor before `handle_cache_command` (`:1230`). |
+    | **W-exp** | `cache_cmd.rs::handle_cache_refresh`, before the explicit `CachedGitBackend::open(store, cache)` | The explicit worker route stays under Deny |
+    | **W-stop** | `handle_cache_refresh`, immediately **before** `if worker {` and the watchdog `thread::spawn`. A cfg(test) one-shot `STOP_BEFORE_WORKER_WATCHDOG` returns `Ok(())` when armed. A cfg(test) counter `worker_watchdog_spawned` sits on the spawn line. | A worker-entry test stops before the watchdog. It asserts `worker_watchdog_spawned == 0`, so no `process::exit` thread is left alive. |
+    | **W-mcp** | `handle_tools_call`, right after `mcp_call_weak_commit_policy`. Records `(tool_name, policy)` **on every call**. | Each MCP call has its own scope-entry observation |
+    | **W-mcp-cs** | `tool_cache_status`, before its constructor | `cache_status` constructs under Deny |
+
+    **Driving the real entry.** `run` reads `std::env::args()` (`lib.rs:3729`), so it cannot be called in-process with a chosen argv. V4 proposes one narrow, behavior-preserving extraction: `run_from_args(raw_args)`, with `run()` delegating to `run_from_args(std::env::args().collect())`. This is pure delegation and changes no cache or transaction behavior.
+
+    Tests create the `CacheReadScope` exactly as `main_entry` does. They call `run_from_args` against a fixture project under the crate's existing hermetic environment guard, and then assert:
+
+    - `cache rebuild`, `cache status` and `cache verify` → W-amb records Deny.
+    - `cache refresh` (plain) and `--if-requested` → W-amb records Deny.
+    - `cache refresh --worker --store X --cache Y` → W-amb records Deny, W-exp records Deny, then W-stop. Watchdog spawned 0.
+    - `list`, `search` and `show` → W-amb records Allow.
+    - MCP: `handle_tools_call(cache_status)` and then `handle_tools_call(list_requirements)` on one fixture server. W-mcp records `[(cache_status, Deny), (list_requirements, Allow)]`. W-mcp-cs records Deny.
+
+    If the gate rejects the extraction, the fallback is the composition V3 stated: the classifier helper test, plus W-amb driven from `run_on_distributed_store`, plus code review that `run` calls the helper before dispatch. In that fallback, the run→helper call is **not** test-witnessed. No owned child process is used, because a release binary carries no cfg(test) probes. C's future watchdog repair is not imported.
+
+    ### 7.3 Core worker and explicit-entry phases (T2(n), core cfg(test), policy forced to the classifier's real output)
+
+    | Phase | Action | Required records |
+    | --- | --- | --- |
+    | P0 | Fixture at S0, cached; commit S1 (one real changed object) | Stale |
+    | P1 | Ambient `CachedGitBackend::with_inner` under Deny | `strict_incremental`(P1) = 1 at 2; weak prep 0; head = S1 |
+    | P2 | Commit S2 | Stale |
+    | P3 | Explicit `CachedGitBackend::open(store, cache)` | `strict_incremental`(P3) = 1 at 2; weak 0; head = S2 |
+    | P4 | Commit S3 | Stale |
+    | P5 | `run_refresh_worker(&explicit)` | `strict_incremental`(P5) = 1 at 2, **not** AlreadyFresh; weak 0; head = S3 |
+    | P6 | Commit S4 (asserted stale), then a nested default scope inside Deny and an eligible-looking stale read | `weak_commit_refused` ≥ 1 or a Strict write at 2; `weak_prep_attempt` 0; after the nested scope drops, the getter still returns Deny |
+
+    **Stated composition.** aida-core cfg(test) counters cannot be read from a separately built CLI. §7.2 shows that the actual entries run under Deny; §7.3 shows that under Deny the constructors and the body write strictly and never prepare weak mode. C's future early worker route must reuse `configure_invocation_cache_policy`. It is not implemented here.
+
+    ## 8. Transition and outcome tables (consistent with §6.2)
+
+    ### 8.1 Eligible-path transitions
+
+    | # | Event | Action | Result | Handle |
+    | --- | --- | --- | --- | --- |
+    | 0 | Migration pending | F-entry; `Ok(false)` before the mutex | — | live |
+    | 1 | Admission refused (checks 1–4) | Strict path | as Strict | live |
+    | 1n | Not in autocommit | Retire `AdmissionNotAutocommit` (§3.3) | Err(Retired) | retired |
+    | 2 | Read P fails | No set issued | Err(Prepare) | live |
+    | 3 | Set error, wrong value, or unreadable read-back | §6.3: read-back; restore and verify if changed or unknown | Err(Prepare), or 9c | live / retired |
+    | 4 | Armed; `with_cache_write` pre-closure error | Confirm autocommit; restore; verify | Primary error, or 9c | live / retired |
+    | 5 | Armed; BEGIN busy | Same | Typed lock error → WriterBusy, or 9c → Retired (never WriterBusy) | live / retired |
+    | 5n | Armed; BEGIN non-lock error | Same | Err(begin), or 9c | live / retired |
+    | 6 | After BEGIN: O-tx; head reached | Checked explicit ROLLBACK; confirm; restore | Ok(true), or 8 / 9 | live / retired |
+    | 7a / 7b | Closure `Ok(false)`, or an `Err` with the transaction still open | Checked ROLLBACK; confirm; restore | Ok(false) or Err(primary), or 8 / 9 | live / retired |
+    | 7b′ | `Err` and already in autocommit | **No** ROLLBACK; `already_autocommit`; restore | Err(primary), or 9 | live / retired |
+    | 7c | COMMIT Ok | Confirm; restore | Ok(true), or 9 (`committed:true`) | live / retired |
+    | 7d | COMMIT Err | ROLLBACK if not in autocommit; confirm; restore | Err(commit), or 8 / 9 | live / retired |
+    | 8 | Rollback failed or autocommit unconfirmed | Retire: explicit close; ByClose or Unknown per §3.5 | Err(Retired{committed:false}) | retired |
+    | 9a / 9b / 9c | Restore fails or mismatches after finish / before any transaction | Retire | Err(Retired{committed, rolled_back}) | retired |
+    | 10 | Unwind | Transaction drops (Ignore); scope `Drop` retires with one best-effort close | Panic continues | retired (poisoned) |
+    | 11 | Abort or kill | No RAII; SQLite recovery; the setting dies with the connection | — | — |
+
+    ### 8.2 Inner versus public outcome (V3 §5.2 kept)
+
+    | Inner `apply_incremental` | Public `freshen_for_read` |
+    | --- | --- |
+    | Ok(true) | Ok(None) |
+    | Ok(false) | The existing flow: Q1 strict `ensure_cache_fresh`, or `file_and_spawn_refresh` (Requested, Deferred, or a strict no-detach/suppression fallback) |
+    | Err(typed lock) | `Some(WriterBusy)` if still stale, else None |
+    | Err(Prepare / Retired / other) | Err, propagated |
+
+    The rollback witness **H-after-restore** (V3 §5.3) is kept unchanged. It runs inside `apply_incremental` after O-restore, before returning, and takes a separate pinned snapshot through a different handle.
+
+    ## 9. Tests (all proposed, unrun)
+
+    - **T1 `read_winner_commit_runs_at_normal_and_restores_exact_prior`.**
+      - Rows E1–E24 of §6.2 through the real winner branch, with the declared counts and assertion order.
+      - E8 uses the real external holder, kept held until the WriterBusy assertions and released before any follow-up write. The sidecar variants are absent, misleading and Unknown.
+      - (i) P=3 (a real `synchronous=EXTRA` set through a test accessor), restored exactly in E1, E3 and E8.
+      - Classifier exclusion under `.context(…)`, with zero schema rebuilds.
+    - **T1-A `read_winner_admission_seam_refuses_or_retires`.** Rows A1–A5, each labelled SEAM, each proving its path before its assertion.
+    - **T1-R: retirement.** Named narrow tests:
+      - `retired_handle_ordinary_close_releases_write_lock_for_separate_connection`: E19 → `close = Closed`, `physical_release = Confirmed`. Immediately afterward, a **separate** new `Cache::open` connection acquires `BEGIN IMMEDIATE` with no BUSY, and a new snapshot shows the fresh rows. This is the actual successful-close control.
+      - `retired_handle_injected_close_failure_quarantines_connection`: E22 on E19 and on E18.
+        - Assert `close = CloseFailed(injected)`, `physical_release = Unconfirmed`, `rolled_back = Unknown` (E18), and that the slot is `Retired{quarantined: true}` (cfg(test) inspector).
+        - Same-handle query, mutation, `read_snapshot` and early-exit APIs all return Retired, with O-expose 0.
+        - Primary, restore and close diagnostics survive two `.context()` wrappers. No WriterBusy and no schema recovery.
+        - Dropping the handle does not panic.
+        - **No** release claim is made at retirement time. A separate-connection write after the handle drops is recorded only as a post-drop observation.
+      - `retired_handle_unwind_retires_once_and_poison_preserves_cause`: E23 under `catch_unwind`. No double panic; O-retire = 1 with cause `Unwind`; close recorded. Three later calls, from this thread and from two others, each return `Retired{Unwind, first_report:false}`, and O-retire stays 1.
+      - `retired_handle_unwind_with_injected_close_failure_does_not_double_panic`: E24.
+      - `poisoned_strict_mutex_retires_once_with_poisoned_cause`: a cfg(test) panic inside a strict upsert closure poisons the mutex. The first later call returns `Retired{Poisoned, first_report:true}` with close observed; later calls keep that cause, and the count stays 1.
+      - `waiting_same_handle_caller_after_verified_restore_writes_at_default` and `waiting_same_handle_caller_after_live_precheck_gets_retired_without_exposure`: §4.1 (M9 target).
+      - `retired_handle_fences_every_data_entry_and_keeps_exempt_getters`: V3 T1-R(r2) plus `recheck_migration` on a retired handle.
+      - `snapshot_mint_racing_retirement_returns_retired` (M10 target) and `snapshot_pinned_before_retirement_remains_readable`.
+    - **T2 `strict_paths_keep_their_connection_durability`.**
+      - S-a1, S-a2, S-b, S-c, S-d, S-k1, S-k2, S-q, S-nd1, S-nd2 and S-nd3 (§5.3).
+      - Every §5.2 label fires at 2.
+      - The §7.2 entry witnesses and §7.3 P0–P6.
+      - The strict mutation and revalidation tests are retained.
+    - **T3 `read_winner_normal_commit_keeps_txn_atomicity_and_provenance`.**
+      - Through the eligible winner, with E1 (tx 1 at 1, closure 1), E2 (closure 0), E3 (rollback witness), E5 (stamp abort, real trigger) and E6 (closure-issued fixture, no explicit ROLLBACK).
+      - A concurrent pinned reader is never torn. A pre-commit snapshot keeps its old rows, head and `built_at` (B6). A new snapshot shows rows and head together.
+      - All TASK-1515 assertions are unchanged. This is consistency evidence, not durability evidence.
+    - **T4 `single_flight_four_readers_default_budget_every_reader_under_2s`.** As in V3:
+      - Fixture: real 1500ms with no override; 256 meaningful rows; one commit retitling two rows; four pre-acquire arrivals; the real held path; zero hold; constructor-inclusive clocks and counters.
+      - Totals: one each of `incremental`, `write_attempt`, `write_wrapper_entry`, `weak_prep_attempt`, `weak_commit_armed` and `weak_tx_observed`. Zero rebuilds; no request file.
+      - Losers: zero weak counters (checked **first**), then zero wrapper, write, incremental/rebuild and write/other retry counts. Open retries are reported and counted inside the clock.
+      - Every reader **<2,000,000µs**. Correct stale or fresh rows; not all-fresh.
+      - **First result only**, run by a new independent session on the actual implemented remedy. The original 60s test is byte-unchanged.
+
+    **Retained unchanged.** All nine B-decision tests by exact name, every original named control listed in V3 review §5, and the BUG-1778 and BUG-1779 controls. None was run here.
+
+    ## 10. Whole criterion table (binding; "retained" means evidence still due, not a pass)
+
+    | Criterion | V4 disposition |
+    | --- | --- |
+    | AC1 | **FAIL controls** (2.648286s). The first independent T4 on the actual remedy is still owed. |
+    | AC2 | Losers return useful committed stale rows, an honest note, `cache.stale` and exit 0. Not all-fresh. |
+    | AC3 | A C obligation; no B credit. |
+    | AC4 | Losers zero, winner one fast-fail attempt. `busy_timeout=0` and the ladder are unchanged. DX-1 is the sole durability exception. |
+    | AC5 | C/strict status contract retained. |
+    | A1–A13 | Retained as in V3 review §5. A2/A11: safety errors are never busy and never rebuild (§3.5). A3: O-tx before the skip. A4: S-k. A5: no recursive or held waits (§§4–5). A13: loser zero-weak checked first (M6-ii). |
+    | Q1–Q6 | Retained. The Q1 fallback is Strict (S-q). No early C. |
+    | B1–B6 | Retained. B2: busy restores before WriterBusy; Retired is never busy (E21). B6: H-after-restore and pinned snapshots. |
+    | DX-1, checkpoints, R2, R3, L2(a) | Limited approvals retained (§1). The R3 retirement close and ownership are completed by §3. |
+    | T1, T1-A, T1-R, T2, T3, T4 | §9; all unrun. |
+    | M1a–M10 | §6.4, with reach and first failing assertion declared. |
+    | C V2 R1–R6 | Retained unchanged. TASK-1527 stays blocked-by TASK-1526. C's winner must be remeasured after B is accepted, including its request-summary/RMW work. |
+    | BUG-1674 | Full show, identity, default linkage, 4s/<5000ms, ≤1500ms aggregate wait, fresh in-lineage 24h after activation, both doctor limbs: separate and unmet. |
+    | Parent / authority | STORY-1484 closure pending. Code dispatch refused, even after any design approval. |
+
+    ## 11. Sequencing and boundaries
+
+    1. A **new, different**, complete independent design review of V4. The reviewer cannot be any V1–V4 author or runtime (including this successor), any prior reviewer, the root, the evidence or E1 author, a TASK-1527 gate or an implementer.
+    2. A separately authorized code dispatch, which is **currently refused** and not released by step 1.
+    3. Fresh independent code review.
+    4. A different independent session runs the first actual T4.
+
+    There were no canonical, queue, status, dependency, mail, record, PR, merge, grant, hold, install, activation or source changes. No test, build, Cargo, SQLite probe, second E1 or Joe question. TASK-1527 stays blocked-by TASK-1526. Reserved TASK-1593, TASK-1591, BUG-1811 and BUG-1812, and the C and D branches, are untouched.
+
+    ## 12. Limits
+
+    - No latency, fsync-free, WAL-bound, whole-command or durability-equivalence claim.
+    - Successful close is SQLite's confirmation of rollback and release. Without it, release is reported as unconfirmed, never assumed. Close-failure evidence is injected, not measured.
+    - The reliance on rusqlite's internal interrupt-lock invariant is declared (§3.3).
+    - The `run_from_args` extraction is a proposal the gate may reject in favor of the stated composition fallback.
+    - This author does not sign off V4.
+
+
+    # TASK-1526 latency rework sketch V4 — ready for a new, different, complete independent design review
+
+    **DESIGN ONLY. Not approved, not implemented, and not released for code dispatch.** No code, tests, Cargo, build, SQLite probe or second E1 were run. No pass is claimed, and every test is proposed and unrun.
+
+    **Actual new code dispatch is refused.** A later design approval does not release that refusal.
+
+    Prepared 2026-10-08 (America/Phoenix) by a **successor TASK-1526 design-owner runtime**. It is not the ended original author runtime `01a11ceb-3fa0-7c20-8a2c-8d8c0cc7290f` (`task1526-latency-design-author`), and it is not a competing active author. No `aida session resume`, extra resume flag or DOC6 resume-authority inheritance was used. Original authorship and evidence are preserved.
+
+    ## Artifact
+
+    `TASK1526_LATENCY_REWORK_SKETCH_V4.md`: 62925 bytes, SHA-256 `383017916ce28dcafe3fed3a4df7ee950319c84d0f602eb3fe130e7d254080e2`.
+
+    This READY note does not embed its own hash. The separate `task1526-latency-v4-hash-manifest.json` lists every input, and it does not list itself or this note.
+
+    ## Response to the V3 review, F1–F4
+
+    1. **F1, retirement ownership and close (V4 §3).**
+       - The in-memory placeholder is gone. `Mutex<ConnSlot>`, with `ConnSlot` being `Live(Connection)` or `Retired{cause, close, quarantined: Option<Connection>}`. Retirement is an in-place `mem::replace`, with no fallible allocation.
+       - **The single post-acquire gate is the slot discriminant.** The precheck is only an optimization. Poison with a `Live` slot retires once as `Poisoned`. Every later caller receives the **first** cause, and the count does not change.
+       - The borrow checker enforces the resource order: the transaction, statements and borrows all end before close.
+       - There is one explicit `Connection::close()`, and its Result is observed. `Closed` means physical release is **confirmed**. `CloseFailed` means the connection is **quarantined**: never served again, and dropped only when the handle drops. Release is then **unconfirmed**.
+       - No cleanup service, loop or raw `sqlite3_close_v2`.
+       - On unwind, the `WeakCommitScope` owns the guard and makes one best-effort close, with no claim made.
+       - Precedence is unchanged. Primary, rollback, restore and close diagnostics are kept inside Retired. `committed:true` is preserved.
+       - Named narrow tests cover ordinary close success with a **separate-connection** write control, injected close failure, unwind, unwind plus close failure, and poison.
+    2. **F2, S-d/M9 (§4).**
+       - H-prelock fires only **after a witnessed live precheck**, immediately before `lock()`. The winner then retires under its mutex and releases. The waiting caller is joined only after the winner returns.
+       - The target is O-expose(V) == 0 plus a typed `Retired{RestoreFailed}` Result.
+       - M9 deletes exactly the slot-discriminant gate. The text explains why the precheck, poison, F-entry and the AtomicBool do not mask it.
+       - No manufactured schema and no mocked write. The restore-success positive and the independent M10, with its positive pinned snapshot, are kept.
+    3. **F3, S-b (§5).**
+       - The actual strict upsert is kept, with its unchanged autocommit statements (no BEGIN, as verified in the source).
+       - The BUSY witness comes from its **first modifying statement**, the DELETE, through the real `Write` retry ladder and a one-shot callback.
+       - `own_setting_while_held` (a real PRAGMA read) is kept separate from O-write(upsert), which fires only after a successful modifying attempt, after release.
+       - No production transaction change and no join while the winner is held.
+       - Placements are given for every mandatory strict label. M2 and M7 detection versus unaffected-control status is declared per schedule.
+    4. **F4, counts (§6).**
+       - Rows E1–E24 cover the ordinary winner, and rows A1–A5 cover the labelled SEAM cases: invalid identity, thread and missing-retry tokens on a writable autocommit handle; read-only forced (no prep, transaction or closure; wrapper 1, write 0); and not-in-autocommit retirement before prep.
+       - The closure-issued ROLLBACK fixture is distinguished from an engine automatic rollback, which is not evidenced.
+       - M6-ii accepts tx ∈ {0, 1} and is detected by the loser's zero `weak_prep_attempt`, checked first.
+       - Real set and read-back rules: unknown state → restore and verify, or retire. There is no `not_needed` value. Faults inject an `Err` or substitute a real SQL action, never a PRAGMA value.
+
+    **V3 review §4 notes (§§3.6, 5.3, 7):**
+
+    - The W-amb probe sits before the ambient constructor (`git_backend_cmd.rs:1202`) for every CLI cache arm.
+    - W-exp and W-stop sit before the watchdog, and `worker_watchdog_spawned` must be 0.
+    - W-mcp fires on every call, so the second `list_requirements` call gets its own observation.
+    - The `run_from_args` delegation extraction is proposed, with a stated fallback composition.
+    - P6 gets its own stale input.
+    - The S-nd fixtures are specified so that weak = 0 is true.
+    - F-snap failure precedence is complete.
+
+    ## Continuity notes for root
+
+    - The brief cites the V3 report as **51599 bytes**. The local report is **52409 bytes** (`7c33cab6…4a73`), which matches its integrity receipt. The relayed checkpoint's first 51599 bytes (`862faad4…76e7`) equal the local report **minus** its §4 "O-change must report the real post-set PRAGMA readback…" paragraph. V4 answers both forms (§0.3, §6.3).
+    - Every limited approval is carried forward as a binding amendment only: DX-1, the unchanged checkpoints, the token plus Deny policy, the R3 parts and L2(a). The first failure at **2.648286s** still controls. E1 D1 is diagnostic only, and 1.955642s is not credit.
+
+    ## Pins
+
+    Source basis `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. HEAD and main `c67728c1dcaf8a577539d920bdc6a3c86126cebb`. The aida-core diff between them is empty. `cache.rs` is `5b5975cb…7973`. rusqlite 0.31.0 `lib.rs` is `10de785a…7c22` and `inner_connection.rs` is `b8512b74…d086`. Bundled `sqlite3.c` is `7956a38f…6775`.
+
+    ## Next gate
+
+    A **NEW, DIFFERENT** complete independent design reviewer. It cannot be any V1–V4 author or runtime (including this successor), any prior reviewer, the root, the evidence or E1 author, a TASK-1527 gate or an implementer. After that come a separately authorized code dispatch (currently refused), fresh code review, and a different session's first actual T4. Root is the sole canonical relay owner.
+
+    ## Boundaries
+
+    - No canonical, queue, status, dependency, mail, record, PR, merge, grant, hold, install, activation, source or test change. No Joe prompt.
+    - TASK-1527 stays blocked-by TASK-1526. STORY-1484 closure is pending. BUG-1674 (full show and 24h, both limbs) is separate and unmet.
+    - Reserved TASK-1593, TASK-1591, BUG-1811 and BUG-1812, and the C and D branches, are untouched.
+    - V1, V2 and V3, every READY note, every report, the original failure and the single E1 are byte-unchanged (see the manifest).
+  created_at: 2026-10-08T21:35:56.245264267Z
+  modified_at: 2026-10-08T21:35:56.245264267Z
+  relayed_from: task1526-latency-v4-design-continuation
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
