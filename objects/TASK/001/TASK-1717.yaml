@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-08T19:11:41.831763900Z
+modified_at: 2026-10-08T20:29:25.096957674Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -298,6 +298,185 @@ comments:
   created_at: 2026-10-08T19:09:24.532960958Z
   modified_at: 2026-10-08T19:09:24.532960958Z
   relayed_from: independent_v2_advisor
+- id: 01a11d34-d8e8-7622-9417-d3acd31166a0
+  author: mcp
+  content: |
+    PROXY DECISION (orchestrator for Joe): full implementer READY report relayed unchanged, PARTIAL delivery evidence at a6fac83f5c4c7197786d1833b0e27e59e18d889d tree0f5fe5aaa42e35bd73290e7d5c90decbed436592. Root read all17334bytes; Batch B counter-mutants explicitly PENDING_B. Source restoration alone does not establish current mutable-target executable provenance after mutant rebuilds. New different strict read-only whole-A4 reviewer starts STATIC first; no fresh Cargo/build/broad suites. Final disposition waits actual B result/restoration and exact unmutated artifact qualification, plus full original acceptance. No approval, machine record, queue/status/parent closure/common-C acceptance/production release/merge is claimed. Parent remains protective-partial closure pending. Full author report follows.
+
+    # TASK-1717 READY — A4 protective child of TASK-1332 (implementer report)
+
+    Implementer: Claude Opus 5.5 (claude-opus-5-5), session 01a11ced, role implementer, worktree
+    `/home/joe/ai/aida-worktrees/aida-pool-aida-6`, branch `task-1717`. Written 2026-10-08 America/Phoenix.
+    This is an implementer delivery report, NOT a review, signoff, status change or completion claim.
+    No canonical comment/status/queue/done/sync/store push was performed by this implementer. Parent
+    TASK-1332 (TASK-1-225) stays closure-pending; this child is protective partial work, not a globally
+    exclusive store. A fresh, different, strict independent review is required.
+
+    ## Identity
+
+    | Item | Value |
+    |---|---|
+    | Head | `a6fac83f5c4c7197786d1833b0e27e59e18d889d` |
+    | Tree | `0f5fe5aaa42e35bd73290e7d5c90decbed436592` |
+    | Parent (single) | `bf65220959c7601427247286abc7eb16278af5a5` (main at dispatch) |
+    | Source base | `bf65220959` (dispatch-stated expected main; verified as worktree HEAD before work) |
+    | Design baseline | b46aec1e67 (V2 sketch/signoff); bf65220 differs from b46 only by BUG-1810/1802/1811/TASK-1591/BUG-1812 commits, none in touched seams |
+    | Current main at report | `c67728c1dc` (TASK-1593 session grants). `git merge-tree --write-tree main a6fac83f5c` exit 0 (clean) — NOT rebased; integrator owns that |
+    | Commit | `[AI:claude] fix(store): serialize ordinary store sync, merge-gate and mailbox digest with the store write lock (TASK-1717)`, Co-Authored-By trailer |
+    | Remote proof | `git push -u origin task-1717` (normal, no force) → `git ls-remote origin refs/heads/task-1717` = `a6fac83f5c4c7197786d1833b0e27e59e18d889d` |
+    | Owner/clean state | `aida session list`: 01a11ced implementer TASK-1717 in aida-pool-aida-6 @ task-1717. After mutation runs all sources restored by `git checkout --`; `git status --short` clean except as noted at end |
+
+    ## Changed paths (bf65220959..a6fac83f5c, numstat)
+
+    ```
+    193 125 aida-cli-lib/src/git_backend_cmd.rs
+    387 191 aida-cli-lib/src/lib.rs
+     19   2 aida-cli-lib/src/mailbox_store.rs
+    157 129 aida-cli-lib/src/remote_create.rs     (mostly re-indent into the closure)
+    1147  0 aida-cli/tests/task_1717_store_writer_lock.rs   (new)
+     58   1 aida-core/src/db/git_backend.rs
+      5   0 aida-core/src/db/mod.rs
+    145   2 aida-core/src/db/store_lock.rs
+    170  13 aida-core/src/git_ops.rs
+    ```
+
+    ## What was implemented (A4 routes → callsite checklist)
+
+    Core closure: `aida_core::db::with_store_write_lock(root, f)` = existing `store_lock::acquire` (same
+    `.aida/store-write.lock`, canonical-root key, same-thread lexical re-entrancy, O_CLOEXEC file) then
+    `git_ops::ensure_store_write_safe` **after** acquisition, then `f`. No new lock, schema, guard transfer,
+    env token or child ownership. Read-only helpers `store_write_lock_held`, `any_store_write_lock_held`,
+    `store_write_lock_path`. New `git_ops::push_exact(repo, remote, sha, branch)` pushes `<sha>:refs/heads/<branch>`
+    and debug-asserts no store lock is held.
+
+    | A4 route | Disposition in a6fac83 |
+    |---|---|
+    | Db Sync (`git_backend_cmd.rs` DbCommand::Sync) | `db_sync_local_window` under one guard: branch read, dirty check, add -A/commit, strict GitBackend (non-cache) preimage load, `pull_rebase` + its own abort, canonical collision scan + conflict detection, head capture. Outside: conflict print, auto-bump, `push_exact(captured)`; on rejection fresh guard → pull_rebase + canonical collision → new head → one `push_exact`; second rejection = error ("rejected again", commits kept). Mirrors via `fan_out_store_mirror_push` with the origin-accepted SHA only. GC after. |
+    | Direct `db merge-gate` / nested pull auto-gate | core `merge_gate` = `with_store_write_lock(merge_gate_locked)`; mkdir/counter load/object scan/writes/stage/commit in one window; nests re-entrantly in pull. Team gate unchanged. |
+    | core `sync_objects` | stage+commit+capture under guard; `push_exact` outside; rejection → guarded pull_rebase + recapture; bounded by existing MAX_CAS_RETRIES. No production callers exist at bf652209 (public core API). |
+    | `handle_pull_command` store leg | mailbox local snapshot outside; guard: canonical digest of snapshot, pending commit, `pull_rebase_auto_merge` (+own cleanup), canonical collision scan, summary, nested merge_gate (`pull_store_leg_locked`). Outside: deferred code reconcile, GC (detached `gc --auto` never inside). Lock/unsafe-state errors become store-leg failure (exit non-zero), BUG-254/476/1625/1633 flow preserved. |
+    | `handle_push_command` store leg | mailbox snapshot outside; guard: digest, pending commit, head capture; `push_exact` outside; rejection stays a failed leg (existing no-retry policy); pinned mirror fan-out. No-origin: commit only (L positive). |
+    | `maybe_sync_pull` (`--sync`) | guard: dirty check, pull_rebase, re-abort only of a rebase this call started (none could pre-exist: safety check after acquire). Pre-existing rebase → warning, untouched. touch_last_fetch + GC after release. |
+    | `pull_store_before_id_allocation` | pending commit = own guarded window; ls-remote probe unlocked (R); each pull attempt = guard{pull_rebase + canonical collision scan}. No-origin / AIDA_ADD_NO_REMOTE_SYNC / offline paths unchanged. |
+    | `push_store_after_id_allocation` | cached collision check (read) then guarded head capture; `push_exact`; rejection → guard{pull_rebase, canonical collisions, recapture}; error = offline deferral (unchanged). |
+    | `auto_push_store_best_effort` / `maybe_auto_push_store` | guard{pending commit, head capture}; timed 5 s `git push origin <sha>:refs/heads/<branch>` outside. No-origin unchanged. |
+    | `remote_create::handle_remote_reconcile --execute` | discovery (ls-remote/fetch) unlocked; guard: dirty check, **current** HEAD preimage, recomputed tips/frontier, ff/union merges, loss/blocks/identity/consent validation, `reset --hard` only to the locked preimage. Pushes `push_exact(union)` after release. Dry-run unchanged. |
+    | Canonical mailbox digest (`digest_mailbox_to_canonical`, `maybe_publish_mailbox_for_sync`, `maybe_digest_mailbox_best_effort`) | local messages read before lock; `mailbox_store::digest_snapshot_to_canonical` takes the guard itself (no direct canonical write can evade it) and strictly re-reads canonical by id/`message_state_rank`; `digest_mailbox_to_canonical` holds one guard across digest+`git add mailbox`+commit. Session-end/drain-end/`mailbox sync` callers inherit it. Old `digest_local_to_canonical` is now `#[cfg(test)]` only. Local send/watermarks untouched. |
+    | Touched P seam: `GitBackend::lock_store` | outermost acquisition re-runs `ensure_store_write_safe` after acquiring (A1 "P rows need post-acquisition validation"). Pre-lock checks retained (fast refusal). CachedGitBackend store→cache order unchanged. |
+    | Collision re-read under lock | new `ensure_no_spec_id_collisions_canonical` (full GitBackend scan, no cache refresh inside the window). |
+
+    Lock order: no new edge. Inside the guard nothing takes cache-refresh, SQLite, tick, drain, seat or
+    queue locks; GC, auto-bump, forge, reconcile, mirrors, push hooks run after release.
+
+    ## Explicit exclusions (not implemented, still owed by parent; none waived)
+
+    Generic code legs; fresh CAS node/block/claim/roster/alias incl. hijack (A2 unsupplied); release/tag
+    (`handle_dev_release`); doctor/init/dispenser/compaction inventory (incl. A1 store→blocks.lock row);
+    schedule ledger and six coordination CAS families; publisher/runtime authority; GC foreground mode.
+    Unconverted C/L writers can still race the shared store. No authority freeze, route disablement,
+    hook disablement, env spoofing or unlock-around-commit was added. No missing prepared adapter was
+    needed for the A4 routes: the supported template/installed profiles run to completion under the guard
+    (see group 5); a custom reentrant writer hook remains unsupported/unproved (not exercised).
+
+    ## Commands and exits (all from the worktree; `CARGO_TARGET_DIR=/home/joe/ai/aida/target/worktrees/aida-pool-aida-6`, normal `~/.local/bin/cargo` slot wrapper, `env -u AIDA_BIN`)
+
+    | # | Command | Exit / result |
+    |---|---|---|
+    | 1 | `cargo test -p aida-cli-lib --lib --no-run` (warm, pre-edit deps) | 0 |
+    | 2 | `cargo fmt --all` then `cargo test -p aida-cli-lib --lib --no-run` | 0, no warnings |
+    | 3 | `cargo test -p aida-cli-lib --lib -- handle_pull_command mailbox story_284 bug_1633 reconcile auto_push allocation db_sync maybe_sync merge_gate push` (with session-env AIDA_BIN sourced) | 249 pass / 1 FAIL — **first failure preserved**: `mailbox_cmd::tests::piped_inbox_read_advances_watermark_even_when_stdout_closes_early` "never saw the inbox header line" |
+    | 3b | same test alone with `env -u AIDA_BIN` | pass. Cause: `.aida/session-env.sh` exports AIDA_BIN=pool-aida-2 binary; the test's re-exec resolver used it. Environment artifact, not this change |
+    | 4 | `cargo test -p aida-core --lib -- store_lock merge_gate git_backend git_ops cached_git_backend` | 189 pass, 0 fail, 1 ignored (exit 0) |
+    | 5 | `cargo build -p aida-cli` | 0 (pinned binary `.../aida-pool-aida-6/debug/aida`, built from this source) |
+    | 6 | `cargo test -p aida-cli --test task_1717_store_writer_lock` (first) | 5 pass / 11 FAIL — test-fixture defects: cargo-slot `slot-0.lock` FD inherited from the harness counted as a lock; fast-forward rebase fires no post-rewrite; malformed mailbox JSON; duplicate `[store.sync]` table. Fixed in the test only (fixture-scoped lock filter, unpublished local commit, real Message shape, in-place mirror key, `env_clear`) |
+    | 7 | same, after fixes | **16 pass, 0 fail** (110 s) |
+    | 8 | `-- post_commit_bypass` with observation assertion | FAIL (rule log absent: field study gated on telemetry; fixture had AIDA_TELEMETRY=0) → enable telemetry under fake HOME for that test → pass (sync 2.4 s) |
+    | 9 | `cargo test -p aida-core --lib -- task_1717` | 6 pass |
+    | 10 | `cargo fmt --all -- --check` | 0 |
+    | 11 | Mutation batch A (see below) | 4/4 targeted witnesses FAIL as intended; sources restored |
+    | 12 | Mutation batch B (see below) | see below |
+
+    Not run (by instruction): full workspace, `make check-ci*`, clippy. Root batched integration owns them.
+
+    ## Acceptance witnesses (actual binary/core entrypoints; disposable tempdirs, fake HOME, `env_clear`,
+    `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, local bare origin/mirror, test-owned `core.hooksPath`;
+    barriers = hook park files + `flock(1)` external holder + `/proc/<pid>/fd` wait detection; no live store/user resources, no vendors)
+
+    Group 1 — sync_vs_edit_serializes: `sync_vs_edit_serializes_at_the_pending_commit` (pre-commit barrier; real
+    `aida edit` parked on lock, HEAD unchanged; then edit lands after sync, both commits, clean tree);
+    `..._across_commit_and_rebase` (post-commit + post-rewrite barriers, peer commit kept);
+    `sync_touches_nothing_before_it_owns_the_lock` (external holder: nothing staged, HEAD unchanged);
+    `sync_refuses_and_preserves_a_pre_existing_rebase` (refusal after acquire, foreign rebase-merge bytes intact, nothing staged).
+    Group 2 — sync_vs_sync_and_queue: `sync_vs_sync_queue_mailbox_and_merge_gate_share_one_lock` — symlinked
+    project path same lock inode; second sync via symlink, real `queue add`, real `db merge-gate` (advisor test grant), real
+    `mailbox sync` all parked; no canonical mailbox write before lock; distinct project store syncs meanwhile; all
+    complete, queue/mailbox/second-sync commits present. Core: store_lock nesting/thread exclusion, symlink+distinct
+    store, mid-rebase refusal without running closure.
+    Group 3 — rejection_retry_preserves_peer: `rejection_retry_preserves_peer_and_concurrent_local_commit`
+    (pre-push barrier: lock free, real edit commits during push, peer pushes; first push named the captured SHA ≠ post-edit
+    HEAD; retry rebased, origin contains peer+sync+edit; mirror == origin-accepted SHA);
+    `repeated_rejection_fails_and_keeps_local_commits` (two peer pushes → non-zero "rejected again", no "Push complete",
+    origin keeps peer tip, local commit kept). Core `sync_objects` pre-push sees lock free and the captured SHA.
+    Group 4 — pull_sync_allocation_remote_reconcile_share_guard: `pull_store_leg_is_one_window`,
+    `read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone`, `allocation_pull_and_push_follow_the_window_discipline`
+    (real `aida add`, edit parked during allocation rebase, new spec reaches origin, push unlocked),
+    `remote_reconcile_uses_the_current_locked_preimage` (holder lets a local commit land after discovery; unknown conflict refuses
+    with union-merge error and rollback keeps the late commit; healthy union keeps peer + late commit and pushes exact union).
+    Mailbox: `mailbox_digest_rereads_canonical_and_commits_in_one_window` (peer tombstone wins over stale local, new id written,
+    stage+commit inside guard with edit parked, idempotent re-run), `local_mailbox_send_never_waits_for_the_store`.
+    Group 5 — no_hook_cache_lock_cycle: every barrier hook records (a) `flock -n` state, (b) fixture `*.lock` FDs of hook,
+    git and aida processes. Commit/rewrite hooks: lock held, hook+git hold no lock FD (no inheritance), aida holds exactly
+    store-write.lock (no seat/cache/tick/drain lock). Pre-push: lock free and no fixture lock FD anywhere (store/seat absent at push).
+    `template_hook_profile_completes_with_healthy_effects` (template pre-commit store early exit+sentinel, post-commit match,
+    store-pair trailer `Aida-Store: <pre-commit head>` verified, commit-msg, linked post-rewrite exit; no bypass recorded);
+    `post_commit_bypass_detector_runs_under_the_held_lock` (missing pre-commit + stale sentinel → `aida internal
+    record-no-verify-bypass` runs while parent holds store lock, completes, records `no-verify-bypass` in fake-HOME log);
+    `installed_hook_profile_completes` (installed prepare-commit-msg HEAD read — path rewritten from the live store to the fixture
+    store —, template pre-commit/commit-msg, installed mirror pre-push calling the pinned binary). Selected binary pinned by PATH
+    prepend of CARGO_BIN_EXE_aida. Note: the live repo's installed post-commit is mode 0644 (git ignores it); the template
+    post-commit was used for the sentinel paths.
+    P seam: `task_1717_writer_rechecks_store_state_after_acquiring_the_lock` (queue writer passes pre-check, waits, holder leaves
+    rebase-merge, writer refuses after acquisition). `task_1717_merge_gate_waits_for_the_store_lock_before_touching_anything`.
+
+    ## Counter-mutants (scratch source mutation, rebuild, targeted run, `git checkout --` restore)
+
+    Batch A (binary rebuilt): M1 Db Sync outer guard removed; M2 both mailbox digest guards removed; M5 reconcile preimage = discovery `local`.
+    - `sync_vs_edit_serializes_at_the_pending_commit` FAIL: `Error: git commit failed: Aborting commit due to empty commit message.` (unguarded edit consumed the sync's staged bytes)
+    - `sync_touches_nothing_before_it_owns_the_lock` FAIL: "db sync exited instead of waiting for the store lock"
+    - `mailbox_digest_rereads_canonical_and_commits_in_one_window` FAIL: `fatal: cannot lock ref 'HEAD': is at ee509e3… but expected 33e6dfb…` — the original TASK-1604 symptom
+    - `remote_reconcile_uses_the_current_locked_preimage` FAIL: rollback HEAD 407b2de… ≠ late local commit f07bbbc… (peer commit reset away)
+    Restored; the unmutated binary passes all 16 (run 7).
+
+    Batch B (core): M3 `lock_store` post-acquisition recheck disabled; M4 `merge_gate` wrapper removed. RESULT: PENDING_B
+
+    ## Overlap for the mechanical integrator (not copied/stacked)
+
+    TASK-1335 branch `task-1335` (ef014aeb07, base b46aec1e67) changes lib.rs auto-bump/`handle_db_reconcile_status`/
+    `specs_with_open_prs` regions, forge.rs, new reconcile_evidence.rs. `git merge-tree --write-tree task-1335 a6fac83f5c` exit 0.
+    No changed signature of `run_deferred_code_reconcile`, `auto_bump_done_to_completed` or any function this child edits or calls
+    was found in its diff. main c67728c1 (TASK-1593 grants) touches git_backend_cmd.rs/lib.rs; merge-tree clean; the integration
+    tests use the existing `tests/support` seat-grant fixture, which TASK-1593 may affect — rerun group tests after integration.
+
+    ## Limits and honest gaps
+
+    - Interprocess competitors are real `aida` processes; the core nesting/thread tests are in-process threads.
+    - "Seat guard absent" is proved by absence of ANY fixture `*.lock` FD in aida/git/hook at push and of anything but the store
+      lock during commit hooks; no seat flock exists in current source to hold.
+    - Custom/required reentrant writer hooks and `.aida/commit-config` executables are not proved safe and were not exercised.
+    - `sync_objects` has no production caller; its window is proved by core test only.
+    - Allocation's first push-leg collision check remains the existing cached read before capture (read-only); post-rebase checks are canonical under lock.
+    - Canonical collision scan inside windows is O(n) (BUG-701 trade-off) only on paths that actually rebased.
+    - No CAS/hijack, A2, A1-dispenser, doctor/init or ledger/coordination witness exists here; those remain parent obligations.
+    - `cargo test` filters in run 3 were name filters, not an exhaustive cli-lib suite.
+
+    ## Provenance
+
+    All source and tests authored in this session on bf65220959; no unreviewed work from other branches copied. Binary
+    under test built from this tree (run 5, rebuilt for mutants and restored source). No self-review. Old reports in this
+    folder untouched; this is a new file.
+  created_at: 2026-10-08T20:29:25.096950210Z
+  modified_at: 2026-10-08T20:29:25.096950210Z
+  relayed_from: task1717-store-lock-claude
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
   author: aida-session-start
