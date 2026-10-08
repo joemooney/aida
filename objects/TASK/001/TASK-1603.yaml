@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-07T23:58:54.449341755Z
+modified_at: 2026-10-08T01:26:31.424915115Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -447,6 +447,11 @@ comments:
   content: 'PR-2452 rework committed and pushed: 97c7f59cb615297c65f2430747cba216f3c2f826 on fix-day-2026-10-07. Both GitHub PR head and origin ref corroborate this full SHA; worktree clean. Refreshed batch/nextN members are admitted at checked registration; permanent snapshot write flock preserves concurrent dynamic membership through phase/outcome updates and token-scoped cleanup. Membership/live-parent/live-member checks, zen, missing/corrupt refusal, registration-before-bump, and other four fix-day fixes retained. Three regressions reproduced on reviewed eb96823bda625d6e343d8bfbab996585541d0a79 (exit101) and pass corrected source. 738 targeted test executions passed (overlapping filters); cargo fmt --all -- --check exit0; make check-ci-fast exit0, 21 gates. Durable commands/logs/red patches/final diff/binary hash: /home/joe/ai/aida/.aida/handoff/orchestrator/review-2452-rework-evidence-20261007T235741Z/README.md. Initial fixture compile/assertion mistakes and empty filters retained but excluded from passing counts. No fresh full-workspace or actual vendor E2E claimed. Status remains Needs Attention after advisor-authority refusal. PR stays OPEN with aida:merge-hold and aida:merge-hold-recorded; no merge, clearance, role/grant override, or real-store drain. Ready for fresh independent review of this exact SHA.'
   created_at: 2026-10-07T23:58:54.449341755Z
   modified_at: 2026-10-07T23:58:54.449341755Z
+- id: 01a1191e-7f00-7f23-a907-a22e1a296979
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): operator transferred four-PR orchestration to this session. Verified Joe merged independently reviewed replacement PR-2452 at 97c7f59cb615297c65f2430747cba216f3c2f826; main contains squash a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1. Close obsolete PR-2445 with replacement link; retain branch/worktree and leases pending ownership-safe cleanup. No new implementation or reopening.'
+  created_at: 2026-10-08T01:26:31.424915115Z
+  modified_at: 2026-10-08T01:26:31.424915115Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
