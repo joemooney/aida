@@ -23,6 +23,19 @@ fn digest(path: &Path, home: &Path) -> [u8; 32] {
     digest
 }
 
+#[cfg(target_os = "linux")]
+fn ancestors() -> Vec<i32> {
+    let mut ancestors = Vec::new();
+    let mut pid = std::process::id() as i32;
+    while pid > 1 {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
+        let after = &stat[stat.rfind(')').unwrap() + 2..];
+        pid = after.split(' ').nth(1).unwrap().parse().unwrap();
+        ancestors.push(pid);
+    }
+    ancestors
+}
+
 #[test]
 fn normal_cli_bootstrap_refuses_before_any_initialization() {
     for args in [
@@ -80,14 +93,7 @@ fn normal_core_and_cli_can_only_prepare_observe_and_cancel() {
     // The public profile binds an observed adopter: an actual ancestor
     // (nearest subreaper) or namespace init, never a bare declaration.
     let profile = HostProfile::probe().unwrap();
-    let mut ancestors = Vec::new();
-    let mut pid = std::process::id() as i32;
-    while pid > 1 {
-        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
-        let after = &stat[stat.rfind(')').unwrap() + 2..];
-        pid = after.split(' ').nth(1).unwrap().parse().unwrap();
-        ancestors.push(pid);
-    }
+    let ancestors = ancestors();
     assert!(
         ancestors.contains(&profile.adopter().pid),
         "{:?} not in {ancestors:?}",

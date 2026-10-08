@@ -627,6 +627,10 @@ impl WaitingChild {
             FixtureBehavior::Normal,
         )
     }
+    // Redundant in this Linux-only module, but explicit: the test-portability
+    // ratchet's brace heuristic reads the cfg(test) parameter below as test
+    // scope for the whole body.
+    #[cfg(target_os = "linux")]
     fn prepare_inner(
         profile: HostProfile,
         helper: SealedExecImage,
