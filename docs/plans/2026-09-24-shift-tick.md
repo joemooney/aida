@@ -193,7 +193,7 @@ Guards (all must pass to launch): `enabled`, `wave-in-flight`, `lock-free`,
   `aida shift tick --dry-run`).
 - `docs/cli/03-work-autonomy.md`: `aida shift` entry.
 - `docs/environment-variables.md`: `AIDA_HOME` relocates `shift-local.toml`.
-- `docs/cli-format-json-audit.md`: regenerated.
+- `docs/archive/audits/cli-format-json-audit.md`: regenerated.
 
 ## Critical Files
 

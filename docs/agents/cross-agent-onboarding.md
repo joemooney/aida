@@ -16,7 +16,7 @@ major agent client changes its MCP config path or marketplace model.
 
 For a deeper Claude Code to Codex CLI migration analysis, including hook
 capability gaps and how to respond if a vendor-standardization policy requires
-moving off Claude Code, see `docs/agents/porting-claude-code-to-codex.md`.
+moving off Claude Code, see `docs/archive/audits/porting-claude-code-to-codex.md`.
 
 ## What AIDA is
 
@@ -278,8 +278,8 @@ In priority order for an agent boarding the project:
 1. **`CLAUDE.md`** (project root) — the project's own orientation; conventions, architecture, the MCP positioning. *Required reading.*
 2. **`docs/aida/discipline/`** — six canonical guides on workflow, lifecycle vocabulary, advisor role, session discipline. The conventions that make an AIDA project run well.
 3. **`docs/agents/aida-mcp-install-matrix.md`** — per-client MCP setup, marketplace/package surface, and safe write-tool posture for Claude, Codex, Cursor, Windsurf, Continue, Cline, Copilot, Devin, and others.
-4. **`docs/spikes/2026-05-20-spike-9-mcp-as-bus.md`** — the architectural verdict on filesystem-canonical + MCP-as-transport. Explains *why* the surface looks the way it does.
-5. **`docs/spikes/2026-05-20-spike-11-session-forking.md`** — fork-from-live advisor (STORY-360, shipped). Lets a live advisor session be consulted during a drain.
+4. **`docs/archive/spikes/2026-05-20-spike-9-mcp-as-bus.md`** — the architectural verdict on filesystem-canonical + MCP-as-transport. Explains *why* the surface looks the way it does.
+5. **`docs/archive/spikes/2026-05-20-spike-11-session-forking.md`** — fork-from-live advisor (STORY-360, shipped). Lets a live advisor session be consulted during a drain.
 6. **`docs/multi-advisor-coordination.md`** — SPIKE-10 verdict on subsystem-scoping + sibling-advisor initiation. The shape this brief is the first concrete instance of.
 7. **`docs/writeups/2026-05-20-autonomy-keystone-day.md`** — narrative of the autonomy keystone shipping. Useful context for how the project ships work end-to-end.
 8. **`OVERVIEW.md`** — strategic vision, public face, surface inventory.

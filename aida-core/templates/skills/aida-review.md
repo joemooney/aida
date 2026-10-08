@@ -536,7 +536,7 @@ If you can construct a plausible breaking input that the test plan didn't cover,
 
 **Time budget.** ~30–60 seconds per touched file. The deep-pass doesn't need to be exhaustive; it needs to be SYSTEMATIC. Drift to "looks fine, moving on" defeats the whole point — the probes exist *because* single-framing reviews already bias that way.
 
-**Composes with `/ultrareview`, doesn't replace it.** This adversarial phase closes part of the depth gap a single-agent review historically has against multi-agent fleets. For high-stakes PRs the user can still run `/ultrareview` afterwards; it brings independent framings and remains the depth ceiling. See `docs/positioning/vs-ultrareview.md`.
+**Composes with `/ultrareview`, doesn't replace it.** This adversarial phase closes part of the depth gap a single-agent review historically has against multi-agent fleets. For high-stakes PRs the user can still run `/ultrareview` afterwards; it brings independent framings and remains the depth ceiling. See `docs/archive/positioning/vs-ultrareview.md`.
 
 ### 5. Fix-forward (only under the doc-only policy) — trace:TASK-333 | ai:claude
 

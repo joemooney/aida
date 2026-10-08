@@ -51,7 +51,7 @@ This distinction was already present in this repo before the trigger — `docs/p
 
 ## 2026-05-26: Marketplace and MCP Distribution Scan
 
-See [2026-05-26-marketplace-research.md](2026-05-26-marketplace-research.md) for the full memo.
+See [2026-05-26-marketplace-research.md](../archive/competitive-analysis/2026-05-26-marketplace-research.md) for the full memo.
 
 ### Classification
 
@@ -96,7 +96,7 @@ Following the latest Anthropic platform updates, we conducted a targeted evaluat
 - **Technical Analysis**:
   Claude Code now supports spawning isolated subagent loops to run background research or targeted editing tasks. This validates our own multi-agent design patterns (e.g. `research` and `self` subagents). AIDA's unique advantage lies in our unified runtime, which coordinate these subagents through a shared git-native state instead of black-box chat contexts.
 - **Action & Backlog Loop**:
-  **In Progress**. We are finalizing `TASK-337` to detail this exact positioning in `docs/positioning/vs-claude-code-subagents.md`, defining how AIDA orchestrators split requirements and enforce advisory lease contracts across spawned subagents.
+  **In Progress**. We are finalizing `TASK-337` to detail this exact positioning in `docs/archive/positioning/vs-claude-code-subagents.md`, defining how AIDA orchestrators split requirements and enforce advisory lease contracts across spawned subagents.
 
 ### 3. `/remote-control` — Remote Terminal Interaction
 - **Competitor/Source**: Anthropic Claude Code (v0.5.0)

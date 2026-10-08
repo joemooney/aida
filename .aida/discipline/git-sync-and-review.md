@@ -1096,13 +1096,13 @@ Related: [[feedback_declare_the_seat_when_dispatching]], [[feedback_serial_not_f
 ### feedback_new_cli_leaf_must_regenerate_format_json_audit
 
 Adding a leaf to `aida-cli-lib/src/cli.rs` **obligates** regenerating
-`docs/cli-format-json-audit.md`. The audit is clap-derived, so a new
+`docs/archive/audits/cli-format-json-audit.md`. The audit is clap-derived, so a new
 subcommand makes `checked_in_audit_is_exhaustive_and_every_honoured_probe_parses`
 (`aida-cli/tests/bug_1502_format_json_audit.rs`) fail with
 `assertion left == right failed: regenerate the BUG-1502 audit`.
 
 Regenerate — never hand-edit:
-`scripts/generate-format-json-audit.py <AIDA_BINARY_BUILT_ON_THE_BRANCH> docs/cli-format-json-audit.md`
+`scripts/generate-format-json-audit.py <AIDA_BINARY_BUILT_ON_THE_BRANCH> docs/archive/audits/cli-format-json-audit.md`
 
 **Why:** TASK-1562 shipped `aida worktree reclaim` with 19 green unit tests, a
 mutation proof, and `make check-ci-fast` all passing, and still took a red CI
@@ -1249,7 +1249,7 @@ iteration of what it asks. Multiply. If the answer is minutes, just run it. Rela
 
 **Why:** public repo + employer-confidential content = a serious, hard-to-reverse leak (it persists in git history even if deleted). This is a confidentiality and outward-facing-action bar, higher than ordinary research-doc commits.
 
-**How to apply:** when source material is work-sourced, scrub thoroughly; **prefer showing the sanitized text before pushing**; always surface a scrub ledger (what was removed, what was genericized, what was kept) and flag anything uncertain so the operator can verify. If a miss reaches the public remote, offer to rewrite branch history (force-with-lease on an unmerged branch) or scrub it. Worked example 2026-06-16: adapted `aida-i3-proposal.pdf` into `docs/research/2026-06-16-research-proposal-multi-vendor-coordination.md` — removed company name / internal program label / named mentor / cost+schedule / "LOB" / "defense-relevant". [[feedback_precise_claim_not_overclaim_in_positioning]] [[project_aida_is_a_probe_not_the_objective]]
+**How to apply:** when source material is work-sourced, scrub thoroughly; **prefer showing the sanitized text before pushing**; always surface a scrub ledger (what was removed, what was genericized, what was kept) and flag anything uncertain so the operator can verify. If a miss reaches the public remote, offer to rewrite branch history (force-with-lease on an unmerged branch) or scrub it. Worked example 2026-06-16: adapted `aida-i3-proposal.pdf` into `docs/archive/research/2026-06-16-research-proposal-multi-vendor-coordination.md` — removed company name / internal program label / named mentor / cost+schedule / "LOB" / "defense-relevant". [[feedback_precise_claim_not_overclaim_in_positioning]] [[project_aida_is_a_probe_not_the_objective]]
 
 ### feedback_pushback_on_overengineering
 

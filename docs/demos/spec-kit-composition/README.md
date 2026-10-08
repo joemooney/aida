@@ -3,7 +3,7 @@
 *TASK-875 · parent EPIC-50 · 2026-06-25*
 
 This is the **shown, not described** version of the composability claim in
-[`docs/positioning/vs-spec-kit.md`](../../positioning/vs-spec-kit.md): you can
+[`docs/archive/positioning/vs-spec-kit.md`](../../archive/positioning/vs-spec-kit.md): you can
 scaffold a feature with [GitHub Spec Kit](https://github.com/github/spec-kit)
 and let AIDA hold the **cross-feature graph + code-to-spec traces + lifecycle**
 that Spec Kit structurally drops once a feature is `/implement`ed.

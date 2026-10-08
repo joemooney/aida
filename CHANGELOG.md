@@ -800,11 +800,11 @@ Specs merged since v0.14.0 (959):
 - **TASK-1125** — Paper: write up the TASK-1123 supervised reviewer-bypass as a field observation (cause taxonomy for SPIKE-67 / section 13) (#1526)
 - **TASK-1163** — aida-assess skill drift: references missing .claude/skills/aida-intake.md and nonexistent 'backlog groom --pickable --apply --risk' flags (#1525)
 - **TASK-1058** — Multi-vendor coordination research + positioning doc refresh (June 2026) (#1522)
-- **TASK-1126** — Add a second workflow-walkthrough note to docs/flow-smoke.md (guard verification) (#1384)
-- **TASK-1123** — Add a workflow-walkthrough note to docs/flow-smoke.md (#1376)
-- **TASK-1119** — Flow smoke-test 3: append a third dated marker line to docs/flow-smoke.md (#1369)
-- **TASK-1118** — Flow smoke-test 2: append a second dated marker line to docs/flow-smoke.md (#1367)
-- **TASK-1115** — Flow smoke-test: add a dated marker line to docs/flow-smoke.md (#1365)
+- **TASK-1126** — Add a second workflow-walkthrough note to docs/archive/reviews/2026-07-flow-smoke.md (guard verification) (#1384)
+- **TASK-1123** — Add a workflow-walkthrough note to docs/archive/reviews/2026-07-flow-smoke.md (#1376)
+- **TASK-1119** — Flow smoke-test 3: append a third dated marker line to docs/archive/reviews/2026-07-flow-smoke.md (#1369)
+- **TASK-1118** — Flow smoke-test 2: append a second dated marker line to docs/archive/reviews/2026-07-flow-smoke.md (#1367)
+- **TASK-1115** — Flow smoke-test: add a dated marker line to docs/archive/reviews/2026-07-flow-smoke.md (#1365)
 - **SPIKE-76** — Resilience for multi-vendor agent dispatch: survive connection drops, agent crashes, and single-vendor dependence (#1347)
 - **STORY-756** — Surface aida why <file:line> as the README hero — lead with the 60-second magic, demote probe-framing (#1345)
 - **TASK-1079** — TUI drive-gate probe reads stderr but CLI emits --json errors on stdout (#1315)
@@ -1353,7 +1353,7 @@ Specs merged since v0.11.0 (198):
 - **TASK-627** — Docs freshness spot-check before demo — getting-started.md + retire stale slideshow.html (#603)
 - **STORY-266** — [EPIC-29 1/5] Define aida-core public API contract — audit + freeze types/methods aida-tui consumes (#597)
 - **TASK-311** — Dialog-role spec audit: verify acceptance criteria match the primary caller's environment before filing (#596)
-- **TASK-682** — Retire/redirect docs/slideshow.html — the OBE 2025-12 deck is still discoverable and actively misleading (#560)
+- **TASK-682** — Retire/redirect docs/archive/rendered/slideshow.html — the OBE 2025-12 deck is still discoverable and actively misleading (#560)
 - **TASK-632** — Document the `[agents] bypass` knob in the discipline pack / CLAUDE.md agents.toml section (#534)
 - **TASK-530** — TASK: scaffolding-pack: link `backlog-grooming.md` from the auto-appended Discipline section in CLAUDE.md (#533)
 - **TASK-109** — docs/git-verb-surface.md: design reference naming the convention (#531)
@@ -1425,8 +1425,8 @@ Specs merged since v0.10.0 (124):
 - **TASK-595** — aida graph CLI subcommand: blocked-by/blocks/tree/impact + --json (STORY-489 slice 2) (#386, #387)
 - **TASK-594** — graph_walk core primitive: cycle-safe transitive relationship walk + status rollup (STORY-489 slice 1) (#385)
 - **STORY-490** — Drain legibility: surface shelved/escalated (NeedsAttention) count in aida queue progress (#384)
-- **TASK-583** — SPIKE-35 v2 follow-ups: align bughunter-severity schema, regen stale REVIEW.md, drop thinking-comment (#354, #367)
-- **SPIKE-35** — Emit REVIEW.md from spec graph (substrate-as-bouncer for managed Code Review) (#353)
+- **TASK-583** — SPIKE-35 v2 follow-ups: align bughunter-severity schema, regen stale docs/archive/reviews/2026-05-generated-review.md, drop thinking-comment (#354, #367)
+- **SPIKE-35** — Emit docs/archive/reviews/2026-05-generated-review.md from spec graph (substrate-as-bouncer for managed Code Review) (#353)
 - **SPIKE-37** — Trigger Code Review via '@claude review once' from /aida-review (#353)
 - **TASK-568** — aida list --tree: parent/child clustering view (parallel to aida queue list --tree) (#351)
 - **TASK-574** — Skill helper subfolders: allow .claude/skills/<name>/{SKILL.md, templates/, examples/} (#350)
@@ -1542,7 +1542,7 @@ Specs merged since v0.10.0 (124):
 - [AI:claude] docs(queue clear): explanatory help + flag the --completed no-op on git backend
 - [AI:claude] docs(spike): SPIKE-46 — measured multi-vendor store interop (read-easy, write-bounded) (#410)
 - [AI:claude] feat(archive): progress heading + throttled [k/N] ticks on bulk --older-than sweep (#422)
-- [AI:claude] feat(rules): SPIKE-35 emit REVIEW.md + Round 2 strategic recompose
+- [AI:claude] feat(rules): SPIKE-35 emit docs/archive/reviews/2026-05-generated-review.md + Round 2 strategic recompose
 - [AI:claude] feat(triage+small-fixes): TASK-350 glossary + TASK-381 digest --copy + TASK-388 plan template
 
 ## [v0.10.0] — 2026-05-26
@@ -1806,7 +1806,7 @@ Specs merged since v0.8.0 (114):
 - **TASK-412** — simple-mode-empty template ▶ row contradicts Step 5c — recommend Stop here when PR already open (#154)
 - **TASK-422** — queue-done gate creates chicken-and-egg with /aida-pr status check (#153)
 - **TASK-338** — Glossary: pin down AIDA's orchestration / session / autonomy machinery vocabulary (#150)
-- **TASK-337** — docs/positioning/vs-claude-code-subagents.md — where AIDA sits vs Claude Code's /agents subagents (#149)
+- **TASK-337** — docs/archive/positioning/vs-claude-code-subagents.md — where AIDA sits vs Claude Code's /agents subagents (#149)
 - **TASK-319** — Codify the 'don't retroactively edit dated historical artifacts' convention (SPIKE / PROMPT_HISTORY / dated docs) (#148)
 - **SPIKE-10** — SPIKE: Multi-advisor coordination — subsystem-scoped advisors + parent→sibling initiation + bidirectional substrate propagation (#141)
 - **SPIKE-9** — SPIKE: MCP server as the inter-agent communication bus — evaluate vs file-handshakes (#139)

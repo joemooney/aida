@@ -159,7 +159,7 @@ A workflow position: **implementer**, **reviewer**, or **advisor**
 templates a session loads.
 
 A role is **not** a Claude Code subagent — see
-[`vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) for
+[`vs-claude-code-subagents.md`](../archive/positioning/vs-claude-code-subagents.md) for
 the within-conversation (subagent) vs cross-conversation (AIDA role) layer
 distinction.
 

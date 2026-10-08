@@ -130,7 +130,7 @@ Fallback order should be explicit per task:
 
 - `docs/plans/2026-07-02-spike-76-dispatch-resilience.md`
 - `docs/agents/session-communication.md`
-- `docs/agents/claude-surfaces-codex-parity.md`
+- `docs/archive/audits/claude-surfaces-codex-parity.md`
 - `docs/agents/cross-agent-onboarding.md`
 - `docs/agents/codex-brief-pickup.md`
 - `docs/agents/antigravity-brief-pickup.md`
@@ -208,9 +208,9 @@ For liveness/report tests, use temp repos and fake registry entries rather than 
 ## Related
 
 - Builds on: `docs/agents/session-communication.md`
-- Builds on: `docs/agents/claude-surfaces-codex-parity.md`
+- Builds on: `docs/archive/audits/claude-surfaces-codex-parity.md`
 - Builds on: `docs/agents/cross-agent-onboarding.md`
 - Builds on: `docs/git-verb-surface.md`
 - See also: `docs/research/ablations/2026-06-19-cross-vendor-portability.md`
 - See also: `docs/research/ablations/README.md`
-- See also: `docs/research/2026-06-16-layered-evaluation-framework.md`
+- See also: `docs/archive/research/2026-06-16-layered-evaluation-framework.md`

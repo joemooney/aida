@@ -112,7 +112,7 @@ CLAUDE_CODE_SESSION_ID=test-xxx ./target/debug/aida advisor register
 
 ## Related
 
-- **SPIKE-11** — the research that motivates this story (`docs/spikes/2026-05-20-spike-11-session-forking.md`).
+- **SPIKE-11** — the research that motivates this story (`docs/archive/spikes/2026-05-20-spike-11-session-forking.md`).
 - **STORY-306** — the headless advisor escalation tier this story augments (cold-boot version stays intact).
 - **STORY-347** — calibration ledger that now becomes implementable.
 - Memory `feedback_headless_advisor_is_cold_boot` — updated to mark fork-from-live as implemented.

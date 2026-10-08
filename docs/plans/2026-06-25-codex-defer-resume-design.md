@@ -42,7 +42,7 @@ that cannot be `defer`-resumed at the tool-call level?
 ## 2. The key finding: AIDA never used `defer`
 
 Read against the shipped hooks (confirmed in
-`docs/agents/porting-claude-code-to-codex.md`, "What AIDA Actually Depends On"):
+`docs/archive/audits/porting-claude-code-to-codex.md`, "What AIDA Actually Depends On"):
 **none of AIDA's shipped hooks emit `permissionDecision`, `defer`, or
 `continue: false`.** The `defer` pattern lives in `session-communication.md`
 purely as a reference for what Claude *can* do. AIDA's actual escalation is
@@ -229,7 +229,7 @@ a gate is ever wanted, it is a Claude-only optimization with a Codex fallback of
 - `docs/agents/session-communication.md` -- Claude `ask`/`continue:false`/`defer`
   reference; update its "Codex And Antigravity" section to point here once this
   lands.
-- `docs/agents/porting-claude-code-to-codex.md` -- the dependency-surface audit
+- `docs/archive/audits/porting-claude-code-to-codex.md` -- the dependency-surface audit
   that establishes AIDA never used `defer`.
 - `aida-cli/src/punt.rs` -- `PuntRequest` / `PuntResponse` handshake (agent-neutral).
 - `aida-cli/src/auto_complete.rs` -- `resume_implementer` (the one vendor-coupled

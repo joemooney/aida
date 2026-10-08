@@ -96,5 +96,5 @@ aida graph impact <SPEC> --json   # machine-readable reverse closure
 ## Related
 
 - Parent: SPIKE-45 (capability roadmap, P2). Sibling shipped: STORY-490 (P5 drain legibility).
-- Positioning: `docs/positioning/vs-kiro.md`, `vs-spec-kit.md` — this command is what those pages claim AIDA can do and they can't.
-- Synthesis: `docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` (P2 = the flagship outsmart move).
+- Positioning: `docs/archive/positioning/vs-kiro.md`, `vs-spec-kit.md` — this command is what those pages claim AIDA can do and they can't.
+- Synthesis: `docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` (P2 = the flagship outsmart move).

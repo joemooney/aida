@@ -36,7 +36,7 @@ replacement for it.
 
 ## Why filesystem-canonical
 
-The SPIKE-9 evaluation ([`docs/spikes/2026-05-20-spike-9-mcp-as-bus.md`])
+The SPIKE-9 evaluation ([`docs/archive/spikes/2026-05-20-spike-9-mcp-as-bus.md`])
 weighed MCP-as-bus against the existing file-handshakes and landed on
 **hybrid**:
 
@@ -162,10 +162,10 @@ transport (HTTP / SSE) is deferred to a follow-up SPIKE.
 
 ## Related
 
-- SPIKE-9 — the analysis behind hybrid: `docs/spikes/2026-05-20-spike-9-mcp-as-bus.md`
+- SPIKE-9 — the analysis behind hybrid: `docs/archive/spikes/2026-05-20-spike-9-mcp-as-bus.md`
 - STORY-285 — implementer findings as draft TASKs
 - STORY-263 — reviewer verdict files
 - STORY-306 — advisor-tier punt resolution / escalation
 - TASK-294 — worker directive channel
-- `docs/positioning/vs-claude-code-subagents.md` — the positioning piece this
+- `docs/archive/positioning/vs-claude-code-subagents.md` — the positioning piece this
   story enables

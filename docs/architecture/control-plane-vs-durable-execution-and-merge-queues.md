@@ -172,7 +172,7 @@ the answer with a gate the contributor cannot bypass.
 
 ## 3. Gap P1: resumable orchestrator checkpointing
 
-The [round-2 moat document](../competitive-analysis/2026-05-31-round2-moat-gaps-moves.md)
+The [round-2 moat document](../archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md)
 (2026-05-31) named **P1 — Resumable orchestrator checkpointing** as the first
 gap a technical evaluator hits: *"A crashed drain isn't step-resumable today;
 formalize phase transitions into a replayable execution log keyed to
