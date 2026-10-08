@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-08T20:49:38.519731692Z
+modified_at: 2026-10-08T21:05:35.428721172Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -2423,6 +2423,294 @@ comments:
   created_at: 2026-10-08T20:49:38.519725228Z
   modified_at: 2026-10-08T20:49:38.519725228Z
   relayed_from: 01a11ceb-3fa0-7c20-8a2c-8d8c0cc7290f
+- id: 01a11d55-f6c4-7802-9ee8-a25e31c19490
+  author: mcp
+  content: |
+    # TASK-1526 latency sketch V3 — independent whole-design review
+
+    **CHANGES REQUESTED. No whole-design approval, implementation release, or performance acceptance.**
+
+    This is the newly assigned independent strict design advisor `/root/v3_independent_advisor`, not root, any V1/V2/V3 author, either prior latency gate, the original performance/evidence or E1 author, a TASK-1527 gate, or an implementer. Root reported its full V3 and READY read before launching this seat. I independently read them completely, recovering truncated output by contiguous reads. I have not authored implementation or delegated this judgment. Root alone owns any separately authorized canonical relay.
+
+    V3 improves the handle API inventory, post-acquisition check, snapshot fence, transaction observer placement, worker phase separation, and inner/public rollback boundary. Those improvements do not resolve its newly introduced close-outcome promise or make every proposed observer/mutant reachable. Four numbered blockers below specify the actual source, required outcome, and future witness. These are independently decidable technical corrections; no Joe question is needed.
+
+    The already independent **limited** approvals remain binding: DX-1's one admitted ordinary winner transaction at NORMAL with exact restoration or retirement and its explicit power-loss exception; unchanged automatic and close-time checkpoint policies; explicit operation token plus deny-only invocation policy; checked finish/error precedence portions of R3; and L2(a)'s original aggregate, actual retry categories, wrapper-entry witness and constructor-inclusive clocks. They are not whole-design approval.
+
+    **Actual new code dispatch is refused. Even a later approved design does not itself release that refusal.** V3 §7 step 2 is only a sequencing prerequisite; its “Only then may implementation … be dispatched” must not be used as affirmative dispatch authority. No alternative CLI `--spec`, environment grant, identity substitution, old binary, installation, activation, or authority bypass is authorized.
+
+    ## 1. Exact inputs, full reads, freshness and precedence
+
+    The review covers the whole proposal, not only the four V2 findings. Full reads comprise V1/V2/V3 and all three READY notes; both full prior latency reports; both numbered rework briefs; the original 20,194-byte default-budget report; complete retained owning TASK-1526, STORY-1484 and TASK-1527 bodies including comments, relationships and linkage; the entire TASK-1527 V2 sketch, READY and APPROVED-AS-AMENDED judgment; and E1's predeclaration, start/result/analysis receipts, driver and analysis source, stdout/stderr, STARTED marker, verification and integrity receipts. Repeated full artifact bodies embedded in owning records were verified byte-identical and read in their complete standalone form. No summary was substituted for an owning amendment.
+
+    I used the qualified retained full MCP bodies in `task1526-latency-independent-review-inputs/`, not fresh canonical reads. Their provenance is the prior independent gate's successful normal `show_requirement` reads, explicitly recorded by its verification receipt and report. I rehashed all 21 entries in that gate's final manifest: zero mismatches. Embedded-body equality was independently rechecked for the full original report and V1 in TASK-1526, and full C V2/READY/verdict in TASK-1527. The retained bodies have 21/11/3 comments respectively. They report TASK-1526 and TASK-1527 Approved, TASK-1527 blocked-by TASK-1526 and STORY-1484 closure pending. These are historical observations, not a claim of present canonical freshness or store health. The user's current constraints independently bind this review. No raw canonical fallback, alternate protected-floor read, cache healing, CLI show, lifecycle write or canonical operation was used.
+
+    | Complete input | Bytes | SHA-256 |
+    | --- | ---: | --- |
+    | TASK1526_LATENCY_REWORK_SKETCH_V3.md | 38256 | 39bf6ab177e03ca47bd7d370ebdf8cd9592c659a7ed6f5ea4502b009f0799ad7 |
+    | TASK1526_LATENCY_SKETCH_V3_READY.md | 5629 | e1638b1d5834599640eed5617ba8ef45ad125e8c1373086fa7d833ffd2811923 |
+    | TASK1526_LATENCY_REWORK_SKETCH_V2.md | 42407 | 0631ffdd5647d1de73173e058743a08f53852fd775a04fb75cc46ead0b761790 |
+    | TASK1526_LATENCY_SKETCH_V2_READY.md | 7334 | 75b424a2482161eaa0940f68ed9197d332b1d47233196f350efdd279d92994df |
+    | TASK1526_LATENCY_REWORK_SKETCH.md | 33352 | 82443dbd17caff3210fb7602fb00af80d0101ae6c164fbef074efdc4d03ca4a8 |
+    | TASK1526_LATENCY_SKETCH_READY.md | 7146 | ceab9d2aa1fe75fa1c861ea3fd7986e8ee679d1a00a37ed1c47e2da245bbeba3 |
+    | TASK1526_LATENCY_REWORK_SKETCH_INDEPENDENT_REVIEW.md | 39627 | 8fa4466c6f35a8e20b692fc949df7eaafeaed1d32ac588e7667c0e107d7aa95f |
+    | TASK1526_LATENCY_REWORK_SKETCH_V2_INDEPENDENT_REVIEW.md | 45264 | ee1a7da96d0dd2fbb0982a02960ba6ef2a448fb9b66faf24c6dc9b3a481f4945 |
+    | TASK1526_DEFAULT_BUDGET_INDEPENDENT_EVIDENCE.md | 20194 | 69fca7b9e755e34c3902688ce0949eaa88bde33f4ca864007661ff923a05387d |
+    | task1526-latency-numbered-design-rework-v3.md | 2803 | 02889bb3bf8bb25e2f70d34766e936583edca82160905ab4542d06ef8e6fca47 |
+    | retained TASK-1526.md | 103543 | 88b54111d28b5bb28e3a3c0ff930475104e3d16249d7fc3cb8d7dece49d4aa7d |
+    | retained STORY-1484.md | 39051 | 191bc728686d1010f02cd164a573918e88af78297e4285c7c33075e109fe1f66 |
+    | retained TASK-1527.md | 109510 | f07637fededbfd0e56446f03615170142f42f7041c6c66bbb3dcfde76b6febd8 |
+    | TASK1527_REWORK_SKETCH_V2.md | 63551 | f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7 |
+    | TASK1527_REWORK_SKETCH_V2_READY.md | 10314 | c33a623d17c912b25505c0df5fd746751cd434f63279c1b1b2f10e218c625509 |
+    | TASK1527_REWORK_SKETCH_V2_INDEPENDENT_REVIEW.md | 31460 | 733fb4ace28da60c0272847e9e9bb3e76c78ee8f06c89daf67452b7568f0eb55 |
+
+    Exact authority order retained:
+
+    1. Parent sketch `01a0df08-c181-7530-b249-2740141c2a0b`, subordinate to signoff `01a0df0d-f964-78f3-a715-046e37e50915`, all A1–A13 and Q1–Q6.
+    2. TASK-1526 decision `01a0e0fb-8d6b-7790-b04b-f808236dbe2d`, all B1–B6 and named tests, adopted by product `01a0e0fd-bc48-7600-bc20-b0a8f781d0f7`.
+    3. Show-specific parent companion `01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105`, with BUG-1674's full signoff identified by C's gate as `01a0e0f6-7f66-7d20-b708-0936f39082eb`. Later implementation narratives cannot rescind the narrower signed show rules.
+    4. Complete C V2 APPROVED-AS-AMENDED judgment, including R1's late-suppression/phase interpretation, R2 actual launch boundary, R3 witnessed outcomes, R4 startup/identity, R5 first-failure time and legacy limits, and R6 retention. No C transition is silently imported into current B source.
+    5. Reopened actual latency failure and current user limits, plus the exact limited independent DX-1/R2/R3/L2 approvals from the 45,264-byte V2 report. Historical shipped linkage is not acceptance of reopened work.
+
+    The three local discipline documents were read. The user's private-artifact-only instruction supersedes the rework craft document's normal queue/brief mechanics: the actionable handoff is contained here, not sent or queued.
+
+    ## 2. Independently verified source and external semantics
+
+    Immutable basis: `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. Observed HEAD and main: `c67728c1dcaf8a577539d920bdc6a3c86126cebb`. The complete ff9ac→c677 aida-core diff is empty. Relevant current workfile bytes equal those immutable core blobs. Cache command and MCP files also match; lib.rs and git_backend_cmd.rs have unrelated later differences, with inspected classification/constructor symbols unchanged. I inspected the diff only to establish that boundary, taking no substantive action on reserved work.
+
+    | File at ff9ac | Full-blob SHA-256 | Inspected source facts |
+    | --- | --- | --- |
+    | aida-core/src/db/cache.rs | 5b5975cb16fb37b9658d26eebffce27db9458260ac4754020aefd45f27798973 | Full relevant open, snapshot, metadata, write wrapper/retry, classifiers, apply_incremental, rebuild and upsert/delete helper bodies; data-entry/mutex inventory. |
+    | aida-core/src/db/cached_git_backend.rs | 544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7 | Constructor; strict refresh; tolerant winner, fallback and repin; schema retry; complete incremental preparation/application and epic decline. |
+    | aida-core/src/db/cache_refresh.rs | b83d380c8bd641c402290bb042fdd9de8cddd857979ec61f8817090b5d45764e | Scope construction/drop/configuration/reset, shared deadline, collector, test counters and hooks. |
+    | aida-core/src/db/refresh_worker.rs | 04239c61fed979aa14044b8070c9617cbdc04463f134b90022abc878eeedc40a | Real strict worker body, recursion check, no-detach and SPAWN_LOG seam; body can be AlreadyFresh after constructor. |
+    | aida-cli-lib/src/cache_cmd.rs | e4ac71e9f4b90b2680f026290cf9d2d795f83e88f0a4607dba5f3a004625e7a8 | Distinct rebuild/status/verify/refresh arms; explicit tolerant open; current unconditional worker watchdog thread. |
+    | aida-cli-lib/src/mcp.rs | a57c9b778b6d802aa954b479a74f514f7ed062d42c77d3d5f404e17e3dd7840c | Scope precedes per-call dispatch; cache_status opens then strictly refreshes. |
+    | aida-cli-lib/src/lib.rs | a43f01cb4c7d18bc940a8a00bbc1beae3d3f1783cfcf51f9fe371562f766e4b1 | Command read-policy classifier at 3845–3868; narrower Show zero-wait preserved. |
+    | aida-cli-lib/src/git_backend_cmd.rs | edfdd1aeac9aec151c9cd1b3b1c2783ad5734ee5854443d3f8b40e3fec4676fd | Actual ambient backend opens before cache dispatch. |
+    | aida-cli-lib/src/history_cache.rs | 1ee91ea6ec2e2f9dc747b034eea548dc1c8db37140b655b1a00ee8f254a474c9 | History disables auto/close checkpoint and separately truncates WAL; not an imported policy. |
+
+    Complete-blob hashing is source identity, not a claim to audit every unrelated line. The separate receipt records full Git blob IDs, c677 and workfile comparisons and dependency hashes.
+
+    Pinned rusqlite 0.31.0 `transaction.rs:186–247` consumes Transaction on commit/rollback and ignores finish errors in Drop. DropBehavior::Ignore and explicit checked completion on the still-owned Connection are supported. **Connection::Drop only flushes its prepared-statement cache; InnerConnection::Drop calls close and discards its Result.** `Connection::close(self)` at lib.rs:792 returns either success or `(Connection, Error)` on failure. `Connection::open_in_memory()` at :456 returns Result; replacement allocation is fallible. Those are distinct facts from transactional Drop and are central to finding 1.
+
+    Bundled libsqlite3-sys 0.28.0 `sqlite3.c:138787` confirms connection-local synchronous state and rejection inside a transaction. `:68169` permits only one WAL writer. `:179318–179431` implements close: unfinalized statements/backups can return BUSY without destroying the connection. Successful destruction rolls back an open transaction; merely asking Drop to close is not the same observation. Current official [SQLite close documentation](https://www.sqlite.org/c3ref/close.html) corroborates that API distinction. I am not claiming such a leaked resource is present in today's Cache implementation or that a real close failure was measured.
+
+    The [SQLite synchronous documentation](https://www.sqlite.org/pragma.html#pragma_synchronous) and [WAL concurrency documentation](https://www.sqlite.org/wal.html#concurrency), read as primary references, support the retained NORMAL power-loss tradeoff and one-writer/pinned-reader model. They do not certify latency or unconditional shutdown success. Local bundled source is the version-specific basis. Automatic and close checkpoints remain unchanged, including any costs they impose.
+
+    ## 3. Numbered blocking findings
+
+    ### 1. Swap-and-drop retirement lacks a complete fallible close/ownership outcome
+
+    **Files/symbols:** V3 §§2.2–2.3, §4.2 PANIC/rollback-failed rows, §5.1 rows 8–10, T1-R(r3/r4), §8; proposed cache.rs::lock_conn/WeakCommitScope retirement; rusqlite lib.rs::{open_in_memory,close,Drop}, inner_connection.rs::{close,Drop}.
+
+    **Fact:** V3 newly requires an in-memory placeholder, but opening it is a fallible operation. No branch specifies what happens if it cannot be created during an ordinary error or unwind. The proposal then drops the real file connection and repeatedly asserts that this rolls back/releases the write lock now and leaves no NORMAL file connection. Its final limit simultaneously acknowledges ignored close errors. Actual rusqlite Drop does not provide the Result that would justify those unconditional outcomes. Its explicit close API does.
+
+    A normal successful-close T1-R(r4) probe establishes that fixture's observable release; it cannot fill the missing production error branch. This is precisely the same distinction already accepted for explicit transaction rollback versus ignored transaction Drop. The correct retirement fence can prevent API reuse even when physical close is unconfirmed, but it must not then claim physical rollback/release. Rust resource scope usually makes close succeed here; the design must state and preserve that resource-order invariant rather than turn it into an unqualified all-failures guarantee. Poison handling must not repeatedly allocate/swap placeholders or erase the original retirement cause merely because every later lock acquisition returns PoisonError.
+
+    **Required outcome:** Use a bounded per-handle ownership representation with an explicit absent/retired state, avoiding mandatory replacement allocation on the error/unwind path (for example an internal optional connection slot; this is not a framework). If another representation is chosen, fully specify its allocation-failure behavior first. Retire while holding exclusive access before any connection can be exposed. Ensure transactions, statements and borrowed handles leave scope before attempted close. On ordinary fallible exits, observe explicit close success/error and preserve primary, rollback, restore and close diagnostics and committed state. Specify the owned returned connection's fate after close error; never silently restore it to live service, lose its cleanup ownership, report close success, or promise immediate lock release. A non-reusable quarantined connection with honestly unconfirmed release is acceptable; it must stay inaccessible through all Cache APIs and must not create a cleanup service, loop, or new authority. Unwind remains non-panicking best effort plus retirement, with no unsupported rollback/close-success claim. No raw sqlite3_close_v2 workaround is implicitly approved.
+
+    This is an independently grounded design choice: **physical close failure may be reported as unconfirmed while logical retirement remains mandatory**. It is not permission to return stale success or weaken exact restoration before reuse. Preserve `CacheHandleRetired > WeakCommitPrepare > primary > Ok`; add close diagnostics inside the highest-priority error, not a new recovery classification. Successful commit followed by retirement remains committed:true.
+
+    **Required future tests:** Retain actual separate-connection write acquisition after successful retirement close and exact committed/old snapshot checks. Add narrow failure injection at the actual close call and, if replacement allocation remains, its actual constructor boundary; distinguish injected refusal from a measured SQLite failure. Verify same-handle queries/mutations/snapshot minting still return Retired, no schema recovery/WriterBusy occurs, the returned connection remains owned but unavailable, close diagnostics survive context wrapping, and cleanup does not double-panic. Exercise ordinary restore-failure retirement and unwind/poison separately; assert first-retirement cause/count is not replaced by subsequent poisoned callers. All are proposed, not executed now.
+
+    ### 2. M9's required successful write is inconsistent with the replacement connection and its barrier is underspecified
+
+    **Files/symbols:** V3 §3 S-d, §4.4 M9, §6 T1-R(r1); cache.rs::upsert_requirement :1823, upsert_requirement_on :2944, delete_one_uncommitted :3086; proposed F-lock.
+
+    **Fact:** The M9 row says deleting only the post-acquire check makes the waiting caller write. Under the specified swap, it instead acquires an empty in-memory Connection. The actual upsert reads `requirements_cache` (some read failures are swallowed), then the first DELETE requires `requirements_cache`; an empty placeholder has none of `requirements_cache`, `requirements_fts`, `hierarchy_edges`, `cache_meta`. It cannot reach a successful real-cache upsert/O-write-after-write as promised. A missing-table error is not that intended witness and could engage schema recovery if exercised through a backend wrapper. No schema should be manufactured in a retired placeholder to make the mutant pass setup.
+
+    Also, “pre-lock hook … before lock()” does not explicitly put the signal after the optional early retired check. If the hook precedes that check, the controller can retire before the waiting caller checks, and M9 still refuses through the remaining precheck. The test can therefore miss the independently required after-acquisition fence.
+
+    **Required outcome:** Put the waiting signal after the caller has actually observed live at the optional precheck, immediately before the blocking mutex acquisition; then retire under the winner's mutex and release. Define the intended assertion at the actual accessor boundary: a retired connection must never be handed to an operation. A cfg(test) boundary observation may record actual connection exposure/operation entry, not fake a successful SQL write or fake PRAGMA value. A direct Result assertion for typed Retired versus a later schema error is also meaningful if expressly declared; call it a fence/type failure, not a successful stale-database write. Adapt this witness to finding 1's final ownership representation so a redundant absent-slot check cannot silently mask the precise mutant. State which check is mutated and why the remaining guards do not make it equivalent/unreachable.
+
+    **Required future test:** S-d ordinary restore success proves a waiting strict write really executes after verified restoration at P=2. Its separate retirement variant proves typed Retired and zero exposure/wrapper/SQL entry. M9 removes only the designated post-acquisition gate after a witnessed precheck; it fails the declared boundary/type assertion, not timeout, schema setup, or a fictitious file write. M10 remains a distinct snapshot test and cannot substitute for M9. Do not call a surviving equivalent mutant detected.
+
+    ### 3. S-b describes a BEGIN/post-BEGIN witness absent from the strict upsert it actually calls
+
+    **Files/symbols:** V3 §3 S-b and §4.1 O-write; cache.rs::{upsert_requirement,upsert_requirement_on,delete_one_uncommitted,with_cache_write,with_cache_retry_observed}; SQLite WAL acquisition at sqlite3.c:68169.
+
+    **Fact:** `Cache::upsert_requirement` holds the mutex and calls `with_cache_write` around `upsert_requirement_on`. Neither wrapper starts an explicit transaction. The helper first performs a read, then DELETE/other statements in the connection's existing mode. S-b nevertheless says this strict upsert's first BEGIN hits BUSY and requires a post-BEGIN upsert hit only after winner release. There is no such BEGIN. If “after first statement” means its first SELECT, an observer may run while the other writer is held, contradicting the specified zero held-period hits. If it means a successful first write, the schedule can be sound, but that exact placement/meaning is not the stated BEGIN witness.
+
+    **Required outcome:** Do not change production upsert transaction boundaries to fit the test. Choose and state one supported schedule: use a real strict apply_incremental/ensure_cache_fresh transaction on handle C for the BEGIN/post-BEGIN witness, retaining separate mandatory upsert controls; or keep upsert and place O-write after its first successful modifying statement, with an explicit read-versus-write observation distinction and a BUSY witness from that actual modifying statement. Record the connection's real PRAGMA separately while the winner is held. Retry-sleep callback remains on C's first Write retry, with default strict retry policy enabled on that thread. Release the winner on receipt of that callback, before joining C; no wait for a successful second writer during the held transaction.
+
+    **Required future test:** Held interval has an actual acquisition failure/retry, own PRAGMA=2, zero chosen successful-write/BEGIN observer hits; released interval reaches that observer and completes the intended strict operation at 2. All database identities and orderings are recorded. M2 and M7 fail an actual value assertion in a feasible operation, never a timeout or missing observer. Keep all independent upsert/delete/meta/rebuild labels nonzero; do not relabel an incremental witness as upsert coverage.
+
+    ### 4. The complete count table still merges incompatible admission cases and overpromises mutant reach
+
+    **Files/symbols:** V3 §§4.2–4.4, §6 “Every row … real winner branch”; cache.rs::with_cache_write :807–829 and proposed admission; cached_git_backend.rs::freshen_for_read :506–548; V3 M6-ii.
+
+    **Fact:** §4.3 includes read-only mismatch among Strict refusals, while §4.2's single token-refused row requires strict_tx=1 and closure=1. Actual with_cache_write returns CacheReadOnly before invoking its closure, so a forced token on a read-only handle cannot meet those counts. An ordinary read-only usable backend returns before the winner branch and cannot naturally construct that token at all. Conversely not-in-autocommit is explicitly a retirement trigger but has no matching count/outcome row. These cannot all be subcases of an ordinary eligible winner with the universal counts currently demanded.
+
+    M6-ii correctly adds ReadRefreshAttempt, so illicit weak preparation is now reachable. It still says tx (or skip) is at least one. If the illicit loser arrives while the genuine winner owns BEGIN IMMEDIATE, its one fast-fail BEGIN can be BUSY: prep/change/armed can fire while tx=0, exactly as the legitimate busy row already specifies. It must fail the loser zero-weak-entry assertion without requiring an impossible simultaneous writer. A deterministic schedule after winner release can instead force a transaction/skip, but that ordering is not specified. The corrected M1a and M3d concepts are sound; they do not cure these other contradictory rows.
+
+    **Required outcome:** Split valid eligible, invalid-token-on-writable-autocommit, read-only refusal, missing retry scope, and not-in-autocommit cases, with exact per-branch counts and reach boundaries. Deliberately invalid admissions may use a narrow test-only call seam and must be labelled as such; do not pretend the real ordinary creator emits them. Read-only forced admission has no weak preparation and no transaction/application closure. Not-in-autocommit retires before prep with the close semantics of finding 1. State whether auto-rollback evidence is an SQL-engine automatic rollback or the current closure-issued ROLLBACK fixture; the latter proves the already-autocommit cleanup branch, not an actual engine-generated automatic error. No cleanup ROLLBACK should be counted when that fixture has already ended the transaction.
+
+    For M6-ii, select either a deliberate post-release ordering with tx=1/skip, or accept the genuine held-writer branch with prep/change/armed>0 and tx=0; in either case the named failing assertion is the loser's zero weak-preparation/armed counter. Never require tx>0 to recognize genuine illicit preparation. For setting/restore mismatch faults, state exactly which real SQL action is omitted/changed or which read errors: actual value observers cannot be implemented by returning invented PRAGMA values. Set-error plus unreadable read-back is unknown state requiring restore/verification or retirement, not “not_needed” based on absence of an observation.
+
+    **Required future tests:** A predeclared expanded count/inner/public table covers these cases; each invoked test states ordinary winner versus invalid-admission seam and proves its path before any failure assertion. No mocked setting values, setup-error credit or zero-hit strict vacuity. M1a retains O-tx while removing the dependent preparation/restore block; M1b remains a refusal control only. M3d witnesses real change but zero verified armed. M6-i remains invalid-token control only. M6-ii reaches the chosen actual contention state and fails zero weak entry, independent of M6b's wrapper-only witness.
+
+    ## 4. Whole API, schedule and wiring disposition
+
+    The retirement inventory is now correctly **20 production mutex sites plus six test sites**. The production functions are recheck_migration; set_meta; get_meta; truncate; rebuild_projection; apply_incremental; upsert_requirement; recompute_epic_status_from_hierarchy; ancestor_epic_ids; delete_requirement; list_summaries; search; requirement_count; pending_decision_count; degrees_for_id; spec_id_for_uuid; spec_id_collisions; query_id_rows; uuid_for_spec_id; descendant_ids. Wrapper metadata/rebuild/id-row methods inherit their underlying lock fence. CacheTx stays inside the held transaction.
+
+    I accept the proposed logical boundary, subject to findings 1–2: retirement is set exclusively; recheck after acquiring is mandatory; precheck alone insufficient; source_head_sha/migration early result, search-empty, apply_incremental/migration and rebuild entry are fenced; read_snapshot is separately fenced; recheck_migration may return its diagnostic flag without querying; has_usable_snapshot returns false; immutable path/lock path/read-only/migration diagnostics remain available. No repair in place. A new independently opened Cache is a different handle, and a previously pinned snapshot is independent committed data.
+
+    F-snap is coherent for successful pinning: read-only open, BEGIN DEFERRED, real schema read pins a snapshot, then SeqCst live check linearizes successful mint before a later retirement store. A call whose precheck saw live but whose final check sees retirement must drop the new snapshot and return Retired. M10's between-precheck-and-mint retirement can reach that assertion without sharing the original mutex; confirm the schema remains healthy and the hook actually retires before mint. Also retain a positive already-pinned snapshot across retirement. On intermediate open/schema failure, specify honest failure precedence; an early schema error must not be advertised as a completed post-mint retirement check. This is no reason to claim any arbitrary error yields usable data.
+
+    All error classifiers must search contextual chains for the two typed safety errors before textual schema/lock classification, with sources opaque as proposed. This is sound for the given anyhow wrappers. Do not classify a retired placeholder's missing-table error instead of the top-level Retired error. Retire/prepare propagation through schema retry and freshen_for_read remains mandatory; a new independent open is an explicit recovery action, not silent rebuilding through the retired handle.
+
+    | Schedule | Independent assessment |
+    | --- | --- |
+    | S-a1 | Feasible before winner BEGIN. B is a different connection to same DB; unrelated strict upsert at2, then winner tx1/closure1 at1. Actual upsert statement observer must be precisely located. |
+    | S-a2 | Feasible before BEGIN: B's strict refresh reaches target, winner still begins then head-check skips. tx1/closure0 is correct after O-tx moves ahead of skip. |
+    | S-b | Ordering concept corrected versus V2; actual upsert BEGIN claim still blocked by finding3. |
+    | S-c | Feasible only as explicitly different database control. Never evidence of two same-DB writers. |
+    | S-d | Ordinary restored follow-up feasible; retirement/M9 evidence blocked by findings1–2. Join after winner returns/relinquishes mutex. |
+    | S-k1 | Feasible AFTER_READS hook before mutex, same-handle strict upsert at2, one-shot hook; no recursive same-mutex acquisition. |
+    | S-k2 | Feasible other-handle strict refresh before acquisition; winner may legitimately skip inside tx. Prevent recursive hook reuse by existing one-shot take. |
+    | S-q | Head-move hook returns false before apply_incremental; no weak prep. Q1 fallback can strictly increment at2; non-ancestor fixture separately reaches rebuild at2. |
+    | S-nd | Current no-detach/suppression helper can strictly refresh after a pre-apply decline or known rebuild need. Specify that fixture so weak counts0 are true; no-detach alone does not veto the current earlier ordinary winner. Existing SPAWN_LOG prevents real spawn. Future C preselection remains separate. |
+
+    The H-after-restore rollback witness is appropriately **inside apply_incremental before public fallback**, under the original mutex but on a different healthy Cache connection/snapshot. On the declared healthy schema that open does not refresh the store, and the transaction has already ended; it does not recursively lock the original handle. It can see old rows/head/built_at after real epic decline. Later Requested with one core SPAWN_LOG entry is a distinct public result, not bool and not evidence of a real detached worker. Keep no-detach, suppression and recursion env unset for that public-phase fixture. Errors propagate independently. No C behavior is changed merely for the fixture.
+
+    Worker P0–P5's separate real S1/S2/S3 changes resolve the prior AlreadyFresh vacuity. P1 ambient and P3 explicit constructors run under Deny with one real Strict incremental each; P5 actual run_refresh_worker then has its own stale input and must record its own Strict transaction. P6 needs its own demonstrably stale input before asserting a nested operation. Sticky Deny inheritance/tightening, scope-exit restore and observation reset not modifying policy are sound and necessary.
+
+    The extracted real CLI classifier and actual per-call MCP hook are appropriate wiring locations. **Complete the actual-entry witness map during design rework:** the two described probes in handle_cache_refresh and tool_cache_status do not themselves fire for CLI rebuild/status/verify, which have distinct arms. A common probe before the ambient constructor, or explicit probes in each actual arm, must establish Deny there; a pure parser/classifier return alone is not proof the dispatcher called it before open. A second MCP list_requirements call must have its own scope-entry policy observation, since it does not run tool_cache_status's probe. These are bounded local probes, not new public knobs.
+
+    Current handle_cache_refresh(--worker) unconditionally spawns a watchdog thread that later calls process::exit; core SPAWN_LOG intercepts detached refresh spawning, not that watchdog. A future cli-lib “real dispatch” fixture must therefore stop at a narrowly declared test-only entry witness before watchdog activation, or execute the actual command in an owned isolated child with deterministic cleanup. Do not let a unit-test helper leave the watchdog alive or import C's future watchdog repair here. The openly stated core/cli-lib composition remains legitimate: core cfg(test) counters are not magically available from the dependency in a CLI binary. This session launched neither fixture nor child.
+
+    ## 5. Independent whole criterion table
+
+    “Retained” means binding and still requiring implementation evidence; it is **not a pass**. “Design coherent” means the proposed mechanism is source-grounded, not executed. F1–F4 refer to the blockers above.
+
+    | Criterion | Independent disposition and complete binding outcome |
+    | --- | --- |
+    | Parent AC1 | **FAIL remains controlling:** four concurrent readers, cache exactly one commit stale, one actual refresh, every reader strictly <2s, default1500ms, constructor-inclusive useful result/provenance. First independent T4 on actual remedy still owed. |
+    | Parent AC2 | Retain loser useful committed stale rows, honest stderr note, cache.stale=true where object contract applies, exit0. No all-fresh requirement. |
+    | Parent AC3 | C obligation: killed worker leaves previous committed cache readable and request present; next reader/tick respawns real completing worker. No B design credit. |
+    | Parent AC4 | Read under A13: losers zero with_cache_write/ladder; winner one fast-fail attempt. busy_timeout0 and strict delay constants unchanged. DX-1 is only explicit durability exception. |
+    | Parent AC5 | Strict CLI cache status and MCP cache_status show actual cache/store heads, built_at, pending request and real holder observation. Target==HEAD alone never means satisfied. C work remains due. |
+    | A1 | BUG-1664/1670 prerequisites own strict/revalidated mutations; session reap already YAML-authoritative, regression only; no new strict-by-delta resolver here. |
+    | A2 | Lock-info diagnostic only, no Alive/Unknown stale shortcut. Actual typed SQLite busy selects WriterBusy only after safe finish/restoration. F1 safety failures never become busy. |
+    | A3 | Flock only single-flight; transactional source-head recheck inside IMMEDIATE is correctness. O-tx-before-skip coherent; real closure skip and rows/stamp atomicity retained. |
+    | A4 | Same-thread tolerant nesting short-circuits; independent threads contend. Explicit Strict operation does not inherit weak eligibility from retry scope. S-k coherent; S-d/F2 needs corrected witness. |
+    | A5 | Never block refresh waits under store/SQLite write locks; writers do not gain a refresh-lock requirement. No recursive same-handle test. S-b must use actual supported acquisition. |
+    | A6 | boot_id+pid namespace domain, hostname display; mismatch Unknown kept, legacy local handling retained, doctor soft-deadline diagnostics; never stale authority. |
+    | A7 | C clear only on fresh current HEAD; three witnessed failed workers/600s suppress under approved phase interpretation. No launch/unknown failure invention, no new backoff. |
+    | A8 | C real current_exe, explicit paths, null stdin, CLOEXEC, detach/cgroup caveat, cap/log rules. Present worker/explicit constructors and body Deny; C early route not imported. |
+    | A9 | One invocation/per-MCP collector; stale observation persists; object cache key always present, array shape/stderr unchanged, structuredContent.cache plus text for tolerant MCP; no generic output/schema rewrite. |
+    | A10 | All TASK-1515 nits retained in B: BUG-1663 comment, head recapture, refill skip, epic pre-resolution. No reassignment. |
+    | A11 | Typed strict lock exhaustion propagates after existing retry policy without full rebuild; tolerant one-attempt busy distinct. Safety errors cannot reach generic schema/full-rebuild recovery. |
+    | A12 | Existing canonical cache_sidecar_path only; no new derivation or authority-bearing path. |
+    | A13 | One eligible fast-fail SQLite attempt; every loser zero wrapper/write/incremental/rebuild/post-race ladder and weak prep. F4 fixes mutant counts without reducing this rule. |
+    | Q1 | Ordinary TTY/non-TTY tolerant winner eligibility same. Current Q1 fallback Strict; future C known strict preselection and post-attempt observe-only approved interpretation retained. No early C rewrite. |
+    | Q2 | Pending migration never old-schema success. General ≤15s wait only absent write locks, then upgrade error; advisory0 silent successful exit without old-schema data. Show narrower exception separate. |
+    | Q3 | Opportunistic sweeps skip with log when not fresh, no refresh inside queue list; explicit sweeps strict. BUG-1664 owns it. |
+    | Q4 | Request is hint only, staleness re-derived; no false liveness. BUG-1778 write-error degradation and BUG-1779 RMW protections preserved. |
+    | Q5 | Session reap authoritative YAML unchanged; regression retained. |
+    | Q6 | Sibling mutation callers remain BUG-1670; queue/archive BUG-1664; no parallel feature. |
+    | B1 | Compatible non-TTY proven rebuild-needed/departed-holder Deferred semantics retained under signed pre-C/C precedence. No arbitrary corruption/schema/I/O swallow or invented worker. |
+    | B2 | One actual busy attempt, rollback/release/restoration before useful old snapshot; absent/misleading/Unknown sidecars irrelevant; next invocation retries, genuinely fresh final check may return fresh. F1/F4 cover failure truth. |
+    | B3 | Actual1500ms bounded shared deadline, advisory0, no backend reset or mandatory full sleep; reobserve holder; WorkerRunning means observed refresh flock, not health/progress. |
+    | B4 | General TTY/missing/unreadable/migration/unsupported-flock strict/error exceptions preserved and contained. Compatible missing stamp is not missing DB. Narrower Show deadline supersedes its general exceptions. |
+    | B5 | Strict mutation/revalidation, ID collision, gates, leases/claims, explicit cache commands; unchanged constants/ladder; retry scope restoration. Token/Deny does not replace strict revalidation. |
+    | B6 | Rows/head/built_at from same pinned snapshot; no later relabel. Same nesting/write-lock/order/output rules. H-after-restore inner boundary coherent; retirement F1/F2 incomplete. |
+    | DX-1 | Retain limited independent approval: admitted ordinary winner only NORMAL, exact prior or unusable retirement, explicit power-loss loss of derived rows+stamp together; no equivalence to FULL. |
+    | Checkpoints | Auto threshold and close checkpoint unchanged; no wal_autocheckpoint0, no no-close flag, no fsync-free or new WAL bound, no checkpointer. |
+    | R2 eligibility | Non-Clone/non-Copy operation token, own handle/thread/retry/autocommit checks, one creator, other callers Strict, deny-only classifier. Coherent boundary; F4 corrects admission evidence. |
+    | R3 completion | Checked finish/autocommit/restore/error precedence retained. New replacement/close ownership incomplete F1; no successful Drop inference. |
+    | L2(a) | Old retry_sleep aggregate preserved; Open/Write/Other from actual operation sum exactly; first-line wrapper entry; clocks/counters before constructor through useful result. Open retries allowed only as disclosed cost, no timing relief. |
+    | T1 | Full success/skip/decline/SQL/stamp/commit/busy/prepare/restore/rollback/unwind/P3 matrix retained; counts and retirement incomplete F1/F4. Busy real external holder remains held through useful-result assertion. |
+    | T1-R | Complete data API plus early exits, snapshot, poison, waiting caller, separate new handle. F1 close outcomes and F2 M9 proof remain blocking; M10 independent and feasible. |
+    | T2 | All actual strict paths and labels required, including nested/thread/worker/explicit/mutation. F3 fixes S-b; §4 completes actual-entry probe/cleanup map. No absent-label pass. |
+    | T3 | Actual eligible winner, concurrent pinned old snapshot and fresh new snapshot, stamp abort, reached-head skip, real epic decline before fallback; consistency only. F1/F4 failure truth still applies. |
+    | T4 | Correct proposed first-result acceptance: 256 meaningful rows, one commit/two retitles, four real pre-acquire arrivals, real held path, zero hold, one incremental/write/wrapper/prep/armed/tx, zero rebuild/request, all clocks<2,000,000µs. Unimplemented/unrun; no acceptance credit. |
+    | M1a | Feasible deletion of complete dependent weak prep/restore while retaining admission/O-tx; fail actual tx value2 vs1, not earlier count/setup. |
+    | M1b | No-op set with verification is refusal control only, not M1a detection. |
+    | M2 | NORMAL-at-open must reach each real strict writer and fail value2; fixture/open refusal is not detection. |
+    | M3a | Omit success restoration with actual armed/tx witness; exactP2 and separateP3 read fails. |
+    | M3b | Omit real decline/in-tx error restore; real closure/rollback boundary, exactP failure, not pre-apply injected error. |
+    | M3c | Omit busy restoration, armed1/tx0; real external holder then release before strict follow-up. ExactP witness retained. |
+    | M3d | Real set changed1, failed verify armed0, omitted restore must fail actual exactP/Retired assertion. No mocked changed-setting value. |
+    | M3e | Failed restore cannot become success; error + committed/rollback fields + retired state, under F1 close outcome. |
+    | M4 | Re-run skip_refresh mutation on future T4, fail PATH_WITNESS; old mutation gives no new credit. |
+    | M5 | Serialization fails four-arrival NONVACUITY; readiness timeout a failure, not retry-green. |
+    | M6-i | Invalid loser token without retry flag is refused-control, not weak-mode mutation. Wrapper detection separate. |
+    | M6-ii | Genuine illicit prep possible with retry scope+token; held writer may yield tx0. F4 corrects exact count/reach while loser zero-weak remains binding. |
+    | M6b | Force loser wrapper on read-only handle: wrapper1/write_attempt0; extended original loser assertion detects it. |
+    | M7 | Retry flag alone as authority must fail real Strict value2 in S-q/S-k. S-nd after flag drop is an unaffected control unless explicitly a live-flag strict call; do not falsely claim every schedule detects it. |
+    | M8 | Actual classifier worker→Allow must fail classifier check and independently reach constructor weak prep in matching core control. Wiring placement is separately witnessed, not assumed from pure helper. |
+    | M9 | Blocked F2: after-precheck acquisition barrier and actual exposure/type assertion needed; empty placeholder cannot yield promised successful file upsert. |
+    | M10 | Feasible independent successful-mint fence mutant with retirement strictly between precheck/mint; positive pre-retirement snapshot stays usable; no accidental nested fence must mask target. |
+    | C V2 R1 | Retained approved phase policy: preselect ordinary strict exceptions before tolerant work; late third failure blocks reservation, no second write, next independent invocation strict; reservation linearization; Show no launch AND no strict fallback. |
+    | C V2 R2 | Retained real child-existence boundary; launch errors separate, no launch backoff; post-spawn tracking errors no replacement launch or invented failure. |
+    | C V2 R3 | Retained token-idempotent witnessed outcomes, absorbing known nonfailure, clean reaped exit, unknown orphan history; dead/stale does not mean failed. |
+    | C V2 R4 | Retained cap before registration/backend, one-try admission, t0-based adjustment, try-only watchdog report, disarm completion; modern boot/ns/start identity and no post-reap resampling. |
+    | C V2 R5 | Retained at=first failure, started_at additive,600 inclusive/601 expired, no age renewal/token reconstruction; separate honest legacy compatibility count. |
+    | C V2 R6 | Retained10 error/10 other terminal/10 launch/8 nonterminal,600s unknown TTL,128KiB output cap, protected recent failures/live slots, pressure retirement of Unknown, no callback resurrection. |
+    | C future latency | TASK-1527 still blocked-by TASK-1526. After accepted integrated B, independently remeasure actual C winner including request summary/RMW; no timing inheritance. |
+    | BUG-1674 | Full selected UUID/native path/alias, bounded committed historical YAML and identity completeness, default linkage,4s operational/<5000ms external,≤1500ms aggregate wait, fresh in-lineage postactivation24h, both doctor limbs (≤10% over1s/no5s ceiling breach) remain separate and unmet. |
+    | Parent/authority | STORY-1484 closure pending. No code dispatch despite later design approval; no canonical/status/queue/record/mail/PR/merge/grant/hold/install/activation. Reserved1593/1591/1811/1812 and C/D untouched. |
+
+    All nine B-decision acceptance tests remain mandatory by exact name: `non_tty_full_rebuild_winner_serves_deferred_without_worker`; `deferred_full_rebuild_repeats_honestly_until_strict_refresh`; `reader_incremental_lock_error_does_not_full_rebuild`; `writer_busy_next_reader_retries_incremental_after_lock_release`; `strict_incremental_lock_error_propagates_without_full_rebuild`; `refresh_holder_exits_without_refresh_returns_deferred`; `tty_full_rebuild_winner_remains_strict_before_c`; `stale_rows_and_label_metadata_share_snapshot`; `stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running`. Apply the already approved C replacement interpretation where current C source superseded pre-C spawn expectations; do not rewrite retained historical assertions opportunistically to hide this rework.
+
+    Also retain exact named controls: `single_flight_four_readers_one_refresh` (old60s bytes unchanged; not a latency certificate), `losing_reader_past_wait_prints_stale_note_and_json_flag_exit_0`, `lock_winner_rechecks_is_stale_and_skips_work`, `reader_path_never_calls_with_cache_write` (extend wrapper witness, keep original assertion), `flock_unsupported_falls_back_to_strict_refresh`, `migration_pending_reader_never_serves_old_schema` (Q2 and advisory0), `nested_freshen_in_lock_holder_does_not_wait` and independent-thread contention, `refresh_txn_rechecks_head_inside_txn`, `second_process_skips_refill_after_migration_committed`, `head_recapture_after_incremental_err_break_stamps_current_head`, `epic_status_preresolved_before_incremental_txn`, `lock_info_foreign_host_is_unknown_and_kept`, `lock_info_foreign_pidns_is_unknown_and_kept`, `refresh_wait_refuses_while_store_or_sqlite_write_lock_held`, collector reset/output shape and strict mutation/revalidation tests. BUG-1778 structural hint-error and BUG-1779 serialized RMW/newer-request controls remain unchanged. None was run here.
+
+    ## 6. First failure and single E1: exact status and limits
+
+    Original zero-delay winner3 **2.648286s is FAIL**, one incremental/one write_attempt/zero retry. Losers1/2/0 took1.528038/1.528182/1.528164s with useful256 old rows, old head `738b2234f2920a1cf1f7f49d3ca856e77de65b39`, built_at `2026-10-08T18:59:51.828911521+00:00`, honest WorkerRunning; winner had two new titles and head `55705f5da0aecae520d0ee454a332e344aac78ca`. Raw stdout, failure stderr and full execution receipt were read. Exit101 at AC1 remains; prior holds/setup failures are not substituted or subtracted.
+
+    Exactly one actual E1 invocation is retained: immutable binary `8b262e2cb3b4f724b793bb29b366c784a12290d36cd4c2f8886850f1331fa87a`; predeclared private bubblewrap/strace invocation,45s supervision, exit0,36.900748s whole diagnostic invocation. Diagnostic winner3/TID29 **1.955642s is not AC1 credit**. W=1.943812s, two successful WAL sync durations0.692232+0.878999=1.571231s, S/W80.832%=>D1; Git0.038968s, Other0.333613s includes directory sync0.314588s. After useful result, WAL0.601683s and DB2.505229s remain outside the predeclared W, not subtracted from acceptance.
+
+    I read the full receipts and driver/analysis text, inspected the relevant raw successful flock, syscall endpoints and reader-output mapping, and rehashed the full620865-byte trace. I did not read every unrelated setup syscall as a new attribution analysis and did not execute either script or open an SQLite database. Original112-entry integrity is preserved historical evidence; this session rechecked its receipt hash, not its expensive complete artifact population. Prior21-entry manifest rehash had zero mismatches. No new attribution/performance/window selection occurred.
+
+    E1 demonstrates sync dominance in that later instrumented run only. It neither gives phase times for the original failure nor proves which syncs NORMAL removes. The trace lacks SQL phase labels and does not establish an in-window auto-checkpoint. D1 grounds considering DX-1, not accepting it as a performance remedy. No second E1, rerun, load filtering, retry-green, deadline increase, hold subtraction or new experiment is authorized.
+
+    ## 7. Actual audit commands and limits
+
+    Only read-only shell/Python/Git text and hashing commands, primary documentation reads, and this report/receipt creation were used. Representative exact executed commands (paths relative to `/home/joe/ai/aida` unless absolute):
+
+    ```text
+    cat .aida/discipline/two-seat-protocol.md .aida/discipline/rework-brief-craft.md .aida/discipline/seat-recovery-playbooks.md
+    ls -l .aida/handoff/orchestrator/run-20261008
+    cat .aida/handoff/orchestrator/run-20261008/TASK1526_LATENCY_REWORK_SKETCH_V3.md
+    sed -n '135,178p' .aida/handoff/orchestrator/run-20261008/TASK1526_LATENCY_REWORK_SKETCH_V3.md
+    sed -n '175,300p' .aida/handoff/orchestrator/run-20261008/TASK1526_LATENCY_REWORK_SKETCH_V3.md
+    git rev-parse HEAD main
+    git diff ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578 c67728c1dcaf8a577539d920bdc6a3c86126cebb -- aida-core
+    git diff ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578 c67728c1dcaf8a577539d920bdc6a3c86126cebb -- aida-cli-lib/src/lib.rs aida-cli-lib/src/git_backend_cmd.rs
+    rg -n 'pub fn|pub\(.*\) fn|fn recheck|conn.lock' aida-core/src/db/cache.rs
+    sed -n '1750,1910p' aida-core/src/db/cache.rs
+    sed -n '2944,3070p' aida-core/src/db/cache.rs
+    sed -n '3080,3110p' aida-core/src/db/cache.rs
+    sed -n '376,740p' aida-core/src/db/cached_git_backend.rs
+    sed -n '878,1032p' aida-core/src/db/cached_git_backend.rs
+    sed -n '345,565p' aida-core/src/db/cache_refresh.rs
+    sed -n '100,180p' aida-cli-lib/src/cache_cmd.rs
+    sed -n '1080,1120p' aida-cli-lib/src/mcp.rs
+    sed -n '5320,5385p' aida-cli-lib/src/mcp.rs
+    sed -n '3838,3880p' aida-cli-lib/src/lib.rs
+    sed -n '1150,1225p' aida-cli-lib/src/git_backend_cmd.rs
+    sed -n '1,180p' aida-core/src/db/refresh_worker.rs
+    sed -n '1075,1145p' aida-cli-lib/src/history_cache.rs
+    ```
+
+    Additional contiguous `cat`/`sed` reads covered the complete artifacts enumerated in §1, full relevant cache open/rebuild/helper/classifier ranges, and local registry transaction/close/synchronous/WAL-writer source. Python only read bytes, parsed retained JSON/text, removed verified duplicate embedded bodies for display, computed SHA-256 and invoked `git show <immutable-sha>:<path>` for identity comparison; it did not import SQLite or execute the retained analysis driver. The final receipt records all input/source hashes used, embedding checks and manifest mismatches. External reads were the three linked SQLite primary documentation pages only.
+
+    No Cargo/build/test/SQLite experiment, executable probe, new E1, live worker, vendor/forge child, implementation edit, raw canonical read, cache heal, mutation, grant/hold change, install/activation, git checkout/fetch/commit/push/PR/merge, status/queue/review-record/mail or reserved-work action occurred. No subagent was spawned by this advisor. Ordinary read-only audit command subprocesses are not implementation dispatch. The only intentional writes are this distinct private report and its separate integrity receipt in RUN.
+
+    ## 8. Handoff
+
+    The same TASK-1526 design needs a complete revised proposal that resolves F1–F4, incorporates the precise wiring/witness notes in §4, and keeps every table mutually consistent with actual source. Preserve V1/V2/V3, all READY/reports, original FAIL and the single E1 byte-for-byte. Do not implement these suggested mechanisms during this design-only handoff. Root may relay this complete judgment only through its separately authorized canonical process; this advisor performs no such action.
+
+    A fresh independent complete design disposition remains necessary. Independent code review and a different independent first actual T4 on the implemented remedy remain later requirements **if and when code dispatch separately becomes authorized**. There is no automatic release from this report, the retained limited approvals or a subsequent design pass.
+
+    TASK-1527 remains blocked-by TASK-1526; C winner remeasurement follows accepted integrated B and includes C work. BUG-1674 full-show/default-linkage/identity and both24h doctor limbs remain separate/unmet. STORY-1484 closure stays pending. Reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 and C/D branches are untouched.
+
+    The separate nonrecursive integrity receipt is written after this report; this report embeds neither its own hash nor that receipt's hash. Notify root of the verdict and artifacts, then wait.
+  created_at: 2026-10-08T21:05:35.428714385Z
+  modified_at: 2026-10-08T21:05:35.428714385Z
+  relayed_from: task1526-latency-v3-fresh-design-gate
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
