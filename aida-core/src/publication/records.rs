@@ -164,7 +164,13 @@ impl FileImage {
             Self::Regular { payload, mode } => {
                 // Privilege bits and nonregular inode kinds are not silently
                 // stripped. Symlinks/directories require separate effect types.
-                if mode & !0o777 != 0 {
+                // Every exact-image check (verify, apply, retry, restore, a
+                // fresh process) reopens the file read-only without chmod, so
+                // an image lacking owner-read could be installed but never
+                // recognised again. That profile is unsupported, and this runs
+                // for every before/after image before any target is touched.
+                // trace:BUG-1808 | ai:claude
+                if mode & !0o777 != 0 || mode & 0o400 == 0 {
                     return Err(RecordError::Mode);
                 }
                 payload.check_budget()?;

@@ -337,6 +337,118 @@ mod tests {
         assert_eq!(fs::read(root.path().join("a")).unwrap(), b"new");
     }
 
+    // Independent checkpoint F1: an image that exact-image inspection can
+    // never reopen (no owner-read) must be refused while validating the whole
+    // set, before the first valid effect writes anything.
+    // trace:BUG-1808 | ai:claude
+    #[test]
+    fn accepted_unreadable_afterimage_must_not_strand_recovery() {
+        for unreadable in [0o000, 0o200, 0o300, 0o070, 0o077] {
+            let root = tempfile::tempdir().unwrap();
+            write(&root.path().join("first"), b"old", 0o600);
+            let mut payloads = Payloads::new();
+            let valid = effect(
+                TargetRoot::Repository,
+                "first",
+                image(&mut payloads, b"old", 0o600),
+                image(&mut payloads, b"new", 0o600),
+            );
+            let stranded_after = effect(
+                TargetRoot::Repository,
+                "second",
+                FileImage::Absent,
+                image(&mut payloads, b"new", unreadable),
+            );
+            let stranded_before = effect(
+                TargetRoot::Repository,
+                "second",
+                image(&mut payloads, b"old", unreadable),
+                FileImage::Absent,
+            );
+            for set in [
+                vec![valid.clone(), stranded_after],
+                vec![valid.clone(), stranded_before],
+            ] {
+                assert_eq!(
+                    PreparedFileEffects::try_from(set.clone()),
+                    Err(RecordError::Mode),
+                    "{unreadable:o}"
+                );
+                // Journal decoding is the same complete-set validation.
+                assert!(serde_json::from_slice::<PreparedFileEffects>(
+                    &serde_json::to_vec(&set).unwrap()
+                )
+                .is_err());
+            }
+            assert_eq!(fs::read(root.path().join("first")).unwrap(), b"old");
+            assert_eq!(
+                fs::metadata(root.path().join("first")).unwrap().mode() & 0o777,
+                0o600
+            );
+            assert!(!root.path().join("second").exists());
+            assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+        }
+    }
+
+    // Positive controls for F1: every owner-readable profile completes,
+    // retries, survives a fresh verification (restart) and restores.
+    // trace:BUG-1808 | ai:claude
+    #[test]
+    fn owner_readable_modes_complete_reverify_restore_and_retry() {
+        for mode in [0o400, 0o440, 0o600, 0o640, 0o700, 0o744] {
+            let root = tempfile::tempdir().unwrap();
+            write(&root.path().join("first"), b"old", 0o640);
+            let mut payloads = Payloads::new();
+            let effects = PreparedFileEffects::try_from(vec![
+                effect(
+                    TargetRoot::Repository,
+                    "first",
+                    image(&mut payloads, b"old", 0o640),
+                    image(&mut payloads, b"new first", mode),
+                ),
+                effect(
+                    TargetRoot::Repository,
+                    "second",
+                    FileImage::Absent,
+                    image(&mut payloads, b"new second", mode),
+                ),
+            ])
+            .unwrap();
+            let roots = || {
+                BTreeMap::from([(
+                    TargetRoot::Repository,
+                    DurableDirectory::open_existing(root.path()).unwrap(),
+                )])
+            };
+            let first_roots = roots();
+            let set = VerifiedFileSet::verify(&effects, &payloads, &first_roots).unwrap();
+            set.apply(Direction::Complete).unwrap();
+            set.apply(Direction::Complete).unwrap();
+            for name in ["first", "second"] {
+                assert_eq!(
+                    fs::metadata(root.path().join(name)).unwrap().mode() & 0o777,
+                    mode,
+                    "{mode:o}"
+                );
+            }
+            // A fresh verifier models recovery after the installer process
+            // is gone: no retained FD, only the recorded images.
+            drop(set);
+            let fresh_roots = roots();
+            let fresh = VerifiedFileSet::verify(&effects, &payloads, &fresh_roots).unwrap();
+            fresh.apply(Direction::Restore).unwrap();
+            fresh.apply(Direction::Restore).unwrap();
+            assert_eq!(fs::read(root.path().join("first")).unwrap(), b"old");
+            assert_eq!(
+                fs::metadata(root.path().join("first")).unwrap().mode() & 0o777,
+                0o640
+            );
+            assert!(!root.path().join("second").exists());
+            fresh.apply(Direction::Complete).unwrap();
+            assert_eq!(fs::read(root.path().join("second")).unwrap(), b"new second");
+        }
+    }
+
     // trace:BUG-1808 | ai:codex
     #[test]
     fn aliases_symlink_parents_and_hardlinks_are_not_regular_effects() {

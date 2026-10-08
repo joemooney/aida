@@ -305,7 +305,10 @@ impl DurableDirectory {
             .expect("UUID staging name contains no NUL");
         let operation = (|| -> io::Result<()> {
             let destination = component(name)?;
-            if mode & !0o777 != 0 {
+            // Owner-read is required so the installed image stays verifiable
+            // by read_regular/sync_entry; refused before staging exists.
+            // trace:BUG-1808 | ai:claude
+            if mode & !0o777 != 0 || mode & 0o400 == 0 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "unsupported publication file mode",
@@ -527,6 +530,25 @@ mod tests {
         assert!(!peer.join("COMMIT.json").exists());
         assert_eq!(std::fs::metadata(&moved).unwrap().ino(), identity.1);
         assert!(DurableDirectory::open_existing(&original).is_err());
+    }
+
+    // trace:BUG-1808 | ai:claude
+    #[test]
+    fn unreadable_or_privileged_install_modes_never_stage() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = DurableDirectory::open_existing(root.path()).unwrap();
+        for mode in [0o000, 0o200, 0o070, 0o4600, 0o1600] {
+            let error = dir.replace_file("target", b"bytes", mode).unwrap_err();
+            assert_eq!(error.stage, WriteStage::ValidateName, "{mode:o}");
+            assert_eq!(error.visibility, Visibility::Unchanged);
+            assert_eq!(error.source.kind(), io::ErrorKind::InvalidInput);
+        }
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+        dir.replace_file("target", b"bytes", 0o400).unwrap();
+        assert_eq!(
+            dir.read_regular("target", 5).unwrap(),
+            Some((b"bytes".to_vec(), 0o400))
+        );
     }
 
     // trace:BUG-1808 | ai:codex
