@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T21:34:44.150358304Z
+modified_at: 2026-10-08T21:44:21.112925097Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -717,6 +717,132 @@ comments:
   created_at: 2026-10-08T21:34:44.150351725Z
   modified_at: 2026-10-08T21:34:44.150351725Z
   relayed_from: task1335-reconcile-diagnostics
+- id: 01a11d79-7378-73a3-9e96-fac1cb60b7d6
+  author: mcp
+  content: |
+    PROXY REVIEW ADOPTION — independent NEW reviewer final APPROVE at exactaba025175baf809e3c21ca7302b41b61714ff40c/tree8390e35b7fa18f815a792c1fbd5b190ed6a04bd5. Root read FULL22495report, verified separate receipt report SHAe1ea5664965a3cdf98e5f1cdbc708d93805d96f15b806b52955bbae99b42ba81 and actual publicFINAL21:44:08. Whole acceptance/source and qualified SAVED author targeted evidence, no new executed independent runtime. Integration/fullworkspace/checkCI/protectedreviewpublication remain owed; no newimplementationdispatch, no automaticDjoin, no Completion/record/mergecredit. No unresolvedsourcegatewaived.
+
+    # TASK-1335 SECOND REWORK — independent review
+
+    **VERDICT: APPROVE**
+
+    The pinned whole change satisfies the bounded diagnostic design and its D1–D3 amendments. F1335-1 through F1335-6 and R1335-1/R1335-2 are addressed within the existing replay policy. I found no remaining blocking source defect in that scope. Approval is for this exact source and the qualified existing targeted evidence. It is **not** a protected review record, machine grant, PR approval, integration result, batch admission, or merge authorization.
+
+    Reviewer: new independent Codex session, native thread/session `01a11d72-6145-79f1-ad31-8a7dc343a1ad`, 2026-10-08 America/Phoenix. This session authored no implementation, sketch, or previous verdict. The harness task path is `/root`; that is not a claim to be the earlier orchestration coordinator. No subagent or proxy supplied this judgment. Root may relay the entire report, preserving qualifications.
+
+    ## Exact pin and governing inputs
+
+    | Item | Verified identity |
+    |---|---|
+    | Requirement | TASK-1335; origin TASK-1-226; UUID `01a1116b-8bec-7f40-9e1e-beaf7f328dce` |
+    | Head | `aba025175baf809e3c21ca7302b41b61714ff40c` |
+    | Tree | `8390e35b7fa18f815a792c1fbd5b190ed6a04bd5` |
+    | Base | `b46aec1e674baae5a329416d4119e67b59200a88` |
+    | Local main / origin-main at inspection | `c67728c1dcaf8a577539d920bdc6a3c86126cebb` |
+    | Author worktree, read only | `/home/joe/ai/aida-worktrees/aida-pool-aida-4`, branch `task-1335`; HEAD/tree match, tracked status clean |
+    | Approved sketch comment | `01a11c6a-b5f5-7fe1-b661-36e1a16a9189` |
+    | Binding D1–D3 comment | `01a11c76-6863-73a0-b77e-9f8c14e2e203` |
+    | Implementation proxy comment | `01a11c76-de18-7b92-8a8a-b054276e401b` |
+
+    Read the complete final TASK1335_REWORK_READY, both prior independent review reports, both numbered rework instructions, the diagnostic sketch, preserved owning canonical description/comments and signed acceptance. Sketch/signoff/proxy body SHA256 values respectively are `b6c33cd55be44d1c14b27adac1b76dbdfff848b815865388fd671636e3a771ac`, `3284c6cad934c050459d55ea12df84e50d0e2a61131b663cbc4638d815c09ced`, and `dd3d72832a89cd0079debfc7630a576acdd852333d88f21ed2e59de017e4aa12`. These are preserved canonical snapshots, not a fresh canonical-state read. No current requirement mutation or current-state claim is inferred from them.
+
+    Read project AGENTS.md, reviewer role purpose and review/two-seat/session discipline. The explicit review-only assignment governs over normal skill procedures that would run tests, post records, send mail, change status or merge. No such workflow was invoked. Read the entire six-file base-to-head diff, exact committed whole-file snapshots, complete new evidence module and CLI fixture, and the complete affected handler, live planner, forge reader and supporting closure/covers/reopen/identity paths. The 4.9 MB monolithic lib.rs was examined by affected and supporting source ranges; this is not an exhaustive audit of unrelated subsystems. Whole-file bytes and every tracked author input were independently checked against the Git pin. No moving HEAD source was silently substituted.
+
+    The original TASK-1588 event remains a historical observation and parser hypothesis. This session did not reproduce it. Adjacent `(TASK-ID) (#PR)` extraction is local; the change supplies honest required-check failure reporting, not offline completion credit.
+
+    ## Whole criterion table
+
+    “PASS” below means inspected source plus applicable saved author runtime evidence, qualified below. It never means this reviewer executed a test. Source references use line numbers in the pinned tree. `CLI` denotes `aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs`; `evidence` denotes `aida-cli-lib/src/reconcile_evidence.rs`.
+
+    | Criterion | Disposition and verified evidence |
+    |---|---|
+    | D1: typed clear/open/unavailable, retained candidate identity/source/full SHA before filtering | PASS. `evidence:22,83,305–416`; `lib.rs::handle_db_reconcile_status:78373` records outcomes before eligibility/freshness/open filtering. Identity retains UUID/display and the outcome retains the textual evidence ID. |
+    | D1: complete required response, positive integer rows | PASS. `evidence::parse_open_change_rows:203` loops over every row and refuses malformed/truncated/non-array/invalid-number output. Unit `open_change_rows_require_a_complete_valid_array` includes malformed trailing rows, zero/negative/string and non-array cases; CLI:498 drives missing/exit/garbage/object/bad-row cases. |
+    | D1: truthful failure classes | PASS. `EvidenceUnavailable`, `exit_failure:190`, and query functions preserve the observed missing executable, spawn failure, actual exit/first stderr, JSON/row failure, discovery and unsupported-provider distinction. They do not infer an auth cause from an arbitrary exit. |
+    | D1: normal and dry-run required-outage errors at every return | PASS. `lib.rs:78766–78830,78893,79197`; ordinary Result errors, no numeric exit family. CLI:498 exercises targeted/sweep × normal/dry-run; :1015 exercises mixed effects. |
+    | D1: all-or-nothing normal batch, honest clear-peer reasons | PASS. `lib.rs:78558–78600` retains each check's result before clearing normal flips; checked-clear peers become BatchDeferred, open peers keep OpenChange. CLI:1015 asserts both statuses and canonical snapshot; all-clear/mixed-open controls succeed. |
+    | D1: genuine no-match, open, terminal, ineligible and reopened no-op distinction | PASS. `lib.rs:78781–78829`, `evidence::render_outcome:450`. CLI:611 verifies controlled out-of-window no-match and pinned range, :648 terminal versus required/diagnostic failure, :830 stale evidence versus later commit. Existing known refusal semantics stay successful. |
+    | D1/F4: diagnostic-only unknown versus measured zero | PASS. `evidence::count_diagnostic_rows:276` requires string title AND body on every row; `lib.rs:78716–78761` warns without making the diagnostic fatal. CLI:648 covers missing, wrong-type, mixed and truncated rows with normal/dry-run snapshots, plus valid empty/matching/nonmatching controls. |
+    | D1/F5: actual independent effects, no peer completion credit | PASS. `lib.rs:79070–79159` derives confirmed normal/stale completions only from this transaction's Apply verdicts; `OtherEffects` uses confirmed counts. CLI:1425 proves peer completion plus outage is not counted/emitted and actual stale completion plus outage is counted once. Separate Draft path remains separate (:1015); no whole-sweep atomicity claim. |
+    | D2/F3: strict TOML and affirmative pure-git classification | PASS. `forge.rs::checked_forge_kind:1057`, `checked_forge_provider:1084`, `checked_origin_url:1110`: actual TOML table parsing, strict provider shape/token, checked local origin commands. Supported non-pure provider wins; stale pure-git yields to recognized origin. Missing provider/origin can affirmatively mean pure git. |
+    | D2/F3: config nonmutation and real positive/negative routes | PASS. CLI:1081 and :1167 cover ordinary/inline/dotted values, wrong types, unknown provider, malformed TOML through real CLI, unsupported configured GitLab, no-provider/no-origin, and local bare origin. Snapshot includes config bytes. Checked reader does not call the config-repair writer. Compatibility resolver policy remains separate. |
+    | D3: scanned default-branch OID/range pinned | PASS. `lib.rs:78184–78292` retains default-branch precondition and resolves HEAD once; git log consumes that OID. `--since` option guard remains. CLI:611 controls distance and since recovery. Human output abbreviates OIDs; full SHA is retained internally. |
+    | D3: attribution/plan/body/closed-unmerged negatives | PASS. `lib.rs:78308–78353` changes candidate recording, not extraction policy. CLI:758 proves existing leading/terminal/multi-spec and gated squash-body positives versus prose/plan/ungated body/malformed/ambiguous negatives. CLI:1858 uses a real unmerged branch and verifies no task/review credit; it is not a forge closed-state proof. |
+    | D3: canonical mapping and ambiguity | PASS. Collection uses `trailer_spec_or_skip`; `plan_reconcile_seam:79267` re-resolves unambiguously and compares scan UUID before writing by resolved UUID index. CLI:758, :888, :1338, :1610 cover remapping, initial collision, newly ambiguous IDs and object replacement. |
+    | D3: SHA and legacy deliberate reopen fences | PASS. Existing `auto_bump_evidence_is_stale:75519`, `human_reopen_after_evidence:75546`, freshness filters :75602/:75614 are preserved. Shared seam repeats freshness. CLI:830 includes legacy human reopen followed by automated overwrite and later-commit positive. :888 includes actual covered Completed→Approved; :1338/:1610 add stale and held reopen barriers. |
+    | D3/F2: all writing decisions before status/audit mutation | PASS. `lib.rs:78942` calls the complete planner before first hold/normal/stale mutation. Current identity, eligible status, reopen and closure are decided for every writing item. Targets are UUID indices. Forge queries precede the writer; planner uses local store/Git reads. |
+    | F1: unsupported covers cycle and support withdrawal | PASS under the existing DIRECT rule. `covers_chain_rooted:79443` accepts only live Completed targets or surviving non-covers normal flips. The planner repeatedly withdraws covers support and re-runs closure after a completion drops. CLI:1253 removes both cycle anchors, reopens a normal anchor, and pairs untouched Completed/normal anchors. |
+    | F1 retained multi-step/healthy/next-run cases | PASS scoped to direct semantics. CLI:1770 adds a blocker to a normal flip, then observes its covers dependent lose support; a mutually linked pair with independent Completed anchors survives; a covers-of-covers story remains Done in run 1 and graduates in run 2. This is not a general transitive covers fixed point. `collect_covers_completed_review_flips:76193` already takes only the pre-covers normal list; requiring transitive same-run graduation would change policy. |
+    | F2 retained stale-review races | PASS. CLI:1338 contains new closure blocker, terminal rejection, UUID replacement, deliberate reopen, new ambiguity, and unaffected completion, with consumed barrier, status/history and event checks. Independent stale-review attribution has no new required forge query. |
+    | R1335-1: hold decision and CURRENT payload | PASS. `plan_reconcile_seam:79387–79430` re-derives blockers/criteria from live graph using surviving completions. Removed hold conservatively becomes Changed; remaining hold carries a new ClosureHold. Writer :78957–78966 applies that payload. No stale scan hold is written. |
+    | R1335-1: hold refusal reporting and legitimate control | PASS. `lib.rs:79078–79128` retains hold verdicts, updates outcomes and reports only live holds. CLI:1610 covers removed/replaced blockers, cleared criterion, UUID replacement, new ambiguity, reopen, terminal status, unchanged genuine hold and unaffected normal completion. Refused cases have no hold note/auto-bump history; replacement note names only current blocker; completion-event counts are checked. |
+    | R1335-2: paired held stale-review preview and normal run | PASS. `lib.rs:78615–78667` computes closure over normal AND stale completions before preview, removing held stale stories with cause-only Held reasons and no Done landing. CLI:1525 pairs blocked/declared-criterion stories with an unblocked positive, checks preview counts/reasons and full canonical/config dry-run snapshot, then normal statuses/history/no landing notes/events. |
+    | F6: one completion per UUID | PASS. `plan_reconcile_seam:79305–79327` consolidates accepted completion items before writes. Writer, confirmed list and events consume Apply only. CLI:1473 covers same-subject and separate-commit native/display aliases, one processing record/status transition/event and repeat idempotence. It allows either existing candidate SHA; no new newest/first-valid evidence selection policy is claimed. |
+    | History/provenance/count/no-write assertions | PASS within fixture scope. Positive completion SHA/history and idempotence at CLI:498/:830/:1473; actual-effect and event assertions at :888/:1253/:1338/:1425/:1610/:1770. Snapshot :424 includes config, canonical object/history bytes, store HEAD/log/status and code refs. No claim of zero writes to all runtime/cache files. |
+    | TASK-1600 attribution unchanged | PASS. No diff in `pr_ship.rs`; saved rw2-lib names both `pr_ship::tests::task_1600_incident_titles_and_bodies_do_not_grant_completion` and `task_1600_only_store_resolving_trailers_and_branch_recovery_survive` as ok, alongside five other task_1600 tests. |
+    | No new authority/schema/command/review-target policy | PASS. Six-file diff adds internal evidence/planner types, bounded readers/reporting and tests/docs. Existing private fixture grant helper is reused unchanged; no production bypass introduced. No new public command flag or persisted requirement field. |
+    | Documentation and traceability | PASS for the additions. AGENTS:25 and storage manual:66 describe outage distinction, independent effects and current hold/preview behavior; changed implementation/tests carry TASK-1335 traces and retain existing trace attribution. Existing surrounding manual shorthand about only Done states is older than this change. |
+    | Main overlap | PASS for content compatibility only. Complete 447-line base→current-main diff inspected; only lib.rs overlaps and all hunks are outside changed reconciliation ranges. Private whole-file three-way merge exits 0. Integrated runtime checks remain owed. |
+
+    ## Findings and retained limits
+
+    **No blocking finding.** Consequently there is no invented failing reproduction or source line labelled as a blocker. Prior findings remain historical rejected-head evidence; they were not deleted or retroactively marked as passing on those earlier heads.
+
+    The direct covers interpretation is material: a story supported only through another covers candidate is not expected to graduate in the same run. The revised implementation and tests now say this explicitly and preserve next-run behavior. The new test's healthy mutual pair has its own Completed anchors; it does not prove arbitrary transitive same-run closure. That stronger property was neither implemented nor necessary to preserve BUG-113's actual collection semantics. The combination of rejected-cycle test, normal-anchor loss, positive roots and next-run graduation is meaningful coverage, not a blanket “all graph shapes tested” assertion.
+
+    The alias dry-run counts textual candidates before live UUID consolidation. They do not establish one-write accounting; normal-mode object/processing/event assertions do. Snapshot equality excludes cache/dispenser/runtime churn and is not a full filesystem no-write guarantee. The CLI harness uses cleared environment, private HOME/XDG and repositories, pinned fake gh/glab and vendor tripwires. Its existing private ADR-66 helper writes fixture grant/roster records for an explicit fixture principal; this reviewer created no grant. The fixture does not install a Git/network refusal wrapper. Therefore these logs prove controlled forge responses, not OS-enforced absence of every transport attempt. No new independent runtime probe was required or run.
+
+    ## Source and runtime evidence are separate
+
+    This reviewer ran **no Cargo, build, test, check-ci, AIDA binary, fixture, installation, or activation**. Runtime results below are preserved author runs, inspected as artifacts. Static review came first. Python was used only to read/hash/copy source and logs, compare immutable Git blobs and write review artifacts; Git operations were local read-only inspection plus `merge-file -p` into private scratch. No source edit, branch mutation, fetch, remote probe or worktree creation occurred.
+
+    | Existing final log | Actual recorded result and qualification |
+    |---|---|
+    | rw2-lib.log | Recompiles pinned-worktree library, test profile, 106 passed / 0 failed / 7717 filtered; 21.84s; DONE exit=0. Includes both named PR-ship attribution tests. |
+    | rw2-cli.log | Recompiles library/CLI, 17 passed / 0 failed; 106.88s; DONE exit=0. All 17 functions in committed fixture appear. Over-60-second notice on window test is followed by ok, not a timeout. |
+    | rw2-check2.log | Successful dev-profile check, 51.34s, DONE exit=0. Exact `--tests` argv comes from READY, not a full invocation manifest in log. |
+    | rw2-clippy.log | Successful library/CLI dev-profile checking, 84s, DONE exit=0. `--tests -- -D warnings` supplied by READY; log contains no warnings but does not itself record full argv. |
+    | rw2-nodefault.log | Successful library/CLI dev-profile check, 83s, DONE exit=0. No-default flags supplied by READY; fast log independently names this gate. |
+    | rw2-cifast.log | 21 fast-tier gates passed, DONE exit=0; explicitly includes successful formatting and no-default checks. Intentionally failing classifier fixture is followed by unittest OK and gate success. Explicit skips mean this is not full check-ci/workspace validation. Portability gate fetched origin in the AUTHOR run; this reviewer did not repeat it. |
+    | standalone fmt | READY reports pass; no separate log. Actual successful fast formatting gate is the retained corroboration. |
+
+    First failures are retained: rw-cli1 records 12 pass/2 fail (covers assertion wording and a failed covered-reopen barrier without fixture advisor authority); rw-cli2 is empty, so supplies no result; rw-cli3 records Cargo slot queue and DONE exit=124; rw2-check1 records only slot queue, with 590s timeout supplied by READY. The later successful rw2 run does not erase them. Earlier original/rework reports retain the original 8/8 failures, timeout and tooling limitations in full. No broad suite was rerun to manufacture a clean baseline.
+
+    ### Artifact qualification
+
+    Independently compared **2,091 tracked blobs** from the author's current worktree to the exact head (Git blob identity plus SHA256 manifest), with zero mismatches, including manifests/lockfiles/support code. All six changed source hashes match READY. Author tracked status is clean and HEAD/tree match. The four changed Rust/test file mtimes precede final executables: forge 12:39:05, evidence 13:50:14, lib 14:03:02, CLI test 14:03:28 MST. Docs edit after tests does not compile into those artifacts; fast check follows it.
+
+    | Existing executable, hashed but NOT run | SHA256 | Observed mtime MST |
+    |---|---|---|
+    | library test `aida_cli_lib-e20b44e11b2231d5` | `b8b37d6c40470dbd59ef13fb26b69d46de2062734c0098b56d0306da4b8162f1` | 14:09:31 |
+    | CLI fixture `task_1335_reconcile_unavailable_evidence-7893c4e45abcc772` | `ca0adefe925efa72d77542477e785235622680b1bb0c9c8a58414e94357f6a3e` | 14:10:55 |
+    | `target/debug/aida` | `f4f30b4210e2ed1b1eb5bdc4f2b2a1fa7e28dfd89ecb5a088028c143e95e86d5` | 14:10:56 |
+
+    Hashes match READY. Cargo fingerprint metadata is preserved and inspected: default/tui feature sets, native compile_kind 0, test profiles, mold linker flag, matching local library dependency identity for CLI and fixture. Logs name the corresponding executable paths. These observations support reuse of the saved results as targeted final-source evidence. They are **not** an independent reproducible-build attestation: current worktree equality/mtime/fingerprint bytes cannot reconstruct every historical external dependency/environment, and logs are not signed build-input manifests. No old build/version header was treated as exact-source proof. Lack of stronger attestation is not a source defect or a reason to rerun forbidden broad suites here.
+
+    ### Exact source hashes
+
+    | Path | SHA256 |
+    |---|---|
+    | aida-cli-lib/src/lib.rs | `87a64d1058ce9854b2da183310170e4bdbd3116ec384016abe3633cc8a11ffc6` |
+    | aida-cli-lib/src/forge.rs | `d3469aefabe7e45eac3c0bc1fd2a470d9d0b0d3978438aaea59cc9c00fcf0d34` |
+    | aida-cli-lib/src/reconcile_evidence.rs | `c06792a7955dea8b7bbc374c7c7bbf7d49e18717fda62d1ae4dc7cabd318689e` |
+    | aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs | `ad34ccd97124ed6b2b932b7634870d38d8981f9b44aa796268cab46b638157fd` |
+    | AGENTS.md | `5f66702b3f18b307cc8ce81bf7892bf2d4d7bd928964bb6383b32187dea1ba3e` |
+    | docs/cli/10-storage.md | `06ec8777148d736056b473a78a6abab4b8d0a5a29b300cb411b9ada8a930893f` |
+
+    ## Main compatibility, integrity and handoff
+
+    Main's 15 changed paths overlap this candidate only in lib.rs. Inspected whole main diff, including surrounding consumers of changed PR UI/seat metadata; none changes this candidate's forge/evidence/planner contracts. Three-way whole-lib content merge returned 0; merged bytes SHA256 `1c1c2ae396119ef9b9c83d7827c7aa72007e77e5d5c40ef5beabcac317629cfd`. This was a private content check, not an integration commit or integrated build. Reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 were not altered or reviewed for independent acceptance. Their appearance in main-overlap inspection grants them nothing.
+
+    Durable evidence: `TASK1335_SECOND_REWORK_INDEPENDENT_CHECKS/` contains exact source copies, complete whole/main diffs, full tracked-source qualification manifest, fingerprint metadata, copied actual logs, acceptance bodies and the initial prior-artifact hash inventory. Companion `TASK1335_SECOND_REWORK_INDEPENDENT_REVIEW_INTEGRITY.json` binds this report, source/log inputs, native thread, final pin and prior-artifact preservation check. Prior artifacts remain byte-for-byte intact. Initial oversized terminal reads were truncated and relevant missing ranges were read separately; one discovery command hit an unrelated permission-denied directory and one guessed log directory was absent. These are inspection limitations, not product failures.
+
+    Root should relay the full verdict and evidence limits. **Full workspace and full check-ci remain owed once at batched integration**, followed by the applicable protected review/publication gates. This source approval does not admit TASK-1335 to existing Batch D; D exclusion is unchanged. No additional child workspace/check-ci is requested. Any changed candidate or combined integration tree needs the normal exact-tree qualification; this report cannot follow a moving branch.
+
+    No canonical status, queue, mail, comment, protected review record, PR, push, merge, grant, hold, install or activation action was attempted. The earlier no-open-PR queue-Done refusal and protected-record floor remain intact. No owned test/build children exist to stop. This review ends with the stable report and receipt; it promises no ongoing watch.
+  created_at: 2026-10-08T21:44:21.112917922Z
+  modified_at: 2026-10-08T21:44:21.112917922Z
+  relayed_from: task1335-second-rework-fresh-review
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
