@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T03:44:37.196009956Z
+modified_at: 2026-10-08T03:52:49.008597354Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -598,6 +598,50 @@ comments:
     PROXY DECISION: accept independent v4 CHANGES REQUESTED in INDEPENDENT_SKETCH_V4_SIGNOFF.md for the single shared callback-origin gap. Inherited Git descendant capability plus genuine executable/ancestry cannot establish that Git supplied the callback input. Request one narrow executable sealed-execution or invocation-origin mechanism; retain accepted advancing-default coverage and binding refinements1–6. BUG-1808 owns the shared substrate first, BUG-1802 consumes later. No implementation/queue/status/grant/hold/merge authorization yet. Concrete author brief authority-sketch-v5-author.md.
   created_at: 2026-10-08T03:44:37.196009956Z
   modified_at: 2026-10-08T03:44:37.196009956Z
+- id: 01a119a4-6e70-7053-aceb-b512c1d6022a
+  author: codex/authority-sketch-v5-author
+  content: |
+    SKETCH (awaiting advisor signoff): BUG-1802 — v5 consumption of the common sealed callback-origin contract
+
+    Author: Codex authority-sketch-v5-author, native thread 01a1199c-e3f0-7e62-806a-4e4bbd2a5e30, separate Joe-assigned REVISION AUTHOR, 2026-10-07 America/Phoenix. AIDA_SESSION_ID absent; no authenticated review grant or independent approval asserted. Baseline 199e591b07aa76a59cd34f0a41946f918501f6ba. No production implementation of these proposals exists at that baseline; all named witnesses are proposed, not passes. Final authority-sensitive merge remains Joe/operator-owned.
+
+    ## Exact amendment and precedence
+
+    Amends BUG-1802 v4 comment 01a11990-78a8-7780-9055-0b76eeec7049, file BUG-1802-sketch-v4-addendum.md, 31561 UTF-8 bytes, SHA256 c2832ce1e4e4d1f4eabcbc73c75978e63487e492c6726b2944b552f2ca293206. Underlying v3 comment 01a1197c-168c-7202-a129-e447a086efd7 has SHA256 165f0ce49e4a80788a9ec4cfa1c1e740c3d06ed694f359a9825e5fe5292d3b1f. These files matched canonical comment bodies exactly, including trailing newlines.
+
+    Read actual INDEPENDENT_SKETCH_V4_SIGNOFF.md and canonical verdict 01a11999-612e-7663-897a-6b78531d74c6, body SHA256 6ac89ddea64d98527f8a1ae0cc8e3876e51378b325386f6c894015d0df18a0cb. Earlier policy A–E and independent binding decisions, including report refinements 1–6, remain superior to author prose. V4's explicit supersessions remain effective; unaffected v3/v4 text and witness matrices remain normative.
+
+    This consumer incorporates the ENTIRE common contract in BUG-1808-sketch-v5-addendum.md, SHA256 8c356c47fd5fd7aaf65b7e87ee679d0586819775e9063d59ef0940785244b5d5, which itself pins BUG-1808 v4 comment 01a11990-553d-7f80-bcf6-21f9b3e06bfe / SHA256 7ed0561699c5f184572612e03f19b72aa3e06cf049eb4ea6958ef45da369e4f2. Canonical v5 comment IDs/readback are recorded in SKETCH_V5_READY.md. There is one common implementation, not a duplicate protocol in this consumer.
+
+    In v4 “Shared callback/publication contract consumed here,” supersede the paragraph's statement that OS peer identity/live bound Git ancestry/executable/bundle plus the inherited capability authenticate every callback. They are necessary corroboration and insufficient origin proof. Apply SealedGitDomain's closed configuration/executable graph, actual slot/input origin and admission rules instead. Also supersede that section's after-connect-only timeout, any later COMMIT-chain rewrite implication, universal version-independent ref-edge interpretation, and recovery reaping assumption with the companion's inclusive deadline, immutable decision/append-only observations, version/backend profile and nonchild-safe quiescence. No other work-operation, accepted-default or reviewer policy is replaced.
+
+    ## One-way consumption and binding refinements 1–5
+
+    BUG-1808 FIRST owns and independently delivers LaunchPublisher, PublicationGuard/coordinator, assignments/activations/receipts and GitPublicationAdapter/PreparedGitStep/CallbackPump/HookClient/SealedGitDomain. Its ordinary generic code/team/store operations do not require this bug's contributor, W, START or verdict policy. BUG-1802 adds those policy consumers later to the SAME prepared steps and retained receipts. No reciprocal prerequisite, duplicate launcher, grant issuer or schema.
+
+    1. Consume the exact supported Git 2.43.0/files/SHA-1 executable profile, effective config/attributes/ENV/runtime seals and hook bundle. Unknown build/backend/phase refuses before setup. Prepared/committed/aborted semantics, zero-old ambiguity and prepared-rejection-without-aborted are explicit. Symbolic HEAD/admin effects use owner-journaled verification; newer preparing/symbolic wire variants require a distinct reviewed profile, never permissive parsing.
+    2. Consume FINAL message plus resolved store-snapshot GateReceipt, actual prepare-commit-msg source/trailer rules, complete formatter/restaging effects, glyph and other integrity checks, skill-sync make/cargo output/applicability/warnings, and pre-push mirror outside the local guard. Ordinary filters and editors run without callback credentials in exact private preparation; their outputs cannot count as callback evidence. Required unsigned commit/builtin rebase/conflict/dirty-auto-stash/clean-submodule/production-hook positives remain. Concrete unsupported signing/custom-driver/executable-custom-hook variants are diagnosed before setup, not silently stripped. A newly discovered required positive that the profile cannot support remains a named adapter blocker; this reference does not waive it.
+    3. COMMIT decision/write-set stays immutable; later callback/install/activation observations append only within its predefined step namespaces/attempt budget. Retained final receipt binds decision and validated observations. WORK FINAL requires authentic actual observations, full source/map completion and the same exact operation/ref/old/new/phase joins; neither SERVICE already-installed verification nor another helper may fabricate a missing committed/rewrite observation.
+    4. Consume the single inclusive finite deadline for connect, partial frames, object decode, Git output draining, termination and shutdown, with no home/repo/episode/Git-lock acquisition in the pump. Recovery holds home, proves old-domain quiescence with containment and OS PID/start handles even for nonchild Git, then uses a fresh sealed attempt/credentials. Inability to prove quiescence or restore exact effects remains blocking recovery, not successful unchanged-state refusal.
+    5. Generic substrate completion is not WORK attribution. This policy alone determines retained contributor/transformer obligations and START/record/ship eligibility. A successful substrate SERVICE install cannot clear a sticky work gap. Preserve stable resumed/reissued actor identity, independent siblings, author-descendant exclusion, full ancestry, typed invalid candidates beside valid approval, archive/closed history, explicit revocation versus natural expiry and all corpus/hold/under-lease checks.
+
+    ## Binding refinement 6: preserve the accepted-default design
+
+    Keep immutable B, pinned F/complete closure C, PRE-source obligations O captured against C_previous before considering C_new, and the unchanged formula `W(H) = (R(H) minus (R(B) union C)) union O`. Keep original/transforming/dirty participants and sticky gaps. START pins the same observation/W/O/K/completion digests; record and ship consume those facts, never re-sample moving default to shrink W. Unrelated closed squash M needs no invented actor. This is the v4 mechanism already judged acceptable, not another redesign.
+
+    `prepare_accepted_default` must retain a complete configured-forge query transcript: authenticated project/default ref identity, exact queried commit/change identities, all association/result pages and continuation cursors, final end-of-pagination evidence, normalized results and response digests. Rate-limit, timeout, permissions ambiguity, partial pagination, missing page, inconsistent project/ref/OID or unavailable endpoint is UNAVAILABLE/INCOMPLETE, never an empty association. Only a successfully completed authoritative query for that exact object/project, with zero associations across all pages, permits the direct-default classification. A known squash/merge association whose merged record/closure is missing or contradictory cannot fall through to “direct default commit.” Pin fetched full object DAG and closure evidence as already specified.
+
+    At begin, and again at consuming START/record/ship (including the merge-lease recheck), revalidate relevant local reopen history/markers, holds, open-episode obligations and closure generations against the pinned observation. A deliberate reopen/hold cannot be hidden by an older forge closure. This revalidation concerns current local blocking facts, not a new moving-default sample that can reduce O or W. Incomplete prior open-work discovery is not authoritative empty. No fresh review/lease/grant can repair missing source evidence.
+
+    ## Proposed witnesses and disposition
+
+    Consume the full proposed `git_callback_descendant_cannot_forge_observation` matrix from the common addendum through REAL wrapped commit/rebase, production hooks, P4 and original-publisher-dead recovery, fake HOME/vendor/forge and temporary repos. The attack executes genuine HookClient and genuine shell hook from configured non-hook private-preparation Git, including a fixture-injected inherited live descriptor/capability, correct repo/live Git ancestry and forged prepared/committed/rewrite input with the true callback withheld. It must obtain no accepted evidence/WORK FINAL. Attempting that helper configuration inside callback-capable Git must be excluded by the seal or refused before setup; if it executes there, the boundary itself fails. Include post-plan configuration change, incomplete real streams and paired genuine callbacks/ordinary filter/editor/hook positives. No helper-only test substitutes for the real entrypoints.
+
+    Retain `work_operation_hook_publication_lock_order`, `bug_1808_publication_git_hooks_do_not_reenter_home`, every cross-repo/history/peer/no-residue/bootstrap/crash witness and all v4 PR-rebase/cascade/finish/auto-stash/continuation cases. Preserve the B->M squash with witnessed X->X' and unrelated-M-only reviewer Q positive; unknown-old-X/missing-hook/dirty-source negatives remain blocked. Extend those fixtures with a multi-page association whose blocking result is on the last page, incomplete pagination/unavailable versus authoritative empty, and reopen/hold after observation/before START or ship. Proposed tests only; none executed.
+
+    Separate authoring is complete subject to fresh DIFFERENT advisor judgment of the new sealed-origin mechanism and its concrete compatibility limits. This author supplies no approval, implementation, status/relationship/queue/grant/hold change or merge. Earlier policies and final operator merge ownership remain unchanged.
+  created_at: 2026-10-08T03:52:49.008597354Z
+  modified_at: 2026-10-08T03:52:49.008597354Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
