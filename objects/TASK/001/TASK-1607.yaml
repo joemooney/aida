@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:25:04.915192114Z
+modified_at: 2026-10-08T02:39:49.653946886Z
 req_type: Task
 tags:
 - guided-lane
@@ -207,6 +207,65 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-08T02:23:56.932572555Z
   modified_at: 2026-10-08T02:23:56.932572555Z
+- id: 01a11961-9b95-7743-9b3b-e66abea73dca
+  author: joe
+  content: |
+    # TASK-1607 C7 F1/F2 — ready for fresh independent review
+
+    Implementer report only; no independent verdict or approval.
+
+    - Final HEAD: `88e8b971f534700425e78aa3eba8406d6d2a80ae`.
+    - Reviewed predecessor: `11efa4a218c9381a2408bdb59e5f9ddb406f0ab5`.
+    - Immutable main base: `199e591b07aa76a59cd34f0a41946f918501f6ba`.
+    - Existing worktree: `/home/joe/ai/aida-worktrees/aida-task-1607`; branch `story-1485`.
+    - Existing lease `01a119224b9d` retained; no duplicate lease. Authoritative CLI `/home/joe/ai/aida/target/agent/aida` confirmed implementer and changed Approved → In Progress with `aida edit`; no completion transition.
+    - Normal `git push origin story-1485` succeeded, advancing `11efa4a218` to this HEAD; `f1-f2/push.log`. Existing hook also reported mirroring the confirmed ref to GitLab.
+
+    ## Concrete changes
+
+    F1: one absolute-deadline reconciliation helper runs through lifecycle/gate pruning under the seat lock and is shared with matching-request polling. At `now >= deadline`, the request times out once, keeping holder, generation and tombstones unchanged. Late ack/release-with-request refuse, holder dispatch resumes without a polling requester, and explicit resume cannot revive an expired UUID. Existing generation/request matching remains in place.
+
+    F2: current-caller and persisted-requester validation share the canonical local `seat_authority::validated_grant` implementation. Ack and release install a callback that reads the persisted grant/roster at handover under the seat lock, rather than carrying a pre-lock authority snapshot. It checks grant handle, subject, session, seat, revocation, expiration, roster ceiling and the existing direct-grant constraint. Missing/invalid authority cancels the request without demoting the holder. Request records now persist the validated subject; legacy records deserialize but cannot transfer without that binding. Existing provably-dead requester release behavior is retained.
+
+    No network/forge calls were added under the seat lock. The callback uses the existing local grant and roster readers. No grant issuance, roster permissions or authority floor changed. Production gateway steps 4–5 and history projection remain deferred; hard takeover remains disabled. The previous child scope, shell exemption, bounded lock, shared root and help/audit changes remain present. Deferred launcher files are unchanged from the reviewed predecessor; imported reliability files are unchanged from the immutable main base. Signed sketch `faa07e4acb`, immutable main base and reviewed predecessor are all ancestors of final HEAD.
+
+    ## Checks and witnesses
+
+    All evidence below is in `f1-f2/` relative to this report.
+
+    | Check | Result | Evidence |
+    |---|---|---|
+    | Original independent CLI control, before fix | pass | `red-control.log` |
+    | Original independent expired and revoked ack witnesses, before fix | both intended assertions fail, exit 1 | `red-expired.log`, `red-revoked.log` |
+    | Expanded expired/revoked release witnesses, before fix | both intended assertions fail, exit 1 | `red-expanded-expired-release.log`, `red-expanded-revoked-release.log` |
+    | `cargo test -p aida-cli-lib --no-default-features --lib seat_occupancy` | 54 passed | `seat-tests-corrected.log` |
+    | Canonical authority tests | 1 passed | `authority-tests.log` |
+    | Config-trust tests | 8 passed | `config-trust.log` |
+    | Generated seat help regression | 1 passed with repository's `RUST_MIN_STACK=8388608` | `help-test.log` |
+    | `cargo test -p aida-core --lib process_probe` | 12 passed | `process-probe.log` |
+    | `cargo build -p aida-cli --no-default-features` | exit 0 | `cli-build-corrected.log` |
+    | Final actual CLI matrix: 12 modes × ack/release | 24 passed | `final-*-ack.log`, `final-*-release.log` |
+    | Unmodified independent control/expired/revoked script on final binary | 3 passed | `independent-green-*.log` |
+    | `cargo fmt --all -- --check` | exit 0 | `fmt.log` and fast gate |
+    | `make check-ci-fast` | 21 gates passed; final run completed before push | `check-ci-fast-final.log` |
+    | Diff whitespace checks, both predecessor and immutable base → final HEAD | exit 0 | verified after amendment |
+
+    The CLI matrix covers valid transfer, deadline expiry, requester exit after no-wait, revoked/expired grant, requester roster loss, missing/corrupt grant and roster, subject mismatch and session mismatch. Missing/corrupt whole-roster CLI cases also invalidate the holder and refuse at holder authentication; the production-callback Rust regression separately proves fresh roster reads under the fixture seat lock. The callback regression mutates authority after context construction, verifies refusal, restores authority and verifies the positive control. Pure core tests cover 119/120/121-second boundaries for ack/release/gate/resume, single timeout emission, holder dispatch recovery, fresh UUIDs and stale UUID refusal.
+
+    Two intermediate test-run issues are retained rather than hidden: the first callback fixture used a non-Git temp root with `SeatStore::for_project`; it now uses existing `SeatStore::at` and all 54 tests pass. Direct execution of the help libtest initially omitted Cargo's configured thread-stack environment and aborted; rerun with that existing 8 MiB setting passes (`help-test-missing-stack-env.log` records the initial run). Neither was waived.
+
+    ## Provenance and isolation
+
+    - Red CLI SHA256: `874bfd59294791fa4cc5f2e38ee7e6fe343f887b2497eecc4704ab404cb4cd64`, from independently built reviewed SHA `11efa4a218c9381a2408bdb59e5f9ddb406f0ab5`; preserved as `red-aida`. The hash matches the independent verdict. See `red-provenance.txt`.
+    - Green CLI SHA256: `bca48c914429355a6994726ef2d3d2f1e56e10283204f5420cde0a013c0a9207`, preserved as `green-aida`. Its version embeds `2df3a2fcc9`, the unpushed commit before one trailing-whitespace line in the Python fixture was removed. The final amendment is precisely `final-whitespace-only.patch`; all compiled Rust files are byte-identical to final HEAD. No binary built from a different production implementation is claimed as final.
+    - `source-files-built.sha256`, `source-files.sha256`, `libtest-binary.sha256`, `green-final-binary.sha256` and `source-provenance.txt` bind the exact source and executable bytes. Working tree matches final committed source.
+    - Builds used the normal `/home/joe/.local/bin/cargo` machine-wide slot wrapper, `RUSTC_WRAPPER=` and `/tmp/c7-independent-target`; no slot bypass or ignored target adapter. Fast gate's ordinary fetch ran outside seat locks.
+    - CLI witnesses strip ambient AIDA/Claude/Codex/Git context, create temporary repos and fake HOME, and assert holder/requester anchors are their own child PIDs. Cleanup affects those owned children only. Rust regressions use hermetic fixture authorities/process probes. No live peer, timer, or user-file fixture targets.
+    - No sub-agents/forks were launched. No new PR, hold clearance, merge, Done/Completed edit, gateway activation or self-verdict. No full workspace/remote-CI success claim.
+
+    Next boundary: fresh independent C7 review of final HEAD. TASK-1607 remains In Progress with the existing lease; later gateway work and final merge still require their standing approvals.
+  created_at: 2026-10-08T02:39:49.653946886Z
+  modified_at: 2026-10-08T02:39:49.653946886Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
