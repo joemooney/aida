@@ -16,12 +16,12 @@ description: |
   2. Bounded wait: a duration flag bounds the CI wait (name aligned with TASK-1602's `--wait <secs>`; one flag, not two divergent spellings). On expiry ship exits with a dedicated non-zero code and nothing is merged. Default remains unbounded.
   3. Scriptable exit codes: distinct, documented exit codes for at least: CI red, CI wait timed out, needs rebase/not mergeable, needs (re-)review/approval not at head, stale CI definition, merge-hold present. 0 still means merged. Documented in docs/cli and `aida pr ship --help`.
   4. Tests: one per pre-flight refusal proving no CI wait occurs (e.g. a fake forge whose watch would hang), plus a timeout test and an exit-code table test.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-08T01:29:53.604394219Z
+modified_at: 2026-10-08T01:31:04.397050159Z
 req_type: Task
 tags:
 - operator-ux
@@ -250,6 +250,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a11922-a8d1-73b3-aaf1-151d63fd4b2b
+  author: aida-reconcile
+  timestamp: 2026-10-08T01:31:04.273828854Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a11922-a94d-79d2-8d5f-32179b2ddcf9
+  timestamp: 2026-10-08T01:31:04.397020763Z
+  agent: implementer
+  commit_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
+  summary: Fresh independent scoped APPROVE; P1 corrected; review-2452-rereview.md; plan sandbox measurements and human hold clearance remain outstanding
+  punted:
+  - 'punted: CI is red on PR-2450: Build (ubuntu-latest)'
+  - 'punted: phase 1 child session 01a11470 exited with code 1 after 19641ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1606` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1606 --force-claim` to take over here, or `aida edit TASK-1606 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1606 — the store reports TASK-1606 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  review_verdict: approved
 filed_at:
   code_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
   branch: main
@@ -268,6 +285,8 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-07T02:12:35.366228267Z
   implemented_by: joe
+  completed_at: 2026-10-08T01:31:04.273794208Z
+  completion_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
 interface_changes:
   cli:
   - aida pr ship --wait <SECS> bounds CI registration and settlement; preflight refusals use exit codes 20–25
