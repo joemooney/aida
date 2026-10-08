@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T07:48:44.543090209Z
+modified_at: 2026-10-08T16:35:18.453090411Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -788,6 +788,11 @@ comments:
     Final disposition: APPROVED FOR BUG-1802 POLICY DESIGN AS AMENDED, with the bounded identity/MCP/lock concretizations above and every prior binding condition. Implementation/dependency acceptance, required positive/negative witnesses, fresh independent exact-head code review, CI and Joe/operator's authority-sensitive merge remain mandatory. No source or lifecycle work is authorized by this comment beyond the separate doer's existing assignment. Exact canonical posting/readback/provenance and advisor notification are saved separately in BUG1802_FINAL_POLICY_SIGNOFF_RECEIPT.json.
   created_at: 2026-10-08T05:33:31.227688347Z
   modified_at: 2026-10-08T05:33:31.227688347Z
+- id: 01a11c5e-8335-7af0-a9bf-08234f1a651f
+  author: joe
+  content: 'CORRECTION — PROXY DECISION (orchestrator for Joe): PR #2461 really merged as b46aec1e674baae5a329416d4119e67b59200a88, but Completed did not establish the full signed acceptance in comment 01a11a00-a0db-76f0-bc1b-d6f1175e94ef. The NEW independent main acceptance audit .aida/handoff/orchestrator/run-20261008/BUG1802_MAIN_ACCEPTANCE_AUDIT.md is REQUEST_CHANGES. Root read the complete report and governing signoff and verified the generic override branch in pr_ship_approval_gate: --override-stale-approval currently applies to Unauthorized as well as stale-head refusals. Missing retained actor/ancestry/work coverage, START/round guards, typed candidates, non-overridable authority, current revocation, final serialization and CLI/MCP/corpus/source integration are outstanding accepted scope. Reopen SAME BUG-1802, preserve its actual merge/completion/comments and all closed historical artifacts. No unauthorized-actor allegation; forge account metadata does not identify the person/process. Common BUG-1808 production prerequisite is still unmet; its approved inactive checkpoint and TASK-1612 requested-change checkpoint are not dependency acceptance. No activation, fresh-review washing, replacement spec, scope waiver or authority-sensitive proxy merge. Route implementation only after the common dependency is independently accepted; source-level findings are not claimed as live exploit/test execution.'
+  created_at: 2026-10-08T16:35:18.453090411Z
+  modified_at: 2026-10-08T16:35:18.453090411Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
