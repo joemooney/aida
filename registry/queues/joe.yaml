@@ -6,28 +6,12 @@
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a10f67-f421-79c2-9a17-68f82790add1
-  position: 20000
-  added_by: joe
-  note: 'BUG-1291 recovery: PR #2435 handed off after shelving in phase 3 (reviewer): PR-2435 moved after CI concluded (9ec89b97b -> 24491f2ff); re-run CI for the current head'
-  added_at: 2026-10-06T04:48:58.716876933Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a10ffb-7469-7fa0-96ac-b030c8c0fc28
   position: 33000
   added_by: joe
   note: Promoted from finding TASK-1-224 via `aida findings promote`
   added_at: 2026-10-06T11:01:52.707154434Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a11422-8ad4-7810-baa1-12e358e5ac1a
-  position: 41000
-  added_by: joe
-  note: 'BUG-1291 recovery: PR #2450 handed off after shelving in phase 2 (ci): CI is red on PR-2450: Build (ubuntu-latest)'
-  added_at: 2026-10-07T02:23:18.407703453Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a11873-7791-7462-9f3a-b81a2fb0619e
   position: 43000
@@ -42,13 +26,6 @@
   note: advisor-cleared at filing
   added_at: 2026-10-07T22:20:03.546373794Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a1119f-6e13-77e0-b336-ebd9283c9798
-  position: 45000
-  added_by: joe
-  added_at: 2026-10-07T23:08:34.976462245Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a11921-6a77-7761-a5eb-86f42ea0b4c9
   position: 46000
