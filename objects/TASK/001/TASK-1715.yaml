@@ -21,8 +21,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-10-08T19:24:00.585264061Z
+modified_at: 2026-10-08T19:24:01.989230115Z
 req_type: Task
+tags:
+- operator-held
 comments:
 - id: 01a11cf7-a146-7782-b29f-a9c76e58bee3
   author: joe
@@ -129,6 +131,10 @@ history:
   - field_name: status
     old_value: Done
     new_value: Approved
+deferred: true
+deferred_at: 2026-10-08T19:24:01.989230115Z
+deferred_until: When the live owner hands off/releases the TASK-1715 lease through the ordinary supported workflow, resume the same queued rework brief on a fresh isolated branch and obtain a new independent full acceptance review.
+deferred_reason: 'Technical ownership handoff pending: actual CLIlease01a119ea3c02 has live creator1623529 with matching start identity. Preserve old separate implementation74c and sharedreservedBUG1811 PR2458; no competing author or forced retirement. Request4e8c5c87 sent to owner.'
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
