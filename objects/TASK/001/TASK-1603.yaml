@@ -3,12 +3,12 @@ spec_id: TASK-1603
 agreed_id: TASK-1603
 title: 'drain launch race: the FIRST batch member''s child starts before the orchestrator run is registered, falls back to interactive rules, and refuses the InProgress-no-lease state the parent just created —'
 description: 'Reproduced on consecutive waves 2026-10-05 (builds 62e3374 and post-887bf7e): wave 1 first member TASK-1523 (children 01a10eee + replacement, both ''spec is InProgress but no local lease holds it'', shelved launch-refused), wave 2 first member TASK-1588 (children 01a10f35 + replacement, identical, shelved) — while every LATER member in both waves (BUG-1803, TASK-1596, BUG-1801, BUG-1804) hit the same InProgress-no-lease precondition and proceeded with ''claiming it anyway''. Wave-1 first-child log shows the smoking gun: ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' — the child launched before the orchestrator''s run record landed, so it applied interactive fail-closed rules to the InProgress bump its own parent had just made. Later children see the live run and claim. Cost: the first spec of every wave burns both launch attempts and shelves; TASK-1523 was wrongly suspected of being undrainable for its cross-project shape. Fix direction: register the run (or hand the child an ownership token) BEFORE the Approved→InProgress bump / child launch, or have the child retry its ownership check briefly instead of refusing on first read.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-08T01:29:43.298816233Z
+modified_at: 2026-10-08T01:30:37.436833231Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -589,6 +589,28 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a11922-3ff1-7650-9268-83a4b35a4d88
+  author: aida-reconcile
+  timestamp: 2026-10-08T01:30:37.425928116Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a11922-3ffc-7051-9813-6649a2979a28
+  timestamp: 2026-10-08T01:30:37.436812780Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/TASK-1603-2026-10-07T233711Z.md.acked
+  commit_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
+  summary: Fresh independent scoped APPROVE; P1 corrected; review-2452-rereview.md; plan sandbox measurements and human hold clearance remain outstanding
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: phase 1 child session 01a11415 exited with code 1 after 29884ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1603` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1603 --force-claim` to take over here, or `aida edit TASK-1603 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1603 — the store reports TASK-1603 as In Progress. The elapsed time above is that replacement child''s own lifetime; phase 1''s recorded duration covers every launch in the phase, not this child alone'
+  - 'punted: session end observed 2 commits ahead on branch `task-1603-2` with no open PR; work may need manual push/PR recovery'
+  - 'punted: HEAD is now at eec6fca718 [AI:codex] fix(drain): preserve concurrent member authority and selection (TASK-1603) Auto-merging AGENTS.md Auto-merging OVERVIEW.md CONFLICT (content): Merge conflict in OVERVIEW.md Auto-merging aida-cli-lib/src/drain_state.rs Auto-merging aida-cli-lib/src/lib.rs Auto-merging aida-cli-lib/src/tests/queue_work_tests.rs error: "rebase aborted due to conflicts" Preparing worktree (checking out ''pr-2445'') warning: container tooling detected (Dockerfile, docker, .aida/docker-compose.yml, docker/docker-compose.yml); this linked worktree''s .git file points at /home/joe/ai/aida/.git/worktrees/pr-rebase-2445. Mount that gitdir path into dev containers so git commands work inside the worktree. Rebasing (1/2) error: could not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603) hint: Resolve all conflicts manually, mark them as resolved with hint: "git add/rm <conflicted_files>", then run "git rebase --continue". hint: You can instead skip this commit: run "git rebase --skip". hint: To abort and get back to the state before "git rebase", run "git rebase --abort". Resolved ''OVERVIEW.md'' using previous resolution. Could not apply a760a2016b... [AI:codex] fix(drain): register ownership before phase-one status bump (TASK-1603) ✗ rebase hit 1 conflict(s) — aborted, worktree cleaned OVERVIEW.md Manual recipe: gh pr checkout 2445 git fetch origin git rebase origin/main # resolve conflicts, then `git rebase --continue` git push --force-with-lease Manual recovery: `aida pr rebase 2445 --interactive`'
+  - 'punted: P1: newly unblocked batch/nextN members fail checked registration before phase entry; see review-2452-verdict.md'
+  - 'punted: Independent review P1: dynamic newly-unblocked batch/nextN member registration fails; review-2452-verdict.md'
+  review_verdict: approved
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -604,4 +626,6 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
+  completed_at: 2026-10-08T01:30:37.425895259Z
+  completion_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
 interface_changes: {}
