@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T17:13:39.797658802Z
+modified_at: 2026-10-08T17:13:52.622174606Z
 req_type: Story
 tags:
 - agent-launch
@@ -281,6 +281,23 @@ comments:
     NEEDS_OPERATOR_SCOPE is recorded in the companion exact relay body: the selected strong guarantee lacks a supported backend within existing scope. Remains blocked; no implementation, refusal-only completion or speculative narrowing. A fresh different advisor may review completeness/honesty, but cannot manufacture missing authorization. TASK-1593/TASK-1591/BUG-1811/BUG-1812 external reservations and shipped authority changes remain untouched. No operator question sent, no autonomous wake, TTY bypass, grant/hold/status/queue change or self-signoff.
   created_at: 2026-10-08T17:13:39.797658802Z
   modified_at: 2026-10-08T17:13:39.797658802Z
+  relayed_from: answered-design-sketch-author
+- id: 01a11c81-d2ee-7c01-aa34-adfd1ee49811
+  author: joe
+  content: |
+    NEEDS_OPERATOR_SCOPE: STORY-1486 — retained strong Git-read-only contract has no selected supported backend
+
+    Exact proposed canonical comment body for coordinator relay, authored by Codex sketch author, 2026-10-08. NOT posted. This records an existing unresolved scope gap; it is neither an operator answer nor a new question or direction.
+
+    Recorded choice 1 at 2026-10-08T15:54:29.273727039Z remains “Profile without exemptions.” Preserve ordinary approval prompts and replace exemption-list AC3 accordingly. Strong AC2 remains unchanged; weaker AIDA-mediated-only behavior is NOT selected. Full independent v1 review was CHANGES REQUESTED; current rework is STORY1486_AMENDED_SKETCH_V2.md at main b46aec1e674baae5a329416d4119e67b59200a88.
+
+    Current root/settings/bwrap/headless surfaces do not prove universal Git-read-only while preserving required source editing/builds, writable scratch, inherited children and external tool/network channels. V2 supplies explicit operation/resource/vendor/OS/mode matrices and monotonic-restriction requirements. No row presently supports the required positive restricted launch. Unsupported launch must refuse before effects, but refusal alone cannot complete AC2 or the story.
+
+    Missing direction is authorization for a coherent enforcement scope/backend, if one is desired beyond currently available capabilities. This author does not select a narrower guarantee, change developer functionality, create a broker/privileged service, or infer any release/TTY/approval exemption. Existing strong acceptance remains pending capability evidence or a separately recorded operator scope disposition. No new alternative is adopted; no question sent to absent Joe. Other authorized work need not stop because this story is blocked.
+
+    No status/queue/spec-description/source/grant/hold changes or implementation are made. This is a proposed relay record, not independent signoff or permission to dispatch. A new different advisor reviews exact v2 hashes and the gap; coordinator preserves recorded direction and authority boundary.
+  created_at: 2026-10-08T17:13:52.622174606Z
+  modified_at: 2026-10-08T17:13:52.622174606Z
   relayed_from: answered-design-sketch-author
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
