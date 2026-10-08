@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T20:41:33.625137619Z
+modified_at: 2026-10-08T21:34:44.150358304Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -563,6 +563,160 @@ comments:
   created_at: 2026-10-08T20:41:33.625130920Z
   modified_at: 2026-10-08T20:41:33.625130920Z
   relayed_from: 01a11d32-5933-7922-8c6d-60bb51eb1fe1
+- id: 01a11d70-a5b6-7bb2-9d03-278896458628
+  author: mcp
+  content: |
+    PROXY EVIDENCE RELAY — existing authorized implementer second rework READY, not approval. Root verified clean tracked worktree, HEAD/tree and origin task-1335 exact aba025175baf809e3c21ca7302b41b61714ff40c. Reported checks remain author evidence; whole-base fresh independent review follows, no automatic batch D admission or protected record.
+
+    # TASK-1335 second-rework READY — implementer handoff (not a review, PR or merge)
+
+    Implementer: Claude Code (claude-opus-5-5), the same existing seat `task1335-reconcile-diagnostics`, in the same pool4 worktree, branch `task-1335`. 2026-10-08.
+    This addresses `TASK1335_INDEPENDENT_REVIEW.md` (F1335-1..6, first rework) and `TASK1335_REWORK_INDEPENDENT_REVIEW.md` (R1335-1, R1335-2 and retained gaps, second rework), per `task1335-numbered-rework.md` and `task1335-numbered-rework-v2.md`.
+    The earlier READY, the checkpoint and both review reports are left byte-for-byte as they were.
+    A NEW, DIFFERENT independent reviewer must review the whole base-to-head diff.
+    I do not approve my own work.
+
+    ## Exact identity
+
+    | Item | Value |
+    |---|---|
+    | Head commit | `aba025175baf809e3c21ca7302b41b61714ff40c` |
+    | Head tree | `8390e35b7fa18f815a792c1fbd5b190ed6a04bd5` |
+    | Commits on branch | `ef014aeb` (original, rejected) → `b98b5175` (rework 1 checkpoint, rejected) → `aba02517` (rework 2) |
+    | Merge base with main | `b46aec1e674baae5a329416d4119e67b59200a88` (branch not rebased) |
+    | Remote | `git ls-remote origin refs/heads/task-1335` → `aba025175baf809e3c21ca7302b41b61714ff40c` (also mirrored to gitlab) |
+    | Worktree | `git status --short` → 0 lines after commit |
+    | Hooks | pre-commit passed; commit-msg format validated |
+
+    SHA256 of head sources:
+
+    | File | SHA256 |
+    |---|---|
+    | aida-cli-lib/src/lib.rs | 87a64d1058ce9854b2da183310170e4bdbd3116ec384016abe3633cc8a11ffc6 |
+    | aida-cli-lib/src/forge.rs | d3469aefabe7e45eac3c0bc1fd2a470d9d0b0d3978438aaea59cc9c00fcf0d34 (unchanged since b98) |
+    | aida-cli-lib/src/reconcile_evidence.rs | c06792a7955dea8b7bbc374c7c7bbf7d49e18717fda62d1ae4dc7cabd318689e |
+    | aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs | ad34ccd97124ed6b2b932b7634870d38d8981f9b44aa796268cab46b638157fd |
+    | AGENTS.md | 5f66702b3f18b307cc8ce81bf7892bf2d4d7bd928964bb6383b32187dea1ba3e (unchanged since ef014aeb) |
+    | docs/cli/10-storage.md | 06ec8777148d736056b473a78a6abab4b8d0a5a29b300cb411b9ada8a930893f |
+
+    The four code and test files were checked with `sha256sum -c` against the hashes captured before the final test chain. They matched both before the commit and after all checks.
+
+    ## Build-artifact provenance (private worktree `target/debug`, normal Cargo slot wrapper, `CARGO_BUILD_JOBS=3`)
+
+    | Artifact | mtime | SHA256 |
+    |---|---|---|
+    | lib unit-test executable `target/debug/deps/aida_cli_lib-e20b44e11b2231d5` (run by rw2-lib) | 14:09:31 | b8b37d6c40470dbd59ef13fb26b69d46de2062734c0098b56d0306da4b8162f1 |
+    | CLI test executable `target/debug/deps/task_1335_reconcile_unavailable_evidence-7893c4e45abcc772` (run by rw2-cli) | 14:10:55 | ca0adefe925efa72d77542477e785235622680b1bb0c9c8a58414e94357f6a3e |
+    | `target/debug/aida` (the binary the CLI tests run) | 14:10:56 | f4f30b4210e2ed1b1eb5bdc4f2b2a1fa7e28dfd89ecb5a088028c143e95e86d5 |
+
+    Source mtimes:
+    - lib.rs 14:03:02
+    - CLI test 14:03:28
+    - reconcile_evidence.rs 13:50:14
+    - forge.rs 12:39:05
+
+    All executables were built after the last code edit.
+    `docs/cli/10-storage.md` was edited at 14:12:56, after the test runs. It is not compiled into these artifacts. `make check-ci-fast` ran after that edit.
+    This is mtime/hash evidence. It is not a reproducible-build attestation.
+
+    ## Source remedies
+
+    **R1335-1 — scan-held candidates are re-decided live (`lib.rs::plan_reconcile_seam`, writer and reporter in `handle_db_reconcile_status`).**
+    - Hold items get the same identity, status and reopen checks as every other item.
+    - After the completion fixed point, each surviving hold is re-derived from the LIVE graph with `closure_holders_treating_resolved`, treating the surviving completions as resolved.
+    - If it is still held, the verdict is `SeamVerdict::Hold(current ClosureHold)`. The writer applies only that CURRENT payload, by decided UUID index.
+    - If it is no longer held, the verdict is `Changed("its closure hold no longer applies")`. Nothing is written; a rerun decides.
+    - Identity, ambiguity, status and reopen refusals are also `Changed`, and are reported.
+    - Every hold verdict now feeds `outcomes`. `report_closure_holds` prints the LIVE holds after the seam in a writing run, and the scan holds only in a dry run.
+
+    **R1335-2 — the preview matches the write.**
+    - At scan, one least-fixed-point `split_closure_held_flips` pass runs over normal AND stale-review completions, iterated with the direct rooted covers rule.
+    - A held stale review story is removed from the would-complete list. It is reported `Held(causes)` (`closure_hold_causes`, the new cause-only text), with no landing and no note.
+    - A covers candidate whose only covered spec was just held is `Held("no covered spec is Completed or completing in this run")`.
+    - The seam's closure check therefore only ever reports holds that are new since the scan.
+    - No new forge query and no attribution change.
+
+    **Covers semantics (rework-v2 item 3).**
+    - `covers_chain_rooted` is deliberately DIRECT. A covered spec must be Completed in the live store, or a surviving non-covers completion in this run. This is BUG-113's existing rule: `collect_covers_completed_review_flips` only ever considered the normal batch.
+    - It is not, and is not claimed to be, a general fixed point over covers candidates.
+    - A story that covers only another covers candidate is not a candidate in the same run. It graduates on the next run once that candidate is Completed; the test witnesses this.
+    - No new covers policy was invented. This is stated in the `plan_reconcile_seam` doc comment.
+
+    Unchanged from b98: F1335-3..6 (strict TOML reader, diagnostic row schema, this-run-only effects, one completion per UUID) and D1–D3.
+    `forge.rs` is byte-identical to b98.
+
+    ## Real-CLI witnesses (17 tests, all in `aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs`)
+
+    New in rework 2:
+    - **`held_candidates_are_redecided_live`** (R1335-1).
+      - Blocker removed, and closure criterion (`closure:pending`) cleared → refused, status Approved, no note, no auto-bump history.
+      - Blocker replaced → Done, with exactly one note naming only the CURRENT blocker (TASK-61, not TASK-60), and the live report says so.
+      - Object UUID replaced, new ambiguity, deliberate reopen (advisor-grant fixture Done→Approved), and rejection → each refused with its specific reason; no note.
+      - Untouched hold → its legitimate note naming TASK-60.
+      - Normal control → Completed with one event.
+    - **`known_stale_review_hold_preview_matches_normal`** (R1335-2).
+      - Blocked review story and declared-criterion review story → "completion is held" in BOTH dry-run and normal, never "would flip".
+      - Unblocked story previewed as 1 and then completed (one event).
+      - Dry-run snapshot unchanged; normal mode leaves the held stories Approved with no reconcile history and no landing note.
+    - **`covers_multistep_loss_rooted_cycle_and_next_run_graduation`** (rework-v2 item 3).
+      - Covered normal flip newly held at the seam → that flip is refused, and its story loses its only support.
+      - Rooted mutual cycle, where each story also covers a Completed spec → both complete.
+      - Covers-of-covers stays Done in run 1 and completes in run 2.
+    - **`stale_review_path_is_decided_at_the_live_seam`** extended with a stale-review deliberate reopen (advisor-grant fixture) and a new ambiguity.
+    - **`configured_forge_is_read_from_any_toml_spelling`** extended with malformed TOML through the real CLI → "unparseable config", nonzero, nothing written.
+
+    Still present from rework 1:
+    - `covers_support_is_rooted_not_circular` (cycle with both anchors removed; direct positives).
+    - `write_seam_rechecks_reopen_closure_and_covers` (real covered reopen, UUID replacement, new ambiguity, events).
+    - `independent_effects_report_only_this_runs_writes`, `aliases_of_one_requirement_complete_once`, `closed_unmerged_work_earns_no_credit`.
+    - The diagnostic-row matrix, and sweep-normal in the historical outage matrix.
+    - Every original D1–D3 group.
+
+    Authority used by fixtures:
+    - The reopen barriers use the repo's existing `tests/support::grant_seat_for` (ADR-66 fixture). It writes a grant under the fixture's private HOME and a roster in the fixture store (committed), for the fixture principal only.
+    - No live grant, role, environment, queue or store was touched.
+    - Isolation: the fixture clears the environment, uses a private HOME/XDG, pins fake gh/glab, and has vendor tripwires.
+    - The committed harness has no Git network-refusal wrapper. No test does fetch, push or ls-remote, but transport isolation is not proved beyond that.
+
+    ## Commands and results, final source (logs in `TASK1335_REWORK2_CHECKS/`)
+
+    | Command | Result | Log |
+    |---|---|---|
+    | `cargo check -p aida-cli-lib --tests` | first attempt **TIMED OUT at 590s** while queued for a slot (rw2-check1); retry with a 3000s bound: PASS, no warnings (rw2-check2) | rw2-check1.log, rw2-check2.log |
+    | `cargo test -p aida-cli-lib --lib -- reconcile_evidence checked_forge_provider read_forge_config task_1600 reconcile_status open_pr non_github_forge closure` | **106 passed, 0 failed**. Includes `pr_ship::tests::task_1600_incident_titles_and_bodies_do_not_grant_completion` and `task_1600_only_store_resolving_trailers_and_branch_recovery_survive` (7 task_1600 tests ok in total) | rw2-lib.log |
+    | `cargo test -p aida-cli --test task_1335_reconcile_unavailable_evidence` | **17 passed, 0 failed**, first run on this source | rw2-cli.log |
+    | `cargo clippy -p aida-cli-lib -p aida-cli --tests -- -D warnings` | PASS | rw2-clippy.log |
+    | `cargo check -p aida-cli --no-default-features` | PASS | rw2-nodefault.log |
+    | `cargo fmt --all -- --check` | PASS (also in the pre-commit hook and the fast gate) | — |
+    | `make check-ci-fast` (after the docs edit) | **21 fast-tier gates passed** | rw2-cifast.log |
+
+    The full workspace suite and full check-ci were NOT run, by instruction; they are owed at integration.
+
+    ## First failures and limits (kept, not erased)
+
+    Rework 1 runs on b98-era source (rw-*.log):
+    - rw-lib1: 85 passed.
+    - rw-cli1: 12 passed, 2 FAILED. One was a covers-line assertion too strict for the actual message. The other was the Completed→Approved barrier being refused for lacking advisor authority, which led to the grant fixture.
+    - rw-cli2: **TIMED OUT at 590s** (slot wait plus rebuild; no result).
+    - rw-cli3 (`write_seam covers_support`, 2400s bound): ended `DONE exit=124`. The whole bound was spent queued for a Cargo slot ("queued for a build slot (2 in use…)"). Nothing compiled and no test ran, so it gives no result either way.
+    - After R1335 rejected b98, no further final checks were run on b98.
+
+    Other notes:
+    - The original ef014aeb READY failures stand as recorded there.
+    - I ran Python once early in the first round (disclosed in the first READY). Every edit since then used editor tools or `sed`; no Python.
+    - Dry-run counts are per textual candidate, before UUID consolidation. They are not proof of one-UUID application; the normal-mode one-record/one-event assertions are.
+    - Branch is based on b46aec1. Main has advanced (the reviewer saw c67728c). Only lib.rs overlaps, in disjoint hunks (per the reviewer's merge-file check on b98). Not rebased.
+
+    ## Status and boundaries
+
+    - `aida queue done TASK-1335` was refused earlier (no open PR). No bypass and no direct Done edit.
+    - TASK-1335 stays `in-progress`. No PR, merge, review record, grant, hold, activation or canonical mailbox action was taken this round.
+    - Batch D exclusion is unchanged. TASK-1593, TASK-1591, BUG-1811, BUG-1812 and peer work were not touched.
+
+    Next: a NEW, DIFFERENT independent reviewer of exact head `aba025175baf809e3c21ca7302b41b61714ff40c` (whole base-to-head), then the batch gate.
+  created_at: 2026-10-08T21:34:44.150351725Z
+  modified_at: 2026-10-08T21:34:44.150351725Z
+  relayed_from: task1335-reconcile-diagnostics
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
