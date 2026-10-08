@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-08T17:14:03.366912690Z
+modified_at: 2026-10-08T17:19:34.813828955Z
 req_type: Task
 comments:
 - id: 01a10353-caab-7160-8f2f-e7811c37b429
@@ -27,6 +27,11 @@ comments:
   content: 'CORRECTION / PROXY DECISION: New independent acceptance audit found all seven disposition pointers and the actual AIDA-57 relay notification, but the blanket October 3 per-procedure current-main runtime verification claim is not substantiated for all items. Preserve original history and credited intake; route missing verification on this same task using pinned source and fully private production-path fixtures, never live merges/holds/session termination. Independent report: .aida/handoff/orchestrator/run-20261008/TASK1574_INDEPENDENT_ACCEPTANCE.md. No replacement defect or code PR is required; return to InProgress pending evidence and a new independent acceptance review.'
   created_at: 2026-10-08T17:14:00.815019175Z
   modified_at: 2026-10-08T17:14:00.815019175Z
+- id: 01a11c87-0b9d-7ee1-8b26-d92a0745989f
+  author: joe
+  content: 'PROXY DECISION recovery: evidence-only native --spec launch refused because my deliberate Done→InProgress correction had no lease. Current session leases and all git worktrees show no TASK-1574 owner/worktree; the audit was read-only and has finished. Return to Approved solely for the ordinary launcher to claim it, preserving the requested-change evidence. No force-claim or lease-floor bypass.'
+  created_at: 2026-10-08T17:19:34.813828955Z
+  modified_at: 2026-10-08T17:19:34.813828955Z
 history:
 - id: 01a0fffb-e757-73d0-b0f5-64dead4d474a
   author: joe
