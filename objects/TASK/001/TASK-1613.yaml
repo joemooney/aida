@@ -1,0 +1,35 @@
+id: 01a119b9-9ed3-7f82-b940-b3b237707a46
+spec_id: TASK-1613
+agreed_id: TASK-1613
+title: Replace legacy aida-pr ceremony with a thin aida ship redirect
+description: |
+  ## Context
+  Operator reports aida-pr used 158 times but not in the last 76 days. The legacy skill never mentions top-level aida ship. Inspection confirms aida ship now owns commit, rebase, push, PR creation, CI, merge, sync and cleanup; --no-merge stops at PR opening. The prior advisor comparison mistakenly focused on aida pr ship rather than aida ship.
+
+  ## Decision
+  Retain aida-pr as a short compatibility entry point pointing at the CLI; retire its duplicated finish ceremony. Default open-for-review intent to aida ship <SPEC> --no-merge. Full aida ship is for an authorized finish-and-merge path and must preserve existing role/review independence. Managed/headless implementers must obey their orchestrator stop/handoff contract rather than invoking a full merge path.
+
+  ## Acceptance
+  - Update canonical aida-core/templates/skills/aida-pr/SKILL.md and aida-core/templates/commands/aida-pr.md, plus generated client surfaces through the established generation/sync mechanism.
+  - Replace the legacy manual commit-log/status/push/create/cleanup ceremony with a concise explanation and calls to aida ship, including --no-merge for review handoff and --dry-run for preview.
+  - Preserve useful agent judgment: clear PR description, linked specs and validation evidence. Verify whether --no-merge queues independent review; if it does not, explicitly invoke the existing aida pr auto-queue-review command after PR creation. Do not claim it happens automatically without checking source.
+  - Preserve draft/supervised/headless and independent-review constraints. Never instruct an implementer to self-merge by default or mark a spec Completed before merge.
+  - Remove stale --complexity guidance and obsolete confirmations/manual lifecycle prose from the replaced skill. Clarify distinction between aida ship and lower-level aida pr ship.
+  - Update direct documentation references that describe the old skill ceremony. Verify generation consistency and relevant existing template checks; no new reusable conventions or lifecycle changes are in scope.
+
+  ## Handoff
+  Inspect aida ship implementation and its --no-merge behavior before writing the redirect. Use existing skill/CLI symmetry discipline. Implementation must occur in an isolated claimed session; advisor review remains independent. This task is a compatibility/documentation update, not a redesign of ship semantics.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T04:15:57.651449326Z
+modified_at: 2026-10-08T04:15:57.651449326Z
+req_type: Task
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
