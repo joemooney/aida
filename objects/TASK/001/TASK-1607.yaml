@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:23:56.240041722Z
+modified_at: 2026-10-08T02:23:56.965435559Z
 req_type: Task
 tags:
 - guided-lane
@@ -194,6 +194,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: C7 checkpoint only: REQUEST_CHANGES. Actual CLI ack transfers after the absolute request deadline and to a revoked requester grant. Gateway steps 4-5 remain unauthorized; see .aida/handoff/task1607-rework/C7_INDEPENDENT_REVIEW.md.. Triage reason: PROXY DECISION: independent C7 review at11efa4a218 reproduced F1 expired-request transfer and F2 revoked-requester transfer. Fix existing lifecycle contract per C7_INDEPENDENT_REVIEW.md and numbered rework brief, preserve eight passed criteria. No gateway activation/holdclearance/merge. Continue same preserved branch and worktree, fresh independent review required.'
   created_at: 2026-10-08T02:23:56.240040337Z
   modified_at: 2026-10-08T02:23:56.240040337Z
+- id: 01a11953-1204-7343-aea4-c5a7794e61bc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 11efa4a218c9
+    Recorded: 2026-10-08T02:21:56.074271355+00:00
+    Findings:
+    1. P1 F1: seat_occupancy/mod.rs ack/hand_over ignores the absolute takeover deadline; actual CLI --grace-secs 1 --no-wait then late ack exits 0, transfers generation 1 to 2 and demotes holder. Expire under lock before transfer and pending-request fencing; cover interrupted/no-wait ack and release.
+    2. P1 F2: seat_occupancy/mod.rs hand_over copies requester grant/session using process liveness only. Actual CLI role current confirms requester grant revoked, yet holder ack exits 0 and transfers to that invalid requester. Revalidate requester grant/session/subject/expiry/revocation/roster at ack/release commitment while preserving C8.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-08T02:23:56.932572555Z
+  modified_at: 2026-10-08T02:23:56.932572555Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
