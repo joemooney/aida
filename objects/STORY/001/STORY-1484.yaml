@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-06T03:14:26.217274120Z
+modified_at: 2026-10-08T21:55:05.789144401Z
 req_type: Story
 tags:
 - cache
@@ -257,4 +257,9 @@ comments:
   created_at: 2026-10-06T03:14:26.217274120Z
   modified_at: 2026-10-06T03:14:26.217274120Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a11d83-49bd-7d03-8ea1-023444bd821d
+  author: mcp
+  content: 'PROXY DESIGN GATE UPDATE — TASK1526 V4 exact62925B SHA383017916ce28dcafe3fed3a4df7ee950319c84d0f602eb3fe130e7d254080e2 now APPROVED-AS-AMENDED DESIGNONLY by independentcoldreviewer with bindingA1–A10, finalcorrected50387report SHA2abe15022b1bfb7d382dc1c48aa4305aeeaba50c025aef59ae4bf7567f4ce90a FULLnormalcanonicalrelay+exactreadback on child. InitialA5countercontradiction corrected SAMEreviewer, exactE/Arowmap nowdistinguishes weakFnMut/applicationclosure/tx, preservedoldreport/receipt. No implementation or measuredpass: originaldefaultfourway2.648286FAIL, oneE1diagnostic1.955642notAC1credit, actualnewcodedispatchREFUSED remains. Freshcodegate anddifferentfirstactualT4 owed; TASK1527blockedRETAINED/Cfutureindependentre-measure/BUG1674fullshow24hbothlimbsunmet/parentclosurepending. No status/dependencyrelease/grant/record/PRmerge/activation.'
+  created_at: 2026-10-08T21:55:05.789137894Z
+  modified_at: 2026-10-08T21:55:05.789137894Z
 execution_mode: guided
