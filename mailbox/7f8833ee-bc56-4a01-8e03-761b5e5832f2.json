@@ -1,0 +1,19 @@
+{
+  "id": "7f8833ee-bc56-4a01-8e03-761b5e5832f2",
+  "thread_id": "7f8833ee-bc56-4a01-8e03-761b5e5832f2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1321-worktree-claude"
+  },
+  "timestamp": 1791476355137,
+  "body": "Continue existing clean branch task-1321 at /home/joe/ai/aida-worktrees/aida-pool-aida-0, lease01a11c4e6e4f. Launcher cwd resolved main incorrectly; never edit main or create another lease/branch. Prior Codex owner exited0 without source edits because it received advisor-only higher-priority instruction. Use assigned separate implementer session only. Full brief in main .aida/handoff/orchestrator/run-20261008/task1321-implement.md.",
+  "subject": "TASK-1321 exact existing worktree",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
