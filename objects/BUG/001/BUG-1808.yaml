@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T04:52:54.311287141Z
+modified_at: 2026-10-08T06:15:08.172715154Z
 req_type: Bug
 tags:
 - atomicity
@@ -1297,6 +1297,26 @@ comments:
     PROXY DECISION (orchestrator for Joe): Read the complete actual PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md and exact canonical posting/readback receipt from NEW independent reviewer01a119ca-46b5-7222-9e0d-6eefaa699fc4. Accept all six binding conditions and the explicit judgment that common BUG-1808 production publication architecture is coherently designed AS AMENDED, with no remaining reviewed design blocker. Earlier actual callback and launch signoffs and A–E/ADR/C7 supersessions remain binding. This permits guided common-owner implementation, not readiness/completion/production activation/merge. TASK-1612 transport component remains separately under implementation/review and production release unavailable there; broader doer must not copy unreviewed dependency or duplicate schemas. Common BUG-1808 first, TASK-1607 occupancy consumer second, BUG-1802 provenance policy later. Preserve default no-PID containment; the bounded existing anchored process-group cleanup and PTY pause/resume obligation applies, not an invented arbitrary-descendant sandbox/cgroup requirement. All real entrypoint positives/negative witnesses, history, strict before-P4 residue-free refusal, durable immutable commitment, identity, independent exact-head review, CI and final operator-owned authority merge remain. Dispatch brief bug1808-common-implementation.md; no gate is waived.
   created_at: 2026-10-08T04:52:34.277469035Z
   modified_at: 2026-10-08T04:52:34.277469035Z
+- id: 01a11a26-ba8c-7d50-89da-aa673e288114
+  author: bug1808-infrastructure-reviewer
+  content: |
+    CHECKPOINT VERDICT: REQUEST_CHANGES — INACTIVE infrastructure only.
+
+    New independent reviewer bug1808-infrastructure-reviewer, native 01a11a18-13af-7dc1-9563-15b120fd9562. Exact head 21d84bd8d555916ad74c1c577b7c02181999ee32, tree 276cb18ed1214db8928645c81bbf1ee17e6db21d, fixed base 5d4180e5ded8a55ad1b02beac5571c190d3da0ac. Full actual verdict/rework source: /home/joe/ai/aida/.aida/handoff/bug1808/INFRASTRUCTURE_INDEPENDENT_REVIEW.md. Evidence: same directory /independent-21d84bd8/.
+
+    F1: FileImage::byte_count accepts mode 0200. VerifiedFileSet validates absent->regular effect, installs and fsyncs it, then its read_regular returns EACCES. Complete retry and Restore also fail, leaving an invocation-owned unreadable target. Actual unprivileged filesystem test accepted_unreadable_afterimage_must_not_strand_recovery fails. Validate all before/after modes as recoverable before first write (honest owner-readable profile refusal is sufficient), or prove restart-safe exact-image recovery; no blind overwrite/chmod workaround. Add two-target validation-before-write and readable-mode controls.
+
+    F2: ObservationChain::require_checkpoint compares cached state after actual retained-tail deletion and returns Ok. Replay then detects Err(Chain), but append of the next sequence succeeds and creates an unreopenable chain. Actual receipt_checkpoint_must_detect_current_lost_tail fails. Freshly validate bounded retained evidence for receipt/append, and fence continuation after retained read/digest/sync failure until explicit reopen/revalidation. Preserve healthy replay/budgets/immutable-collision controls.
+
+    24 existing exact-source component tests, 22 portability ratchet tests, fmt and exact diff checks passed. An independent isolated Git 2.43 conflict/continue run produced 27 callbacks, all parsed by exact source, including ORIG_HEAD/REBASE_HEAD/CHERRY_PICK_HEAD. No production origin/entrypoint witness claimed. Two independent filesystem assertions fail (not compilation failures). Detached source unmodified, normal worktree removal/absence verified, private runtime removed.
+
+    Limitations preserved: earlier fake-HOME workspace test writes remain disclosed and unaltered; owner withdrew broad core/fast-CI isolation claims. This review initially stripped XDG_RUNTIME_DIR for two standalone builds, accidentally selecting /tmp Cargo slot locks instead of /run/user/1000; corrected build and probe/regression reruns used the normal shared slots and private target. No bypass flag or shared binary replacement. Full workspace/feature/cross-platform/cloud CI not independently rerun. Four supplied guard-removal failures were read, not rerun. Existing wrong production Aida-Store trailer (now BUG-1810) is not introduced here and was not repaired/history-rewritten.
+
+    ALL parent gates remain: initialized global coordinator/root discovery/locks and full durable journals/C/receipts/object closure/recovery/history; reciprocal assignment/caller/process/current-authority joins and strict real-entrypoint refusal; closed sealed Git domain/actual production gates/hooks/authenticated callback origin/quiescence; complete CLI/MCP/core/backend enlistment; root-supplied independently reviewed TASK-1612 plus private common publisher/single P4/one-shot post-lock consumption; full foreground/headless/no-launch/TUI/phase/admission and private pane/optional containment/installed-Codex/creator/adopter/FD/group/job-control adapters; all named real positives/negatives/crash/peer/nonvacuity and TASK-1337/TASK-1603/C7 regressions; fresh repaired-head/composition review, complete CI and operator-owned authority merge. TASK-1612 production release unavailable; no dependency copied or approved. TASK-1607 and BUG-1802 remain later consumers. Current main BUG-1807 strict reader/inventory and TASK-1716 wrapper must survive integration.
+
+    This is a negative checkpoint comment, NOT a standard approved parent review record, Done/Completed, PR, hold release, activation, dependency acceptance or merge permission. BUG-1808 remains In Progress / implementation BLOCKED and NOT READY.
+  created_at: 2026-10-08T06:15:08.172715154Z
+  modified_at: 2026-10-08T06:15:08.172715154Z
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
