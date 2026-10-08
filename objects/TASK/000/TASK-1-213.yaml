@@ -8,11 +8,17 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:48:11.551846892Z
-modified_at: 2026-10-06T03:16:18.577901726Z
+modified_at: 2026-10-08T16:17:04.464542363Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a11c4d-d1d0-7a83-a581-055091ddb032
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): sign off and queue the bounded linked-worktree dry-run root-resolution bug. Preserve authority, rebase and store policies; isolated fixture must distinguish invoked sibling from primary checkout. Separate implementer, fresh independent review and exact-head green CI required. No dispatch overlap with external reserved specs.'
+  created_at: 2026-10-08T16:17:04.464542363Z
+  modified_at: 2026-10-08T16:17:04.464542363Z
 history:
 - id: 01a10f36-4a11-70a9-b7af-7a1a01372452
   author: joe
