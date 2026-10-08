@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:11.140223762Z
-modified_at: 2026-10-07T23:08:03.512498933Z
+modified_at: 2026-10-08T15:54:23.485773990Z
 req_type: Task
 tags:
 - follow-up
@@ -52,4 +52,6 @@ decision_request:
   - label: Retain refusal
     consequence: No Windows protected-operation enablement yet
     resolution: noop
+  answered: 1
   asked_at: 2026-10-07T23:08:03.512498933Z
+  answered_at: 2026-10-08T15:54:23.476507166Z
