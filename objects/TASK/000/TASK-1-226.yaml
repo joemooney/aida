@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T17:04:48.583587367Z
+modified_at: 2026-10-08T19:11:32.531330153Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -113,6 +113,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): implement the independently approved bounded diagnostics design, with D1-D3 binding amendments from store-reconcile-independent-advisor. Choose honest matched-candidate / required-forge-unavailable diagnosis and retryable ordinary nonzero exit, not offline completion credit. Preserve exact attribution, pure-git positive, no-write dry-run config, reopen/closure/covers fences at the actual atomic apply seam and existing aggregate all-or-nothing normal flips. Queue separate implementer only after full canonical signoff relay. Any broader discovered authority/lifecycle remedy beyond this bounded seam remains same-spec gated and must not be inferred. Fresh exact-head review, integration checks and publication floors remain; no common production activation or external reserved work.'
   created_at: 2026-10-08T17:01:54.583991054Z
   modified_at: 2026-10-08T17:01:54.583991054Z
+- id: 01a11ced-8cb3-7442-a0b0-fb26f0630c2b
+  author: joe
+  content: 'IMPLEMENTER READY (not review/merge): exact head ef014aeb07eca288a6faa51922252fbc33209684 tree 66e9a850ddaee6b0196aa8896bd5c46bbd70a25c base b46aec1e674baae5a329416d4119e67b59200a88, branch task-1335 pushed clean. Built per signoff 01a11c76-6863 D1-D3. Checks: targeted lib 383 pass, CLI fixture 8/8 pass, clippy -D warnings, no-default check, fmt, make check-ci-fast 21 gates pass; full workspace deferred to integration. queue done refused (no PR; PR out of scope) so status stays in-progress. Full evidence: .aida/handoff/orchestrator/run-20261008/TASK1335_READY.md + TASK1335_CHECKS/. Fresh independent reviewer next.'
+  created_at: 2026-10-08T19:11:32.531330153Z
+  modified_at: 2026-10-08T19:11:32.531330153Z
+  session_id: 01a11c79-91f7-7a70-86ee-b70e1c372e31
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
