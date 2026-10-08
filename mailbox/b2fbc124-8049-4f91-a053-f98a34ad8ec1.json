@@ -1,0 +1,18 @@
+{
+  "id": "b2fbc124-8049-4f91-a053-f98a34ad8ec1",
+  "thread_id": "b2fbc124-8049-4f91-a053-f98a34ad8ec1",
+  "from": "codex/bug1802-main-acceptance-auditor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791477332522,
+  "body": "Independent strict main acceptance audit: REQUEST_CHANGES at b46aec1e674baae5a329416d4119e67b59200a88 (parent 86738497539281dac210b1b115580c78f56099f6). Full report: /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/BUG1802_MAIN_ACCEPTANCE_AUDIT.md (SHA256 b7b1dfe01f1b2c0239b2663d60a6a88d9c5687a43ae247de4ea67226f61c231e). Exact source, canonical JSON/policy receipt, forge metadata and binary staleness evidence: sibling bug1802-main-acceptance-evidence/. PR #2461 is actually MERGED; forge mergedBy account joemooney does not identify the human/process or prove operator authorization. BUG-1802 remains Completed; no status changed. Signed full policy remains binding and incomplete: retained contributor/ancestor identity, sticky work coverage and B/F/C/O/W, START/round/head, typed candidates, revocation, home-first final serialization and CLI/MCP/corpus/source composition missing. New Unauthorized refusal is also accepted by the generic --override-stale-approval branch. Existing exact-head and corpus protections are credited without treating them as complete authority. BUG-1808 latest approval is INACTIVE checkpoint-only; all production gates remain open. TASK-1612 latest checkpoint requires adopter rework and production release is unavailable. All inspected installed/target binaries predate the audited SHA; this was source-only, with NO build/tests or live gate experiments. Recommend root record CORRECTION and reopen SAME BUG-1802 preserving merge/completion trail and all closed history; no replacement spec. Root decides correction/routing. No code fixes, commits, push, PR, merge, authority/hold/queue changes or others' cleanup. Auditor native thread 01a11c56-d0c1-7c33-86ba-c69a9af3b2ba; new independent acceptance role, not author/prior reviewer/coordinator.",
+  "subject": "BUG-1802 main acceptance: REQUEST_CHANGES at b46aec1e; root correction recommended",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
