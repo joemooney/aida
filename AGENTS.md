@@ -37,6 +37,12 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 
 # AGENTS.md
 
+Shell role updates require a successful CLI exit and one complete pair of
+standalone eval markers. Failed diagnostics are preserved verbatim; unmarked
+legacy output is display-only. Existing shells need the updated shell-init
+helper loaded to receive this protection. See OVERVIEW.md.
+<!-- trace:BUG-1806 | ai:codex -->
+
 Drain run ownership is persisted before the phase-1 status bump and child
 launch. Missing/corrupt batch state or failed ownership writes stop the member
 before launch; pipelined parents leave the bump to the registered child.

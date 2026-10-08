@@ -389,6 +389,17 @@ aida dev deactivate                    # the wrapper auto-evals this too
 
 `aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.
 
+The shell helper applies role/session/dev/worktree environment updates only
+after a successful CLI exit with one complete pair of standalone
+`#aida:eval:begin` / `#aida:eval:end` markers. Failed stdout is sent verbatim to
+stderr without evaluation; unmarked or malformed successful output is displayed.
+Older binaries emitting bare shell output must be updated for automatic shell
+mutations. Already-loaded helpers are not replaced by a binary upgrade: install
+the updated helper with `aida dev shell-init --install` and reload the shell
+configuration. The binary's existing bare-output behavior for absent or legacy
+helpers is unchanged. Isolated regression: `bash tests/test_role_wrapper_boundary.sh`.
+<!-- trace:BUG-1806 | ai:codex -->
+
 For project conventions (commit format, scaffold/template architecture, CLI reference) see [CLAUDE.md](CLAUDE.md).
 
 ---

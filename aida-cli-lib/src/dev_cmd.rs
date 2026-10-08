@@ -1394,52 +1394,54 @@ aida() {
             # lines. Both markers are shell comments, so an older wrapper (or a
             # hand-rolled `eval "$(aida …)"`) that evals the lot is inert.
             #
-            # No markers in the output = an OLDER BINARY that predates the
-            # channel: fall back to the legacy "all of stdout is shell" reading
-            # so a new wrapper keeps driving an old aida.
-            #
-            # Eval still happens ONLY on exit 0 — belt and braces, and it keeps
-            # a half-emitted payload from a failing command out of the shell.
-            # A failure's output is printed to stderr with the markers stripped,
-            # and the status propagates so callers can branch on it.
-            # (trace:BUG-779)
-            local _aida_out _aida_rc _aida_pre _aida_post _aida_eval _aida_rest _aida_part
+            # trace:BUG-1806 | ai:codex
+            # Failed output is diagnostic data, including any apparent markers.
+            # Keep a sentinel through capture to preserve trailing newlines.
+            # Old binaries without markers are display-only: never guess that
+            # unmarked stdout is shell code. Validate the entire block before
+            # eval, requiring exactly one pair of standalone marker lines.
+            local _aida_out _aida_rc _aida_pre='' _aida_post='' _aida_eval=''
+            local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            _aida_out=$(command aida "$@")
-            _aida_rc=$?
-            case "$_aida_out" in
-                *"$_aida_b"*)
-                    _aida_pre="${_aida_out%%"$_aida_b"*}"
-                    _aida_rest="${_aida_out#*"$_aida_b"}"
-                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
-                    _aida_post="${_aida_rest#*"$_aida_e"}"
-                    # Drop the newlines that abutted the markers so the prose
-                    # doesn't gain blank lines it never had.
-                    _aida_pre="${_aida_pre%"$_aida_nl"}"
-                    _aida_eval="${_aida_eval#"$_aida_nl"}"
-                    _aida_eval="${_aida_eval%"$_aida_nl"}"
-                    _aida_post="${_aida_post#"$_aida_nl"}"
-                    ;;
-                *)
-                    _aida_pre=''
-                    _aida_eval="$_aida_out"
-                    _aida_post=''
-                    ;;
-            esac
-            if [ "$_aida_rc" -eq 0 ]; then
-                [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
-                [ -n "$_aida_eval" ] && eval "$_aida_eval"
-                [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
-                return 0
+            if _aida_out=$(command aida "$@"; _aida_rc=$?; printf '.'; exit "$_aida_rc"); then
+                _aida_rc=0
             else
-                for _aida_part in "$_aida_pre" "$_aida_eval" "$_aida_post"; do
-                    [ -n "$_aida_part" ] && printf '%s\n' "$_aida_part" >&2
-                done
+                _aida_rc=$?
+            fi
+            _aida_out=${_aida_out%.}
+            if [ "$_aida_rc" -ne 0 ]; then
+                printf '%s' "$_aida_out" >&2
                 return "$_aida_rc"
             fi
+            while IFS= read -r _aida_line; do
+                case "$_aida_line" in
+                    "$_aida_b")
+                        [ "$_aida_state" -eq 0 ] || _aida_valid=0
+                        _aida_state=1 ;;
+                    "$_aida_e")
+                        [ "$_aida_state" -eq 1 ] || _aida_valid=0
+                        _aida_state=2 ;;
+                    *)
+                        case "$_aida_state" in
+                            0) _aida_pre="$_aida_pre$_aida_line$_aida_nl" ;;
+                            1) _aida_eval="$_aida_eval$_aida_line$_aida_nl" ;;
+                            2) _aida_post="$_aida_post$_aida_line$_aida_nl" ;;
+                        esac ;;
+                esac
+            done <<AIDA_WRAPPER_OUTPUT
+${_aida_out%"$_aida_nl"}
+AIDA_WRAPPER_OUTPUT
+            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ]; then
+                printf '%s' "$_aida_pre"
+                [ -n "$_aida_eval" ] && eval "$_aida_eval"
+                printf '%s' "$_aida_post"
+            else
+                printf '%s' "$_aida_out"
+            fi
+            return 0
             ;;
         "init"|"init "*)
             # STORY-780: `aida init <DIR>` finishes by handing this shell a

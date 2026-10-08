@@ -44,7 +44,7 @@
 //! | wrapper | binary | behaviour |
 //! |---------|--------|-----------|
 //! | old (no `eval-block`) | new | bare payload — byte-identical to today |
-//! | new (`eval-block`)    | old | no markers found → wrapper evals whole stdout (legacy path) |
+//! | new (`eval-block`)    | old | no markers found → display only; update the binary for shell mutations |
 //! | new                   | new | marked block: payload eval'd, prose displayed |
 //! | none (raw `eval "$(aida …)"`) | new | bare payload — unchanged |
 //!
