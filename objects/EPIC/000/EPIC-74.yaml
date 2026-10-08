@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T17:28:28.317251400Z
+modified_at: 2026-10-08T17:28:46.965283710Z
 req_type: Epic
 tags:
 - architecture
@@ -457,6 +457,67 @@ comments:
     Missing common consumer/persistence/hook APIs remain explicit prerequisites or refusal, not invented authorization. Release of live/unlanded isolation still needs its actual actor/evidence/confirmation disposition; no absent-Joe prompt or new option selected. No canonical mutation in v3; exact relay drafts only. No code, ADR docs publication, statuses/queues, grants/holds, launches, implementation/merge or self-signoff. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 untouched. Existing profile no-exemption choice and strong AC2 unchanged.
   created_at: 2026-10-08T17:28:28.317251400Z
   modified_at: 2026-10-08T17:28:28.317251400Z
+  relayed_from: answered-design-sketch-author
+- id: 01a11c8f-7875-7f60-92b6-3bbcf6b005a9
+  author: joe
+  content: |
+    # EPIC-74 v3 — entrypoint and guard matrix
+
+    Proposed companion to EPIC74_AMENDED_SKETCH_V3.md, pinned main b46aec1e674baae5a329416d4119e67b59200a88. New symbols below are proposals. Exact current handler names identify integration seams, not claims of already-shipped guards. F1–F3 rework preserving accepted R1 inventory; no source edits. Exact proposed full canonical relay body, not posted. Supersedes the v2 matrix proposal only.
+
+    Guards: **D** = strict branch-context discovery; errors propagate and excluded rows carry a reason. A stale display can show unknown, never eligible. **A** = store-only checked constraint reservation for Ordinary OR Isolated context; then the sole common publisher for lifecycle effects where required (ADR v3). An epic reservation never issues authority or releases a child. Missing common consumer hook/receipt or checked store adapter refuses before any setup, claim or queue effect, not after a caller's force shortcut. **M** = checked branch/repo/predicate reservation plus actual PR/base/head/coverage; network outside seat/store/common locks, separate forge-only lease phase, no merge->store nesting; no atomic-base claim from source pin. **C** = one committed-snapshot coverage validator regardless of path, with checked outputs retaining Pending until full result receipt. Slice 1 supports isolated read/selection positives and blocks all isolated M/C successes and unprovided lifecycle adapters; its generic force/resume paths do not skip A. Work already planned/queued/open is not exempt.
+
+    | Entry/variant | Current handlers / shared aliases | Guard and first protected effect |
+    | --- | --- | --- |
+    | CLI queue list and next | queue_cmd.rs handle_queue_command, QueueCommand::List / Next | D before eligible/recommended row; Next's selected plan still needs A at execution |
+    | Explicit/no-ID/cluster pickup; implicit queue row | resolve_queue_work_plan -> handle_queue_work; queue_fresh_pickup_policy, queue_drain_pickup_policy | D during plan and A before persisting implicit queue row; A before calibration, lease, status, worktree or dispatch; force-NeedsAttention branch cannot bypass |
+    | Force/resume/held/from-PR recovery pickup | handle_queue_work, held_resume_plan, held_resume_reentry_allowed, handle_queue_recover, queue_work_plan_wants_pr_head_branch | A before recovery mutation; load original UUID/isolation lineage and actual PR, never trust saved context alone |
+    | Auto single / nextN / batch / batches / single-branch / cluster / resume | queue auto_complete_head_candidates_with_roles / with_blocked / base projection, pick_auto_complete_head_for_role, resolve_auto_complete_head; lib.rs handle_auto_complete, run_auto_complete, handle_auto_complete_next_n, handle_auto_complete_batch, handle_auto_complete_batches, handle_auto_complete_single_branch | D before any projection drops blocked reasons; A for EACH member before registration/phase-1 status, not just batch head; refreshed membership also A; resume phase must A/M/C independently |
+    | Queue add / advance / done and MCP counterparts | handle_queue_command Add/Advance/Done; handle_queue_advance; mcp.rs tool_queue_add_inner, tool_queue_done | A for routing/admission effects with explicit excluded result; Done is not default landing; any completion credit invokes C. Merely storing a deferred excluded row must never advertise it as admitted |
+    | Burndown plan/run and wave | lib.rs handle_burndown_command/handle_burndown_plan/handle_burndown_run, resolve_burndown_sets; burndown.rs partition | D for plan and A before launch/queue/status effects; same reason on exclusion |
+    | Wave merger / drain merge phase | lib.rs integrate_wave_prs, merge_wave_pr; auto-complete runner merge method (main line 114415) | M immediately before each Forge::merge_change, including pre-existing PR; wave currently lacks match_head, must supply verified source pin; C before status credit |
+    | Shift read/dispatch/resume | shift.rs gather_candidates, select_wave, launch_wave_isolated, handle_shift_command/resume_command | D errors returned, not empty vec/filter_map omission; A before wave launch and refreshed member dispatch |
+    | Groom aliases and pickable groom | lib.rs rewrite_groom_alias; backlog.rs handle_groom/handle_groom_pickable, enqueue_groomed_for | D then A before disposition/queue mutation; alias reaches same guard, no separate authorization |
+    | Integrate plan/run/watch | queue_cmd.rs handle_queue_integrate; integrate.rs classify_candidate/plan_stacked_integration/select_canonical_pr; probe_pr_integration_state | D on EACH discovery/watch iteration; M on actual merge call; prior watch classification is not admission; C on credit |
+    | CLI session and foreground agent new | lib.rs session_start, dispatch_agent_new, agent_new_with_config, prepare_agent_launch_dry | Dry D; actual A before first session/grant/lease/status/worktree effect. Seat validation stays required |
+    | Background / headless / inherited children | lib.rs agent_new_bg_dispatch and auto-complete runner; session.rs compose_headless_command, spawn_vendor_headless_with_seat, exec_vendor_headless | A before child authority/setup/spawn; preflight token is not downstream permission to ship; each later mutation separately guards |
+    | Native and ended agent resume | lib.rs agent_resume, agent_resume_ended, maybe_handle_agent_resume_or_duplicate, prepare_agent_resume_context | D on display; A before resumed process/setup; stale original branch/default is refusal |
+    | Worktree entry/add | lib.rs handle_worktree_command -> handle_worktree_enter/handle_worktree_add | D and A before branch/worktree/focus mutation; bounded in-scope setup only; no implicit pipeline authorization |
+    | MCP queue/session metadata | mcp.rs tool_queue_list, tool_queue_next, tool_queue_work, tool_session_start | D; queue_work/session_start are metadata peeks returning CLI guidance, NOT launches. Excluded/unknown must not return actionable start guidance |
+    | MCP real claim | mcp.rs tool_claim_task | A before actual lease file create; explicit spec/worktree args and “already claimed” results must not bypass truthful isolation disposition |
+    | Direct PR/create/ship aliases | pr_cmd.rs pr_ship_create_pr, pr_ship_handler, ship_preflight_gates; shared pr command dispatch in git_backend_cmd.rs | A before PR publication, M before merge incl existing PR; actual base unavailable refuses (pr_ship_target_branch's literal-main fallback unusable here); C before credit |
+    | GitLab MR recovery / explicit target | pr_cmd.rs preflight_mr_base, read_mr_recovery_state, resolve_mr_target_branch, write_mr_recovery_state | A before saving recovery/publishing, M before merging; explicit/saved target cannot override canonical isolation; both forge adapters covered |
+    | Status and completion paths | lib.rs auto_bump_done_to_completed_with, handle_db_reconcile_status, collect_covers_completed_review_flips; git_backend_cmd.rs pull; live ship/drain/wave/umbrella/retry; CLI edit and mcp.rs update_requirement status mutations | C for known isolated lineage including after declaration clear, env unset and display-ID remap. Existing ordinary status authority is not proof of landing. Unknown lineage errors stop promotion |
+
+    ## F1/F2 composition on every mutating row
+
+    The row names do not assert that current handlers implement the required adapters. Each first-effect path is gated by checked canonical receipt and the owner contract in EPIC74_ADR_DRAFT_V3.md sections 1–4. Queue/claim/worktree/session/agent lifecycle after-images belong to the single signed common publisher when required. Its existing C/receipt decides success; epic reconciliation only observes it. Current direct lease creation in tool_claim_task and existing spawn_vendor_headless_with_seat cannot substitute. No common consumer hook => zero setup effect. First slice can remain read/selection-positive without fake lifecycle success.
+
+    Reservation commit/projection phases are STORE ONLY, not nested inside merge/common/seat/queue/cache locks. Common uses home->repo->seats->store->queues->drain->manifests->verdict->merge->Git; callbacks/READY/network/waits outside seat. Forge-only optional branch lease never nests store/common entry. Existing ordinary lock callers are not globally reordered; incompatible participating paths refuse until owner-integrated. Best-effort auto_commit_paths or atomic-update success does not constitute a durable receipt. Dirty/partial Completed/Landed YAML cannot authorize a row.
+
+    ## F3 writer closure and Ordinary positives
+
+    All canonical mutation entrypoints converge on the same candidate-graph validator, including COMMON publisher after-images: CLI edit/relationship add-remove/delete/import/restore; MCP update_requirement/add_relationship and saves; GitBackend single/bulk/atomic writes; store pull/rebase/conflict-resolution adoption; checkout/recovery; completion/reopen; AIDA-mediated default/ref/PR retarget. TASK-1332 owns common store writer integration; required hook-safe checked adapter is unprovided, not duplicated here. Candidate adoption validates before live installation and returns a checked snapshot/receipt.
+
+    Reservations cover Ordinary absence as well as positive generation membership. Under guard, recompute old AND candidate ancestor closures, relevant declaration absence, sticky membership, descendant/coverage-set and repo/default predicates for active operations; conservative all-reservation evaluation is acceptable. Reject changed contexts even when caller affected-ID lists omit a new ancestor or descendant. Only exact declared action/common-owner output digests are exempt; “same object” is not exemption. All admitted ordinary positives participate.
+
+    Declaration on existing ordinary in-flight work requires serialized inventory. Previously admitted effect wins => declaration refuses until safely settled; declaration first => new ordinary action sees isolation and refuses default effect. Unregistered/unfenceable current work means no positive declaration, not permission to cancel it or promise retroactive protection. Pure stale plans re-resolve before admission. Opposite race must be tested.
+
+    Target reset/clear/reparent/detach/epic deletion/retype/history erasure/default reinterpretation cannot bypass unlanded isolation. First-slice refusal of release is accepted protective scope, not satisfaction of full old AC4/5. Separate-clone/raw external changes remain the ADR's explicit limits; no local-lock consensus claim.
+
+    ## Test construction and paired outcomes
+
+    For EVERY matrix row, table-driven fixture modes are: ordinary default work permitted under existing gates; in-scope declared subtree selection positive; sibling/outside subtree excluded; no env; misleading env; explicit ID; force; resume/recovered plan. Later-slice positive mutation requires capable fake forge/protocol; slice-1 corresponding mutation must refuse. Assert exit/error classification and visible reason. Snapshot queue bytes, canonical statuses/graph, lease files, worktree/refs, child-spawn counter and fake-forge request log: every refusal leaves all intended effects absent, except a documented durable uncertain-outcome record after a request was actually sent.
+
+    Named obligations: off_default_subtree_excluded_without_env_each_selector; isolated_context_selects_only_subtree_positive; mcp_claim_isolation_refuses_before_lease; mcp_peek_reports_exclusion_without_start_guidance; shift_isolation_read_failure_is_error; slice1_direct_ship_and_resume_fail_closed_before_slice2; force_resume_cluster_refreshed_member_cannot_bypass_admission; wave_drain_direct_and_mr_recovery_validate_target; trunk_default_missing_metadata_never_falls_back_to_main. Race, coverage and writer tests are in the ADR and acceptance amendment. No tests executed in this sketch pass.
+
+    ## F1–F3 named witnesses and accepted R2/R3 amendments
+
+    Add actual-handler paired tests ordinary_admission_blocks_new_ancestor_isolation_after_final_check; declaration_before_ordinary_admission_refuses_default_effect; pending_coverage_blocks_new_descendant; declaration_with_unfenced_ordinary_inflight_refuses; epic_reservation_consumes_common_publication_once; epic_common_lock_order_has_no_merge_store_cycle; pending_commit_failure_sends_no_effect; output_mid_batch_failure_retains_pending; isolation_clear_and_clone_replay_require_committed_evidence. Fault/refusal snapshots include common C/receipt and retained Pending, not only process counters. All are proposed, not run.
+
+    Completion rows require explicit immutable predecessor IDs with cycle/missing-link refusal. Narrow squash positive requires reviewed base ancestor of pinned source, actual first parent/base equal reviewed base, result tree equal reviewed source tree and forge-confirmed identities/default reachability. No unspecified general merge-tree/patch-equivalence proof. Forge source pin does not imply base pin; cooperative raw-forge limit is explicit, stricter unsupported atomic condition refuses. Pending never expires into permission and current TTL/RAII branch lease is not fencing.
+  created_at: 2026-10-08T17:28:46.965283710Z
+  modified_at: 2026-10-08T17:28:46.965283710Z
   relayed_from: answered-design-sketch-author
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
