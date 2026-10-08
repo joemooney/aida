@@ -8,13 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-10-08T17:38:15.176428719Z
+modified_at: 2026-10-08T19:17:35.564989934Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
 - kind:observation
 - linked:TASK-1327
 - linked:TASK-1523
+- operator-held
 - severity:major
 relationships:
 - rel_type: Blocks
@@ -253,6 +254,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+deferred: true
+deferred_at: 2026-10-08T19:17:35.564989934Z
+deferred_until: When those exact profiles and independently accepted common dependencies exist, recheck all B1-B4 mandatory positive and negative real-entrypoint witnesses before resuming.
+deferred_reason: 'Technical dependency: signed consumer design is approved but the exact supported vendor/version/containment/minimal-credential profile and independently accepted common publisher/P4/C, occupancy and real transport/consumer joins are not supplied. No guessed backend or authority bypass.'
 filed_at:
   code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
   branch: task-1327
