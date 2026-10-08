@@ -22,6 +22,29 @@ use crate::dev_cmd::{classify_wrapper, WrapperState};
 use crate::shell_eval::{EVAL_BEGIN, EVAL_BLOCK_CAP, EVAL_END};
 use crate::shell_wrapper_harness::{run_wrapper_in, wrapper_shells};
 
+// trace:BUG-1806 | ai:codex
+#[test]
+#[cfg(unix)]
+fn role_wrapper_security_boundary_fixtures() {
+    let home = tempfile::tempdir().unwrap();
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/test_role_wrapper_boundary.sh");
+    let output = std::process::Command::new("bash")
+        .arg(script)
+        .env_clear()
+        .env("HOME", home.path())
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .current_dir(home.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 // ── the acceptance case: prose AND an eval directive from one subcommand ─────
 
 /// The regression this task exists for: a subcommand that prints human prose to
@@ -87,11 +110,11 @@ fn prose_after_the_block_is_displayed() {
 }
 
 /// A failing subcommand still reports on stderr and propagates its status — and
-/// the protocol markers are stripped from that report rather than shown to the
-/// operator as noise. (BUG-779's guarantee, preserved through the redesign.)
+/// even apparent protocol markers are preserved as diagnostic data.
 // trace:TASK-1171 | ai:claude
+// trace:BUG-1806 | ai:codex
 #[test]
-fn failure_reports_on_stderr_with_markers_stripped() {
+fn failure_reports_on_stderr_verbatim() {
     for &shell in wrapper_shells() {
         let (stdout, stderr, _) = run_wrapper_in(
             shell,
@@ -110,8 +133,8 @@ fn failure_reports_on_stderr_with_markers_stripped() {
             "[{shell}] the real error reaches the operator:\n{stderr}"
         );
         assert!(
-            !stderr.contains(EVAL_BEGIN) && !stderr.contains(EVAL_END),
-            "[{shell}] markers must not surface in the error report:\n{stderr}"
+            stderr.contains(EVAL_BEGIN) && stderr.contains(EVAL_END),
+            "[{shell}] failed output must remain diagnostic data:\n{stderr}"
         );
         assert!(
             stdout.contains("leaked:unset"),
@@ -124,11 +147,11 @@ fn failure_reports_on_stderr_with_markers_stripped() {
 // ── version skew ─────────────────────────────────────────────────────────────
 
 /// NEW wrapper + OLD binary. A binary that predates the channel emits a bare
-/// payload with no markers; the wrapper must fall back to the legacy "all of
-/// stdout is shell" reading rather than dropping the payload on the floor.
+/// payload with no markers; the wrapper displays it without evaluating it.
 // trace:TASK-1171 | ai:claude
+// trace:BUG-1806 | ai:codex
 #[test]
-fn unmarked_payload_from_an_older_binary_still_evals() {
+fn unmarked_payload_from_an_older_binary_is_display_only() {
     for &shell in wrapper_shells() {
         let (stdout, stderr, _) = run_wrapper_in(
             shell,
@@ -139,9 +162,10 @@ fn unmarked_payload_from_an_older_binary_still_evals() {
         );
 
         assert!(
-            stdout.contains("legacy:applied"),
-            "[{shell}] an older binary's bare payload must still be eval'd:\n{stdout}\nstderr:\n{stderr}"
+            stdout.contains("legacy:unset"),
+            "[{shell}] an older binary's bare payload must not be eval'd:\n{stdout}\nstderr:\n{stderr}"
         );
+        assert!(stdout.contains("export AIDA_TASK1171_LEGACY=applied"));
         assert!(stdout.contains("rc:0"), "[{shell}] {stdout}");
     }
 }
