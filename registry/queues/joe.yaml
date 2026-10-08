@@ -20,13 +20,6 @@
   added_at: 2026-10-07T22:19:47.863371483Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a11873-bcab-7c73-b023-e4614448bdd9
-  position: 44000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-10-07T22:20:03.546373794Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a11921-6a77-7761-a5eb-86f42ea0b4c9
   position: 46000
   added_by: joe
