@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:48:11.551846892Z
-modified_at: 2026-10-08T16:17:44.990148344Z
+modified_at: 2026-10-08T21:09:50.897117737Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -19,6 +19,139 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): sign off and queue the bounded linked-worktree dry-run root-resolution bug. Preserve authority, rebase and store policies; isolated fixture must distinguish invoked sibling from primary checkout. Separate implementer, fresh independent review and exact-head green CI required. No dispatch overlap with external reserved specs.'
   created_at: 2026-10-08T16:17:04.464542363Z
   modified_at: 2026-10-08T16:17:04.464542363Z
+- id: 01a11d59-dcb1-7210-a51e-ee2bd14f9dbe
+  author: mcp
+  content: |
+    ACTUAL BATCH D FINISHED VALIDATION NON-PASS. Full mechanical integrator report below; source review previously bounded/unfinalized does not make this a pass. Root independently verifies fixture git commit lacks explicit identity and transport test's non-CLOEXEC owned lock/release assertion. Parallel-inheritance explanation remains unverified, not a diagnosis/pass. No new code dispatch authorized, no rerun or alternate authority path; bounded rework/verification briefs will remain prepared until legitimate route exists.
+
+    # Batch D — single full local-CI validation: NON-PASS (Run tests failed; gates 6–37 unrun)
+
+    **Outcome.** The one bounded run at **`65e19b9bd1f617567235c0bf42df70f9e3a89729` / tree `2ce32ba6fc46a7fa4893d329767ea9902cc8795b`** (base `bf65220959c7601427247286abc7eb16278af5a5`) is NON-PASS.
+
+    - `Run tests` (`cargo test --workspace --no-fail-fast`) failed with **51 failures in 15 test binaries** (9881 passed, 12 ignored, 103 result lines).
+    - **Two failures are batch-owned new tests**, one per member (§2).
+    - The runner stops at the first failing gate, so **gates 6–37 never ran**.
+    - Gates 1–4 passed. `check-templates` passed. **No external signal**: the run completed on its own.
+    - No full pass is claimed. No approval transfers to this head.
+
+    Written 2026-10-08T14:09:18-07:00 (America/Phoenix). Mechanical integrator seat (Claude Code, Opus 5.5), not an author or reviewer. No fix authored, no rerun, no baseline chasing, no push/PR/merge/record/status/hold/grant action. TASK-1612's operator-owned merge and the protected machine-record floors remain binding.
+
+    ## 1. Run record
+
+    | Step | Command | Start → end (-07:00) | Exit |
+    |---|---|---|---|
+    | driver | `run-validation.sh` → `setsid --wait strace -qq -tt -e trace=none -e 'signal=!SIGCHLD' -o driver-signals.strace timeout 14400 sandbox.sh bash inner.sh` | 12:36:38 → 14:07:20 | 0 (timeout not reached) |
+    | a | rustc-wrapper probe (`cargo build -v` of a trivial private crate) | 12:36:38 | 0. `Running …/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc …`, **0 sccache mentions**: wrapper verified off |
+    | b | `python3 scripts/check-ci-gates.py --audit` | 12:36:38 | 0 (45 gates classified) |
+    | c | `python3 -u scripts/check-ci-gates.py --tier all` (exact `make check-ci` body, unbuffered) | 12:36:38 → 14:05:25 | **1** |
+    | d | `make --no-print-directory check-templates` | 14:05:25 → 14:07:20 | **0** ("All templates OK!") |
+    | post | `git status --porcelain --untracked-files=all`; `git rev-parse HEAD HEAD^{tree}` | 14:07:20 | clean; head/tree unchanged |
+
+    `check-ci` gates:
+
+    1. `Check aida-cli without default features`: **ok** (82.8 s).
+    2. `Build all packages`: **ok** (167.7 s); one batch build through the normal slot wrapper.
+    3. `TUI seam guard`: **ok** (66.4 s). This is the gate that Batch A lost to an outside SIGTERM; it passes here.
+    4. `Generated protobuf mirror drift guard`: **ok** (169.7 s).
+    5. `Run tests`: **FAIL** (4839.7 s).
+    6–37. **NOT RUN**: GitLab live-smoke workflow guard; Weekly Windows workflow contract; External-prose classifier inventory; MCP stdio compatibility; history template CLI/config/MCP contract; single-spec show latency; MCP doc-consistency; merge-hold gate fixtures; advisor-code-guard hook; git-guardrails parse; shipped full-access launch refusal fixtures; no-origin pull warning; two-remote pull byte-identical; advisor-code-gate substrate; pre-commit provenance move-detection; agent-skill-hook installer fixtures; distributed/sibling-store integration; ~/.aida home-guard self-test; Minimal aida-cli build; CLI-manual drift-guard; Monitor contract drift guard; Performance profile guard; **Check formatting**; Removed mode-flag spelling guard; Rust test portability ratchet; Prose-classification fixtures; File-time handle portability fixtures; Executable fixture ratchet; **Run clippy**; Glyph-literal lint; Trace/doc-header stranding gate; Docs-drift scheduling guard.
+
+    Signal observation: `driver-signals.strace` is **empty**, so no non-SIGCHLD signal was delivered to the top-level `timeout`. The limit: strace watched only that process (no `-f`, to avoid ptrace effects on TASK-1612's reaping fixtures), so a signal sent to a single deeper process would not appear. No test reported being killed by a signal.
+
+    ## 2. Batch-owned failures (new tests; they do not exist on main, so they cannot be "pre-existing")
+
+    **TASK-1321 — `aida-cli/tests/task_1321_rebase_linked_worktree.rs::task_1321_dry_run_json_reports_the_invoked_linked_worktree`** (0.48 s)
+
+    ```text
+    panicked at aida-cli/tests/task_1321_rebase_linked_worktree.rs:59:5:
+    git ["commit", "-q", "-m", "init"] in …/tmp/.tmpWw7C9t/primary failed: Author identity unknown
+    fatal: unable to auto-detect email address (got 'joe@imac.(none)')
+    ```
+
+    Fact: the fixture runs `git commit` without setting a commit identity. This sandbox supplies none (empty `GIT_CONFIG_GLOBAL`, no `GIT_AUTHOR_*`/`GIT_COMMITTER_*`), per root's "no fixture identity manufacture". Whether a CI runner passes depends on its own git identity and hostname auto-detection, which is unverified here. This is a test-portability defect for the author or reviewer to judge; the integrator authored no fix. The author's and reviewer's passing runs had a different identity environment. Unit tests `rebase_cmd::tests::{linked_worktree_cwd_resolves_to_the_linked_checkout, unrelated_or_missing_cwd_keeps_the_store_root}` **passed** in this run.
+
+    **TASK-1612 — `aida-core` lib `launch_transport::linux::tests::image_seals_descriptor_policy_and_native_positive`** (aida-core lib result: 1332 passed, 1 failed, 7 ignored)
+
+    ```text
+    panicked at aida-core/src/launch_transport/tests.rs:385:5:
+    assertion `left == right` failed: helper inherited lock
+      left: -1
+     right: 0
+    ```
+
+    Fact: after the test drops its deliberately non-CLOEXEC locked FD, a second `flock(LOCK_EX|LOCK_NB)` on `owned-lock` returned −1, so some process still held that lock.
+
+    Unverified hypothesis, for the author and reviewer only: CI's `cargo test --workspace` runs lib tests on parallel threads. A fork in a concurrently running test could inherit the non-CLOEXEC FD while it is open. The author's and reviewer's passing transport runs used `--test-threads=1`. Not rerun or diagnosed here.
+
+    The other 12 `launch_transport` tests passed (including `namespace_init_is_qualified_only_as_the_actual_adopter` and `opened_noexec_mount_and_runtime_search_path_are_rejected`; 5 subprocess-only workers are ignored, as designed). `waiting_child_bootstrap` passed 2/2.
+
+    ## 3. Other failures (13 binaries, 49 tests): UNCLASSIFIED
+
+    Per-test list: `failure-map.txt`.
+
+    | Binary | Failed |
+    |---|---|
+    | `agent_write_confirm` | 1 |
+    | `bug_1289_format_json` | 4 |
+    | `bug_1502_format_json_audit` | 8 |
+    | `bug_1513_queue_list_for_role` | 1 |
+    | `bug_1683_live_drain_lock` | 1 |
+    | `bug_1687_defer_status_lens` | 4 |
+    | `bug_1771_status_lens_filters` | 3 |
+    | `bug_1795_queue_list_filter_outputs` | 4 |
+    | `journey` | 2 |
+    | `queue_work_dry_run` | 14 |
+    | `task_1290_criteria_gate` | 4 |
+    | `task_1561_worktree_parent_placement` | 2 |
+    | `task_163_why_live_drain` | 1 |
+
+    The dominant panic text is authority refusals inside fixture setup:
+    - "filed as draft (requested approved needs advisor authority)" ×8;
+    - "`X` isn't queued. Status is Draft." ×11;
+    - "promoting a Draft spec … needs advisor authority" ×6;
+    - "queuing work for execution needs dispatch authority" ×5;
+    - "queue done refused: … Draft" ×4.
+
+    This is the same family seen in TASK-1321's and TASK-1612's earlier per-candidate fenced runs (`agent_write_confirm` was baseline-confirmed only there). None of these binaries is among the 13 batch paths. **Not classified as pre-existing or batch-introduced**: no baseline run was made, per root. The c677 drift touches nearby areas (session grants, `events.rs` active seat, `role_cmd` non-TTY advisor prompt, and `Run tests < /dev/null` in `ci.yml`), but source movement does not make these failures fixed or baseline.
+
+    ## 4. Isolation (root option b) and CI differences
+
+    - **Private clone** of the exact head: no hooks; origin URL points to a nonexistent path; `origin/main`/`origin/HEAD` pinned to `bf652209`; no `.aida-store`; clean before and after.
+    - **Environment:** `env -i`, 25 variables (`sandbox-env.txt`). Private HOME/AIDA_HOME/XDG*/mode-0700 runtime/TMPDIR, empty global git config, `GIT_CONFIG_NOSYSTEM`, `GIT_ALLOW_PROTOCOL=file`, stdin `/dev/null`. No identity, grant, token, forge or display variables.
+    - **Curated PATH = `tools/:guards/:sysbin/`**:
+      - 2772 `/usr/bin` symlinks;
+      - 17 vendor names genuinely absent, verified pre-run; 5 of them are installed on this host (`antigravity chatgpt claude-desktop code goose`) and are reachable only by absolute path, which no batch source names;
+      - 32 loud guards.
+
+      Hard-coded `/usr/bin/claude`, `/usr/local/bin/claude` and `/usr/bin/codex` in source are absent on this host. No installed tool was hidden or edited.
+    - **Guard hits during tests:** `gh` ×216 (mostly `repo view --json defaultBranchRef`, `--version`, plus `run list --workflow cross-platform.yml`, `pr view 77`, `pr view 59`) and `crontab -l` ×1. All were refused with 97. CI has a real `gh`, so this is a **CI difference**; whether any failure above stems from a guarded `gh` is unverified.
+    - **Cargo:** unmodified slot wrapper via the restore shim (machine-wide `/run/user/1000` slots; `check-templates` logged a normal queue wait), `CARGO_BUILD_JOBS=3`, offline, the clone's private `target/`. sccache verified off.
+    - **Other CI differences:**
+      - `CI`/`GITHUB_ACTIONS` unset;
+      - unprivileged userns already enabled locally, whereas CI enables it after `Run tests`;
+      - local git has no commit identity;
+      - the gate list was read from the bf-based `ci.yml`, which lacks c677's `< /dev/null` edit. Our runner already used stdin `/dev/null`.
+
+    ## 5. Main drift (recorded, not adopted)
+
+    `origin/main` is now `c67728c1dcaf8a577539d920bdc6a3c86126cebb` (TASK-1593, external owner, 8 paths). It overlaps D on `aida-cli-lib/src/lib.rs`, in disjoint regions (about lines 53241 and 95562 vs `main_entry` at about 1097). The details are in BATCH_D_PREPARED.md. This result applies **only** to the bf-based pin.
+
+    ## 6. Remaining
+
+    - The two batch-owned test failures go to their authors and reviewers. The integrator does not fix them.
+    - Root routes the precise refresh onto c677: normal merge, whole-overlap check, a new strict exact-head reviewer, and only the affected checks chosen from the actual diff and these results.
+    - Gates 6–37, including fmt and clippy, are unrun on any D head.
+    - Trace and doc-intent gates; required Ubuntu Build and merge-hold-gate; native and remote-only gates.
+    - The TASK-1612 operator-owned merge; protected review-record floors.
+
+    ## Evidence
+
+    `batch-d-validation-evidence/`: `summary.txt`, `check-ci.log` (+ `.gz`), `failure-map.txt`, `check-ci-audit.log`, `check-templates.log`, `driver-signals.strace` (empty), `guard-calls.log`, `rustc-wrapper-probe.log`, `pre-run-verify.log`, `sandbox-env.txt`, `post-run-git-status.txt` (empty), `sccache-before.txt`/`sccache-after.txt`, all scripts, `SCRIPTS.SHA256`, `LOGS.SHA256`. The private clone and target remain in the session scratchpad.
+
+    FINAL: **waiting for root's routing.** No self-approval, no background job, no irreversible action.
+  created_at: 2026-10-08T21:09:50.897110968Z
+  modified_at: 2026-10-08T21:09:50.897110968Z
+  relayed_from: proxy-batch-d-integrator
 history:
 - id: 01a10f36-4a11-70a9-b7af-7a1a01372452
   author: joe
