@@ -76,8 +76,25 @@ fn normal_core_and_cli_can_only_prepare_observe_and_cancel() {
         .write(true)
         .open("/dev/null")
         .unwrap();
+    // trace:TASK-1612 | ai:claude
+    // The public profile binds an observed adopter: an actual ancestor
+    // (nearest subreaper) or namespace init, never a bare declaration.
+    let profile = HostProfile::probe().unwrap();
+    let mut ancestors = Vec::new();
+    let mut pid = std::process::id() as i32;
+    while pid > 1 {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
+        let after = &stat[stat.rfind(')').unwrap() + 2..];
+        pid = after.split(' ').nth(1).unwrap().parse().unwrap();
+        ancestors.push(pid);
+    }
+    assert!(
+        ancestors.contains(&profile.adopter().pid),
+        "{:?} not in {ancestors:?}",
+        profile.adopter()
+    );
     let mut child = WaitingChild::prepare(
-        HostProfile::probe().unwrap(),
+        profile,
         helper,
         leaf,
         LaunchDescription {

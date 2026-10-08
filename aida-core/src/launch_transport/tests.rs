@@ -556,15 +556,22 @@ fn wait_stopped(pid: i32) {
 
 // Each lifetime case runs under a dedicated subprocess subreaper. No global
 // test-runner reaper/credentials/environment are changed, and no unrelated
-// process can be adopted or signaled by these fixtures.
+// process can be adopted or signaled by these fixtures. The supervisor uses the
+// unchanged public HostProfile, which must qualify this nearer subreaper (not
+// PID 1) as the actual adopter, or refuse when it cannot.
+// trace:TASK-1612 | ai:claude
+// trace:BUG-1808 | ai:claude
 #[test]
 fn parent_creating_thread_pre_prctl_and_orphan_reaping() {
     for case in [
+        "parent-public-ready",
         "parent-ready",
         "parent-pre-prctl",
         "parent-before-exec",
         "thread-ready",
         "thread-pre-prctl",
+        "refuse-non-reaping-adopter",
+        "refuse-subreaper-supervisor",
     ] {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join("case"), case).unwrap();
@@ -616,7 +623,62 @@ fn lifetime_worker() {
         .stderr(std::process::Stdio::inherit())
         .spawn()
         .unwrap();
-    let until = std::time::Instant::now() + Duration::from_secs(15);
+    let me = ProcessIdentity::capture(unsafe { libc::getpid() }).unwrap();
+    let supervisor_pid = supervisor.id() as i32;
+    if case.starts_with("refuse") {
+        // No reaping here: the non-reaping adopter must fail qualification.
+        let until = std::time::Instant::now() + Duration::from_secs(60);
+        let status = loop {
+            if let Some(status) = supervisor.try_wait().unwrap() {
+                break status;
+            }
+            assert!(std::time::Instant::now() < until, "refusal did not finish");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert!(status.success(), "{case}: supervisor failed");
+        let refusal = std::fs::read_to_string(home.join("refusal")).unwrap();
+        let (expected, orphans) = if case == "refuse-non-reaping-adopter" {
+            ("did not reap an orphan", 1)
+        } else {
+            ("child-subreaper supervisor", 0)
+        };
+        assert!(refusal.contains(expected), "{case}: {refusal}");
+        // Exactly the probe orphans this subreaper adopted; nothing else lives.
+        assert_eq!(reap_adopted(Duration::from_secs(10)), orphans, "{case}");
+        std::fs::write(home.join("reaped"), b"yes").unwrap();
+        return;
+    }
+    // The qualification probes' orphans arrive before the bootstrap exists;
+    // reap only those, never the supervisor, and stop before it can die.
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let reaper = {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            let mut reaped = 0;
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+                let rc = unsafe {
+                    libc::waitid(
+                        libc::P_ALL,
+                        0,
+                        &mut info,
+                        libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                    )
+                };
+                let pid = unsafe { info.si_pid() };
+                if rc == 0 && pid != 0 && pid != supervisor_pid {
+                    let mut status = 0;
+                    assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+                    assert_eq!(status, 0, "probe orphan failed");
+                    reaped += 1;
+                } else {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+            reaped
+        })
+    };
+    let until = std::time::Instant::now() + Duration::from_secs(60);
     let identity: ProcessIdentity = loop {
         if let Ok(b) = std::fs::read(home.join("owned-child")) {
             if let Ok(id) = serde_json::from_slice(&b) {
@@ -636,6 +698,15 @@ fn lifetime_worker() {
     assert!(identity.is_current());
     let pidfd = pidfd_open(identity.pid).unwrap();
     assert!(identity.is_current());
+    let adopter: ProcessIdentity =
+        serde_json::from_slice(&std::fs::read(home.join("adopter")).unwrap()).unwrap();
+    assert_eq!(
+        adopter, me,
+        "{case}: public profile did not bind the actual adopter"
+    );
+    stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    // HostProfile::probe and prepare each qualified once, each orphan reaped.
+    assert_eq!(reaper.join().unwrap(), 2, "{case}");
     if case.starts_with("parent") {
         supervisor.kill().unwrap();
         supervisor.wait().unwrap();
@@ -683,11 +754,19 @@ fn lifetime_worker() {
         supervisor.kill().unwrap();
         supervisor.wait().unwrap();
     }
+    // The kernel, not a declaration, chose this subreaper as adopter.
+    let status_text = std::fs::read_to_string(format!("/proc/{}/status", identity.pid)).unwrap();
+    assert!(
+        status_text
+            .lines()
+            .any(|l| l.split_whitespace().eq(["PPid:", &me.pid.to_string()])),
+        "{case}: orphan was not adopted by the qualified adopter\n{status_text}"
+    );
     let mut status = 0;
     assert_eq!(
         unsafe { libc::waitpid(identity.pid, &mut status, libc::WNOHANG) },
         identity.pid,
-        "declared fixture adopter did not reap"
+        "qualified fixture adopter did not reap"
     );
     assert!(libc::WIFSIGNALED(status) || libc::WEXITSTATUS(status) == 126);
     assert!(!Path::new(&format!("/proc/{}", identity.pid)).exists());
@@ -696,7 +775,36 @@ fn lifetime_worker() {
         !Path::new(&sentinel).exists(),
         "controlled pre-exec death ran the native leaf"
     );
+    assert_eq!(reap_adopted(Duration::ZERO), 0, "{case}: unexpected orphan");
     std::fs::write(home.join("reaped"), b"yes").unwrap();
+}
+
+// Reap every remaining child of this isolated subreaper (bounded) and count
+// them; ECHILD ends it. Only this worker's own children/adoptees are waited.
+fn reap_adopted(bound: Duration) -> usize {
+    let until = std::time::Instant::now() + bound;
+    let mut reaped = 0;
+    loop {
+        let mut status = 0;
+        let pid = unsafe { libc::waitpid(-1, &mut status, libc::WNOHANG) };
+        if pid > 0 {
+            assert_eq!(status, 0, "adopted probe orphan failed");
+            reaped += 1;
+            continue;
+        }
+        if pid < 0 {
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::ECHILD)
+            );
+            return reaped;
+        }
+        assert!(
+            std::time::Instant::now() < until,
+            "adopted orphan did not exit"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
 }
 
 #[test]
@@ -704,6 +812,27 @@ fn lifetime_worker() {
 fn supervisor_worker() {
     let home = crate::home::home_dir().expect("isolated fixture HOME");
     let case = std::fs::read_to_string(home.join("case")).unwrap();
+    if case.starts_with("refuse") {
+        if case == "refuse-subreaper-supervisor" {
+            assert_eq!(
+                unsafe { libc::prctl(libc::PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) },
+                0
+            );
+        }
+        let error = HostProfile::probe().unwrap_err();
+        // Refusal leaves this supervisor no child, and nothing was signaled.
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        assert_eq!(
+            unsafe { libc::waitid(libc::P_ALL, 0, &mut info, libc::WEXITED | libc::WNOHANG) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ECHILD)
+        );
+        std::fs::write(home.join("refusal"), format!("{error:#}")).unwrap();
+        return;
+    }
     let thread_home = home.clone();
     let is_thread = case.starts_with("thread");
     let (tx, rx) = std::sync::mpsc::channel();
@@ -717,23 +846,38 @@ fn supervisor_worker() {
             FixtureBehavior::Normal
         };
         let (helper, leaf) = f.images();
-        let mut profile = HostProfile::probe().unwrap();
-        // This is the preexisting outer subreaper, not the doomed supervisor.
-        profile.adopter = ProcessIdentity::capture(unsafe { libc::getppid() }).unwrap();
+        // Unchanged public profile: no private adopter substitution.
+        let profile = HostProfile::probe().unwrap();
         let null = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .open("/dev/null")
             .unwrap();
         let cwd = File::open(f.root.path()).unwrap();
-        let mut child = WaitingChild::prepare_inner(
-            profile,
-            helper,
-            leaf,
-            f.launch(Duration::from_secs(10)),
-            &cwd,
-            [&null, &null, &null],
-            behavior,
+        let mut child = if case == "parent-public-ready" {
+            WaitingChild::prepare(
+                profile,
+                helper,
+                leaf,
+                f.launch(Duration::from_secs(10)),
+                &cwd,
+                [&null, &null, &null],
+            )
+        } else {
+            WaitingChild::prepare_inner(
+                profile,
+                helper,
+                leaf,
+                f.launch(Duration::from_secs(10)),
+                &cwd,
+                [&null, &null, &null],
+                behavior,
+            )
+        }
+        .unwrap();
+        std::fs::write(
+            thread_home.join("adopter"),
+            serde_json::to_vec(&child.description.adopter).unwrap(),
         )
         .unwrap();
         if matches!(behavior, FixtureBehavior::BeforeExec) {
@@ -770,6 +914,107 @@ fn supervisor_worker() {
     // Stay alive so the outer witness distinguishes thread death from TGID death.
     let mut all = Vec::new();
     std::io::stdin().read_to_end(&mut all).unwrap();
+}
+
+// Direct-init control. In a fresh user+PID+mount namespace with its own procfs
+// (no PID translation), this worker is namespace init and no subreaper lies
+// between it and the probing supervisor. The unchanged public profile must
+// qualify exactly that init, which actually reaps the probe orphan. Only the
+// worker's own namespace processes exist; the namespace dies with it.
+// trace:TASK-1612 | ai:claude
+// trace:BUG-1808 | ai:claude
+#[test]
+fn namespace_init_is_qualified_only_as_the_actual_adopter() {
+    let root = tempfile::tempdir().unwrap();
+    let output = Command::new("unshare")
+        .args(["--map-current-user", "--pid", "--fork", "--mount-proc"])
+        .arg(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "launch_transport::linux::tests::namespace_init_worker",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env_clear()
+        .env("HOME", root.path())
+        .env("TMPDIR", root.path())
+        .env("PATH", "/usr/bin:/bin")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "isolated namespace-init witness failed: {}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read(root.path().join("init-qualified")).unwrap(),
+        b"yes"
+    );
+}
+
+#[test]
+#[ignore = "subprocess-only namespace init"]
+fn namespace_init_worker() {
+    let home = crate::home::home_dir().expect("isolated fixture HOME");
+    assert_eq!(unsafe { libc::getpid() }, 1);
+    let me = ProcessIdentity::capture(1).unwrap();
+    let probe = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "launch_transport::linux::tests::adopter_probe_worker",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env_clear()
+        .env("HOME", &home)
+        .env("TMPDIR", &home)
+        .env("PATH", "/usr/bin:/bin")
+        .spawn()
+        .unwrap();
+    let probe_pid = probe.id() as i32;
+    // As init, reap promptly: the probe supervisor and every adopted orphan.
+    let until = std::time::Instant::now() + Duration::from_secs(20);
+    let (mut probe_status, mut orphans) = (None, 0);
+    loop {
+        let mut status = 0;
+        let pid = unsafe { libc::waitpid(-1, &mut status, libc::WNOHANG) };
+        if pid == probe_pid {
+            probe_status = Some(status);
+        } else if pid > 0 {
+            assert_eq!(status, 0, "probe orphan failed");
+            orphans += 1;
+        } else if pid < 0 {
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::ECHILD)
+            );
+            break;
+        } else {
+            assert!(std::time::Instant::now() < until, "namespace probe hung");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    drop(probe);
+    assert_eq!(probe_status, Some(0), "namespace probe supervisor failed");
+    assert_eq!(orphans, 1, "exactly one probe orphan is adopted and reaped");
+    let adopter: ProcessIdentity =
+        serde_json::from_slice(&std::fs::read(home.join("adopter")).unwrap()).unwrap();
+    assert_eq!(adopter, me);
+    std::fs::write(home.join("init-qualified"), b"yes").unwrap();
+}
+
+#[test]
+#[ignore = "subprocess-only namespace probe supervisor"]
+fn adopter_probe_worker() {
+    let home = crate::home::home_dir().expect("isolated fixture HOME");
+    let profile = HostProfile::probe().unwrap();
+    assert_eq!(profile.adopter().pid, 1);
+    std::fs::write(
+        home.join("adopter"),
+        serde_json::to_vec(profile.adopter()).unwrap(),
+    )
+    .unwrap();
 }
 
 #[test]

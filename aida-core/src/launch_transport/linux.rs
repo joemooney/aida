@@ -133,8 +133,9 @@ impl Credentials {
 }
 
 /// The only profile in this slice: same host PID namespace, procfs, native ELF,
-/// unprivileged credentials, no wrapper/containment/pane adapter. PID 1 is the
-/// declared orphan adopter. Test fixtures use a preexisting isolated subreaper.
+/// unprivileged credentials, no wrapper/containment/pane adapter. The orphan
+/// adopter is observed, not declared: the nearest preexisting subreaper or
+/// namespace init that actually adopted and reaped an owned probe orphan.
 #[derive(Debug)]
 pub struct HostProfile {
     adopter: ProcessIdentity,
@@ -197,10 +198,311 @@ impl HostProfile {
             "waiting-child requires exclusive wait ownership and default SIGCHLD"
         );
         Ok(Self {
-            adopter: ProcessIdentity::capture(1)?,
+            adopter: qualify_adopter()?,
             credentials: Credentials::capture()?,
         })
     }
+    /// The qualified orphan adopter. An observation, not a signaling right.
+    pub fn adopter(&self) -> &ProcessIdentity {
+        &self.adopter
+    }
+}
+
+const ADOPTER_QUALIFICATION: Duration = Duration::from_secs(2);
+
+// trace:TASK-1612 | ai:claude
+// trace:BUG-1808 | ai:claude
+// When this supervisor dies, the kernel reparents its children to the nearest
+// live ancestor child-subreaper, else to namespace init. Neither is observable
+// in procfs, and liveness of PID 1 proves neither. So orphan an owned probe the
+// same way and observe who adopts it: owned C (pidfd from clone3) forks G and
+// reports its PID while G is C's unreaped child, pinning G's PID for our
+// pidfd. C exits; G's new parent is the actual adopter. G then exits, and the
+// adopter must reap it within the bound. No probe is signaled except C through
+// its own pidfd, and nothing is guessed: an unqualified adopter refuses.
+fn qualify_adopter() -> Result<ProcessIdentity> {
+    let mut subreaper = 0i32;
+    ensure!(
+        unsafe { libc::prctl(libc::PR_GET_CHILD_SUBREAPER, &mut subreaper, 0, 0, 0) } == 0
+            && subreaper == 0,
+        "a child-subreaper supervisor adopts its own orphans; outer orphan adopter unqualified"
+    );
+    let me = unsafe { libc::getpid() };
+    let until = monotonic_ns()?.saturating_add(ADOPTER_QUALIFICATION.as_nanos() as u64);
+    // Bounded even if this supervisor is lost mid-probe and no byte arrives.
+    let linger_ms = (ADOPTER_QUALIFICATION.as_millis() as i32) * 2;
+    let (report_r, report_w) = error_pipe()?;
+    let (hold_r, hold_w) = error_pipe()?;
+    let (release_r, release_w) = error_pipe()?;
+    let (report_fd, hold_fd, release_fd) = (
+        report_w.as_raw_fd(),
+        hold_r.as_raw_fd(),
+        release_r.as_raw_fd(),
+    );
+    let parent_ends = [
+        report_r.as_raw_fd(),
+        hold_w.as_raw_fd(),
+        release_w.as_raw_fd(),
+    ];
+    let mut owned_pidfd = -1i32;
+    let c = unsafe { raw_clone(&mut owned_pidfd) };
+    ensure!(
+        c >= 0,
+        "orphan adopter probe fork failed: {}",
+        std::io::Error::last_os_error()
+    );
+    if c == 0 {
+        // Only raw syscalls here, as in the waiting-child post-fork path.
+        unsafe {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL, 0, 0, 0) != 0
+                || libc::getppid() != me
+            {
+                libc::_exit(1);
+            }
+            // Supervisor loss then reaches both probes as EOF.
+            for fd in parent_ends {
+                libc::close(fd);
+            }
+            let g = raw_clone(std::ptr::null_mut());
+            if g == 0 {
+                libc::close(report_fd);
+                libc::close(hold_fd);
+                linger(release_fd, linger_ms);
+                libc::_exit(0);
+            }
+            if g < 0 || libc::write(report_fd, (&g as *const i32).cast(), 4) != 4 {
+                libc::_exit(1);
+            }
+            linger(hold_fd, linger_ms);
+            libc::_exit(0);
+        }
+    }
+    let mut probe = ProbeChild {
+        pidfd: unsafe { File::from_raw_fd(owned_pidfd) },
+        reaped: false,
+    };
+    drop((report_w, hold_r, release_r));
+    let observed = observe_orphan(me, c, &mut probe, &report_r, &hold_w, &release_w, until);
+    // Always unblock both probes, then settle the owned one. A lingering G is
+    // the adopter's to collect; it is never signaled.
+    let _ = write_byte(&hold_w);
+    let _ = write_byte(&release_w);
+    let settled = probe.settle();
+    let adopter = observed?;
+    settled?;
+    Ok(adopter)
+}
+
+struct ProbeChild {
+    pidfd: File,
+    reaped: bool,
+}
+impl ProbeChild {
+    fn exited(&self) -> Result<bool> {
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        let rc = unsafe {
+            libc::waitid(
+                libc::P_PIDFD,
+                self.pidfd.as_raw_fd() as u32,
+                &mut info,
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+        ensure!(rc == 0, "orphan adopter probe wait failed");
+        Ok(unsafe { info.si_pid() } != 0)
+    }
+    fn reap(&mut self, until: u64) -> Result<()> {
+        while !self.reaped {
+            let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+            let rc = unsafe {
+                libc::waitid(
+                    libc::P_PIDFD,
+                    self.pidfd.as_raw_fd() as u32,
+                    &mut info,
+                    libc::WEXITED | libc::WNOHANG,
+                )
+            };
+            if rc == 0 && unsafe { info.si_pid() } != 0 {
+                self.reaped = true;
+                ensure!(
+                    info.si_code == libc::CLD_EXITED && unsafe { info.si_status() } == 0,
+                    "orphan adopter probe failed"
+                );
+                break;
+            }
+            if rc < 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
+                bail!("orphan adopter probe wait failed");
+            }
+            ensure!(monotonic_ns()? < until, "orphan adopter probe did not exit");
+            poll_fd(self.pidfd.as_raw_fd(), libc::POLLIN, until)?;
+        }
+        Ok(())
+    }
+    fn settle(&mut self) -> Result<()> {
+        if self.reaped {
+            return Ok(());
+        }
+        let until = monotonic_ns()?.saturating_add(1_000_000_000);
+        if self.reap(until).is_ok() {
+            return Ok(());
+        }
+        // Only our own clone3 pidfd is ever signaled.
+        unsafe {
+            libc::syscall(
+                libc::SYS_pidfd_send_signal,
+                self.pidfd.as_raw_fd(),
+                libc::SIGKILL,
+                std::ptr::null::<libc::siginfo_t>(),
+                0,
+            );
+        }
+        let until = monotonic_ns()?.saturating_add(1_000_000_000);
+        let _ = self.reap(until);
+        ensure!(self.reaped, "orphan adopter probe settlement unknown");
+        Ok(())
+    }
+}
+
+fn observe_orphan(
+    me: i32,
+    c: i32,
+    probe: &mut ProbeChild,
+    report: &File,
+    hold: &File,
+    release: &File,
+    until: u64,
+) -> Result<ProcessIdentity> {
+    ensure!(
+        poll_fd(report.as_raw_fd(), libc::POLLIN, until)? & libc::POLLIN != 0,
+        "orphan adopter probe did not report"
+    );
+    let mut g = 0i32;
+    ensure!(
+        unsafe { libc::read(report.as_raw_fd(), (&mut g as *mut i32).cast(), 4) } == 4 && g > 0,
+        "invalid orphan adopter probe report"
+    );
+    let orphan = pidfd_open(g)?;
+    // C never waits, so while C is alive G's PID cannot be reused: the pidfd
+    // above names C's actual child.
+    ensure!(
+        stat_ppid(g) == Some(c) && !probe.exited()?,
+        "orphan adopter probe lost its child"
+    );
+    write_byte(hold)?;
+    // Reaping C means exit_notify has already reparented G.
+    probe.reap(until)?;
+    let adopter_pid = stat_ppid(g).context("orphan adopter probe vanished")?;
+    ensure!(
+        adopter_pid > 0 && adopter_pid != me && adopter_pid != c,
+        "orphan adopter is not visible in this PID namespace"
+    );
+    let adopter = ProcessIdentity::capture(adopter_pid)?;
+    // G unreaped after both reads: the observed stat lines were G's own.
+    ensure!(
+        stat_ppid(g) == Some(adopter_pid) && pidfd_signal_zero(&orphan)?,
+        "orphan adopter changed during qualification"
+    );
+    write_byte(release)?;
+    while pidfd_signal_zero(&orphan)? {
+        ensure!(
+            monotonic_ns()? < until,
+            "orphan adopter did not reap an orphan within the qualification bound"
+        );
+        if poll_fd(orphan.as_raw_fd(), libc::POLLIN, until)? & libc::POLLIN != 0 {
+            // Exited; only the adopter's reaping is left to observe.
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
+    // Only G's parent can reap it; a replaced adopter would have done so.
+    ensure!(
+        adopter.is_current(),
+        "orphan adopter changed during qualification"
+    );
+    Ok(adopter)
+}
+
+/// True while the pidfd's process is unreaped (live or zombie); false once its
+/// parent reaped it. Signal 0 delivers nothing.
+fn pidfd_signal_zero(fd: &File) -> Result<bool> {
+    let rc = unsafe {
+        libc::syscall(
+            libc::SYS_pidfd_send_signal,
+            fd.as_raw_fd(),
+            0,
+            std::ptr::null::<libc::siginfo_t>(),
+            0,
+        )
+    };
+    if rc == 0 {
+        return Ok(true);
+    }
+    ensure!(
+        std::io::Error::last_os_error().raw_os_error() == Some(libc::ESRCH),
+        "orphan observation failed"
+    );
+    Ok(false)
+}
+
+fn stat_ppid(pid: i32) -> Option<i32> {
+    let stat = std::fs::read(format!("/proc/{pid}/stat")).ok()?;
+    let end = stat.iter().rposition(|b| *b == b')')?;
+    let field = stat.get(end + 2..)?.split(|b| *b == b' ').nth(1)?;
+    std::str::from_utf8(field).ok()?.parse().ok()
+}
+
+fn write_byte(f: &File) -> Result<()> {
+    ensure!(
+        unsafe { libc::write(f.as_raw_fd(), [1u8].as_ptr().cast(), 1) } == 1,
+        "orphan adopter probe control failed"
+    );
+    Ok(())
+}
+
+// Post-fork probe wait: one bounded poll, no allocation.
+unsafe fn linger(fd: RawFd, millis: i32) {
+    let mut p = libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    libc::poll(&mut p, 1, millis);
+}
+
+#[repr(C)]
+struct CloneArgs {
+    flags: u64,
+    pidfd: u64,
+    child_tid: u64,
+    parent_tid: u64,
+    exit_signal: u64,
+    stack: u64,
+    stack_size: u64,
+    tls: u64,
+    set_tid: u64,
+    set_tid_size: u64,
+    cgroup: u64,
+}
+/// Raw clone3: no libc atfork callbacks. A non-null `pidfd` receives the
+/// child's pidfd atomically with its creation.
+unsafe fn raw_clone(pidfd: *mut i32) -> i32 {
+    let args = CloneArgs {
+        flags: if pidfd.is_null() {
+            0
+        } else {
+            libc::CLONE_PIDFD as u64
+        },
+        pidfd: pidfd as u64,
+        child_tid: 0,
+        parent_tid: 0,
+        exit_signal: libc::SIGCHLD as u64,
+        stack: 0,
+        stack_size: 0,
+        tls: 0,
+        set_tid: 0,
+        set_tid_size: 0,
+        cgroup: 0,
+    };
+    libc::syscall(libc::SYS_clone3, &args, std::mem::size_of::<CloneArgs>()) as i32
 }
 
 /// Ephemeral exact arguments/environment; this is not an assignment or grant.
@@ -338,8 +640,13 @@ impl WaitingChild {
         helper.verify()?;
         leaf.verify()?;
         ensure!(
-            Credentials::capture()? == profile.credentials && profile.adopter.is_current(),
+            Credentials::capture()? == profile.credentials,
             "host profile changed"
+        );
+        // Re-observe rather than trust a stale qualification.
+        ensure!(
+            qualify_adopter()? == profile.adopter,
+            "orphan adopter changed since host profile qualification"
         );
         ensure!(cwd.metadata()?.is_dir(), "cwd must be an opened directory");
         let parent = ProcessIdentity::capture(unsafe { libc::getpid() })?;
@@ -416,41 +723,8 @@ impl WaitingChild {
         envp.push(std::ptr::null());
         // clone3 returns the pidfd atomically with child creation. No numeric
         // PID lookup window and no libc atfork callbacks in the raw child.
-        #[repr(C)]
-        struct CloneArgs {
-            flags: u64,
-            pidfd: u64,
-            child_tid: u64,
-            parent_tid: u64,
-            exit_signal: u64,
-            stack: u64,
-            stack_size: u64,
-            tls: u64,
-            set_tid: u64,
-            set_tid_size: u64,
-            cgroup: u64,
-        }
         let mut owned_pidfd = -1i32;
-        let clone_args = CloneArgs {
-            flags: libc::CLONE_PIDFD as u64,
-            pidfd: (&mut owned_pidfd as *mut i32) as u64,
-            child_tid: 0,
-            parent_tid: 0,
-            exit_signal: libc::SIGCHLD as u64,
-            stack: 0,
-            stack_size: 0,
-            tls: 0,
-            set_tid: 0,
-            set_tid_size: 0,
-            cgroup: 0,
-        };
-        let pid = unsafe {
-            libc::syscall(
-                libc::SYS_clone3,
-                &clone_args,
-                std::mem::size_of::<CloneArgs>(),
-            )
-        } as i32;
+        let pid = unsafe { raw_clone(&mut owned_pidfd) };
         ensure!(
             pid >= 0,
             "waiting-child fork failed: {}",
@@ -958,7 +1232,7 @@ fn validate_lifetime(d: &Description) -> Result<()> {
     );
     ensure!(
         d.adopter.is_current(),
-        "declared orphan adopter identity changed"
+        "qualified orphan adopter identity changed"
     );
     let mut signal = 0;
     ensure!(

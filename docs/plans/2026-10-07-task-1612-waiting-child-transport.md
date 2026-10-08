@@ -67,3 +67,14 @@ Kernel references: [executable memfds](https://docs.kernel.org/userspace-api/mfd
 [creating-thread death semantics](https://man7.org/linux/man-pages/man2/PR_SET_PDEATHSIG.2const.html).
 These document the primitives; the fixture results establish only the tested
 host behavior, not installed-vendor or production integration readiness.
+
+## F1 rework (2026-10-08)
+
+Independent checkpoint review found that the profile declared PID 1 as orphan
+adopter. Linux reparents to the nearest live ancestor child-subreaper (here,
+`systemd --user`) before namespace init, and neither status is visible in
+procfs. `HostProfile::probe` and `WaitingChild::prepare` now orphan an owned
+probe process and bind the actual adopter only after observing it adopt and
+reap that orphan. Lifetime fixtures use the unchanged public profile under an
+isolated subreaper; a namespace-init control and non-reaping/subreaper
+supervisor refusals cover the other branches.

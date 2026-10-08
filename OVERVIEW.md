@@ -251,9 +251,13 @@ execveat, close_range, atomic clone3 pidfds and pidfd waitid. Native 64-bit litt
 system interpreter; system loader/libraries remain trusted. Source set-id,
 file capabilities, noexec mounts, active process capabilities, uid/gid
 transitions, arbitrary scripts/wrappers, loader injection and RPATH/RUNPATH
-refuse. All source policy uses opened descriptors. The profile declares
-namespace init as orphan adopter; isolated lifetime fixtures use a preexisting
-subreaper. Production adapters still need their own operational reaping proof.
+refuse. All source policy uses opened descriptors. The orphan adopter is
+observed, not declared: profile probe and each prepare orphan an owned,
+non-executing probe process and bind whichever nearest subreaper or namespace
+init actually adopts and reaps it within two seconds. A subreaper supervisor,
+an invisible or non-reaping adopter, or a changed adopter refuses. Later
+ancestry/subreaper changes are not observed; production adapters still need
+their own operational reaping proof.
 
 The waiting handle stays on its creating thread, which must live until child
 exit. Parent/thread loss arms kernel death protection and checks the pre-prctl
