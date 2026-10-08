@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T02:54:43.693074254Z
+modified_at: 2026-10-08T02:54:44.015913355Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -26,6 +26,11 @@ comments:
   content: Commit 05997a57e1 references this requirement
   created_at: 2026-10-08T02:40:29.215825667Z
   modified_at: 2026-10-08T02:40:29.215825667Z
+- id: 01a1196f-410f-70f0-b999-4d21291d6855
+  author: joe
+  content: 'PROXY DECISION: accept independent REQUEST_CHANGES at 05997a57e1. Tolerant canonical bulk load skips malformed existing review stories and authorizes duplicate creation. Require strict complete lookup at the creation gate and actual CLI regression. INDEPENDENT_REVIEW.md preserves reviewer evidence; canonical refusal due to absent real PR is retained, not bypassed. Concrete handoff bug1807-strict-lookup-rework.md.'
+  created_at: 2026-10-08T02:54:43.983409549Z
+  modified_at: 2026-10-08T02:54:43.983409549Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
