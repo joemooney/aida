@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T03:31:00.904333708Z
+modified_at: 2026-10-08T03:40:44.718983994Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -572,6 +572,26 @@ comments:
     No unresolved operator policy fork is claimed. Concrete implementation risks requiring demonstration are exact Git-effect inventory, production hook transport/gate extraction, closure observation validation, and preserving continuation/auto-stash mappings through actual entrypoints. If any remains unimplemented, name it as an engineering blocker rather than calling a constraint an adapter. This addendum requests fresh independent design signoff; it grants no implementation or merge authority.
   created_at: 2026-10-08T03:31:00.904333708Z
   modified_at: 2026-10-08T03:31:00.904333708Z
+- id: 01a11999-612e-7663-897a-6b78531d74c6
+  author: codex/authority-sketch-v4-signoff
+  content: |
+    CHANGES REQUESTED — BUG-1802 v4 independent advisor sketch review
+
+    Reviewer: Codex authority-sketch-v4-signoff, native thread 01a11992-a842-7943-ba31-6ff04727a2da; NEW Joe-assigned advisor, neither sketch author nor earlier signoff reviewer. AIDA_SESSION_ID absent; no authenticated code-review grant asserted. Canonical comment 01a11990-78a8-7780-9055-0b76eeec7049 matches BUG-1802-sketch-v4-addendum.md exactly, SHA256 c2832ce1e4e4d1f4eabcbc73c75978e63487e492c6726b2944b552f2ca293206. Baseline 199e591b07aa76a59cd34f0a41946f918501f6ba. Full independent finding, source references and binding refinements: .aida/handoff/orchestrator/INDEPENDENT_SKETCH_V4_SIGNOFF.md.
+
+    F1 is the remaining shared blocker: GitPublicationAdapter passes an attempt capability to Git and descendants, then authenticates peer PID/start/ancestry, executable/hook chain and payload joins. This identifies a permitted-looking process but does not establish that Git supplied its callback input. A configured non-hook Git helper can exec the genuine pinned hook/client with fabricated input while retaining the live Git parent, inherited capability, valid cwd and expected executable chain. No grant/journal/hook tampering is needed. The proposal does not yet seal permitted external Git execution or supply a distinct invocation-origin mechanism. A matching tuple or object is not proof that the missing committed/rewrite callback happened.
+
+    Required narrow revision: choose an executable callback-origin boundary covering effective Git configuration/attributes, non-hook descendants and descriptor inheritance, exact hook kind/input, nested Git helpers, and recovery children after publisher death. A sealed trusted execution configuration or a concrete per-invocation supervisor channel can be considered, but specify the mechanism rather than asserting the child is a hook. Preserve production gates, no home/repo/episode acquisition in hooks, parent-serviced finite pump, bounded fsynced attachments, exact tuple CAS, parent-only FINAL and strict service-versus-WORK recovery. No generic hook disabling, environment-only trust, released home guard over provisional state, or waived positive cases.
+
+    Required proposed test: git_callback_descendant_cannot_forge_observation through real commit/rebase and P4/recovery service ref install, production hooks and isolated fixtures. A non-hook configured child attempts genuine HookClient/hook execution with inherited capability and forged expected-shaped phase/payload while the real callback is missing. It must not produce accepted evidence/FINAL; genuine callback positives still complete boundedly. Include shell exec, changed config after planning, partial stream and original dead publisher. Retain the existing publication-lock/cross-repo/peer-history/no-residue/bootstrap crash witnesses; none was executed here.
+
+    The advancing-default mechanism is acceptable at design level, with report refinement 6: immutable B, PRE-source O before newer C, authenticated pinned F/closure before PR forced-fetch/cascade mutation, and W=(R(H) minus (R(B) union C)) union O at START/record/ship. Original/transforming/dirty contributors and sticky gaps cannot wash out; unrelated closed squash M needs no fabricated author. Distinguish complete empty forge association from missing data. Keep the exact B-to-M positive, unknown-old-X/missing-hook negatives, PR --check/onto/conflict continuation and actual pull-auto cascade/finish/auto-stash tests. No additional advancing-default blocker found; overall signoff remains withheld because this consumer depends on F1.
+
+    Report refinements 1–5 are binding integration details: Git version/backend protocol; actual prepare-commit-msg store trailer and skill-sync hooks; immutable decision versus later receipt digests; finite connect/IO/termination and recovery quiescence; substrate-only independence from BUG-1802 policy. They are not requests for another broad architecture rewrite. Earlier A–E and v4 explicit supersession take precedence over conflicting v3 author statements. BUG-1808 delivers one LaunchPublisher/publication/assignment/receipt/callback substrate first; BUG-1802 consumes it later.
+
+    Disposition: CHANGES REQUESTED for F1, not acceptance relaxation or an operator policy fork. Return the narrow executable mechanism to a fresh independent advisor. No implementation/status/queue/grant/hold changes or merge authorized by this comment. Final authority-sensitive merge remains Joe/operator-owned.
+  created_at: 2026-10-08T03:40:44.718983994Z
+  modified_at: 2026-10-08T03:40:44.718983994Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
