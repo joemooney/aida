@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T02:45:49.917027728Z
+modified_at: 2026-10-08T02:53:47.132288028Z
 req_type: Bug
 tags:
 - atomicity
@@ -258,6 +258,44 @@ comments:
     Review item 1 is addressed by the retained assignment fields, reciprocal validator and per-entrypoint single-owner table; none relies on DrainState.current/RunMarker.spec/env alone. Item 2 is addressed by one concrete staged publication protocol with ordered locks, enlisted readers/writers, current locked preimages, Git ref/object quarantine, exact final validation, expiry linearization and crash recovery. The larger-but-bounded scope is stated explicitly because current primitives cannot meet strict acceptance. The independent advisor must accept or request concrete changes to this scope; the author supplies no signoff and proposes no operator acceptance relaxation.
   created_at: 2026-10-08T02:45:49.917027728Z
   modified_at: 2026-10-08T02:45:49.917027728Z
+- id: 01a1196e-62fc-79d2-99d8-8ee6ef85820b
+  author: codex/authority-sketch-v2-signoff
+  content: |-
+    CHANGES REQUESTED — BUG-1808 v2
+
+    Independent advisor: Codex `authority-sketch-v2-signoff`, native thread `01a11968-cee1-7010-bc73-26f561e134ae`; not the revision author or previous reviewer. Reviewed against main `199e591b07aa76a59cd34f0a41946f918501f6ba`. Full evidence and verification limits: `.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V2_SIGNOFF.md`. Final authority-sensitive merge remains operator-owned.
+
+    The per-entrypoint table is a useful improvement: ordinary/headless/resume/reviewer/TUI pickup, wrapper admission, phase driver and rework-prefix ownership are explicitly separated. One owner issues, an assigned nondelegating child consumes, and inherited driver authority is insufficient. Preflight of selected static seats and dynamic admissions, explicit selector behavior, private fetches, preserving rework history and TASK-1337/TASK-1603 ordering are required. Journaled staged publication is a concrete direction, but the current recovery and activation description has unresolved joins; the breadth of its writer list is not proof of atomicity.
+
+    Verified baseline: `queue_cmd.rs:10936,10968,12421` has early interactive-only delegation checking and late issuance. `session.rs:1179,1221,2769,3035,3063` confirms headless wrapper differences. `lib.rs:112172,112254` launches a queue-work subprocess today; replacing it with shared preparation/direct vendor execution is a real refactor. `lib.rs:105350` registers ownership before status; `drain_state.rs:648,693` uses checked registration and the permanent snapshot lock. `orchestrator.rs:88,229` has no grant/session binding. `global_queue.rs:54,67,101` reads a home-global queue with only its existing per-role mutation lock. `seat_authority.rs:35,58,104` stores grants in the home and has no publication protocol. `aida-core/src/team.rs:223` independently writes/commits roster changes. None supplies the proposed shared transaction or recovery discovery.
+
+    ### Required mechanism 1: home-global recovery discovery and durable commit evidence
+
+    P2 places the only named journal in repository A's `.aida/pickup-publications/<uuid>/journal.json`, while P3 can install home-global queue/grant bytes. After a crash releases the home lock, a queue reader/writer in repository B, or a role/grant operation with no A context, has no specified way to discover A's PREPARED transaction. A queue YAML entry has no publication pointer. Taking the same lock after the owner died does not reveal which repo journal must be recovered. B can therefore observe provisional rows or write over them before A recovers; A's rollback hash predicate then fails through an entirely supported peer, not hostile mutation. “The next reader recovers” needs a durable lookup protocol.
+
+    Required revision: name a home-scoped transaction locator/coordinator (or another exact discoverable mechanism), written durably before any shared installation. Define its identity/root validation, lock order, journal lookup, recovery ownership, unavailable/moved repo handling, and when shared readers must stop instead of expose state. All relevant home readers/writers, including commands in B or outside a project, must consult it before proceeding. Recovery needing A's exclusive repo lock must occur before selecting/acquiring B's lower-order locks; avoid an unspecified shared-to-exclusive upgrade. Do not scan arbitrary filesystem trees or rely on environment roots.
+
+    Also resolve committed-journal retention: consumers are said to require committed publication, but CRASH permits journal cleanup without naming a retained commit proof. Define the durable commit/activation receipt or retained journal, its cleanup owner, and how grant/assignment readers distinguish committed, interrupted and corrupt publication afterwards. Store/code commit objects and rollback/roll-forward payloads must be durable and discoverable before the COMMIT decision can authorize a recoverable ref update; system-temp preparation alone is not that proof. Raw filesystem atomicity is not required; logical atomicity for supported readers still is.
+
+    Witness: add `bug_1808_cross_repo_recovery_preserves_peer_queue`. Use two temporary repositories sharing one fake HOME; kill A after provisional queue/grant installation, then invoke B's real queue read and mutation and a supported authority reader. They must recover A or refuse before exposing/writing provisional state. Repeat after COMMIT, after committed-journal cleanup, with missing/unavailable A, and with a legitimate B edit after recovery. Verify full original status history on abort and no loss of B's changes. Exercise both PREPARED and COMMIT through a different CLI process, not a recovery helper alone.
+
+    ### Required mechanism 2: bind and release the actual child at P4
+
+    The assigned-consumer validator requires actual caller PID/start or native-session evidence, but the phase table says it validates a prepared child command before P4 and spawns the vendor afterwards. The future process does not yet exist. Optional consumer fields and a typed ActivatedAssignment do not supply this join. Baseline `session.rs:2769` obtains a child PID only after spawn; `lib.rs:32510,32614` likewise registers after execution starts. This is the same concrete identity hole identified separately for BUG-1802, not permission to depend on its approval.
+
+    Required revision: specify one process bootstrap/exec protocol for fresh, resume, standalone reviewer, direct phase, pane-host and TUI activation. Identify the parent-owned writer, actual PID/start acquisition, reciprocal manifest/grant/run-token/member/phase/attempt binding, and release channel. Before release, the child may only wait in bootstrap; it must not run vendor work or issue its own child grant. A failed bind must be inside the uncommitted abort boundary, with no invocation-owned lifecycle residue. A crash after COMMIT but before known release must preserve committed setup and require a fresh authorized activation, without blind respawn. Define pane-host and exec PID transitions rather than treating the host PID as the vendor actor. Explain exactly when P4 authorizes release and how delayed activation is distinguished from that same immediate launch. No environment-only shortcut or post-publication delegation refusal is acceptable.
+
+    Witness: extend `bug_1808_assigned_phase_is_not_recursive_delegation` through the production phase launcher and pane path with deterministic barriers before binding and release. Use a fake vendor whose first action writes a sentinel or invokes assigned pickup. Delay/fail binding, kill the parent, expire/revoke before P4, and attempt a mismatched member/attempt. On refusal no vendor work occurs and state is unchanged apart from legitimate peer changes. Positive matching nondelegating children execute with exactly one issuance; reviewer/resume paths do not recurse. TUI activation must preserve its earlier authorized setup when the new activation refuses.
+
+    ### Binding implementation constraints retained
+
+    Keep all static-seat checks before initial lifecycle writes and dynamic checks before admission. Root-run creation, first admission and first launch must retain the proposed single refusal boundary; later phases do not roll back already executed authorized members. Preserve TASK-1603 registration-before-status/launch and token-scoped peer membership; preserve TASK-1337 branch preflight/manual retirement and post-authorization vendor-failure continuation. Rework-with-work includes its prefix history/queue changes. Expiry before P4 aborts; serialized revocation before P4 wins. Neither changing `--role` nor widening inherited grants remedies refusal. Existing lock inodes stay permanent.
+
+    Retain the complete real-argv matrix and lifecycle/history/ref snapshots in v2, including all three TASK-1337 tests. The proposed common publication guard must actually cover CLI/MCP supported writers; a missed supported writer that invalidates rollback is an acceptance failure, not an allowed residual-state diagnostic. No source or tests were changed or executed in this review.
+
+    Disposition: **CHANGES REQUESTED** for home-global recovery/commit-proof discovery and actual-child activation binding. These are routine engineering gaps under strict existing acceptance, not a request to relax it. This verdict is independent of BUG-1802; either design may return for separate signoff when its own mechanisms are complete. No status/queue/grant/hold changes or implementation/merge authorization follow from this comment.
+  created_at: 2026-10-08T02:53:47.132288028Z
+  modified_at: 2026-10-08T02:53:47.132288028Z
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
