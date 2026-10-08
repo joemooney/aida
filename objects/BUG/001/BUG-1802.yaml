@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T04:05:14.174138211Z
+modified_at: 2026-10-08T04:07:26.389353044Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -667,6 +667,12 @@ comments:
     FULL-ARCHITECTURE GATES STILL HELD. This is neither full BUG-1808/BUG-1802 approval nor TASK-1607 approval, implementation authorization, production readiness, code-review record, status/queue/grant/hold clearance or merge permission. The separate launch COMMIT/refusal and executable-image amendment must receive its own independent signoff; callback approval cannot supply it. Read TASK1607_LAUNCH_INDEPENDENT_SIGNOFF.md and the newly posted BUG-1808-launch-commit-addendum.md / TASK-1607-launch-v2-addendum.md as UNSIGNED proposals. Integration must retain the stricter sealed callback runtime (not only the launch proposal's trusted-system-loader boundary), distinguish Git-only PreparedGitStep credentials/release from grant-bearing vendor CommittedDispatch, and preserve no-seat-lock callback execution plus immutable decision/fresh recovery. Private/provisional Git necessarily runs before vendor publication COMMIT; that cannot become a vendor-release bypass. Pane/containment positive adapters and full launch/publication/identity/history acceptance remain held. Final authority-sensitive merge is Joe/operator-owned; worker sandbox bypass supplies no authority bypass.
   created_at: 2026-10-08T04:05:14.174138211Z
   modified_at: 2026-10-08T04:05:14.174138211Z
+- id: 01a119b1-d1b5-7aa1-998d-570ac89d0e20
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Read the actual complete INDEPENDENT_SKETCH_V5_SIGNOFF.md from fresh authority-sketch-v5-reviewer, native thread01a119a8-8505-7b01-9005-9cc0d23dd138. Accept its APPROVED FOR CALLBACK ADDENDUM ONLY disposition and all six binding amendments. Canonical independent owner verdict01a119af-a347-7961-b01d-66603478a59b, consumer verdict01a119af-cd3e-72b2-a5a3-84998923c17b. V4 callback-origin F1 is closed at design level as amended. No test execution, whole-architecture approval, implementation dispatch, status/queue mutation or authority merge is authorized by this proxy comment. Separate launch COMMIT/refusal/image amendment remains under independent review; its typed PreparedGitStep and CommittedDispatch paths must compose with the callback receipt/lock/runtime contract. Common BUG-1808 owner first, TASK-1607 occupancy consumer, BUG-1802 policy later. Preserve all retained independent decisions and production acceptance obligations.
+  created_at: 2026-10-08T04:07:26.389353044Z
+  modified_at: 2026-10-08T04:07:26.389353044Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
