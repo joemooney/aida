@@ -2034,6 +2034,16 @@ pub enum PrCommand {
         branch: Option<String>,
     },
 
+    /// Discoverable alias for `aida queue work <ID> --auto-complete`.
+    /// Starts the independent review pipeline for the specified PR/MR.
+    /// Distinct from `aida pr ship`, which is for shipping merged code.
+    // trace:TASK-1715 | ai:antigravity
+    Review {
+        /// The PR/MR requirement ID (e.g., PR-123) or bare number
+        /// (which resolves via the forge default).
+        id: String,
+    },
+
     /// List open PRs/MRs with their mapped spec IDs and rebase status.
     #[clap(visible_alias = "mr")]
     List {
@@ -16229,6 +16239,18 @@ mod tests {
                 assert!(!age, "the offline staleness report is opt-in");
             }
             other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+
+    // trace:TASK-1715 | ai:antigravity
+    #[test]
+    fn pr_review_alias_parses_properly() {
+        let cli = Cli::try_parse_from(["aida", "pr", "review", "PR-123"]).unwrap();
+        match cli.command {
+            Command::Pr(PrCommand::Review { id }) => {
+                assert_eq!(id, "PR-123");
+            }
+            other => panic!("expected pr review command, got {other:?}"),
         }
     }
 }

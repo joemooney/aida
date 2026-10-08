@@ -5310,7 +5310,9 @@ pub(crate) fn run() -> Result<()> {
     // add` calls; it doesn't need the global Storage handle.
     // trace:STORY-90 | ai:claude
     if let Command::Pr(pr_cmd) = &cli.command {
-        return handle_pr_command(pr_cmd);
+        if !matches!(pr_cmd, PrCommand::Review { .. }) {
+            return handle_pr_command(pr_cmd);
+        }
     }
 
     // trace:TASK-1583 | ai:antigravity
@@ -6344,7 +6346,23 @@ pub(crate) fn run() -> Result<()> {
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
         Command::Lock(_) => unreachable!("lock is dispatched before storage init"),
-        Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
+        // trace:TASK-1715 | ai:antigravity
+        Command::Pr(PrCommand::Review { id }) => {
+            let fake_args = vec![
+                "aida".to_string(),
+                "queue".to_string(),
+                "work".to_string(),
+                id.clone(),
+                "--auto-complete".to_string(),
+            ];
+            let fake_cli = Cli::parse_from(fake_args);
+            if let Command::Queue(queue_cmd) = fake_cli.command {
+                handle_queue_command(&queue_cmd, &storage, &requirements_path)?;
+            } else {
+                unreachable!("synthetic args must parse as QueueCommand::Work");
+            }
+        }
+        Command::Pr(_) => unreachable!("other pr commands are dispatched before storage init"),
         Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
         Command::Orchestrator(_) => {
             unreachable!("orchestrator is dispatched before storage init")
