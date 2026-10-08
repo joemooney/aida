@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T19:17:22.955217782Z
+modified_at: 2026-10-08T19:18:03.739394004Z
 req_type: Story
 tags:
 - agent-launch
@@ -366,6 +366,29 @@ comments:
   created_at: 2026-10-08T19:17:22.955217782Z
   modified_at: 2026-10-08T19:17:22.955217782Z
   relayed_from: answered-sketch-author
+- id: 01a11cf3-84db-7af2-9051-7222738dcf2a
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: APPROVED AS AMENDED — STORY-1486 retained profile/gap and exact V3 scope amendment, as an accurate BLOCKED CONTRACT ONLY.
+    ADVISOR SIGNOFF: CHANGES REQUESTED — functional STORY-1486; no supported strong backend or positive restricted launch supplied.
+
+    Independent V3 reviewer: Codex answered-v3-independent-advisor; neither sketch author, coordinating author/root session nor V1/V2 reviewer. Committed code reference b46aec1e674baae5a329416d4119e67b59200a88; concurrent edits excluded.
+
+    Verified exact canonical full bodies:
+    STORY1486_AMENDED_SKETCH_V2.md 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf (01a11c81-a0d5-7c62-aa82-83fa332ee96b)
+    STORY1486_NEEDS_OPERATOR_SCOPE_V2.md 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598 (01a11c81-d2ee-7c01-aa34-adfd1ee49811)
+    STORY1486_V3_REVIEW_AMENDMENTS_RELAY.md 9682c627e48a0d2cf7fcdfea635f2b3870e0586174aaae655be25d75da8559f1 (01a11c90-3944-72f1-aa67-9876d17b8292)
+
+    Strong AC2 and settled no-exemptions choice remain. Accept accurate missing-capability record without approving functional completion; no new profile rewrite or operator question requested. Unsupported restricted launch refuses before effects, but refusal/fake adapter is not the required positive read/edit/build launch. Retain requested/enforceable distinction, monotonic inherited ceiling, path/handle and effective inherited config/argv checks, pure preview, recipe integrity, portability/aida_bin and existing seat gates. Profile consumes the one common publisher; no independent release owner.
+
+    Proof obligations concern the actually claimed adapter/mode, not mandatory all-vendor/OS support or general hostile-process confinement. Preserve ordinary source editing/build functionality. No new broker, weakened AIDA-only contract, approval exemption, global shared-network/no-PID default change, authority schema, new operator answer or backend selection. Pending concrete coherent capability evidence remains an acceptable disposition. Current headless bypass/root/bwrap surfaces do not provide that evidence.
+
+    Full binding independent report: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V3_INDEPENDENT_REVIEW.md
+    SHA-256: 65400759950fa8e3ab3072b23d9e6c72409a0e15098baabfdea45f1de87c1a0e
+    All tests proposed, none run. No canonical, status/queue/relationship/grant/hold/activation/source/PR/merge/commit/push writes by this reviewer. Previous V1/V2 artifacts/history and external TASK-1593/TASK-1591/BUG-1811/BUG-1812 preserved. Exact sidefile for honest coordinator relay, not automatic dispatch or functional signoff.
+  created_at: 2026-10-08T19:18:03.739394004Z
+  modified_at: 2026-10-08T19:18:03.739394004Z
+  relayed_from: answered-v3-independent-advisor
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
