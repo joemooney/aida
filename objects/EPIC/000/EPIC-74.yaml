@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T17:29:01.226606455Z
+modified_at: 2026-10-08T17:29:13.654825041Z
 req_type: Epic
 tags:
 - architecture
@@ -637,6 +637,54 @@ comments:
     Readiness: exact v3 needs NEW independent advisor judgment. Checked persistence/common hook/receipt prerequisites are unprovided; protected positive paths refuse until available. No status/queue/authority changes, source edits, implementation, release activation or self-signoff follows from this draft.
   created_at: 2026-10-08T17:29:01.226606455Z
   modified_at: 2026-10-08T17:29:01.226606455Z
+  relayed_from: answered-design-sketch-author
+- id: 01a11c8f-e0b6-71f0-a9cc-2a99e878a659
+  author: joe
+  content: |
+    # EPIC-74 child acceptance amendment v3 — proposed, not applied
+
+    Codex same sketch-author lineage, main b46aec1e674baae5a329416d4119e67b59200a88, 2026-10-08. Responds to F1–F3 while retaining accepted E1/E3/E4 and R1–R4, with full proposal EPIC74_AMENDED_SKETCH_V3.md, guard matrix and draft ADR in this directory. V1/V2 remain unchanged. Exact proposed relay body; not posted. Supersedes v2 amendment proposal. This artifact does not alter canonical Approved statuses or dispatch children.
+
+    EPIC proposed title: “Epic target branches: canonical isolation until verified default landing.” Preserve target/parent direction, guided ordering 1481 -> 1482 -> 1483, independent sketch signoff and accepted ADR requirement. No lane subsystem. All tests below are future isolated fixtures, not run.
+
+    | Owner / old acceptance | Proposed v2 acceptance |
+    | --- | --- |
+    | 1481 title/description | Canonical epic target declaration and main-line exclusion. Typed epic UUID generation with retained membership/history, reused branch/worktree views, no lane flag/seat/open/list/close family. Release capability is unresolved, not silently removed. |
+    | 1481 AC1 | Every row of EPIC74_ENTRYPOINT_GUARDS_V3.md excludes isolated work from main-line actions with env unset/misleading, explicit IDs, force, resume and old queues/PRs. Visible reasons; missing reads fail, not empty success. Slice 1 also refuses direct ship/completion and unsupported off-default paths before slice 2. |
+    | 1481 AC2 | Verified epic context selects only subtree, subject to all other gates. Positive selection preview is required. Positive setup/claim only where admission/downstream guards are implemented; unsupported target pipeline refuses before any effects. No positive shipping claimed for slice 1. |
+    | 1481 AC3 | Clone B after canonical sync preserves exclusion and generations. Main-line environment irrelevant. ADR v3 reserves Ordinary absence and isolated contexts across all old/candidate graph writers, including common after-images; checked snapshot/receipt required; it does not claim unsynchronized cross-clone serialization. |
+    | 1481 AC4 | Explicit outside-context pickup refuses; generic force is not release. Old force entitlement awaits operator disposition. No successful release test or implicit override is authorized. |
+    | 1481 AC5 | Old close-without-landing promise remains blocked pending explicit authority/evidence/confirmation disposition. Proposed partial first slice refuses ALL release-equivalent clear/reset/reparent/delete/retype/restore/import/default-reinterpretation paths. The future release fork does not itself prevent protective first-slice signoff; NEW advisor must still approve exact corrected F1–F3 architecture. Author does not mark story fully satisfied. |
+    | 1482 title/description | Targeted PRs and durable Done evidence until default landing. No new status/tag. |
+    | 1482 AC1 | All creation/recovery/merge paths validate actual repo/base/head and Ordinary/Isolated input predicates under ADR v3. Store-only reservations precede the one common publication where applicable; missing common hook/checked persistence refuses positive effects. AIDA retarget serialized; source pin required; unsupported required atomic-base condition refuses. Both forge paths have positive capable-adapter fixtures plus zero-request refusal fixtures. |
+    | 1482 AC2 | Live ship, pull/reconcile, replay, direct status, review-covers/umbrella and retry share C validator for retained isolated lineage. Off-default result stays Done; fresh final squash does not refresh old reopened child work. |
+    | 1482 AC3 | show/status use durable verified evidence for “Done (merged to <target>; awaiting default landing)”; unmerged Done is distinct. No reliance on current env/declaration presence. |
+    | 1482 AC4 | Trailer grammar unchanged; candidate attribution only. Versioned reviewed coverage set with original child evidence/reopen generation and explicit immutable predecessor IDs controls credit, including historical body trailers and after clone/remap/clear. Missing/cyclic links refuse. Initial squash proof requires reviewed base ancestor of source, actual first parent/base equal reviewed base, result tree equal source tree and forge-confirmed identities; unavailable proof refuses/retains Done. |
+    | 1483 title/description | Parent sync/drift and reviewed target landing through ordinary PR workflow. |
+    | 1483 AC1 | Option<BranchRef>: default + absent/empty => None/no Git call; off-default absent => positively identified actual default; same-as-target => reported no-op. Parent->target sync conflict stops intact. Shared target never auto-rebased. |
+    | 1483 AC2 | Drift is commits-behind-validated-parent, error on unknown parent; warning uses reviewed config threshold. No literal-main default. |
+    | 1483 AC3 | Normal review/CI/hold/independence gates plus reviewed coverage and actual authoritative default result. Only fresh covered UUIDs complete; partial/intermediate-parent stays Done. Clear requires full inventory/coverage/no pending or live work under ADR; no unlanded release. Separate authorized branch cleanup after verified merge, no automatic deletion promise. |
+    | 1483 AC4 | Closed-unmerged and uncertain/local-persist failure preserve isolation; query-before-retry and action UUID reconcile exactly once. |
+
+    Required concrete tests, in addition to matrix per-entrypoint positives/negatives:
+
+    - 1481: off_default_subtree_excluded_without_env_each_selector; isolated_context_selects_only_subtree_positive; mcp_claim_isolation_refuses_before_lease; shift_isolation_read_failure_is_error; slice1_direct_ship_and_resume_fail_closed_before_slice2. Snapshot all queue/lease/status/worktree/spawn/forge effects, not merely candidate lists.
+    - 1481/1482: ancestry_detach_target_reset_and_epic_delete_cannot_release; declaration_change_after_final_check_serializes_with_action; pending_local_admission_blocks_reparent_after_guard_release; store_pull_generation_change_invalidates_plan; generic_force_does_not_release_isolation; clear_with_live_or_unlanded_work_refuses. Barrier is AFTER final validation. Authorized positive unlanded release test is blocked, not omitted as satisfied.
+    - 1482/1483: wave_drain_direct_and_mr_recovery_validate_target; same_head_pr_retarget_during_merge_is_not_head_pinned; unsupported_base_precondition_refuses_before_request; trunk_default_missing_metadata_never_falls_back_to_main. Positive source/base-pinned fake adapter and honest raw external race limitation.
+    - Coverage: squash_landing_completes_only_verified_covered_children; reverted_child_ancestor_is_not_coverage; reopened_child_old_work_in_new_squash_stays_open; squash_body_omitted_id_cannot_bypass_manifest; clone_replay_after_clear_retains_coverage_fence; landing_races_new_child_no_clear; remote_merge_success_local_persist_failure_reconciles_once; intermediate_parent_keeps_done; closed_unmerged_preserves_generation.
+    - Parent sync: default_target_empty_parent_sync_is_noop; off_default_parent_defaults_to_trunk; parent_sync_conflict_preserves_work_and_reports_drift. Positive clean merge and conflict with original refs/files preserved for manual resolution.
+
+    No claim that these proposed changes are approved acceptance. Full 1481 release behavior and whole-epic credit remain blocked; release authority alone does not block a technically sound protective slice. DOC-5 shipped/planned table remains planned; docs/ADR publication follows a separate authorized doer step only after independent review.
+
+    ## F1–F3 acceptance corrections (binding parts of proposed v3)
+
+    - Every setup/claim/queue/worktree/launch positive requiring common publication must consume its existing final C/receipt; epic Pending is constraints only. Lost ACK/crash cannot cause a replacement spawn or recovered release. Missing consumer hook/receipt is an explicit dependency and zero-effect refusal, not a separate handshake.
+    - All Pending/output/terminal constraint commits require checked durable canonical receipt. Stage/commit/file-sync/dir-sync/readback faults prevent effects. Partial status/evidence/Landed output retains Pending; committed-snapshot readers cannot use dirty/partial YAML for promotion or clear. Missing hook-safe Git adapter refuses rather than disabling hooks or recursive AIDA reentry.
+    - All Ordinary and Isolated admissions reserve negative/positive graph predicates. Candidate declaration/new ancestor/new descendant/reparent/default change recomputes old+candidate ancestry and covered-set membership across active operations, including common writes. Declaration on unfenceable ordinary in-flight work refuses; no peer cancellation.
+
+    Required named paired witnesses: ordinary_admission_blocks_new_ancestor_isolation_after_final_check; pending_coverage_blocks_new_descendant; declaration_before_ordinary_admission_refuses_default_effect; epic_reservation_consumes_common_publication_once; epic_common_lock_order_has_no_merge_store_cycle; pending_commit_failure_sends_no_effect; output_mid_batch_failure_retains_pending; isolation_clear_and_clone_replay_require_committed_evidence; narrow_squash_equal_tree_equal_base_positive; squash_changed_first_parent_or_result_tree_keeps_done; coverage_predecessor_cycle_or_missing_link_refuses. Preserve prior matrix/coverage/reopen/revert/body/clone tests. Proposed only, not executed.
+  created_at: 2026-10-08T17:29:13.654825041Z
+  modified_at: 2026-10-08T17:29:13.654825041Z
   relayed_from: answered-design-sketch-author
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
