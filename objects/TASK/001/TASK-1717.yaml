@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-08T20:39:59.495317050Z
+modified_at: 2026-10-08T21:39:54.897249629Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -649,6 +649,167 @@ comments:
   created_at: 2026-10-08T20:39:59.495311028Z
   modified_at: 2026-10-08T20:39:59.495311028Z
   relayed_from: 01a11d35-a35e-74c2-9098-e3afda25d44e
+- id: 01a11d75-6391-7b40-86f6-6bcf4cd541d9
+  author: mcp
+  content: |
+    PROXY EVIDENCE RELAY — existing authorized TASK1717 implementer REWORK_READY, not approval. Root verified clean tracked worktree HEAD223c192aa1d40d920e31dd51b6c3c08fc565ede7/treed7e7c2c2641b5be9820c05798d04a5058473eeef and origin task1717 exact. Full fresh independent whole-A4 review owed. Author confirms actual B mutant results/restoration sequence, six postrestoration witness controls, immutable artifacts; root does not convert author checks to independent pass. Known gaps remain explicit, parent TASK1332 closure pending/commonCAS unaccepted. No new implementation dispatch/protected record/merge.
+
+    # TASK-1717 REWORK_READY — response to independent REQUEST_CHANGES on a6fac83f
+
+    Implementer: Claude Opus 5.5, session 01a11ced, implementer, worktree aida-pool-aida-6, branch task-1717.
+    Written 2026-10-08 ~14:40 America/Phoenix. Implementer report only — not a review, signoff, status, queue,
+    done, PR or merge. Parent TASK-1332 stays closure-pending; CAS/A2/hijack/publisher remain unaccepted and
+    untouched. Initial READY (TASK1717_READY.md, sha256 79e725d3…6255 before its dated append) is retained.
+    A NEW different whole-A4 reviewer is required.
+
+    ## Identity
+
+    | Item | Value |
+    |---|---|
+    | Final head | `223c192aa1d40d920e31dd51b6c3c08fc565ede7` |
+    | Final tree | `d7e7c2c2641b5be9820c05798d04a5058473eeef` |
+    | Parent | `a6fac83f5c4c7197786d1833b0e27e59e18d889d` (reviewed candidate) ← `bf65220959` |
+    | Remote | `git push origin task-1717` fast-forward a6fac83f5c..223c192aa1; `git ls-remote origin refs/heads/task-1717` = 223c192aa1d40d920e31dd51b6c3c08fc565ede7 |
+    | Whole diff bf65220959..223c192aa1 | 12 paths, +3468 −508 |
+    | Rework diff a6..223c | git_backend_cmd.rs 11/7; lib.rs 71/32; mailbox_store.rs 31/1; remote_create.rs 241/169; tests/fixtures/task_1717_installed_hooks/{post-commit 44, pre-push 19, prepare-commit-msg 2} (new); task_1717_store_writer_lock.rs 603/17; store_lock.rs 9/1; git_ops.rs 343/5 |
+    | Source blob ids at head | recorded in task1717-rework-evidence/qualify.txt (`git ls-tree` of every touched path and aida-core/templates/hooks) |
+    | main at review time | c67728c1dc; not rebased (integrator owns) |
+
+    ## Sequence and Batch B (explicit, in order)
+
+    1. Batch A (M1/M2/M5) — reported in READY; 4/4 targeted witnesses failed (log logs/mutantA.log).
+    2. Batch B started 13:05 MST (M3: `lock_store` post-acquisition recheck disabled via `&& false`; M4: `merge_gate`
+       wrapper removed). Its cargo waited ~60 min for a normal build slot (other sessions held both slots); no
+       bypass, no kill of unowned processes. It ran ONCE, ended ~14:05: `test result: FAILED. 4 passed; 2 failed`
+       — exactly the targeted witnesses: `task_1717_writer_rechecks_store_state_after_acquiring_the_lock`
+       ("a rebase left behind must be refused: ()" — the writer wrote onto rebase state) and
+       `task_1717_merge_gate_waits_for_the_store_lock_before_touching_anything` ("the gate waits for the lock").
+       The other four core witnesses passed under the mutants. Log preserved: logs/mutantB.log. Owned runner pid
+       136924 had exited.
+    3. 14:06:10 MST, BEFORE any rework edit: `git checkout --` of ONLY the two mutated files; `git diff` showed only
+       the two MUTANT lines before restore; afterwards `git status` clean, HEAD a6fac83f, and every touched path's
+       `git hash-object` equal to its a6 blob (printed "same" for all ten). No stale-a6 restoration rebuild was run.
+    4. Only then were the rework files (prepared in session scratch during the slot wait) copied in.
+    5. Hygiene found later (14:24): two orphaned test `flock` holders from MY test fixtures (Batch A's mutant
+       reconcile test panicked before releasing; the first killed-holder test killed `flock` but not its shell)
+       still held their tempdir store locks and the old tee pipes. They held no real store. I ended exactly
+       those owned pids (133569, 133570, 640671). Fix in tests: `Holder` now has `Drop` and kills the shell too.
+       No mutant marker remains in source (`grep MUTANT` empty); no older cargo of mine was running.
+    6. Mutant-built executables in target were superseded by fresh builds from the committed clean head (below);
+       the a6/mutant binaries are not claimed as candidate artifacts.
+
+    ## Findings → remedy
+
+    - F1: `with_store_write_lock` (outermost) calls new `git_ops::ensure_store_hooks_supported` after the safety
+      check and BEFORE `f`. It inspects executable in-transaction hooks (pre-commit, prepare-commit-msg, commit-msg,
+      post-commit, pre-rebase, post-rewrite, post-checkout, post-merge, pre-merge-commit, reference-transaction,
+      pre-auto-gc; hooks dir via `git rev-parse --git-path hooks`). Supported: byte-identical shipped template
+      (EMBEDDED_TEMPLATES hooks/*), or no `aida` invocation other than `aida internal …` / `command -v|which|type aida`;
+      `$AIDA_BIN` counts as invocation. If any active hook sources `.aida/commit-config`, that file must be literal
+      `NAME=value`/comments. Otherwise a named refusal ("… is not a shipped AIDA hook … Nothing was changed") before
+      staging/canonical writes. Covers Db Sync, push/pull legs, merge-gate, mailbox digest, allocation, autopush,
+      sync_objects, reconcile. No hook disablement/env ownership/FD transfer/unlock. Limit: a static classifier;
+      a hook that writes the store without naming `aida` (e.g. raw git into the store) is not detected.
+    - F2: mailbox `write_snapshot_locked` uses new strict `read_canonical_messages_strict` (read/parse errors are
+      errors; tolerant reader kept for inbox views). New `git_ops::load_requirements_strict` (list_objects_strict +
+      read_object_from_path, error on any failure; absent objects/ = empty) used by Db Sync preimage (no more
+      unwrap_or_default), post-pull validation and `ensure_no_spec_id_collisions_canonical`.
+    - F3: push leg, pull leg and pre-allocation propagate has_changes/add/commit errors with git's text; no
+      "Committed:", no push of the old head, pending work untouched. Mailbox "published" printed only after the
+      enclosing commit succeeded (`report_mailbox_published`).
+    - F4: execute no-op decided under the lock from current HEAD + discovered hub tips (stale discovery early
+      return removed). Merges and all validation moved to `merge_and_validate`; any error after the first merge goes
+      through `rollback_to_preimage` (checked `reset --hard <locked pre>`, verifies HEAD==pre and clean; otherwise
+      reports FAILED/partial). `ls_objects` failure is an error. Never resets to discovery state.
+    - F5: `sync_objects` refuses before staging when this thread holds that store's lock; `push_exact` refuses
+      (release builds too) when any store lock is held. Caller lock never released for it.
+    - F6: added witnesses (below). FD claim limited: assertions cover fixture-path `*.lock` FDs; the cargo slot lock
+      `/run/user/1000/cargo-slots-1000/slot-N.lock` is inherited by the whole test process tree from the normal
+      wrapper and is visible in hook/git/aida observations; it is not the command's and is not claimed absent.
+
+    ## Commands and exits (normal slot wrapper, `CARGO_TARGET_DIR=…/aida-pool-aida-6`, `env -u AIDA_BIN`)
+
+    | When | Command | Result |
+    |---|---|---|
+    | 14:07 | `cargo test -p aida-core --lib --no-run` (rework) | 0 |
+    | ~14:08 | `cargo test -p aida-core --lib -- task_1717` | 9 passed |
+    | ~14:09 | `cargo test -p aida-cli --test task_1717_store_writer_lock --no-run` | 0, no warnings |
+    | ~14:10–14:22 | same, run (r1) | **first result preserved: 25 passed, 4 FAILED** — auto-push (duplicate `auto_push` key: config already has `auto_push = "manual"`), killed-holder (killing `flock` left its shell holding the lock → 60 s lock timeout), fresh-cache and unparsable-object (fixture picked `objects/.gitkeep` as "first object"). All test-fixture defects; fixed in the test only |
+    | ~14:26 | the 4 tests (r2) | 4 passed |
+    | ~14:29 | `cargo test -p aida-cli-lib --lib -- handle_pull_command mailbox story_284 bug_1633 reconcile auto_push allocation db_sync maybe_sync merge_gate push` | exit 0, 250 passed (incl. the earlier AIDA_BIN-environment failure) |
+    | 14:31 | `cargo fmt --all -- --check` | 0; commit 223c192aa1 |
+    | 14:32:47 | from clean head (status 0): `cargo test -p aida-core --lib --no-run`; `cargo test -p aida-cli --test task_1717_store_writer_lock --no-run` | 0 / 0 (cli-lib + cli recompiled from the committed tree) |
+    | 14:33:56–14:37:20 | archived executables run directly (no cargo): core `aida_core_lib_tests-223c192 task_1717`; CLI `task_1717_store_writer_lock-223c192` | core exit 0, 9 passed; CLI exit 0, 29 passed |
+
+    Not run: full workspace, make check-ci*, clippy, PR CI.
+
+    ## Qualified artifacts (task1717-rework-evidence/)
+
+    | Artifact | sha256 |
+    |---|---|
+    | artifacts/aida-223c192 (copy of target/debug/aida) | 202b94a3f23a16da6c67676187743d73139d082ef0fbae95865600046729bbd2 |
+    | artifacts/task_1717_store_writer_lock-223c192 | 80d117cee60a1cd68485a745fd299e9ea399da36600bd076eaf23ecfba9e3f50 |
+    | artifacts/aida_core_lib_tests-223c192 | 9e35825299e1fdc2a5513ece9f6a4cc117bb4fd674c262d1c66ab0dd88384884 |
+
+    Copies are read-only. Inputs: head/tree above, status 0 before build and before/after controls; rustc 1.92.0
+    (ded5c06cf 2025-12-08), cargo 1.92.0; Cargo.lock sha256 67fbe4ad…24e9; dev/test profile (unoptimized+debuginfo),
+    sccache wrapper, clang+mold linker (from ~/.cargo/config.toml). The CLI test executable bakes
+    CARGO_BIN_EXE_aida = target/debug/aida and reads templates/fixtures via CARGO_MANIFEST_DIR at runtime; therefore
+    target/debug/aida was hashed at control start and end (202b94a3… both times, = archived copy) and the source
+    tree stayed clean (0 status lines) at start and end. Limit: the binary under test is the target path verified
+    by hash, not executed from the archive copy; runtime template/fixture inputs are the committed tree files.
+
+    ## Post-restoration paired controls on the FINAL candidate (controls-core.log / controls-cli.log)
+
+    | Mutant (first result) | Witness | Unmutated 223c192 control |
+    |---|---|---|
+    | M1 Db Sync guard removed — FAIL empty-commit race | sync_vs_edit_serializes_at_the_pending_commit | ok |
+    | M1 — FAIL "exited instead of waiting" | sync_touches_nothing_before_it_owns_the_lock | ok |
+    | M2 mailbox guards removed — FAIL `cannot lock ref 'HEAD'` | mailbox_digest_rereads_canonical_and_commits_in_one_window | ok |
+    | M5 discovery preimage — FAIL rollback lost late commit | remote_reconcile_uses_the_current_locked_preimage | ok |
+    | M3 recheck disabled — FAIL writer wrote onto rebase | task_1717_writer_rechecks_store_state_after_acquiring_the_lock | ok |
+    | M4 merge_gate unwrapped — FAIL gate did not wait | task_1717_merge_gate_waits_for_the_store_lock_before_touching_anything | ok |
+
+    Mutants ran against a6 source; controls run against the remedied 223c source (same witness names; witness
+    bodies unchanged except the Holder Drop/kill helper). No mutants were re-run on 223c.
+
+    ## New witnesses (29 CLI total, 9 core)
+
+    F1: reentrant_writer_hook_is_refused_before_any_change (pre-commit runs `aida edit`; db sync, push, pull,
+    mailbox sync, merge-gate all refuse in <30 s, HEAD/index/objects/pending unchanged, spec not edited);
+    commit_config_must_be_literal_settings (literal passes; executable line refuses unchanged);
+    core task_1717_hook_classification (all shipped hook templates supported; positive/negative lines).
+    F2: mailbox_digest_refuses_an_unreadable_canonical_record (explicit refuses, bytes/HEAD kept; automatic pull
+    digest warns, bytes kept, clean tree); sync_refuses_to_publish_after_pulling_an_unparsable_object (origin keeps
+    peer head); core task_1717_strict_load_reports_an_unparsable_object.
+    F3: push_store_leg_reports_a_failed_commit_and_pushes_nothing (online + no-origin failure with hook text kept,
+    healthy online + no-origin controls); pull_and_allocation_report_a_failed_pending_commit (pull + `aida add`
+    refuse with hook text, HEAD kept, no spec allocated; healthy pull control).
+    F4: remote_reconcile_checks_its_rollback (malformed blocks after clean merge → "back at" pre; injected
+    index.lock via post-merge hook → "rollback to … FAILED", no "back at"); remote_reconcile_decides_noop_under_the_lock
+    (late commit after discovery is published; genuine no-op still reported).
+    F5: core task_1717_sync_objects_refuses_to_publish_inside_a_transaction (nothing staged/committed, caller still
+    holds lock; push_exact under lock refused).
+    F6: per_write_auto_push_publishes_the_captured_commit_unlocked; sibling_worktree_discovers_the_same_lock;
+    killed_holder_releases_the_lock_and_the_sidecar_survives (same inode); sync_pull_leaves_a_fresh_cache;
+    missing_and_matching_sentinel_paths (missing records bypass; matching with telemetry ON records nothing);
+    installed_hook_profile_completes now uses the installed bytes (post-commit 0644 as installed, pre-push and
+    prepare-commit-msg verbatim with only the store path substituted).
+
+    ## Remaining gaps (honest)
+
+    - Abort-failure of an owned rebase, stale-cache with a *competing refresh holder*, detached/foreground GC
+      lifetime, FETCH_HEAD/private-ref observation through the CLI route, and full byte/admin snapshots at every
+      phase are NOT witnessed.
+    - F1 classifier is static (see limit above); custom hooks using printf text containing a bare `aida` word are
+      conservatively refused.
+    - Allocation's first push-leg collision check is still the existing cached read before capture; strict checks
+      run after each rebase under lock.
+    - Not rebased onto main c67728c1 (TASK-1593); merge-tree against a6 was clean, re-check at integration.
+    - No CAS/A1-dispenser/doctor/init/ledger/coordination/release work; parent obligations unchanged.
+  created_at: 2026-10-08T21:39:54.897243358Z
+  modified_at: 2026-10-08T21:39:54.897243358Z
+  relayed_from: task1717-store-lock-claude
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
   author: aida-session-start
