@@ -48,6 +48,10 @@ feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
 modified_at: 2026-10-08T19:07:53.906693751Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a1101a-d324-7002-9942-3eb492b0fc4c
+  created_at: 2026-10-08T19:08:09.132041278Z
 filed_at:
   code_sha: bf65220959c7601427247286abc7eb16278af5a5
   branch: main
