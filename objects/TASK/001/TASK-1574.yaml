@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-08T19:17:49.561975795Z
+modified_at: 2026-10-08T19:18:25.392833190Z
 req_type: Task
 tags:
 - operator-held
@@ -34,6 +34,72 @@ comments:
   content: 'PROXY DECISION recovery: evidence-only native --spec launch refused because my deliberate Done→InProgress correction had no lease. Current session leases and all git worktrees show no TASK-1574 owner/worktree; the audit was read-only and has finished. Return to Approved solely for the ordinary launcher to claim it, preserving the requested-change evidence. No force-claim or lease-floor bypass.'
   created_at: 2026-10-08T17:19:34.813828955Z
   modified_at: 2026-10-08T17:19:34.813828955Z
+- id: 01a11cf3-d971-7252-b032-3be57c589079
+  author: joe
+  content: |
+    # TASK-1574 consumer supplement independent review
+
+    **Verdict: ACCEPT the bounded consumer supplement. Full TASK-1574 acceptance remains BLOCKED.** Item 6's missing pinned actual-argv witness is closed. Item 5's missing MET-message consumer witness is closed, including the actual agent's refused clear attempt and retained hold. Neither establishes an authorized review producer or an authorized human clearance followed by shipping.
+
+    This is a new independent Codex review, distinct from the author and previous reviewers, dated 2026-10-08. It is a Markdown evidence judgment only: not a recorded review, authority grant, machine verdict, hold clearance, or canonical status update.
+
+    ## Scope and method
+
+    Read AGENTS.md, the full two-seat protocol, rework-brief craft and recovery playbooks, and all of `TASK1574_REWORK_INDEPENDENT_ACCEPTANCE.md`, `task1574-consumer-supplement.md`, and `TASK1574_CONSUMER_SUPPLEMENT_READY.md`. Inspected the supplement's complete harness, command metadata, relevant raw outputs, forge logs, synthetic inputs, marker, initial/final state and bundles. The prior independent report supplies the full-task acceptance context; I did not perform a new live canonical TASK-1574 read or independently repeat the historical seven-item audit.
+
+    Independently recomputed checksums and stdout metadata; imported the four retained Git bundles into fresh private bare repositories; checked refs, commit parents, trees and timestamps; read production source at build commit `202739552799d138e45ec86a91bb4d79181d4c7b`; and ran two negative checks of the unchanged archived fake forge in a new private fixture. No production AIDA command, protected recorder, Cargo build or workspace suite was run by this review.
+
+    Private work is retained at `/tmp/task1574-independent-review-4m6drqgx`. Compact review evidence is retained in [task1574-consumer-independent-review-evidence](task1574-consumer-independent-review-evidence/), with its own SHA256SUMS. Fresh private HOME/runtime and an explicit minimal environment were used for bundle Git operations and fake-forge execution; no live authority or session was inherited into those executions.
+
+    ## Integrity and production provenance
+
+    - **309/309 prior entries passed**, preserving the prior evidence against its existing manifest. Manifest SHA256: `a3199a3a921bfb027e26616a176b5ac738feaafe62dda2f8496f9326a4b538e0`.
+    - **69/69 supplement entries passed**. Manifest SHA256: `cb5164aaf87f8b2d4f5b58d8e29631d8f59562df4c3b3e3e29258b26a585936c`.
+    - All **95 prior and 14 supplement** command stdout hashes and byte counts matched. All four bundles verify and contain complete history.
+    - Prior READY hashes to `40909955d2e3171c9371fd30d9ec3d39439903bec8e6b9c075a46a2943ddd0d3`, matching the retained notification. The notification remains unchanged during this review. Checksums establish consistency with the retained manifests, not independently timestamped proof of every execution or the absence of all possible side effects.
+    - Independently hashed the existing 495,702,000-byte executable: `c1a997a59945e048eed7657f0a73d1380258c4aae2ddbe22771d2c1d794f6631`, matching both packages. The retained version identifies build 2027395 at 09:29:10 -07:00. I did not execute or rebuild it.
+    - Independently compared b46aec1e674baae5a329416d4119e67b59200a88 to that build commit: thirteen documentation/template paths differ; no Rust/Cargo-manifest/lock delta. The inspected reader, hold and ship code corroborates these production consumer paths. This is handler-source applicability, not a reproducible-build attestation or a current-main binary claim.
+
+    `penv` uses `env -i`, private HOME/AIDA_HOME/XDG/runtime, private binary/forge paths and guarded Git SSH routing. `rec` captures individual consumer exits with stdin `/dev/null`. The fake forge simulates only into its private bare origin. One qualification: setup runs the copied binary's `--version` before `penv`; the blanket sanitized-environment description therefore applies to the recorded consumer commands, not literally every setup invocation. No authority is inferred from that version probe. This harness is not an OS-enforced network/filesystem sandbox.
+
+    ## Item 5: consumer accepted; authorized clearance blocked
+
+    `s5-01` arms private PR-15; `s5-02` reports no verdict. The explicitly synthetic input supplies APPROVED at full head `84249e24aae76faef58873ccf11bda65100b3df4`, with actual timestamp, fixture-only attribution and an explicit no-authority summary. Its SHA256 is `31a8bce9dd06fa6c992db7f00c65e7457ecfafe3f1bedac56fad16f43225bfa8`.
+
+    `s5-03` exits 0 and reports **release condition MET**, **hold still armed**, then the complete ordered action: `aida merge-hold clear 15` (human, recorded), then `aida pr ship 15`. It also explains the human terminal's one-command alternative and refusal of agent seats. TOON/JSON outputs corroborate it; JSON's `refusal_released: true` denotes the condition, not a completed clearance.
+
+    `s5-06`, the actual `aida merge-hold clear 15`, exits **1** with the human-terminal integrity-floor refusal. The refusal is in **stdout**, with empty stderr. Its forge log is empty. `s5-07` is byte-identical to the earlier MET output. The retained schema-v2 PR-15 marker remains armed; final forge state is OPEN with both `aida:merge-hold` and `aida:merge-hold-recorded`. No held-PR ship or successful clear is evidenced or claimed.
+
+    Production `merge_hold.rs::refusal_release` evaluates the approval without clearing; `release_met_next_action` produces the observed message. `lib.rs` checks the integrity floor before clearance. The synthetic record is input to these readers, **not a review recorded by an authorized independent actor**. Missing archived per-command forge logs for s5-04/s5-05 remain a disclosed limit; s5-03, the actual clear and the retained state suffice for this bounded witness.
+
+    ## Item 6: pinned consumer accepted
+
+    PR-16 is distinct, with branch `probe-pin`, full head `897fe57a857b7a92699dd0b7df6171a0c6c4eb46`, no hold labels in either state, and no hold placement/clearance for it in the retained sequence. Its synthetic approval hash is `c3da1087d9cd5d6c926b5966fb8693e706a1b1e83a233fc02e31d5fbcb0334ba`; attribution remains `fixture-reviewer-not-a-live-actor`.
+
+    Dry-run exits 0 and names the conditional pin and omission of branch deletion. Actual ship exits 0. The sole intercepted merge argv among 29 forge calls is exactly:
+
+    ```json
+    ["pr","merge","16","--squash","--match-head-commit","897fe57a857b7a92699dd0b7df6171a0c6c4eb46"]
+    ```
+
+    `--delete-branch` and `--subject` are absent, matching the protected sibling-worktree decision and no subject repair. `merge_gate_verdict_candidates` reads PR-16, `approved_match_head` chooses the covering full head, the ship approval gate passes it through `MergeOptions`, and `forge.rs::github_merge_argv` appends the pin.
+
+    The forge's `require_pin` conditional actually refuses before its simulation code unless the supplied pin equals `headRefOid`. I independently executed the unchanged archived harness with missing and all-zero pins: both exited **97**, retained the initial state byte-for-byte and created no merge simulation. These are harness negative checks, not new production CLI executions. The retained positive run passed this same condition.
+
+    Bundle state corroborates a real local simulated squash: main is `05455ed0c12281338a4acdc57fbe55df966b882d`, parent `5ff4eb8a663256f648b5f08fd6041e5346fb6219`, and its tree equals the pinned branch tree. Both probe refs remain. This closes the missing pinned argv branch alongside the prior unpinned witness. It proves neither a real GitHub merge nor review authorization, race handling, every subject/delete branch, or protected producer success.
+
+    ## Corrections and remaining acceptance
+
+    The dated corrections are supported. Prior bundle commit timestamps show first fixture commit 10:30:12, probe commits 10:41:04/10:41:08, simulated squash 10:43:00, and final store commit 10:43:02 (-07:00). READY/manifest/notification mtimes agree with the correction; mtimes are file metadata, not command execution clocks. The former hardcoded 11:00 `mergedAt` cannot establish elapsed runtime. The supplement retains measured timeline entries from 11:05:46 through 11:08:36; its simulated merge timestamp 11:08:16 falls inside the ship window and agrees with the Git commit second.
+
+    `aida-core/build.rs` embeds templates, including the four changed inputs. Initialization can scaffold that text. The corrected handler-source-equivalence claim is appropriate; the former “none is read” and hypothetical byte-equivalence claims stay superseded. Historical item-3 worktree-object and item-4 pipeline-exit qualifications remain intact. Failed protected recorder attempts remain preserved, not replaced by synthetic success.
+
+    **Full acceptance remains BLOCKED on exactly the unresolved actor procedures:** item 2 needs the prescribed successful authorized protected request-changes producer (`--pr` and full `--sha`) and resulting NeedsAttention; item 5 needs an actual authorized human clear followed by ship to merge. This supplement supplies neither and cannot confer the missing authority. Earlier item 1/3/4/7 dispositions are carried forward from the prior independent report, not re-executed here. No new implementation or substitute filing is requested.
+
+    Only fresh private review artifacts and this requested report were written. No live AIDA/coordination operation, grant, session, hold, store/ref mutation, protected recorder retry, install, PR, merge, source edit or canonical change was performed. Reserved TASK1593/TASK1591/BUG1811/BUG1812 work was excluded. **No mailbox notification was sent during the canonical recovery pause.**
+  created_at: 2026-10-08T19:18:25.392833190Z
+  modified_at: 2026-10-08T19:18:25.392833190Z
+  relayed_from: task1574-consumer-supplement-independent-review
 history:
 - id: 01a0fffb-e757-73d0-b0f5-64dead4d474a
   author: joe
