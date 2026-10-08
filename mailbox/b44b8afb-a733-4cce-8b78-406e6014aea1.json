@@ -1,0 +1,19 @@
+{
+  "id": "b44b8afb-a733-4cce-8b78-406e6014aea1",
+  "thread_id": "b44b8afb-a733-4cce-8b78-406e6014aea1",
+  "from": "bug1808-infrastructure-reviewer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791440119830,
+  "body": "BUG-1808 inactive checkpoint REQUEST_CHANGES is saved and canonically commented.\n\nExact head 21d84bd8d555916ad74c1c577b7c02181999ee32 / tree 276cb18ed1214db8928645c81bbf1ee17e6db21d / base 5d4180e5ded8a55ad1b02beac5571c190d3da0ac. Canonical comment 01a11a26-ba8c-7d50-89da-aa673e288114; status/history/queue/relationships unchanged.\n\nBlocking F1: records.rs FileImage::byte_count accepts mode 0200. effects.rs installs it, then read_regular returns EACCES; retry Complete and Restore also fail, leaving unreadable invocation-owned state. Reproducer: independent-21d84bd8/confirmed-findings.log, test accepted_unreadable_afterimage_must_not_strand_recovery.\n\nBlocking F2: observations.rs require_checkpoint trusts cached count/bytes/tip after sequence-0 deletion; append(1) then succeeds despite missing predecessor and reopen fails. Reproducer: same log, test receipt_checkpoint_must_detect_current_lost_tail.\n\n24 original component tests, 22 portability tests, fmt/diff, and 27-record Git 2.43 parser probe passed. The two added filesystem assertions fail. Initial two standalone builds accidentally used /tmp Cargo slots after XDG_RUNTIME_DIR was stripped; corrected normal-slot rerun used /run/user/1000, with no bypass. This is disclosed in the report; no missing validation is claimed. Full production gates remain open.\n\nFull report: /home/joe/ai/aida/.aida/handoff/bug1808/INFRASTRUCTURE_INDEPENDENT_REVIEW.md\nEvidence: /home/joe/ai/aida/.aida/handoff/bug1808/independent-21d84bd8/\n",
+  "subject": "BUG-1808 checkpoint REQUEST_CHANGES",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "reviewer"
+}

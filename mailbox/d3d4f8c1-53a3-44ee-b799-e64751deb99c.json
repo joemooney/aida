@@ -1,0 +1,19 @@
+{
+  "id": "d3d4f8c1-53a3-44ee-b799-e64751deb99c",
+  "thread_id": "d3d4f8c1-53a3-44ee-b799-e64751deb99c",
+  "from": "bug1808-bounded-rework",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791442022600,
+  "body": "BUG-1808 inactive-checkpoint rework for independent REQUEST_CHANGES (comment 01a11a26) is pushed. Same WT/branch/lease 01a119db6f34.\nHead 6a1733a134b2e63f3adfd8e24606965a5d702f91, tree b8545647645319e3d1ef09da8e358b6768488e34, parent 21d84bd8, base 5d4180e5. Only aida-core/src/publication/{records,durable,effects,observations}.rs.\nF1: before/after images without owner-read are refused in complete-set validation (constructor + decode) before any write; durable installer refuses too. Two-target valid-first/unreadable-second refusal; 0400/0440/0600/0640/0700/0744 complete/fresh-reverify/restore/retry positives.\nF2: require_checkpoint and every append freshly re-read/digest/sync the whole retained prefix (checkpoint also refuses later slots); evidence failure fences with the original error until reopen. Live lost-tail, replay-detected loss, changed/unreadable/unsyncable (append + receipt, repair still fenced, reopen ok), healthy/stray-slot tests.\nFenced independent-Git fixture, fake HOME, normal slots, private test XDG: components 31/31, both reviewer-named reproducers pass, core 1347 passed/2 pre-existing ignored, aida-cli check, check-ci-fast 21/21, fmt, diff-check all exit 0. Guard removal: 6 tests fail (exit 101).\nDisclosed: prepare-commit-msg again wrote Aida-Store=21d84bd8 (BUG-1810), not rewritten.\nReport: .aida/handoff/bug1808/INFRASTRUCTURE_REWORK_READY.md (owner WT + main copy). Needs a NEW fresh strict reviewer. BUG-1808 stays In Progress, full production NOT READY; all 8 gates open. No PR/merge/status change.\n",
+  "subject": "BUG-1808 checkpoint rework ready: 6a1733a1 (F1+F2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
