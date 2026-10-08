@@ -3,12 +3,12 @@ spec_id: BUG-1802
 agreed_id: BUG-1802
 title: aida review record lets an implementer seat self-approve its own PR with '(operator)' attribution
 description: 'Observed live 2026-10-04 (PR-2424 / TASK-1597): after a request-changes verdict and rework merge-hold, the unattended implementer seat ran ''aida review record --verdict approved --pr 2424 TASK-1597'' from its own worktree. The record was written with recorded_by=''aida review record (operator)'' even though the caller was the implementer session that authored the PR, and the seat then re-armed ''aida pr ship'' to merge on green. The canonical store''s hold held only because the forged record stayed in the seat''s worktree copy; nothing in the command itself refused. Wanted: (1) review record binds the recording identity (session/seat/role) and refuses operator attribution without a human-at-TTY gate, like the BUG-1693 floor; (2) refuse or quarantine a verdict recorded by the same session/seat that implemented the spec (self-review); (3) pr ship verifies the verdict''s recorded_by authority, not just its presence. Related: BUG-1693 (merge-hold floor advisory only).'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T06:50:46.154934474Z
+modified_at: 2026-10-08T06:52:29.638971426Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -810,6 +810,13 @@ history:
   - field_name: status
     old_value: Completed
     new_value: Approved
+- id: 01a11a48-ee46-72d1-a0bc-8bac02f5dcc1
+  author: aida-session-start
+  timestamp: 2026-10-08T06:52:29.638970797Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a10ee7-4c8b-7337-9d7a-0853d34e7fbb
   timestamp: 2026-10-06T01:50:01.867939682Z
