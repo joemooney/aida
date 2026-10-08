@@ -78480,9 +78480,27 @@ pub(crate) fn handle_db_reconcile_status(
     // already covers the Done-state review story, so this completes the
     // {Approved, InProgress, Done} set. trace:BUG-219 | ai:claude
     let mut stale_review_flips = collect_stale_review_story_flips(&store, &pr_to_sha, &flips);
-    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
     if let Some(target) = spec {
         stale_review_flips.retain(|(sid, ..)| sid.eq_ignore_ascii_case(target));
+    }
+    // TASK-1335: this independent path gets the same per-candidate record
+    // (scan-time UUID included) so its write-seam decision is reportable.
+    // trace:TASK-1335 | ai:claude
+    for (sid, sha, ..) in &stale_review_flips {
+        outcomes.record(outcome_for(
+            sid,
+            sha,
+            reconcile_evidence::EvidenceSource::ReviewStoryMerge,
+            store.get_requirement_by_spec_id(sid),
+            reconcile_evidence::CandidateReason::WouldComplete,
+        ));
+    }
+    let before_fresh_stale = stale_review_flips.clone();
+    retain_fresh_stale_review_flips(project_root, &store, &mut stale_review_flips);
+    for (sid, ..) in &before_fresh_stale {
+        if !stale_review_flips.iter().any(|(kept, ..)| kept == sid) {
+            outcomes.set_reason(sid, reconcile_evidence::CandidateReason::StaleAfterReopen);
+        }
     }
 
     // BUG-113: the covers chain — a `Done` review story whose covered
@@ -78815,39 +78833,70 @@ pub(crate) fn handle_db_reconcile_status(
     let flips_for_write = flips.clone();
     let stale_for_write = stale_review_flips.clone();
     let holds_for_write = closure_holds.clone();
-    // TASK-1335: the scan-time identity and evidence source of each flip, so
-    // the write seam can recheck the LIVE store before granting completion.
-    let flip_context: Vec<(Option<uuid::Uuid>, reconcile_evidence::EvidenceSource)> = flips
+    // TASK-1335: every write-seam candidate — holds, normal flips, and the
+    // independent stale-review flips — with its scan-time identity, so the
+    // seam decides ALL of them against the live store before ANY mutation.
+    // Order: holds, then flips, then stale-review flips (scan order within).
+    // trace:TASK-1335 | ai:claude
+    let seam_item = |spec_id: &str, sha: &str, kind: SeamKind| {
+        let (uuid, source) = outcomes
+            .get(spec_id)
+            .map(|o| (o.identity.as_ref().map(|id| id.uuid), o.source))
+            .unwrap_or((None, reconcile_evidence::EvidenceSource::SubjectTrailer));
+        SeamItem {
+            spec_id: spec_id.to_string(),
+            sha: sha.to_string(),
+            uuid,
+            source,
+            kind,
+        }
+    };
+    let seam_items: Vec<SeamItem> = holds_for_write
         .iter()
-        .map(|flip| {
-            outcomes
-                .get(&flip.spec_id)
-                .map(|o| (o.identity.as_ref().map(|id| id.uuid), o.source))
-                .unwrap_or((None, reconcile_evidence::EvidenceSource::SubjectTrailer))
-        })
+        .map(|h| seam_item(&h.flip.spec_id, &h.flip.sha, SeamKind::Hold))
+        .chain(
+            flips_for_write
+                .iter()
+                .map(|f| seam_item(&f.spec_id, &f.sha, SeamKind::Flip)),
+        )
+        .chain(
+            stale_for_write
+                .iter()
+                .map(|(sid, sha, ..)| seam_item(sid, sha, SeamKind::StaleReview)),
+        )
         .collect();
-    let mut apply_verdicts: Vec<Option<String>> = Vec::new();
+    let mut seam_verdicts: Vec<SeamVerdict> = Vec::new();
     storage.update_atomically(|s| {
+        seam_verdicts = plan_reconcile_seam(project_root, s, &seam_items);
+        let target_of = |item: &SeamItem| -> Option<usize> {
+            match item.uuid {
+                Some(uuid) => s.requirements.iter().position(|r| r.id == uuid),
+                None => s
+                    .get_requirement_unambiguous(&item.spec_id)
+                    .ok()
+                    .flatten()
+                    .map(|r| r.id)
+                    .and_then(|id| s.requirements.iter().position(|r| r.id == id)),
+            }
+        };
+        let targets: Vec<Option<usize>> = seam_items.iter().map(target_of).collect();
+        let (hold_verdicts, rest) = seam_verdicts.split_at(holds_for_write.len());
+        let (flip_verdicts, stale_verdicts) = rest.split_at(flips_for_write.len());
+        let (hold_targets, rest_targets) = targets.split_at(holds_for_write.len());
+        let (flip_targets, stale_targets) = rest_targets.split_at(flips_for_write.len());
         // BUG-1551: closure holds — land at Done + record the merge.
-        for hold in &holds_for_write {
-            if let Some(r) = s.requirements.iter_mut().find(|r| {
-                r.spec_id.as_deref() == Some(hold.flip.spec_id.as_str())
-                    || r.agreed_id.as_deref() == Some(hold.flip.spec_id.as_str())
-            }) {
-                apply_closure_hold(r, hold, now, project_root);
+        for ((hold, verdict), target) in holds_for_write.iter().zip(hold_verdicts).zip(hold_targets)
+        {
+            if *verdict != SeamVerdict::Apply {
+                continue;
+            }
+            if let Some(index) = *target {
+                apply_closure_hold(&mut s.requirements[index], hold, now, project_root);
             }
         }
-        // TASK-1335: decide every flip against the LIVE store under the
-        // writer lock — identity, status, reopen history, covers support and
-        // the current closure graph — before mutating any of them.
-        // trace:TASK-1335 | ai:claude
-        apply_verdicts = reconcile_apply_verdicts(project_root, s, &flips_for_write, &flip_context);
-        for ((flip, (uuid, _)), verdict) in flips_for_write
-            .iter()
-            .zip(&flip_context)
-            .zip(&apply_verdicts)
+        for ((flip, verdict), target) in flips_for_write.iter().zip(flip_verdicts).zip(flip_targets)
         {
-            if verdict.is_some() {
+            if *verdict != SeamVerdict::Apply {
                 continue;
             }
             // TASK-1-113: match agreed_id as well as spec_id. flip.spec_id is
@@ -78858,15 +78907,10 @@ pub(crate) fn handle_db_reconcile_status(
             // the dry-run/candidate path uses `get_requirement_by_spec_id`
             // (agreed-aware), so the apply diverged from the preview.
             // trace:TASK-1-113 | ai:claude
-            // TASK-1335: the verdict above already resolved the id to the
-            // scan-time requirement, so write exactly that requirement.
-            if let Some(r) = s.requirements.iter_mut().find(|r| match uuid {
-                Some(uuid) => r.id == *uuid,
-                None => {
-                    r.spec_id.as_deref() == Some(flip.spec_id.as_str())
-                        || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
-                }
-            }) {
+            // TASK-1335: the seam verdict already resolved the id to the
+            // scan-time requirement (agreed or native form), so write exactly
+            // that requirement, once.
+            if let Some(r) = target.map(|index| &mut s.requirements[index]) {
                 // BUG-477: record the reconcile-driven Done→Completed bump
                 // in the per-spec history, matching the manual edit path's
                 // status field_change shape. trace:BUG-477
@@ -78907,23 +78951,17 @@ pub(crate) fn handle_db_reconcile_status(
         // rather than calling it, so it needed the same Draft widening by
         // hand — kept in lockstep with the other two sites deliberately,
         // not by omission.
-        for (spec_id, sha, pr_n, _) in &stale_for_write {
-            if let Some(r) = s
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
-            {
-                if !matches!(
-                    r.status,
-                    RequirementStatus::Draft
-                        | RequirementStatus::Approved
-                        | RequirementStatus::InProgress
-                ) {
-                    continue;
-                }
-                if auto_bump_evidence_is_stale(project_root, r, sha) {
-                    continue;
-                }
+        // TASK-1335: status/reopen/identity/closure were decided for this
+        // path by the seam verdict above, against the live store.
+        for (((_, sha, pr_n, _), verdict), target) in stale_for_write
+            .iter()
+            .zip(stale_verdicts)
+            .zip(stale_targets)
+        {
+            if *verdict != SeamVerdict::Apply {
+                continue;
+            }
+            if let Some(r) = target.map(|index| &mut s.requirements[index]) {
                 // trace:STORY-1418 | ai:claude
                 let prior = completion::mark_completed(r);
                 // BUG-477: record the reconcile stale-review flip-to-Completed
@@ -78956,40 +78994,50 @@ pub(crate) fn handle_db_reconcile_status(
         }
     })?;
 
-    let after = storage.load().unwrap_or_else(|_| store.clone());
-    // TASK-1335: "applied" is what the write seam actually decided, not
-    // "Completed after the write" (a concurrent completion is not ours).
+    // TASK-1335: "applied" is what the write seam actually decided for this
+    // invocation, never "Completed after the write" — a peer's concurrent
+    // completion is not ours to count, report, or emit.
     // trace:TASK-1335 | ai:claude
     let mut confirmed: Vec<AutoBumpFlip> = Vec::new();
-    for (flip, verdict) in flips.into_iter().zip(apply_verdicts) {
-        match verdict {
-            None => {
-                outcomes.set_reason(&flip.spec_id, reconcile_evidence::CandidateReason::Applied);
-                confirmed.push(flip);
+    let mut confirmed_stale: Vec<(String, String, u64, RequirementStatus)> = Vec::new();
+    let mut seam_reports: Vec<String> = Vec::new();
+    let mut verdict_iter = seam_verdicts.into_iter().skip(holds_for_write.len());
+    let flip_verdicts: Vec<SeamVerdict> = verdict_iter.by_ref().take(flips.len()).collect();
+    let stale_verdicts: Vec<SeamVerdict> = verdict_iter.collect();
+    let mut decide = |spec_id: &str, verdict: SeamVerdict| -> bool {
+        let reason = match verdict {
+            SeamVerdict::Apply => reconcile_evidence::CandidateReason::Applied,
+            SeamVerdict::Changed(why) => {
+                reconcile_evidence::CandidateReason::ChangedDuringApply(why)
             }
-            Some(why) => {
-                outcomes.set_reason(
-                    &flip.spec_id,
-                    reconcile_evidence::CandidateReason::ChangedDuringApply(why),
-                );
-                if let Some(line) = outcomes
-                    .get(&flip.spec_id)
-                    .and_then(|o| reconcile_evidence::render_outcome(o, targeted))
-                {
-                    eprintln!("  {line}");
-                }
+            SeamVerdict::Held(why) => reconcile_evidence::CandidateReason::HeldAtWrite(why),
+            SeamVerdict::SameAs(other) => {
+                reconcile_evidence::CandidateReason::SameRequirementAs(other)
             }
+        };
+        let applied = reason == reconcile_evidence::CandidateReason::Applied;
+        outcomes.set_reason(spec_id, reason);
+        if let Some(line) = outcomes
+            .get(spec_id)
+            .and_then(|o| reconcile_evidence::render_outcome(o, targeted))
+        {
+            seam_reports.push(line);
+        }
+        applied
+    };
+    for (flip, verdict) in flips.into_iter().zip(flip_verdicts) {
+        if decide(&flip.spec_id, verdict) {
+            confirmed.push(flip);
         }
     }
-    let confirmed_stale: Vec<(String, String, u64, RequirementStatus)> = stale_review_flips
-        .into_iter()
-        .filter(|(sid, _, _, _)| {
-            after
-                .get_requirement_by_spec_id(sid)
-                .map(|r| matches!(r.status, RequirementStatus::Completed))
-                .unwrap_or(false)
-        })
-        .collect();
+    for (stale, verdict) in stale_review_flips.into_iter().zip(stale_verdicts) {
+        if decide(&stale.0, verdict) {
+            confirmed_stale.push(stale);
+        }
+    }
+    for line in &seam_reports {
+        eprintln!("  {line}");
+    }
 
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "reconcile-status");
@@ -79070,79 +79118,174 @@ pub(crate) fn handle_db_reconcile_status(
     Ok(())
 }
 
-/// TASK-1335: the write-seam decision for each reconcile flip, made against
-/// the LIVE store under the writer lock. `None` grants completion; `Some`
-/// names what changed after the scan. Rechecks identity (the evidence id
-/// must still resolve to the scan-time requirement), eligible status and
-/// reopen fences, then — to a fixed point, since dropping one flip can
-/// withdraw another's support — covers-chain support and the current
-/// closure graph. Pure local reads; no forge I/O under the lock.
+/// TASK-1335: one write-seam candidate — a closure hold, a normal
+/// Done→Completed flip, or an independent stale-review flip — with the
+/// requirement its evidence resolved to at scan time.
+#[derive(Clone, Debug)]
+struct SeamItem {
+    spec_id: String,
+    sha: String,
+    uuid: Option<uuid::Uuid>,
+    source: reconcile_evidence::EvidenceSource,
+    kind: SeamKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SeamKind {
+    Hold,
+    Flip,
+    StaleReview,
+}
+
+/// TASK-1335: what the write seam decided for one [`SeamItem`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SeamVerdict {
+    Apply,
+    /// The live store no longer supports the scan-time decision.
+    Changed(String),
+    /// A closure holder blocks this completion at the write.
+    Held(String),
+    /// Another accepted id of the same requirement is applied instead.
+    SameAs(String),
+}
+
+/// TASK-1335: decide every seam item against the LIVE store under the writer
+/// lock, before any mutation. Per item: the evidence id must still resolve
+/// unambiguously to the scan-time UUID, the status must still be one its
+/// path completes (or holds), and reopen fences must not cover the
+/// evidence. Completions are then consolidated per UUID (the first accepted
+/// item in scan order wins; its aliases are reported, not re-applied), and —
+/// to a fixed point, since dropping one completion can withdraw another's
+/// support — covers support must be ROOTED in a live Completed requirement
+/// or a surviving non-covers completion (never another covers candidate),
+/// and the live closure graph is evaluated as a least fixed point over the
+/// surviving completions. Pure local reads; no forge I/O under the lock.
 // trace:TASK-1335 | ai:claude
 // trace:TASK-1600 | ai:codex
-fn reconcile_apply_verdicts(
+fn plan_reconcile_seam(
     project_root: &std::path::Path,
     store: &aida_core::RequirementsStore,
-    flips: &[AutoBumpFlip],
-    context: &[(Option<uuid::Uuid>, reconcile_evidence::EvidenceSource)],
-) -> Vec<Option<String>> {
-    let mut verdicts: Vec<Option<String>> = flips
+    items: &[SeamItem],
+) -> Vec<SeamVerdict> {
+    let mut verdicts: Vec<SeamVerdict> = items
         .iter()
-        .zip(context)
-        .map(|(flip, (uuid, _))| {
-            let current = match store.get_requirement_unambiguous(&flip.spec_id) {
+        .map(|item| {
+            let current = match store.get_requirement_unambiguous(&item.spec_id) {
                 Ok(Some(r)) => r,
-                Ok(None) => return Some("its ID no longer resolves to a requirement".to_string()),
-                Err(_) => return Some("its ID now names more than one requirement".to_string()),
+                Ok(None) => {
+                    return SeamVerdict::Changed(
+                        "its ID no longer resolves to a requirement".to_string(),
+                    )
+                }
+                Err(_) => {
+                    return SeamVerdict::Changed(
+                        "its ID now names more than one requirement".to_string(),
+                    )
+                }
             };
-            if uuid.is_some_and(|uuid| uuid != current.id) {
-                return Some("its ID now resolves to a different requirement".to_string());
+            if item.uuid.is_some_and(|uuid| uuid != current.id) {
+                return SeamVerdict::Changed(
+                    "its ID now resolves to a different requirement".to_string(),
+                );
             }
-            if !auto_bump_eligible_status(&current.status) {
-                return Some(format!("its status changed to {}", current.status));
+            let status_ok = match item.kind {
+                SeamKind::Hold | SeamKind::Flip => auto_bump_eligible_status(&current.status),
+                SeamKind::StaleReview => matches!(
+                    current.status,
+                    RequirementStatus::Draft
+                        | RequirementStatus::Approved
+                        | RequirementStatus::InProgress
+                ),
+            };
+            if !status_ok {
+                return SeamVerdict::Changed(format!("its status changed to {}", current.status));
             }
-            if auto_bump_evidence_is_stale(project_root, current, &flip.sha) {
-                return Some("it was reopened after this evidence".to_string());
+            if auto_bump_evidence_is_stale(project_root, current, &item.sha) {
+                return SeamVerdict::Changed("it was reopened after this evidence".to_string());
             }
-            None
+            SeamVerdict::Apply
         })
         .collect();
+
+    // One completion per requirement, whichever accepted id named it.
+    let completes = |kind: SeamKind| kind != SeamKind::Hold;
+    let resolved_uuid = |item: &SeamItem| {
+        item.uuid.or_else(|| {
+            store
+                .get_requirement_by_spec_id(&item.spec_id)
+                .map(|r| r.id)
+        })
+    };
+    for index in 0..items.len() {
+        if verdicts[index] != SeamVerdict::Apply || !completes(items[index].kind) {
+            continue;
+        }
+        let Some(uuid) = resolved_uuid(&items[index]) else {
+            continue;
+        };
+        if let Some(first) = (0..index).find(|&earlier| {
+            verdicts[earlier] == SeamVerdict::Apply
+                && completes(items[earlier].kind)
+                && resolved_uuid(&items[earlier]) == Some(uuid)
+        }) {
+            verdicts[index] = SeamVerdict::SameAs(items[first].spec_id.clone());
+        }
+    }
+
     loop {
         let mut changed = false;
-        let surviving: Vec<&str> = flips
+        let anchors: std::collections::HashSet<uuid::Uuid> = items
             .iter()
             .zip(&verdicts)
-            .filter(|(_, v)| v.is_none())
-            .map(|(f, _)| f.spec_id.as_str())
+            .filter(|(item, v)| {
+                **v == SeamVerdict::Apply
+                    && item.kind == SeamKind::Flip
+                    && item.source != reconcile_evidence::EvidenceSource::CoversChain
+            })
+            .filter_map(|(item, _)| resolved_uuid(item))
             .collect();
-        for (index, flip) in flips.iter().enumerate() {
-            if verdicts[index].is_some()
-                || context[index].1 != reconcile_evidence::EvidenceSource::CoversChain
+        for index in 0..items.len() {
+            if verdicts[index] != SeamVerdict::Apply
+                || items[index].source != reconcile_evidence::EvidenceSource::CoversChain
             {
                 continue;
             }
-            if !covers_chain_still_supported(store, &flip.spec_id, &surviving) {
-                verdicts[index] = Some("no covered spec is still completed".to_string());
+            if !covers_chain_rooted(store, &items[index].spec_id, &anchors) {
+                verdicts[index] =
+                    SeamVerdict::Changed("no covered spec is still completed".to_string());
                 changed = true;
             }
         }
-        let mut released: Vec<AutoBumpFlip> = flips
+        let surviving: Vec<usize> = (0..items.len())
+            .filter(|&i| verdicts[i] == SeamVerdict::Apply && completes(items[i].kind))
+            .collect();
+        let mut released: Vec<AutoBumpFlip> = surviving
             .iter()
-            .zip(&verdicts)
-            .filter(|(_, v)| v.is_none())
-            .map(|(f, _)| f.clone())
+            .map(|&i| {
+                AutoBumpFlip::new(
+                    items[i].spec_id.clone(),
+                    items[i].sha.clone(),
+                    RequirementStatus::Done,
+                )
+            })
             .collect();
         for hold in split_closure_held_flips(store, &mut released) {
-            if let Some(index) = flips
+            let Some(&index) = surviving
                 .iter()
-                .zip(&verdicts)
-                .position(|(f, v)| v.is_none() && f.spec_id == hold.flip.spec_id)
-            {
-                verdicts[index] = Some(format!(
-                    "its completion is now held ({})",
-                    closure_hold_reason(&hold)
-                ));
-                changed = true;
-            }
+                .find(|&&i| items[i].spec_id == hold.flip.spec_id)
+            else {
+                continue;
+            };
+            let why = format!(
+                "its completion is now held ({})",
+                closure_hold_reason(&hold)
+            );
+            verdicts[index] = match items[index].kind {
+                // A normal flip was released at scan time, so a hold is new.
+                SeamKind::Flip => SeamVerdict::Changed(why),
+                _ => SeamVerdict::Held(why),
+            };
+            changed = true;
         }
         if !changed {
             return verdicts;
@@ -79150,14 +79293,16 @@ fn reconcile_apply_verdicts(
     }
 }
 
-/// TASK-1335: [`collect_covers_completed_review_flips`]'s condition, re-read
-/// at the write seam: the review story is still a `Done` review story and an
-/// `implements` target is Completed or still being completed in this batch.
+/// TASK-1335: [`collect_covers_completed_review_flips`]'s condition re-read
+/// at the write seam with ROOTED support: the review story is still a `Done`
+/// review story and an `implements` target is Completed in the live store
+/// or is one of `anchors` (surviving non-covers completions). Another covers
+/// candidate never counts, so a covers cycle cannot justify itself.
 // trace:TASK-1335 | ai:claude
-fn covers_chain_still_supported(
+fn covers_chain_rooted(
     store: &aida_core::RequirementsStore,
     review_id: &str,
-    batch: &[&str],
+    anchors: &std::collections::HashSet<uuid::Uuid>,
 ) -> bool {
     let Some(review) = store.get_requirement_by_spec_id(review_id) else {
         return false;
@@ -79177,10 +79322,7 @@ fn covers_chain_still_supported(
             .find(|r| r.id == rel.target_id)
             .is_some_and(|covered| {
                 matches!(covered.status, RequirementStatus::Completed)
-                    || covered
-                        .spec_id
-                        .as_deref()
-                        .is_some_and(|cid| batch.contains(&cid))
+                    || anchors.contains(&covered.id)
             })
     })
 }

@@ -13,6 +13,8 @@
 //! concurrent edit the write seam must honour.
 // trace:TASK-1335 | ai:claude
 
+mod support;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -71,6 +73,12 @@ case "$mode" in
   garbage) echo 'this is not json' ;;
   object) echo '{"number":5}' ;;
   badrow) echo '[{"title":"no number"}]' ;;
+  diag-missing) echo '[{}]' ;;
+  diag-wrongtype) echo '[{"title":42,"body":false}]' ;;
+  diag-mixed) echo '[{"title":"wip (TASK-11)","body":""},{"title":"x"}]' ;;
+  diag-truncated) echo '[{"title":"wip (TASK-11)","body":""}' ;;
+  diag-match) echo '[{"title":"wip (TASK-11)","body":""}]' ;;
+  diag-nomatch) echo '[{"title":"other (TASK-110)","body":"TASK-1"}]' ;;
   *) echo "unknown fixture mode $mode" >&2; exit 9 ;;
 esac
 "#;
@@ -201,6 +209,7 @@ impl Fx {
             .env("AIDA_TEST_GLAB_BINARY", self.bin.join("glab"))
             .env("FIXTURE_STATE", &self.state)
             .env("FIXTURE_AIDA", env!("CARGO_BIN_EXE_aida"))
+            .env("FIXTURE_STORE", self.store())
             .stdin(std::process::Stdio::null());
         cmd
     }
@@ -326,6 +335,49 @@ impl Fx {
         .unwrap();
     }
 
+    /// Run a raw shell script from inside the open-PR lookup for `spec_id`
+    /// (for concurrent store writes the CLI does not offer, e.g. a peer
+    /// replacing an object). `$FIXTURE_STORE` is the store worktree.
+    fn barrier_script(&self, spec_id: &str, script: &str) {
+        std::fs::write(self.state.join(format!("barrier-{spec_id}")), script).unwrap();
+    }
+
+    /// Replace the scaffolded `[forge]` table with `root_line`, written as a
+    /// root-level TOML entry (inline table, dotted key, ...).
+    fn rewrite_forge(&self, root_line: &str) {
+        let config = std::fs::read_to_string(self.config_path()).unwrap();
+        let kept: Vec<&str> = config
+            .lines()
+            .filter(|l| l.trim() != "[forge]" && !l.trim_start().starts_with("provider ="))
+            .collect();
+        assert!(kept.len() + 2 == config.lines().count(), "no [forge] table");
+        std::fs::write(
+            self.config_path(),
+            format!("{root_line}\n{}\n", kept.join("\n")),
+        )
+        .unwrap();
+    }
+
+    fn set_title(&self, spec_id: &str, title: &str) {
+        let path = self.object_path(spec_id);
+        let body = std::fs::read_to_string(&path).unwrap().replace(
+            &format!("title: fixture {spec_id}"),
+            &format!("title: '{title}'"),
+        );
+        std::fs::write(&path, body).unwrap();
+        git_in(&self.store(), &["commit", "-qam", "retitle"], None);
+    }
+
+    /// `SpecCompleted` events this project recorded for `spec_id` from
+    /// reconcile-status.
+    fn completion_events(&self, spec_id: &str) -> usize {
+        std::fs::read_to_string(self.repo.join(".aida/events.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.contains(&format!("\"{spec_id}\"")) && l.contains("reconcile-status"))
+            .count()
+    }
+
     fn gh_log(&self) -> String {
         std::fs::read_to_string(self.state.join("gh.log")).unwrap_or_default()
     }
@@ -434,6 +486,7 @@ fn historical_trailer_unavailable_then_clear() {
             &["--spec", "TASK-1588", "--dry-run"][..],
             &["--spec", "TASK-1588"][..],
             &["--dry-run"][..],
+            &[][..],
         ] {
             let mut cmd = fx.command();
             match mode {
@@ -585,6 +638,51 @@ fn genuine_no_match_vs_diagnostic_and_required_outage() {
         assert!(stdout(&out).contains("Scanned main@"), "{}", text(&out));
         assert_same(&fx.snapshot(), &before, "");
     }
+
+    // F1335-4: a diagnostic response whose rows lack the requested string
+    // fields is unavailable (warning, still exit 0) — never a measured zero.
+    for (mode, reason) in [
+        ("diag-missing", "without string `title` and `body` fields"),
+        ("diag-wrongtype", "without string `title` and `body` fields"),
+        ("diag-mixed", "without string `title` and `body` fields"),
+        ("diag-truncated", "output was not JSON"),
+    ] {
+        fx.mode("diag", mode);
+        for extra in [&["--dry-run"][..], &[][..], &["--spec", "TASK-11"][..]] {
+            let out = fx.reconcile(extra);
+            let all = text(&out);
+            assert!(out.status.success(), "{mode} {extra:?}:\n{all}");
+            assert!(
+                stdout(&out).contains("unknown (open-PR diagnostic unavailable)"),
+                "{mode}:\n{all}"
+            );
+            assert!(
+                stderr(&out).contains(reason),
+                "{mode} wants `{reason}`:\n{all}"
+            );
+            assert!(
+                !stdout(&out).contains(" 0 Completed spec"),
+                "{mode}:\n{all}"
+            );
+            assert_same(&fx.snapshot(), &before, mode);
+        }
+    }
+    for (mode, count) in [
+        ("clear", "0 Completed specs"),
+        ("diag-match", "1 Completed spec still"),
+        ("diag-nomatch", "0 Completed specs"),
+    ] {
+        fx.mode("diag", mode);
+        let out = fx.reconcile(&["--dry-run"]);
+        assert!(out.status.success(), "{}", text(&out));
+        assert!(stdout(&out).contains(count), "{mode}:\n{}", text(&out));
+        assert!(
+            !stderr(&out).contains("diagnostic does not gate"),
+            "{}",
+            text(&out)
+        );
+    }
+    fx.mode("diag", "exit");
     let out = fx.reconcile(&["--spec", "TASK-10"]);
     assert!(out.status.success(), "{}", text(&out));
     assert!(
@@ -771,13 +869,49 @@ fn write_seam_rechecks_reopen_closure_and_covers() {
     std::fs::write(&path, body).unwrap();
     git_in(&fx.store(), &["commit", "-qam", "review story"], None);
 
+    fx.seed("TASK-75", "TASK-75", "Done", ""); // object replaced mid-run
+    fx.seed("TASK-76", "TASK-76", "Done", ""); // id made ambiguous mid-run
     fx.commit(
-        "fix: lands (TASK-70) (TASK-71) (TASK-73)",
+        "fix: lands (TASK-70) (TASK-71) (TASK-73) (TASK-75) (TASK-76)",
         "2026-09-10T00:00:00Z",
+    );
+    fx.barrier_script(
+        "TASK-75",
+        "sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000aa/' \
+         \"$FIXTURE_STORE/objects/TASK/000/TASK-75.yaml\" && \
+         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-75'\n",
+    );
+    fx.barrier_script(
+        "TASK-76",
+        "printf 'id: 01a11c00-0000-7000-8000-0000000000bb\\nspec_id: TASK-1-76\\n\
+         agreed_id: TASK-76\\ntitle: peer twin\\ndescription: d\\nstatus: Done\\n\
+         priority: Medium\\nowner: x\\nfeature: Uncategorized\\n\
+         created_at: 2026-09-01T00:00:00Z\\nmodified_at: 2026-09-01T00:00:00Z\\n\
+         req_type: Task\\n' > \"$FIXTURE_STORE/objects/TASK/000/TASK-1-76.yaml\" && \
+         git -C \"$FIXTURE_STORE\" add -A && \
+         git -C \"$FIXTURE_STORE\" commit -qm 'peer adds TASK-76 twin'\n",
     );
     fx.barrier("TASK-70", "edit TASK-70 --status approved");
     fx.barrier("TASK-71", "rel add TASK-71 TASK-72 --type blocked-by");
-    fx.barrier("STORY-80", "rel remove STORY-80 TASK-74 --type implements");
+    // The covered spec itself is reopened: a real Completed → Approved
+    // decision, which the CLI takes only from a validated advisor seat (the
+    // shared ADR-66 grant fixture) with --force.
+    let grant = support::grant_seat_for(
+        &fx.root.join("home"),
+        &fx.repo,
+        "fixture-human",
+        "advisor",
+        &[],
+    );
+    git_in(&fx.store(), &["add", "-A"], None);
+    git_in(&fx.store(), &["commit", "-qm", "fixture roster"], None);
+    fx.barrier_script(
+        "STORY-80",
+        &format!(
+            "AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
+             \"$FIXTURE_AIDA\" edit TASK-74 --status approved --force\n"
+        ),
+    );
 
     let out = fx.reconcile(&[]);
     let all = text(&out);
@@ -800,7 +934,25 @@ fn write_seam_rechecks_reopen_closure_and_covers() {
     assert_eq!(fx.status("TASK-70"), "Approved", "{all}");
     assert_eq!(fx.status("TASK-71"), "Done", "{all}");
     assert_eq!(fx.status("STORY-80"), "Done", "{all}");
+    assert_eq!(fx.status("TASK-74"), "Approved", "{all}");
+    assert_eq!(fx.status("TASK-75"), "Done", "{all}");
+    assert_eq!(fx.status("TASK-76"), "Done", "{all}");
+    assert_eq!(fx.status("TASK-1-76"), "Done", "{all}");
     let err = stderr(&out);
+    assert!(
+        err.contains("TASK-75: commit")
+            && err.contains("(its ID now resolves to a different requirement)"),
+        "{all}"
+    );
+    assert!(
+        err.contains("TASK-76: commit")
+            && err.contains("(its ID now names more than one requirement)"),
+        "{all}"
+    );
+    for id in ["TASK-70", "TASK-71", "TASK-75", "TASK-76", "STORY-80"] {
+        assert_eq!(fx.completion_events(id), 0, "{id} emitted a completion");
+    }
+    assert_eq!(fx.completion_events("TASK-73"), 1, "{all}");
     assert!(
         err.contains("TASK-70: commit")
             && err.contains("changed after the scan (it was reopened after this evidence)"),
@@ -979,5 +1131,348 @@ fn unavailable_forge_classification_is_not_empty() {
     assert!(out.status.success(), "{}", text(&out));
     assert_eq!(fx.status("TASK-95"), "Completed");
     assert_eq!(fx.gh_log(), calls, "pure git queried a forge");
+    fx.assert_no_tripwire();
+}
+
+/// F1335-3: every valid TOML spelling of a configured forge is honoured by
+/// the read-only classifier, and a value it cannot interpret refuses — a
+/// configured forge never silently becomes pure git. Required check (normal
+/// and dry-run) and the diagnostic-only route, config bytes unchanged.
+#[test]
+fn configured_forge_is_read_from_any_toml_spelling() {
+    let fx = Fx::new(Forge::PureGit);
+    fx.seed("TASK-96", "TASK-96", "Done", "");
+    fx.seed("TASK-98", "TASK-98", "Completed", "");
+    fx.commit("fix: shipped (TASK-96) (TASK-98)", "2026-09-10T00:00:00Z");
+    let scaffolded = std::fs::read_to_string(fx.config_path()).unwrap();
+    let cases: [(&str, &str); 5] = [
+        (
+            "forge = { provider = \"gitlab\" }",
+            "the configured forge `gitlab` has no supported open-change query",
+        ),
+        (
+            "forge.provider = \"gitlab\"",
+            "the configured forge `gitlab` has no supported open-change query",
+        ),
+        (
+            "forge = { provider = 7 }",
+            "`[forge] provider` is not a string",
+        ),
+        ("forge = \"gitlab\"", "`forge` is not a table"),
+        (
+            "forge = { provider = \"svn\" }",
+            "unrecognized forge provider \"svn\"",
+        ),
+    ];
+    for (line, want) in cases {
+        std::fs::write(fx.config_path(), &scaffolded).unwrap();
+        fx.rewrite_forge(line);
+        let before = fx.snapshot();
+        for extra in [&["--dry-run"][..], &[][..]] {
+            let out = fx.reconcile(extra);
+            let all = text(&out);
+            assert!(!out.status.success(), "{line} {extra:?}:\n{all}");
+            assert!(stderr(&out).contains(want), "{line} wants `{want}`:\n{all}");
+            assert!(stderr(&out).contains("TASK-96: commit"), "{all}");
+            assert_same(&fx.snapshot(), &before, line);
+        }
+        // Diagnostic-only route: the Completed spec alone is a warning.
+        let out = fx.reconcile(&["--spec", "TASK-98"]);
+        assert!(out.status.success(), "{line}:\n{}", text(&out));
+        assert!(
+            stdout(&out).contains("unknown (open-PR diagnostic unavailable)"),
+            "{line}:\n{}",
+            text(&out)
+        );
+        assert!(stderr(&out).contains(want), "{line}:\n{}", text(&out));
+        assert_same(&fx.snapshot(), &before, line);
+    }
+    // Positives: a dotted pure-git provider, and a document with no provider
+    // and no origin, are affirmative pure git.
+    for line in ["forge.provider = \"pure-git\"", "# no forge configured"] {
+        std::fs::write(fx.config_path(), &scaffolded).unwrap();
+        fx.rewrite_forge(line);
+        let out = fx.reconcile(&["--dry-run"]);
+        assert!(out.status.success(), "{line}:\n{}", text(&out));
+        assert!(
+            stdout(&out).contains("would flip 1 spec → Completed"),
+            "{line}:\n{}",
+            text(&out)
+        );
+        assert!(stdout(&out).contains("0 Completed specs"), "{}", text(&out));
+    }
+    assert!(!fx.gh_log().contains("pr list"), "{}", fx.gh_log());
+    fx.assert_no_tripwire();
+}
+
+/// F1335-1: covers support must be rooted in a live Completed requirement or
+/// a surviving non-covers completion. A cycle whose real anchor disappears,
+/// and a chain whose only anchor is reopened mid-run, stay Done; an anchored
+/// story and an independently justified one still complete.
+#[test]
+fn covers_support_is_rooted_not_circular() {
+    let fx = Fx::new(Forge::GitHub);
+    let anchor = fx.seed("TASK-41", "TASK-41", "Completed", "");
+    let kept = fx.seed("TASK-42", "TASK-42", "Completed", "");
+    let pending = fx.seed("TASK-43", "TASK-43", "Done", ""); // reopened mid-run
+    let fresh = fx.seed("TASK-44", "TASK-44", "Done", ""); // untouched normal flip
+    let s81 = uuid::Uuid::new_v4().to_string();
+    let s82 = uuid::Uuid::new_v4().to_string();
+    let implements = |targets: &[&str]| {
+        let mut out = String::from("relationships:\n");
+        for t in targets {
+            out.push_str(&format!("- rel_type: implements\n  target_id: {t}\n"));
+        }
+        out
+    };
+    // The cycle: each story implements the anchor and the other story.
+    let seed_with_id = |id: &str, uuid: &str, extra: &str| {
+        let path = fx.object_path(id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(
+                "id: {uuid}\nspec_id: {id}\nagreed_id: {id}\ntitle: fixture {id}\n\
+                 description: fixture\nstatus: Done\npriority: Medium\nowner: ''\n\
+                 feature: Uncategorized\ncreated_at: 2026-09-01T00:00:00Z\n\
+                 modified_at: 2026-09-01T00:00:00Z\nreq_type: Story\n{extra}"
+            ),
+        )
+        .unwrap();
+        git_in(&fx.store(), &["add", "-A"], None);
+        git_in(&fx.store(), &["commit", "-qm", &format!("seed {id}")], None);
+    };
+    seed_with_id("STORY-81", &s81, &implements(&[&anchor, &s82]));
+    seed_with_id("STORY-82", &s82, &implements(&[&anchor, &s81]));
+    fx.seed("STORY-83", "STORY-83", "Done", &implements(&[&pending]));
+    fx.seed("STORY-84", "STORY-84", "Done", &implements(&[&kept, &s81]));
+    fx.seed("STORY-85", "STORY-85", "Done", &implements(&[&fresh]));
+    for (id, pr) in [
+        ("STORY-81", 981),
+        ("STORY-82", 982),
+        ("STORY-83", 983),
+        ("STORY-84", 984),
+        ("STORY-85", 985),
+    ] {
+        fx.set_title(id, &format!("Review PR-{pr}: fixture"));
+    }
+    fx.commit("fix: lands (TASK-43) (TASK-44)", "2026-09-10T00:00:00Z");
+    fx.barrier("STORY-81", "rel remove STORY-81 TASK-41 --type implements");
+    fx.barrier("STORY-82", "rel remove STORY-82 TASK-41 --type implements");
+    fx.barrier("TASK-43", "edit TASK-43 --status approved");
+
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    let err = stderr(&out);
+    for id in ["STORY-81", "STORY-82", "STORY-83"] {
+        assert_eq!(
+            fx.status(id),
+            "Done",
+            "{id} completed without a rooted anchor:\n{all}"
+        );
+        let line = err
+            .lines()
+            .find(|l| l.contains(&format!("↷ {id}: ")))
+            .unwrap_or_default();
+        assert!(
+            line.contains("covers chain") && line.contains("(no covered spec is still completed)"),
+            "{id}:\n{all}"
+        );
+        assert!(!fx.object(id).contains("author: aida-reconcile"), "{id}");
+        assert_eq!(fx.completion_events(id), 0, "{id}");
+    }
+    for id in ["STORY-84", "STORY-85", "TASK-44"] {
+        assert_eq!(fx.status(id), "Completed", "{id}:\n{all}");
+        assert_eq!(fx.completion_events(id), 1, "{id}:\n{all}");
+        assert_eq!(fx.object(id).matches("author: aida-reconcile").count(), 1);
+    }
+    assert!(stdout(&out).contains("3 specs"), "applied count:\n{all}");
+    fx.assert_no_tripwire();
+}
+
+/// F1335-2: the independent stale-review path is decided at the same live
+/// seam — a blocker added mid-run holds it, a status change or object
+/// replacement refuses it — while untouched stories still complete.
+#[test]
+fn stale_review_path_is_decided_at_the_live_seam() {
+    let fx = Fx::new(Forge::GitHub);
+    fx.seed("TASK-10", "TASK-10", "Done", "");
+    fx.seed("TASK-12", "TASK-12", "InProgress", "");
+    for (id, status, pr) in [
+        ("STORY-20", "Approved", 901),   // new blocker mid-run
+        ("STORY-21", "Approved", 902),   // untouched control
+        ("STORY-22", "InProgress", 903), // rejected mid-run
+        ("STORY-23", "Approved", 904),   // object replaced mid-run
+    ] {
+        fx.seed(id, id, status, "");
+        fx.set_title(id, &format!("Review PR-{pr}: fixture"));
+    }
+    for pr in [901, 902, 903, 904] {
+        fx.commit(
+            &format!("fix: merged review {pr} (TASK-10) (#{pr})"),
+            "2026-09-10T00:00:00Z",
+        );
+    }
+    fx.barrier_script(
+        "TASK-10",
+        "\"$FIXTURE_AIDA\" rel add STORY-20 TASK-12 --type blocked-by && \
+         \"$FIXTURE_AIDA\" edit STORY-22 --status rejected && \
+         sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000cc/' \
+         \"$FIXTURE_STORE/objects/STORY/000/STORY-23.yaml\" && \
+         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces STORY-23'\n",
+    );
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    assert!(!std::fs::read_dir(&fx.state)
+        .unwrap()
+        .any(|e| e.unwrap().file_name() == "barrier-TASK-10"));
+    let err = stderr(&out);
+    assert_eq!(fx.status("TASK-10"), "Completed", "{all}");
+    assert_eq!(fx.status("STORY-21"), "Completed", "{all}");
+    assert_eq!(fx.status("STORY-20"), "Approved", "{all}");
+    assert_eq!(fx.status("STORY-22"), "Rejected", "{all}");
+    assert_eq!(fx.status("STORY-23"), "Approved", "{all}");
+    assert!(
+        err.contains("STORY-20: commit") && err.contains("but its completion is now held"),
+        "{all}"
+    );
+    assert!(
+        err.contains("STORY-22: commit") && err.contains("(its status changed to Rejected)"),
+        "{all}"
+    );
+    assert!(
+        err.contains("STORY-23: commit")
+            && err.contains("(its ID now resolves to a different requirement)"),
+        "{all}"
+    );
+    assert!(stdout(&out).contains("1 review story"), "{all}");
+    for id in ["STORY-20", "STORY-22", "STORY-23"] {
+        assert_eq!(fx.completion_events(id), 0, "{id}");
+        assert!(!fx.object(id).contains("author: aida-reconcile"), "{id}");
+    }
+    assert_eq!(fx.completion_events("STORY-21"), 1, "{all}");
+    fx.assert_no_tripwire();
+}
+
+/// F1335-5: with a required outage, a review story a PEER completed during
+/// the run is not counted, reported or emitted as this run's work; a stale
+/// story this run genuinely completed is.
+#[test]
+fn independent_effects_report_only_this_runs_writes() {
+    let fx = Fx::new(Forge::GitHub);
+    fx.seed("TASK-30", "TASK-30", "Done", "");
+    fx.seed("STORY-30", "STORY-30", "Approved", "");
+    fx.set_title("STORY-30", "Review PR-910: fixture");
+    fx.commit("fix: merged (TASK-30) (#910)", "2026-09-10T00:00:00Z");
+    fx.barrier("TASK-30", "edit STORY-30 --status completed");
+    fx.mode("search-TASK-30", "garbage");
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(!out.status.success(), "{all}");
+    assert!(stderr(&out).contains("and nothing else changed"), "{all}");
+    assert!(!all.contains("auto-completed"), "{all}");
+    assert!(!all.contains("WERE applied"), "{all}");
+    assert_eq!(fx.status("STORY-30"), "Completed");
+    assert!(!fx.object("STORY-30").contains("author: aida-reconcile"));
+    assert_eq!(fx.completion_events("STORY-30"), 0);
+    assert_eq!(fx.status("TASK-30"), "Done");
+
+    // Genuine: this run completes the stale story despite the outage.
+    fx.seed("TASK-31", "TASK-31", "Done", "");
+    fx.seed("STORY-31", "STORY-31", "Approved", "");
+    fx.set_title("STORY-31", "Review PR-911: fixture");
+    fx.commit("fix: merged (TASK-31) (#911)", "2026-09-11T00:00:00Z");
+    fx.mode("search-TASK-31", "garbage");
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(!out.status.success(), "{all}");
+    assert!(
+        stderr(&out).contains("other independent changes WERE applied: 0 Draft specs landed at Done, 1 review story completed"),
+        "{all}"
+    );
+    assert_eq!(fx.status("STORY-31"), "Completed");
+    assert_eq!(
+        fx.object("STORY-31")
+            .matches("author: aida-reconcile")
+            .count(),
+        1
+    );
+    assert_eq!(fx.completion_events("STORY-31"), 1, "{all}");
+    assert_eq!(fx.completion_events("STORY-30"), 0);
+    fx.assert_no_tripwire();
+}
+
+/// F1335-6: two accepted ids of one requirement complete it ONCE — one
+/// applied decision, one processing record, one event — whether they share
+/// a subject or arrive in separate commits; reruns stay idempotent.
+#[test]
+fn aliases_of_one_requirement_complete_once() {
+    let fx = Fx::new(Forge::PureGit);
+    fx.seed("TASK-1-40", "TASK-1540", "Done", "");
+    fx.seed("TASK-1-41", "TASK-1541", "Done", "");
+    let first = fx.commit("fix: display id (TASK-1540)", "2026-09-10T00:00:00Z");
+    let second = fx.commit("fix: origin id (TASK-1-40)", "2026-09-11T00:00:00Z");
+    fx.commit(
+        "fix: both forms (TASK-1-41) (TASK-1541)",
+        "2026-09-12T00:00:00Z",
+    );
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    assert!(stdout(&out).contains("2 specs"), "applied count:\n{all}");
+    assert!(!stdout(&out).contains("4 specs"), "{all}");
+    for id in ["TASK-1-40", "TASK-1-41"] {
+        let object = fx.object(id);
+        assert_eq!(fx.status(id), "Completed", "{all}");
+        assert_eq!(object.matches("Completed via merge").count(), 1, "{object}");
+        assert_eq!(
+            object.matches("author: aida-reconcile").count(),
+            1,
+            "{object}"
+        );
+    }
+    // The first accepted id in scan order supplies the completion evidence;
+    // the other alias is reported, not re-applied.
+    let object = fx.object("TASK-1-40");
+    assert!(
+        object.contains(&format!("completion_sha: {second}"))
+            || object.contains(&format!("completion_sha: {first}")),
+        "{object}"
+    );
+    let events: usize = ["TASK-1540", "TASK-1-40"]
+        .iter()
+        .map(|id| fx.completion_events(id))
+        .sum();
+    assert_eq!(events, 1, "{all}");
+    let out = fx.reconcile(&["--spec", "TASK-1540", "--dry-run"]);
+    assert!(out.status.success(), "{}", text(&out));
+    let settled = fx.snapshot();
+    let out = fx.reconcile(&[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert_same(&fx.snapshot(), &settled, "alias rerun");
+    fx.assert_no_tripwire();
+}
+
+/// Closed-but-unmerged: a PR whose commit never reached the default branch
+/// earns nothing — not for its spec, not for its review story — even when
+/// the forge reports no open PR.
+#[test]
+fn closed_unmerged_work_earns_no_credit() {
+    let fx = Fx::new(Forge::GitHub);
+    fx.seed("TASK-97", "TASK-97", "Done", "");
+    fx.seed("STORY-97", "STORY-97", "Approved", "");
+    fx.set_title("STORY-97", "Review PR-950: fixture");
+    git_in(&fx.repo, &["checkout", "-q", "-b", "closed-pr"], None);
+    fx.commit("fix: never merged (TASK-97) (#950)", "2026-09-10T00:00:00Z");
+    git_in(&fx.repo, &["checkout", "-q", "main"], None);
+    for extra in [&["--dry-run"][..], &[][..], &["--spec", "TASK-97"][..]] {
+        let out = fx.reconcile(extra);
+        assert!(out.status.success(), "{extra:?}:\n{}", text(&out));
+        assert!(!stdout(&out).contains("would flip"), "{}", text(&out));
+    }
+    assert_eq!(fx.status("TASK-97"), "Done");
+    assert_eq!(fx.status("STORY-97"), "Approved");
     fx.assert_no_tripwire();
 }

@@ -37,6 +37,8 @@ pub(crate) enum EvidenceUnavailable {
     NotArray,
     /// A row lacked a positive change number.
     BadRow,
+    /// A diagnostic row lacked the string `title` and `body` it was asked for.
+    BadDiagnosticRow,
 }
 
 impl std::fmt::Display for EvidenceUnavailable {
@@ -65,6 +67,10 @@ impl std::fmt::Display for EvidenceUnavailable {
             Self::BadRow => write!(
                 f,
                 "`gh pr list` returned a row without a positive PR number"
+            ),
+            Self::BadDiagnosticRow => write!(
+                f,
+                "`gh pr list` returned a row without string `title` and `body` fields"
             ),
         }
     }
@@ -261,19 +267,30 @@ pub(crate) fn count_completed_with_open_changes(
     if !out.status.success() {
         return Err(exit_failure(&out));
     }
-    let value = serde_json::from_slice::<serde_json::Value>(&out.stdout)
+    count_diagnostic_rows(&out.stdout, candidate_ids)
+}
+
+/// Validate the complete `gh pr list --json title,body` response and count
+/// the candidates its rows name.
+// trace:TASK-1335 | ai:claude
+pub(crate) fn count_diagnostic_rows(
+    stdout: &[u8],
+    candidate_ids: &[String],
+) -> Result<usize, EvidenceUnavailable> {
+    let value = serde_json::from_slice::<serde_json::Value>(stdout)
         .map_err(|_| EvidenceUnavailable::Undecodable)?;
     let rows = value.as_array().ok_or(EvidenceUnavailable::NotArray)?;
     let mut haystack = String::new();
+    // Every row must carry BOTH requested fields as strings (an empty body is
+    // `""`); anything else is not a measurement, so it cannot count as 0.
     for row in rows {
-        let Some(row) = row.as_object() else {
-            return Err(EvidenceUnavailable::BadRow);
-        };
         for field in ["title", "body"] {
-            if let Some(text) = row.get(field).and_then(|v| v.as_str()) {
-                haystack.push_str(text);
-                haystack.push('\n');
-            }
+            let text = row
+                .get(field)
+                .and_then(|v| v.as_str())
+                .ok_or(EvidenceUnavailable::BadDiagnosticRow)?;
+            haystack.push_str(text);
+            haystack.push('\n');
         }
     }
     Ok(crate::count_ids_mentioned(&haystack, candidate_ids))
@@ -339,6 +356,10 @@ pub(crate) enum CandidateReason {
     Applied,
     /// The live store no longer supported completion at the write seam.
     ChangedDuringApply(String),
+    /// A closure holder blocked this completion at the write seam.
+    HeldAtWrite(String),
+    /// Another accepted id of the same requirement was applied instead.
+    SameRequirementAs(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -467,7 +488,14 @@ pub(crate) fn render_outcome(outcome: &CandidateOutcome, targeted: bool) -> Opti
             "↷ {name}: {evidence} matched, but the spec changed after the scan ({why}); not \
              completed — rerun to re-evaluate."
         ),
+        CandidateReason::HeldAtWrite(why) => {
+            format!("↷ {name}: {evidence} matched, but {why} at the write; not completed.")
+        }
         _ if !targeted => return None,
+        CandidateReason::SameRequirementAs(other) => format!(
+            "· {name}: {evidence} names the same requirement as {other}, which was completed \
+             once from its own evidence."
+        ),
         CandidateReason::UnknownSpec => {
             format!("· {name}: {evidence} names it, but no requirement has that ID.")
         }
@@ -571,6 +599,58 @@ mod tests {
             assert_eq!(
                 parse_open_change_rows(bytes),
                 OpenChangeCheck::Unavailable(want),
+                "{}",
+                String::from_utf8_lossy(bytes)
+            );
+        }
+    }
+
+    #[test]
+    fn diagnostic_rows_require_string_title_and_body() {
+        let ids = vec!["TASK-11".to_string(), "TASK-12".to_string()];
+        assert_eq!(count_diagnostic_rows(b"[]", &ids), Ok(0));
+        assert_eq!(
+            count_diagnostic_rows(br#"[{"title":"wip (TASK-11)","body":""}]"#, &ids),
+            Ok(1)
+        );
+        assert_eq!(
+            count_diagnostic_rows(br#"[{"title":"other","body":"TASK-110"}]"#, &ids),
+            Ok(0)
+        );
+        for (bytes, want) in [
+            (&b"[{}]"[..], EvidenceUnavailable::BadDiagnosticRow),
+            (
+                &br#"[{"title":42,"body":false}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"[{"title":"x"}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"[{"title":"x","body":null}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"[{"title":"TASK-11","body":""},{"body":""}]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"["TASK-11"]"#[..],
+                EvidenceUnavailable::BadDiagnosticRow,
+            ),
+            (
+                &br#"[{"title":"x","body":""}"#[..],
+                EvidenceUnavailable::Undecodable,
+            ),
+            (
+                &br#"{"title":"x","body":""}"#[..],
+                EvidenceUnavailable::NotArray,
+            ),
+        ] {
+            assert_eq!(
+                count_diagnostic_rows(bytes, &ids),
+                Err(want),
                 "{}",
                 String::from_utf8_lossy(bytes)
             );
