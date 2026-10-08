@@ -3,12 +3,12 @@ spec_id: BUG-1806
 agreed_id: BUG-1806
 title: 'Regression: role-enter shell wrapper evaluates failed CLI diagnostics'
 description: 'The shell wrapper around `aida role enter <seat>` must evaluate only a successful, explicitly delimited environment-update payload. A denied role request containing backticks currently allows diagnostic text to reach eval, producing command substitution. Acceptance: non-zero CLI exits print diagnostics verbatim and never reach eval; a regression test covers a denied advisor request with backticks; the caller role remains unchanged. Reproduced from qci#BUG-020; verify whether TASK-1171 regressed or stale-wrapper compatibility remains unsafe.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:19:42.865695554Z
-modified_at: 2026-10-08T03:25:52.873972834Z
+modified_at: 2026-10-08T03:48:28.137092806Z
 req_type: Bug
 tags:
 - from-qci:BUG-020
@@ -58,6 +58,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a119a0-7139-7442-97c0-ce2d800fe4a9
+  author: aida-auto-bump
+  timestamp: 2026-10-08T03:48:27.577691200Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a119a0-7369-7ce3-ae69-eb1db0d46686
+  timestamp: 2026-10-08T03:48:28.137080440Z
+  agent: implementer
+  commit_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  summary: 'Independent review: approved exact SHA d6b4ed43b819346e6ededd2f47215065ba68b065; no blocking findings. Failed diagnostics remain verbatim and inert, malformed/unmarked output is display-only, and valid role updates pass. 21 targeted Rust tests, supplied Bash fixtures, 180 independent isolated probes, formatting, template and diff checks passed. Zsh unavailable; no portable defect identified. Report: .aida/handoff/bug1806/INDEPENDENT_REVIEW.md.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
@@ -66,3 +80,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 887bf7e5fb
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T03:48:27.577675982Z
+  completion_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
