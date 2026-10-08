@@ -19,12 +19,12 @@ description: |
 
   ## Handoff
   Inspect aida ship implementation and its --no-merge behavior before writing the redirect. Use existing skill/CLI symmetry discipline. Implementation must occur in an isolated claimed session; advisor review remains independent. This task is a compatibility/documentation update, not a redesign of ship semantics.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T16:16:05.172362637Z
+modified_at: 2026-10-08T16:16:28.062544083Z
 req_type: Task
 comments:
 - id: 01a11c4c-ea34-7831-8a39-b2b252255ef8
@@ -32,6 +32,14 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): existing Approved queued bounded compatibility/documentation work dispatched separately; implement exact acceptance using canonical templates and established generation, no lifecycle redesign, authority change or self-merge. Fresh independent review and gated integration required. User external lane TASK-1593 TASK-1591 BUG-1811 BUG-1812 excluded.'
   created_at: 2026-10-08T16:16:05.172362637Z
   modified_at: 2026-10-08T16:16:05.172362637Z
+history:
+- id: 01a11c4d-439e-7890-8926-b76a03022ec6
+  author: aida-session-start
+  timestamp: 2026-10-08T16:16:28.062543296Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
