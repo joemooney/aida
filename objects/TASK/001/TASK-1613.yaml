@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T16:52:39.334779676Z
+modified_at: 2026-10-08T21:00:27.772032593Z
 req_type: Task
 tags:
 - docs:impacted
@@ -55,6 +55,313 @@ comments:
   created_at: 2026-10-08T16:52:39.334779676Z
   modified_at: 2026-10-08T16:52:39.334779676Z
   relayed_from: task1613-final-independent-review
+- id: 01a11d51-44fc-7d70-ab39-f3c9df1cade1
+  author: mcp
+  content: |
+    BATCH C ACTUAL FINISHED CI — NON-PASS. Full integrator report follows. Root separately verified exact pinned command description (62 bytes), context_budget.rs assertion and unchanged 48-byte context-budget.toml. TASK-1613 requires bounded description rework/new independent review. New implementation dispatch remains refused; this report does not authorize a workaround or claim queue/dispatch. No broad suite rerun.
+
+    # Batch C: PREPARED; full local CI NON-PASS (one attempt, finished)
+
+    **State: head `0695776070406a4a082e3bec8405e0e20f05be25` / tree `34014208cffd3a511a9472bb17be9e1e1ccca53c` (base bf65) is prepared, and its targeted, build and pack checks pass. The single authorized `make check-ci` finished at 13:45:27 with exit 2.**
+
+    - Gates 1–4 passed.
+    - Gate 5, Run tests, FAILED: 53 of 9,922 tests.
+    - Gates 6–37 did not run.
+
+    One failure is a deterministic TASK-1613 content defect (A below). Main has since drifted to `c67728c1` (TASK-1593). Nothing here is a validation pass or merge readiness. Nothing has been pushed. No PR, merge to main, canonical/AIDA write, review record, grant, hold, install or mailbox action has been made.
+
+    Waiting for root.
+
+    Mechanical integrator seat (Claude Code, Opus 5.5). I did not author or review any member. I made no source edits beyond the single independently approved archive exception. This report contains no self-review and no approval.
+
+    Every time below is an actual `date` reading or log stamp (America/Phoenix, -07:00), not an estimate.
+
+    ## Inputs read (complete)
+
+    | Input | sha256 prefix |
+    |---|---|
+    | `batch-c-prepare.md` | `72d612b6b7171d14` |
+    | `batch-c-validation-amendment.md` | `36ff622aae56117a` |
+    | `BATCH_AB_ARCHIVE_INTERACTION_DISPOSITION.md` | `9de15b1ba250fd82` |
+    | `BATCH_B_INDEPENDENT_REVIEW.md` (as re-read after its 11:24 update) | `9f9c922ca2ecdb10` |
+    | `BATCH_A_VALIDATED.md` | `1ece8cbd8c3cae92` |
+
+    Also read in full:
+
+    - `BATCH_A_PREPARED.md` and `BATCH_B_PREPARED.md`
+    - TASK-1613 READY and independent review
+    - TASK-1329 READY and independent review
+    - TASK-1605 READY, independent review, rework READY and rework independent review
+    - TASK-1611 READY, independent review, correction READY and correction independent review
+    - `AGENTS.md`, plus the integrator, two-seat and git-sync/review disciplines
+
+    Root's mid-run steering was followed:
+
+    - **11:29:** depth-limited store snapshot.
+    - **~11:46:** the amendment.
+    - **11:50:** merge current main `bf65220` before the full CI.
+
+    ## Final candidate
+
+    | Item | Value |
+    |---|---|
+    | Worktree | `/home/joe/ai/aida-worktrees/aida-proxy-batch-c` (new sibling; plain `git worktree add`; no AIDA lease) |
+    | Branch | `integrate/proxy-20261008-c` (local only, no upstream, not pushed) |
+    | **Head** | **`0695776070406a4a082e3bec8405e0e20f05be25`** |
+    | **Tree** | **`34014208cffd3a511a9472bb17be9e1e1ccca53c`** |
+    | **Base (current main)** | **`bf65220959c7601427247286abc7eb16278af5a5`**. Confirmed via local main, the fetched `origin/main` and a fresh `ls-remote`, all at 11:50. `ff9ac13c` is its ancestor. |
+    | Ahead / behind main | 15 / 0 |
+    | Superseded intermediate head (preserved as first parent) | `dbe412fbc1dba4ea1faddaf59cd4274489ada20e`, tree `44c1c2eacaa2c88778d41b0eb8c97d4ac59c6d4f`, base `ff9ac13c` |
+
+    ### Graph (all merges `--no-ff`, ort, exit 0, zero conflicts)
+
+    | Commit | Parents | Content |
+    |---|---|---|
+    | `81f371f12284f090195355ba6d6b7bb275bf8054` | `ff9ac13c…` + Batch A `4e695ef01c2f86977563f84d0a62750289ece70e` | Batch A merge. Batch A contains TASK-1613 `f03306facc288986602dc85cf15d0b4398163cf2` and TASK-1329 `3699bb109836a843b80c842449a7c96209c202d7`. Merged 11:25:03, no integrator edits. |
+    | `dbe412fbc1dba4ea1faddaf59cd4274489ada20e` | `81f371f1…` + Batch B `4e359ccdc617dd5c28519b5d006c98f66323fe83` | Batch B merge. Batch B contains TASK-1605 `affb9ff1959cb88199f029e5b603cab36ff73f32` and TASK-1611 `80a565402d4215da1cbcc95c51fd3851f2c12dfa`. Contains the **single approved archive exception**, described below. Committed 11:25:32. |
+    | `0695776070406a4a082e3bec8405e0e20f05be25` | `dbe412fb…` + main `bf65220959c7…` | Merge of the external BUG-1812 commit, `[AI:antigravity] fix(tests): strip ANSI codes…`, at 11:50:56. Six `aida-cli-lib` files, +41/−9. No integrator edits. |
+
+    **Members:** exactly the four fixed SHAs. All are ancestors of the head, and each matched its `ls-remote` value at 11:24 and again at 11:50.
+
+    **Excluded:** TASK-1321, TASK-1335 and any other work. Batch A (`4e695ef0…`, tree `0b11cf4e…`) and Batch B (`4e359ccd…`, tree `a56054b4…`) branches and worktrees are unchanged and clean.
+
+    **Authorship:** all 15 commits ahead of main have author and committer Joe Mooney. Tool attribution is kept in the subjects (`[AI:codex]`, `[AI:claude]`, `[AI:codex+claude]`). Integration merge subjects carry no trailing `(SPEC-ID)`. The shared Git identity is not human-approval evidence.
+
+    ### Archive exception: the single deliberate deviation from Git's automatic result
+
+    Batch B was merged with `--no-commit`. Git's automatic tree was `0ebe05120a2c503392b5da6e569aa005a9c7a230`. In it, `docs/archive/audits/porting-claude-code-to-codex.md` carried blob `00f239bc20f7…`, which is TASK-1613's live-workflow edit, and the old live path was absent.
+
+    Per `BATCH_AB_ARCHIVE_INTERACTION_DISPOSITION.md`, instruction 2, I ran `git checkout 80a565402d42 -- <archive path>`. The index then held **mode 100644, blob `10dd846c7b00b83ab0958313b881dc863d0306e1`**, which `hash-object` confirmed. `git diff <auto> <fixed>` shows exactly one path and one line: line 768, reverting to `` `aida pr ship`). ``.
+
+    The fixed tree `44c1c2ea…` was committed with the normal `git commit`:
+
+    - commit-msg hook: valid
+    - pre-commit gates: silent (beyond a TOON-format note)
+    - post-commit hook: non-executable, ignored by git
+
+    The automatic tree, the deviation and its authority are all named in the commit message. The retained simulation `c99395f…` was not reused as an approved tree. The old live path `docs/agents/porting-claude-code-to-codex.md` stays **absent**.
+
+    ## Source provenance and union (head `06957760`)
+
+    `provenance2.py` compares type, mode and object for every path across base b46, main bf65, the 4 members and the head. It covers **2,204 paths** (2,104 entries in the head).
+
+    | Expected source | Paths |
+    |---|---|
+    | unchanged base | 1,934 |
+    | main (b46→bf65: `dev_cmd.rs`, `bug_1683_live_drain_lock.rs` casing, 6 BUG-1812 files) | 8 |
+    | TASK-1611 | 233 |
+    | TASK-1613 | 8 |
+    | TASK-1329 | 2 |
+    | TASK-1605 | 12 |
+    | TASK-1613 + TASK-1611 overlaps (3-way `git merge-file -p`) | 5 |
+    | TASK-1329 + TASK-1611 overlap (3-way) | 1 |
+    | approved archive exception | 1 |
+
+    **Result: `ALL_PATHS_MATCH_EXPECTED`. 0 mismatches.**
+
+    - All five independently recomputed 3-way unions equal both the head blob and the retained simulation blob: `OVERVIEW.md`, both `cross-agent-onboarding.md` copies, `docs/session-lifecycle.md` and `docs/agents/aida-repository-guide.md`.
+    - The rename-source path is absent, as expected.
+    - The head differs from the retained A+B simulation `c99395f…` in exactly 8 paths: the 7 main-only paths (6 BUG-1812 files plus `ff9ac`'s test) and the archive blob.
+    - Every main change is preserved: `0ffe` shell `set +x`, `ff9ac` test casing and `bf65` BUG-1812.
+    - No member hunk was reverted, and no `2026-10-cleanup/before/` file is in the tree.
+    - `git diff --check bf65..HEAD` exits 0.
+
+    **Maintained homes.** The four maintained docs (`OVERVIEW.md`, both `cross-agent-onboarding.md` copies, `docs/session-lifecycle.md`) each carry the `aida ship <SPEC> --no-merge` and `aida pr auto-queue-review` sequence. So do the canonical `aida-pr` skill and command, whose blobs are exactly TASK-1613's.
+
+    **Overlaps:** rename-aware, 6 between A and B, as the disposition states. Main's movement overlaps no member path.
+
+    ## Private check environment
+
+    - **Clone:** a private `git clone --shared` (read-only alternates), with its own index and config, `core.hooksPath=/dev/null` and no `origin` remote. `refs/remotes/origin/main` is pinned to the base: ff9ac first, then bf65. The clone was moved to each head with a detached checkout. Ignored state was cleaned before each phase, and the tracked tree was clean before and after every phase.
+    - **Store snapshot for doc-intent and glossary:**
+      - A depth-1 fetch of the published `aida-store` exited **124**: it hit its 120s cap in object negotiation and was not retried.
+      - Fallback: the private ref `aida-store` was pinned to **`d02b75cce5f5513f550aece8c470fd6a1fb5a278`**, tree `1bc8d394…`. That equals the fresh `ls-remote origin refs/heads/aida-store`. It is a committed canonical object read through alternates; it is not a dirty live snapshot, not a review authority and not a mutation.
+      - A private `.aida-store` worktree was attached only for the glossary runs, then removed.
+    - **Environment:** `env -i` allow-list.
+      - Fake HOME, AIDA_HOME and XDG config/cache/data/state; private mode-0700 runtime dir; private TMPDIR.
+      - `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, prompts and askpass disabled, `GIT_ALLOW_PROTOCOL=file`, loopback-deny proxies.
+      - No AIDA agent, grant, token or GH variables.
+      - Refusal stubs (exit 97) for installed `aida`, `gh`, `glab`, `curl`, `wget`, `ssh`, `scp`, `nc`, `npx`, `claude`, `codex` and `gemini`. Real `tokei` 12.1.2 only.
+    - **Network:** executed checks ran under `unshare -rn`, a kernel network namespace. For the full CI, loopback was brought up inside it.
+    - **Builds:** `env -i`, fake HOME, `CARGO_NET_OFFLINE=true`, private `CARGO_TARGET_DIR`, through the **unmodified** slot wrapper `~/.local/bin/cargo` with the real `/run/user/1000` slot dir. The log shows `cargo: queued for a build slot` honored; there was no `AIDA_CARGO_NO_SLOT`.
+      - The builds used the configured shared sccache server. Builds ran outside the namespace for this reason; sccache is a cache, not a source input.
+      - During the check-ci attempts, sccache instead started a private server inside the namespace.
+
+    ## Source-bound builds
+
+    | Head | Command | Exit | Time | Result |
+    |---|---|---|---|---|
+    | dbe412 | first attempt, all 3 builds | **127** ×3 | 0 s | **My harness bug**: `timeout` cannot exec a shell function. No Cargo ran. Preserved in `prep-logs/attempt1-harness-error/`. |
+    | dbe412 | `cargo build -p aida-cli` | 0 | 11:30:15–11:35:45 | `aida 0.15.0 (built 11:33:23, sha dbe412fbc1)`, no `+dirty`. Binary sha256 `c6287a24df430eb0…` |
+    | dbe412 | `cargo build -p aida-core --example agent_skill_pack` / `cargo test -p aida-core --lib --no-run` | 0 / 0 | | `agent_skill_pack` `bc9931ab…`; lib-test `02c132b8…` |
+    | **0695776** | `cargo build -p aida-cli` | **0** | 11:51:21–11:56:28 | **`aida 0.15.0 (built 11:54:07, sha 0695776070)`**, no `+dirty`. **sha256 `5c0c3795f4a824d67fb65b429dbe5d51c17de5e206091db6a72eb3835a035f82`** |
+    | 0695776 | agent pack / core lib-test `--no-run` | 0 / 0 | to 12:03:06 | Fresh: aida-core is unchanged by BUG-1812. Same `bc9931ab…` and `02c132b8…` |
+
+    **Input provenance** (`buildprov.py` → `prep-logs-v2/build-provenance.json`):
+
+    - The dep-info of the three artifacts lists 744 unique inputs.
+    - **All 643 tracked-source inputs equal the head's blobs.**
+    - The remaining in-repo entries are the clone's `.git/HEAD`, `.git/index` and `.git/logs/HEAD`, which are build-stamp inputs.
+    - The 2 out-of-repo inputs are the build-generated `embedded_templates.rs`.
+    - The clone was clean after building.
+
+    ## Checks on final head 0695776 (targeted, build-dependent, not covered by `make check-ci`)
+
+    | Check | Exit | Result |
+    |---|---|---|
+    | `aida --version` (built binary) | 0 | sha 0695776070 |
+    | `make sync-templates`, then `git status --porcelain --untracked-files=no` | 0 / 0 | No tracked change; the generated pack was regenerated |
+    | `make check-templates` | **0** | "All templates OK!" Discipline mirror current; **compiled `.agents/skills` pack matches templates** |
+    | core template and agent-pack tests (`aida_core` lib-test binary, `templates:: scaffolding::agent_pack::`) | **0** | **37 passed**, 0 failed |
+    | doc-intent: unittest, then `verify-interface-changes.py origin/main HEAD`, with the private store ref | **0** | 7 tests OK. Gate ARMED on the skill/command template changes; referenced BUG-1812, TASK-1329, TASK-1605, TASK-1611, TASK-1613, TASK-337. **"OK doc-intent — doc-impact marked on: TASK-1611, TASK-1613"** |
+    | glossary generator (`docs/cli/generate-glossary.sh` with the built binary) | 0 | The generated page differs from the committed page by 118 insertions / 32 deletions. The drift is **byte-identical** to the dbe412 run. The batch's only glossary change (line 163, the `../archive/positioning/` retarget) is unchanged context, so generator and committed page agree on it. The rest is pre-existing drift outside batch-touched lines. The exact main-baseline drift was not measured (main was not rebuilt). **Not a regeneration pass**; the file was restored. |
+
+    **Checks run on dbe412 that still apply to 0695776:** the merge with bf65 changed only the 6 Rust paths.
+
+    - **Static/Python gates.** Their logs hold the second run, at 11:44; both runs passed.
+      - all exit 0: inventory `--check` (100 moves, 856 rows), py_compile (4 files), `diff --check`, weekly Windows workflow contract, external-prose inventory (12), prose-classification (22), file-time (4), executable-fixture ratchet (22), glyph lint, trace-header (9), docs-guards schedule (5), merge-hold fixtures (7 states × 2 gates)
+      - the Rust-sensitive ones among these (trace-header, glyph, fmt) are rerun by check-ci on 0695776
+    - **Link scan:** run on exports of main ff9ac, A, B and C(dbe412).
+      - **C minus (main ∪ A ∪ B) = 0**; C equals the simulation's set.
+      - BUG-1812 changes no docs.
+    - **Inventory:** row 445 is intact; 856 rows plus the header.
+    - **Templates:** 25 of 25 discipline masters equal their mirrors; skill symlinks resolve to their masters.
+    - **dbe412-only results, superseded by check-ci on 0695776:**
+      - CLI manual: exit 0, 81 commands, 14 specs.
+      - Monitor contract: exit 0, 12 surfaces.
+      - MCP: CI step body exit 1, then 101. Both are harness failures: the isolated HOME lost rustup, and sccache was unreachable in the namespace. The direct harness `test_mcp_doc_consistency.py --aida <built dbe412 binary>` exited 0 with 58 tools.
+
+    **Reused without rerun (exact-input applicable):**
+
+    - the TASK-1605 real-Tokei 28-test suite (all 12 TASK-1605 blobs are identical to the reviewed and B-tested blobs)
+    - TASK-1611's consumer, include and user-guide evidence (byte-identical inputs)
+
+    ## Full local CI (`make check-ci`): one bounded attempt on the final head
+
+    **Earlier attempt on dbe412, preserved:**
+
+    - Started at 11:49:25 under `timeout 14400`. **`make check-ci` exit 2 after 10.4 s.** Gate 1 (`Check aida-cli without default features`) FAILED with `sccache: error: path must be shorter than SUN_LEN`.
+    - Cause, verified by a gate-free probe (`ci-logs/sccache-probe.log`): my private TMPDIR path was too long for sccache's server socket inside the namespace.
+      - A short runtime dir alone still failed.
+      - A short private TMPDIR started and stopped a namespace-private sccache server cleanly.
+    - No product code compiled; this was a harness defect.
+    - It was not retried on dbe412. Root's 11:50 instruction then directed the bf65 merge and one full run on the new head.
+
+    **Current run on head 0695776 (tree `34014208…`):**
+
+    - Started **12:04:58** under `timeout 14400 unshare -rn` with loopback up and short private TMPDIR `/tmp/bc.8wRw` (mode 0700).
+    - Same allow-list environment and real slot wrapper (`ci-tools/cargo` → `cargo-real` restores the private runtime for tests).
+    - The private target is reused, and `target/debug` links into it. The bound is 14400 s because Batch A spent 2,033 s in a single slot wait.
+    - `check-ci-gates.py --audit`: 45 gates classified. The plan has 37 local gates and 8 skipped (local-impossible).
+
+    ### ACTUAL RESULT (run ended 13:45:27): **NON-PASS, `make check-ci` exit 2**
+
+    Head and tree were unchanged before and after the run; the clone's post-run `git status --porcelain --untracked-files=all` is empty. The run was not stopped, rerun or retried.
+
+    | # | Gate | Result |
+    |---|---|---|
+    | 1 | Check aida-cli without default features [fast] | **ok**, 106.3 s |
+    | 2 | Build all packages [full] | **ok**, 180.2 s |
+    | 3 | TUI seam guard [fast] | **ok**, 38.3 s. This is the gate Batch A's run lost to an external SIGTERM. |
+    | 4 | Generated protobuf mirror drift guard [full] | **ok**, 113.9 s |
+    | 5 | **Run tests** [full] (`cargo test --workspace`, no-fail-fast) | **FAIL**, 5,590.1 s. Totals across 101 test binaries: 9,862 passed, **53 failed**, 7 ignored. 15 targets failed. |
+    | 6–37 | All remaining local gates | **NOT RUN.** The runner stops at the first failing gate. |
+
+    Gates 6–37 include merge-hold, MCP, distributed/sibling-store, CLI-manual, monitor contract, fmt, clippy, the weekly Windows contract, trace/doc-header and docs-drift scheduling. Some of these ran separately as targeted checks, listed above; that does not make them CI-order passes.
+
+    The 8 local-impossible skips (trace gate, doc-intent CI step, cross-target report, bwrap live gate and others) are skips, not passes.
+
+    **Failing targets:**
+
+    - `-p aida-cli --test` agent_write_confirm, bug_1289_format_json, bug_1502_format_json_audit, bug_1513_queue_list_for_role, bug_1687_defer_status_lens, bug_1771_status_lens_filters, bug_1795_queue_list_filter_outputs, journey, queue_work_dry_run, task_1290_criteria_gate, task_1561_worktree_parent_placement, task_163_why_live_drain
+    - `-p aida-cli-lib --lib`
+    - `-p aida-core --lib`
+    - `-p aida-core --test context_budget`
+
+    The verbatim panic for every failed test is in `ci-logs-v2/failure-digest.txt`; the full log is `ci-logs-v2/check-ci.log` (sha256 `76b91f9c…`).
+
+    These groupings come from the panic messages. They are mechanical, and the only attribution I make is in item A.
+
+    **A. Content failure that the batch introduces (deterministic, environment-independent):** `aida-core/tests/context_budget.rs:64` reports `.claude/commands/aida-pr.md: 62 bytes`.
+
+    - The test limits each generated command's frontmatter `description` to `command_description_max_bytes = 48`, set in `aida-core/templates/context-budget.toml`, which is unchanged by the batch.
+    - TASK-1613 (`f03306fa`) changed `aida-core/templates/commands/aida-pr.md`'s description from `Run /aida-pr.` (13 bytes, at b46) to `Open implemented work for independent review through aida ship` (**62 bytes**).
+    - This would fail on TASK-1613's own tree. Its READY and review ran the `templates::` and `agent_pack::` unit tests, not this integration test.
+    - **This is a real source defect for the TASK-1613 owner to rework. It is not an integrator fix,** and I made none. Mechanical-fix rules require a root brief and a new review.
+
+    **B. Authority-floor refusals inside test fixtures (about 45 tests, 12 aida-cli targets):** the fixtures' own `aida` invocations were refused with messages such as:
+
+    - `"promoting a Draft spec to InProgress/Completed needs advisor authority (advisor role or an interactive session)"`
+    - `"queuing work for execution needs dispatch authority (product, advisor, or integrator role, or a live orchestrator)"`
+    - `"filed as draft (requested approved needs advisor authority)"`
+    - the knock-on errors `"`BUG-1`/`TASK-1` isn't queued. Status is Draft."` and `"queue done refused: TASK-1 is Draft…"`
+
+    The batch changes no Rust. These come from current authority behavior meeting this run's environment: non-TTY stdin `/dev/null` and no role or agent variables. Whether they also fail in hosted CI or on main alone was **not established**. I did no baseline chasing, created no fixture identity, and bypassed no floor. They remain failures.
+
+    **C. Probably sandbox-induced, not verified:** 3 `aida-core --lib` cache tests:
+
+    - `db::cache::tests::empty_old_stamp_in_unwritable_cache_with_live_wal_defers_migration`
+    - `db::cached_git_backend::tests::unreadable_cache_declines_when_configured_fallback_is_unavailable`
+    - `…unreadable_cache_uses_private_fallback_and_serves_store_rows`
+
+    My `unshare -rn` maps the runner to **uid 0 inside the namespace** (confirmed: `unshare -rn id -u` prints `0`), and root bypasses the file-permission "unwritable/unreadable" premises these tests rely on. Batch A's run had no namespace. This is an explanation, not a pass.
+
+    **D. Environment-dependent:** `aida-cli-lib` `session::tests::bwrap_write_confinement_live_or_fail_closed` failed with `bwrap: execvp claude: No such file or directory`. It needs a real vendor binary inside bwrap; the sandbox has only refusal stubs, and bwrap's own PATH lookup did not find one. CI covers live confinement with a separate gate. Note: `global_queue::tests::bug_1682_process_child` printed an intended "injected unwind" panic and is **not** among the failures.
+
+    **Timing and isolation:**
+
+    - The bound used was 14,400 s; actual elapsed was about 6,029 s.
+    - Slots came through the real wrapper. sccache ran as a namespace-private server.
+    - My leftover processes: none.
+    - The short private TMPDIR `/tmp/bc.8wRw` (288K of test leftovers, listing preserved) is left in place; it is owned and private.
+
+    ## Main drift during the pinned run (recorded 13:02 per root's `main-c677-drift-notice.md`)
+
+    Local `main` and `origin/main` are now **`c67728c1dcaf8a577539d920bdc6a3c86126cebb`**. That is the external TASK-1593 owner's commit `[AI:antigravity] refactor(auth): enforce session grants (TASK-1593)`, on top of bf65.
+
+    It touches 8 paths, +27/−16:
+
+    - `.github/workflows/ci.yml`
+    - `aida-cli-lib/src/{claim,events,git_backend_cmd,lib,pr_cmd,role_cmd}.rs`
+    - `patch_events.sh`
+
+    How this run handles it:
+
+    - **The running full CI stays pinned** to head `0695776…` / tree `34014208…` (base bf65) and compiled binary `5c0c3795…`. c677 was **not** adopted into the private tree, the build or any qualification.
+    - The run will finish once; it was not stopped, rerun or substituted.
+    - Batch C is now 1 commit behind main. Before any PR or merge, the normal integration of the confirmed latest main is still owed, together with:
+      - a whole-overlap and source check
+      - a new strict review
+      - only the checks the actual diff and results show to be affected
+    - Results from this pinned run cannot be called fixed or passed on the strength of later source movement.
+
+    Reserved TASK-1593 work is untouched.
+
+    ## Still owed regardless of the local result
+
+    - **NEW independent exact-head review** of `0695776070406a4a082e3bec8405e0e20f05be25`. It must cover the restored archive blob and mode, the absent old path, the maintained homes, every member's provenance, the preserved main changes (including bf65), the rename-aware overlaps, inventory and links, and the build/pack evidence.
+    - **Gates that cannot run locally:**
+      - the trace gate and the CI doc-intent step, both of which fetch and fast-forward the store (a private-ref doc-intent run passed above; that is not CI)
+      - cross-target report
+      - bwrap confinement
+    - **Required remote checks:** Ubuntu **Build** and **merge-hold-gate**.
+    - **Native Windows cancellation** under TASK-1329's 45-minute step: unverified; it needs runner evidence.
+    - TASK-1611 publication acceptance (PR) and the ordinary guarded route. Both are blocked until store-safety and publication gates are genuine.
+    - The protected-recorder refusal floor stays binding. No machine verdict exists for any member or batch.
+
+    ## Preservation
+
+    - **Main checkout:** HEAD moved externally (b46 → 0ffe → ff9ac → bf65; not by this seat). It now reports a clean status. The earlier untracked paths disappeared before this task began; root and Batch A recorded that.
+    - **TASK-1611 worktree:** the 9 `before/` files verify against their manifest (`sha256sum -c` exit 0) and were never copied.
+    - **Not touched:** Batch A and Batch B branches and worktrees, the member worktrees, and the external TASK-1593, TASK-1591, BUG-1811 and BUG-1812 work. BUG-1812 was merged only as part of main.
+    - **Observed but not mine:** another lane's process ran `AIDA_CARGO_NO_SLOT=1 cargo test -p aida-cli-lib` (TASK-1593 log path).
+    - **Batch C worktree:** clean apart from the ignored zero-byte `.aida/.format-hint-shown`, which the login-shell hint created when a shell entered it.
+    - **Shared Git DB:** remote-tracking refs and `FETCH_HEAD` from read-only fetches; the new branch, worktree and three merge commits; unreferenced merge-tree/write-tree objects.
+    - **Not done:** no AIDA mutation, lease, queue, mail, status, review record, push, PR or `gh`.
+    - **Evidence:** `batch-c-prepare-evidence/` holds scripts, merge/commit logs, `provenance{,2}.json`, `build-provenance.json` for both heads, `prep-logs/`, `prep-logs-v2/`, `ci-logs/` (failed dbe412 attempt plus probe) and link-scan data. It will gain `ci-logs-v2/` and a refreshed SHA256SUMS when the run ends.
+  created_at: 2026-10-08T21:00:27.772025997Z
+  modified_at: 2026-10-08T21:00:27.772025997Z
+  relayed_from: batch-c integrator
 history:
 - id: 01a11c4d-439e-7890-8926-b76a03022ec6
   author: aida-session-start
