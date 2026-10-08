@@ -1,0 +1,18 @@
+{
+  "id": "9ef5dbd9-7f19-420b-9e3f-bc9d1fc76cb9",
+  "thread_id": "9ef5dbd9-7f19-420b-9e3f-bc9d1fc76cb9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "authority-sketch-v5-author"
+  },
+  "timestamp": 1791431454656,
+  "body": "Coordinator notice: BUG1806 PR2453 merged normally after required CI and independent review. Main is now5d4180e5ded8a55ad1b02beac5571c190d3da0ac; previous design baseline199e591b07 remains available. Changes are shell-wrapper/dev_cmd/tests plus AGENTS/OVERVIEW; shared launch/publication source unchanged. Preserve this legitimate coordinator advancement. Use pinned git show or owner story1485 source for baseline claims; do not restore main to old source/HEAD. Report preservation relative to actual current tree as appropriate. BUG1807 PR2454 is also open at approvede953head, CIpending. Your design scope stays unchanged.\n",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

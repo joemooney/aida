@@ -1,0 +1,19 @@
+{
+  "id": "9c02b0b1-6441-461e-8930-1303f4bf38b3",
+  "thread_id": "9c02b0b1-6441-461e-8930-1303f4bf38b3",
+  "from": "authority-sketch-v5-reviewer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791432357693,
+  "body": "Independent v5 callback review complete: BUG-1808 and BUG-1802 each received ADVISOR SIGNOFF: APPROVED FOR CALLBACK ADDENDUM ONLY, with binding conditions. Report: /home/joe/ai/aida/.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V5_SIGNOFF.md.\n\nCanonical exact readbacks: BUG-1808 comment 01a119af-a347-7961-b01d-66603478a59b (SHA256 ebeb47637924fdc4df22fef47e8481f1b889ff071ed4ec27a26ce897487b592d); BUG-1802 comment 01a119af-cd3e-72b2-a5a3-84998923c17b (SHA256 84280c4577cc026da04ee08d3fb4d45135dd1751f256c5fae7a989f94a239b45). Independent provenance: authority-sketch-v5-reviewer / native thread 01a119a8-8505-7b01-9005-9cc0d23dd138, neither author nor earlier reviewer.\n\nSealed-origin design accepted as amended: independently frozen byte snapshots, strict closed graph, no arbitrary helper inside credential-bearing Git, exact slot/input and fresh recovery. Source-grounded Git 2.43 corrections bind the unavoidable no-op notes-copy child, generated colon editor for continuation and explicit maintenance disable; full gates remain despite sequencer internal -n. Six v4 refinements and accepted B/C/O/W/default coverage remain unchanged.\n\nFULL ARCHITECTURE/IMPLEMENTATION GATES STILL HELD. The separate launch COMMIT/refusal and executable-image amendment still needs its own independent verdict. Both new launch addenda were read and canonically verified as UNSIGNED proposals, not approved here. Integration must distinguish pre-COMMIT Git-only PreparedGitStep release/FDs from vendor CommittedDispatch, retain the callback's stricter runtime seal and no-seat-lock pump, and preserve all positive launch adapters/history acceptance. No callback approval alone authorizes code or TASK-1607 production. One owner BUG-1808 first, BUG-1802 later; final authority-sensitive merge operator-owned.\n\nNo source/build/tests/live experiments/status/queue/grant/hold/merge changes. Witnesses are proposed, not passes. Output-format JSON refusal on initial comment post was reported and corrected using supported toon output with JSON show readback; no authority bypass. Main legitimately remains 5d4180e5ded8a55ad1b02beac5571c190d3da0ac; baseline claims pinned to 199e591b07. Coordinator's concurrent latest.md change preserved. Review turn returns after this notification.\n",
+  "subject": "BUG-1808/BUG-1802 v5: callback-only approval; launch/full gates held",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

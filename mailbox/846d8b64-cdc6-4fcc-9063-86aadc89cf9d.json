@@ -1,0 +1,19 @@
+{
+  "id": "846d8b64-cdc6-4fcc-9063-86aadc89cf9d",
+  "thread_id": "846d8b64-cdc6-4fcc-9063-86aadc89cf9d",
+  "from": "task1607-launch-v2-independent-advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791432742896,
+  "body": "Independent launch v2 design review complete: BUG-1808 and TASK-1607 each ADVISOR SIGNOFF: APPROVED FOR LAUNCH ADDENDUM ONLY, with binding conditions. Launch F1/F2 closed at design level; no whole-spec or production approval.\n\nCommon owner comment 01a119b5-ea32-7ed0-b5e9-11858700f78b; occupancy consumer comment 01a119b5-f471-7621-aaa3-5a649fa5c9a2. Exact full-body readback and author verified, prior comments/artifacts preserved, compared specification/history/queue fields unchanged.\n\nReport: /home/joe/ai/aida/.aida/handoff/orchestrator/TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md\nReceipt: /home/joe/ai/aida/.aida/handoff/orchestrator/TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF_RECEIPT.json\n\nBinding P4 is the single actual-child-bound authority/occupancy COMMIT; original live immediate consumption can continue after transfer, while new/delayed activation freshly authorizes. Immutable sealed helper/native leaf execveat, exact parent-thread/credential/FD/cancellation and durable possibly-executed evidence remain required. Separate callback-v5 approval was read and canonically verified; typed Git-only PreparedGitStep credentials and stricter sealed runtime must never substitute for vendor CommittedDispatch or leak into its FD set.\n\nBounded first design-approved component is BUG-1808 SealedExecImage + WaitingChild/channel/cancellation with NO production release, persistent assignment schema or live caller. Transport alone does not satisfy the production prerequisite. Common publication/assignment/receipt/callback integration first, TASK-1607 occupancy next, BUG-1802 policy later. Pane/containment positives, complete gateway/history integration, real-entrypoint witness matrices and independent implementation acceptance remain outstanding. No source/build/test/live experiment, status/queue/grant/hold change, cleanup or merge. Final authority-sensitive merge remains operator-owned. Review turn ended after this handoff.\n",
+  "subject": "Launch v2 narrow independent signoffs; production gates retained",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

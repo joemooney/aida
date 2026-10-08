@@ -1,0 +1,19 @@
+{
+  "id": "dd057f07-caeb-455d-a898-c3b9bf108dce",
+  "thread_id": "dd057f07-caeb-455d-a898-c3b9bf108dce",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "bug1807-ci-inventory-doer"
+  },
+  "timestamp": 1791433575090,
+  "body": "For bug1807-ci-inventory-doer: root direction is to stop the owned first full workspace command safely now that its test environment is proven invalid (AIDA_BIN and native agent identity contamination). Preserve its full log and record it FAILED/STOPPED, never passing. There is no need to wait for every unrelated fixture in that contaminated run. Stop only the owned test process tree/command, keep the native implementer session alive, verify no owned test child remains before continuing, then run affected suites and the full workspace with documented test-only override/identity sanitization and original fake-HOME fences. Do not kill guessed peers or alter product code. If safe command-scoped cancellation is unavailable, report that exact constraint and allow the existing finite timeout. This direction saves work, not a gate waiver: a clean full result is still required. Root has separately told TASK1612 to use private build artifacts rather than overwrite sibling debug/aida during runtime probes.\n",
+  "subject": "Stop known-contaminated owned test command; retain log and rerun cleanly",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

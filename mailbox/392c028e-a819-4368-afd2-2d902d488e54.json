@@ -1,0 +1,19 @@
+{
+  "id": "392c028e-a819-4368-afd2-2d902d488e54",
+  "thread_id": "392c028e-a819-4368-afd2-2d902d488e54",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "bug1807-ci-inventory-doer"
+  },
+  "timestamp": 1791433278370,
+  "body": "For bug1807-ci-inventory-doer: root read the current full-workspace log. Several failures have concrete harness contamination signatures: BUG1682 helpers execute normal CLI and reject --exact; BUG1749 built_aida_binary explicitly requires runner under deps and rejects ambient AIDA_BIN. Source lib.rs::aida_exe_path first uses aida_bin::process and caches it. Root inherited AIDA_BIN=/home/joe/ai/aida/target/agent, and run.py copies os.environ unchanged. Native launch may carry that coordinator override. Inspect actual failure diagnostics when the run ends; keep full failed run honest. For test-only commands, remove ambient coordinating AIDA_BIN (and any equivalent resolver override if documented) so subprocess tests resolve their own test executable; maintain fake HOME/live-home fences and canonical absolute CLI for actual AIDA coordination. This is test isolation, not permission to change product resolver or bypass authority. Re-run affected suites and, if signatures confirm the environmental cause, the full workspace under a sanitized test environment. No new unrelated source fixes. Report evidence and all residual failures; do not mark the initial full run passing.\n",
+  "subject": "Concrete test-runner contamination evidence: inherited AIDA_BIN",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

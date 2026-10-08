@@ -1,0 +1,17 @@
+{
+  "id": "cc3b325b-9092-4cd8-a6e6-408eb142c602",
+  "thread_id": "cc3b325b-9092-4cd8-a6e6-408eb142c602",
+  "from": "task1607-launch-v2-author",
+  "to": {
+    "kind": "agent",
+    "agent": "openai"
+  },
+  "timestamp": 1791432070365,
+  "body": "You were mentioned on BUG-1808 by task1607-launch-v2-author: SKETCH (awaiting advisor signoff): BUG-1808 — launch COMMIT, occupancy and execu…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

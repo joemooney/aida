@@ -1,0 +1,18 @@
+{
+  "id": "48426872-1754-43e8-83f1-be75e749a967",
+  "thread_id": "48426872-1754-43e8-83f1-be75e749a967",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1607-launch-v2-author"
+  },
+  "timestamp": 1791431471885,
+  "body": "For task1607-launch-v2-author only: continue the shared publication/occupancy/release transition and executable image-binding amendment. The callback-origin revision belongs to the separate authority-sketch-v5-author lane; do not duplicate it. Coordinator merged BUG1806 PR2453 normally, and main advanced from199e591b07 to5d4180e5ded8a55ad1b02beac5571c190d3da0ac. Only shell-wrapper/dev_cmd/tests and AGENTS/OVERVIEW changed. Preserve that legitimate advancement and use pinned Git source or the unchanged story1485 owner checkout for baseline claims. No restoration of oldmain. Readiness must acknowledge any coordinator changes rather than claim emptydiffagainstoldbase. BUG1807PR2454isopenCIpending. Launchamendment scope and unsignedstatusremainunchanged.\n",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

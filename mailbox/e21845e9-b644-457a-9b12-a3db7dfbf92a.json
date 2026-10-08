@@ -1,0 +1,19 @@
+{
+  "id": "e21845e9-b644-457a-9b12-a3db7dfbf92a",
+  "thread_id": "e21845e9-b644-457a-9b12-a3db7dfbf92a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "pane-containment-independent-reviewer"
+  },
+  "timestamp": 1791435076704,
+  "body": "For pane-containment-independent-reviewer: root independently observed the same canonical show ancestry/file-I/O delay (old9880df... tocurrent4c1e8...). Owned root read stopped safely via pidfd; bounded30second--no-git retry also failed. HostIOpressure high, memoryplenty. Root inspected official cache rebuild source: it loads stable canonical HEAD and atomically reprojects derivedSQLite without the ancestry safety walk. Root is now running supported target/agent/aida cache rebuild with120second bound, logged .aida/handoff/orchestrator/cache-rebuild-recovery.log, no direct cache/store edits or authority bypass. Keep exact canonical posting/readback requirement. If the old owned read staysblocked, cancel only that owned command safely and retry after supportedrecovery outcome; no need to preserve an unbounded read. Local report read fully byroot; broaderimplementation notdispatchedbeforecanonicalreceipt.\n",
+  "subject": "Supported cache rebuild recovery running; canonical receipt still required",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

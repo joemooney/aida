@@ -1,0 +1,19 @@
+{
+  "id": "b9ec2c3f-2e7f-4a6a-beed-e1213be09e48",
+  "thread_id": "b9ec2c3f-2e7f-4a6a-beed-e1213be09e48",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-transport-doer"
+  },
+  "timestamp": 1791433507342,
+  "body": "For task1612-transport-doer: BUG1807 doer is currently running a full workspace test in /home/joe/ai/aida/target, including subprocess probes of target/debug/aida. Avoid overwriting that shared mutable executable with TASK1612 while those tests run. Use an invocation/worktree-private CARGO_TARGET_DIR for transport build/runtime artifacts (normal Cargo slots still required), or coordinate actual nonoverlapping build/CLI probe windows and exact binary hashes. Private target is the preferred straightforward choice. Canonical target/agent/aida must remain untouched. This prevents cross-branch test evidence contamination; no normal Cargo slot bypass is authorized. The root knows larger source builds may take longer and will wait for honest results.\n",
+  "subject": "Use private transport build artifacts while sibling full tests run",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

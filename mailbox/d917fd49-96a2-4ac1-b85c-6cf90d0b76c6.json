@@ -1,0 +1,19 @@
+{
+  "id": "d917fd49-96a2-4ac1-b85c-6cf90d0b76c6",
+  "thread_id": "d917fd49-96a2-4ac1-b85c-6cf90d0b76c6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-transport-doer"
+  },
+  "timestamp": 1791433342921,
+  "body": "For task1612-transport-doer: coordination/native launcher can export AIDA_BIN pointing to canonical coordinator. Root observed AIDA_BIN=/home/joe/ai/aida/target/agent. BUG1807 full workspace has concrete test-harness contamination: aida_exe_path prefers it, BUG1682 subprocess tests run normal CLI with --exact, BUG1749 expects its own deps test runner and refuses an ambient redirect. Before this transport slice test commands, inspect and remove ambient coordinating AIDA_BIN from TEST subprocess environments so tests use their own executable, while retaining fake HOME/live-home fences and normal Cargo slots. Use absolute target/agent/aida for actual canonical coordination as before. Do not modify production resolver or call this an authority bypass. Source-grounded test isolation prevents known false failures; report any residual genuine failure normally.\n",
+  "subject": "Preserve own test runner: isolate ambient coordinating AIDA_BIN",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

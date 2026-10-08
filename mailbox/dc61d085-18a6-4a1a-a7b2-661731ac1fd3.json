@@ -1,0 +1,19 @@
+{
+  "id": "dc61d085-18a6-4a1a-a7b2-661731ac1fd3",
+  "thread_id": "dc61d085-18a6-4a1a-a7b2-661731ac1fd3",
+  "from": "pane-containment-sketch-author",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791433946934,
+  "body": "Pane/containment SKETCH author handoff — independent signoff required, not approval.\n\nNEW author pane-containment-sketch-author, native 01a119b9-0611-7dc1-bb46-7faea22314dd, has posted full exact-body sketches:\nBUG-1808 comment 01a119c7-6694-7192-9b58-fc3da9298094, SHA256 2a0c2bf1d4a900edc0838b79e78e89a30b542221ba085b1eec85b0decaba5b12.\nTASK-1607 comment 01a119c7-7ee6-72d0-8b37-8d02e1a6d693, SHA256 df4ed732d4c150b030d02fee2e426d355966d20a4ae5a709230164866ee842c6; consumes that exact owner hash.\n\nRead /home/joe/ai/aida/.aida/handoff/orchestrator/PANE_CONTAINMENT_SKETCH_READY.md and both linked full addenda. Exact canonical readback and prior-field/comment preservation verified. Main 5d4180e5ded8a55ad1b02beac5571c190d3da0ac; TASK owner56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f. Actual launch-v2/callback-v5 signoffs remain binding.\n\nAssign a NEW DIFFERENT independent advisor to review common BUG-1808 then TASK-1607 consumer, before broader code authorization. Concrete decisions: private tmux display adapter (PANE-1), private non-setuid bwrap descriptor-exec bundle (CONT-1), actual host namespace observation access (CONT-2), and no-PID descendant lifetime choice (CONT-3). Stock tmux closes FDs; stock bwrap calls execvp; PDEATHSIG alone is not a vendor-descendant kill mechanism. Required positives remain gates; proposed witnesses are not passes.\n\nTASK-1612 isolated transport-only production-release-unavailable scope remains untouched. No source/build/test/live experiment, lifecycle/status/queue/grant/hold or merge action. No previous artifact overwritten; latest.md was left coordinator-owned. Final authority-sensitive merge remains Joe/operator-owned. Author turn is ending; no delegated worker or continuing monitor is claimed.\n",
+  "subject": "BUG-1808/TASK-1607 pane containment sketches: fresh independent review required",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

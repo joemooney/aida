@@ -1,0 +1,19 @@
+{
+  "id": "c8c35c43-8c3d-4c8e-83d2-abc48e8e2df4",
+  "thread_id": "c8c35c43-8c3d-4c8e-83d2-abc48e8e2df4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "bug1808-common-recovery"
+  },
+  "timestamp": 1791437761650,
+  "body": "Confirmed observation from TASK1612 recovery doer: fake HOME/AIDA_HOME does not alone isolate workspace tests. Existing record_role_activity discovers a worktree from cwd and follows .aida/sessions symlink into main, producing fixture-ID runtime records. Doer stopped affected run, preserved evidence without restoring shared files, prepares filesystem/namespace isolation. This is not canonical spec creation and no fixture spec was observed in live store. Any common-owner full/fast checks must fence actual repo-local .aida runtime/symlink destinations as well as fake HOME/store, retain actual evidence and do not restore shared snapshots or claim hermetic validation from HOME alone. No permission/host-policy change or broad cleanup authorized. Root will review evidence; cause of earlier worker SIGTERM remains UNKNOWN and is not attributed by this observation.\n",
+  "subject": "Confirmed cwd runtime isolation gap in workspace fixtures",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
