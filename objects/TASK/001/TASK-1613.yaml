@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T16:19:29.500552747Z
+modified_at: 2026-10-08T16:19:30.408388145Z
 req_type: Task
 tags:
 - docs:impacted
@@ -34,6 +34,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): existing Approved queued bounded compatibility/documentation work dispatched separately; implement exact acceptance using canonical templates and established generation, no lifecycle redesign, authority change or self-merge. Fresh independent review and gated integration required. User external lane TASK-1593 TASK-1591 BUG-1811 BUG-1812 excluded.'
   created_at: 2026-10-08T16:16:05.172362637Z
   modified_at: 2026-10-08T16:16:05.172362637Z
+- id: 01a11c50-0be8-7da3-96ea-1789adbba9e6
+  author: joe
+  content: 'Implementation scope is the canonical aida-pr skill/command compatibility redirect and direct documentation. Source inspection: run_human_finish_ceremony StopAtPr and pr_ship_create_pr do not invoke review autoqueue; PR creation uses draft:false. Added docs:impacted for the existing surface/doc-intent gate; no lifecycle or authority implementation changes.'
+  created_at: 2026-10-08T16:19:30.408388145Z
+  modified_at: 2026-10-08T16:19:30.408388145Z
 history:
 - id: 01a11c4d-439e-7890-8926-b76a03022ec6
   author: aida-session-start
