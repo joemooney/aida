@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:19:42.865695554Z
-modified_at: 2026-10-08T02:21:27.072783010Z
+modified_at: 2026-10-08T02:22:26.123329911Z
 req_type: Bug
 tags:
 - from-qci:BUG-020
@@ -26,6 +26,12 @@ comments:
   content: Commit d6b4ed43b8 references this requirement
   created_at: 2026-10-08T02:21:27.072783010Z
   modified_at: 2026-10-08T02:21:27.072783010Z
+- id: 01a11951-af4b-7651-8d16-89e750d8156d
+  author: joe
+  content: |
+    IMPLEMENTED_READY for independent review: normal push of bug-1806-shell-wrapper at d6b4ed43b819346e6ededd2f47215065ba68b065, base 199e591b07aa76a59cd34f0a41946f918501f6ba. Handoff: /home/joe/ai/aida/.aida/handoff/bug1806/IMPLEMENTED_READY.md. Existing TASK-1171 exit guard already blocks current non-zero diagnostics; historical unconditional wrapper reproduced in fake HOME. Removed unsafe success fallback and required complete standalone marker pair; failures preserved verbatim. 21 targeted Rust tests, shell fixtures, template check, fmt, and all 21 check-ci-fast gates pass. Zsh unavailable. No PR, merge/ship, hold clearance, or self-review; lease retained for handoff.
+  created_at: 2026-10-08T02:22:26.123329911Z
+  modified_at: 2026-10-08T02:22:26.123329911Z
 history:
 - id: 01a11945-177d-7112-8e88-af7023e58138
   author: aida-session-start
