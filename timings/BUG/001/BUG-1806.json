@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1806",
+  "publishes": [
+    {
+      "at": "2026-10-08T03:48:28.985416089Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T02:08:43.040122674Z",
+      "spec": "BUG-1806",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T02:29:26.362290812Z",
+      "spec": "BUG-1806",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "d6b4ed43b819346e6ededd2f47215065ba68b065"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:31:19.610325841Z",
+      "spec": "BUG-1806",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-08T02:31:48.158110281Z",
+      "spec": "BUG-1806",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1806",
+        "branch": "bug-1806-shell-wrapper",
+        "first_seen": "2026-10-08T02:31:48.158043569+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-08T03:26:19.310087260Z",
+      "spec": "BUG-1806",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T03:48:12.550120226Z",
+      "spec": "BUG-1806",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-08T03:48:21.634035461Z",
+      "spec": "BUG-1806",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2453
+      }
+    },
+    {
+      "ts": "2026-10-08T03:48:28.973146477Z",
+      "spec": "BUG-1806",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5d4180e5ded8a55ad1b02beac5571c190d3da0ac",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
