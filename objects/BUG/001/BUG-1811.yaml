@@ -1,0 +1,19 @@
+id: 01a11a3b-0139-7590-8283-60651513ae8f
+spec_id: BUG-1811
+agreed_id: BUG-1811
+title: Suppress set -x in aida shell wrapper
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T06:37:16.985945430Z
+modified_at: 2026-10-08T06:37:16.985945430Z
+req_type: Bug
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: feat-task-1715
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: antigravity
