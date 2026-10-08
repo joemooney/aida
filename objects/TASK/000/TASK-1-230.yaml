@@ -3,12 +3,12 @@ spec_id: TASK-1-230
 agreed_id: TASK-1337
 title: 'guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant — and the last failure left a half-started session'
 description: 'Operator, 2026-10-06 18:45-18:51, launching ''aida queue work TASK-1607 --guided --branch story-1485''. Failures in order: (1) lease taken under role advisor because the operator''s shell was the advisor seat; (2) after ending it, ''InProgress but no local lease'' (status left stuck by the ended lease — same shape as TASK-1603); (3) role resolved ''advisor (cluster-derived)'' from the queue entry''s for_role despite the shell being in role:implementer — the shell''s explicit role should win or the mismatch should be stated before acting; (4) ''git worktree add'' failed because story-1485 was checked out in an idle, clean, unleased worktree — queue work could detect that and offer to retire it; (5) after creating the session, lease, worktree and Approved->InProgress bump, launch failed with ''the active implementer grant does not delegate implementer'' — a check that is knowable BEFORE any side effects. Ask: run the delegation check, the branch-availability check and the role resolution as a preflight before any state change; when a launch fails post-setup, print the exact manual continuation (worktree enter + claude ''/aida-guided-implement <ID>'') rather than only the error. Also: the guided-lane tag did not keep TASK-1607 out of ''queue work --drain'' — only ''--mode guided'' did; tag and mode should not diverge silently. Operator quote: ''aargh so many attempts to get the command line right''.'
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:51:55.840375581Z
-modified_at: 2026-10-07T23:06:11.238378895Z
+modified_at: 2026-10-08T01:11:06.880153938Z
 req_type: Task
 tags:
 - from-advisor:TASK-1607
@@ -44,6 +44,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a11910-6305-7872-adf3-b6207c4eb3d0
+  author: aida-auto-bump
+  timestamp: 2026-10-08T01:11:06.757376785Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a11910-6380-7f83-a9bc-374e540a47f9
+  timestamp: 2026-10-08T01:11:06.880133073Z
+  agent: implementer
+  commit_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
+  summary: Fresh independent scoped APPROVE; P1 corrected; review-2452-rereview.md; plan sandbox measurements and human hold clearance remain outstanding
+  review_verdict: approved
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main
@@ -52,3 +66,7 @@ filed_at:
   aida_build_sha: c89606cd47
   vendor: antigravity
   session: a36129c0-3fde-4c5c-92a2-908e517184b1
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T01:11:06.757364792Z
+  completion_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
