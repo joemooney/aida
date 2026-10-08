@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1116b-8bec-7f40-9e1e-beaf7f328dce
+  position: 295000
+  added_by: role:implementer
+  note: 'Independent REQUEST_CHANGES at ef014aeb07eca288a6faa51922252fbc33209684: F1335-1..6 full report and numbered rework under .aida/handoff/orchestrator/run-20261008/TASK1335_INDEPENDENT_REVIEW.md and task1335-numbered-rework.md. SAME live author/branch/lease remains InProgress; no new dispatch or status reset. Canonical UUID dedup, rooted covers support, all completion-path live closure/identity checks before mutation, honest actual effects, full checked TOML/schema. No broad workspace/CI or no-PR Done bypass; NEW DIFFERENT review after revision.'
+  added_at: 2026-10-08T19:29:35.710332803Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a11874-024a-71b2-935d-56a2a7e89778
   position: 296000
   added_by: role:implementer
@@ -56,14 +63,6 @@
   position: 452000
   added_by: role:implementer
   added_at: 2026-10-08T16:17:05.348108294Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1116b-8bec-7f40-9e1e-beaf7f328dce
-  position: 453000
-  added_by: role:implementer
-  note: Independent design APPROVED D1-D3; proxy selects honest diagnostics, no offline completion; separate implementation and fresh review.
-  added_at: 2026-10-08T17:02:36.886839130Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
