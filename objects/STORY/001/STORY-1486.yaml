@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T17:29:36.324344407Z
+modified_at: 2026-10-08T19:17:22.955217782Z
 req_type: Story
 tags:
 - agent-launch
@@ -344,6 +344,28 @@ comments:
   created_at: 2026-10-08T17:29:36.324344407Z
   modified_at: 2026-10-08T17:29:36.324344407Z
   relayed_from: answered-design-sketch-author
+- id: 01a11cf2-e58b-7b81-847a-9b86a52713a1
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 v3 handoff — retain v2 bodies with independent scope amendments
+
+    Codex same sketch-author lineage, 2026-10-08, main b46aec1e674baae5a329416d4119e67b59200a88. Exact proposed canonical relay body; NOT posted. This author does not supply independent signoff or rewrite the settled choice. Preserve unchanged full bodies:
+
+    - STORY1486_AMENDED_SKETCH_V2.md, SHA-256 8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf.
+    - STORY1486_NEEDS_OPERATOR_SCOPE_V2.md, SHA-256 8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598.
+
+    The full independent V2 review accepted the accurate boundary/gap and P2/P3 as amended, while functional STORY-1486 remains CHANGES REQUESTED: no selected supported backend meets strong AC2. This amendment carries those precise review limits into v3; it does not claim approval of the functional story.
+
+    1. Retain strong AC2 and the settled profile WITHOUT exemptions at canonical answered_at 2026-10-08T15:54:29.273727039Z. No weaker AIDA-command-only policy, broker, privileged service, credential service or removal of developer functionality selected. Missing support may remain pending concrete capability evidence within existing scope; no new operator answer must be solicited merely to keep that requirement pending.
+    2. V2's vendor/OS/mode matrix is adversarial proof obligations for whichever adapter/mode is actually claimed supported, NOT a requirement to implement every vendor/OS or general hostile-process confinement. Equivalent mutations and external endpoints matter when they defeat the claimed Git boundary. Do not interpret ordinary source editing as prohibited merely because Git could also edit files. A coherent eventual backend must distinguish protected operations/resources while preserving positive editing/builds. Fake adapter or universal refusal cannot satisfy AC2.
+    3. Preserve requested-versus-enforceable mode, pure preview, restriction ceiling independent of mutable grant/env labels, path/handle/executable identity, effective inherited config/argv, common-dir/endpoint scope and manifest-last recipe integrity. Scaffold manifest is not authority ledger. No new seat schema or revocation engine. Where lifecycle publication applies, consume the one common publisher/C/receipt; profile installs no independent release owner. The existing shared-network/no-PID common containment is not a strong Git-read-only certificate, and this review does not authorize changing that default.
+    4. Keep replacement AC3: no generated exemptions, allow/no-ask/bypass/never settings; preserve ordinary approval prompts and refuse incompatible fully composed posture. Approval cannot lift ceiling. Preserve aida_bin portability/debug-release semantics. No change to this current unrestricted harness; no live launch/kernel/approval experiment or TTY bypass.
+    5. Retain all v2 proposed positive/adversarial tests scoped to the actually supported claim; no tests executed. Future supported_profile_positive_read_edit_build_with_prompt must be real capability evidence, not a fake adapter or removal of editing/build behavior. Missing common hook/receipt or checked persistence remains dependency/refusal, never permission to use the current bypass launcher.
+
+    The existing NEEDS_OPERATOR_SCOPE record is accurate pending capability; it is not an automatically sent question or authorization to invent architecture. New different advisor evaluates v3 EPIC corrections; profile functional unready status remains explicit. No canonical mutation, code, status/queue/grant/hold/launch/merge or external-reservation changes accompany this relay draft.
+  created_at: 2026-10-08T19:17:22.955217782Z
+  modified_at: 2026-10-08T19:17:22.955217782Z
+  relayed_from: answered-sketch-author
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
