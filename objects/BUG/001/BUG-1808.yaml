@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T16:00:31.551174645Z
+modified_at: 2026-10-08T19:42:49.863819449Z
 req_type: Bug
 tags:
 - atomicity
@@ -1338,6 +1338,11 @@ comments:
   content: 'Advisor checkpoint disposition, 2026-10-08: read the full fresh INFRASTRUCTURE_REWORK_INDEPENDENT_REVIEW.md and accept its independent CHECKPOINT VERDICT APPROVE at exact head 6a1733a134b2e63f3adfd8e24606965a5d702f91, tree b8545647645319e3d1ef09da8e358b6768488e34, fixed base 5d4180e5ded8a55ad1b02beac5571c190d3da0ac. F1 complete-set owner-readable-mode refusal and F2 fresh retained-chain validation with persistent fencing resolve the previous inactive-checkpoint blockers. This is an inactive infrastructure checkpoint comment ONLY, not a standard parent review approval, dependency acceptance, completion, activation or merge permission. Preserve earlier REQUEST_CHANGES verdict and exact new evidence. Independent executed evidence: 35 standalone component tests, 2 prior filesystem reproducers, 27 actual Git callback records with parser, 22 portability tests, default core check, fmt/diff. Core no-default fails identically on checkpoint and fixed base (9 baseline diagnostics); reviewer did not run full workspace/cloud CI. Cargo sandbox workaround used review-local read-only lock opens on the same permanent queue and two slot flocks, disclosed in report; no broader validation claimed. All eight report production gates remain OPEN: coordinator/discovery/locks/journals/recovery; real authority and identity joins plus residue-free refusals; closed Git domain/authenticated pump; full reader/writer/history enlistment; independently reviewed exact TASK-1612 then common publisher/CommittedDispatch; all launch/pane/containment/lifetime adapters; complete real-entrypoint/nonvacuity/regression/CI matrix; fresh full-composition review, final CI and Joe/operator authority merge. TASK-1612 review is still pending and production release remains unavailable. Later integration must preserve current main peer changes. BUG-1808 stays In Progress; TASK-1607 and BUG-1802 remain later consumers. No lifecycle, queue, hold or grant changes authorized by this checkpoint.'
   created_at: 2026-10-08T16:00:31.551174645Z
   modified_at: 2026-10-08T16:00:31.551174645Z
+- id: 01a11d0a-3207-73f1-a971-219fe187ed68
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): exact inactive checkpoint6a1733 and8production gates remain open. Commissioned separate COMMON-OWNER DESIGN ONLY A2 join author bug1808-store-cas-owner-join-author under root current-store CAS brief, no spec lease/code/recovery/activation takeover. Full TASK1332 V2 independent A2 requires exact prepared-Git/private visibility, family authority at remote acceptance, accepted-remote/local-install-failure recovery, ambiguous outcomes/current successors and owned peer HIJACKED.toml ordering. Fresh local sample then unlock does not establish authority at remote success; local P4/C cannot be relabeled remote CAS. No new broker/schema/issuer/freeze/distributed transaction or implicit product fork. Full current common decisions and isolated TASK1717 protective partial scope retained. Concrete owner sketch will be canonically relayed then reviewed by NEW DIFFERENT independent advisor before any C-family code. Current TASK1612 source fixes independently resolved but whole transport PARTIAL pending workspace/CI; no dependency acceptance or production release implied. Reserved1593/1591/1811/1812 untouched.'
+  created_at: 2026-10-08T19:42:49.863819449Z
+  modified_at: 2026-10-08T19:42:49.863819449Z
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
