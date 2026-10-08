@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:06.737868438Z
-modified_at: 2026-10-08T16:20:14.889189814Z
+modified_at: 2026-10-08T16:20:15.799090007Z
 req_type: Task
 tags:
 - follow-up
@@ -40,6 +40,9 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): apply recorded operator answer Retain refusal (2026-10-08). Keep native macOS enablement unimplemented and Draft; park until TASK-1607 common integration is independently accepted and Joe explicitly revisits macOS enablement with native test capability. Deferral is not completion.'
   created_at: 2026-10-08T16:20:14.889189814Z
   modified_at: 2026-10-08T16:20:14.889189814Z
+deferred: true
+deferred_at: 2026-10-08T16:20:15.799090007Z
+deferred_until: TASK-1607 common integration accepted and operator explicitly revisits native macOS enablement with native validation
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
