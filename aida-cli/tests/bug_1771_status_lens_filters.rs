@@ -44,6 +44,7 @@ fn aida(fixture: &Fixture, args: &[&str]) -> Output {
         .env("HOME", &fixture.home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_SESSION_ROLE", "advisor")
+        .env("AIDA_AGENT_NAME", "test-agent")
         .env("NO_COLOR", "1");
     // ADR-66: the role env is only a hint; advisor-gated setup writes ride a
     // validated seat grant. trace:STORY-1473 | ai:claude

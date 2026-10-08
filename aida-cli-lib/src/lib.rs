@@ -95776,7 +95776,7 @@ pub(crate) fn handle_review_claim(
         pr,
         head.as_deref(),
         spec.map(|s| s.to_ascii_uppercase()).as_deref(),
-        &review_recorded_by().replace("aida review record", "aida review claim"),
+        &review_recorded_by(&project_root).replace("aida review record", "aida review claim"),
     );
     marker.pid = 0;
     marker.ttl_secs = ttl_mins.saturating_mul(60);
@@ -95977,7 +95977,18 @@ pub(crate) fn handle_review_record_at(
             "no commit could be resolved for this review — pass `--sha <commit>`; an unstamped verdict is unverifiable and will not be recorded"
         );
     }
-    let recorded_by = review_recorded_by();
+
+    // BUG-1802: bind recording identity and enforce policy.
+    // trace:BUG-1802 | ai:antigravity
+    let recorded_by = review_recorded_by(&project_root);
+    #[cfg(not(test))]
+    if recorded_by == "aida review record (operator)" {
+        crate::seat_authority::require_direct_human()
+            .context("aida review record attribution fallback")?;
+    }
+    if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
+        anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
+    }
 
     // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
     // standing marker (its text and who placed it) and any prior verdict
@@ -96383,21 +96394,27 @@ mod story_1405_review_marker_tests {
 /// Audit identity for a supported seat-written verdict. The launched seat's
 /// name is stable and distinguishable from the drain's own metadata writer.
 // trace:BUG-1467 | ai:codex
-pub(crate) fn review_recorded_by() -> String {
+pub(crate) fn review_recorded_by(project_root: &std::path::Path) -> String {
     review_recorded_by_from(
         std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
         std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
+        crate::seat_authority::current_seat(project_root).as_deref(),
     )
 }
 
-pub(crate) fn review_recorded_by_from(name: Option<&str>, kind: Option<&str>) -> String {
+pub(crate) fn review_recorded_by_from(
+    name: Option<&str>,
+    kind: Option<&str>,
+    role: Option<&str>,
+) -> String {
+    let role_disp = role.unwrap_or("reviewer");
     match (
         name.map(str::trim).filter(|s| !s.is_empty()),
         kind.map(str::trim).filter(|s| !s.is_empty()),
     ) {
-        (Some(name), Some(kind)) => format!("{name} ({kind} reviewer seat)"),
-        (Some(name), None) => format!("{name} (reviewer seat)"),
-        (None, Some(kind)) => format!("{kind} reviewer seat"),
+        (Some(name), Some(kind)) => format!("{name} ({kind} {role_disp} seat)"),
+        (Some(name), None) => format!("{name} ({role_disp} seat)"),
+        (None, Some(kind)) => format!("{kind} {role_disp} seat"),
         (None, None) => "aida review record (operator)".to_string(),
     }
 }
@@ -96408,7 +96425,7 @@ mod bug_1467_reviewer_record_tests {
 
     #[test]
     fn launched_reviewer_identity_is_distinct_from_the_drain_writer() {
-        let identity = review_recorded_by_from(Some("review-pr-1986"), Some("claude"));
+        let identity = review_recorded_by_from(Some("review-pr-1986"), Some("claude"), None);
         assert_eq!(identity, "review-pr-1986 (claude reviewer seat)");
         assert_ne!(identity, "aida drain reviewer");
     }

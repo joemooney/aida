@@ -1428,14 +1428,22 @@ pub(crate) enum ApprovalHeadRefusal {
     },
     /// The approval records no `reviewed_sha`, so it cannot be tied to any
     /// commit. `head_sha` is empty when the head was unreadable too.
-    NoReviewedSha { head_sha: String },
+    NoReviewedSha {
+        head_sha: String,
+    },
     /// The PR's current head could not be read, so no approval can be shown
     /// to cover it.
-    HeadUnreadable { reviewed_sha: String },
+    HeadUnreadable {
+        reviewed_sha: String,
+    },
     /// Both shas are present but too short to compare with confidence.
     Incomparable {
         reviewed_sha: String,
         head_sha: String,
+    },
+    // trace:BUG-1802 | ai:antigravity
+    Unauthorized {
+        recorded_by: String,
     },
 }
 
@@ -1457,7 +1465,22 @@ pub(crate) fn approval_head_refusal(
     use crate::awaiting_you::{classify_pr_review, PrReviewRow};
     let approvals = open_approvals(candidates);
     let head_sha = head.map(str::trim).unwrap_or("").to_string();
-    let row = classify_pr_review(&approvals, head).row?;
+    let decision = classify_pr_review(&approvals, head);
+
+    if let Some(newest) = approvals.iter().max_by_key(|a| a.recorded_at.clone()) {
+        if newest
+            .recorded_by
+            .as_deref()
+            .unwrap_or("")
+            .contains("implementer seat")
+        {
+            return Some(ApprovalHeadRefusal::Unauthorized {
+                recorded_by: newest.recorded_by.clone().unwrap_or_default(),
+            });
+        }
+    }
+
+    let row = decision.row?;
     let reviewed_sha = match &row {
         PrReviewRow::Stale { reviewed_sha }
         | PrReviewRow::Unverifiable { reviewed_sha }
@@ -1542,6 +1565,7 @@ pub(crate) fn approval_head_refusal_shas(refusal: &ApprovalHeadRefusal) -> (Stri
         ApprovalHeadRefusal::HeadUnreadable { reviewed_sha } => {
             (reviewed_sha.clone(), String::new())
         }
+        ApprovalHeadRefusal::Unauthorized { .. } => (String::new(), String::new()),
     }
 }
 
@@ -1603,6 +1627,9 @@ pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefus
         } => format!(
             "its approval sha {} cannot be compared with the PR head {} (too short to tell)",
             reviewed_sha, head_sha
+        ),
+        ApprovalHeadRefusal::Unauthorized { recorded_by } => format!(
+            "its approval was recorded by an unauthorized seat: {recorded_by} (self-review is prohibited)"
         ),
     };
     format!(
