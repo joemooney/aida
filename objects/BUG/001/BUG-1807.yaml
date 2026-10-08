@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T03:20:44.797738337Z
+modified_at: 2026-10-08T03:20:45.321161613Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -41,6 +41,11 @@ comments:
   content: Strict canonical lookup rework committed and pushed at 1508607da5a31797f29fda12800ad5b3d6f91dc6. Creation now requires a complete strict canonical inventory; read/parse failures refuse handoff without duplication or legacy fallback. Red and clean-SHA green actual CLI witnesses, all requested Rust filters, formatting/diff checks and 21 fast CI gates are recorded in .aida/handoff/bug1807/STRICT_LOOKUP_REWORK_READY.md. Existing lease 01a119472385 preserved; status InProgress. Ready for fresh independent review, not a self-review verdict. Prior REQUEST-CHANGES report and advisor decision remain evidence; no PR, hold clearance, merge or completion.
   created_at: 2026-10-08T03:08:19.563116009Z
   modified_at: 2026-10-08T03:08:19.563116009Z
+- id: 01a11987-13f4-7bc0-aaa5-9f5cb66a3c78
+  author: joe
+  content: 'PROXY DECISION: accept independent REQUEST_CHANGES at1508607da5 in STRICT_LOOKUP_INDEPENDENT_REVIEW.md. object_store::list_objects uses exists(), swallowing metadata errors into empty inventory after preflight; deterministic EACCES produced duplicate17->18. Require strict fallible enumeration at actual boundary, preserve tolerant readers, prove injected IO failure and no duplicate. Concrete brief bug1807-enumeration-rework.md. Canonical refusing-verdict no-PR refusal retained, not bypassed.'
+  created_at: 2026-10-08T03:20:45.300624255Z
+  modified_at: 2026-10-08T03:20:45.300624255Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
