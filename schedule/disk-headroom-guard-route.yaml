@@ -5,3 +5,5 @@ last_by:
   session: bfd19354-cbdf-496f-9fae-64fb73c21959
   vendor: antigravity
 result: done
+due_since: 2026-10-08T19:57:11.745742905Z
+due_reason: on CronJobFailed:disk-headroom-guard
