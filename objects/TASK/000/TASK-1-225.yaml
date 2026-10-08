@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-08T19:07:50.352730573Z
+modified_at: 2026-10-08T20:10:08.283224785Z
 req_type: Task
 tags:
 - closure-pending
@@ -269,6 +269,12 @@ comments:
   created_at: 2026-10-08T17:38:06.802559800Z
   modified_at: 2026-10-08T17:38:06.802559800Z
   relayed_from: independent_v2_advisor
+- id: 01a11d23-321b-7822-b2c6-a5ce3a4f4d3d
+  author: mcp
+  content: 'PROXY DECISION (orchestrator for Joe): full A2 common-owner store-CAS sketch and READY have been relayed unchanged to BUG-1808, sketch53274 bytes SHA2564f20ee848da54457d809fb6197d9d67589e52ea2ffacb8028290a371d224f00b; READY6532 bytes. These are a proposal, not accepted dependency or code dispatch. NEW DIFFERENT independent advisor will verify all five A2 joins, genuine F-1 counterexample and R-1/R-2/R-3 engineering rulings. No implicit acceptance relaxation or product choice. TASK-1717 remains protective partial under its exact independent code gate, and parent closure/common eight production gates remain open. No protected machine review record/production merge/activation is claimed.'
+  created_at: 2026-10-08T20:10:08.283218767Z
+  modified_at: 2026-10-08T20:10:08.283218767Z
+  relayed_from: bug1808-store-cas-owner-join-author
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
