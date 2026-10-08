@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T16:38:53.910749111Z
+modified_at: 2026-10-08T16:39:20.784662623Z
 req_type: Task
 tags:
 - docs:impacted
@@ -44,6 +44,11 @@ comments:
   content: Commit f03306facc references this requirement
   created_at: 2026-10-08T16:37:57.974616862Z
   modified_at: 2026-10-08T16:37:57.974616862Z
+- id: 01a11c62-35d0-7f11-8f9f-ad4cf4163073
+  author: joe
+  content: Acceptance delivered on pushed task-1613 head f03306facc2842c1e5ab05e3cb4d191a2e4c601e (exact final SHA in handoff; see source branch). Canonical aida-pr skill/command now delegate authorized review publication to ship --no-merge plus explicit autoqueue; managed parent publication, independent review, draft policy preserved. 23 template and 14 portable-pack tests, generation/parity, rustfmt, all applicable docs-only CI guards and MCP doc-consistency passed in isolated fake HOME/cwd/runtime. Broad check-ci-fast was terminated at the docs-inapplicable TUI check; no compiler diagnostic, no code scope expansion. No PR/merge/activation/install performed. Independent review and integration remain coordinator-owned; shared-store metadata sync remains coordinator-owned.
+  created_at: 2026-10-08T16:39:20.784662623Z
+  modified_at: 2026-10-08T16:39:20.784662623Z
 history:
 - id: 01a11c4d-439e-7890-8926-b76a03022ec6
   author: aida-session-start
