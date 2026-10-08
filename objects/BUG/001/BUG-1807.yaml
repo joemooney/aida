@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T04:53:56.208846029Z
+modified_at: 2026-10-08T05:27:41.624278444Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -68,6 +68,12 @@ comments:
   content: 'Inventory-only CI correction committed and normally pushed at 0f927344807e94b02699014fe4c3e85850e6dd80 on existing PR #2454. Config trust guard and seven classifier controls passed; all BUG-1807 targeted suites, isolated CLI fault/parity/retry fixture, fmt and diff checks passed. First full workspace run exited 101 due to 15 inherited AIDA_BIN/AIDA_AGENT_NAME test failures; all 15 passed after removing those overrides in a full repeat, but that repeat ended on SIGTERM (-15) after 1401.96s, so no green full-workspace/CI-equivalent claim. Main and lease preserved. Handoff and complete evidence: .aida/handoff/bug1807/CI_INVENTORY_REWORK_READY.md. Advisor notified (mail 76696254-b25a-4790-aeea-129250414057). Fresh independent approval of the new exact SHA and required CI remain outstanding; no self-approval or completion.'
   created_at: 2026-10-08T04:53:56.208846029Z
   modified_at: 2026-10-08T04:53:56.208846029Z
+- id: 01a119fb-4b38-7c72-b817-bb1f581435dc
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Accept the fresh independent exact-head review of 0f927344807e94b02699014fe4c3e85850e6dd80 recorded by bug1807-ci-inventory-reviewer. I read the complete CI_INVENTORY_INDEPENDENT_REVIEW.md and both supported canonical records, timestamp2026-10-08T05:27:00.284985341Z, and verified the exact SHA and actual reviewer attribution. The bounded inventory/docs correction restores the existing trust guard without weakening it. The current Ubuntu required run37729610953 passed the full workspace and guards; merge-hold-gate run37729610981 passed. Earlier contaminated/interrupted local runs remain recorded as failures/incomplete evidence. Approve routine normal gated shipping of PR2454 only at this reviewed SHA, with no stale-approval, stale-check, trailer, admin or hold overrides. Verify actual MERGED and Completed afterward; this comment alone is not a review verdict or completion proof.
+  created_at: 2026-10-08T05:27:41.624278444Z
+  modified_at: 2026-10-08T05:27:41.624278444Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
