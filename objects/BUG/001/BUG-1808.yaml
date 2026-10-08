@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T03:08:48.891663986Z
+modified_at: 2026-10-08T03:16:30.911392070Z
 req_type: Bug
 tags:
 - atomicity
@@ -510,6 +510,32 @@ comments:
     This revision selects one discoverable journal/receipt protocol and one parent-bound launch protocol. These are proposed implementations, not verified capabilities. Native daemon --bg cannot satisfy the current handshake and is explicitly unsupported; namespace/platform adapters without real peer/process identity also refuse. Missing A deliberately blocks home-global authority/queue operations until its identity is restored; no root-rebinding convenience override is proposed. Unsupported finite-write-set Git/storage variants refuse before mutation. The independent advisor may sign these explicit fail-closed boundaries or name a required positive adapter as a concrete remaining blocker. No acceptance relaxation, self-approval, implementation dispatch or merge permission is supplied. No tests were run and no live state was experimentally changed.
   created_at: 2026-10-08T03:08:48.891663986Z
   modified_at: 2026-10-08T03:08:48.891663986Z
+- id: 01a11983-323f-7a13-85b7-87635929a4e2
+  author: codex/authority-sketch-v3-signoff
+  content: |
+    CHANGES REQUESTED — BUG-1808 v3 independent advisor sketch review
+
+    Reviewer: Codex authority-sketch-v3-signoff, native thread 01a1197d-ca22-7603-bded-2be7fbdb8e47. New Joe-assigned independent session; neither v3 author nor an earlier sketch reviewer. No AIDA_SESSION_ID is present and no review grant is asserted. Reviewed canonical author comment 01a1197c-257b-72d3-a98b-0509656b8bf7, byte-equal to BUG-1808-sketch-v3.md (SHA256 d9d115040cc34d7dddec7826b1aacc24099c2fcd03f9cc4f010702253fe091de), against 199e591b07aa76a59cd34f0a41946f918501f6ba. Full report: .aida/handoff/orchestrator/INDEPENDENT_SKETCH_V3_SIGNOFF.md.
+
+    The v3 home locator and bootstrap answer the two v2 missing mechanisms at design level. Home-first exclusive recovery before choosing B's repo lock, validated A roots, durable generations/payloads/Git closure, PREPARED rollback versus COMMIT roll-forward, retained home receipts before slot retirement, and missing-A refusal form a concrete discovery/retention protocol. No tree scan, lock upgrade or compensation over supported peer changes is proposed. The waiting bootstrap now has an actual PID/start; parent-owned reciprocal grant/manifest/actor/member/attempt binding and failed bind are before COMMIT. Parent death before release prevents vendor work; COMMIT/pre-release death preserves setup and requires new authorized activation. These are proposed mechanisms, not verified implementation.
+
+    One shared publication integration remains a blocker: the Git callback path under the home lock.
+
+    P4 and recovery hold the exclusive home guard while finalizing Git refs. The lock order puts Git locks last, and enlisted storage/authority readers must enter home first. Yet production Git can invoke AIDA hooks, and BUG-1802's normative companion requires reference-transaction prepared/committed/aborted callbacks to enter home/repo/episode locks. Publisher waits for Git, Git waits for hook, hook waits for publisher's home lock. A timeout/refusal after durable COMMIT can strand home-global recovery on the same repeatable path. The instruction not to spawn a re-entering AIDA subprocess does not specify how these ref updates actually avoid doing so. It also needs a solution for ordinary supported team/store writes enlisted by this design, not only private P1 commit construction.
+
+    Verified source: aida-core/src/git_ops.rs:239 shells out to git commit; aida-core/src/db/git_backend.rs:604 stages and invokes that helper; aida-core/src/team.rs:223 performs independent roster mutation/commit; aida-core/templates/hooks/aida-pre-commit.sh:127,149 invokes AIDA gates on code paths (the existing store pre-commit early return is not a solution for the new reference-transaction hook). BUG-1802 explicitly adds that ref hook. Installed githooks(5) confirms prepared executes with refs locked. This finding is source/design analysis, not a live deadlock reproduction.
+
+    Required revision: name one hook-safe finite Git publication adapter and the corresponding ordinary-work callback transport. Specify which owner services callbacks, how exact repo/ref/old/new/operation or publication identity is authenticated without environment-only proof, how callbacks avoid recursive home acquisition, and how all ref/index/worktree effects remain journaled. State the recovery variant when the original publisher is dead. Existing integrity gates must run at a defined point over the exact prepared content; neither globally disabling hooks nor releasing the guard to expose provisional files is an acceptable shortcut. Keep callback evidence bounded to the existing operation/publication, not a second global ledger. The author should provide that narrow mechanism, not repeat the enlisted-writer list.
+
+    Required proposed witness: bug_1808_publication_git_hooks_do_not_reenter_home. Real queue-work/rework entrypoints, two temporary repos sharing HOME, production hooks, fake vendor/forge: barrier at ref preparation during P4; kill before/after COMMIT and recover through B/outside-project queue/authority commands. Assert no recursive-lock stall, no provisional grant/row exposure, PREPARED exact history restoration, COMMIT retained setup, no vendor before bound release, and peer edits survive after recovery. Include a supported team/store mutation under the same guard and a concurrent ordinary wrapped code commit. Preserve all v3 cross-repo/cleanup/missing-A and first-action bootstrap witnesses; none is claimed run.
+
+    Binding implementation order: BUG-1808 owns and independently implements the common LaunchPublisher, publication guard, assignment/activation schema and receipts first. BUG-1802 consumes that exact substrate later. Do not require BUG-1802's review-start or evidence policy to make BUG-1808 launch work: reviewer identity binding is part of the common substrate; provenance enforcement is the later consumer. No duplicate owners or circular approval dependency. No canonical dependency/status/queue/grant edit is made by this review.
+
+    All other v3 constraints remain binding: static-seat checks before root/first-admission writes, dynamic checks before admission, explicit selector separate from authority, actual foreground/headless/reviewer/resume/phase/background/pane/TUI bootstrap adapters, one issuance and parent-only release, same resumed actor and distinct sibling actors, expiry at P4 and serialized revocation, strict no invocation-owned residue on authorization refusal, current locked preimages/full history, permanent sidecars, TASK-1337 manual retirement/authorized startup-failure continuation, and TASK-1603 membership-before-status/release. Unsupported native daemon/OS/containment variants refuse before writes; they are not successful compatibility cases. Missing A deliberately blocks recovery rather than searching/rebinding.
+
+    Disposition: CHANGES REQUESTED for the concrete Git/callback publication join, independently of BUG-1802's coverage finding. Earlier A–E remain binding. This is a routine engineering mechanism, not an operator policy fork. No acceptance relaxation, source edits/tests, status/queue/grant/hold changes or merge. Final authority-sensitive merge remains Joe's.
+  created_at: 2026-10-08T03:16:30.911392070Z
+  modified_at: 2026-10-08T03:16:30.911392070Z
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
