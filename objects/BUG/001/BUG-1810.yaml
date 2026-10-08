@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   Resolve and stamp the actual canonical distributed store snapshot in ordinary main and linked worktree commits, using configured store locations and correct repository identity rather than inherited code Git discovery. Real production-hook fixtures must assert trailer matches verified store OID and differs from distinct code OID. Exercise unavailable/corrupt/misresolved store with explicit honest behavior, never silently use code HEAD. Preserve message edits, configured guards, actual final-message checking and existing supported legacy behavior; do not bypass hooks or rewrite historical commits. Common BUG1808 signed Git preparation must bind correct canonical store snapshot/final message, not import this faulty lookup as provenance. This draft captures the discovered defect for triage; no separate doer or completion/activation is authorized by filing it.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T05:58:40.207284193Z
-modified_at: 2026-10-08T05:59:03.636424002Z
+modified_at: 2026-10-08T06:45:47.928253959Z
 req_type: Bug
 tags:
 - from-advisor
@@ -23,6 +23,14 @@ relationships:
   target_id: 01a11874-024a-71b2-935d-56a2a7e89778
   created_at: 2026-10-08T05:59:03.636415624Z
   created_by: joe
+history:
+- id: 01a11a42-cd18-7c72-b0c9-fe4c75f0909c
+  author: joe
+  timestamp: 2026-10-08T06:45:47.928249537Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 8ea2fe47c0e6128127a67251ad4545a412fb5d28
   branch: main
