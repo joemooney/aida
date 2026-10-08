@@ -13,8 +13,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-08T17:20:45.972632234Z
+modified_at: 2026-10-08T19:17:49.561975795Z
 req_type: Task
+tags:
+- operator-held
 comments:
 - id: 01a10353-caab-7160-8f2f-e7811c37b429
   author: joe
@@ -75,6 +77,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+deferred: true
+deferred_at: 2026-10-08T19:17:49.561975795Z
+deferred_until: When legitimate bound recording and clearance actors exist through the ordinary supported workflow, run only the two remaining witnesses and obtain new independent full acceptance review; no stale binary, forged actor or hold-clear workaround.
+deferred_reason: 'Full verification remains incomplete: bounded consumer/pin/MET evidence accepted, but the authorized protected request-changes producer with exact PR/full SHA and actual authorized human-clear-to-ship witness are unavailable. Refused producer/clear attempts stay failures.'
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:54:42.331293739Z
