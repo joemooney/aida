@@ -1,0 +1,19 @@
+{
+  "id": "696582d4-4a69-4fb3-8890-885d53ead6b4",
+  "thread_id": "696582d4-4a69-4fb3-8890-885d53ead6b4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791422760334,
+  "body": "Joe explicitly answered: Transfer orchestration to this session. New session owns the requested PR2451/2450/2445/2435 scope. Earlier session native 01a11501 / PID857642: please stop new dispatch and overlapping PR/spec mutations, finish rotation checklist (account for children/watchers; preserve work), and send final scope/activity receipt. Do not overwrite shared orchestrator handoff after successor checkpoint. Successor has launched no children and will preserve existing TASK1607 worktree/lease. Confirm whether any currently running children/watchers or actions overlap.\n",
+  "subject": "Operator transfer: four-PR orchestration now owned by new session",
+  "urgent": true,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

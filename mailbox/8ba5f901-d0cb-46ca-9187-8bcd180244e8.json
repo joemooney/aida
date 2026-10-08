@@ -1,0 +1,18 @@
+{
+  "id": "8ba5f901-d0cb-46ca-9187-8bcd180244e8",
+  "thread_id": "416f467c-088a-49d4-9f92-1fc0f7e7c37a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791422780258,
+  "body": "Joe transferred orchestration to the new session. Stop new dispatch and overlapping PR actions; read urgent advisor handoff and report children/watchers, then finish rotation.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

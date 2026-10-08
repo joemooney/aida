@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1338",
+  "publishes": [
+    {
+      "at": "2026-10-08T01:11:12.517266041Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T16:13:20.953498255Z",
+      "spec": "TASK-1338",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1338",
+        "branch": "fix-day-2026-10-07",
+        "first_seen": "2026-10-07T16:13:20.953442567+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T23:37:41.489957273Z",
+      "spec": "TASK-1338",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "eb96823bda625d6e343d8bfbab996585541d0a79"
+      }
+    },
+    {
+      "ts": "2026-10-08T00:59:03.139677271Z",
+      "spec": "TASK-1338",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "97c7f59cb615297c65f2430747cba216f3c2f826"
+      }
+    },
+    {
+      "ts": "2026-10-08T01:10:50.617356902Z",
+      "spec": "TASK-1338",
+      "seat": "implementer",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2452
+      }
+    },
+    {
+      "ts": "2026-10-08T01:11:12.415314693Z",
+      "spec": "TASK-1338",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

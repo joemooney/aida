@@ -1,0 +1,19 @@
+{
+  "id": "14be5178-f40c-4b97-80b6-7937b0b7b752",
+  "thread_id": "14be5178-f40c-4b97-80b6-7937b0b7b752",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791422724590,
+  "body": "Joe has assigned this new advisor session aida-orchestrate proxy work for PRs 2451,2450,2445,2435. Live earlier Codex advisor process 857642 resumes native session 01a11501-1827-7d22-988a-2a2e0a742de9; current session is later. Please confirm whether earlier session still owns orchestration and its active scope. Verified PR2452 merged by Joe at a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1. No new dispatch, overlapping PR mutation, or hold clearance performed. Direct native-session mail routing refused as ambiguous (two matching registry records); this is the shared advisor fallback. Current later session stands down from overlapping mutations until ownership is resolved.\n",
+  "subject": "Orchestrator ownership check: new proxy request for four PRs",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
