@@ -1951,3 +1951,90 @@ fn bug_1505_audit_flags_legacy_keys_and_missing_sha_without_rewriting() {
         legacy
     );
 }
+
+// Fix-day 2026-10-07: PR-2435's raw writer omitted round provenance.
+#[test]
+fn fix_day_recorded_rounds_keep_actual_recorder_and_timestamp() {
+    let tmp = TempDir::new().unwrap();
+    let path = verdict_path(tmp.path(), "PR-2435");
+    let old = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let new = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    for (sha, recorder) in [(old, "first reviewer"), (new, "second reviewer")] {
+        record_verdict_at_path(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            Some(sha),
+            None,
+            Some("review complete"),
+            &[],
+            recorder,
+        )
+        .unwrap();
+    }
+    let body = std::fs::read_to_string(&path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+    for (round, recorder) in [
+        (&value, "second reviewer"),
+        (&value["rounds"][0], "first reviewer"),
+    ] {
+        assert_eq!(round["recorded_by"], recorder);
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(round["recorded_at"].as_str().unwrap()).is_ok()
+        );
+    }
+    assert_eq!(
+        reconcile_artifacts_for_sha([body.as_str()], new).unwrap(),
+        Some(VerdictKind::Approved)
+    );
+    // Existing missing metadata must still block, never be inferred.
+    let mut corrupt = value.clone();
+    corrupt["rounds"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("recorded_by");
+    assert!(
+        reconcile_artifacts_for_sha([corrupt.to_string().as_str()], new)
+            .unwrap_err()
+            .contains("retained round has no recorded_by")
+    );
+}
+
+#[test]
+fn fix_day_empty_recorder_fails_before_writing_or_archiving() {
+    let tmp = TempDir::new().unwrap();
+    let path = verdict_path(tmp.path(), "PR-2435");
+    record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        None,
+        None,
+        &[],
+        "actual reviewer",
+    )
+    .unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let error = record_verdict_at_path(
+        tmp.path(),
+        &path,
+        Some("approved"),
+        Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        None,
+        None,
+        &[],
+        "  ",
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn fix_day_review_template_uses_provenance_writer_for_verdicts() {
+    let template = include_str!("../../../aida-core/templates/skills/aida-review.md");
+    assert!(template.contains("aida review record <SPEC-ID> --pr <N>"));
+    assert!(!template.contains("cat > \"$AIDA_REVIEW_VERDICT_FILE\""));
+    assert!(template.contains("recorded_by") && template.contains("recorded_at"));
+}

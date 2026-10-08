@@ -1,9 +1,34 @@
+Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+delegation before persisting an implicit queue row or changing calibration, lease,
+worktree, or spec state. Occupied branches receive a manual retirement offer only
+when idle, clean, unlocked, and unleased. Setup failures retain a manual
+`aida worktree enter` and guided-session continuation.
+<!-- trace:TASK-1337 | ai:codex -->
+
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
 # AIDA — Overview
 
 Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
 workspace build so feature-disabled stubs stay buildable. This check-only guard
 uses the existing full-CI filter and skips docs-only changes.
 <!-- trace:TASK-1601 | ai:codex -->
+
+`aida pr ship` reports live drive ownership at direct human terminals using
+wave/PID, owning member phase, and session-scoped activity evidence.
+`--wait [secs]` (default 300) polls ownership every two seconds and continues
+through the existing shipping gates after release; timeout/refusal exits
+non-zero. Drive seats and headless callers refuse immediately, preventing
+self-waits. The explicit in-drive override does not bypass merge holds.
+See [git lifecycle](docs/cli/04-git-lifecycle.md) for usage and evidence limits.
+Wait release refreshes PR metadata; a drive merge takes the sync/cleanup path
+without CI or merge credit. Shared run identity is reported as uncorroborated.
+<!-- trace:TASK-1602 | ai:codex -->
 
 Windows validation runs weekly on latest main (Sunday 06:00 UTC); non-main
 manual dispatches fail before validation. Selected-path Windows PR checks stay
@@ -77,6 +102,27 @@ mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
 commit-evidence and ledgered `--force` rules.
+
+**Drain launch ownership.** A single, batch, or nextN member publishes its
+run UUID and zen provenance before the phase-1 status bump and phase-child
+launch. Ownership persistence is required: missing/corrupt batch state or a
+failed write returns a phase-1 failure before that run changes status or
+spawns a phase child. Pipelined parents leave the bump to the registered
+member process. Each active member publishes an independent UUID record in
+`.aida/orchestrator-runs/`, including its PID and zen provenance. Children
+require that record, a live member PID and a live parent drain snapshot;
+current-run snapshot fields are telemetry only. Cleanup revokes only the
+exiting member's UUID, so overlapping members keep authority. A delayed
+child may leave its queue head Approved briefly; the scheduler waits for
+progress and retries selection without treating that duplicate as exhaustion.
+Stale or bare environment flags grant no authority. Refreshed batch/nextN
+selection can admit newly unblocked or newly tagged members; checked run
+registration adds them to the parent snapshot before token corroboration.
+Snapshot read/modify/write updates serialize on the permanent
+`.aida/drain-state-write.lock` sidecar, preserving dynamic membership through
+concurrent phase updates and sibling cleanup. The child still requires both
+live PIDs and recorded membership.
+<!-- trace:TASK-1603 | ai:codex -->
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
@@ -193,7 +239,7 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
 
-1. **The intent store (the data plane).** The git-canonical requirement graph: YAML objects on the orphan `aida-store` branch, stable IDs, typed relationships, comments, the rebuildable cache, and the intent layer that makes the store worth keeping — acceptance criteria, `// trace:` comments, reconstitution, contradiction and gap detection. This is what "requirements management" names, and it is the product.
+1. **The intent store (the data plane).** The git-canonical requirement graph: YAML objects on the orphan `aida-store` branch, stable IDs, typed relationships, comments, the rebuildable cache, and the intent layer that makes the store worth keeping — acceptance criteria, `// trace:` comments, reconstitution, contradiction and gap detection. This is what "requirements management" names, and it is the product. Reconstitution reports probe failures even when recall has no traced-test denominator; a successful agent exit still requires readable, valid probe output, with artifact and headless-log paths retained in failure reasons (see [reporting](docs/cli/08-reporting.md#aida-reconstitute)).
 2. **The control plane (the corpus-integrity layer).** The layer that decides whether work may advance and reports the state of work in flight: the queue, the drain, the orchestrator and its phases, seats, leases, worktree assignment, review verdicts, merge-holds, `BlockedBy` gating, required-check rollups, the event feed, and the surfaces that report on all of it (`aida ps`, drain status, awaiting, doctor). It exists to keep the store true while unreliable agent workers change the code; that is why it takes about half the engineering without being the product. Its two sub-facets have industry names — admission / merge gating (a merge queue) and state reconciliation (actual vs reported vs desired) — and its characteristic defect is a surface asserting a state that is not true: false-green, false-empty, stale reading as current.
 3. **The execution layer.** Isolated worktrees and sessions in which agents (Claude Code, Codex CLI, Antigravity, any harness with a shell) do the work, one spec per worktree, with role-pure seats and deterministic handoffs.
 4. **The surfaces.** CLI, MCP, TUI and web. They display store and control-plane state; none of them is the control plane and none of them is the product's face.
@@ -408,3 +454,11 @@ spawn. An exit-zero report therefore does not prove that an agent ran. See the
 [pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
 TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
 <!-- trace:TASK-1327 | ai:codex -->
+
+`aida pr ship` checks known review, mergeability, stale CI definition, and hold
+blockers before waiting for CI, and repeats the checks before merge. An optional
+`--wait <secs>` deadline covers registration and settlement; the default is
+unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
+stale definition, and hold refusals for scripts. See
+[git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
+<!-- trace:TASK-1606 | ai:codex -->

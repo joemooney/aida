@@ -84,6 +84,55 @@ or forced completion is needed for an ID remapping.
 
 **Gotchas.** `auto-queue-review` and `ship` detect the PR via `gh pr list --head <branch>`, so `gh` must be on PATH and authenticated. `ship` squash-merges — if you need merge commits preserved, it's the wrong verb.
 
+**Drive-owned PRs.** A live drive's PR remains protected by its independent
+reviewer. A direct human terminal invocation reports the owning wave/PID
+and phase, plus recent headless activity when that member's session is known.
+Activity from another member is never attributed to this PR. Missing activity
+is reported as unavailable; a live PID alone does not establish progress.
+The explanation describes the outcome: the drive merges if authorized or
+escalates the merge decision to the operator. It does not prompt.
+
+Use `aida pr ship <N> --wait 120` to poll ownership every two seconds for up to
+120 seconds; bare `--wait` uses 300 seconds. Release continues through the
+ordinary CI, approval, and merge-hold gates after refreshing PR metadata. If
+the drive merged while waiting, ship runs post-merge sync/cleanup without
+watching CI, merging again, or claiming merge credit. Shared run identity is
+reported unavailable because phase entry can leave a sibling run UUID in the
+snapshot. Timeout and ownership refusals
+exit non-zero. Drive seats (including headless callers) refuse immediately,
+even with `--wait`, so they cannot wait on their own pipeline. The explicit
+`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1` override remains available and never bypasses
+merge holds. Operator explanations use the same direct-TTY/non-managed-agent
+predicate as direct role grants.
+<!-- trace:TASK-1602 | ai:codex -->
+
+**Preflight and CI deadline.** Ship checks mergeability, approval at the current
+head, verdict reconciliation, review-in-progress, merge-holds (including a
+label without a local marker), and stale CI definitions before watching CI.
+It checks again before merging because the head and gates can change during
+the wait. The stale-check and stale-approval overrides apply in both phases;
+they do not bypass verdict reconciliation or holds.
+
+`aida pr ship [N] --wait [SECS]` bounds drive ownership, registration, and
+CI settlement with one deadline. Bare `--wait` uses 300 seconds. Omit `--wait` for an unbounded wait. Pending state is printed
+on each poll; expiry leaves the PR open. Informational checks remain excluded
+unless required by branch protection.
+
+| Exit | Outcome |
+| --- | --- |
+| 0 | Merged or already merged (dry-run only previews) |
+| 1 | Other command/forge error |
+| 20 | CI red |
+| 21 | Ownership or CI wait timed out |
+| 22 | Needs rebase / forge reports not mergeable |
+| 23 | Needs review, approval at head, or verdict repair |
+| 24 | Stale CI definition |
+| 25 | Merge-hold present |
+
+Draft-only, supervised, and drive-owned review handoffs return 23, leaving
+the PR open. Scripts can branch on these codes instead of parsing messages.
+<!-- trace:TASK-1606 | ai:codex -->
+
 **Completion credit.** Ship uses an explicit trailing `(REQ-ID …)` title group,
 then branch-name recovery; each ID must resolve unambiguously in the store.
 Mid-title references and PR-body prose do not become completing trailers.

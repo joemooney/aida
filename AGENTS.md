@@ -1,3 +1,23 @@
+Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+delegation before persisting an implicit queue row or changing calibration, lease,
+worktree, or spec state. Occupied branches receive a manual retirement offer only
+when idle, clean, unlocked, and unleased. Setup failures retain a manual
+`aida worktree enter` and guided-session continuation.
+<!-- trace:TASK-1337 | ai:codex -->
+
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
+`pr ship` preflights review/corpus, mergeability, stale-definition, and hold
+gates before CI, then checks again under the merge lease. `--wait <secs>`
+bounds CI registration plus settlement; omitted means unbounded. Typed exit
+codes 20–25 distinguish refusals. See [git lifecycle](docs/cli/04-git-lifecycle.md).
+<!-- trace:TASK-1606 | ai:codex -->
+
 GitHub `pr ship` polls classified CI rows directly, so pending or failed
 informational workflows do not delay shipping. Required checks override the
 informational allow-list; other unlisted failures still block the merge.
@@ -16,6 +36,17 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 <!-- trace:TASK-1328 | ai:codex -->
 
 # AGENTS.md
+
+Drain run ownership is persisted before the phase-1 status bump and child
+launch. Missing/corrupt batch state or failed ownership writes stop the member
+before launch; pipelined parents leave the bump to the registered child.
+Concurrent members use independent UUID records in `.aida/orchestrator-runs/`
+with live member/parent PID checks and token-scoped cleanup. A duplicate
+in-flight queue head waits for child progress without declaring exhaustion.
+Refreshed batch/nextN members join the snapshot during checked registration,
+before phase entry. Snapshot updates share a permanent write-lock sidecar so
+concurrent admission and cleanup retain sibling membership and tokens.
+<!-- trace:TASK-1603 | ai:codex -->
 
 Reconstitution can fail before vendor spawn when its empty scratch cwd cannot
 resolve the seat roster. Store-probe failures now also print to stderr; command
@@ -37,12 +68,28 @@ platform run within 24h. Weekly cadence does not shorten Linux PR CI.
 See [CI policy](docs/agents/aida-repository-guide.md).
 <!-- trace:TASK-1588 | ai:codex -->
 
+Ship ownership refusals exit non-zero. Direct human terminals get owning
+wave/run/phase and member-scoped activity evidence; `pr ship --wait [secs]`
+(default 300) polls every two seconds before continuing through ordinary gates.
+Drive seats/headless callers refuse immediately even with `--wait`; the
+explicit in-drive override never bypasses merge holds. See
+[git lifecycle](docs/cli/04-git-lifecycle.md).
+Wait release refreshes PR metadata; a drive merge takes the sync/cleanup path
+without CI or merge credit. Shared run identity is reported as uncorroborated.
+<!-- trace:TASK-1602 | ai:codex -->
+
 Ship derives completion IDs from an explicit trailing PR-title group, then
 store-resolving branch IDs. Title prose, PR bodies, and an unrelated branch-head
 trailer do not grant completion credit. CLI/MCP rework and status edits record
 `reopened_at_sha` when reopening Done/Completed; live and replay scans reject
 evidence at or before that SHA. See [git lifecycle](docs/cli/04-git-lifecycle.md).
 <!-- trace:TASK-1600 | ai:codex -->
+
+Reconstitution preserves store-probe failures even with no traced-test denominator.
+Missing or invalid probe artifacts report their output and headless-log paths;
+a successful child exit alone does not establish a successful probe.
+See [reporting](docs/cli/08-reporting.md#aida-reconstitute).
+<!-- trace:TASK-1-216 | ai:codex -->
 
 Mirror code refs follow origin's confirmed tips. Pre-push hook proposals are
 mirrored only when origin already advertises the exact SHA; rejected or pending

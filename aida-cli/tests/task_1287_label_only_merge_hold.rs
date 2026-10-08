@@ -72,10 +72,19 @@ set -eu
 state=${AIDA_FIXTURE_STATE:?}
 printf '%s\n' "$*" >> "$state/calls"
 
-if [ "$1 $2" = "pr list" ]; then
+if [ "$1" = "--version" ]; then
+  echo "gh version fixture"
+elif [ "$1 $2" = "pr list" ]; then
   printf '%s\n' '[{"number":1287,"url":"https://github.test/pull/1287","headRefName":"task-1287-fixture","baseRefName":"main","title":"fixture"}]'
-elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title,mergedAt'; then
+elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title.*mergedAt'; then
+  if [ -f "$state/merged" ]; then
+    printf '%s\n' '{"state":"MERGED","title":"fixture","mergedAt":"2026-10-06T13:42:00Z","baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
+    exit 0
+  fi
   printf '%s\n' '{"state":"OPEN","title":"fixture","mergedAt":null,"baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
+elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,mergeable,reviewDecision,headRefOid'; then
+  # trace:TASK-1606 | ai:codex — preflight now reads forge mergeability.
+  printf 'OPEN\tMERGEABLE\t\tabc\n'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; then
   test -f "$state/label" && printf '%s\n' true || printf '%s\n' false
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
@@ -127,14 +136,14 @@ fi
         }
     }
 
-    fn ship(&self) -> Output {
+    fn ship_command(&self) -> Command {
         let inherited = std::env::var_os("PATH").unwrap_or_default();
         let path = std::env::join_paths(
             std::iter::once(self.bin.clone()).chain(std::env::split_paths(&inherited)),
         )
         .unwrap();
-        Command::new(env!("CARGO_BIN_EXE_aida"))
-            .current_dir(&self.repo)
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+        cmd.current_dir(&self.repo)
             .args([
                 "pr",
                 "ship",
@@ -146,11 +155,15 @@ fi
             .env("HOME", &self.home)
             .env("PATH", path)
             .env("AIDA_FIXTURE_STATE", &self.state)
+            .env("AIDA_TEST_GH_BINARY", self.bin.join("gh"))
             .env("AIDA_TELEMETRY", "0")
             .env("NO_COLOR", "1")
-            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1")
-            .output()
-            .unwrap()
+            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1");
+        cmd
+    }
+
+    fn ship(&self) -> Output {
+        self.ship_command().output().unwrap()
     }
 
     // trace:TASK-1331 | ai:codex
@@ -364,13 +377,17 @@ fn gitlab_ship_refines_failed_watcher_for_informational_jobs() {
         let output = fixture.ship();
         assert!(output.status.success(), "{}", output_text(&output));
         let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
-        let watch = calls
-            .find("ci status")
-            .expect("must retain pipeline watcher");
         let rows = calls
             .find("pipelines/1/jobs")
-            .expect("must refine failed watcher");
-        assert!(watch < rows, "{calls}");
+            .expect("must classify job rows");
+        let merge = calls
+            .find("merge_requests/1287/merge")
+            .expect("must merge after green classified jobs");
+        assert!(rows < merge, "{calls}");
+        assert!(
+            !calls.contains("ci status"),
+            "bounded wait must not invoke unbounded watcher: {calls}"
+        );
         assert!(calls.contains("merge_requests/1287/merge"), "{calls}");
         assert_eq!(
             std::fs::read_to_string(fixture.state.join("events")).unwrap(),
@@ -396,13 +413,14 @@ fn gitlab_ship_rejects_unlisted_failures_and_unavailable_job_rows() {
         assert!(!output.status.success(), "{}", output_text(&output));
         let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
         assert!(
-            calls.contains("ci status") && calls.contains("pipelines/1/jobs"),
+            !calls.contains("ci status") && calls.contains("pipelines/1/jobs"),
             "{calls}"
         );
         assert!(!calls.contains("merge_requests/1287/merge"), "{calls}");
         let text = output_text(&output);
         if unavailable {
-            assert!(text.contains("CI failed"), "{text}");
+            assert_eq!(output.status.code(), Some(20), "{text}");
+            assert!(text.contains("CI did not pass"), "{text}");
         } else {
             assert!(
                 text.contains("CI is red") && text.contains("Optional"),
@@ -410,4 +428,272 @@ fn gitlab_ship_rejects_unlisted_failures_and_unavailable_job_rows() {
             );
         }
     }
+}
+
+// Exercise actual CLI exit status, continuation to merge, and the downstream
+// hold gate using the same fake forge as the hold regressions above.
+// trace:TASK-1602 | ai:codex
+fn drive_state(fixture: &Fixture) -> PathBuf {
+    let aida = fixture.repo.join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    std::fs::write(
+        aida.join("drain.lock"),
+        serde_json::json!({
+            "pid": std::process::id(), "started_at_utc": "2026-10-06T13:42:00Z",
+            "command": "test drive", "host": "test", "wave_id": "test-wave"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let path = aida.join("drain-state.json");
+    std::fs::write(
+        &path,
+        serde_json::json!({
+            "command": "test drive", "mode": "single", "members": [{
+                "spec": "TASK-1602", "state": "in-phase-3", "pr": 1287
+            }], "current": "TASK-1602", "current_phase": "3 (reviewer)",
+            "orchestrator_pid": std::process::id(), "started_at": "2026-10-06T13:42:00Z",
+            "on_drain_complete": "escalates merge", "run_uuid": "test-run"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    path
+}
+
+fn operator_ship(fixture: &Fixture) -> Command {
+    let mut cmd = fixture.ship_command();
+    for key in [
+        "AIDA_HEADLESS",
+        "AIDA_AUTO_COMPLETE",
+        "AIDA_AUTO_COMPLETE_TOKEN",
+        "AIDA_AGENT_NAME",
+        "AIDA_AGENT_TYPE",
+        "AIDA_PR_SHIP_ALLOW_IN_DRIVE",
+    ] {
+        cmd.env_remove(key);
+    }
+    cmd
+}
+
+#[test]
+fn drive_owned_cli_timeout_is_nonzero_and_never_watches_ci() {
+    let fixture = Fixture::new(false);
+    drive_state(&fixture);
+    let output = operator_ship(&fixture)
+        .args(["--wait", "0"])
+        .output()
+        .unwrap();
+    let text = output_text(&output);
+    assert!(!output.status.success(), "{text}");
+    assert!(text.contains("timed out"), "{text}");
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+    assert!(
+        !calls.contains("pr checks") && !calls.contains("pr merge"),
+        "{calls}"
+    );
+    let output = operator_ship(&fixture)
+        .env("AIDA_HEADLESS", "1")
+        .args(["--wait", "300"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{}", output_text(&output));
+    assert!(output_text(&output).contains("caller is a drive"));
+    assert!(!output_text(&output).contains("waiting for drive release"));
+}
+
+#[test]
+fn drive_release_wait_continues_to_ship_and_still_enforces_holds() {
+    for held in [false, true] {
+        let fixture = Fixture::new(held);
+        let path = drive_state(&fixture);
+        let child = operator_ship(&fixture)
+            .args(["--wait", "10"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        // Releasing state after the process starts allows either the first or
+        // a later ownership probe to observe release; unit coverage verifies
+        // the exact two-probe transition separately.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        std::fs::remove_file(path).unwrap();
+        let output = child.wait_with_output().unwrap();
+        let text = output_text(&output);
+        assert_eq!(output.status.success(), !held, "{text}");
+        let events = std::fs::read_to_string(fixture.state.join("events")).unwrap_or_default();
+        assert_eq!(events.contains("merge"), !held, "{text}");
+    }
+}
+
+#[test]
+// trace:TASK-1602 | ai:codex
+fn direct_tty_explains_ownership_but_managed_tty_gets_plain_refusal() {
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use std::io::Read;
+    for managed in [false, true] {
+        let fixture = Fixture::new(false);
+        drive_state(&fixture);
+        let source = operator_ship(&fixture);
+        let mut cmd = CommandBuilder::new(source.get_program());
+        cmd.args(source.get_args());
+        cmd.cwd(&fixture.repo);
+        for (key, value) in source.get_envs() {
+            match value {
+                Some(value) => cmd.env(key, value),
+                None => cmd.env_remove(key),
+            }
+        }
+        if managed {
+            cmd.env("AIDA_AGENT_NAME", "codex");
+        }
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 120,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let mut child = pair.slave.spawn_command(cmd).unwrap();
+        drop(pair.slave);
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let read = std::thread::spawn(move || {
+            let mut text = String::new();
+            let _ = reader.read_to_string(&mut text);
+            text
+        });
+        let started = std::time::Instant::now();
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break status;
+            }
+            if started.elapsed() > std::time::Duration::from_secs(5) {
+                child.kill().unwrap();
+                panic!("ship must explain/refuse without waiting for terminal input");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        };
+        assert!(!status.success());
+        drop(pair.master);
+        let text = read.join().unwrap();
+        assert!(text.contains("owned by the live drive"), "{text}");
+        assert_eq!(text.contains("test-wave"), !managed, "{text}");
+        assert_eq!(text.contains("run unavailable"), !managed, "{text}");
+        assert_eq!(text.contains("3/6 (reviewer)"), !managed, "{text}");
+        assert_eq!(text.contains("activity unavailable"), !managed, "{text}");
+        assert_eq!(
+            text.contains("escalates the merge decision"),
+            !managed,
+            "{text}"
+        );
+        assert_eq!(text.contains("--wait 300"), !managed, "{text}");
+    }
+}
+
+// trace:TASK-1602 | ai:codex
+#[test]
+fn drive_merge_during_wait_skips_ci_and_merge_without_claiming_credit() {
+    use std::io::{BufRead, BufReader};
+    for bucket in ["pass", "fail"] {
+        let fixture = Fixture::new(false);
+        let path = drive_state(&fixture);
+        std::fs::write(
+            fixture.state.join("rows"),
+            format!(r#"[{{"name":"Build","workflow":"CI","bucket":"{bucket}"}}]"#,),
+        )
+        .unwrap();
+        std::fs::write(fixture.state.join("required"), "[]").unwrap();
+        let mut child = operator_ship(&fixture)
+            .args(["--wait", "10"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        // Synchronize on the actual ownership wait, so metadata was OPEN
+        // before the transition and the drive guard has observed its owner.
+        let mut stderr = BufReader::new(child.stderr.take().unwrap());
+        let mut prefix = String::new();
+        loop {
+            let mut line = String::new();
+            assert!(stderr.read_line(&mut line).unwrap() > 0, "{prefix}");
+            let waiting = line.contains("waiting for drive release");
+            prefix.push_str(&line);
+            if waiting {
+                break;
+            }
+        }
+        std::fs::write(fixture.state.join("merged"), "merged").unwrap();
+        std::fs::remove_file(path).unwrap();
+        child.stderr = Some(stderr.into_inner());
+        let output = child.wait_with_output().unwrap();
+        let text = format!("{prefix}{}", output_text(&output));
+        let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+        assert!(output.status.success(), "{text}\n{calls}");
+        assert!(
+            text.contains("was already merged (not by this run)"),
+            "{text}\n{calls}"
+        );
+        assert!(!text.contains("PR-1287 shipped"), "{text}");
+        assert!(
+            calls.matches("state,title,author,mergedAt").count() >= 2,
+            "{calls}"
+        );
+        assert!(
+            !calls.contains("pr checks") && !calls.contains("pr merge"),
+            "{calls}"
+        );
+        let events =
+            std::fs::read_to_string(fixture.repo.join(".aida/events.jsonl")).unwrap_or_default();
+        assert!(!events.contains("PrMerged"), "{events}");
+    }
+}
+
+// trace:TASK-1606 | ai:codex
+#[test]
+fn ownership_and_ci_share_one_wait_deadline() {
+    use std::io::{BufRead, BufReader};
+    let fixture = Fixture::new(false);
+    let path = drive_state(&fixture);
+    std::fs::write(
+        fixture.state.join("rows"),
+        r#"[{"name":"Build","workflow":"CI","bucket":"pending"}]"#,
+    )
+    .unwrap();
+    std::fs::write(fixture.state.join("required"), "[]").unwrap();
+    let started = std::time::Instant::now();
+    let mut child = operator_ship(&fixture)
+        .args(["--wait", "2"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = BufReader::new(child.stderr.take().unwrap());
+    let mut prefix = String::new();
+    loop {
+        let mut line = String::new();
+        assert!(stderr.read_line(&mut line).unwrap() > 0, "{prefix}");
+        let waiting = line.contains("waiting for drive release");
+        prefix.push_str(&line);
+        if waiting {
+            break;
+        }
+    }
+    // The ownership poll consumes the budget, then release leads into CI
+    // with no new two-second allowance.
+    std::fs::remove_file(path).unwrap();
+    child.stderr = Some(stderr.into_inner());
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(21),
+        "{prefix}{}",
+        output_text(&output)
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(3500),
+        "a second CI budget was incorrectly granted"
+    );
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+    assert!(!calls.contains("pr merge"), "{calls}");
 }

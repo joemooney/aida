@@ -2198,6 +2198,9 @@ pub enum PrCommand {
     // trace:TASK-458 | ai:claude
     // trace:BUG-286 | ai:claude
     // trace:TASK-487 | ai:claude
+    #[clap(
+        after_help = "Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI red; 21 ownership/CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24 stale CI definition; 25 merge-hold present."
+    )]
     Ship {
         /// PR number to ship. When omitted, the command resolves the
         /// PR open on the current branch (or creates one if none
@@ -2219,6 +2222,15 @@ pub enum PrCommand {
         /// Print the resolved sequence without executing any of it.
         #[clap(long)]
         dry_run: bool,
+
+        /// Bound drive ownership plus CI registration/settlement wait in seconds.
+        /// Bare --wait uses 300 seconds; omitted leaves CI unbounded and refuses
+        /// drive-owned PRs immediately. Drive seats always refuse immediately.
+        /// Exit codes: 20 CI red, 21 CI timeout, 22 not mergeable, 23 review,
+        /// 24 stale CI definition, 25 merge hold (0 merged/already merged).
+        // trace:TASK-1602 trace:TASK-1606 | ai:codex
+        #[clap(long, value_name = "SECS", num_args = 0..=1, default_missing_value = "300")]
+        wait: Option<u64>,
 
         /// Delete the merged branch even when branches/PRs are stacked on
         /// it. Without this, ship keeps the branch alive when it detects
