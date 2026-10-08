@@ -8,11 +8,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T16:16:03.568950798Z
-modified_at: 2026-10-07T16:16:20.371582216Z
+modified_at: 2026-10-08T16:44:11.029270886Z
 req_type: Task
 tags:
 - cleanup
 - docs
+comments:
+- id: 01a11c66-a395-7792-b35e-336b887ba8fb
+  author: joe
+  content: Commit b46aec1e67 references this requirement
+  created_at: 2026-10-08T16:44:11.029270886Z
+  modified_at: 2026-10-08T16:44:11.029270886Z
+  session_id: 01a11c62-1d03-7522-a7bc-3f29d0dee721
 history:
 - id: 01a11726-c993-7f82-87e7-83a8433f0ea3
   author: aida-session-start
