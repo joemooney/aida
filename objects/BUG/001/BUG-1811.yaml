@@ -3,7 +3,7 @@ spec_id: BUG-1811
 agreed_id: BUG-1811
 title: Suppress set -x in aida shell wrapper
 description: ''
-status: approved
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
