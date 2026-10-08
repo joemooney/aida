@@ -534,7 +534,14 @@ impl CachedGitBackend {
                     let recorded = self.cache.source_head_sha()?;
                     if let Some(from) = recorded.filter(|s| !s.is_empty()) {
                         if !head.is_empty()
-                            && crate::git_ops::is_ancestor(self.inner.path(), &from, &head)?
+                            // trace:BUG-1809 | ai:antigravity
+                            && crate::git_ops::is_ancestor_with_timeout(
+                                self.inner.path(),
+                                &from,
+                                &head,
+                                budget.0,
+                            )
+                            .unwrap_or(false)
                         {
                             let attempt = super::cache::ReadRefreshAttempt::new();
                             let result = self.try_incremental_update(&from, &head);
