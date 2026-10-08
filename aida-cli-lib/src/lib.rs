@@ -321,6 +321,7 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+mod seat_occupancy;
 mod seat_rotation;
 mod seats;
 mod server_cmd;
@@ -27179,6 +27180,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             })
         }
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
+        // trace:TASK-1607 | ai:claude
+        SessionCommand::Seat { cmd } => seat_occupancy::cmd::dispatch(cmd),
     }
 }
 

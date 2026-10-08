@@ -1,3 +1,19 @@
+C7 lifecycle commands resolve invoking caller authority after acquiring the
+seat lock; ack/release also revalidate persisted requester authority locally.
+The dormant runtime gate refreshes its caller at the same locked boundary.
+Absolute deadlines reconcile on lifecycle/gate entry without a live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
+Seat occupancy C7 core rework uses process-bound child scope plus persisted
+review/implements relationships for assigned-work routing, bounded seat-lock
+acquisition, and one shared main-worktree policy/state root. Plain-shell
+one-shot routing/spawn does not implicitly hold the seat. Production gateway
+wiring still awaits fresh independent C7 approval; hard takeover stays disabled.
+See [the sketch addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements).
+<!-- trace:TASK-1607 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only
