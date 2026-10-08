@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-08T21:41:54.083193884Z
+modified_at: 2026-10-08T21:59:43.878292551Z
 req_type: Task
 tags:
 - closure-pending
@@ -645,6 +645,11 @@ comments:
   content: PROXY COORDINATION UPDATE — TASK1717 existing authorized doer has finished first rework at223c192aa1d40d920e31dd51b6c3c08fc565ede7/treed7e7c2c2641b5be9820c05798d04a5058473eeef. Root independently verified clean tracked WT and origin branch exact; archived3executable hashes match READY. FULL TASK1717_REWORK_READY.md12952B relayed on child with exact canonical readback. Author reports core9/CLI29 final controls and250 route tests, preserves first r1 fourfailures/Bmutants/restoration/ownedfixturecleanup; incomplete rebaseabort/competingcache/GC/privateRefFETCHHEAD/fullphasecoverage explicitly remains. No independent approval transferred. New whole-A4 review brief prepared; normal reviewer launch refused because current TASK1335 reviewer occupies repository role. No alternative role/scope/identity/grant workaround. Parent closure remains pending; commonCAS/A2/hijack/publisher and eight production gates remain unaccepted/open. New implementation dispatch remains refused.
   created_at: 2026-10-08T21:41:54.083149781Z
   modified_at: 2026-10-08T21:41:54.083149781Z
+- id: 01a11d87-8806-7da1-810f-cc8ea366f994
+  author: mcp
+  content: 'Proxy advisor 21:59 UTC: TASK-1717 fresh whole-A4 review REQUEST_CHANGES at exact 223c192aa1d40d920e31dd51b6c3c08fc565ede7. Full 26456-byte verdict SHA256 6dd698caa58f8e83b431ce281df26eea15bdf27728574be28e5d3569f8951717 and numbered same-existing-author rework v2 relayed in full on child; root verified all 42 receipt input hashes without mismatch and grounded both blockers. B1 real generated hook wrappers fail classification; advisor supports current exact named-template body with genuine wrapper, unestablished drift gets explicit upgrade refusal. B2 failed git status is treated clean and can falsely publish digest/push success; strict pre-effect check required. Missing required witnesses remain. Existing authorized author continuation only, no new dispatch/requeue workaround. A2/CAS/common production gates and parent closure stay pending; no merge/completion credit.'
+  created_at: 2026-10-08T21:59:43.878286696Z
+  modified_at: 2026-10-08T21:59:43.878286696Z
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
