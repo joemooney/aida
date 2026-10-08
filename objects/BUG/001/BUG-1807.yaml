@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T04:01:28.525942325Z
+modified_at: 2026-10-08T04:32:30.923981067Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -57,6 +57,12 @@ comments:
   content: 'PROXY DECISION: PR #2454 required Ubuntu run 37724570741 failed the config-trust inventory guard: lib.rs has 48 config.toml sites, inventory records 47. Strict review-story canonical-store probe is the new site. Route bounded trust classification/inventory correction to a separate doer, preserve actual guard, run full checks, then fresh exact-head independent review; no CI waiver. Brief: .aida/handoff/orchestrator/bug1807-ci-inventory-rework.md; actual log: .aida/handoff/bug1807/ci-37724570741-failed.log.'
   created_at: 2026-10-08T04:01:28.503408099Z
   modified_at: 2026-10-08T04:01:28.503408099Z
+- id: 01a119c8-c6cb-7ab2-960b-0e67c7f04db4
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Required CI failure37724570741 remains a real config inventory mismatch until the new commit passes gates. Separate first full local rework run ended101 after22m45s with15 library failures and all other targets passing; it is NOT a pass. Root read actual workspace log and verified source: aida_exe_path prefers ambient AIDA_BIN, BUG1682 test subprocesses were sent to normal coordinator CLI with --exact, and BUG1749 explicitly requires its own deps runner. Native coordinator exported AIDA_BIN=/home/joe/ai/aida/target/agent; inherited agent identity also affected an inbox assertion. Doer confirmed these signatures. Approved test-only removal of inherited binary/agent identity overrides for a new isolated full run, keeping fake-HOME/live-home fences and absolute canonical coordinator for real actions. No product resolver/guard/authority change or failure waiver. New full run is underway, final status pending. Fresh independent exact-head review and required remote CI still mandatory. Evidence in ownerWT .aida/handoff/bug1807/ci-inventory-evidence; root notices and receipts in orchestrator handoff.
+  created_at: 2026-10-08T04:32:30.923981067Z
+  modified_at: 2026-10-08T04:32:30.923981067Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
