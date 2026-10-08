@@ -2743,6 +2743,7 @@ mod tests {
             "meta",
             "constraint",
             "doc",
+            "faq",
             // An unknown token is never silently dropped.
             "somefuturetype",
         ] {

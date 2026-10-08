@@ -876,6 +876,9 @@ pub enum RequirementType {
     /// `Doc` is generic explanatory prose that powers the EPIC-24 book/tutorial
     /// projection. trace:STORY-104 | ai:claude
     Doc,
+    /// Frequently Asked Question and its answer. Stateless (knowledge graph).
+    // trace:TASK-1614 | ai:antigravity
+    Faq,
 }
 
 impl fmt::Display for RequirementType {
@@ -900,6 +903,7 @@ impl fmt::Display for RequirementType {
             RequirementType::Decision => write!(f, "Decision"),
             RequirementType::Term => write!(f, "Term"),
             RequirementType::Doc => write!(f, "Doc"),
+            RequirementType::Faq => write!(f, "Faq"),
         }
     }
 }
@@ -909,7 +913,7 @@ impl RequirementType {
     /// canonical type prefixes should derive them from this list and
     /// [`RequirementType::default_prefix`] rather than maintaining a second
     /// prefix table.
-    pub const ALL: [RequirementType; 19] = [
+    pub const ALL: [RequirementType; 20] = [
         RequirementType::Functional,
         RequirementType::NonFunctional,
         RequirementType::System,
@@ -929,6 +933,7 @@ impl RequirementType {
         RequirementType::Decision,
         RequirementType::Term,
         RequirementType::Doc,
+        RequirementType::Faq,
     ];
 
     /// The built-in short prefix for this type, used in agreed-id format
@@ -957,6 +962,7 @@ impl RequirementType {
             RequirementType::Decision => "ADR",
             RequirementType::Term => "TERM",
             RequirementType::Doc => "DOC",
+            RequirementType::Faq => "FAQ",
         }
     }
 
@@ -1010,6 +1016,7 @@ impl RequirementType {
             "decision" => Some(RequirementType::Decision),
             "term" => Some(RequirementType::Term),
             "doc" => Some(RequirementType::Doc),
+            "faq" => Some(RequirementType::Faq),
             _ => None,
         }
     }
@@ -5455,6 +5462,7 @@ impl RequirementsStore {
             RequirementType::Decision => "Decision",
             RequirementType::Term => "Term",
             RequirementType::Doc => "Doc",
+            RequirementType::Faq => "Faq",
         };
         self.type_definitions.iter().find(|td| td.name == type_name)
     }
@@ -6491,6 +6499,7 @@ impl RequirementsStore {
             RequirementType::Decision => ("Decision", "ADR"),
             RequirementType::Term => ("Term", "TERM"),
             RequirementType::Doc => ("Doc", "DOC"),
+            RequirementType::Faq => ("Faq", "FAQ"),
         };
         // Try database first, fall back to built-in prefix
         self.id_config
@@ -6623,6 +6632,7 @@ impl RequirementsStore {
                     RequirementType::Decision => Some("ADR".to_string()),
                     RequirementType::Term => Some("TERM".to_string()),
                     RequirementType::Doc => Some("DOC".to_string()),
+                    RequirementType::Faq => Some("FAQ".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -6805,6 +6815,7 @@ impl RequirementsStore {
                     RequirementType::Decision => Some("ADR".to_string()),
                     RequirementType::Term => Some("TERM".to_string()),
                     RequirementType::Doc => Some("DOC".to_string()),
+                    RequirementType::Faq => Some("FAQ".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -7896,6 +7907,7 @@ mod tests {
             RequirementType::Decision,
             RequirementType::Term,
             RequirementType::Doc,
+            RequirementType::Faq,
         ] {
             let debug = format!("{t:?}");
             assert_eq!(

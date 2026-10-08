@@ -308,6 +308,7 @@ impl PostgresBackend {
             RequirementType::Decision => "Decision",
             RequirementType::Term => "Term",
             RequirementType::Doc => "Doc",
+            RequirementType::Faq => "Faq",
         }
     }
 
@@ -328,6 +329,7 @@ impl PostgresBackend {
             "Folder" => RequirementType::Folder,
             "Meta" => RequirementType::Meta,
             "Doc" => RequirementType::Doc,
+            "Faq" => RequirementType::Faq,
             _ => RequirementType::Functional,
         }
     }

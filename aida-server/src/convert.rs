@@ -108,7 +108,8 @@ pub fn req_type_to_proto(req_type: &CoreReqType) -> proto::RequirementType {
         | CoreReqType::Constraint
         | CoreReqType::Decision
         | CoreReqType::Term
-        | CoreReqType::Doc => proto::RequirementType::Meta,
+        | CoreReqType::Doc
+        | CoreReqType::Faq => proto::RequirementType::Meta,
     }
 }
 

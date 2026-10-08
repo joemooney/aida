@@ -1382,6 +1382,7 @@ mod tests {
                 "decision",
                 "term",
                 "doc",
+                "faq",
             ]
         );
         // Relationship: the fixed (non-Custom) variants, in declaration order.
