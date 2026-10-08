@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T02:19:11.720778153Z
+modified_at: 2026-10-08T02:24:26.167579521Z
 req_type: Bug
 tags:
 - atomicity
@@ -79,6 +79,43 @@ comments:
     E. Confirm explicit --role should govern no-arg selection as well as cross-user fallback and launch role; its current role_filter re-reads shell env. Diagnostics must not instruct the launcher to become the child seat.
   created_at: 2026-10-08T02:19:11.720778153Z
   modified_at: 2026-10-08T02:19:11.720778153Z
+- id: 01a11953-8437-7bf1-b89b-c2a2b9c419ac
+  author: joe
+  content: |
+    CHANGES REQUESTED — BUG-1808 independent sketch review
+
+    Reviewed independently against main 199e591b07aa76a59cd34f0a41946f918501f6ba using /home/joe/ai/aida/target/agent/aida for full BUG-1808 and TASK-1337 specs/comments. This session did not author the sketch or implementation. Final authority-changing merge remains operator-owned. Source inspection only; no live pickup reproduction or tests executed.
+
+    Verified evidence
+
+    TASK-1337 is present and must remain: queue_cmd::handle_queue_work (10936 onward) resolves role and branch before synthesized-row/calibration/setup writes, but validate_child_delegation is guarded by !no_launch && !no_human. resolve_queue_work_plan uses role_hint for fallback while synthesis/head selection still consult shell role. QueueCommand::Work dispatches batch/nextN/auto-complete before ordinary pickup. session::spawn_vendor_headless_with_seat and spawn_claude_headless_resume issue late child grants; exec_vendor_headless does not. Existing task_1337_delegation_refuses_before_any_pickup_mutation, task_1337_held_branch_refuses_before_any_pickup_mutation and task_1337_post_setup_launch_error_prints_manual_guided_continuation are real CLI tests; assert_pickup_unstarted checks status/session files/queue membership, not the full acceptance snapshot.
+
+    The proposed assignment shortcut is not established by the cited helpers. orchestrator_authorizes_explicit_queue_pickup_with_token checks a live token and shared DrainState.current; it does not join the calling grant/session to that token's member. orchestrator::read_live_run checks live parent/member PIDs and marker.spec membership, but RunMarker has no child-grant identity. lib.rs::run_implementer builds a queue-work subprocess, phase environment and lease receipt, then uses spawn_and_wait_watched (or pane hosting); the inspected path does not itself issue an implementer grant. Plain headless later inherits the environment. Therefore neither a live token nor calling this path an 'already-issued phase child' proves a scoped child grant was issued. Multi-member runs also cannot rely solely on shared current.
+
+    Binding answers to sketch questions A–E
+
+    A. Yes: --no-launch/TUI setup mutates the listed lifecycle state and must preflight the routed role. A caller-minted --session-id is not authorization. Require real delegation for launcher setup; permit same-assignment execution only with corroborated scoped assignment and valid actor identity. Dry-run/list remain nonmutating. Preserve TASK-1337's ordinary post-authorization vendor-failure manual continuation.
+
+    B. A genuinely already-issued scoped phase child executes its assignment without recursively delegating to itself. Verify canonical root, token-specific live member/spec, actual phase/seat, and a retained binding to this caller's grant/session; reject mismatched, stale or missing proof. The existing helpers are useful corroboration, not a complete join. A launcher, including inherited driver-authority headless execution, must validate delegation and install the routed child authority before running vendor work. It cannot run implementation using the parent driver's authority. Specify one issuance owner per path so resume/reviewer wrappers do not issue a second child from a nondelegating child. The exact binding/issuance call graph is a blocker below.
+
+    C. Unchanged-state acceptance includes late authority refusal; no narrower acceptance is approved. A concurrent peer's legitimate changes remain, but this refused invocation must leave none of its own lifecycle changes and must never restore old whole-file state over a peer. A residual-state diagnostic is honest failure reporting, not acceptance compliance. No broad transaction rewrite or speculative 'CAS compensation' is signed off.
+
+    D. Preflight all statically required seats for the actual selected mode/variant and bounded initial members before run/admission writes; check dynamically admitted members before their admission writes. Do not require seats for phases that will not run. Retain TASK-1603's register-before-status/launch ordering after authorization succeeds. A whole long-running drain is not rolled back after already authorized earlier members executed; each later admission/launch still needs its own safe refusal boundary.
+
+    E. Explicit --role controls non-review selection consistently, including no-arg head and synthesis, while PR/MR scope keeps its documented reviewer rule. Print selector/selected role separately from validated launcher authority. Suggest an authorized launcher select the routed role; never suggest changing role as an automatic authority remedy. None of these decisions grants advisor/product/integrator delegation absent their actual valid grant and roster.
+
+    Required sketch revision before signoff
+
+    1. Provide a per-entrypoint sequence naming QueueCommand::Work wrappers, handle_queue_work, run_auto_complete/run_implementer, standalone reviewer, fresh/resume spawn, rework direct call and TUI setup. State whether each is a launcher or an assigned consumer; identify the precise grant issuance and token/member/session binding writer and validator. Do not substitute environment flags, RunMarker.spec alone or shared DrainState.current for caller assignment. Name any minimal additions to existing records; preserve successful assigned-child execution without recursive delegation or widening its delegation set.
+    2. Choose one bounded final-validation/publication mechanism and specify it concretely. Inventory first writes (queue, canonical spec/history/calibration, fetch/refs/FETCH_HEAD, dormant cleanup, worktree/branch, lease/manifest, reviewer-file reset, grant and orchestration records). For staging, name staging paths, publication point, lock order, which authority/roster and lifecycle writers honor those locks, expiry handling and crash recovery. For compensation, name each existing CAS/ownership predicate and writer API, how canonical status/history changes are undone without fabricated history, and what happens when a peer changes the same artifact. Queue row equality or a standalone queue lock cannot atomically restore spec/history, refs and worktree state. An append-only status event is not undone by simply changing status back. Authority check then issue_child after setup is exactly the race requiring a design, not its solution. Keep unrelated cleanup/pull side effects outside an operation that promises unchanged state unless their effect is explicitly covered. Do not assume the existing grant writer/roster writer share a transactional lock: inspected seat_authority has no such locking protocol.
+
+    Required named witnesses (proposed tests, not executed)
+
+    Retain all three TASK-1337 integration tests. In aida-cli/tests/queue_work_dry_run.rs extend the fixture snapshot and add bug_1808_headless_delegation_refusal_is_atomic; bug_1808_explicit_selector_does_not_change_launcher_authority; bug_1808_all_entrypoints_preflight_before_mutation; bug_1808_preflight_races_fail_closed; bug_1808_assigned_phase_is_not_recursive_delegation. Name actual argv for interactive/guided, headless fresh, supported resume, standalone reviewer, --no-launch with TUI session id, batch, nextN, auto-complete, and rework path. Use a real CLI and production phase launcher with fake vendor/forge and isolated HOME/AIDA_HOME. Include queued and implicit rows, pre-existing InProgress state, readied caches, no-vendor sentinel, and full lifecycle snapshots. Place deterministic barriers after planning, before first write and immediately before final issue/launch; revoke/expire/change roster and race a peer update there. Prove no child, no invocation-owned residue and preserved peer edits. Add valid nondelegating assigned-child success, wrong-member token refusal, inherited-driver grant refusal/scoping, and no extra child issuance in resume/reviewer paths. Source-string checks alone are insufficient.
+
+    Disposition: CHANGES REQUESTED for concrete assignment binding and atomicity, independently of BUG-1802. Existing acceptance determines the conservative answers above; no operator acceptance relaxation is assumed or requested. If a revision proposes allowing late-refusal residue, that is a separate operator choice: retaining strict acceptance requires the atomic design; relaxing it would permit partial setup and change the requirement. Current work must use the strict choice. Return the revised sketch to an independent advisor before implementation; no status/queue/hold/grant changes authorized here.
+  created_at: 2026-10-08T02:24:26.167579521Z
+  modified_at: 2026-10-08T02:24:26.167579521Z
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
