@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:55:59.422509511Z
+modified_at: 2026-10-08T03:06:23.333062499Z
 req_type: Task
 tags:
 - guided-lane
@@ -283,6 +283,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-08T02:54:40.837044344Z
   modified_at: 2026-10-08T02:54:40.837044344Z
+- id: 01a11979-ece5-7bc3-b97b-37f025d62b30
+  author: joe
+  content: |
+    TASK-1607 bounded C7 F3 rework is ready for fresh independent review at exact SHA 56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f, normally pushed to story-1485.
+
+    Holder caller resolution now occurs after acquiring the seat lock for ack/release. Adjacent claim/takeover and the dormant runtime gate were corrected within the same contract; no production gateways or history expansion. F1/F2, generation/request CAS, requester revalidation and local-only lock work are preserved.
+
+    The original independent holder-race ack/release witnesses were preserved red before source edits and now pass. Expanded real CLI holder revocation/expiry/roster/subject/session contention tests pass with valid ack/release controls; all ten invalid cases failed on the red binary. Existing 24-case lifecycle matrix, 55 seat tests, 12 process probes, authority/config/help tests, JSON audit, fmt/diff checks and all 21 make check-ci-fast gates pass.
+
+    Full exact-SHA report with adjacent audit, commands, hashes and red/green witnesses:
+    /home/joe/ai/aida/.aida/handoff/task1607-rework/C7_REWORK_F3_READY.md
+    Artifacts: /home/joe/ai/aida/.aida/handoff/task1607-rework/f3/
+
+    Implementer readiness only. C7 remains closed; TASK-1607 remains In Progress/incomplete. Existing worktree, branch and lease 01a119224b9d are retained. No PR opened, hold cleared, merge, self-review or completion edit. Stopping for fresh independent review; gateway steps 4-5 remain unauthorized.
+  created_at: 2026-10-08T03:06:23.333062499Z
+  modified_at: 2026-10-08T03:06:23.333062499Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
