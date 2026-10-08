@@ -281,7 +281,11 @@ fn handle_role_enter(
 Include it in the TTY-issued delegation set?";
             // inquire writes to stderr and reads from /dev/tty properly.
             // ?-exempt: cannot use confirm_with_context because it writes to stdout, breaking shell eval
-            let include = inquire::Confirm::new(prompt).with_default(false).prompt()?; // Returns Err on Ctrl-C / interrupt, which is the desired abort behavior
+            let include = if std::io::stdin().is_terminal() {
+                inquire::Confirm::new(prompt).with_default(false).prompt()?
+            } else {
+                false
+            }; // Returns Err on Ctrl-C / interrupt, which is the desired abort behavior
             if include {
                 final_delegate_seats.push("advisor".to_string());
             }
