@@ -19,6 +19,11 @@ triggers = workflow.get('on', workflow.get(True))
 jobs = workflow['jobs']
 assert triggers['schedule'] == [{'cron': '0 6 * * 0'}]
 assert jobs['build']['strategy']['matrix'] == {'os': ['windows-latest']}
+# TASK-1329: step-level (not per-test) bound on the Windows workspace tests.
+run_tests = next(s for s in jobs['build']['steps'] if s.get('name') == 'Run tests')
+assert run_tests['timeout-minutes'] == 45
+assert run_tests['run'] == 'cargo test --workspace --no-fail-fast'
+assert 'timeout-minutes' not in jobs['build']
 assert triggers['pull_request']['branches'] == ['main']
 assert 'aida-core/src/db/git_backend.rs' in triggers['pull_request']['paths']
 assert '.github/workflows/**' in triggers['pull_request']['paths']

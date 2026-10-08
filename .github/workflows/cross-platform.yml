@@ -351,6 +351,10 @@ jobs:
         run: cargo build --workspace --release
 
       - name: Run tests
+        # TASK-1329: step-level bound (not per-test): a hung test cannot hold
+        # the runner for hours. Healthy suite ~22 min; a hang was seen >70 min.
+        # It does not identify which test hung. trace:TASK-1329 | ai:claude
+        timeout-minutes: 45
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
