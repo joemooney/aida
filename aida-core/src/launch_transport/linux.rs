@@ -1,3 +1,5 @@
+// Already Linux-only via mod.rs; explicit for the Windows-reachability ratchet.
+#![cfg(target_os = "linux")]
 // trace:TASK-1612 | ai:codex
 // trace:BUG-1808 | ai:codex
 use super::image::{dup_high, read_bounded, sealed_bytes, verify_image, verify_sealed};

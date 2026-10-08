@@ -1,4 +1,6 @@
 //! Independently copied, sealed executable bytes; paths are selection inputs only.
+// Already Linux-only via mod.rs; explicit for the Windows-reachability ratchet.
+#![cfg(target_os = "linux")]
 // trace:TASK-1612 | ai:codex
 // trace:BUG-1808 | ai:codex
 use anyhow::{bail, ensure, Context, Result};

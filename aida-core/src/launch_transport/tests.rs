@@ -1,3 +1,5 @@
+// Already Linux-only via mod.rs; explicit for the Windows-reachability ratchet.
+#![cfg(target_os = "linux")]
 // Isolated kernel witnesses, not source-string assertions.
 // trace:TASK-1612 | ai:codex
 // trace:BUG-1808 | ai:codex
