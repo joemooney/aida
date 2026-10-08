@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T20:26:08.915350809Z
+modified_at: 2026-10-08T20:41:33.625137619Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -414,6 +414,155 @@ comments:
   created_at: 2026-10-08T20:26:08.915343340Z
   modified_at: 2026-10-08T20:26:08.915343340Z
   relayed_from: task1335-reconcile-diagnostics
+- id: 01a11d3f-f6b9-7491-b201-b6da23d9a60f
+  author: mcp
+  content: |
+    PROXY REVIEW RELAY — FULL fresh whole-acceptance source REQUEST_CHANGES on b98b5175991ccbcbcb47b4157cc73e272702b251. Root read full report and verified immutable hold exclusion, original hold-payload write, discarded hold verdicts and normal-only dry-run closure split. Final execution UNFINALIZED, no protected machine record/acceptance/batch membership. Same existing authorized author gets numbered remedy; preserve previous failures and first pending-run outcomes.
+
+    # TASK-1335 rework — independent whole-acceptance source review
+
+    **Source verdict: REQUEST CHANGES. Validation remains UNFINALIZED.** Two concrete source findings below prevent source approval at the checkpoint. Final author READY and final-tree test proof have not been received or qualified. This document is source evidence only: it is not an authenticated review record, acceptance of a production dependency, batch membership, PR approval, or merge authorization.
+
+    Reviewer: fresh Codex `task1335_fresh_rework_review`, 2026-10-08 America/Phoenix. Neither author, sketch author, prior design advisor, rejected-head code reviewer, nor root. No implementation performed. Initial static-only restriction honored: no Cargo, build, test, CLI fixture execution, or old executable reuse.
+
+    ## Exact inputs
+
+    | Input | Verified value |
+    |---|---|
+    | Owning requirement | TASK-1335 / origin TASK-1-226 / UUID 01a1116b-8bec-7f40-9e1e-beaf7f328dce |
+    | Reviewed commit | `b98b5175991ccbcbcb47b4157cc73e272702b251` |
+    | Tree | `f0448eddb55c6f5ba5b9ee287762846152687ffd` |
+    | Parent, still rejected | `ef014aeb07eca288a6faa51922252fbc33209684` |
+    | Merge base | `b46aec1e674baae5a329416d4119e67b59200a88` |
+    | Actual main, checked repeatedly | `c67728c1dcaf8a577539d920bdc6a3c86126cebb` |
+    | Author worktree | `/home/joe/ai/aida-worktrees/aida-pool-aida-4`, `task-1335`; `git status --short` empty |
+    | Actual remote proof | `git ls-remote origin refs/heads/task-1335` returned the reviewed full OID |
+    | Sketch comment | `01a11c6a-b5f5-7fe1-b661-36e1a16a9189` |
+    | Binding D1–D3 signoff | `01a11c76-6863-73a0-b77e-9f8c14e2e203` |
+    | Implementation proxy decision | `01a11c76-de18-7b92-8a8a-b054276e401b` |
+
+    Read the full 6,750-byte REWORK_CHECKPOINT, full 28,057-byte prior independent REQUEST CHANGES report, numbered rework, full original 12,747-byte READY with its failures and limits, full sketch, full independent sketch review, implementation handoff, AGENTS.md and aida-review skill. The user’s explicit read-only source-review assignment overrides that skill’s ordinary PR/record/queue/merge workflow. Fresh MCP `show_requirement({id:"TASK-1335",include_git:false})` returned the owning description and all nine current comments. A retained full response confirms the full local sketch, D1–D3 body and prior review are verbatim present, not just titles or summaries. The original incident remains an observation and hypothesis, not a reproduced historical runtime cause.
+
+    Read the entire six-file base-to-head diff, all 780 lines of the new typed module, all 1,478 lines of the CLI fixture, supporting freshness/covers/closure/stale-review helpers and existing private grant fixture. Exact Git source copies, whole/rework/main diffs, input hashes and overlap evidence are retained under `TASK1335_REWORK_INDEPENDENT_CHECKS/`. No peer-owned file or earlier report was edited or removed.
+
+    ## Blocking source findings
+
+    Locations refer to the exact reviewed tree. These are observed control-flow facts and statically derived repros, **not executed CLI results**. No unavailable test result is being promoted to a pass or a failure.
+
+    ### R1335-1 — P2: scan-held candidates still apply stale closure data and discard their live decisions
+
+    **File/symbol:** `aida-cli-lib/src/lib.rs::plan_reconcile_seam`, lines 79191–79206, 79211 and 79259–79272; `handle_db_reconcile_status`, lines 78884–78897 and 79004.
+
+    **Observed source fact:** a `SeamKind::Hold` receives identity, eligible-status and reopen checks, and covers-source items receive the direct-anchor check. However, `completes = |kind| kind != SeamKind::Hold` excludes every hold from the live closure calculation. No current blocker/criteria payload is produced for holds. The writer passes the original `holds_for_write` entry to `apply_closure_hold`; that helper checks freshness/status but never reads the closure graph. It can change a pre-Done status to Done and append the old blocker/criteria comment. Afterward, `seam_verdicts.into_iter().skip(holds_for_write.len())` discards every hold decision, including Changed UUID/ambiguity/status/reopen decisions. Only the earlier scan-based “stays Done” report survives.
+
+    **Concrete static repro:** seed an eligible Approved task A with a real attributed commit and an unresolved BlockedBy B (or an unmet declared closure criterion). Seed an unaffected normal candidate C as a positive control. During A’s required open-PR lookup, use a successful private peer mutation to remove/replace A’s blocker or clear/change its closure criterion. The scan snapshot still classifies A as a hold. At the live seam, A has the same UUID, eligible status and fresh SHA; the code returns Apply without checking its new closure facts, then marks A Done and writes a note naming the old hold. The current graph no longer supports that note. In a separate variant, replace A’s UUID, add a new ID ambiguity, or make A terminal at that barrier: the new guard prevents the write, but the Changed decision is discarded and the report still states the obsolete hold outcome.
+
+    **Required outcome:** fulfill F2’s explicit all-hold/normal/stale decision-before-mutation invariant. Decide whether a hold is still supported using current closure facts before writing its status or audit data; do not persist a stale blocker/criterion explanation. Preserve the actual live decision in the report, including held-item identity/status/reopen refusals. This does not require new permission, forge, review-target or generic lifecycle policy; conservative refusal on drift is sufficient if accurately reported.
+
+    **Required meaningful test:** real CLI held-candidate barriers for removed/replaced blockers or changed criteria, UUID replacement, new ambiguity, reopen and terminal peer change. Assert final status, exact history/comment bytes and emitted events; an untouched genuinely held candidate must still get its legitimate hold note, and C must complete. Neither the existing normal-candidate race nor a helper-only verdict test covers this path.
+
+    ### R1335-2 — P2: dry-run predicts stale-review completion that the same source refuses in normal mode
+
+    **File/symbol:** `aida-cli-lib/src/lib.rs::handle_db_reconcile_status`, stale collection at 78483 onward, normal-only closure split at 78598, dry-run stale summary at 78798–78820 and return at 78829; live plan at 78874 and 79259–79286.
+
+    **Observed source fact:** `split_closure_held_flips(&store, &mut flips)` evaluates only the normal list. `stale_review_flips` gets freshness filtering but no closure evaluation before the dry-run output. Dry-run prints every surviving stale review as “would flip … → Completed” and returns before `plan_reconcile_seam`. Normal mode now correctly evaluates these same stale reviews against the live closure graph and returns Held. Thus even a blocker already present before scanning—not a race—produces incompatible preview and actual outcomes.
+
+    **Concrete static repro:** seed Approved review story S titled `Review PR-901: fixture`, with an unresolved BlockedBy B already present; seed eligible task A and a default-branch commit `fix: merged (A) (#901)`. Fake required lookup returns authoritative `[]`. `--dry-run` includes S in its would-complete review count. Normal mode completes A but leaves S Approved and reports its closure hold. No network failure, identity change or authority refusal is required to trigger the discrepancy.
+
+    **Required outcome:** report the known closure-held stale review as held/non-completing in the dry-run, consistent with normal behavior, while retaining successful no-op semantics for a known hold. Do not introduce an extra required forge query or change stale-review attribution policy.
+
+    **Required meaningful test:** paired dry-run/normal real CLI with an initially blocked stale review, unblocked stale-review positive, and declared-criterion variant. Assert preview counts/reasons, normal status/history/event counts, and full no-write dry-run snapshot. The current stale-review test exercises only a normal invocation with a blocker introduced at the lookup barrier.
+
+    ## Rework findings F1–F6 and real-witness audit
+
+    No row below is a final test PASS. “Source-supported” describes the inspected branch only; author final-tree evidence remains owed.
+
+    | Prior finding | Current disposition |
+    |---|---|
+    | F1, unsupported covers cycle | The exact old mutual-covers/no-anchor case is structurally refused: only live Completed UUIDs or surviving non-covers normal flips enter direct support. Iteration withdraws dependent direct support after closure removes an anchor. New `covers_support_is_rooted_not_circular` seeds a two-story cycle, removes both real anchor edges in real CLI barriers, and asserts no reconcile history/events; direct Completed and direct normal-flip positives are present. **The declared multi-hop witness is not present:** STORY-83 has one implements edge to TASK-43; STORY-84 has its own direct Completed anchor. No multi-hop anchor-removal case or rooted cycle whose surviving route runs through another covers candidate is demonstrated. `covers_chain_rooted` intentionally never propagates through another covers candidate; do not label it a general covers least-fixed-point proof. A real multi-hop negative and anchored positive remain required before whole F1 acceptance. No wider attribution policy is requested by this observation. |
+    | F2, every live completion and hold | Normal and stale completions now share unambiguous ID, scan UUID, path-status and reopen decisions before writes. Their surviving set goes through the existing least-fixed-point closure helper. Targets are selected by UUID. New normal fixture includes reopen/new blocker/real covered reopen/UUID replacement/new ambiguity plus untouched completion. New stale fixture includes new blocker, terminal rejection, UUID replacement and untouched completion. **Incomplete: R1335-1; stale reopen and new-ambiguity barriers are absent; no held-candidate barriers exist. R1335-2 exposes a preview gap.** |
+    | F3, valid TOML and strict unknown | `checked_forge_provider` parses `toml::Table`, recognizes ordinary/dotted/inline/single-quoted values, rejects parse errors, non-table forge, non-string provider and unknown tokens. Missing forge/provider is absence. Read errors and failed origin discovery are errors. Source-supported. CLI test has inline/dotted unsupported and wrong-type/unknown normal/dry-run plus diagnostic-only cases; pure-git dotted/no-provider previews and bare-origin actual completion are positives. Malformed TOML is currently a unit case, not a meaningful real CLI checked-reader witness. |
+    | F4, all diagnostic rows | `count_diagnostic_rows` requires string title AND body on every row; outer non-array or malformed JSON is unavailable. Source-supported. CLI missing/wrong/mixed/truncated cases assert warning/unknown, exit 0 and snapshots; valid empty/matching/nonmatching controls exist. Their final execution is unqualified. |
+    | F5, actual invocation effects | `confirmed` and `confirmed_stale`, activity and completion events now derive from this transaction’s Apply decisions, not later terminal status. New real CLI peer-completion+outage and this-run completion+outage variants check counts, reconcile author and events. Source-supported for the repaired completion accounting. The final error’s “nothing else changed” means this invocation’s effects; the peer variant deliberately changes state externally. Hold-decision reporting remains R1335-1. The separate pre-existing Draft path is not proof of stronger whole-sweep atomicity. |
+    | F6, UUID aliases | Every accepted completion candidate is consolidated by UUID before application. Later aliases receive SameAs and cannot write a second completion record/event. CLI same-subject and separate-commit origin/display aliases assert one processing record, transition/event and repeat idempotence; ambiguity controls exist elsewhere. Source-supported for one actual application. Its test accepts either candidate SHA rather than asserting a precise attribution-order contract; no new first-valid policy was introduced. Dry-run still displays textual candidate counts before consolidation, so those counts are not proof of one-UUID application. |
+
+    The added closed-unmerged test is a real branch-not-on-default negative, paired elsewhere with merged `(#PR)` evidence. It does not query a forge closed-state payload; the production route does not use one to grant credit. The historical subject outage matrix now includes sweep-normal as well as targeted normal/dry-run and sweep dry-run. Required malformed trailing-array-row/zero/negative/string/null validation is present in unit source; the real CLI bad-row mode covers a missing number, not every unit case.
+
+    The new covered-reopen fixture is materially better than the rejected head: it uses existing `tests/support::grant_seat_for` with explicit fixture principal, fixture HOME and private repository roster, then invokes the real CLI with its private grant and `--force`. It asserts TASK-74 actually became Approved and every barrier file was consumed. It is not merely accepting a failed barrier as a successful refusal. The helper writes only under supplied private roots; it is not a live grant or a role-only bypass. This review did not execute or mint any grant.
+
+    The fixture clears inherited environment, supplies private HOME/XDG, pins fake gh/glab, uses real initialized code/store repositories and vendor tripwires. Snapshot includes config bytes, canonical object/history bytes, store HEAD/log, objects/registry status and code refs. It excludes runtime dispenser files and does not prove zero filesystem writes. The committed harness does not install a Git/network denial wrapper; fake gh and fake-looking URLs alone are not a transport audit. Earlier independent private probe logs retained refused `git ls-remote` attempts. Their timing/target must be considered before inferring actual external contact; this static review claims neither that new tests contacted a live service nor that network isolation has been proved. Any later independent probe still requires its own env-i/private-root/refusing Git/forge/vendor isolation and exact artifact qualification.
+
+    ## Whole original acceptance disposition
+
+    | Criterion | Source/evidence disposition |
+    |---|---|
+    | Historical observation retained, no speculative offline credit | Supported. Local parser still extracts adjacent task group before `(#PR)`; no historical runtime reproduction claimed. |
+    | Typed per-lookup positive/open/unavailable; retain candidate identity/source/SHA before filtering | Supported by `OpenChangeCheck`, `EvidenceUnavailable`, `CandidateOutcome` and handler collection. Internal-only types; full SHA retained. |
+    | Complete array, every positive integer row, no first-valid fallback | Supported by full loop in `parse_open_change_rows`; compatibility wrapper shares it and keeps conservative Option semantics. |
+    | Honest failure classes | Missing executable, spawn, actual exit/stderr, undecodable, non-array, bad row, unsupported forge and discovery failure are distinct. No inferred auth/rate-limit cause. |
+    | Required outage ordinary nonzero, normal and dry-run | All three completion-handler exit sites check the retained required-unavailable list. No numeric exit family. Source-supported; final CLI proof pending. |
+    | Normal batch all-or-nothing on unavailable | Any unavailable clears normal flips; checked-clear peers become BatchDeferred, open peers remain OpenChange. No partial normal batch is granted. |
+    | Genuine no-match and known open/stale/terminal/hold no-op outcomes | No-match records pinned range and exits 0; matched ineligible reasons are distinct. Known stale-review hold preview fails R1335-2; held-item live reporting fails R1335-1. |
+    | Completed-only diagnostic warning and exit 0 | Separate result and warning, never used as completion gate. Full field schema fixed under F4. |
+    | Actual independent Draft/review effects | Repaired stale completion accounting under F5; Draft count comes from existing independent helper. No whole-sweep atomicity promise. |
+    | Affirmative pure-git, strict read-only config/origin discovery | Supported by checked TOML reader and checked origin command results; normal and diagnostic use the same lazy classification. Compatibility resolver policy remains separate. |
+    | Pin default branch/range | Branch precondition preserved; HEAD resolved once to commit OID and used in actual git log arguments, with full candidate OIDs. `--since` option guard retained. Printed summaries abbreviate SHA, so full input identity is in retained evidence, not inferred from the display. |
+    | Leading/terminal/multi-spec, gated body, plan exclusion and canonical mapping | Original parser and plan/body gates unchanged. Unknown/ambiguous IDs are refused and remapped identity retained. Tests include accepted and negative forms. No parser transplantation from PR ship. |
+    | SHA and legacy deliberate reopen including automated overwrite | Existing freshness helpers unchanged and used by shared live plan; CLI later-commit positive and old-evidence negatives present. Required stale/hold barrier variants still missing. |
+    | Current canonical status/UUID/ambiguity before application | Supported for shared initial decision; held-item decisions are not reported, R1335-1. Unknown scan UUID fallback exists but ordinary collected accepted requirements supply identity. |
+    | Current closure/covers facts, least-fixed-point behavior | Completion closure helper uses a least fixed point and is rerun after support changes. **All-item claim fails for holds, R1335-1. Covers proof is direct-root support, with multi-hop evidence gap above.** |
+    | Decide before any mutation, one UUID, actual result | Shared plan runs before the transaction’s writes, but does not decide live hold facts; R1335-1. Completion UUID dedup and actual-effect repair supported. |
+    | No forge I/O under store writer | New plan uses in-memory store plus local Git freshness helpers; forge lookup occurs before update_atomically. No new gh/glab calls inside it. |
+    | No new permission/ledger/schema/command/review-target policy | Entire six-file diff introduces none. Existing private test grant helper is reused, unchanged. |
+    | Real CLI witnesses and snapshots | Substantial meaningful positive/negative source coverage; exact omissions above cannot be silently marked passed. No final-tree execution qualified. |
+    | Required unchanged TASK-1600 PR-ship attribution tests | Source unaffected. Checkpoint says prefinal 85-test filter included both named PR-ship tests; final-tree rerun pending, not credited. |
+    | Documentation | Correctly describes intended outage split and independent paths. Unqualified write-seam/current-state wording exceeds R1335-1 behavior; dry-run completion claims should match R1335-2’s result. |
+    | Current-main compatibility | Clean private three-way lib.rs content merge, detailed below; not integrated-build or release approval. |
+
+    ## Commands, qualification, failures and limits
+
+    Actual read-only inspection included `git status --short`, `git rev-parse HEAD`, `git show -s --format='%H %T %P' <head>`, `git merge-base <head> main`, `git ls-remote origin refs/heads/task-1335`, whole base/head and rejected/head diffs, `git show <head>:<file>` immutable source extraction, `rg`, `sed`, `cat`, SHA256/byte comparison scripts and private `git merge-file -p main base head`. Python scripts here only read/copy/hash source and create review evidence; none invokes the product or a test/build. MCP show_requirement was read-only. The actual remote read verified origin, not the claimed GitLab mirror.
+
+    Tooling observations preserved: initial oversized combined reads were truncated by the output budget; full inputs and all source ranges were subsequently read in bounded chunks, not treated as complete from the truncated view. `ls .../TASK1335_REWORK_READY.md` returned missing on both checks. These are inspection observations, not product-test failures. No test assertion was changed, and no first runtime failure was erased because no runtime probe ran.
+
+    Author checkpoint evidence, **not final passes**:
+
+    - Prefinal `cargo check -p aida-cli-lib --tests` reports success; final source qualification absent here.
+    - Prefinal library run reports 85 passed and includes named TASK-1600 tests, but formatting/test-source changed afterward; final-tree rerun pending.
+    - `rw-cli1` reports 12 passed, 2 failed: covers wording assertion and refused advisor-required Completed→Approved barrier. Subsequent test edits address wording and private authority setup; they do not retroactively pass this run.
+    - `rw-cli2` hit the author’s 590-second bound while waiting/building; no pass credit.
+    - `rw-cli3`, final 14-CLI file, final unit rerun, clippy, no-default check and fast checks were pending at checkpoint. No new final READY was present when this review was written.
+    - Original rejected-head READY failures remain retained in full: early 8/8 CLI failures, dispenser snapshot correction, refused covered reopen replaced by edge removal, unexpected repo-view tripwire, 590-second CLI timeout, changed pure-git log assertion, first fast ratchet failure and 580-second timeout, clippy exit 255 without diagnostics, 1200-second check timeout and the author-owned self-matching waiter. None supplies rework pass credit.
+
+    **Artifact qualification:** no executable was qualified, copied, hashed or executed by this initial review. Therefore no executable digest is supplied as evidence for b98, and the old rejected-head binary is not used. Source/input hashes below and in the retained manifests are exact; final build-input/fingerprint/log/executable proof remains absent. Tests and integration/CI are not accepted merely because static portions look correct. The two source blockers already suffice for REQUEST CHANGES without duplicating the author’s cold build or broad suites.
+
+    ## Hashes
+
+    | Reviewed file | SHA256 |
+    |---|---|
+    | `aida-cli-lib/src/lib.rs` | `749d6544538e7e9378789f4ed7a716ce3e5a26eac62d4a02be5d1c71ecb76070` |
+    | `aida-cli-lib/src/forge.rs` | `d3469aefabe7e45eac3c0bc1fd2a470d9d0b0d3978438aaea59cc9c00fcf0d34` |
+    | `aida-cli-lib/src/reconcile_evidence.rs` | `60a31d25f4564fe40749ded2a6c1da87975ecae7eef466a68507d1f0dcb64f77` |
+    | CLI test | `8156431d1171dbb748a885f353d5c05d5a1ce8a2f19422457bb4269ea2381a96` |
+    | `AGENTS.md` | `5f66702b3f18b307cc8ce81bf7892bf2d4d7bd928964bb6383b32187dea1ba3e` |
+    | `docs/cli/10-storage.md` | `68aaee4ead715593fe5ff97faf359f163cbce8a443ea4b7f3bf26168543b31ff` |
+    | REWORK_CHECKPOINT | `f3c534aa205c89b1cff04059ecb950b79035ab1eb99107377285ccd47cc1aed5` |
+    | Prior independent review | `268a3d082fcafe9d5e4a521cc0b0907486c03cc929d726067def7a1e699bcc13` |
+    | Numbered rework | `9623c62be2f7e399c24114e61c15bf31f86d8128dfa34e58b0e7bc1f2dd59cab` |
+    | Fresh canonical markdown capture | `0b85a6bef36e4efbe0e269d459e12c86f5089c4e75a9ee2dc31203560705b9d8` |
+
+    Full input byte sizes and hashes, including original READY, sketch, complete design review and exact D1–D3 body (`3284c6cad934c050459d55ea12df84e50d0e2a61131b663cbc4638d815c09ced`), are in `input-hashes.json`. All six reviewed file hashes match the checkpoint.
+
+    ## Main overlap and handoff
+
+    Main remained `c67728c1dcaf8a577539d920bdc6a3c86126cebb`, four commits beyond the candidate’s base. Compare from the verified merge base, not a candidate/main tip diff. Of main’s 15 changed files, only `aida-cli-lib/src/lib.rs` overlaps the candidate; its changed hunks concern draft-PR/status UI and role metadata, outside the changed reconciliation ranges. Private three-way `git merge-file -p` returned 0; merged lib.rs SHA256 `019a41001fcef9736cf5262b6bb8dd449076011039d556f667ba4509b8186d30`. Main also changes event-seat qualification in events.rs; this preserves the meaning of emitting only actual completions, but the combined tree still needs ordinary integration checks. No integration branch/tree, D1321+1612 combination or current-main build was created or tested.
+
+    Root may route R1335-1/R1335-2 and the explicit evidence gaps to the same author. This reviewer will not implement. A revised candidate requires another new independent reviewer as instructed; pending tests on b98 cannot remove these source findings. TASK-1335 remains excluded from existing D and has not joined a new batch.
+
+    No canonical record/status/queue/mail/grant/hold/lease/PR/push/merge/install/activation/recovery mutation occurred. The original queue-Done no-open-PR refusal remains intact; no bypass or protected-record retry was attempted. No owned test/build children were launched or stopped. Required final source-qualified checks, workspace/CI/PR and authenticated record/publication work remain owed. This report is the review deliverable and root notification, not completion of those later gates.
+  created_at: 2026-10-08T20:41:33.625130920Z
+  modified_at: 2026-10-08T20:41:33.625130920Z
+  relayed_from: 01a11d32-5933-7922-8c6d-60bb51eb1fe1
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
