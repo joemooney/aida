@@ -3,7 +3,7 @@ spec_id: TASK-1716
 agreed_id: TASK-1716
 title: Fix init block in dev shell-init to use robust marker parsing
 description: ''
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
