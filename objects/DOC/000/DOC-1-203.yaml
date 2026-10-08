@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-08T20:12:28.945828809Z
+modified_at: 2026-10-08T20:13:47.507105560Z
 req_type: Doc
 relationships:
 - rel_type: References
@@ -184,6 +184,11 @@ comments:
   created_at: 2026-10-08T20:12:28.945822407Z
   modified_at: 2026-10-08T20:12:28.945822407Z
   relayed_from: doc6-current-delivery-fresh-audit
+- id: 01a11d26-8a73-7c23-8ae2-b7bcb7acd5e3
+  author: mcp
+  content: 'PROXY DECISION execution correction: the planned B3 documentation handoff did NOT dispatch. Normal preferred MCP queue_add DOC-6 --for implementer returned: ''Cannot queue work for execution via MCP: routing work needs dispatch authority (product, advisor, or integrator role).'' No CLI/alternate-API retry, role/env/grant substitution, new implementer lease, or native --spec dispatch will bypass that refusal. The full independent audit remains saved/verified. B3 is a concrete eligible doc-only scope for a legitimately dispatch-authorized seat; DOC-6 remains partial. Existing functional authority/roster owner was sent peer request 398ef497-44a4-4bce-8534-47e9b03dbfa0 for B1/B2/R1 disposition, not root takeover. All runtime/authority positives still unverified.'
+  created_at: 2026-10-08T20:13:47.507099596Z
+  modified_at: 2026-10-08T20:13:47.507099596Z
 filed_at:
   code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
   branch: story-1473
