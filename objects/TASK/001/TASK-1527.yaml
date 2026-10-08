@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:37.337431823Z
-modified_at: 2026-10-08T19:07:45.689166236Z
+modified_at: 2026-10-08T19:15:33.796443301Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -1048,6 +1048,11 @@ comments:
   created_at: 2026-10-08T19:07:14.489623440Z
   modified_at: 2026-10-08T19:07:14.489623440Z
   relayed_from: task1527-rework-v2-independent-advisor
+- id: 01a11cf1-3b24-7961-9504-02ff6422680d
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): independent default-budget measurement is REQUEST_CHANGES, not a new latency waiver. TASK-1526 reopened Approved on actual current code SHA bf65220959; preserve all historical merge/work and full evidence comment. A separate design-only author is investigating a bounded remedy under the existing two-second/default1500ms/single-flight/useful-snapshot contract; no product implementation before a new independent design disposition. TASK-1527 full V2 sketch and fresh independent APPROVED-AS-AMENDED report are now canonical, but it remains blocked-by TASK-1526; no dependency removal or queued implementation is inferred. Preserve BUG-1778/1779 fixes and separate BUG-1674 full-show/24h obligations and parent STORY-1484 closure. No numeric budget, load filtering, repeated-green selection, authority change or completion credit.'
+  created_at: 2026-10-08T19:15:33.796443301Z
+  modified_at: 2026-10-08T19:15:33.796443301Z
 history:
 - id: 01a0fdf1-836d-7331-9d3e-ac3a67bb447b
   author: joe
