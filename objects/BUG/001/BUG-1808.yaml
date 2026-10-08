@@ -3,12 +3,12 @@ spec_id: BUG-1808
 agreed_id: BUG-1808
 title: Preflight child-seat delegation before queue-work mutations
 description: 'Validate that the active launcher seat may delegate the routed child role before changing requirement status, queue membership, branch/worktree, lease, or manifest state. A refusal must leave all pre-command state unchanged. Add regression coverage for implementer launching implementer-routed work. Diagnostics must distinguish queue selection from child-role delegation and tell an authorized advisor/product/integrator launcher to use an explicit role selector. Reproduced from qci#BUG-021. Authority-class: requires sketch and independent advisor signoff before implementation; never proxy-merge.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T04:52:34.277469035Z
+modified_at: 2026-10-08T04:52:54.311287141Z
 req_type: Bug
 tags:
 - atomicity
@@ -1297,6 +1297,14 @@ comments:
     PROXY DECISION (orchestrator for Joe): Read the complete actual PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md and exact canonical posting/readback receipt from NEW independent reviewer01a119ca-46b5-7222-9e0d-6eefaa699fc4. Accept all six binding conditions and the explicit judgment that common BUG-1808 production publication architecture is coherently designed AS AMENDED, with no remaining reviewed design blocker. Earlier actual callback and launch signoffs and A–E/ADR/C7 supersessions remain binding. This permits guided common-owner implementation, not readiness/completion/production activation/merge. TASK-1612 transport component remains separately under implementation/review and production release unavailable there; broader doer must not copy unreviewed dependency or duplicate schemas. Common BUG-1808 first, TASK-1607 occupancy consumer second, BUG-1802 provenance policy later. Preserve default no-PID containment; the bounded existing anchored process-group cleanup and PTY pause/resume obligation applies, not an invented arbitrary-descendant sandbox/cgroup requirement. All real entrypoint positives/negative witnesses, history, strict before-P4 residue-free refusal, durable immutable commitment, identity, independent exact-head review, CI and final operator-owned authority merge remain. Dispatch brief bug1808-common-implementation.md; no gate is waived.
   created_at: 2026-10-08T04:52:34.277469035Z
   modified_at: 2026-10-08T04:52:34.277469035Z
+history:
+- id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
+  author: aida-session-start
+  timestamp: 2026-10-08T04:52:54.311286315Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
