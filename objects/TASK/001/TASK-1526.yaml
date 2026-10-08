@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-08T19:15:24.244565706Z
+modified_at: 2026-10-08T19:29:41.876703270Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -866,6 +866,269 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): independent default-budget measurement is REQUEST_CHANGES, not a new latency waiver. TASK-1526 reopened Approved on actual current code SHA bf65220959; preserve all historical merge/work and full evidence comment. A separate design-only author is investigating a bounded remedy under the existing two-second/default1500ms/single-flight/useful-snapshot contract; no product implementation before a new independent design disposition. TASK-1527 full V2 sketch and fresh independent APPROVED-AS-AMENDED report are now canonical, but it remains blocked-by TASK-1526; no dependency removal or queued implementation is inferred. Preserve BUG-1778/1779 fixes and separate BUG-1674 full-show/24h obligations and parent STORY-1484 closure. No numeric budget, load filtering, repeated-green selection, authority change or completion credit.'
   created_at: 2026-10-08T19:15:24.244565706Z
   modified_at: 2026-10-08T19:15:24.244565706Z
+- id: 01a11cfe-2bf5-7d22-bb9b-99ac9ba134e5
+  author: joe
+  content: |
+    # TASK-1526 latency rework sketch — the read-path winner commits with a durable sync
+
+    **DESIGN ONLY. Not approved, implemented or measured.** Every test below is a proposal and has not been run. No pass is claimed. A NEW independent advisor, different from this author, the root, the evidence author and the eventual implementer, must dispose this artifact before anything is queued.
+
+    Author: an independent sketch-author session (advisor role, separate native session). Prepared 2026-10-08 (America/Phoenix). This author wrote no product code, made no canonical writes, sent no mail, and changed no queue, grant, hold, lease, branch, PR or install. The only files written are this sketch, its READY note, and copies of the three fresh canonical reads under `task1526-latency-sketch-inputs/`.
+
+    ## 0. Summary
+
+    The measured AC1 failure comes from the **winner**, not the losers. The three losers return honestly stale in 1.528s, inside their budget. The winner is the only reader that performs an inline incremental refresh, and it returned in 2.648s with no deliberate hold. Across all three completed first-run cases, the winner spent between about 1.8s and 2.6s of its own time after the barrier released it, beyond any deliberate hold (§2.2). So the overrun is systematic, not one outlier.
+
+    From the source, one operation sits only on the winner's path and can plausibly cost seconds on this host: the SQLite `COMMIT` of the incremental transaction. The cache never sets `PRAGMA synchronous`, so it runs at SQLite's default of FULL. In WAL mode, FULL fsyncs the WAL file on every commit. The host was a loaded six-CPU machine with an ext4 root on `/dev/sda2`, 93% full. Its `host.json` snapshot, taken about eleven minutes before V3, showed **5.9 GB of dirty page cache**. Losers make no durable write. The in-repo precedent is `history_cache.rs:1089/1111`, which already runs its derived WAL index with `synchronous=NORMAL` and `wal_autocheckpoint=0`, for this reason.
+
+    **Proposed correction (L1).** Run only the read-path winner's single fast-fail incremental transaction with `synchronous=NORMAL` and the WAL auto-checkpoint suspended. Restore both values on every exit. Every strict writer, rebuild, migration, schema repair, detached worker and explicit cache command keeps FULL durability. This preserves the real incremental refresh, the single write attempt, the same-transaction stamp, honest stale labels and every strict contract. The read budget is unchanged.
+
+    **This attribution is source- and environment-grounded, but not instrumented.** The measured run did not record per-phase timestamps or syscalls. So L1 is proposed **conditional on one bounded, read-only attribution experiment (E1, §6)**, which uses the immutable V3 executable byte-for-byte under `strace`, with a decision rule fixed in advance. If E1 attributes the time elsewhere, L1 is withdrawn and this sketch states what the next step is. In no case does E1 supply acceptance credit.
+
+    ## 1. Inputs, authority and pins
+
+    ### 1.1 What was read
+
+    - **Fresh canonical reads.** `aida show TASK-1526 --json`, `STORY-1484 --json` and `TASK-1527 --json` were read via the installed CLI, not the raw-YAML fallback, at 2026-10-08 ~12:10 MST. Copies are retained in `task1526-latency-sketch-inputs/`.
+      - TASK-1526 is now **Approved**: history shows Completed→Approved by joe at `2026-10-08T19:07:38Z`, and `reopened_at_sha` is `bf65220959`. It has **19 comments**. The newest, `01a11ce9-9663-74f3-bfb5-8ecf7b1b10ca`, is the full canonical relay of the 20194-byte evidence report.
+      - STORY-1484 is Approved, with closure pending and **11 comments**.
+      - TASK-1527 is **Approved**, reopened at `2026-10-08T19:07:45Z`. It has **2 comments**: the 10-02 post-merge review, and the relay `01a11ce9-9cbd-76e2-9bb2-5823b66ee92e` of the V2 gate. Its only relation is **blocked-by TASK-1526**, which is unsatisfied.
+      - Every description and comment was read in full. The retained `input-hashes.json` fallback was not needed.
+    - **Binding contract, in this precedence:**
+      - STORY-1484 AC1: four concurrent readers on a one-commit-stale cache, exactly one refresh, every reader <2s.
+      - STORY-1484 sketch `01a0df08-c181-7530-b249-2740141c2a0b` and signoff `01a0df0d-f964-78f3-a715-046e37e50915`, amendments A1–A13 and answers Q1–Q6. A13 scopes "no `with_cache_write`/ladder" to **losers**; the winner's one fast-fail incremental attempt is allowed. Its Out of scope list says "Changing busy_timeout, DEFAULT_CACHE_RETRY_DELAYS_MS, or WAL."
+      - TASK-1526 decision `01a0e0fb-8d6b-7790-b04b-f808236dbe2d` (B1–B6 and the named tests), adopted by product in `01a0e0fd-bc48-7600-bc20-b0a8f781d0f7`. B3 keeps the **1500ms default** and the shared bounded wait. B5 keeps `busy_timeout=0` and the ladder. B6 requires rows and labels to come from one committed snapshot.
+      - BUG-1674 companion `01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105`. It stays separate; nothing here claims show's whole-command deadline.
+      - TASK-1565: root approved **KeepCurrentBudget**, which is not a numeric waiver.
+    - **Evidence.** The full 20194-byte `TASK1526_DEFAULT_BUDGET_INDEPENDENT_EVIDENCE.md` (REQUESTCHANGES), `probe-v3.rs`, the first-run logs for `v3-zero-first`, `v2-short-first` and `v2-expired-first` (stdout, stderr and receipt), `host.json` and `results-summary.json` keys.
+    - **TASK-1527 V2.** I read V2 READY in full; the V2 independent review's header, authority, source table and R1–R4 rulings; and the V2 sketch's section headings plus the §4 R1 phase table. I did **not** re-read the whole 63551-byte V2 body. The sequencing claims in §8 are limited to what those parts state.
+    - **Discipline.** AGENTS.md (headings, Cache read behavior and Sketch-First Protocol), `two-seat-protocol.md`, `rework-brief-craft.md`, `seat-recovery-playbooks.md`, and `TASK1565_DECISION_ACCEPTANCE.md`.
+
+    ### 1.2 Source pin
+
+    The pin is `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`, the evidence pin. Current HEAD/main is `bf65220959c7601427247286abc7eb16278af5a5`. `git diff ff9ac13c4f bf65220959 -- aida-core` is **empty**, so every cited aida-core line is identical at HEAD. The blobs below were exported with `git show <pin>:<path>`. Large files were read by the symbol ranges cited, not audited end to end.
+
+    | Path at pin | Git blob | SHA-256 |
+    | --- | --- | --- |
+    | aida-core/src/db/cached_git_backend.rs | 122e16eeb25b4d0e422c6945516589272ad190be | 544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7 |
+    | aida-core/src/db/cache.rs | 01cadb5c57b1d8919b823c173967454d24e13eae | 5b5975cb16fb37b9658d26eebffce27db9458260ac4754020aefd45f27798973 |
+    | aida-core/src/db/cache_refresh.rs | be889537445c7b8459843e7b2caea004d5302381 | b83d380c8bd641c402290bb042fdd9de8cddd857979ec61f8817090b5d45764e |
+    | aida-core/src/db/cache_lock.rs | ca6c834b48a9a858262f5135512ce431857936a2 | f1c5228c7c2bfc958b72f8c82b38a5868db9711a12f7b2159aa2d6806f9c049d |
+    | aida-core/src/db/refresh_request.rs | 39cd8ebfc9761cfdc8681b7df390499966423a1d | 4b473062d1f95180244c639867fde1beef9dab3714bd7e56da7d9948d2e9bbdf |
+    | aida-core/src/db/refresh_worker.rs | eb959b773f88aaccef9ba12f5ce2509ce6c30395 | 04239c61fed979aa14044b8070c9617cbdc04463f134b90022abc878eeedc40a |
+    | aida-core/src/db/git_backend.rs | 767e5a6f4915261dcab03009e5c59e7a43824839 | 962004d4098db98b2ce6c89f25a258468cbb92ba4887bd2f76740b9afe4dd31c |
+    | aida-core/src/git_ops.rs | b66fa13c53fbfea8a50d0c2aaada9c4b638e785b | b7a82077d3df0ae3a8f542f09ae962aefd87b57a559c1b7d7f07d3720beddaec |
+    | aida-cli-lib/src/history_cache.rs | 50546b18f3ce0d2dfab03223f8ca103c87e75342 | 1ee91ea6ec2e2f9dc747b034eea548dc1c8db37140b655b1a00ee8f254a474c9 |
+    | aida-cli-lib/src/lib.rs | 70547d508c895a363126feb875e6e8f97d74eb68 | a43f01cb4c7d18bc940a8a00bbc1beae3d3f1783cfcf51f9fe371562f766e4b1 |
+
+    ## 2. What the first failure actually shows
+
+    ### 2.1 Primary witness, preserved as measured
+
+    From `logs/v3-zero-first.stdout`, SHA-256 `81fc0483…a3e529`, and its receipt `de2e8d2f…e389`:
+
+    - The run used the binary with SHA-256 `8b262e2c…fa87a`, exit 101, and AC1 panicked at `cached_git_backend.rs:4348`. The load average was `[12.17, 12.69, 17.58]` before the run and `[13.12, 12.87, 17.51]` after. Affinity was all six CPUs and the timeout was 45s.
+    - `PROBE_READY` arrivals were `[3,1,0,2]` with `all_four_before_acquire:true`. `PROBE_HELD` reported `winner:3`, `real_refresh_flock_held:true` and `hold_ms:0`.
+    - **Losers 0, 1 and 2.** Each started at about `18:59:56.37314` and ended at `18:59:57.90118`–`.90134`, for 1.528038–1.528182s. Each returned 256 rows labelled `stale:true, refreshing:worker_running`, pinned to cache head `738b2234…` and `built_at 18:59:51.828911521`, with **empty counters**.
+    - **Winner 3.** It started at `18:59:56.373197` and ended at `18:59:59.021488`, for **2.648286s**. It returned 256 fresh rows with `gen1`=2 at pinned head `55705f5d…`. Its counters were `incremental:1, write_attempt:1` and no `retry_sleep`.
+
+    This failure is not re-measured, re-selected, filtered or subtracted here. It stays the binding first failure.
+
+    ### 2.2 Diagnostic decomposition (never acceptance credit)
+
+    `wait_remaining` (`cache_refresh.rs:535–545`) starts a loser's deadline when the loser first enters the contended branch. That happens after the `BEFORE_ACQUIRE` barrier releases all four readers together. So a loser's total time is its pre-barrier time, plus the 1500ms budget, plus its tail. In V3, all of that adds up to 28ms over the budget. That bounds the winner's pre-barrier constructor time at about 28ms, and the winner's own post-release work at **≥ 2.62s**.
+
+    The same arithmetic on the two V2 first runs:
+
+    | Case | Winner elapsed | Losers' (pre-barrier + tail) | Deliberate hold | Winner work after release, excluding the hold (diagnostic lower bound) |
+    | --- | ---: | ---: | ---: | ---: |
+    | v3-zero-first | 2.648 | ≤0.028 | 0 | ≥2.62 |
+    | v2-short-first | 2.229 | ≤0.141 | 0.250 | ≥1.84 |
+    | v2-expired-first | 3.603 | ≤0.148 | 1.650 | ≥1.81 |
+
+    This table is used **only** to locate the cost: it is the winner's, and it repeats across three independent first runs. It is not an acceptance figure. No hold is subtracted from any acceptance clock.
+
+    ### 2.3 Source map of the winner path at the pin
+
+    The winner's path runs from the constructor to its useful result:
+
+    1. `CachedGitBackend::open` → `with_inner` (`cached_git_backend.rs:40–47`).
+    2. `Cache::open` → `open_connection_inner` (`cache.rs:719–747`). This open uses the full ladder: `with_cache_retry_observed(... "open cache" ...)` at `cache.rs:720` with `DEFAULT_CACHE_RETRY_DELAYS_MS = [100…12800]` (`cache.rs:563`).
+    3. `ensure_cache_fresh_for_read_with_schema_retry` (`:45`) → `freshen_for_read` (`:496`).
+    4. `current_head_sha` (one `git rev-parse`), `is_stale`, then `RefreshLock::try_acquire` with the barrier, which this reader wins.
+    5. A recheck with a second `git rev-parse`, a third `git rev-parse`, and `is_ancestor_with_timeout` (`:538`, one `git merge-base`, polled every 5ms).
+    6. `ReadRefreshAttempt::new()` (`:546`) → `try_incremental_update` (`:878`):
+       - `changed_object_files` (one `git diff`).
+       - Two targeted YAML reads through `GitBackend::get_requirement_by_spec_id`, which read the file directly with no store scan (`git_backend.rs` symbol).
+       - Ancestor-epic pre-resolution.
+       - The `TASK_1515_AFTER_READS` hook (`:950`).
+       - A head recheck (one `git rev-parse`).
+       - `Cache::apply_incremental` (`cache.rs:1769–1803`).
+    7. Inside `apply_incremental`, under `with_cache_write` (`cache.rs:807`):
+       - Create the lock-info sidecar (no fsync).
+       - `BEGIN IMMEDIATE` (`:1788`).
+       - `refresh_head_reached`, which runs two git children while the write lock is held (`cache.rs:576–597`).
+       - Two row upserts and the stamp.
+       - **`tx.commit()` (`:1799`)**.
+       - Clean up the sidecar.
+    8. Constructor return, then the query: `with_cache_schema_retry` → `tolerant_read` → `freshen_for_read`, which is now fresh (one `git rev-parse`). Then `current_head_sha`, `read_snapshot` (a new read-only connection with `BEGIN DEFERRED`), and the 256-row list and provenance.
+
+    The losers run the same git spawns, constructor, snapshot and 256-row query, all inside their 28ms, so those parts are cheap on this host. The winner-only work is: one `git merge-base`, one `git diff`, three more `git rev-parse` and one more `git merge-base` (two of them inside the write transaction), two small YAML reads, two upserts, the sidecar create and remove, and **one durable commit**.
+
+    Nowhere in the pinned crates is `synchronous` or `wal_autocheckpoint` set: `git grep` finds them only in `history_cache.rs`. rusqlite 0.31 is built `bundled`, with SQLite's compile default `SQLITE_DEFAULT_SYNCHRONOUS=2` (FULL) and the same value for WAL. So the commit at `cache.rs:1799` fsyncs `cache.db-wal`. If the WAL also crosses the 1000-page auto-checkpoint threshold, the commit runs a checkpoint with further fsyncs of the WAL and the database.
+
+    Two observations support this, and both are corroborating, not decisive:
+
+    - **V1.** The bulk fixture went through the per-row product filing and write-through path, one durable cache commit per row, and timed out at 45s during setup in all four attempts. That would be expected if each durable commit cost hundreds of ms or more on this host.
+    - **`host.json`.** Captured at 18:48 UTC, it records `Dirty: 5925292 kB`. On ext4 in data=ordered mode, an fsync while that much is dirty can wait behind journal writeback.
+
+    This sketch does **not** claim that this host's fsync cost explains the whole interval. E1 decides that.
+
+    ### 2.4 The loser constructor retry is a separate finding and does not explain the winner
+
+    In V2, some readers recorded exactly one `retry_sleep` with zero writes. The counter at `cache.rs:875` also counts open-time retries (`cache.rs:720`). This is consistent with SQLite returning a busy/recovery error to concurrent openers while one connection initializes the WAL index. Because the barrier absorbed those 100ms sleeps before the loser clocks' budgets started, no measured AC1 failure is attributable to them. The decisive V3 case recorded **zero** retries. L1 therefore does not claim to fix the constructor retry. That item is handled separately in §5 (L2), as an accounting rule plus a design fork for the advisor.
+
+    ## 3. Required contract (unchanged)
+
+    | Property | Source | Status after L1 |
+    | --- | --- | --- |
+    | Every reader <2s, measured from before `CachedGitBackend::open` to its useful result, with the real 1500ms default, four-way overlap, a 256-meaningful-row cache one commit stale, and counts taken from before the constructors with no reset | STORY-1484 AC1; evidence §Fixture | Binding; re-measured only by a new independent measurement after implementation (§7) |
+    | Exactly one real incremental refresh and one real SQLite write attempt, by the winner | AC1, A13 | Preserved; L1 changes the transaction's sync level, not how often it runs |
+    | Losers never call `with_cache_write` or the write ladder | A13, B3 | Preserved; L1 lives only inside `apply_incremental` under the winner's `ReadRefreshAttempt` |
+    | Rows and stamp are applied in one IMMEDIATE transaction; head is rechecked inside the transaction | TASK-1515, A3 | Preserved; L1 changes no transaction boundary |
+    | Honest stale labels (`worker_running`/`deferred`/`writer_busy`/`requested`) with the pinned `cache_head` and `built_at` from the served snapshot | B1–B3, B6 | Unchanged |
+    | `busy_timeout=0`, `DEFAULT_CACHE_RETRY_DELAYS_MS`, journal_mode WAL | Story Out of scope, B5 | Unchanged values. **The advisor must rule whether "or WAL" covers per-transaction sync and checkpoint scope (§4.4)** |
+    | Strict mutations, gates and `cache rebuild` stay strict; BUG-1664/1670 revalidation; BUG-1778 hint failure degrades; BUG-1779 serialized RMW | B5, BUG-1778/1779 | Untouched; L1 never runs in those paths |
+    | Same-thread nesting (A4), store-lock to SQLite ordering (A5), no wait while holding a write lock | A4, A5, B6 | Unchanged; L1 takes no new lock and never waits |
+    | Migration or schema-drift paths never serve old-schema rows | B4, Q2 | Unchanged; `apply_incremental` already declines when a migration is pending (`cache.rs:1778`), before L1 does anything |
+
+    ## 4. Proposed correction L1 — winner commit without a durable sync
+
+    ### 4.1 Owner, trigger and handler
+
+    - **Owner.** The aida-core cache layer: `Cache::apply_incremental` (`cache.rs:1769`) and the existing thread-local `ReadRefreshAttempt` / `READ_REFRESH_ATTEMPT` (`cache.rs:602, 612–622`).
+    - **Trigger.** Only the read-path winner's single fast-fail incremental attempt sets `READ_REFRESH_ATTEMPT`. That happens at `cached_git_backend.rs:546` in `freshen_for_read`'s winner branch. The flag is also set around the one-attempt TTY `ensure_cache_fresh` at `:576`; see §4.3 for how L1 behaves there.
+    - **Handler.** Inside `apply_incremental`, while holding this handle's connection mutex and **before** `with_cache_write`/`BEGIN IMMEDIATE`, when `READ_REFRESH_ATTEMPT` is set:
+      - Read the current `PRAGMA synchronous` and `PRAGMA wal_autocheckpoint`.
+      - Set `synchronous=NORMAL` and `wal_autocheckpoint=0` on this connection.
+      - Run the existing closure unchanged: one attempt, because the ladder is empty under `READ_REFRESH_ATTEMPT`.
+      - Then restore both values exactly as read, after the transaction has committed or rolled back. The restore is a guard that runs on `Ok(true)`, `Ok(false)` (decline), a typed lock error (busy `BEGIN IMMEDIATE`, i.e. WriterBusy), any other error, and unwinding. Pragmas are changed only outside a transaction.
+    - **No other call site changes**: no new API, no new lock, no new thread or process, no schema change and no configuration knob.
+
+    ### 4.2 Why it is safe for a derived projection
+
+    In WAL mode with `synchronous=NORMAL`, SQLite documents that the database stays consistent. An application crash loses nothing: the WAL frames are already in the OS page cache. A power loss or OS crash may roll back the most recent commits. For this cache, a rolled-back incremental commit loses its rows **and** its stamp together, because they are one transaction (TASK-1515). After a reboot the cache is therefore at its previous committed head, which is honestly stale, and the next reader or the worker refreshes again from the canonical Git store. The next FULL commit by any writer fsyncs the WAL, and with it the earlier NORMAL frames.
+
+    Suspending auto-checkpoint for this one transaction only moves the checkpoint to the next strict writer or worker commit, or to the existing close-time checkpoint. `NO_CKPT_ON_CLOSE` is **not** proposed. So the WAL stays bounded exactly as it is today. This is the same reasoning behind `history_cache.rs:1089–1113` (TASK-1507).
+
+    The 2026-10-05 corruption comment on STORY-1484 happened under today's FULL setting, with a binary replaced mid-stream. L1 does not claim to address that, and must not be read as reducing corruption protection. NORMAL in WAL mode adds risk to durability, not to consistency.
+
+    ### 4.3 Boundaries
+
+    - L1 covers **only** `apply_incremental` under `READ_REFRESH_ATTEMPT`.
+    - These all keep FULL and auto-checkpoint: `ensure_cache_fresh` strict incremental (no flag); the write-through `upsert_requirement`/`delete_requirement`; `rebuild_for_refresh`/`rebuild_from_store`/`rebuild_after_cache_schema_drift`; the C worker, which takes the strict path; and `cache rebuild`/`verify --fix`.
+    - **TTY one-attempt rebuild at `:576`.** That branch runs `ensure_cache_fresh()` under `READ_REFRESH_ATTEMPT`. If it chooses the incremental path, it reaches `apply_incremental`, and L1 applies. If it chooses `full_rebuild`, L1 does **not** apply, because only `apply_incremental` carries the handler. The advisor must confirm that the Q1 interactive incremental may use L1. The recommendation is yes: it is the same derived single transaction.
+    - **Nested or recursive use.** A nested `freshen_for_read` returns early (`:522–524`). If the guard ever finds the connection already at NORMAL, it records and restores the value it read, not a hard-coded FULL.
+
+    ### 4.4 Explicit advisor ruling needed (a design fork, not a human question)
+
+    STORY-1484's Out of scope list says "Changing … WAL". L1 keeps journal_mode=WAL and changes the per-transaction **sync and checkpoint scope** for the read-path winner only. This author reads "WAL" as journal mode and leaves the reading for the gate to rule on. **If the gate rules that L1 falls under that exclusion**, the signed B scope has no grounded remedy for a sync-dominated winner. The remaining options would be a winner deadline or handoff, which needs TASK-1527 V2's phase machinery (rejected alternative X2, §9), or removing inline refresh from readers entirely (X3). That would be an advisor design fork escalated with E1's data, not a human policy question.
+
+    ## 5. L2 — constructor-open retries: accounting rule plus a design fork
+
+    **Grounded facts.** Every `Cache::open` runs its open under the full ladder (`cache.rs:720`), whose worst case is about 25.5s. Every CLI invocation creates a `CacheReadScope` (`lib.rs:1124`) and configures a read policy (`lib.rs:3862`), mutations included. So `Cache::open` cannot tell a tolerant read from a strict command. Changing open patience at that point would shorten it for strict commands too.
+
+    **Proposed binding accounting (test-only, no product change).**
+
+    - Split the cfg(test) counter: increment `open_retry_sleep` when the sleep happens outside `holding_write()` during `open cache`, and keep `retry_sleep` for everything else. The legacy `retry_sleep` total may be kept as the sum.
+    - The acceptance test (§7, T4) requires **zero write-path retry sleeps** and **zero `with_cache_write` by losers**. It counts open retries honestly **inside** each reader's measured elapsed time. It does not require zero open retries, because A13 scopes the no-ladder rule to the post-race loser. The probe's stricter zero-retry assertion was the probe author's choice, not a signed criterion.
+
+    **Fork for the advisor.** Either:
+
+    - **(a)** accept the pre-race open ladder as outside A13, with its cost always counted in AC1; or
+    - **(b)** bound the open retry by the invocation's shared read deadline, only for constructors opened by an ordinary stale-allowed read. That needs a read-intent flag passed from command classification in `lib.rs:3852–3868` into `CachedGitBackend::with_inner`, and it must leave strict commands' open patience unchanged.
+
+    The recommendation is **(a) for this correction**. The decisive failure had zero retries; every observed open retry resolved at the first 100ms step; and (b) changes the open path shared with BUG-683, BUG-1097 and BUG-1752, which is a larger change. If the gate prefers (b), it becomes a separately sketched item. It must not be folded silently into L1.
+
+    ## 6. E1 — the one proposed attribution experiment (not executed)
+
+    - **The question.** In the decisive zero-delay fixture on the pinned binary, what share of the winner thread's time after release is spent in `fsync`/`fdatasync` on `cache.db-wal`/`cache.db`, compared with child-process (git) lifetime and everything else?
+    - **Design.** Run once, recording the first result only, with no source change.
+      - **Executable.** The retained V3 test binary `task1526-default-budget-independent/target/debug/deps/aida_core-0a54d692a9eb69e2`. Before running, verify SHA-256 `8b262e2cb3b4f724b793bb29b366c784a12290d36cd4c2f8886850f1331fa87a`, or abort and report that the evidence is missing. Do not rebuild.
+      - **Invocation.** The same bwrap sandbox, allow-listed environment and test filter `db::cached_git_backend::tests::independent_default_budget_zero_delay --exact --nocapture --test-threads=1` as `logs/v3-zero-first.result.json`. The one difference is the prefix `/usr/bin/strace -f -tt -T -y -o /evidence/../task1526-latency-attribution/strace.txt -e trace=fsync,fdatasync,sync_file_range,execve,wait4,flock`. strace is in `/usr`, so it is visible inside the sandbox, and `ptrace_scope=1` allows tracing a child.
+      - **Same supervision.** A 45s timeout, a reaped process group, and no rerun.
+      - **Host data.** Record `/proc/meminfo` `Dirty`/`Writeback`, load averages and affinity, before and after.
+      - **Output.** Write everything to a **new** folder, `task1526-latency-attribution/`. Every existing V1–V3 artifact stays byte-identical; check this with `artifact-integrity.json` before and after.
+    - **Attribution.**
+      - The winner thread is the thread ID whose `flock(... cache.db.refresh.lock, LOCK_EX|LOCK_NB) = 0` succeeds first and that later issues `fsync`/`fdatasync` on `cache.db-wal`; the `-y` paths identify the file.
+      - Its window runs from that flock to its last traced syscall before the `PROBE_READER` line with `"reader":<winner>`, cross-checked against the probe's printed UTC times.
+      - Compute `S` (the sum of sync durations on the cache files), `G` (the sum of `execve` to the matching `wait4` return for git children of that thread), and `W` (the window).
+    - **Decision rule, fixed now.**
+      - **D1:** `S ≥ 0.5·W` and `S` is the largest component. L1 is grounded, and it goes to the new gate together with E1's data.
+      - **D2:** `G ≥ 0.5·W`. L1 is withdrawn. The next step is a sketch revision for **L3**: reuse one captured HEAD per freshen decision, and remove git children from inside `BEGIN IMMEDIATE` while keeping A3's in-transaction head recheck. It is not designed here.
+      - **D3:** neither. No remedy is grounded. The missing evidence is the time spent per phase (YAML reads, SQL, hook coordination). The next bounded measurement would be cfg(test) phase timestamps in a private export (E2), proposed separately.
+      - **D4:** the trace fails, setup times out, or the winner thread cannot be identified. Record that, do not retry, and report the exact missing evidence.
+    - **Limits.**
+      - strace slows the traced process. E1's elapsed times and libtest outcome are recorded but are **never** acceptance evidence for or against AC1, and they never replace the first failure.
+      - E1 tests no remedy, selects no load window, applies no outlier filter, subtracts no hold, resets no counter and raises no budget.
+      - If E1 happens to finish in under 2s, it certifies nothing.
+
+    E1 needs no Cargo build, workspace build, install or canonical write. It is offered because L1's selection depends on attribution. If the gate judges the source and environment grounding in §2.3 sufficient without E1, it may say so explicitly; this author does not claim that.
+
+    ## 7. Binding amendments and named tests (all proposed and unrun)
+
+    **Amendment L1** (§4), conditional on E1 reaching D1, or on the gate's explicit waiver of E1. **Amendment L2-accounting** (§5). **Fork L2(a)/(b)** and **ruling §4.4** to be decided by the gate.
+
+    **Positive tests:**
+
+    - **T1 `read_refresh_winner_commits_without_durable_sync_and_restores`.** A cfg(test) observer inside `apply_incremental`, after `BEGIN IMMEDIATE` and before commit, records `PRAGMA synchronous` and `wal_autocheckpoint` on the transaction's connection.
+      - The read-path winner must see `1` (NORMAL) and `0`.
+      - After the call, the same handle must read its prior values (`2` and `1000` by default), on each of these exits: success; a real decline (BUG-1606 epic miss); an injected `INCREMENTAL_ERROR`; and a **real separate `BEGIN IMMEDIATE` holder**, which produces WriterBusy, with an absent sidecar and with a misleading one.
+      - On each exit, a strict `upsert_requirement` that follows on the same handle observes FULL.
+    - **T2 `strict_paths_keep_full_sync_and_autocheckpoint`.** The observer sees `2` and the configured auto-checkpoint for: strict `ensure_cache_fresh` incremental, write-through upsert and delete, `full_rebuild` refresh and reconcile, schema-drift rebuild, the worker's strict refresh, and `rebuild_cache`. This includes a strict call made immediately after a read-path refresh on the same thread, and one made concurrently on another thread.
+    - **T3 `read_refresh_normal_sync_keeps_txn_atomicity`.** Re-run the TASK-1515 atomicity assertions (`task_1515_concurrent_reader_sees_whole_incremental_refreshes`, `task_1515_incremental_rows_roll_back_when_the_stamp_fails`, `refresh_txn_rechecks_head_inside_txn`) through the read-path winner branch. Rows and stamp must never be torn, and a decline rolls everything back.
+    - **T4 `single_flight_four_readers_default_budget_every_reader_under_2s`** (AC1 acceptance). Promote the independent V3 design unchanged:
+      - Fixture and readers: the real 1500ms default, with `AIDA_CACHE_READ_WAIT_MS` unset; 256 meaningful rows; exactly one stale commit retitling two rows; a fresh `CacheReadScope` per reader thread, with empty counters checked before `open`; clocks from before `open` to the useful result and its pinned head and `built_at`; a four-way `BEFORE_ACQUIRE` barrier; the real `TASK_1515_AFTER_READS` path witness; zero hold.
+      - Assertions: one `incremental`, one `write_attempt`, zero `full_rebuild`, zero write-path `retry_sleep`; open retries counted and included; stale rows with `gen0`, `worker_running` and the baseline head and `built_at`; fresh rows with `gen1` and the new head; no request file; every elapsed time **<2,000,000µs**.
+      - Run: as a single-test invocation by a **new independent measurement session**, on the actual loaded host class, first execution only, with load and `Dirty` recorded.
+      - The existing 60s `single_flight_four_readers_one_refresh` stays byte-unchanged and remains **not** a latency certificate.
+
+    **Negative and non-vacuity controls** (each must fail at the named assertion, not during setup):
+
+    - **M1.** L1 removed: T1 fails at the observer (`synchronous=2`).
+    - **M2.** NORMAL applied at `Cache::open`: T2 fails.
+    - **M3.** Restore skipped on the decline, error or busy exit: T1's restore or strict-follow-up assertion fails in that branch.
+    - **M4.** The existing `skip_refresh` mutation: T4 `PATH_WITNESS` fails.
+    - **M5.** The existing `serialize` mutation: T4 `NONVACUITY` fails.
+    - **M6.** L1 also armed for losers: the existing `reader_path_never_calls_with_cache_write` and T4's loser zero-write assertion fail.
+
+    **Retained.** All B1–B6 named tests, the A-series tests listed in `01a0e0fb…`, and the BUG-1778/1779 regressions run unchanged. No existing assertion is relaxed.
+
+    ## 8. Sequencing with TASK-1527 and the other gates
+
+    - **No C integration has to come before L1.** L1 touches only `cache.rs` `apply_incremental` and the existing `ReadRefreshAttempt`. It does not use `file_and_spawn_refresh`, `refresh_request.rs` or `refresh_worker.rs`.
+    - **Keep TASK-1527 blocked-by TASK-1526.** No dependency is removed and no worker is added. The order is TASK-1526 L1 → independent review → merge → TASK-1527 V2 implementation, rebased.
+    - **Overlap.** V2's R1 phase table (§4) runs "One fast-fail incremental attempt" under the same `ReadRefreshAttempt` and adds a RequestLock read/RMW under RefreshLock before the SQLite attempt. That RMW is `refresh_request.rs`'s tmp-and-rename with no fsync. V2's implementer must keep T1, T2 and T4 green, and run T4 again as a new independent measurement after V2 lands, because V2 adds work to the winner's path. V2's ordinary-strict preselection (no-detach or suppression) uses strict `ensure_cache_fresh` and so keeps FULL. That is correct, and those paths are outside AC1's fixture.
+    - **Ownership.** This sketch does not reinterpret V2's approved design, does not start its code, and does not change its owner.
+    - **Out of scope here.** BUG-1674 (whole-command show deadline and provenance), TASK-1674 (full show and the 24h gates) and STORY-1484 closure all stay separate and unmet. L1 may shorten show's winner commit as a side effect, but no show claim is made. CLI process-exit cost, such as the close-time checkpoint, is outside AC1's measured path and is not claimed either.
+    - **Untouched.** Reserved TASK-1593, TASK-1591, BUG-1811 and BUG-1812, and the batch C and D branches.
+
+    ## 9. Rejected alternatives
+
+    - **X1: raise or reshape the 1500ms budget, or lower AC1.** Forbidden. TASK-1565 is KeepCurrentBudget, not a numeric waiver.
+    - **X2: a winner deadline before `BEGIN IMMEDIATE`, then hand off to the C worker.** This needs V2's post-attempt handoff phases, which are not started, and would turn the measured fixture into zero refreshes. It is not proposed.
+    - **X3: no inline refresh by readers; always use the worker.** That changes STORY-1484's design and the "exactly one refresh" counter, so it would be a new architecture fork.
+    - **X4: disable sync globally, or `NO_CKPT_ON_CLOSE` for the cache.** Too broad: it changes durability for strict writers. Rejected.
+    - **X5: drop the two git children inside the transaction now.** That is only D2's path; L3 is not designed unless E1 points to it.
+
+    ## 10. Limits and stance
+
+    There is no universal OS or latency bound, no fleet guard, no whole-command CPU bound and no 24h claim. L1 cannot bound fsync-independent costs such as CPU starvation or slow reads. The rule that ReadBudget bounds polling, not all work, stays as it is. The future acceptance is T4, measured fresh by an independent session. The first failure remains on record whatever happens.
+
+    The author does not sign off this sketch. Root remains the only canonical relay owner. This sketch makes no canonical, queue, status, grant, hold, test-bypass or global-configuration change.
+  created_at: 2026-10-08T19:29:41.876703270Z
+  modified_at: 2026-10-08T19:29:41.876703270Z
+  relayed_from: task1526-latency-design-author
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
