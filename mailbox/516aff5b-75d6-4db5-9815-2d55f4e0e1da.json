@@ -1,0 +1,18 @@
+{
+  "id": "516aff5b-75d6-4db5-9815-2d55f4e0e1da",
+  "thread_id": "83056b9f-d4a0-48a9-a61a-0176ab2510cd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791422845989,
+  "body": "Operator transferred orchestration. Please stand down and send activity receipt through advisor mailbox.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
