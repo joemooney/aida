@@ -11,8 +11,9 @@
 //!   (nearest claude/codex harness ancestor, else the invoking parent shell or
 //!   loop process) plus that process's start identity.
 //! - ADR-68: a caller whose validated grant is for a single-occupancy seat
-//!   claims it implicitly on its first protected op (an amendment to the
-//!   signed-off sketch, which required an explicit claim). A former holder
+//!   claims implicitly for a loop or harness-anchored protected op. A plain
+//!   shell Route/Spawn validates its grant without acquiring the seat (C7
+//!   refinement of ADR-68). A former holder
 //!   never claims implicitly (advisor condition C4).
 //! - ADR-69: Unknown process evidence refuses; nothing falls back to env
 //!   labels.
@@ -30,6 +31,7 @@
 pub(crate) mod cmd;
 pub(crate) mod config;
 pub(crate) mod runtime;
+pub(crate) mod scope;
 pub(crate) mod store;
 
 use aida_core::process_probe::{Probe, ProcFacts, ProcessIdentity};
@@ -271,7 +273,7 @@ impl<'a> ResolvedCaller<'a> {
     }
 
     /// Self up to and including the anchor.
-    fn own(&self) -> &'a [ProcFacts] {
+    pub(super) fn own(&self) -> &'a [ProcFacts] {
         &self.chain[..=self.anchor_idx]
     }
 
@@ -308,11 +310,15 @@ pub(crate) fn classify(rec: &SeatRecord, caller: &Caller, rc: &ResolvedCaller) -
         .flat_map(|h| h.processes())
         .chain(rec.tombstones.iter().map(|t| &t.process))
         .any(|p| contains(rc.above(), p));
-    if parent_lineage {
-        let own_spec = rec
-            .children
-            .iter()
-            .find(|c| contains(rc.chain, &c.identity))
+    // trace:TASK-1607 | ai:codex
+    // Persisted child identity remains binding after reparenting or holder
+    // death. A parent's child record must never supply this worker's scope.
+    let child_spawn = rc
+        .own()
+        .iter()
+        .find_map(|p| rec.children.iter().find(|c| c.identity == p.identity));
+    if parent_lineage || child_spawn.is_some() {
+        let own_spec = child_spawn
             .and_then(|c| c.spec.clone())
             .or_else(|| caller.lease_scope.clone());
         return Relation::Child { own_spec };
@@ -362,6 +368,8 @@ impl SeatOp {
 pub(crate) struct Ctx<'a> {
     pub now: DateTime<Utc>,
     pub probe: &'a dyn Fn(&ProcessIdentity) -> Probe,
+    /// Local persisted review graph, read before taking the seat lock.
+    pub scope: Option<&'a scope::ChildScopeGraph>,
 }
 
 /// Holder liveness: Alive if any holder process is alive, Dead only if every
@@ -754,9 +762,17 @@ pub(crate) fn gate(
             false,
         )),
         Relation::Child { own_spec } => {
+            // trace:TASK-1607 | ai:codex
+            // Scope comes from the process-bound spawn (or registered lease),
+            // expanded only through persisted review/implements edges. The
+            // operation description and role label never grant peer routing.
             let own_scope = matches!(op, SeatOp::Route { .. })
-                && op.spec().is_some()
-                && op.spec() == own_spec.as_deref();
+                && op.spec().is_some_and(|target| {
+                    own_spec.as_deref().is_some_and(|assigned| {
+                        target == assigned
+                            || ctx.scope.is_some_and(|scope| scope.contains(assigned, target))
+                    })
+                });
             if own_scope {
                 return Ok(Gate::Pass);
             }
@@ -764,7 +780,7 @@ pub(crate) fn gate(
                 rec,
                 ctx,
                 format!(
-                    "this process was dispatched under the {} seat{}; a delegated worker can only act on its own spec and cannot {}",
+                    "this process was dispatched under the {} seat{}; a delegated worker can only act within its assigned review scope and cannot {}",
                     rec.seat,
                     own_spec
                         .as_deref()
@@ -788,6 +804,23 @@ pub(crate) fn gate(
                 holder: holder_view(rec, ctx),
                 hints: Vec::new(),
             })?;
+            // trace:TASK-1607 | ai:codex
+            // C7/ADR-68: one-shot routing from a days-long shell must not
+            // fence a later harness launched from that shell. Classification
+            // above still refuses demoted/child lineage before this exemption.
+            if matches!(op, SeatOp::Route { .. } | SeatOp::Spawn { .. })
+                && rc.anchor.harness().is_none()
+                && !loop_anchor(rc.anchor)
+            {
+                // Passing without a claim is not an identity-probe fallback.
+                match (ctx.probe)(&rc.anchor.identity) {
+                    Probe::Alive => return Ok(Gate::Pass),
+                    evidence => return Err(refuse(rec, ctx, format!(
+                        "cannot verify one-shot caller anchor ({}: {}); refusing",
+                        evidence.label(), evidence.reason().unwrap_or("missing evidence")
+                    ), false)),
+                }
+            }
             let grant = grant.clone();
             let notice = try_claim(rec, ctx, &grant, &rc, ClaimKind::Implicit)?;
             if matches!(op, SeatOp::LoopStart { .. }) {
@@ -798,6 +831,18 @@ pub(crate) fn gate(
             })
         }
     }
+}
+
+// trace:TASK-1607 | ai:codex
+fn loop_anchor(anchor: &ProcFacts) -> bool {
+    let is_aida = anchor.command_label() == "aida" || anchor.command_label() == "aida.exe";
+    is_aida
+        && (anchor.cmd.windows(2).any(|w| w == ["burndown", "run"])
+            || (anchor.cmd.windows(2).any(|w| w == ["queue", "work"])
+                && anchor
+                    .cmd
+                    .iter()
+                    .any(|a| a == "--drain" || a.starts_with("--auto-complete"))))
 }
 
 fn bind_loop(rec: &mut SeatRecord, process: &ProcessIdentity) {

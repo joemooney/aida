@@ -91,6 +91,47 @@ implementation and add discovered paths to this table. Unknown managed
 control paths fail closed. Same-user malicious record/grant forgery remains
 the explicit ADR-66 limitation, not a security property supplied by lineage.
 
+### C7 inventory refresh and accepted core refinements
+
+This addendum records the advisor's 2026-10-07 C7 changes-requested decision
+and the operator's mechanical rework authorization. It does not authorize
+steps 4–5 gateway activation. The original signed-off sketch and its commits
+remain preserved. Core regressions exercise runtime permits using fixture
+repos, persisted local review relationships and test-owned processes.
+<!-- trace:TASK-1607 | ai:codex -->
+
+| Caller/path | Actual operations and disposition |
+| --- | --- |
+| Implementer child: `queue_cmd::handle_queue_done`, status/comment edits | Route the assigned spec; no claim or holder permit. Persisted spawn identity supplies the assigned spec, with a process/start-validated own lease as fallback. |
+| Implementer session end: `try_auto_queue_pr_review`, `aida_subcmd_add_review_story`, `aida_subcmd_rel_add_implements`, `aida_subcmd_queue_add_for_reviewer` | File the review story, persist its `implements` edges, then route that story to reviewer. Forge discovery and store push occur outside the seat lock. The new story is within scope only after its local persisted relationship links the assigned spec. |
+| Reviewer child: `handle_review_record_at`, `queue_cmd::handle_queue_rework`, reviewer queue completion | PR/MR lease or assigned review story covers that persisted story and its direct `implements` specs. Verdict recording and rework routing of those specs pass; unrelated specs do not. Forge labels are distinct; title prose/trailers alone confer no scope. |
+| Punt/advice child: `handle_punt_command`, headless advisor phase and implementer resume | Local punt/status/comment writes and routing the assigned spec to advisor or back for rework pass. The child cannot spawn its own advisor/reviewer peer or originate a loop; the holder dispatches the required phase. |
+| `maintenance_schedule::tick` / `tick_core`, including systemd/cron `aida schedule tick` → scheduled `shift tick` | Unattended control-path candidate, usually no validated grant. Maintenance/seat due delivery stays classified separately. A timer must not originate an orchestrator loop; diagnose/refuse that launch instead of inventing authority or implicitly claiming from an environment label. No timer/user service is a test target. |
+| `supervisor::handle_supervise_command` → `launch_redrive` (`queue work --auto-complete --force-claim --no-human both`) | This is a LoopStart, not ordinary spec completion. The approved disposition is to hand the requeued spec to the live holder's loop, never originate a competing loop. A missing/unknown holder or invalid caller authority must diagnose/refuse; no fallback launcher. |
+
+Child review scope is a bounded local snapshot: assigned spec, its persisted
+review story, and that review's direct PR/MR specs. Never transitively walk
+other PRs through shared specs. Resolve the caller against committed child
+PID/start identity even after reparenting/holder exit; do not borrow a parent
+spawn record or a parent lease. Unknown/ambiguous evidence adds no scope.
+The core exposes `authorize_as_scoped` for this snapshot; wiring production
+callers to it remains the separate post-C7 checkpoint.
+
+ADR-68 refinement requested at C7: grant-valid plain-shell one-shot Route/Spawn
+passes without installing a holder. LoopStart, harness anchors and loop
+anchors still claim implicitly. Persisted holder, demotion and child lineage
+are checked first and remain fenced. The refinement comment is retained in
+`.aida/handoff/task1607-rework/adr68-refinement.md` if the canonical store is
+unwritable; it must be reconciled to ADR-68 when store writes are available.
+
+ADR-70 remains local-only: obtain any graph/forge/network data before taking
+the permanent seat flock; validate and commit only bounded local mutations or
+spawn/identity recording under it, then unlock before push/sync/gh/glab/fetch,
+mail delivery, or waiting. Seat-lock acquisition itself now times out with a
+diagnosis after ten seconds; a stalled commitment does not block every caller
+indefinitely. Seat policy and state share the main-worktree root. C1–C8,
+demotion/spoof/unknown refusals and disabled hard takeover continue to apply.
+
 ## 2. Atomic commitment, transfers, and recovery
 
 Store a versioned record under the main worktree's

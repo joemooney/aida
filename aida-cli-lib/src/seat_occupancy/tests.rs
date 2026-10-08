@@ -139,6 +139,7 @@ impl World {
         let ctx = Ctx {
             now: *self.now.borrow(),
             probe: &probe,
+            scope: None,
         };
         f(&ctx)
     }
@@ -734,4 +735,132 @@ fn every_event_has_a_unique_op_id() {
             SeatEventKind::Transferred
         ]
     );
+}
+
+// trace:TASK-1607 | ai:codex
+#[test]
+fn shell_one_shot_route_and_spawn_do_not_fence_a_later_harness() {
+    let w = World::new();
+    let mut rec = SeatRecord::empty(ORCHESTRATOR);
+    let shell = caller(
+        &[(900, "aida"), (2, "bash"), (1, "init")],
+        Some(grant("sess-a", ORCHESTRATOR)),
+    );
+    for op in [
+        route("TASK-7"),
+        SeatOp::Spawn {
+            spec: Some("TASK-7".into()),
+            what: "spawn implementer".into(),
+        },
+    ] {
+        assert_eq!(
+            w.with(|ctx| gate(&mut rec, ctx, &shell, &op)).unwrap(),
+            Gate::Pass
+        );
+        assert_eq!(
+            rec,
+            SeatRecord::empty(ORCHESTRATOR),
+            "one-shot shell must not install a holder or event"
+        );
+    }
+    assert!(matches!(
+        w.with(|ctx| gate(&mut rec, ctx, &orch_a(), &route("TASK-7")))
+            .unwrap(),
+        Gate::Holder { claimed: Some(_) }
+    ));
+    // A sibling harness, including one on the same grant, is still refused.
+    assert!(w
+        .with(|ctx| gate(&mut rec, ctx, &orch_b_same_grant(), &route("TASK-8")))
+        .is_err());
+}
+
+#[test]
+fn shell_route_passes_with_live_holder_but_loop_and_handoff_still_refuse() {
+    let w = World::new();
+    let mut rec = SeatRecord::empty(ORCHESTRATOR);
+    claimed(&w, &mut rec, &orch_a());
+    let shell = caller(
+        &[(900, "aida"), (2, "bash"), (1, "init")],
+        Some(grant("shell-session", ORCHESTRATOR)),
+    );
+    assert_eq!(
+        w.with(|ctx| gate(&mut rec, ctx, &shell, &route("TASK-7")))
+            .unwrap(),
+        Gate::Pass
+    );
+    for op in [loop_start(), SeatOp::HandoffWrite] {
+        assert!(w.with(|ctx| gate(&mut rec, ctx, &shell, &op)).is_err());
+    }
+    assert_eq!(rec.generation, 1);
+}
+
+#[test]
+fn loop_anchored_route_still_claims_implicitly() {
+    let w = World::new();
+    let mut rec = SeatRecord::empty(ORCHESTRATOR);
+    let mut c = caller(
+        &[(901, "aida"), (900, "aida"), (2, "bash")],
+        Some(grant("loop-session", ORCHESTRATOR)),
+    );
+    c.chain.as_mut().unwrap()[1].cmd = vec![
+        "aida".into(),
+        "queue".into(),
+        "work".into(),
+        "--auto-complete".into(),
+    ];
+    assert!(matches!(
+        w.with(|ctx| gate(&mut rec, ctx, &c, &route("TASK-7")))
+            .unwrap(),
+        Gate::Holder { claimed: Some(_) }
+    ));
+}
+
+#[test]
+fn persisted_drain_child_stays_fenced_after_reparenting_and_holder_exit() {
+    let w = World::new();
+    let mut rec = seat_with_drain(&w);
+    let mut child = drain_child_of_a(None);
+    child.chain.as_mut().unwrap().truncate(3); // self, wrapper, own harness
+    w.set(10, Probe::Dead("parent exited".into()));
+    w.set(105, Probe::Dead("loop exited".into()));
+    assert_eq!(
+        w.with(|ctx| gate(&mut rec, ctx, &child, &route("TASK-7")))
+            .unwrap(),
+        Gate::Pass
+    );
+    assert!(w
+        .with(|ctx| gate(&mut rec, ctx, &child, &route("TASK-8")))
+        .is_err());
+    // A reused PID does not inherit the persisted child's authority.
+    child.chain.as_mut().unwrap()[2].identity.start = "different-start".into();
+    let rc = ResolvedCaller::resolve(&child).unwrap();
+    assert_eq!(classify(&rec, &child, &rc), Relation::Ordinary);
+}
+
+// trace:TASK-1607 | ai:codex
+#[test]
+fn shell_one_shot_exemption_preserves_unknown_and_demotion_refusals() {
+    let w = World::new();
+    let mut rec = SeatRecord::empty(ORCHESTRATOR);
+    let shell = caller(
+        &[(900, "aida"), (2, "bash"), (1, "init")],
+        Some(grant("shell-session", ORCHESTRATOR)),
+    );
+    w.set(2, Probe::Unknown("permission denied".into()));
+    let err = w
+        .with(|ctx| gate(&mut rec, ctx, &shell, &route("TASK-7")))
+        .unwrap_err();
+    assert!(
+        err.reason.contains("cannot verify one-shot caller anchor"),
+        "{err}"
+    );
+    assert_eq!(rec, SeatRecord::empty(ORCHESTRATOR));
+    w.set(2, Probe::Alive);
+    w.with(|ctx| claim(&mut rec, ctx, &shell)).unwrap();
+    w.with(|ctx| release(&mut rec, ctx, &shell, 1, None))
+        .unwrap();
+    let err = w
+        .with(|ctx| gate(&mut rec, ctx, &shell, &route("TASK-7")))
+        .unwrap_err();
+    assert!(err.reason.contains("demoted"), "{err}");
 }

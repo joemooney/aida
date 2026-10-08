@@ -462,3 +462,16 @@ unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
 stale definition, and hold refusals for scripts. See
 [git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
 <!-- trace:TASK-1606 | ai:codex -->
+
+
+Seat occupancy is at the early C7 core checkpoint: process identity, permanent
+seat record/lock, graceful transitions and seat commands are implemented, while
+production gateway wiring requires fresh independent review. The C7 rework
+bounds lock acquisition to ten seconds, shares policy with the main-worktree
+state root, and defines a delegated child's review scope through persisted
+spawn identity and direct review/implements edges. One-shot shell Route/Spawn
+validates authority without claiming; harness/loop operations retain implicit
+claims. Hard takeover (`--kill`) remains disabled scaffolding. The
+[sketch C7 addendum](docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md#c7-inventory-refresh-and-accepted-core-refinements)
+records the actual phase operations and unattended launcher dispositions.
+<!-- trace:TASK-1607 | ai:codex -->

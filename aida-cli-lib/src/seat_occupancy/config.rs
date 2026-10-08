@@ -51,7 +51,10 @@ impl Default for SeatConfig {
 
 impl SeatConfig {
     pub fn load(project_root: &Path) -> Result<Self> {
-        let path = project_root.join(".aida").join("config.toml");
+        // trace:TASK-1607 | ai:codex
+        // Config and the permanent seat record have one authority root.
+        let root = super::store::main_worktree_root(project_root)?;
+        let path = root.join(".aida").join("config.toml");
         match std::fs::read_to_string(&path) {
             Ok(content) => Self::parse(&content).with_context(|| format!("in {}", path.display())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),

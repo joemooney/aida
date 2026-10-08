@@ -16,10 +16,13 @@ use anyhow::{bail, Context, Result};
 use fs2::FileExt;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use super::{SeatRecord, SCHEMA_VERSION};
 
 const DIR: &str = "seat-occupancy";
+const LOCK_TIMEOUT: Duration = Duration::from_secs(10);
+const LOCK_POLL: Duration = Duration::from_millis(20);
 
 pub(crate) struct SeatStore {
     dir: PathBuf,
@@ -59,6 +62,13 @@ impl SeatStore {
 
     /// Lock `seat` exclusively and load its record.
     pub fn lock(&self, seat: &str) -> Result<SeatGuard> {
+        self.lock_with_timeout(seat, LOCK_TIMEOUT)
+    }
+
+    // trace:TASK-1607 | ai:codex
+    // Lock order: seat -> queue. A stalled local commitment must not wedge
+    // every gated caller indefinitely. The permanent sidecar is never removed.
+    fn lock_with_timeout(&self, seat: &str, timeout: Duration) -> Result<SeatGuard> {
         validate_seat_name(seat)?;
         std::fs::create_dir_all(&self.dir)
             .with_context(|| format!("cannot create {}", self.dir.display()))?;
@@ -69,8 +79,25 @@ impl SeatStore {
             .write(true)
             .open(&lock_path)
             .with_context(|| format!("cannot open {}", lock_path.display()))?;
-        lock.lock_exclusive()
-            .with_context(|| format!("cannot lock {}", lock_path.display()))?;
+        let deadline = Instant::now() + timeout;
+        loop {
+            match lock.try_lock_exclusive() {
+                Ok(()) => break,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        bail!(
+                            "seat `{seat}` lock {} is busy after {} ms; refusing: another local seat commitment may be stalled; inspect the holder with `aida session seat status --seat {seat}` and retry after it finishes",
+                            lock_path.display(), timeout.as_millis()
+                        );
+                    }
+                    std::thread::sleep(LOCK_POLL.min(remaining));
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| format!("cannot lock {}", lock_path.display()))
+                }
+            }
+        }
         let path = self.dir.join(format!("{seat}.json"));
         let rec = read_record(&path, seat)?;
         Ok(SeatGuard {
@@ -234,7 +261,47 @@ mod tests {
             "second lock must contend"
         );
         drop(g);
-        assert!(other.try_lock_exclusive().is_ok());
+        // Parallel tests can fork while g is held; the child inherits the
+        // flock's open file description until exec. Allow that bounded window.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match other.try_lock_exclusive() {
+                Ok(()) => break,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(10))
+                }
+                Err(e) => panic!("lock did not release after drop: {e}"),
+            }
+        }
+    }
+
+    #[test]
+    fn stalled_holder_times_out_without_removing_sidecar_or_changing_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SeatStore::at(dir.path());
+        let mut held = store.lock("orchestrator").unwrap();
+        held.rec.generation = 7;
+        held.save().unwrap();
+        let start = Instant::now();
+        let err = store
+            .lock_with_timeout("orchestrator", Duration::from_millis(60))
+            .err()
+            .expect("stalled holder must refuse")
+            .to_string();
+        assert!(start.elapsed() >= Duration::from_millis(60));
+        assert!(start.elapsed() < Duration::from_secs(2), "must be bounded");
+        assert!(
+            err.contains("busy after 60 ms") && err.contains("may be stalled"),
+            "{err}"
+        );
+        assert!(
+            err.contains("aida session seat status --seat orchestrator"),
+            "{err}"
+        );
+        assert!(dir.path().join("orchestrator.lock").exists());
+        assert_eq!(store.peek("orchestrator").unwrap().generation, 7);
     }
 
     #[test]
@@ -271,6 +338,27 @@ mod tests {
         run(
             &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "b"],
             &main,
+        );
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        std::fs::create_dir_all(wt.join(".aida")).unwrap();
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "[seat_occupancy]\ntakeover_grace_secs = 17\ninspection = \"refuse\"\n",
+        )
+        .unwrap();
+        // A sibling's contradictory policy must never split authority.
+        std::fs::write(
+            wt.join(".aida/config.toml"),
+            "[seat_occupancy]\nsingle_seats = [\"unmapped\"]\n",
+        )
+        .unwrap();
+        let main_cfg = crate::seat_occupancy::config::SeatConfig::load(&main).unwrap();
+        let sibling_cfg = crate::seat_occupancy::config::SeatConfig::load(&wt).unwrap();
+        assert_eq!(main_cfg, sibling_cfg);
+        assert_eq!(sibling_cfg.takeover_grace_secs, 17);
+        assert_eq!(
+            SeatStore::for_project(&main).unwrap().dir(),
+            SeatStore::for_project(&wt).unwrap().dir()
         );
         let a = main_worktree_root(&main).unwrap();
         let b = main_worktree_root(&wt).unwrap();

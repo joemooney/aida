@@ -1273,8 +1273,8 @@ pub enum LockCommand {
 
 // trace:FR-1-043 | ai:claude
 
-/// `aida session seat` subcommands (STORY-1485 slice A).
-// trace:TASK-1607 | ai:claude
+// `aida session seat` subcommands.
+// trace:TASK-1607 | ai:codex
 #[derive(Subcommand, Debug, Clone)]
 pub enum SeatCommand {
     /// Claim an empty seat, or one whose holder has provably exited. Holding
@@ -16313,6 +16313,33 @@ mod tests {
                 assert!(!age, "the offline staleness report is opt-in");
             }
             other => panic!("expected review stranded command, got {other:?}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod seat_help_tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    // trace:TASK-1607 | ai:codex
+    #[test]
+    fn session_seat_generated_help_contains_no_internal_spec_ids() {
+        let mut cli = Cli::command();
+        let session = cli.find_subcommand_mut("session").unwrap();
+        let seat = session.find_subcommand_mut("seat").unwrap();
+        let help = seat.render_long_help().to_string();
+        let leaves: Vec<_> = seat
+            .get_subcommands_mut()
+            .map(|leaf| leaf.render_long_help().to_string())
+            .collect();
+        for text in std::iter::once(help).chain(leaves) {
+            for internal in ["STORY-1485", "TASK-1607", "trace:"] {
+                assert!(
+                    !text.contains(internal),
+                    "internal trace leaked to generated help: {text}"
+                );
+            }
         }
     }
 }
