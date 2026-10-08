@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T17:01:24.451375179Z
+modified_at: 2026-10-08T17:01:54.583991054Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -108,6 +108,11 @@ comments:
   created_at: 2026-10-08T17:01:24.451375179Z
   modified_at: 2026-10-08T17:01:24.451375179Z
   relayed_from: store-reconcile-independent-advisor
+- id: 01a11c76-de18-7b92-8a8a-b054276e401b
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): implement the independently approved bounded diagnostics design, with D1-D3 binding amendments from store-reconcile-independent-advisor. Choose honest matched-candidate / required-forge-unavailable diagnosis and retryable ordinary nonzero exit, not offline completion credit. Preserve exact attribution, pure-git positive, no-write dry-run config, reopen/closure/covers fences at the actual atomic apply seam and existing aggregate all-or-nothing normal flips. Queue separate implementer only after full canonical signoff relay. Any broader discovered authority/lifecycle remedy beyond this bounded seam remains same-spec gated and must not be inferred. Fresh exact-head review, integration checks and publication floors remain; no common production activation or external reserved work.'
+  created_at: 2026-10-08T17:01:54.583991054Z
+  modified_at: 2026-10-08T17:01:54.583991054Z
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
