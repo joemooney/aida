@@ -1375,6 +1375,10 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd'
 
 aida() {
+    # trace:BUG-1811 | ai:antigravity
+    # Suppress set -x trace for wrapper internals
+    local - 2>/dev/null || true
+    set +x 2>/dev/null
     # Take the first two positional words verbatim — that's enough to
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
