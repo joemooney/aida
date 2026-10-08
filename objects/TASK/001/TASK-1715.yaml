@@ -1,0 +1,32 @@
+id: 01a119c5-79b1-74e3-a497-bbcab69545ab
+spec_id: TASK-1715
+agreed_id: TASK-1715
+title: Add aida pr review as a discoverable alias for the reviewed PR pipeline
+description: |
+  ## Decision
+  Operator agreed to aida pr review N as the discoverable entry point for aida queue work PR-N --auto-complete, rather than aida pr work. This is an additive CLI alias using the existing pipeline, not a new lifecycle or review contract.
+
+  ## Acceptance
+  - Add aida pr review <N|PR-N|MR-N>, with numeric identifiers resolved through the existing configured-forge machinery and explicit identifiers handled consistently with queue work. Preserve GitLab MR support.
+  - Delegate to the same execution path as aida queue work <change-id> --auto-complete. Do not shell out to a duplicated recipe or implement another orchestration pipeline.
+  - Preserve independent review, ownership/leases, merge holds, supervised/draft restrictions, rework routing, and existing merge authorization. The alias grants no extra authority.
+  - Help clearly states that this starts the independent review pipeline and can proceed through merge when authorized; distinguish from aida pr ship (land approved work) and aida ship --no-merge (finish implementation/open PR).
+  - Keep aida queue work PR-N --auto-complete compatible. Document the new entry point in CLI lifecycle guidance and relevant review handoff skills/templates through normal generation. Coordinate with TASK-1613, the aida-pr compatibility-skill refresh.
+  - Add focused parser/dispatch coverage demonstrating equivalent pipeline arguments for GitHub and GitLab identifiers, and existing refusal/gate behavior remains shared. Run relevant existing checks and formatting.
+
+  ## Handoff
+  Advisor decision is approved by the operator in this session. Inspect existing PrCommand, queue-work dispatch and forge identifier helpers before implementation. Keep this a bounded additive alias; any change to orchestration semantics or authority requires a separate design decision. Implement in an isolated claimed session and obtain independent review.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T04:28:54.577389253Z
+modified_at: 2026-10-08T04:28:54.577389253Z
+req_type: Task
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: e1422ae139
+  vendor: codex
