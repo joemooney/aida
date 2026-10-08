@@ -16,12 +16,12 @@ description: |
   2. Bounded wait: a duration flag bounds the CI wait (name aligned with TASK-1602's `--wait <secs>`; one flag, not two divergent spellings). On expiry ship exits with a dedicated non-zero code and nothing is merged. Default remains unbounded.
   3. Scriptable exit codes: distinct, documented exit codes for at least: CI red, CI wait timed out, needs rebase/not mergeable, needs (re-)review/approval not at head, stale CI definition, merge-hold present. 0 still means merged. Documented in docs/cli and `aida pr ship --help`.
   4. Tests: one per pre-flight refusal proving no CI wait occurs (e.g. a fake forge whose watch would hang), plus a timeout test and an exit-code table test.
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-08T01:29:23.593148888Z
+modified_at: 2026-10-08T01:29:53.604394219Z
 req_type: Task
 tags:
 - operator-ux
@@ -243,6 +243,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a11921-94c4-75c2-b589-d86dd2b49d61
+  author: joe
+  timestamp: 2026-10-08T01:29:53.604379914Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 filed_at:
   code_sha: c89606cd4753c750342e4a1e0df70312a3a05d6f
   branch: main
