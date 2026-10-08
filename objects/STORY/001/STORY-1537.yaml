@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2445` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: InProgress
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T14:30:23.507320949Z
-modified_at: 2026-10-07T23:08:33.111653656Z
+modified_at: 2026-10-08T01:27:04.889883216Z
 req_type: Story
 relationships:
 - rel_type:
@@ -42,6 +42,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: adopt fix-day-2026-10-07 as the FIRST unit, draft PR-2452 at exact eb96823bda625d6e343d8bfbab996585541d0a79, base 738653fb3e6de71d0975047adb143c5f31a25d85. Source/test SHA 7e007f83dcecced4da73b5f32838a63367db56f3; only evidence docs follow. All 63 evidence-file hashes matched manifest. ONE independent whole-branch review brief saved at /tmp/aida-fix-day-final-review.md; launch fix-day-final-review-2452 refused before vendor spawn because advisor grant lacks reviewer delegation. No review approval claimed. Two sandbox E2E runs remain unmeasured, original authority refusals retained. No holds cleared or authority-sensitive merge performed. Existing PR-2445 and PR-2450 remain open/held until final reviewed adoption/operator decision; avoid redispatching their implementations. Remaining routine backlog decisions authorized by latest operator instruction, superseding earlier no-backlog day scope while preserving one combined fix-day review.'
   created_at: 2026-10-07T23:08:33.111653656Z
   modified_at: 2026-10-07T23:08:33.111653656Z
+- id: 01a1191f-0ad1-7e63-aa99-5084d46df7fd
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #2445 closed on the forge without merging.'
+  created_at: 2026-10-08T01:27:07.217600502Z
+  modified_at: 2026-10-08T01:27:07.217600502Z
 history:
 - id: 01a11212-5392-76b0-bdb9-8d84b078547f
   author: joe
@@ -50,6 +55,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1191f-0ad1-7e63-aa99-509a339a4406
+  author: aida-auto-bump
+  timestamp: 2026-10-08T01:27:07.217616253Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Rejected
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
