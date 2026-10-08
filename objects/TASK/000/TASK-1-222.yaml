@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:47:44.689506175Z
-modified_at: 2026-10-07T23:06:38.414642894Z
+modified_at: 2026-10-08T16:35:38.694765418Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -20,6 +20,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): approve and queue bounded Windows test-timeout work. Preserve required check policy and weekly Windows cadence. Implementer must establish a measured bound and use fixtures/config validation; native Windows results require existing platform runner evidence, not Linux simulation claims.'
   created_at: 2026-10-07T23:06:36.341672262Z
   modified_at: 2026-10-07T23:06:36.341672262Z
+- id: 01a11c5e-d246-7941-848a-9f10beca3e3e
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): bounded workflow fix approved and already queued. Use a 45-minute timeout on the Windows Run tests step (not a per-test guarantee): this gives twice the recorded ~22-minute healthy suite while turning the recorded >70-minute hang into a failure in under an hour. Retain cargo test --workspace --no-fail-fast, weekly Windows cadence, selected-path informational PR posture, main-only manual validation, Ubuntu requirements, notifications and 24-hour release freshness. No nextest migration, cross-platform policy expansion or live workflow dispatch. A separate implementer will update the workflow/docs contract and a different reviewer will verify actual changed scope; native Windows cancellation remains CI evidence rather than a local Linux pass.'
+  created_at: 2026-10-08T16:35:38.694765418Z
+  modified_at: 2026-10-08T16:35:38.694765418Z
 history:
 - id: 01a1189e-6dce-7be3-ab02-05713cfac939
   author: joe
