@@ -549,7 +549,7 @@ mod tests {
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count_after, 15);
+        assert_eq!(meta_count_after, 16);
     }
 
     #[test]
