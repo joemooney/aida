@@ -73,3 +73,11 @@
   added_at: 2026-10-08T17:02:36.886839130Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a11cea-36b2-7a81-889c-22f40c6f43da
+  position: 454000
+  added_by: role:implementer
+  note: 'PROXY: exact protective A4 child, full canonical signed amendment; parent closure pending. Separate Opus doer, fresh independent review; no common production activation.'
+  added_at: 2026-10-08T19:08:46.810118793Z
+  for_role: implementer
+  added_by_machine: imac
