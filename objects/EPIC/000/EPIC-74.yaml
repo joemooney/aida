@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T17:13:57.008283572Z
+modified_at: 2026-10-08T17:28:28.317251400Z
 req_type: Epic
 tags:
 - architecture
@@ -397,6 +397,67 @@ comments:
   created_at: 2026-10-08T17:13:57.008283572Z
   modified_at: 2026-10-08T17:13:57.008283572Z
   relayed_from: answered-v2-independent-advisor
+- id: 01a11c8f-2f9d-7071-84ec-77a1c183ba83
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): EPIC-74 v3 — constraint reservations consuming one checked common publication
+
+    Codex, same sketch-author lineage, 2026-10-08. Main b46aec1e674baae5a329416d4119e67b59200a88. Exact full proposed canonical relay body; NOT posted. Supersedes the v2 composite proposal, preserving v1/v2/history. Independent v2 verdict remains CHANGES REQUESTED; this author supplies no signoff, code or authority effects.
+
+    This composite incorporates the full same-directory EPIC74_ENTRYPOINT_GUARDS_V3.md, EPIC74_ADR_DRAFT_V3.md and EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V3.md. Their exact hashes and numbered response are in ANSWERED_DESIGN_SKETCHES_V3_READY.md. A NEW different advisor reviews the entire composite, not this summary alone. ADR remains a handoff draft; no docs publication or child dispatch.
+
+    ## Direction, owner and surfaces
+
+    Actual operator answer is unchanged: choice 1/answered=0 at 2026-10-08T15:54:26.321418310Z chooses target/parent vocabulary plus store-side epic isolation. No lane seat/flag/status/command family or per-spec target override. Epic UUID owns typed target generation and retained membership/evidence; ordinary and isolated actions both carry graph constraints. Store fact governs even when sessions lack env. Environment cannot clear isolation. Missing/broken reciprocal Parent/Child edges, cycles/conflicting declarations, uncertain default or unsupported multi-repository scope refuse.
+
+    Triggers remain the accepted actual-handler matrix: queue read/next/explicit/force/resume/from-PR/cluster and auto single/batch/nextN; burndown/wave; shift; groom aliases; integrate plan/run/watch; session/foreground/background/headless/resume/worktree; MCP peeks versus actual claim; PR/ship/MR recovery; all live/replay/direct-status/review-covers/umbrella/retry completion. Already-open PRs/plans are included. D reads cannot advertise unknown as eligible. A admission gates the first effect; M governs actual forge calls; C is one committed-evidence completion validator.
+
+    Canonical writer owns checked persistence; the signed common publisher exclusively owns lifecycle provisional effects, final authority sample, immutable C/receipt and original-child release. Epic reservation owns constraints only. Existing authority/grants/holds/review/CI remain independent gates. No new issuer or release channel is proposed.
+
+    ## F1 correction: single-owner publication and lock composition
+
+    V2's “store Pending -> setup/spawn -> epic Verified” formulation is withdrawn. V3 prepares Pending in a bounded STORE-ONLY phase with no common/seat/merge/queue/cache lock; consumes its checked receipt via the sole common lifecycle publisher; then observes common C/receipt in a separate store-only projection. Pending does not permit a spawn. The exact input digest and finite intended after-images are passed to common, which validates them again in its existing ordered store phase. Only those common-owned after-images may be exempted from reservation conflict. Lost ACK/crash never creates a second launch or recovered release.
+
+    Signed order remains home -> repo -> sorted seats -> store -> sorted queues -> drain -> manifests -> verdict -> merge -> Git. READY, callbacks/helper exchange, network/forge and waits stay outside seat. The ADR supplies a caller/held-lock table: forge-only reservation and projection are store-only; optional branch-lease request phase holds no store/common lock; no consumer merge->store nesting and no global prose reversal of ordinary callers. Incompatible paths refuse until owner-integrated.
+
+    Explicit unprovided prerequisites: common isolation-consumer hook and existing receipt mapping; checked canonical persistence adapter at TASK-1332/common writer seam; signed hook-safe Git execution where required. Current spawn_vendor_headless_with_seat is not that API. Missing prerequisites refuse positive setup/claim/queue/worktree/launch before effects. This epic does not implement a competing publisher or handshake.
+
+    ## F2 correction: checked durability and trustworthy reads
+
+    Current auto_commit_paths ignores stage/commit errors and returns unit; current atomic-update success is not durable commit proof. Require checked Result receipt covering action UUID, input/output digests, all affected serialized objects/evidence/membership, exact tree/commit and readback, with file/rename/directory durability and required common Git hook behavior. No external effect on preparation stage/commit/sync/readback failure. Unsupported required hooks refuse; no no-verify, lock bypass or child CLI reentry under parent guard.
+
+    Outputs retain durable Pending until ALL exact evidence/status/common-result outputs have a checked commit receipt; only a later checked constraint observation closes it. Dirty/partial Completed/Landed YAML cannot authorize promotion or clear. Eligibility/completion derive from validated immutable committed snapshot/receipt lineage, not lock-free partial objects or stale cache. NoEffectFailure, Committed and UncertainEffect are distinct. Recovery may finish store-only projection after observing actual result/common receipt, never issue vendor release or replay setup.
+
+    ## F3 correction: ordinary absence and candidate graph predicates
+
+    `ResolvedIsolation` is Ordinary or a generation identity. Reserve subjects, ancestor/reciprocal-edge closure, relevant declaration absence, sticky membership, descendant/coverage-set inputs and repo/default identity. Proposed constraint reservations reside in existing canonical metadata because an Ordinary action has no epic owner; retained isolation/coverage remains epic-owned. This journal has no authority or launch C fields; it references common results only.
+
+    Every writer, including common after-images and store-sync adoption, recomputes active reservation predicates against both old committed graph and full candidate graph. Do not use only old UUID overlap or caller “affected IDs”. New isolating ancestor, new descendant, reparent/default change or imported erasure invalidates/reserves accordingly. Exact action-owned output-only changes are specifically checked, not blanket exempted by object identity.
+
+    A declaration racing admitted ordinary work must serialize against its in-flight inventory. Existing reserved ordinary effect wins => declaration refuses; declaration first => ordinary admission sees Isolated and refuses default effect. Unregistered/unfenceable running ordinary work blocks positive declaration. No retroactive merge protection or peer cancellation promised. Pure stale plans re-resolve before effects.
+
+    ## Accepted R1–R4 preserved
+
+    Protective first slice supports truthful in-scope read/selection, canonical exclusion and refusal at every unsupported setup/ship/completion surface, including force/resume/existing PRs. It need not fake lifecycle success. Positive declaration still needs writer closure and checked persistence. Future live/unlanded release authority does not alone block first-slice signoff; F1–F3 exact architecture needs NEW independent approval. Full original 1481 force/close acceptance and whole epic are not satisfied by refusal.
+
+    Parent is Option<BranchRef>: ordinary default + absent/empty => None/no sync invocation; off-default absent => positively identified actual default; explicit same-target => reported no-op. Generic force gives no release. Target reset/clear/detach/reparent/delete/retype/restore/import/default reinterpretation cannot release unlanded work. Sync merges parent into target, stops on conflict, never auto-rebases shared branch. No literal-main authority fallback.
+
+    Versioned durable coverage uses original child evidence/reopen/definition, retained UUID generations and explicit immutable predecessor evidence/coverage IDs. Reject missing/cyclic links. Ancestry is mechanical inclusion; independent final-diff/set review excludes reverted/omitted work. Body trailers are candidates, not coverage. A new squash SHA never refreshes old reopened child work; all completion paths use the same validator after clone/clear/remap.
+
+    Initial squash proof is exact: reviewed base ancestor of pinned source; actual result first-parent/base equals reviewed base; actual result tree equals reviewed source tree; forge confirms exact repo/PR/source/base/result. Completed additionally requires authoritative default reachability and original child freshness. No unspecified general merge-tree/patch-equivalence support. Unsupported known preconditions refuse; ambiguous actual result retains Done/Uncertain. Intermediate/partial/closed-unmerged keeps isolation; clear alone grants no credit.
+
+    Current head pin is not atomic base/default pin. Documented AIDA-cooperative boundary does not imply protection from raw-forge retargeting, but that external guarantee is not newly required for all modes. A mode needing unavailable atomic precondition refuses before request. Existing branch lease TTL/RAII/slug identity is not fencing; durable reservation remains the cooperative exclusion. Uncertain never expires into permission. Separate clones do not acquire consensus from local flock.
+
+    ## Files, verification and remaining gates
+
+    Inspected main seams: db/git_backend.rs auto_commit_paths/lock_store/update_spec_atomically_with_subject/bulk_update_atomically; db/store_lock.rs acquire/StoreWriteGuard; db/cached_git_backend.rs single/bulk wrappers; git_ops.rs pull/rebase; merge_lock.rs stale_reason/acquire/Drop; forge.rs MergeOptions/merge_change; matrix named queue/shift/mcp/launch/wave/ship/reconcile handlers. Existing common signed order in ../PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md section 6 is binding design, not deployed-source evidence. TASK1332_STORE_WRITER_SKETCH.md identifies writer/hook dependency; this does not approve or duplicate that separate work.
+
+    Named proposed paired witnesses: ordinary_admission_blocks_new_ancestor_isolation_after_final_check; pending_coverage_blocks_new_descendant; epic_reservation_consumes_common_publication_once; epic_common_lock_order_has_no_merge_store_cycle; pending_commit_failure_sends_no_effect; output_mid_batch_failure_retains_pending; isolation_clear_and_clone_replay_require_committed_evidence; narrow_squash_equal_tree_equal_base_positive; coverage_predecessor_cycle_or_missing_link_refuses. Preserve all matrix/reopen/revert/body/clone tests. Actual future handlers, isolated repositories/HOME/fake forges, deterministic barriers/faults; NOT run or passed here.
+
+    Missing common consumer/persistence/hook APIs remain explicit prerequisites or refusal, not invented authorization. Release of live/unlanded isolation still needs its actual actor/evidence/confirmation disposition; no absent-Joe prompt or new option selected. No canonical mutation in v3; exact relay drafts only. No code, ADR docs publication, statuses/queues, grants/holds, launches, implementation/merge or self-signoff. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 untouched. Existing profile no-exemption choice and strong AC2 unchanged.
+  created_at: 2026-10-08T17:28:28.317251400Z
+  modified_at: 2026-10-08T17:28:28.317251400Z
+  relayed_from: answered-design-sketch-author
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
