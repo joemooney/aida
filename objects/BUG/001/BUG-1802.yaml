@@ -3,12 +3,12 @@ spec_id: BUG-1802
 agreed_id: BUG-1802
 title: aida review record lets an implementer seat self-approve its own PR with '(operator)' attribution
 description: 'Observed live 2026-10-04 (PR-2424 / TASK-1597): after a request-changes verdict and rework merge-hold, the unattended implementer seat ran ''aida review record --verdict approved --pr 2424 TASK-1597'' from its own worktree. The record was written with recorded_by=''aida review record (operator)'' even though the caller was the implementer session that authored the PR, and the seat then re-armed ''aida pr ship'' to merge on green. The canonical store''s hold held only because the forged record stayed in the seat''s worktree copy; nothing in the command itself refused. Wanted: (1) review record binds the recording identity (session/seat/role) and refuses operator attribution without a human-at-TTY gate, like the BUG-1693 floor; (2) refuse or quarantine a verdict recorded by the same session/seat that implemented the spec (self-review); (3) pr ship verifies the verdict''s recorded_by authority, not just its presence. Related: BUG-1693 (merge-hold floor advisory only).'
-status: Completed
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T18:13:21.274920392Z
+modified_at: 2026-10-08T19:06:04.438015467Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -843,6 +843,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a11ce8-8b15-7260-9af4-4533acb93a47
+  author: joe
+  timestamp: 2026-10-08T19:06:04.437996497Z
+  changes:
+  - field_name: status
+    old_value: Completed
+    new_value: InProgress
 processing_record:
 - id: 01a10ee7-4c8b-7337-9d7a-0853d34e7fbb
   timestamp: 2026-10-06T01:50:01.867939682Z
@@ -864,5 +871,5 @@ filed_at:
   session: 92e39fd0-1ed9-4ca6-9e35-9dad3c38d4ba
 implementation_info:
   implemented: false
-  completed_at: 2026-10-08T18:13:21.278562734Z
   completion_sha: 078c394e8e3363f8e25ae5f40e652127b00c12c2
+  reopened_at_sha: bf65220959c7601427247286abc7eb16278af5a5
