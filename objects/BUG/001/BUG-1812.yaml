@@ -3,17 +3,31 @@ spec_id: BUG-1812
 agreed_id: BUG-1812
 title: human and awaiting promote checkpoint-only approval to merge readiness
 description: 'Observed 2026-10-08 advisor human-audit: aida human lists STORY-1485 and TASK-1607 as awaiting-merge / reviewed and approved / just needs merging for PR-2451. aida awaiting --json held_prs action recommends aida merge-hold clear 2451. Actual forge PR-2451 is OPEN DRAFT at 56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f with aida:merge-hold and aida:merge-hold-recorded. Both specs remain InProgress. Canonical TASK-1607 latest independent signoff and coordinator disposition explicitly say C7 approval at 56f7b55 is checkpoint-only, common BUG-1808 implementation and consumer integration plus full real-entrypoint acceptance and exact-head independent review remain outstanding. Do not distort spec lifecycle or clear holds to silence reporting. Acceptance: derive whole-spec merge readiness independently of checkpoint/design approvals; draft held incomplete implementation must not appear as just-needs-merging or receive hold-clear next action. Preserve checkpoint evidence without granting parent or whole-spec completion credit. Add a regression reproducing this actual shape with checkpoint approval, current SHA, draft PR, holds and InProgress parent/child. Also investigate reviews-awaiting false positives for already Accepted ADR-66 associated with TASK-1594 and documentation principle PRIN-5 associated with claude/task-1455; their branches do not establish a fresh human approval requirement.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T15:51:07.044749216Z
-modified_at: 2026-10-08T15:51:07.044749216Z
+modified_at: 2026-10-08T18:46:10.911699695Z
 req_type: Bug
 tags:
 - awaiting
 - human
 - merge-safety
+history:
+- id: 01a11cd6-5422-7521-b673-ec08d8f0bec5
+  author: aida-auto-bump
+  timestamp: 2026-10-08T18:46:10.722825093Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a11cd6-54df-71e3-a798-580b407f23a0
+  timestamp: 2026-10-08T18:46:10.911696876Z
+  agent: aida
+  commit_sha: bf65220959c7601427247286abc7eb16278af5a5
+  summary: Completed via merge bf652209
 filed_at:
   code_sha: b46aec1e674baae5a329416d4119e67b59200a88
   branch: main
@@ -21,3 +35,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T18:46:10.722818653Z
+  completion_sha: bf65220959c7601427247286abc7eb16278af5a5
