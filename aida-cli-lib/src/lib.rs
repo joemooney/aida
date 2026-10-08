@@ -76909,6 +76909,17 @@ pub(crate) fn apply_closure_hold(
 /// STORY-1436: the closure hold as a [`events::EventKind::GateHeld`] record.
 // trace:STORY-1436 | ai:claude
 pub(crate) fn closure_hold_reason(hold: &ClosureHold) -> String {
+    format!(
+        "merged ({}) but completion held at Done — {}",
+        hold.flip.sha.chars().take(7).collect::<String>(),
+        closure_hold_causes(hold)
+    )
+}
+
+/// What holds `hold` — blockers and/or unmet criteria — without the
+/// "held at Done" framing, for paths that do not land at Done.
+// trace:TASK-1335 | ai:claude
+pub(crate) fn closure_hold_causes(hold: &ClosureHold) -> String {
     let mut why = Vec::new();
     if !hold.blockers.is_empty() {
         why.push(format!(
@@ -76922,11 +76933,7 @@ pub(crate) fn closure_hold_reason(hold: &ClosureHold) -> String {
             closure_criteria_label(&hold.criteria)
         ));
     }
-    format!(
-        "merged ({}) but completion held at Done — {}",
-        hold.flip.sha.chars().take(7).collect::<String>(),
-        why.join("; ")
-    )
+    why.join("; ")
 }
 
 // trace:STORY-1436 | ai:claude
@@ -78595,12 +78602,73 @@ pub(crate) fn handle_db_reconcile_status(
     // auto-bump — an unresolved BlockedBy predecessor keeps the spec at Done
     // (merge recorded in a note) rather than completing past it.
     // trace:BUG-1551 | ai:claude
-    let closure_holds = split_closure_held_flips(&store, &mut flips);
-    for hold in &closure_holds {
-        outcomes.set_reason(
-            &hold.flip.spec_id,
-            reconcile_evidence::CandidateReason::ClosureHeld,
-        );
+    // TASK-1335: one least-fixed-point closure pass over EVERY completion
+    // this run would grant — normal flips and the independent stale-review
+    // flips — so the dry-run preview and the live write seam agree. A held
+    // normal flip keeps its existing Done landing + note; a held stale
+    // review story is simply not completed (no new landing policy).
+    // trace:TASK-1335 | ai:claude
+    // The covers chain uses the same DIRECT rooted rule as the write seam: a
+    // covers candidate whose only covered spec this pass just held loses its
+    // support, which can in turn change the closure picture — so the two
+    // filters iterate to a fixed point (each pass only removes candidates).
+    let mut closure_holds: Vec<ClosureHold> = Vec::new();
+    loop {
+        let mut all_completions: Vec<AutoBumpFlip> = flips.clone();
+        all_completions.extend(stale_review_flips.iter().map(|(sid, sha, _, prior)| {
+            AutoBumpFlip::new(sid.clone(), sha.clone(), prior.clone())
+        }));
+        let mut changed = false;
+        for hold in split_closure_held_flips(&store, &mut all_completions) {
+            changed = true;
+            if stale_review_flips
+                .iter()
+                .any(|(sid, ..)| *sid == hold.flip.spec_id)
+            {
+                stale_review_flips.retain(|(sid, ..)| *sid != hold.flip.spec_id);
+                outcomes.set_reason(
+                    &hold.flip.spec_id,
+                    reconcile_evidence::CandidateReason::Held(closure_hold_causes(&hold)),
+                );
+            } else {
+                flips.retain(|flip| flip.spec_id != hold.flip.spec_id);
+                outcomes.set_reason(
+                    &hold.flip.spec_id,
+                    reconcile_evidence::CandidateReason::ClosureHeld,
+                );
+                closure_holds.push(hold);
+            }
+        }
+        let anchors: std::collections::HashSet<uuid::Uuid> = flips
+            .iter()
+            .filter(|f| {
+                outcomes.get(&f.spec_id).map(|o| o.source)
+                    != Some(reconcile_evidence::EvidenceSource::CoversChain)
+            })
+            .filter_map(|f| store.get_requirement_by_spec_id(&f.spec_id).map(|r| r.id))
+            .collect();
+        let unsupported: Vec<String> = flips
+            .iter()
+            .filter(|f| {
+                outcomes.get(&f.spec_id).map(|o| o.source)
+                    == Some(reconcile_evidence::EvidenceSource::CoversChain)
+                    && !covers_chain_rooted(&store, &f.spec_id, &anchors)
+            })
+            .map(|f| f.spec_id.clone())
+            .collect();
+        for id in &unsupported {
+            changed = true;
+            flips.retain(|flip| flip.spec_id != *id);
+            outcomes.set_reason(
+                id,
+                reconcile_evidence::CandidateReason::Held(
+                    "no covered spec is Completed or completing in this run".to_string(),
+                ),
+            );
+        }
+        if !changed {
+            break;
+        }
     }
     let targeted = spec.is_some();
     for outcome in outcomes.entries() {
@@ -78608,7 +78676,11 @@ pub(crate) fn handle_db_reconcile_status(
             eprintln!("  {line}");
         }
     }
-    report_closure_holds(&closure_holds);
+    // A dry run reports the scan's holds; a writing run reports the holds the
+    // live seam actually decided (below), never an obsolete scan payload.
+    if dry_run {
+        report_closure_holds(&closure_holds);
+    }
 
     // TASK-1446 (BUG-1506 AC3): the sweep runs — and reports — in BOTH
     // directions, not just the one that produces a flip.
@@ -78885,13 +78957,14 @@ pub(crate) fn handle_db_reconcile_status(
         let (hold_targets, rest_targets) = targets.split_at(holds_for_write.len());
         let (flip_targets, stale_targets) = rest_targets.split_at(flips_for_write.len());
         // BUG-1551: closure holds — land at Done + record the merge.
-        for ((hold, verdict), target) in holds_for_write.iter().zip(hold_verdicts).zip(hold_targets)
-        {
-            if *verdict != SeamVerdict::Apply {
+        // TASK-1335: only a hold the LIVE graph still supports is written, with
+        // its CURRENT blockers/criteria — never the scan's payload.
+        for (verdict, target) in hold_verdicts.iter().zip(hold_targets) {
+            let SeamVerdict::Hold(current) = verdict else {
                 continue;
-            }
+            };
             if let Some(index) = *target {
-                apply_closure_hold(&mut s.requirements[index], hold, now, project_root);
+                apply_closure_hold(&mut s.requirements[index], current, now, project_root);
             }
         }
         for ((flip, verdict), target) in flips_for_write.iter().zip(flip_verdicts).zip(flip_targets)
@@ -79001,16 +79074,26 @@ pub(crate) fn handle_db_reconcile_status(
     let mut confirmed: Vec<AutoBumpFlip> = Vec::new();
     let mut confirmed_stale: Vec<(String, String, u64, RequirementStatus)> = Vec::new();
     let mut seam_reports: Vec<String> = Vec::new();
-    let mut verdict_iter = seam_verdicts.into_iter().skip(holds_for_write.len());
+    let mut verdict_iter = seam_verdicts.into_iter();
+    let hold_verdicts: Vec<SeamVerdict> =
+        verdict_iter.by_ref().take(holds_for_write.len()).collect();
     let flip_verdicts: Vec<SeamVerdict> = verdict_iter.by_ref().take(flips.len()).collect();
     let stale_verdicts: Vec<SeamVerdict> = verdict_iter.collect();
+    // The holds the live seam actually kept, with their current payloads.
+    let live_holds: Vec<ClosureHold> = hold_verdicts
+        .iter()
+        .filter_map(|v| match v {
+            SeamVerdict::Hold(current) => Some(current.clone()),
+            _ => None,
+        })
+        .collect();
     let mut decide = |spec_id: &str, verdict: SeamVerdict| -> bool {
         let reason = match verdict {
             SeamVerdict::Apply => reconcile_evidence::CandidateReason::Applied,
+            SeamVerdict::Hold(_) => reconcile_evidence::CandidateReason::ClosureHeld,
             SeamVerdict::Changed(why) => {
                 reconcile_evidence::CandidateReason::ChangedDuringApply(why)
             }
-            SeamVerdict::Held(why) => reconcile_evidence::CandidateReason::HeldAtWrite(why),
             SeamVerdict::SameAs(other) => {
                 reconcile_evidence::CandidateReason::SameRequirementAs(other)
             }
@@ -79025,6 +79108,9 @@ pub(crate) fn handle_db_reconcile_status(
         }
         applied
     };
+    for (hold, verdict) in closure_holds.iter().zip(hold_verdicts) {
+        decide(&hold.flip.spec_id, verdict);
+    }
     for (flip, verdict) in flips.into_iter().zip(flip_verdicts) {
         if decide(&flip.spec_id, verdict) {
             confirmed.push(flip);
@@ -79038,6 +79124,7 @@ pub(crate) fn handle_db_reconcile_status(
     for line in &seam_reports {
         eprintln!("  {line}");
     }
+    report_closure_holds(&live_holds);
 
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "reconcile-status");
@@ -79143,8 +79230,8 @@ enum SeamVerdict {
     Apply,
     /// The live store no longer supports the scan-time decision.
     Changed(String),
-    /// A closure holder blocks this completion at the write.
-    Held(String),
+    /// A scan-time hold is still held by the live graph: write THIS payload.
+    Hold(ClosureHold),
     /// Another accepted id of the same requirement is applied instead.
     SameAs(String),
 }
@@ -79159,7 +79246,14 @@ enum SeamVerdict {
 /// support — covers support must be ROOTED in a live Completed requirement
 /// or a surviving non-covers completion (never another covers candidate),
 /// and the live closure graph is evaluated as a least fixed point over the
-/// surviving completions. Pure local reads; no forge I/O under the lock.
+/// surviving completions. Finally each scan-time hold is re-derived from the
+/// live graph: still held → [`SeamVerdict::Hold`] with the CURRENT payload;
+/// no longer held → refused as changed (a rerun decides; no completion and
+/// no obsolete note). Covers support is deliberately DIRECT (BUG-113's
+/// existing rule: a covered spec Completed or completing in this run's
+/// normal batch), so a story covering only another covers candidate
+/// completes on a later run, once that candidate is Completed. Pure local
+/// reads; no forge I/O under the lock.
 // trace:TASK-1335 | ai:claude
 // trace:TASK-1600 | ai:codex
 fn plan_reconcile_seam(
@@ -79276,21 +79370,68 @@ fn plan_reconcile_seam(
             else {
                 continue;
             };
-            let why = format!(
+            // Every completion was released by the scan's closure pass, so
+            // a hold here is new since the scan.
+            verdicts[index] = SeamVerdict::Changed(format!(
                 "its completion is now held ({})",
-                closure_hold_reason(&hold)
-            );
-            verdicts[index] = match items[index].kind {
-                // A normal flip was released at scan time, so a hold is new.
-                SeamKind::Flip => SeamVerdict::Changed(why),
-                _ => SeamVerdict::Held(why),
-            };
+                closure_hold_causes(&hold)
+            ));
             changed = true;
         }
         if !changed {
-            return verdicts;
+            break;
         }
     }
+
+    // Scan-time holds: re-derive the hold from the LIVE graph (treating the
+    // surviving completions as resolved, the same least fixed point), so the
+    // writer records the current blockers/criteria — or nothing at all when
+    // the hold no longer applies (conservatively refused, rerun decides).
+    let resolved: std::collections::HashSet<uuid::Uuid> = items
+        .iter()
+        .zip(&verdicts)
+        .filter(|(item, v)| **v == SeamVerdict::Apply && completes(item.kind))
+        .filter_map(|(item, _)| resolved_uuid(item))
+        .collect();
+    let mut held_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (item, verdict) in items.iter().zip(&verdicts) {
+        if item.kind == SeamKind::Hold && *verdict == SeamVerdict::Apply {
+            held_ids.insert(item.spec_id.clone());
+            if let Some(req) = store.get_requirement_by_spec_id(&item.spec_id) {
+                held_ids.insert(
+                    req.agreed_id
+                        .clone()
+                        .or_else(|| req.spec_id.clone())
+                        .unwrap_or_else(|| req.id.to_string()),
+                );
+            }
+        }
+    }
+    for (item, verdict) in items.iter().zip(verdicts.iter_mut()) {
+        if item.kind != SeamKind::Hold || *verdict != SeamVerdict::Apply {
+            continue;
+        }
+        let Some(req) = store.get_requirement_by_spec_id(&item.spec_id) else {
+            continue;
+        };
+        let (blockers, criteria) = closure_holders_treating_resolved(req, store, &resolved);
+        *verdict = if blockers.is_empty() && criteria.is_empty() {
+            SeamVerdict::Changed("its closure hold no longer applies".to_string())
+        } else {
+            let cycle_members = blockers
+                .iter()
+                .filter(|b| held_ids.contains(&b.id))
+                .map(|b| b.id.clone())
+                .collect();
+            SeamVerdict::Hold(ClosureHold {
+                flip: AutoBumpFlip::new(item.spec_id.clone(), item.sha.clone(), req.status.clone()),
+                blockers,
+                cycle_members,
+                criteria,
+            })
+        };
+    }
+    verdicts
 }
 
 /// TASK-1335: [`collect_covers_completed_review_flips`]'s condition re-read

@@ -114,6 +114,22 @@ fn git_in(dir: &Path, args: &[&str], date: Option<&str>) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
+/// Barrier shell that commits a peer requirement `twin` whose agreed id is
+/// `display`, making `display` ambiguous in the live store.
+fn twin_script(twin: &str, display: &str) -> String {
+    let (prefix, _) = twin.split_once('-').unwrap();
+    format!(
+        "printf 'id: {uuid}\\nspec_id: {twin}\\nagreed_id: {display}\\ntitle: peer twin\\n\
+         description: d\\nstatus: Done\\npriority: Medium\\nowner: x\\n\
+         feature: Uncategorized\\ncreated_at: 2026-09-01T00:00:00Z\\n\
+         modified_at: 2026-09-01T00:00:00Z\\nreq_type: Task\\n' > \
+         \"$FIXTURE_STORE/objects/{prefix}/000/{twin}.yaml\" && \
+         git -C \"$FIXTURE_STORE\" add -A && \
+         git -C \"$FIXTURE_STORE\" commit -qm 'peer adds {display} twin'",
+        uuid = uuid::Uuid::new_v4()
+    )
+}
+
 fn text(out: &Output) -> String {
     format!(
         "exit={:?}\nstdout:\n{}\nstderr:\n{}",
@@ -370,6 +386,23 @@ impl Fx {
 
     /// `SpecCompleted` events this project recorded for `spec_id` from
     /// reconcile-status.
+    /// A validated advisor seat for the fixture principal, minted by the
+    /// shared ADR-66 test fixture under this fixture's private HOME and
+    /// store roster (committed so the store stays clean). Barriers that make
+    /// a deliberate advisor decision pass it explicitly.
+    fn advisor_grant(&self) -> String {
+        let grant = support::grant_seat_for(
+            &self.root.join("home"),
+            &self.repo,
+            "fixture-human",
+            "advisor",
+            &[],
+        );
+        git_in(&self.store(), &["add", "-A"], None);
+        git_in(&self.store(), &["commit", "-qm", "fixture roster"], None);
+        grant
+    }
+
     fn completion_events(&self, spec_id: &str) -> usize {
         std::fs::read_to_string(self.repo.join(".aida/events.jsonl"))
             .unwrap_or_default()
@@ -896,15 +929,7 @@ fn write_seam_rechecks_reopen_closure_and_covers() {
     // The covered spec itself is reopened: a real Completed → Approved
     // decision, which the CLI takes only from a validated advisor seat (the
     // shared ADR-66 grant fixture) with --force.
-    let grant = support::grant_seat_for(
-        &fx.root.join("home"),
-        &fx.repo,
-        "fixture-human",
-        "advisor",
-        &[],
-    );
-    git_in(&fx.store(), &["add", "-A"], None);
-    git_in(&fx.store(), &["commit", "-qm", "fixture roster"], None);
+    let grant = fx.advisor_grant();
     fx.barrier_script(
         "STORY-80",
         &format!(
@@ -1187,6 +1212,21 @@ fn configured_forge_is_read_from_any_toml_spelling() {
         assert!(stderr(&out).contains(want), "{line}:\n{}", text(&out));
         assert_same(&fx.snapshot(), &before, line);
     }
+    // A config the strict reader cannot parse at all is a refusal through the
+    // real CLI, not a fallback to pure git.
+    std::fs::write(fx.config_path(), &scaffolded).unwrap();
+    fx.rewrite_forge("forge = { provider = \"gitlab\"");
+    let before = fx.snapshot();
+    for extra in [&["--dry-run"][..], &[][..]] {
+        let out = fx.reconcile(extra);
+        let all = text(&out);
+        assert!(!out.status.success(), "malformed {extra:?}:\n{all}");
+        assert!(!stdout(&out).contains("would flip"), "{all}");
+        assert!(stderr(&out).contains("unparseable config"), "{all}");
+        assert_same(&fx.snapshot(), &before, "malformed config");
+    }
+    assert_eq!(fx.status("TASK-96"), "Done");
+
     // Positives: a dotted pure-git provider, and a document with no provider
     // and no origin, are affirmative pure git.
     for line in ["forge.provider = \"pure-git\"", "# no forge configured"] {
@@ -1304,23 +1344,34 @@ fn stale_review_path_is_decided_at_the_live_seam() {
         ("STORY-21", "Approved", 902),   // untouched control
         ("STORY-22", "InProgress", 903), // rejected mid-run
         ("STORY-23", "Approved", 904),   // object replaced mid-run
+        ("STORY-24", "Approved", 905),   // deliberately reopened mid-run
+        ("STORY-25", "Approved", 906),   // id made ambiguous mid-run
     ] {
         fx.seed(id, id, status, "");
         fx.set_title(id, &format!("Review PR-{pr}: fixture"));
     }
-    for pr in [901, 902, 903, 904] {
+    for pr in [901, 902, 903, 904, 905, 906] {
         fx.commit(
             &format!("fix: merged review {pr} (TASK-10) (#{pr})"),
             "2026-09-10T00:00:00Z",
         );
     }
+    let grant = fx.advisor_grant();
     fx.barrier_script(
         "TASK-10",
-        "\"$FIXTURE_AIDA\" rel add STORY-20 TASK-12 --type blocked-by && \
-         \"$FIXTURE_AIDA\" edit STORY-22 --status rejected && \
-         sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000cc/' \
-         \"$FIXTURE_STORE/objects/STORY/000/STORY-23.yaml\" && \
-         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces STORY-23'\n",
+        &format!(
+            "\"$FIXTURE_AIDA\" rel add STORY-20 TASK-12 --type blocked-by && \
+             \"$FIXTURE_AIDA\" edit STORY-22 --status rejected && \
+             sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000cc/' \
+             \"$FIXTURE_STORE/objects/STORY/000/STORY-23.yaml\" && \
+             git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces STORY-23' && \
+             AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
+             \"$FIXTURE_AIDA\" edit STORY-24 --status done --force && \
+             AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
+             \"$FIXTURE_AIDA\" edit STORY-24 --status approved --force && \
+             {twin}\n",
+            twin = twin_script("STORY-1-25", "STORY-25")
+        ),
     );
     let out = fx.reconcile(&[]);
     let all = text(&out);
@@ -1334,8 +1385,19 @@ fn stale_review_path_is_decided_at_the_live_seam() {
     assert_eq!(fx.status("STORY-20"), "Approved", "{all}");
     assert_eq!(fx.status("STORY-22"), "Rejected", "{all}");
     assert_eq!(fx.status("STORY-23"), "Approved", "{all}");
+    assert_eq!(fx.status("STORY-24"), "Approved", "{all}");
+    assert_eq!(fx.status("STORY-25"), "Approved", "{all}");
     assert!(
-        err.contains("STORY-20: commit") && err.contains("but its completion is now held"),
+        err.contains("STORY-20: commit") && err.contains("(its completion is now held"),
+        "{all}"
+    );
+    assert!(
+        err.contains("STORY-24: commit") && err.contains("(it was reopened after this evidence)"),
+        "{all}"
+    );
+    assert!(
+        err.contains("STORY-25: commit")
+            && err.contains("(its ID now names more than one requirement)"),
         "{all}"
     );
     assert!(
@@ -1348,7 +1410,7 @@ fn stale_review_path_is_decided_at_the_live_seam() {
         "{all}"
     );
     assert!(stdout(&out).contains("1 review story"), "{all}");
-    for id in ["STORY-20", "STORY-22", "STORY-23"] {
+    for id in ["STORY-20", "STORY-22", "STORY-23", "STORY-24", "STORY-25"] {
         assert_eq!(fx.completion_events(id), 0, "{id}");
         assert!(!fx.object(id).contains("author: aida-reconcile"), "{id}");
     }
@@ -1452,6 +1514,340 @@ fn aliases_of_one_requirement_complete_once() {
     let out = fx.reconcile(&[]);
     assert!(out.status.success(), "{}", text(&out));
     assert_same(&fx.snapshot(), &settled, "alias rerun");
+    fx.assert_no_tripwire();
+}
+
+/// R1335-2: a stale review story already held by closure at scan time is
+/// previewed exactly as the writing run treats it — held, not "would flip"
+/// — for a BlockedBy predecessor and a declared closure criterion, while an
+/// unblocked story is previewed and then completed.
+#[test]
+fn known_stale_review_hold_preview_matches_normal() {
+    let fx = Fx::new(Forge::GitHub);
+    fx.seed("TASK-50", "TASK-50", "Done", "");
+    let blocker = fx.seed("TASK-52", "TASK-52", "InProgress", "");
+    fx.seed(
+        "STORY-50",
+        "STORY-50",
+        "Approved",
+        &format!("relationships:\n- rel_type: BlockedBy\n  target_id: {blocker}\n"),
+    );
+    fx.seed(
+        "STORY-51",
+        "STORY-51",
+        "Approved",
+        "tags:\n- closure:pending\n",
+    );
+    fx.seed("STORY-52", "STORY-52", "Approved", "");
+    for (id, pr) in [("STORY-50", 920), ("STORY-51", 921), ("STORY-52", 922)] {
+        fx.set_title(id, &format!("Review PR-{pr}: fixture"));
+        fx.commit(
+            &format!("fix: merged (TASK-50) (#{pr})"),
+            "2026-09-10T00:00:00Z",
+        );
+    }
+    let before = fx.snapshot();
+    let out = fx.reconcile(&["--dry-run"]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    assert!(
+        stdout(&out).contains("would flip 1 spec → Completed"),
+        "{all}"
+    );
+    assert!(
+        stdout(&out).contains("would flip 1 review story → Completed"),
+        "{all}"
+    );
+    assert!(stdout(&out).contains("STORY-52"), "{all}");
+    assert!(
+        !stdout(&out).contains("STORY-50") && !stdout(&out).contains("STORY-51"),
+        "{all}"
+    );
+    for (id, why) in [
+        ("STORY-50", "blocked by TASK-52"),
+        ("STORY-51", "closure:pending"),
+    ] {
+        let line = stderr(&out)
+            .lines()
+            .find(|l| l.contains(&format!("↷ {id}: ")))
+            .unwrap_or_default()
+            .to_string();
+        assert!(
+            line.contains("completion is held") && line.contains(why),
+            "{id}:\n{all}"
+        );
+    }
+    assert_same(&fx.snapshot(), &before, "held-review dry run");
+
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    assert!(stdout(&out).contains("1 review story"), "{all}");
+    assert_eq!(fx.status("TASK-50"), "Completed", "{all}");
+    assert_eq!(fx.status("STORY-52"), "Completed", "{all}");
+    assert_eq!(fx.completion_events("STORY-52"), 1, "{all}");
+    for id in ["STORY-50", "STORY-51"] {
+        assert_eq!(fx.status(id), "Approved", "{id}:\n{all}");
+        assert_eq!(fx.completion_events(id), 0, "{id}");
+        let object = fx.object(id);
+        assert!(!object.contains("author: aida-reconcile"), "{object}");
+        assert!(
+            !object.contains("[aida:closure-held]"),
+            "no landing note: {object}"
+        );
+        assert!(stderr(&out).contains(&format!("↷ {id}: ")), "{all}");
+    }
+    fx.assert_no_tripwire();
+}
+
+/// R1335-1: a candidate the scan HELD is re-decided against the live graph
+/// at the write seam. A removed blocker or cleared criterion, a replaced
+/// object, a new ambiguity, a deliberate reopen and a terminal change are
+/// each refused and reported (no status write, no note); a replaced blocker
+/// writes the CURRENT blocker; an untouched hold gets its legitimate note;
+/// an unaffected normal candidate completes.
+#[test]
+fn held_candidates_are_redecided_live() {
+    let fx = Fx::new(Forge::GitHub);
+    let b1 = fx.seed("TASK-60", "TASK-60", "InProgress", "");
+    fx.seed("TASK-61", "TASK-61", "InProgress", "");
+    let blocked = format!("relationships:\n- rel_type: BlockedBy\n  target_id: {b1}\n");
+    for id in [
+        "TASK-62", // blocker removed
+        "TASK-63", // blocker replaced
+        "TASK-65", // object replaced
+        "TASK-66", // id made ambiguous
+        "TASK-67", // deliberately reopened
+        "TASK-68", // rejected
+        "TASK-69", // untouched hold
+    ] {
+        fx.seed(id, id, "Approved", &blocked);
+    }
+    fx.seed(
+        "TASK-64",
+        "TASK-64",
+        "Approved",
+        "tags:\n- closure:pending\n",
+    );
+    fx.seed("TASK-59", "TASK-59", "Done", "");
+    fx.commit(
+        "fix: lands (TASK-59) (TASK-62) (TASK-63) (TASK-64) (TASK-65) (TASK-66) (TASK-67) \
+         (TASK-68) (TASK-69)",
+        "2026-09-10T00:00:00Z",
+    );
+    let grant = fx.advisor_grant();
+    fx.barrier("TASK-62", "rel remove TASK-62 TASK-60 --type blocked-by");
+    fx.barrier_script(
+        "TASK-63",
+        "\"$FIXTURE_AIDA\" rel remove TASK-63 TASK-60 --type blocked-by && \
+         \"$FIXTURE_AIDA\" rel add TASK-63 TASK-61 --type blocked-by\n",
+    );
+    fx.barrier("TASK-64", "edit TASK-64 --remove-tag closure:pending");
+    fx.barrier_script(
+        "TASK-65",
+        "sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000dd/' \
+         \"$FIXTURE_STORE/objects/TASK/000/TASK-65.yaml\" && \
+         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-65'\n",
+    );
+    fx.barrier_script(
+        "TASK-66",
+        &format!("{}\n", twin_script("TASK-1-66", "TASK-66")),
+    );
+    fx.barrier_script(
+        "TASK-67",
+        &format!(
+            "AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
+             \"$FIXTURE_AIDA\" edit TASK-67 --status done --force && \
+             AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
+             \"$FIXTURE_AIDA\" edit TASK-67 --status approved --force\n"
+        ),
+    );
+    fx.barrier("TASK-68", "edit TASK-68 --status rejected");
+
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    assert!(
+        !std::fs::read_dir(&fx.state).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("barrier-")),
+        "every barrier ran:\n{all}"
+    );
+    let err = stderr(&out);
+    for (id, status, why) in [
+        (
+            "TASK-62",
+            "Approved",
+            "(its closure hold no longer applies)",
+        ),
+        (
+            "TASK-64",
+            "Approved",
+            "(its closure hold no longer applies)",
+        ),
+        (
+            "TASK-65",
+            "Approved",
+            "(its ID now resolves to a different requirement)",
+        ),
+        (
+            "TASK-66",
+            "Approved",
+            "(its ID now names more than one requirement)",
+        ),
+        (
+            "TASK-67",
+            "Approved",
+            "(it was reopened after this evidence)",
+        ),
+        ("TASK-68", "Rejected", "(its status changed to Rejected)"),
+    ] {
+        assert_eq!(fx.status(id), status, "{id}:\n{all}");
+        let line = err
+            .lines()
+            .find(|l| l.contains(&format!("↷ {id}: ")))
+            .unwrap_or_default();
+        assert!(line.contains(why), "{id} wants `{why}`:\n{all}");
+        let object = fx.object(id);
+        assert!(
+            !object.contains("[aida:closure-held]"),
+            "{id} got a note: {object}"
+        );
+        assert!(!object.contains("author: aida-auto-bump"), "{id}: {object}");
+        assert!(!err.contains(&format!("{id} stays Done")), "{id}:\n{all}");
+    }
+    // Replaced blocker: the note and report name the CURRENT blocker only.
+    let replaced = fx.object("TASK-63");
+    assert_eq!(fx.status("TASK-63"), "Done", "{all}");
+    assert_eq!(
+        replaced.matches("[aida:closure-held]").count(),
+        1,
+        "{replaced}"
+    );
+    let note = replaced
+        .lines()
+        .find(|l| l.contains("[aida:closure-held]"))
+        .unwrap_or_default();
+    assert!(
+        note.contains("TASK-61") && !note.contains("TASK-60"),
+        "{replaced}"
+    );
+    assert!(
+        err.contains("TASK-63 stays Done — merged, but blocked by TASK-61"),
+        "{all}"
+    );
+    // The untouched hold gets its legitimate note; the control completes.
+    let held = fx.object("TASK-69");
+    assert_eq!(fx.status("TASK-69"), "Done", "{all}");
+    assert_eq!(held.matches("[aida:closure-held]").count(), 1, "{held}");
+    assert!(
+        held.lines()
+            .any(|l| l.contains("[aida:closure-held]") && l.contains("TASK-60")),
+        "{held}"
+    );
+    assert_eq!(fx.status("TASK-59"), "Completed", "{all}");
+    assert_eq!(fx.completion_events("TASK-59"), 1, "{all}");
+    for id in [
+        "TASK-62", "TASK-63", "TASK-64", "TASK-65", "TASK-66", "TASK-67", "TASK-68", "TASK-69",
+    ] {
+        assert_eq!(fx.completion_events(id), 0, "{id}");
+        assert!(!fx.object(id).contains("author: aida-reconcile"), "{id}");
+    }
+    fx.assert_no_tripwire();
+}
+
+/// F1335-1 retained gaps, against BUG-113's existing covers rule (a review
+/// story graduates when a covered spec is Completed or completing in this
+/// run's NORMAL batch). Multi-step anchor loss: the covered normal flip is
+/// newly held at the seam, so the story loses its only support. Rooted
+/// cycle: two stories that cover each other AND a Completed spec both
+/// complete. Covers-of-covers: a story covering only another covers
+/// candidate is not a candidate in the same run (direct support only), and
+/// graduates on the next run once that candidate is Completed.
+#[test]
+fn covers_multistep_loss_rooted_cycle_and_next_run_graduation() {
+    let fx = Fx::new(Forge::GitHub);
+    fx.seed("TASK-12", "TASK-12", "InProgress", "");
+    let via_flip = fx.seed("TASK-45", "TASK-45", "Done", "");
+    let a46 = fx.seed("TASK-46", "TASK-46", "Completed", "");
+    let a47 = fx.seed("TASK-47", "TASK-47", "Completed", "");
+    let a48 = fx.seed("TASK-48", "TASK-48", "Completed", "");
+    let ids: std::collections::HashMap<&str, String> =
+        ["STORY-86", "STORY-87", "STORY-88", "STORY-89", "STORY-90"]
+            .into_iter()
+            .map(|id| (id, uuid::Uuid::new_v4().to_string()))
+            .collect();
+    let implements = |targets: &[&str]| {
+        let mut out = String::from("relationships:\n");
+        for t in targets {
+            out.push_str(&format!("- rel_type: implements\n  target_id: {t}\n"));
+        }
+        out
+    };
+    let stories: [(&str, String, u64); 5] = [
+        ("STORY-86", implements(&[&via_flip]), 986),
+        ("STORY-87", implements(&[&ids["STORY-88"], &a46]), 987),
+        ("STORY-88", implements(&[&ids["STORY-87"], &a47]), 988),
+        ("STORY-89", implements(&[&ids["STORY-90"]]), 989),
+        ("STORY-90", implements(&[&a48]), 990),
+    ];
+    for (id, rels, pr) in &stories {
+        let path = fx.object_path(id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(
+                "id: {}\nspec_id: {id}\nagreed_id: {id}\ntitle: 'Review PR-{pr}: fixture'\n\
+                 description: fixture\nstatus: Done\npriority: Medium\nowner: ''\n\
+                 feature: Uncategorized\ncreated_at: 2026-09-01T00:00:00Z\n\
+                 modified_at: 2026-09-01T00:00:00Z\nreq_type: Story\n{rels}",
+                ids[id]
+            ),
+        )
+        .unwrap();
+    }
+    git_in(&fx.store(), &["add", "-A"], None);
+    git_in(&fx.store(), &["commit", "-qm", "seed stories"], None);
+    fx.commit("fix: lands (TASK-45)", "2026-09-10T00:00:00Z");
+    fx.barrier("TASK-45", "rel add TASK-45 TASK-12 --type blocked-by");
+
+    let out = fx.reconcile(&[]);
+    let all = text(&out);
+    assert!(out.status.success(), "{all}");
+    let err = stderr(&out);
+    assert_eq!(fx.status("TASK-45"), "Done", "{all}");
+    assert!(
+        err.contains("TASK-45: commit") && err.contains("(its completion is now held"),
+        "{all}"
+    );
+    assert_eq!(fx.status("STORY-86"), "Done", "{all}");
+    let line = err
+        .lines()
+        .find(|l| l.contains("↷ STORY-86: "))
+        .unwrap_or_default();
+    assert!(
+        line.contains("(no covered spec is still completed)"),
+        "{all}"
+    );
+    for id in ["STORY-87", "STORY-88", "STORY-90"] {
+        assert_eq!(fx.status(id), "Completed", "{id}:\n{all}");
+        assert_eq!(fx.completion_events(id), 1, "{id}:\n{all}");
+    }
+    assert_eq!(
+        fx.status("STORY-89"),
+        "Done",
+        "not a same-run candidate:\n{all}"
+    );
+    assert_eq!(fx.completion_events("STORY-89"), 0);
+    assert_eq!(fx.completion_events("STORY-86"), 0);
+
+    let out = fx.reconcile(&[]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert_eq!(fx.status("STORY-89"), "Completed", "{}", text(&out));
+    assert_eq!(fx.completion_events("STORY-89"), 1);
+    assert_eq!(fx.status("STORY-86"), "Done", "anchor still held");
     fx.assert_no_tripwire();
 }
 

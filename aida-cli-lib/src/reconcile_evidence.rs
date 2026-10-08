@@ -356,8 +356,8 @@ pub(crate) enum CandidateReason {
     Applied,
     /// The live store no longer supported completion at the write seam.
     ChangedDuringApply(String),
-    /// A closure holder blocked this completion at the write seam.
-    HeldAtWrite(String),
+    /// A closure holder keeps this review story from completing (no landing).
+    Held(String),
     /// Another accepted id of the same requirement was applied instead.
     SameRequirementAs(String),
 }
@@ -488,8 +488,10 @@ pub(crate) fn render_outcome(outcome: &CandidateOutcome, targeted: bool) -> Opti
             "↷ {name}: {evidence} matched, but the spec changed after the scan ({why}); not \
              completed — rerun to re-evaluate."
         ),
-        CandidateReason::HeldAtWrite(why) => {
-            format!("↷ {name}: {evidence} matched, but {why} at the write; not completed.")
+        CandidateReason::Held(why) => {
+            format!(
+                "↷ {name}: {evidence} matched, but completion is held — {why}; status unchanged."
+            )
         }
         _ if !targeted => return None,
         CandidateReason::SameRequirementAs(other) => format!(
