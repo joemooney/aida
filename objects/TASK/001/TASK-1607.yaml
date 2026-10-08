@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:04:56.856192199Z
+modified_at: 2026-10-08T02:04:57.684730784Z
 req_type: Task
 tags:
 - guided-lane
@@ -178,6 +178,12 @@ comments:
   created_at: 2026-10-08T02:04:56.856192199Z
   modified_at: 2026-10-08T02:04:56.856192199Z
   relayed_from: implementer
+- id: 01a11941-afd4-7d11-9298-f2187bcce978
+  author: joe
+  content: |
+    C7 refinement of ADR-68, relaying the advisor's TASK-1607 C7 review dated 2026-10-07T04:08:55Z and the operator-authorized eight-item rework brief: an unbound plain-shell caller with a validated single-seat grant passes one-shot Route/Spawn without installing a holder. LoopStart and harness/loop-anchored callers still claim implicitly. Persisted holder/child/demotion classification takes precedence, so the exemption cannot restore a demoted holder or let a child route peers. This avoids a days-long operator shell fencing a later harness after one queue add. Regression coverage includes a later harness claiming after shell route/spawn, live-holder one-shots, loop/handoff refusal and loop-anchored implicit claim. Gateway activation remains deferred until fresh independent C7 approval.
+  created_at: 2026-10-08T02:04:57.684730784Z
+  modified_at: 2026-10-08T02:04:57.684730784Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
