@@ -6,12 +6,6 @@
   added_at: 2026-10-08T02:23:57.180622632Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a10fe3-ea4c-7fd3-9561-6e545a5806d6
-  position: 302000
-  added_by: role:implementer
-  added_at: 2026-10-06T13:03:35.163535975Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0dd1b-98af-71d2-aaf7-719663db7044
   position: 400000
   added_by: role:implementer
@@ -26,66 +20,10 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a10f02-a6f0-7216-a69e-2f748f65252c
-  position: 431000
-  added_by: role:implementer
-  added_at: 2026-10-06T13:04:28.996392095Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a11171-66bf-7830-80c0-b5b1e682a653
-  position: 438000
-  added_by: role:implementer
-  added_at: 2026-10-06T13:40:45.745346098Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a10f3a-fa80-7263-ae46-caf8982d3ae5
-  position: 439000
-  added_by: role:implementer
-  added_at: 2026-10-06T13:41:16.341980932Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a10f68-9ece-7e91-9a6c-295a10cddcb7
-  position: 440000
-  added_by: role:implementer
-  added_at: 2026-10-06T14:00:41.612361627Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a10fa4-f5e8-7cf3-a456-76a11ea8ec51
-  position: 441000
-  added_by: role:implementer
-  added_at: 2026-10-06T16:30:06.178799142Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a111f3-f3fd-7b11-99ea-6ab4ec8868b9
-  position: 442000
-  added_by: role:implementer
-  added_at: 2026-10-06T16:30:11.995281223Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a10f18-927f-760f-b4dc-05621855aa58
   position: 446000
   added_by: role:implementer
   added_at: 2026-10-07T01:58:09.504771019Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a113ff-b37a-7e43-9a25-2611b8c00bf2
-  position: 447000
-  added_by: role:implementer
-  added_at: 2026-10-07T03:37:31.257771720Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a10f36-d0b6-7798-bbab-f1a68dbafdb4
-  position: 448000
-  added_by: role:implementer
-  added_at: 2026-10-07T04:02:41.380904914Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
