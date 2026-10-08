@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T21:00:27.772032593Z
+modified_at: 2026-10-08T21:20:16.592984648Z
 req_type: Task
 tags:
 - docs:impacted
@@ -362,6 +362,102 @@ comments:
   created_at: 2026-10-08T21:00:27.772025997Z
   modified_at: 2026-10-08T21:00:27.772025997Z
   relayed_from: batch-c integrator
+- id: 01a11d63-68d0-7b93-a69e-d8a57fa2fefc
+  author: mcp
+  content: |
+    # Batch C final independent review
+
+    **VERDICT: REQUEST_CHANGES — exact candidate `0695776070406a4a082e3bec8405e0e20f05be25`.** TASK-1613 introduces a deterministic command-description budget violation. The whole four-member source union was reviewed; no additional member-source blocker was established. Separately, the completed full local CI is **NON-PASS**, exit 2, with 53 failures and gates 6–37 unrun. Correcting the bounded source defect alone cannot make this batch green or merge-ready.
+
+    This is a fresh Codex reviewer session, independent of the member authors, prior member/A/B/C reviewers, archive advisor, and mechanical integrator. I authored no candidate implementation. The earlier `BATCH_C_INDEPENDENT_REVIEW.md` remains **UNFINALIZED and unchanged**; this new report supplies the final judgment rather than overwriting it. The companion `BATCH_C_FINAL_INDEPENDENT_REVIEW_INTEGRITY.json` binds the input reports, raw evidence, whole-path proof, and this report by SHA-256. This Markdown judgment is not a protected machine verdict or publication authorization.
+
+    ## Exact scope and read evidence
+
+    | Item | Pin |
+    |---|---|
+    | Worktree / branch | `/home/joe/ai/aida-worktrees/aida-proxy-batch-c` / `integrate/proxy-20261008-c` |
+    | Candidate | `0695776070406a4a082e3bec8405e0e20f05be25` |
+    | Tree | `34014208cffd3a511a9472bb17be9e1e1ccca53c` |
+    | Fixed review base | `bf65220959c7601427247286abc7eb16278af5a5` |
+    | TASK-1613 | `f03306facc288986602dc85cf15d0b4398163cf2` |
+    | TASK-1329 | `3699bb109836a843b80c842449a7c96209c202d7` |
+    | TASK-1605 | `affb9ff1959cb88199f029e5b603cab36ff73f32` |
+    | TASK-1611 | `80a565402d4215da1cbcc95c51fd3851f2c12dfa` |
+
+    The actual worktree HEAD/tree match these pins and its tracked status is clean. The merge base equals bf65. The review instrument is `git diff bf65220959c7601427247286abc7eb16278af5a5...0695776070406a4a082e3bec8405e0e20f05be25`. Candidate parents are old C `dbe412fbc1dba4ea1faddaf59cd4274489ada20e` and bf65. Recorded c677 main movement is **not integrated or qualified here**. No fresh remote assertion, fetch, or moving-main comparison was used.
+
+    Read complete prior C review, complete final C PREPARED, complete B independent review and A+B archive disposition, A VALIDATED, the preparation brief, all four original member READY/reviews and the 1605 rework/1611 correction READY/final reviews. Read all four actual retained acceptance snapshots, AGENTS, two-seat/integrator/review guidance, publication disposition, the full raw failure digest, final actual summary, relevant full-log passages and all test-result rows, preparation scripts, build provenance, template/pack/doc-intent results, and retained interaction/link/inventory evidence. Acceptance snapshots are evidence of the assigned contract, not fresh live status reads. Root's reported canonical relay/readback is not relabeled as my own canonical operation.
+
+    ## R1613-1 — blocking, medium: command description exceeds its existing context budget
+
+    At `aida-core/templates/commands/aida-pr.md:2`, TASK-1613 changed the canonical description from `Run /aida-pr.` (**13 bytes**) to `Open implemented work for independent review through aida ship` (**62 UTF-8 bytes**). Exact Git blobs establish that C inherits the member's command unchanged. The common base and bf65 still have the 13-byte description.
+
+    `aida-core/templates/context-budget.toml:6` sets `command_description_max_bytes = 48`. That file and `aida-core/tests/context_budget.rs` are byte-identical across the common base, bf65, all four members, and C. The test trims the value after `description:` and uses Rust string byte length, then checks each generated `.claude/commands/*.md` artifact against that limit at line 64. Thus this is a member-introduced violation of an unchanged contract, independent of authority, cache permissions, bwrap, or later main movement.
+
+    The actual final CI log independently corroborates the source finding: `repository_and_generated_scaffold_stay_inside_context_budgets` fails at `aida-core/tests/context_budget.rs:64:13` with `.claude/commands/aida-pr.md: 62 bytes` (full log lines 11412–11428). Earlier 23 template and 14 agent-pack unit tests did not include this integration test; template parity can faithfully reproduce invalid content. The earlier member APPROVE does not supersede this finding.
+
+    Numbered remedy and verification, **for later legitimately authorized owning-lane rework only**:
+
+    1. Shorten the canonical command description to **at most 48 UTF-8 bytes**, retaining its review-handoff meaning. Preserve the command body, explicit successful-PR autoqueue, preview, managed-child stop contract, draft constraints, and independent-review boundaries. Do not raise the budget, weaken assertions, or broaden lifecycle scope.
+    2. Use the established template sync mechanism for the affected client surfaces; inspect the exact resulting diff and generated parity. Preserve the approved archive blob/mode and old-live-path absence. No unrelated member or reserved-source edits belong in this remedy.
+    3. On the corrected, pinned source in an isolated fixture with normal Cargo slots, run the focused existing `cargo test -p aida-core --test context_budget`, plus relevant template/agent-pack parity checks and diff checks. Require the generated scaffold budget test to pass, not merely a hand-counted source string. Record actual commands/exits and input/binary provenance. No new reusable harness or duplicate full-workspace/check-ci run is requested by this finding.
+    4. Supply a new exact HEAD/tree/base for a different independent whole-scope reviewer. Keep the other failures and unrun gates open. This report does not dispatch rework, grant a seat, bypass the actual new-code dispatch refusal, or permit an old-binary/identity/environment/direct-JSON/forge workaround.
+
+    No code fix or test execution was performed by this reviewer.
+
+    ## Whole-union source judgment
+
+    A fresh independent comparison of every path's presence, type, mode and object across common b46, fixed bf65, all four members and C covered **2,204 paths / 2,104 extant candidate entries**, with **zero mismatches**. The receipt includes every row. Attribution: 1,934 unchanged, 234 TASK-1611 (including the preserved archive), 8 TASK-1613, 2 TASK-1329, 12 TASK-1605, 8 upstream, five ordinary unions, and the absent historical source path. Five unions were independently reconstructed with `git merge-file -p` on private temporary blobs; no repository index/ref or source was changed.
+
+    The six rename-aware overlaps are OVERVIEW, live and template cross-agent onboarding, repository guide, session lifecycle, and the old porting guide. The sole intentional deviation from automatic A+B merging is satisfied: `docs/archive/audits/porting-claude-code-to-codex.md` is **100644 / `10dd846c7b00b83ab0958313b881dc863d0306e1`**, and `docs/agents/porting-claude-code-to-codex.md` is absent. All five other unions match. Main's 0ffe shell helper, ff9ac drain-lock casing, and six bf65 files retain their exact upstream blobs. The old-C→C raw delta equals ff9ac→bf65, and the exact scoped diff equals the retained prior C diff. No member approval transfers merely because this provenance succeeds.
+
+    | Member / interaction | Source judgment and evidence limits |
+    |---|---|
+    | TASK-1613 | **FAIL R1613-1.** The rest of the thin redirect remains coherent: full canonical skill/command inspected; `--no-merge --dry-run`, successful PR then explicit autoqueue, honest skip/failure reporting, no default self-merge or early Completed, parent-owned publication and draft restrictions retained. All four maintained workflow homes contain the sequence. Historical archive prose is correctly excluded from current guidance. |
+    | TASK-1329 | No additional source defect found. The 45-minute bound is on the Windows Run tests step, with unchanged `cargo test --workspace --no-fail-fast`; it is not per-test diagnosis. The complete six-input retained fixture closure matches C by SHA-256, including workflows, fixture, release preflight and config. Retained parsed-workflow/fixture evidence remains applicable; no fresh test or native Windows cancellation proof is claimed. Full-CI eligibility and required Ubuntu/hold policy remain. |
+    | TASK-1605 | No additional source defect found. All 12 delivered files match final member and retained reviewed export byte-for-byte. The analyzer's finite min/max calendar enumeration, artifact exports/chart exclusions, selected-ref provenance and corrected annotations remain. Retained real-Tokei 28-pass/zero-skip evidence applies to unchanged analyzer/test inputs and literal private fixtures only; it is not a new run or a new C-tip measurement. |
+    | TASK-1611 | No additional source defect found within the reviewed scope. All 100 rename destinations match the final member; 87 moves are byte-identical. Inventory script/TSV match the final member, with 856 rows and exact historical-archive row 445. Retained field-level inventory and 99-text historical-prose proof remain applicable to the unchanged move/input closure. Fresh author-date recount confirms 28 / 643 / 139 = 810. Reviewable-PR acceptance remains open. |
+
+    All four actual analytics PNGs were visually inspected again: legible titles, units, legends and footers, with honest **b46/Tokei 12.1.2** provenance. Production is 375,504 code lines; supporting is 262,130 total lines with the migration caveat; delivery explains subject-inferred early zero PRs and partial periods; Rust labels 9,882 heuristic attributes with artifact exclusions. Retained reconciliation is 526,337 code / 236,941 comments / 70,210 blanks / 1,831 recognized files. None is an executed Rust-test count or measurement of C.
+
+    Retained C link results equal B: **510 occurrences / 454 unique findings**, versus main/A 442 / 396; no C finding lies outside the reviewed input union. The new-C and old-C datasets are equal, and the six intervening source changes are Rust only. This qualifies the retained scanner/input proof, **not a fresh scan or globally clean-link assertion**. External targets and comprehensive anchors remain unverified. The later analytics README is explicitly outside the historical inventory snapshot.
+
+    Restored REVIEW, format-audit include document, parity/roundtrip scaffold documents, both live user-guide HTML files and generator references remain covered by whole-source provenance. The bf65 `lib.rs` delta is separately preserved; old CLI runtime consumer passes are **not** transferred across that changed binary input. The eight actual format-audit failures remain failures. The earlier reserved BUG-1812 producer/consumer finding stays in its preserved separate report; it is not resolved or taken over here, and no claim is made that the whole upstream candidate is defect-free.
+
+    ## Build, artifact integrity and completed CI
+
+    Fresh manifest verification found no mismatches: **105 C preparation, 40 B preparation, 18 B independent, 58 TASK-1611 independent, 252 TASK-1605 rework independent, and 12 A validation entries**. Counts are evidence files, not tests. All **643 recorded tracked build inputs** match exact C Git blobs. The three `.git` metadata entries remain explicitly build-stamp inputs; this is not a complete external toolchain/supply-chain attestation.
+
+    Historical final-C logs establish default CLI build, agent-pack build and core-test `--no-run` exit 0; the version log identifies 0695776070 without +dirty. Actual sync/check logs show the compiled portable pack **present and current**, and filtered core tests report 37 passed. Local doc-intent reports seven tests and an armed successful check using the private committed store snapshot. These historical results retain their actual scope; `--no-run` alone runs no tests. Glossary generation exits 0 but leaves +118/-32 drift: **not a regeneration pass**, with no exact-main baseline measurement.
+
+    **New artifact-reuse limitation:** the files currently at the preparer's CLI and pack paths no longer match their recorded pre-CI hashes. CLI recorded `5c0c3795f4a824d67fb65b429dbe5d51c17de5e206091db6a72eb3835a035f82`, current `55d5e04faec39c8300fc5b43bbec3a1561a2a2d24824f2db7afacc4ee131346f`; pack recorded `bc9931abb82316a26aace89606afea9962154e6bc49fbd18bb00eb35dbd2e150`, current `a6bbb80b9815752437803542c7b6466d54c4cf4fdd419ada83a80aa89918fdec`. Core-test remains `02c132b885b52931e6ebcfa412b468bc8e603d0f111d1e515c0a0e7599b4c745`. Cause was not investigated or inferred. The preserved pre-CI independent hash receipt and logs remain historical evidence; **current CLI/pack files are not qualified for reuse by that receipt**. No binary was executed here and no replacement build was launched.
+
+    The one exact-C CI attempt actually ended **2026-10-08 13:45:27 MST, exit 2**, starting 12:04:58 with a 14,400-second bound. Summary pins the same HEAD/tree before/after and reports zero post-run status lines. Direct parsing of the full log's **101 test-result rows** independently reproduces **9,862 passed / 53 failed / 7 ignored** and 53 explicit failed-test lines. Fifteen targets failed.
+
+    | Gate | Actual outcome |
+    |---|---|
+    | 1, no-default CLI check | PASS, 106.3s |
+    | 2, workspace build | PASS, 180.2s |
+    | 3, TUI seam | PASS, 38.3s |
+    | 4, protobuf mirror drift | PASS, 113.9s |
+    | 5, workspace tests | FAIL, 5590.1s; counts above |
+    | 6–37 | **UNRUN**, stopped after gate 5 |
+    | Eight local-impossible items | **SKIPPED**, never passes |
+
+    The failures comprise the one confirmed content defect, **48 tests across 12 CLI targets** with authority/fixture-status symptoms, three core cache tests, and one bwrap test. This precise 48 count refines the preparer's approximate “45”; it does not establish one root cause for every failure. Authority refusals/Draft knock-ons, namespace permission hypotheses and `bwrap: execvp claude: No such file or directory` remain **UNRESOLVED, not baseline-qualified, and not passes**. No main-only rerun, hosted-CI equivalence or environmental exoneration is claimed. The digest has 54 panic entries because `global_queue::tests::bug_1682_process_child` prints an intended injected-unwind panic; the full log marks that test okay, and it is absent from the 53 failure list.
+
+    The recorded env-i/private-clone/private HOME/XDG/TMP/network-namespace/guard setup and normal slot wrapper bound the original checks. They do not convert a failed fixture into a pass. The probe's `rustc: not found` remains a failed subcommand despite its overall exit 0. Old-dbe harness exit 127 and sccache SUN_LEN exit 2 remain superseded failures. A's actual exit 2 / TUI `Terminated`, cause unestablished, is preserved; A's absent-pack no-op does not validate C. Old-head manual/MCP/monitor passes are not new-C runtime passes.
+
+    ## Open gates and preservation
+
+    Required remote Ubuntu Build and merge-hold checks, applicable trace and publication-time doc-intent with real store fetch/fast-forward, remaining local gates, confinement/platform evidence, native Windows cancellation, TASK-1611 reviewable-PR acceptance, and a legitimately produced independent exact-head machine record remain open as applicable. The successful private-ref doc-intent check does not discharge remote publication requirements. Informational cross-target reports retain their informational classification.
+
+    Any later integration of recorded c677 or another source change needs a newly pinned tree, overlap/input analysis and new independent review. No result here qualifies unintegrated main or grants merge/completion credit. Prior recorder and actual new-code dispatch refusals remain binding; no stale binary, supplied identity, borrowed grant, fabricated JSON or alternate API/forge route may bypass them.
+
+    Only this new report, its integrity receipt, and reviewer-owned temporary comparison data were written. No source, canonical object, status, queue, mail, record, push, PR, merge, grant, hold, install or activation action occurred. Reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 and previous reports were untouched. **Turn ended with final source judgment REQUEST_CHANGES and full-CI NON-PASS; no ongoing watcher or delegated work is claimed.**
+  created_at: 2026-10-08T21:20:16.592978262Z
+  modified_at: 2026-10-08T21:20:16.592978262Z
+  relayed_from: batch-c-final-fresh-review
 history:
 - id: 01a11c4d-439e-7890-8926-b76a03022ec6
   author: aida-session-start
