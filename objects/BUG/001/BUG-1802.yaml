@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T03:40:44.718983994Z
+modified_at: 2026-10-08T03:44:37.196009956Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -592,6 +592,12 @@ comments:
     Disposition: CHANGES REQUESTED for F1, not acceptance relaxation or an operator policy fork. Return the narrow executable mechanism to a fresh independent advisor. No implementation/status/queue/grant/hold changes or merge authorized by this comment. Final authority-sensitive merge remains Joe/operator-owned.
   created_at: 2026-10-08T03:40:44.718983994Z
   modified_at: 2026-10-08T03:40:44.718983994Z
+- id: 01a1199c-ed4c-70e0-8ee4-842ef7ae1300
+  author: joe
+  content: |
+    PROXY DECISION: accept independent v4 CHANGES REQUESTED in INDEPENDENT_SKETCH_V4_SIGNOFF.md for the single shared callback-origin gap. Inherited Git descendant capability plus genuine executable/ancestry cannot establish that Git supplied the callback input. Request one narrow executable sealed-execution or invocation-origin mechanism; retain accepted advancing-default coverage and binding refinements1–6. BUG-1808 owns the shared substrate first, BUG-1802 consumes later. No implementation/queue/status/grant/hold/merge authorization yet. Concrete author brief authority-sketch-v5-author.md.
+  created_at: 2026-10-08T03:44:37.196009956Z
+  modified_at: 2026-10-08T03:44:37.196009956Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
