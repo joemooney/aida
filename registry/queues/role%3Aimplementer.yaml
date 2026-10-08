@@ -65,3 +65,11 @@
   added_at: 2026-10-08T16:17:05.348108294Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1116b-8bec-7f40-9e1e-beaf7f328dce
+  position: 453000
+  added_by: role:implementer
+  note: Independent design APPROVED D1-D3; proxy selects honest diagnostics, no offline completion; separate implementation and fresh review.
+  added_at: 2026-10-08T17:02:36.886839130Z
+  for_role: implementer
+  added_by_machine: imac
