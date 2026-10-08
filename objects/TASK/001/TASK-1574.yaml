@@ -8,12 +8,12 @@ description: |-
   The intake job: read AIDA-57 from the aida-relay store, and for each defect (a) run its re-verification procedure against current aida main, (b) grep code and search specs before filing as new (two drafts have been wrong for skipping this), (c) file the survivors as bounded bugs with the measured evidence, (d) report back to the aida-relay session which were filed, which were duplicates, and which no longer reproduce.
 
   Acceptance sketch: every one of the seven has a disposition recorded (filed-as-<ID> / duplicate-of-<ID> / not-reproducible-with-evidence), and the aida-relay session is told the outcome.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T00:08:38.744286061Z
-modified_at: 2026-10-08T17:19:52.428473817Z
+modified_at: 2026-10-08T17:20:45.972632234Z
 req_type: Task
 comments:
 - id: 01a10353-caab-7160-8f2f-e7811c37b429
@@ -68,6 +68,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a11c88-2194-7740-8fb6-b431290567bd
+  author: aida-session-start
+  timestamp: 2026-10-08T17:20:45.972631767Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 implementation_info:
   implemented: true
   implemented_at: 2026-10-03T19:54:42.331293739Z
