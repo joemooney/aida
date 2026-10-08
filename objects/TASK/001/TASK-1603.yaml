@@ -3,12 +3,12 @@ spec_id: TASK-1603
 agreed_id: TASK-1603
 title: 'drain launch race: the FIRST batch member''s child starts before the orchestrator run is registered, falls back to interactive rules, and refuses the InProgress-no-lease state the parent just created —'
 description: 'Reproduced on consecutive waves 2026-10-05 (builds 62e3374 and post-887bf7e): wave 1 first member TASK-1523 (children 01a10eee + replacement, both ''spec is InProgress but no local lease holds it'', shelved launch-refused), wave 2 first member TASK-1588 (children 01a10f35 + replacement, identical, shelved) — while every LATER member in both waves (BUG-1803, TASK-1596, BUG-1801, BUG-1804) hit the same InProgress-no-lease precondition and proceeded with ''claiming it anyway''. Wave-1 first-child log shows the smoking gun: ''AIDA_AUTO_COMPLETE is set but no live orchestrator run owns it — treating this as a normal interactive session'' — the child launched before the orchestrator''s run record landed, so it applied interactive fail-closed rules to the InProgress bump its own parent had just made. Later children see the live run and claim. Cost: the first spec of every wave burns both launch attempts and shelves; TASK-1523 was wrongly suspected of being undrainable for its cross-project shape. Fix direction: register the run (or hand the child an ownership token) BEFORE the Approved→InProgress bump / child launch, or have the child retry its ownership check briefly instead of refusing on first read.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:16:53.046696542Z
-modified_at: 2026-10-08T01:28:45.444233237Z
+modified_at: 2026-10-08T01:29:24.010318210Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -457,6 +457,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): completion bookkeeping repair after verified operator merge of PR-2452. Canonical independent approval covers exact 97c7f59cb615297c65f2430747cba216f3c2f826; merged squash a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1 contains this spec trailer. Old PR-2445 closed as folded into replacement. Mark code requirement Completed; two plan-level sandbox measurements remain unverified and are not claimed as executed.'
   created_at: 2026-10-08T01:28:45.444233237Z
   modified_at: 2026-10-08T01:28:45.444233237Z
+- id: 01a11921-212a-7c70-87da-0012e5ad469c
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Independent review P1: dynamic newly-unblocked batch/nextN member registration fails; review-2452-verdict.md. No triage reason was given.'
+  created_at: 2026-10-08T01:29:24.010301882Z
+  modified_at: 2026-10-08T01:29:24.010301882Z
 history:
 - id: 01a10f71-f72f-7f71-b8ef-3181b54f072b
   author: joe
@@ -570,6 +575,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a11921-212a-7c70-87da-00006dcfbe17
+  author: joe
+  timestamp: 2026-10-08T01:29:24.010276329Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: a0ca7c41988cf3b3d3fafa181983c673f64946a8
   branch: main
@@ -585,12 +597,4 @@ implementation_info:
     cargo fmt --all -- --check; git diff --check
   implemented_at: 2026-10-06T14:11:46.874224271Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Independent review P1: dynamic newly-unblocked batch/nextN member registration fails; review-2452-verdict.md'
-  recovery_hint: address the review findings, move TASK-1603 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-10-07T23:37:40.205706683Z
 interface_changes: {}
