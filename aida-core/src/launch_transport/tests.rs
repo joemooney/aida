@@ -566,6 +566,7 @@ fn wait_stopped(pid: i32) {
 #[test]
 fn parent_creating_thread_pre_prctl_and_orphan_reaping() {
     for case in [
+        "probe-default-sigpipe",
         "parent-public-ready",
         "parent-ready",
         "parent-pre-prctl",
@@ -637,7 +638,7 @@ fn lifetime_worker() {
             assert!(std::time::Instant::now() < until, "refusal did not finish");
             std::thread::sleep(Duration::from_millis(5));
         };
-        assert!(status.success(), "{case}: supervisor failed");
+        assert!(status.success(), "{case}: supervisor failed: {status:?}");
         let refusal = std::fs::read_to_string(home.join("refusal")).unwrap();
         let (expected, orphans) = if case == "refuse-non-reaping-adopter" {
             ("did not reap an orphan", 1)
@@ -680,6 +681,32 @@ fn lifetime_worker() {
             reaped
         })
     };
+    if case == "probe-default-sigpipe" {
+        // Public probe only, in a supervisor with the CLI's default SIGPIPE.
+        // Qualification cleanup must return, not die with signal 13.
+        let until = std::time::Instant::now() + Duration::from_secs(60);
+        let status = loop {
+            if let Some(status) = supervisor.try_wait().unwrap() {
+                break status;
+            }
+            assert!(std::time::Instant::now() < until, "probe did not finish");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(status.signal(), None, "{case}: supervisor killed by signal");
+        assert!(status.success(), "{case}: {status:?}");
+        let adopter: ProcessIdentity =
+            serde_json::from_slice(&std::fs::read(home.join("adopter")).unwrap()).unwrap();
+        assert_eq!(
+            adopter, me,
+            "{case}: public profile did not bind the actual adopter"
+        );
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(reaper.join().unwrap(), 1, "{case}");
+        assert_eq!(reap_adopted(Duration::ZERO), 0, "{case}: unexpected orphan");
+        std::fs::write(home.join("reaped"), b"yes").unwrap();
+        return;
+    }
     let until = std::time::Instant::now() + Duration::from_secs(60);
     let identity: ProcessIdentity = loop {
         if let Ok(b) = std::fs::read(home.join("owned-child")) {
@@ -814,6 +841,21 @@ fn reap_adopted(bound: Duration) -> usize {
 fn supervisor_worker() {
     let home = crate::home::home_dir().expect("isolated fixture HOME");
     let case = std::fs::read_to_string(home.join("case")).unwrap();
+    // Like the normal CLI (install_sigpipe_handler), not libtest's SIG_IGN, so
+    // every public probe/prepare below runs under the real caller disposition.
+    assert_ne!(
+        unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) },
+        libc::SIG_ERR
+    );
+    if case == "probe-default-sigpipe" {
+        let profile = HostProfile::probe().unwrap();
+        std::fs::write(
+            home.join("adopter"),
+            serde_json::to_vec(profile.adopter()).unwrap(),
+        )
+        .unwrap();
+        return;
+    }
     if case.starts_with("refuse") {
         if case == "refuse-subreaper-supervisor" {
             assert_eq!(
@@ -1010,6 +1052,11 @@ fn namespace_init_worker() {
 #[ignore = "subprocess-only namespace probe supervisor"]
 fn adopter_probe_worker() {
     let home = crate::home::home_dir().expect("isolated fixture HOME");
+    // Normal CLI SIGPIPE disposition, not libtest's SIG_IGN.
+    assert_ne!(
+        unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) },
+        libc::SIG_ERR
+    );
     let profile = HostProfile::probe().unwrap();
     assert_eq!(profile.adopter().pid, 1);
     std::fs::write(

@@ -234,8 +234,11 @@ fn qualify_adopter() -> Result<ProcessIdentity> {
     // Bounded even if this supervisor is lost mid-probe and no byte arrives.
     let linger_ms = (ADOPTER_QUALIFICATION.as_millis() as i32) * 2;
     let (report_r, report_w) = error_pipe()?;
-    let (hold_r, hold_w) = error_pipe()?;
-    let (release_r, release_w) = error_pipe()?;
+    // Control ends are sockets so supervisor writes use MSG_NOSIGNAL: a probe
+    // that already exited yields EPIPE, never SIGPIPE in a caller (the CLI keeps
+    // SIGPIPE at SIG_DFL). No process-wide signal policy is changed.
+    let (hold_r, hold_w) = probe_control()?;
+    let (release_r, release_w) = probe_control()?;
     let (report_fd, hold_fd, release_fd) = (
         report_w.as_raw_fd(),
         hold_r.as_raw_fd(),
@@ -452,11 +455,35 @@ fn stat_ppid(pid: i32) -> Option<i32> {
     std::str::from_utf8(field).ok()?.parse().ok()
 }
 
-fn write_byte(f: &File) -> Result<()> {
+// trace:TASK-1612 | ai:claude
+// trace:BUG-1808 | ai:claude
+fn probe_control() -> Result<(File, File)> {
+    let mut fds = [-1; 2];
     ensure!(
-        unsafe { libc::write(f.as_raw_fd(), [1u8].as_ptr().cast(), 1) } == 1,
-        "orphan adopter probe control failed"
+        unsafe {
+            libc::socketpair(
+                libc::AF_UNIX,
+                libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+                0,
+                fds.as_mut_ptr(),
+            )
+        } == 0,
+        "orphan adopter probe control unavailable"
     );
+    Ok(unsafe { (File::from_raw_fd(fds[0]), File::from_raw_fd(fds[1])) })
+}
+
+/// Peer already gone is a returned EPIPE/ECONNRESET, not a signal.
+fn write_byte(f: &File) -> Result<()> {
+    let n = unsafe {
+        libc::send(
+            f.as_raw_fd(),
+            [1u8].as_ptr().cast(),
+            1,
+            libc::MSG_NOSIGNAL | libc::MSG_DONTWAIT,
+        )
+    };
+    ensure!(n == 1, "orphan adopter probe control failed");
     Ok(())
 }
 
