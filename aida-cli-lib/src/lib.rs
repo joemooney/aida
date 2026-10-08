@@ -95560,7 +95560,7 @@ mod task_1450_review_verdict_event_tests {
     #[test]
     fn review_record_emits_seat_tagged_spec_pr_verdict_and_sha() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "reviewer");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "reviewer", &[]);
 
         emit_review_verdict_recorded(
             tmp.path(),

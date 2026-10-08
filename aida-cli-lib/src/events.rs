@@ -1576,11 +1576,15 @@ mod tests {
     fn record_gate_held_appends_actor_seat_and_reason() {
         let tmp = tempfile::tempdir().unwrap();
         // One guard for all three: the env lock is not re-entrant.
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            (EVENTS_DISABLE_ENV, None),
-            ("AIDA_AGENT_ID", Some("claude-reviewer-1")),
-            ("AIDA_SESSION_ROLE", Some("reviewer")),
-        ]);
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            tmp.path(),
+            "reviewer",
+            &[],
+            &[
+                (EVENTS_DISABLE_ENV, None),
+                ("AIDA_AGENT_ID", Some("claude-reviewer-1")),
+            ],
+        );
         record_gate_held(
             tmp.path(),
             GATE_MERGE_HOLD_CLEAR_FLOOR,

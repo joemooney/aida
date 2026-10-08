@@ -4928,7 +4928,7 @@ mod pr_ship_environment_tests {
     #[test]
     fn emit_ship_pr_merged_writes_one_event_per_credited_spec_with_seat() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
 
         emit_ship_pr_merged(
             tmp.path(),
