@@ -233,6 +233,44 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 
 ---
 
+## Waiting-child transport boundary
+
+`aida_core::launch_transport` provides independently copied/sealed helper and
+native ELF images, a private credential-bearing seqpacket channel, actual
+PID/boot/start and creating-thread identity, and pidfd-owned cancellation.
+Bootstrap dispatch precedes all normal CLI initialization. Production release
+is **unavailable**: normal builds contain no fixture permit or native-leaf exec
+branch, and no production caller is wired. This is a prerequisite component,
+not completion of the launch/publication, occupancy or provenance work.
+<!-- trace:TASK-1612 | ai:codex -->
+<!-- trace:BUG-1808 | ai:codex -->
+
+The validated Linux x86_64 GNU host profile requires explicit executable memfds (Linux 6.3+
+semantics), seals, procfs with matching namespace PID numbering, faccessat2,
+execveat, close_range, atomic clone3 pidfds and pidfd waitid. Native 64-bit little-endian ELF uses an approved
+system interpreter; system loader/libraries remain trusted. Source set-id,
+file capabilities, noexec mounts, active process capabilities, uid/gid
+transitions, arbitrary scripts/wrappers, loader injection and RPATH/RUNPATH
+refuse. All source policy uses opened descriptors. The profile declares
+namespace init as orphan adopter; isolated lifetime fixtures use a preexisting
+subreaper. Production adapters still need their own operational reaping proof.
+
+The waiting handle stays on its creating thread, which must live until child
+exit. Parent/thread loss arms kernel death protection and checks the pre-prctl
+window. Cancellation uses the owned pidfd and a bounded nonblocking reap;
+unsettled cleanup is reported, never called successful. Delivery intent remains
+possibly executed even when ACK is missing or the process dies. No process is
+replaced automatically, and no unknown identity becomes an empty start value.
+
+Future production release requires the common publisher's private
+`CommittedDispatch`, complete publication/history integration and independent
+review. Git-only `PreparedGitStep` credentials must remain a distinct purpose
+and require the stricter sealed callback runtime. This component does not add
+those schemas, installed vendor/Node translation, pane/containment adapters,
+current-authority checks, or production witnesses. It never reads or writes
+AIDA lifecycle state. Tests use compiled fake leaves and fake HOME/temporary
+roots only; the early malformed-bootstrap refusal also leaves those roots empty.
+
 ## Architecture
 
 ### The four layers

@@ -1094,6 +1094,9 @@ mod bug_1723_config_trust_tests;
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // trace:TASK-1612 | ai:codex
+    // trace:BUG-1808 | ai:codex
+    aida_core::launch_transport::bootstrap_if_requested();
     install_sigpipe_handler();
     // trace:BUG-766 | ai:claude
     // Export this binary's identity (AIDA_BIN + a PATH prepend of its

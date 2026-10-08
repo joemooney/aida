@@ -37,6 +37,15 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 
 # AGENTS.md
 
+Core `launch_transport` is unwired waiting-child infrastructure. Normal builds
+can prepare/observe/cancel a sealed helper but cannot release a native leaf;
+only cfg(test) fixtures contain release and leaf exec. Bootstrap dispatch occurs
+before CLI initialization. No grant, publisher, occupancy or vendor path uses
+it. Linux host entry-image policy and remaining gates are in OVERVIEW.md.
+<!-- trace:TASK-1612 | ai:codex -->
+<!-- trace:BUG-1808 | ai:codex -->
+
+
 Shell role updates require a successful CLI exit and one complete pair of
 standalone eval markers. Failed diagnostics are preserved verbatim; unmarked
 legacy output is display-only. Existing shells need the updated shell-init

@@ -105,6 +105,9 @@ pub mod integrations;
 pub mod project_manifest;
 // trace:TASK-737 | ai:claude
 pub mod lifecycle;
+// trace:TASK-1612 | ai:codex
+// trace:BUG-1808 | ai:codex
+pub mod launch_transport;
 // Shared /proc process-liveness probe + lease/spec liveness classifiers, lifted
 // out of aida-cli so aida-tui can compute per-spec liveness in-process (BUG-677).
 // Native-gated: the probe leans on `sysinfo` + `dirs`.
