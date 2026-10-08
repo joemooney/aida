@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:13:23.384864566Z
-modified_at: 2026-10-08T05:46:22.597560502Z
+modified_at: 2026-10-08T16:15:52.459903192Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -35,6 +35,11 @@ comments:
     PROXY DECISION (orchestrator for Joe): Current regression-recovery-results.json shows successful ten transport tests, normal/no-default CLI checks, core check, liveness, process_retry and CLI parser. Finish remaining normal-binary bootstrap and public-release compile-fail/format/diff focused checks. If those pass and source is stable, commit/push a clearly labeled transport review checkpoint on the SAME branch with requiredTASK1612trailer, and send root exact fullSHA/tree/base plus focusedresults and actual outstanding isolatedfullworkspace state. Keep TASK1612 InProgress, do NOT claim IMPLEMENTATION_READY/fulltestpass until actual complete result. Root can assign fresh independent reviewer to immutablecheckpoint in parallel with ongoing fullsuite; approval/fullreadiness remains conditional on actual required validation. This does not waive fullworkspace/CI or authorize release/parentcompletion/PR/merge. Do not cancel/restart running suite merely to commit and do not let subsequentsourceedits invalidate fixedheadtests silently. Preserve all earlier leak/interruption evidence. If concretefocusedfailure, fix/retestbeforecheckpoint.
   created_at: 2026-10-08T05:46:22.597560502Z
   modified_at: 2026-10-08T05:46:22.597560502Z
+- id: 01a11c4c-b88b-78f0-bde2-8fbe2fb5e508
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe, explicit 2026-10-08 authorization): independent checkpoint REQUEST_CHANGES at 17b6ac3ecaafd158bdff1553bb43b4c5ca149780 read in full. Blocking HostProfile::probe PID1 declaration does not qualify actual nearer subreaper adopter; unchanged-public-profile probe proves mismatch. Same-spec/same-branch F1 rework is required, with actual qualification or honest unsupported refusal, isolated public-profile adopter/reaping controls, and missing ordinary supported-host lifetime validation. Concrete numbered brief .aida/handoff/orchestrator/run-20261008/task1612-rework.md preserves exact report/evidence and all release/production gates. Keep existing lineage/lease and InProgress; no unreviewed dependency supplied to BUG-1808, no PR/merge/status completion. New independent reviewer after rework.'
+  created_at: 2026-10-08T16:15:52.459903192Z
+  modified_at: 2026-10-08T16:15:52.459903192Z
 history:
 - id: 01a119b7-9c62-7890-901e-794aa2127b48
   author: aida-session-start
