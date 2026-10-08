@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T16:42:50.782544076Z
+modified_at: 2026-10-08T17:13:39.797658802Z
 req_type: Story
 tags:
 - agent-launch
@@ -195,6 +195,93 @@ comments:
   created_at: 2026-10-08T16:42:50.782544076Z
   modified_at: 2026-10-08T16:42:50.782544076Z
   relayed_from: answered-sketch-independent-advisor
+- id: 01a11c81-a0d5-7c62-aa82-83fa332ee96b
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): STORY-1486 v2 — non-exemption profile, strong Git-read-only backend unresolved
+
+    Codex same sketch-author lineage, 2026-10-08; pinned main b46aec1e674baae5a329416d4119e67b59200a88. Reworks P1–P3 of the full CHANGES REQUESTED verdict. Exact proposed canonical comment body for coordinator relay; NOT posted. V1 artifacts/comment remain unchanged. Companion STORY1486_NEEDS_OPERATOR_SCOPE_V2.md is part of this proposal, not a newly answered direction.
+
+    ## Recorded scope and ownership
+
+    Actual answer choice 1 / answered=0 at 2026-10-08T15:54:29.273727039Z is “Profile without exemptions”: roots and Git policy, approval prompts preserved. Strong AC2 is retained. No weaker AIDA-command-only guarantee is selected; no new broker, privileged service or changed developer workflow is designed/authorized here. No implementation or refusal-only completion proposed.
+
+    Scaffolder owns a symbolic recipe; launcher resolves desired policy and reports capabilities; a proven adapter would own enforcement; existing seat_authority.rs owns seat/grant validation. TASK-1499/aida_bin::process owns executable resolution, including debug/release. STORY-1473 current_grant/current_seat/validate_child_delegation and lib.rs effective_role_with_roster stay intact: invalid grant fallback is implementer metadata, not proof of guest status or permission to relax a previously imposed restriction. No grant-schema change or duplicate authority machinery.
+
+    Triggers covered by future profile planning: scaffold/upgrade, foreground/background/headless, resume and all descendant launches; dry previews remain pure. Profile not applied means not certified; direct vendor launches are outside AIDA's launcher but cannot be an escape path for a purportedly enforced descendant. Effective inherited vendor config/argv matter as much as generated files.
+
+    ## Precise retained boundary and the unmet requirement
+
+    For the strong AC2, protected Git mutation includes repository init; worktree/index changes by checkout/reset; object/ref/config/remote changes by commit/update-ref/fetch/config; alternate index, object directory, git-dir/common-dir; libgit2 or equivalent direct writes; and remote push/PR/merge effects through CLI, libraries or tool endpoints. Scope includes new repositories in writable tmp/source, inherited children, absolute binaries and out-of-process tool channels. This is the conservative strong interpretation tested by v1/review, not a silently weakened command allow-list.
+
+    Ordinary source editing/build output and universal prevention of arbitrary Git-equivalent filesystem writes cannot be derived merely from writable-root lists. Making .git read-only still allows alternate state; writable tmp allows new repositories. Readable credentials/shared sockets or unconfined MCP endpoints allow remote writes. A new mediation/enforcement architecture or a changed editing/build workflow would require separately authorized scope. None is inferred from the profile answer. No selected current backend meets this positive launch contract. Consequently strong mode is unsupported across the matrix below; requested strong launch must refuse before persistent session/grant/lease/worktree effects or spawn. Refusal is necessary, not satisfaction of functional AC2.
+
+    ## Capability matrix — current source, not a host experiment
+
+    Cells show current evidence and strong-profile disposition. “Unverified” is not “supported.” OS labels describe intended platform matrix; no live OS probe or launch was run.
+
+    | Vendor / OS | Foreground | Background/headless | Resume / inherited children | Strong mode |
+    | --- | --- | --- | --- | --- |
+    | Codex / Linux | codex_session_args native preserves selected posture; roots do not mediate Git operations | codex_headless_args_with_model_and_effort includes bypass; composed flags conflict with restricted profile | no demonstrated immutable inherited restriction context; resuming cannot retrofit one | Unsupported; refuse |
+    | Codex / macOS, Windows | no inspected adapter proving root precedence, handles and Git/network mediation | no certified equivalent; bypass path cannot establish restriction | unproven descendant and endpoint boundary | Unsupported; refuse |
+    | Claude / Linux | tool hooks/settings do not confine every Edit/Write/MCP endpoint | optional bwrap_confinement_args_inner binds source/rw_paths and tmp writable; bwrap_preflight proves only basic sandbox viability | writable handles, child policy, remote credentials/endpoints not covered by strong certificate | Unsupported; refuse, even if bwrap is installed |
+    | Claude / macOS, Windows | no inspected whole-process strong adapter | no proven equivalent to required operation/resource boundary | no proven monotonic resume/descendant ceiling | Unsupported; refuse |
+    | Antigravity / Linux, macOS, Windows | no proven strong adapter in inspected launch inventory | bypass/posture flags are not Git mediation | no certified inheritance/endpoint closure | Unsupported; refuse |
+    | Other/unknown vendor or launcher / any OS | no capability evidence | no capability evidence | no capability evidence | Unsupported by default; no fallback |
+
+    No row is a production-supported positive path. A unit-test fake adapter cannot change that fact. Existing native launch functionality without this strong profile is separate; this sketch does not alter global defaults or authorize it in response to a failed restricted request.
+
+    ## Resource/capability proof obligations
+
+    | Resource or channel | Desired policy / necessary proof | Current limitation |
+    | --- | --- | --- |
+    | Consumer source, .aida, store, cache, build | Enumerate resolved project roots; actual intended editing/build succeeds; write outside denied | strings/settings alone not proof; required functionality must not be removed just to pass negatives |
+    | Consumer versus AIDA checkout | AIDA checkout and both selected debug/release binaries read/execute-only unless actual developed repository is AIDA; verify repo identity, not basename/env | ancestor rw bind may dominate nested ro; no proven universal precedence |
+    | Git admin | Resolve both git-dir and git-common-dir and sibling reach; protect all relevant refs/index/objects | read-only normal .git does not cover alternate/new state or sibling shared metadata |
+    | Symlink/ancestor/executable | Resolve identities/handles; bind chosen executable; no path replacement between plan and spawn | canonical strings alone leave TOCTOU; backend must bind handles or refuse |
+    | Existing writable FDs and child processes | No inherited write handle bypass; kernel/adapter restriction ceiling survives env deletion, exec and child spawning | no present proof; profile env string is insufficient |
+    | tmp and build scratch | Positive build/edit workflow and no new/alternate Git-equivalent mutation | unrestricted scratch contradicts universal operation prohibition; unresolved scope/backend |
+    | Credentials/network | Remote Git/forge mutations prevented for every equivalent caller, not just git binary | existing shared network/credentials do not establish this |
+    | Local sockets and external MCP/tools | Deny unconfined endpoints or prove independently enforced same ceiling | child process filesystem sandbox does not confine external server |
+    | Resume | Restore same or stricter enforcement context before any action | old unrestricted process/session cannot be labeled restricted from new metadata |
+
+    A backend capability certificate would need evidence for EVERY required resource/channel and positive workflow, not only a bwrap smoke test. Designing that backend is outside this rework's authorization. Requested vs enforceable policy must be printed distinctly in preview, including missing row/channel and refusal reason.
+
+    ## Monotonic restriction and race contract
+
+    Desired Git permission is intersection of existing authorized seat policy, explicit --git-read-only, inherited restriction ceiling and adapter capability. Known guest and explicit downgrade never widen. Loss/revocation/expiry of a guest grant cannot fall through to implementer and thereby regain Git-write; the already-established enforcement ceiling must persist independently of mutable role/env metadata. Ordinary grant validation still runs; it never creates an exemption. No new seat or grant field is proposed as an enforcement substitute.
+
+    An actual supported implementation would bind the ceiling to non-removable enforcement context and close writable-handle/path substitution before spawn. Child cannot clear env, invoke another binary or contact an unconfined server to escape. If proof cannot be supplied, refuse. Revalidate resolved roots, profile revision, executable identity, seat and composed approval flags immediately before any authority/session/worktree effects; plan or preview does not grant later execution. Path handles/identities must remain stable through spawn, not just another pre-spawn string check. This pass does not claim that current launchers have such a primitive.
+
+    Symbolic portable recipe may reference consumer worktree, store, cache/build and resolved AIDA installation. Runtime resolved absolute paths may be printed but not written into any generated project file, hook, prefix, comment or remediation snippet. Missing/overlapping roots and unproven sibling/common-dir scope refuse. A standalone AIDA executable does not imply a writable source checkout or fictitious debug/release siblings.
+
+    Scaffold proposed update is prepared and validated as a whole before publication through existing managed-merge seams. Generation/digest manifest would prevent launch using partially updated files: launcher accepts only a complete validated generation, otherwise refuses. Publish the manifest last after file writes; failure leaves old generation valid only if all old hashes still match, otherwise disabled until corrected. This is a proposed artifact-integrity mechanism, not authority storage. Do not overwrite unrelated user settings or lower approvals to make a profile fit. Atomic per-file replacement is not claimed to be multi-file atomicity. No generation files or runtime state are created by this sketch.
+
+    ## Approval-posture amendment and current session
+
+    Replace original AC3: “The profile generates no exemption list, allow/no-ask entry, approval-policy-never setting or bypass flag. Fully composed launch argv/config, including inherited settings and headless adapters, must preserve the user's ordinary approval posture; incompatible restricted launch refuses. An approval cannot lift the profile restriction ceiling.” No exemption list is reintroduced under another name.
+
+    The current author harness has disabled filesystem sandbox and approval_policy=never; displayed roots are not enforcement. Nothing here changes that harness, conducts approval experiments or retrofits a restricted profile. It is an explicit unsupported surface, not a test of a future implementation.
+
+    ## Proposed acceptance and named tests (not executed)
+
+    1. Actual permitted/prohibited filesystem effects for consumer and verified AIDA self-development, shared administration and root overlap. consumer_profile_keeps_aida_checkout_read_only; aida_self_development_uses_verified_repo_identity; overlapping_roots_and_store_symlink_escape_refuse; shared_git_common_dir_is_explicit. Merely listing paths is insufficient.
+    2. Retain strong guest/explicit Git-read-only guarantee. Require one genuinely supported positive restricted launch AND adversarial negative operations; no supported current row, so this AC remains unmet. supported_profile_positive_read_edit_build_with_prompt and supported_adapter_blocks_git_write_entrypoints must include absolute binaries, init/checkout/update-ref/commit, alternate state, libgit2/direct equivalent writes, tmp, inherited FDs, child escalation and external sockets/MCP. readonly_remote_mutation_sends_no_request uses isolated fake forge/server credentials and proves zero mutating requests. A fake adapter unit test is not platform acceptance.
+    3. Above replacement for approval AC: generated_profile_preserves_approval_prompts; incompatible_existing_bypass_refuses_profile; approval_granted_does_not_lift_readonly. Test composed inherited configuration, not just emitted recipe.
+    4. debug_release_switch_needs_no_rescaffold uses existing aida_bin selection, validates the selected executable at execution and preserves root/approval restrictions; no target/* permission or prompt exemption.
+    5. relocated_project_and_aida_install_keep_profile_portable checks every generated artifact/hook/snippet before resolving in a relocated temp root.
+    6. preview_is_read_only; preview_then_grant_or_root_change_refuses_launch; git_read_only_cannot_be_widened_by_child_or_env; grant_loss_does_not_widen_restriction; unsupported_git_boundary_refuses_before_spawn; partial_scaffold_generation_is_not_launchable. Observe no lease/grant/store/status/worktree/spawn changes on refusal, with complete supported positives where eventually available.
+
+    All future tests must use isolated temp HOME/repos, fake credentials/forges and explicit process barriers. No live kernel, vendor, approval or launch experiment in this pass. Pending real capability design, test plan is not evidence of support.
+
+    ## Files/symbols and readiness
+
+    Reuse scaffold_cmd.rs handle_scaffold_command/run_scaffold_upgrade/decide_managed_merge; core scaffolding/settings.rs generate_claude_settings_json and mcp_translate.rs render_codex_config_document; aida_bin.rs process/resolve/Resolved/Profile; lib.rs agent_new_with_config/agent_new_bg_dispatch/prepare_agent_launch_dry/print_agent_launch_noexec/resolved_agent_permission_summary; session.rs compose_headless_command/spawn_vendor_headless_with_seat/codex_session_args/codex_headless_args_with_model_and_effort/bwrap_confinement_args_inner/bwrap_preflight. Existing seat checks are dependencies. No source implementation, new privileged backend or authority schema is included.
+
+    NEEDS_OPERATOR_SCOPE is recorded in the companion exact relay body: the selected strong guarantee lacks a supported backend within existing scope. Remains blocked; no implementation, refusal-only completion or speculative narrowing. A fresh different advisor may review completeness/honesty, but cannot manufacture missing authorization. TASK-1593/TASK-1591/BUG-1811/BUG-1812 external reservations and shipped authority changes remain untouched. No operator question sent, no autonomous wake, TTY bypass, grant/hold/status/queue change or self-signoff.
+  created_at: 2026-10-08T17:13:39.797658802Z
+  modified_at: 2026-10-08T17:13:39.797658802Z
+  relayed_from: answered-design-sketch-author
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
