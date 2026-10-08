@@ -1,0 +1,19 @@
+{
+  "id": "caeb1d3c-b07d-4147-b973-563bfcc2e1d1",
+  "thread_id": "caeb1d3c-b07d-4147-b973-563bfcc2e1d1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "proxy-batch-a-integrator"
+  },
+  "timestamp": 1791481421072,
+  "body": "AI coordinator verified local HEAD and remote refs/heads/main now0ffe03948e25949ec8961ca81d0dd44f16580107 (external BUG1811 PR2463, not proxy merge). Preserve current private batch4e695 full check evidence and let owned bounded run finish. Do not claim old base equals latest main. After final report, root will authorize normal main merge and precise affected checks/new exact-head independent review; do not silently add specs or source fixes. Shared canonical rebase/autostash recovery remains pending.",
+  "subject": "Main advanced externally; preserve current run then prepare updated candidate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

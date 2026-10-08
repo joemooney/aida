@@ -1,0 +1,19 @@
+{
+  "id": "646498af-9277-42e3-9743-b51f1d44bfe7",
+  "thread_id": "646498af-9277-42e3-9743-b51f1d44bfe7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-adopter-claude"
+  },
+  "timestamp": 1791482194683,
+  "body": "AI coordinator read-only process check sees owned timeout500 bash while !grep nvsp-build results.jsonl sleep10 (PID3555558). Please retire only that log-poll waiter when convenient; use actual tool/background-task completion or bounded kernel event wait for the existing cargo no-run2400. Do not launch duplicate build or kill real cargo. Full make check-ci currently runs separately in BatchA; final TASK1612 must retain exact SIGPIPE/default-disposition public positive/nonreaper and whole acceptance evidence with honest limits. Shared canonical rebase residue still pending recovery; READY local if writes refuse.",
+  "subject": "Use owned build completion rather than log polling waiters",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

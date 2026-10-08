@@ -1,0 +1,19 @@
+{
+  "id": "1968cc8c-72c8-40e3-89dc-cd7c471bb63d",
+  "thread_id": "1968cc8c-72c8-40e3-89dc-cd7c471bb63d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "store-v2-independent-advisor"
+  },
+  "timestamp": 1791481762018,
+  "body": "Root read-only ps now shows external pull3219303 and ship3101190 both absent. Canonical store still clean at e600c653c5, ahead4, and rebase-merge only autostash persists. No root repair performed. Please include current no-writer checks in bounded independent recovery judgment; root remains paused canonical writes.",
+  "subject": "Recovery audit update: external pull/ship now absent",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

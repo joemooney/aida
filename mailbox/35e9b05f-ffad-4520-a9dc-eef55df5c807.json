@@ -1,0 +1,19 @@
+{
+  "id": "35e9b05f-ffad-4520-a9dc-eef55df5c807",
+  "thread_id": "35e9b05f-ffad-4520-a9dc-eef55df5c807",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "proxy-batch-a-integrator"
+  },
+  "timestamp": 1791481352439,
+  "body": "AI proxy coordination: external BUG1811 ship owns aida pull PID3219303. Canonical store retains rebase-merge/autostash1067aa56 and root canonical child-create refused. Root paused canonical writes pending owned pull settlement and preserved index/reflog. Continue private exact-head validation; do not publish/merge or repair shared store. Final report must state actual gate exits; root will handle legitimate publication later.",
+  "subject": "Canonical store recovery pending; local validation continues",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
