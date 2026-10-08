@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T19:11:14.149404213Z
+modified_at: 2026-10-08T19:11:15.367016656Z
 req_type: Epic
 tags:
 - architecture
@@ -993,6 +993,163 @@ comments:
   created_at: 2026-10-08T19:11:14.149404213Z
   modified_at: 2026-10-08T19:11:14.149404213Z
   relayed_from: answered-sketch-author
+- id: 01a11ced-49a8-7ad2-9330-3f422b360c9d
+  author: joe
+  content: |
+    # Independent V4 answered-design review
+
+    2026-10-08, America/Phoenix. Reviewer: Codex `answered-v4-independent-advisor`, the NEW independent advisor session directly assigned this review. This session is neither the coordinating/sketch-author session nor a V1–V3 reviewer. No delegated review, authenticated implementation-review grant, or machine reviewer record is asserted. The runtime's `/root` task label is not evidence of authorship of the earlier root session's work, and role/proxy labels neither confer nor negate the authority of the actual retained operator answers.
+
+    **Full EPIC-74 V4 positive extension DESIGN — ADVISOR SIGNOFF: APPROVED AS AMENDED.** Both numbered V3 findings are resolved at design level by the exact four V4 artifacts and binding interpretations below. This signs the late-result/receipt and declaration/landing/verified-clear composition. It does not sign an unlanded release policy, deliver a common publisher, amend canonical acceptance, or complete the original epic/children.
+
+    **Bounded protective S1–S4 DESIGN — ADVISOR SIGNOFF: APPROVED AS AMENDED, unchanged.** Preserve the already independently signed text and its exact limited scope. This review does not add lifecycle, forge, completion, or any clear positive to that slice.
+
+    **Implementation/activation readiness, for both positive extension and protective declaration — ADVISOR SIGNOFF: CHANGES REQUESTED; NOT READY.** This is a delivery/prerequisite disposition, not a remaining design counterexample. Checked canonical persistence and strict committed reads, schema preservation, candidate-before-install and actual relevant writer/admission integration remain unsupplied. Full lifecycle positives additionally require the sole common owner's production integration and the concrete isolation hook/receipt mapping. No dispatch follows from this review alone.
+
+    **STORY-1486 V2 plus V3 amendment — retained ADVISOR SIGNOFF: APPROVED AS AMENDED as an accurate blocked contract. Functional strong profile remains ADVISOR SIGNOFF: CHANGES REQUESTED.** No supported strong backend or real positive restricted launch has been supplied. No profile rewrite, weaker guarantee, new operator question, or changed ordinary launch defaults is requested.
+
+    ## Exact input and authority evidence
+
+    Read the complete project AGENTS.md and two-seat, rework-brief and seat-recovery disciplines; all four complete EPIC V4 bodies; V4 READY and manifest; complete V3 independent report and complete V2 independent report; retained profile V2/gap/V3 bodies. Read the full common-publisher independent signoff chain V1–V5, launch V2 owner/occupancy signoff, pane/containment signoff, and C7 F3 checkpoint report. Also read the current retained store-recovery judgment and full V2 store/reconcile independent review to distinguish a separately approved protective repair from complete store readiness. Earlier binding amendments and explicit supersessions remain in force; no summary verdict line replaces their full conditions.
+
+    All paths below are relative to `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/` unless stated otherwise.
+
+    | Exact V4 draft | Independently verified SHA-256 |
+    | --- | --- |
+    | EPIC74_AMENDED_SKETCH_V4.md | `0dda057277b0209da5608c30051f1db1eef8eda75f2cd284d6121191720a7820` |
+    | EPIC74_ADR_DRAFT_V4.md | `4794ec014e5e0b16eeb0e44eada74728978816dd2d706c0094013d771da3f088` |
+    | EPIC74_ENTRYPOINT_GUARDS_V4.md | `36b626a6cfe7a438b642918ee150e182a3e62aea694d9364c37b9b6e22eaa49d` |
+    | EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V4.md | `bc8db46eab085ef736e1a7ce61331efbfbea8552915ecf4439b1dce850ef5613` |
+
+    Complete V3 report: `65400759950fa8e3ab3072b23d9e6c72409a0e15098baabfdea45f1de87c1a0e`. Signed excerpt: `ab82b6b462ec5ba737a5ed7b3aa76a2bc56c547ef6de1ceccd0d3ed48d7ffec4`. Its full signed prose, including S1–S4, is byte-identical in V3 and V4. Precisely: the excerpt/source section ends in two LF bytes, while the ADR ends after one LF; the only difference is the final blank separator after the last paragraph. An initial whole-excerpt containment assertion detected this and was replaced by an explicit byte comparison of the section and separator. There is no signed-text change or hash mismatch.
+
+    The unchanged profile bodies also match their manifest: sketch `8df3f46be39e1dab6f4b64be6297e2ba73a4c51c1f1f2a4a17674767ebd4d6cf`; gap `8e10ef232f9a247a611020271a4470edf82c755efae514e0be6e138d1580e598`; V3 amendment `9682c627e48a0d2cf7fcdfea635f2b3870e0586174aaae655be25d75da8559f1`.
+
+    Independently verified all 27 source hashes against immutable Git objects at `0ffe03948e25949ec8961ca81d0dd44f16580107` and `b46aec1e674baae5a329416d4119e67b59200a88`; each pair is identical. The entire intervening diff is four shell-helper lines in dev_cmd.rs. Private exports are in `answered-v4-independent-evidence/source/`. Source observations here use those exports, not peer main edits. No fetch or remote-tip freshness claim.
+
+    Retained canonical evidence comes from `answered-v3-independent-evidence/{EPIC-74,STORY-1481,STORY-1482,STORY-1483,STORY-1486}.json`. Read the full original contracts, decisions and historical operator/proxy comments, and independently recomputed all 30 complete comment-body hashes in its readback ledger; every named relay equals its complete local body, including terminal newline. This is retained historical evidence, not a fresh shared-store read or a claim those comments survived the subsequent store regression. Those snapshots report cache.stale=false at their own observation time. Parents remain Draft and children Approved/guided there; 1481 → 1482 → 1483 dependencies remain. V4 bodies are drafts, with no canonical V4 comment IDs established by this review.
+
+    The actual decision records are answered=0 (first displayed choice): target/parent with store-side isolation at `2026-10-08T15:54:26.321418310Z`, and profile without exemptions at `2026-10-08T15:54:29.273727039Z`. Both resolve with noop. They settle those choices; neither selects unlanded-release authority or a strong backend. Earlier proxy/role prose cannot erase these later recorded answers. Conversely the answers do not silently rewrite original force/close acceptance or prove functional AC2.
+
+    The underlying common reports independently hash to:
+
+    - `../INDEPENDENT_SKETCH_V5_SIGNOFF.md`: `0360a9b91f1c8092458e890c936425802702f813ce06a5a26b9e35026de54852`.
+    - `../TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md`: `f77fb2b49e605dbdc2a2afeae3112642d7211f6da1dd3d9fbbf42e59d8fcd658`.
+    - `../PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md`: `b7606d575fd6a2b812244b4761e2f161f462a3a3497109807ac4a990c33402e5`.
+
+    Five full retained canonical callback/launch/pane verdict bodies were additionally matched byte-for-byte to their independent sidefiles: common callback `01a119af-a347-7961-b01d-66603478a59b`; common/occupancy launch `01a119b5-ea32-7ed0-b5e9-11858700f78b` and `01a119b5-f471-7621-aaa3-5a649fa5c9a2`; common/occupancy pane `01a119d7-0711-7613-9c2a-c0643b331549` and `01a119d7-1315-7171-bdfd-f2901ac9b751`. Exact evidence is in `answered-v4-independent-evidence/underlying-signoffs.json`; artifact/source/EPIC readback evidence is in `integrity.json`. These are document checks, not new canonical posts or executable tests.
+
+    ## Numbered V3 findings against actual V4
+
+    ### 1. Late concrete results and acyclic receipts — resolved as amended
+
+    ADR V4 §§2–3, composite correction 1 and the matrix's writer/output closure now distinguish immutable I inputs from late observations. I fixes action UUID, requested operation, known repo/PR/spec identities, expected existing owner domain, Ordinary/Isolated graph predicates, known source/base and finite typed slot schema/budgets. It does not purport to hash a not-yet-created process or squash result. The actual common owner binds child/start/image and lifecycle after-images at its existing final sample/C; the forge owner binds the verified response to its exact request. The epic consumer neither invents identity nor issues C.
+
+    This fixes the V3 counterexample: a newly known child PID/start or result SHA can occupy its declared typed value without altering the original request/input/schema digest. It does not permit the caller to change role, request, repo, covered set, destination object, or grant. Fixed action UUID + slot key determines destination; a typed late identity is evidence, not a caller-selected address for an arbitrary write. Concrete after-images are derived and checked against owner provenance, fixed slot fields/budgets and old AND candidate predicates before store publication. Same-object identity is not an exemption from those checks.
+
+    Finite positive limits from the owner's configured bounds are sufficient for this design: no single universal numeric maximum has to be invented here. Binding interpretation: the actual positive maxima and operation-specific closed schema are fixed in I, validated before Pending, and remain fixed for the action. Later config changes cannot widen that action. “Example slot” does not authorize generic JSON or arbitrary extra fields. Unknown keys/identity joins, omitted or unbounded limits, excess cardinality/aggregate bytes, changed operation or different owner refuse. A future owner adapter must instantiate these concrete types and bounds; it cannot claim support merely by accepting a blob with a size limit.
+
+    The canonical digest contract is sufficiently precise at design level. SHA-256 domains distinguish intent, inputs, output-schema, observation and store-transition. UTF-8 key ordering, fixed escapes, no floats, normalized validated UUID/hash encodings, explicit optional nulls, declared set ordering with duplicate rejection, preserved ordered arrays and timestamp encoding remove serializer-default ambiguity. Each projection excludes its own digest; arbitrary YAML/cache formatting is not a digest input. Binding interpretation: exact candidate-payload digests cover the declared canonical payload projection and its version, not a hash field embedded in itself. Reject unknown/omitted schema fields as the proposed golden-byte witness requires. The future typed implementation must supply golden bytes for each actual schema, including negative cases; that is implementation evidence still owed, not a reason to reject a coherent design.
+
+    The temporal chain is backward-only:
+
+    1. K0 durably commits immutable intent/slot declarations and Pending; R0 is returned after exact checked readback. K0 does not contain its own commit/tree OID.
+    2. Common C consumes already committed R0 and binds its own actual observations under its existing publication protocol. C does not require future epic K1. Forge response is verified by its original owner.
+    3. K1 projects the concrete owner-bound outputs with references to R0 and C/forge result. Pending remains. R1 is returned only after K1 durability and exact readback.
+    4. K2 settles the constraint observation only after complete K1 proof and references R0/owner result/R1. A returned K2 receipt is not inserted into K2. Any subsequent audit references it from a later commit.
+
+    No containing-commit self-hash or forward C↔K1 cycle remains. A terminal success/no-effect observation is also a finite typed slot, not an exception allowing new fields or effects. Definite no-effect requires original-owner evidence; uncertainty cannot consume a terminal slot and remains blocking.
+
+    Loss of R0/R1/R2 does not require another effect: recover the unique exact transaction UUID AND payload from validated committed history, reconstruct its receipt, then freshly revalidate eligibility. Multiple/mismatched instances, missing lineage, uncertain durability and malformed receipt chains block. Recovery may finish the SAME action's verified store projection inside its original slots; it cannot replay setup, forge request, vendor release, substitute a new process or enlarge the schema. Preparation faults allow zero effects. Partial post-effect output faults retain the prior durable Pending and block dirty/inconsistent snapshots, even if an older clean snapshot exists. Complete evidence/status outputs must precede closure; partial Completed/Landed bytes confer nothing.
+
+    **Disposition:** numbered finding 1 is closed at design level. The required checked store/common adapters are named, not falsely claimed present. Their missing implementation is a real readiness prerequisite, not an unresolved self-hash or late-result design contradiction.
+
+    ### 2. Explicit declaration, landing observation and verified clear — resolved as amended
+
+    ADR V4 §5 chooses one concrete sequence, rather than leaving clear semantics to an implementer.
+
+    **D is store-only declaration.** In one writer window, read a validated committed preimage, prove complete relevant in-flight inventory and validate every peer reservation against both old and exact candidate graphs. The initiating transition explicitly permits only declaration/generation/sticky membership/history under existing authority. It does not first reserve the Ordinary absence it will intentionally change. Unknown or unfenceable ordinary activity refuses; existing admissions must participate. No queue, calibration, lease, worktree, grant, PR, forge or vendor effect is part of D. Receipt timing is the acyclic S2 contract.
+
+    **O settles a real landing observation while isolation remains active.** Validate original child freshness, exact reviewed source/base/set, immutable coverage and actual owner result. K1 retains Pending through complete output publication; K2 closes only the settled observation. O never clears the declaration. Closing an observation is not proof of coverage or independent permission to grant status credit.
+
+    **L is a distinct later store-only transaction under a NEW writer window.** Re-read current committed state; verify the original K0/K1/K2 chain and actual result through the same coverage validator; require the observation truly settled. Revalidate unchanged generation/target/default identity, current retained member set, fresh original child definition/reopen evidence, actual default reachability, complete live inventory and every peer old/candidate predicate. A new child, reopened/changed acceptance, live or unlanded member, or peer Pending/Uncertain blocks clear. The original action's own Pending is never exempt. Only a genuinely Closed historical observation ceases to count as Pending, like any other settled record.
+
+    L changes only the fully verified generation's Active → Landed/inactive declaration and audit history. Membership, original evidence, coverage/predecessors and receipts survive; it grants no completion itself. The active declaration protects the entire O→L interval, so there is no Pending-drop gap exposing main-line work. A competing writer before L changes fresh eligibility and makes L refuse; a writer after successful L sees retained lineage and must honor reopen/evidence fences. A persistence fault either leaves active committed isolation or blocks on dirty/uncertain state; exact UUID readback determines whether L committed without repeating the landing.
+
+    ADR §4 separately fixes the expected external advance: SAME immutable repo and SAME named target/default identity, exact old B to actual result R, exact pinned source and selected method, with R proved by the original forge owner. This is not a changed input digest, arbitrary tip exemption, default rename, retarget, new source, or descendant-of-R guess. Additional unknown advance remains uncertainty/revalidation. Peer predicates still apply, and conflicting effect admissions must serialize before requests. Source pin alone is not atomic base pin; post-effect checks cannot undo a wrong merge. The accepted cooperative scope and zero-request refusal for a required unavailable precondition remain explicit.
+
+    **Disposition:** numbered finding 2 is closed at design level. No blanket self-action exception, own-Pending exemption, history erasure, or default reinterpretation remains. L is accepted as part of the full extension design only; S3 still refuses ALL clear in the protective slice. No force/unlanded release entitlement has been added.
+
+    ## Binding preserved integration contracts
+
+    **F1, one owner and order.** Retain home → canonical repo → sorted seats → store → sorted queues → drain → manifests → verdict → merge → Git. Reservation and later projection are bounded store-only phases that end before common publication. Forge-only network work holds no store/common/seat guard and releases its optional branch lease before projection. No merge→store cycle or global reversal of ordinary lock order is introduced. READY, callbacks/helper exchange, network/forge, waits/reaping/backoff stay outside seat; no Rust guard crosses exec.
+
+    The common publisher alone performs provisional finite lifecycle work, final P4 authority/occupancy sample, immutable C and original-child release. Winning pre-C revocation/transfer/expiry/member change triggers the signed exact current-locked restoration preserving peers/history. After durable C the original live bounded immediate dispatch follows its signed historical rule; epic observation failure must not retroactively roll back C or require another leaf authority sample. New/delayed/recovered/new-process activation needs fresh authority. Recovery cannot release a vendor; a lost ACK is not retry permission. The EPIC journal is denial/serialization and owner-result evidence, not an issuer or alternate launch ledger.
+
+    The full callback-v5 closed Git runtime/config/hooks/origin conditions remain, including WORK/SERVICE separation, actual gates/trailer/formatter/skill-sync effects, finite budgets and fresh recovery credentials. Git-only PreparedGitStep never becomes vendor CommittedDispatch. Vendor entry-image/loader concessions and pane no-PID scope do not weaken Git-domain requirements. Retain actual authenticated pane relay/descriptor joins, creating-thread/owned-group/adopter/FD obligations and no uncertain fallback. No global PID/cgroup/default containment change or universal hostile-process guarantee is imposed here.
+
+    Occupancy remains the same C's after-image. C7 checkpoint approval does not establish production gateways/history; fresh locked holder AND requester/deadline checks, C1 direct scope, C2/C3 notices, C4 demotion/env omission, C5 disclosure, C6 limitations and C8 local-only/disabled-kill bounds survive. TASK-1337 preflight/branch/manual-retirement/authorized-failure continuation and TASK-1603 checked token/member registration-before-status/release remain binding. EPIC cannot replace any of those owner checks with an action UUID or Closed record.
+
+    **F2, actual persistence seam.** Immutable exports confirm git_backend.rs::auto_commit_paths (604) still ignores add/commit results, bulk_update_atomically (1042) writes sequentially, and update_spec_atomically_with_subject (1430) is not the proposed durable snapshot receipt. Cached wrappers retain store through cache projection. StoreMetadata is a typed model, not evidence that the new constraints survive all load/save/import paths. git_ops.rs::pull_rebase and pull_rebase_auto_merge mutate the live store; candidate-before-install is a required change. Current MergeOptions offers match_head, not atomic expected-base. These concrete seams justify readiness gates without pretending the missing future APIs have failed executed tests.
+
+    **F3, all-writer/admission closure.** Ordinary is explicit and reserves relevant declaration ABSENCE, both-direction ancestry/edges, sticky membership, descendants/coverage, repo/default identity and child/reopen/review inputs. Every cooperative writer, including common after-images and import/sync adoption, validates old AND exact candidate graphs. Caller affected IDs or old-member overlap alone cannot exclude a phantom ancestor/new descendant. Typed outputs do not authorize graph changes. Unknown inventory/schema and old writers capable of erasure remain unsupported. The guard matrix is accepted as inventory and required boundaries, not proof that all handlers are integrated. Actual aliases, explicit IDs, force/resume, existing PRs, refreshed batch members and MCP real claim versus peeks must retain their stated guards.
+
+    **Coverage and parent.** Preserve original child evidence independently of new landing time/SHA; immutable evidence/coverage predecessor IDs with cycle/missing-link refusal; independent exact final-diff/set review excluding reverted or omitted work; same committed validator for live/replay/direct status/umbrella/review-covers. Body trailers, clone/remap/clear and new descendants cannot enlarge credit. Narrow initial squash remains B ancestor of S, actual result first-parent/base B, result tree equal S tree, exact forge repo/PR/source/base/result and authoritative default reachability. No patch-equivalence substitute. Option<BranchRef> remains None/no Git sync for ordinary default absent/empty parent, positively identified actual default for off-default absence, and no-op for same target; conflict stops and shared branches are not automatically rebased/deleted.
+
+    ## Design approval versus delivery and original acceptance
+
+    S1–S4 was already independently signed and is reproduced below without expansion. Its actual positive boundary is store-only declaration plus truthful ordinary/isolated discovery/selection, after S4 integration. It does not need an invented fake successful launch and does not become ready merely because this review closes the full extension's design gaps.
+
+    The actual dependency is the existing TASK-1332 canonical writer seam with checked durability/readback, strict validated snapshot/receipt reads, candidate-before-install and schema-preserving adoption, composed with the common hook-safe adapter where required and the actual relevant admission domains. The separately approved TASK-1332 V2 A4 local S/L/P protective slice covers ordinary sync/direct merge-gate/canonical mailbox with the existing lock; it explicitly leaves other writers and C/hijack/common-owner joins pending. That approval is useful bounded progress, not a globally exclusive store, a checked EPIC receipt API, or S4 closure. It must not be widened by this review.
+
+    Likewise the common owner's independently approved sealed-image/WaitingChild/channel/cancellation component without production release is distinct from deployed publisher/occupancy/history integration. A transport checkpoint or an author READY file cannot supply the full consumer API. Full positive EPIC paths need the real original owner/result verification and concrete schema mapping; first-slice refusal paths may stay bounded while those are absent. Required healthy positive and negative evidence remains outstanding.
+
+    The V4 child amendment is approved as a proposed DESIGN amendment at its stated scope, not applied acceptance. Original 1481 force and close-without-landing acceptance remains unfulfilled pending a separately recorded policy disposition; generic force gives no release. That future fork alone does not block protective S1–S4 or reject the verified-landed L design. Full story/epic completion still cannot be credited. Dependencies and guided/sketch gates remain; no queue/status/acceptance change occurs here.
+
+    Profile V2+V3 remains an accurate blocked contract, with strong AC2 and no exemptions. No real supported backend has been established that meets the claimed operation/resource boundary while preserving positive editing/builds. Proof obligations attach to the actual adapter/mode claimed, not every OS/vendor or arbitrary hostile-process confinement. Ordinary editing is not prohibited just because Git can also edit files. A fake adapter, bwrap smoke check, grant label, shared-network/no-PID default or refusal everywhere cannot supply functional acceptance. No new broker, weakened policy or absent-Joe question is requested.
+
+    ## Signed S1–S4 retained verbatim
+
+    ## Independently signed bounded protective design: S1–S4
+
+    This is a finite technical first slice of the existing proposals, not a replacement spec or waiver of full acceptance. The matrix's discovery inventory and refusing boundaries are **ADVISOR SIGNOFF: APPROVED AS AMENDED** by these exact limits.
+
+    **S1 — declaration and discovery only.** Permit a store-only canonical declaration transaction through the existing writer owner. Under its guard, read the validated committed preimage, prove complete relevant in-flight inventory, evaluate every peer reservation against old and exact candidate graphs, and commit declaration/sticky history together. No self-reservation of Ordinary absence for this purely store-local atomic transition. No queue/calibration/lease/worktree/grant/vendor/PR/forge effects belong to declaration. Unknown or unfenceable ordinary activity refuses. Existing admissions must serialize through the same domain; absence of their participation prevents positive declaration. Discovery/selection supports real ordinary and isolated-subtree positives and truthful excluded/unknown results.
+
+    **S2 — acyclic checked store-only receipt.** Preallocate transaction UUID, pin input snapshot and exact candidate payload/history; do not include the resulting commit/tree hash in that payload. The checked adapter returns the actual immutable commit/tree receipt only after required durability and exact readback. A later observation may reference that prior receipt, never its own containing commit. Loss of the return is uncertain to the caller; reconcile the exact UUID/payload in committed history and revalidate current eligibility, never repeat an external effect. Dirty/incomplete state blocks affected admissions even when an older clean snapshot exists. Unsupported required hooks or durability fail before a success claim. No new authority ledger or hook bypass.
+
+    **S3 — explicit unsupported mutations.** Refuse isolated setup/claim/queue/worktree/launch/PR/merge/completion, all clear/release-equivalent transitions and every positive path whose required owner adapter is unavailable. Ordinary effect paths cannot be exempted from absence reservation just to keep a positive test green; their actual support requires the same safe admission contract. This slice may limit its positives to store-only declaration and read/selection. No fake lifecycle success is required or counted. Refusal entrypoints must cover actual handlers/aliases, explicit IDs, force/resume, existing PRs and refreshed batch members.
+
+    **S4 — delivery prerequisites, not present evidence.** Positive declaration is disabled until checked canonical persistence/strict committed reads, hook-safe Git where needed, candidate-before-install adoption, schema preservation and every relevant writer/admission domain are actually integrated and independently verified. Refuse unsupported old-writer/in-flight domains; a config claim is not proof of closure. Required proposed positives are uncontended declaration and ordinary/isolated selection, paired with declaration-vs-admission/new ancestry/new descendant/import/common-writer races and persistence failures. Run eventual tests in private HOME/repos with deterministic barriers; all tests remain proposed here. No current task is dispatched.
+
+    F1's sole common owner and F3's peer predicates are approved design directions. The full output/clear extensions need findings 1–2 resolved. Missing future unlanded release does not block this bounded design. Full original 1481 AC4/5, positive 1482/1483 and whole-epic completion remain unfulfilled. Root's condition of full applicable signoff plus real dependency readiness remains intact.
+
+    The preceding section is historical signed text, intentionally preserved. Its sentence that the full extension still needs findings 1–2 resolved records the V3 boundary; this V4 review resolves those findings separately and does not edit or broaden that S1–S4 approval.
+
+    ## Required future witnesses and execution limits
+
+    No Cargo/build/full-workspace run, private executable fixture, live kernel/launch/forge test, crash experiment or implementation acceptance test was run in this review. Only document/source inspection, immutable export and whole-byte/hash comparisons were performed. All witnesses below remain PROPOSED:
+
+    - `reservation_receipt_is_acyclic_and_clone_verifiable`: K0/C/K1/K2 backward graph and clone readback; missing/mismatched/cyclic/self references refuse. Crash after each commit before returning the receipt resolves exact UUID/payload without effect replay.
+    - `late_common_identity_binds_only_declared_slots` and `forge_result_binds_without_rewriting_reserved_inputs`: real owner positive; wrong child/start/image/owner/repo/source/operation, arbitrary destination, unknown field, budget growth or excess cardinality refuse.
+    - `canonical_digest_projection_has_stable_golden_bytes` and `terminal_observation_cannot_self_reference_or_widen_slots`: actual schemas, key/set ordering, nulls, Unicode/controls, integer/no-float, unknown/omitted fields, all digest phases and terminal/nonterminal distinction.
+    - Persistence faults at stage/commit/file-sync/rename/directory-sync/readback: zero pre-effect requests; post-effect partial concrete outputs retain Pending and block status/clear; owner C is never rolled back or replayed by epic recovery.
+    - `declaration_commits_without_self_conflicting_absence`: real uncontended D and selection positives, paired with declaration/admission, new ancestry/descendant, import/common-writer and unknown inventory negatives.
+    - `verified_landing_then_clear_revalidates_current_inventory`: O retains active declaration, settled own observation permits a clean L; peer Pending, new/reopened/changed child, live/unlanded member or generation/default change between O and L refuses. Own Pending never gets an exemption. L faults retain history/isolation or uncertainty.
+    - `expected_default_advance_is_not_peer_reinterpretation`: exact original-owner B→R positive against retarget/default/repo/source/unrelated-tip negatives; no request on an unavailable required precondition.
+
+    Retain the earlier actual-handler/alias/explicit-ID/force/resume/existing-PR/refreshed-member zero-effect and paired positive witnesses, all coverage/reopen/revert/body/clone/remap/narrow-squash/parent tests, and the complete binding common-publisher/occupancy tests. Use private HOME/repos, fake credentials/forges/vendors and deterministic barriers when implementation exists. Source absence is not an executed failure; document hashes are not acceptance tests.
+
+    ## Relay, recovery and preservation
+
+    This report and `answered-v4-independent-evidence/EPIC74_ADVISOR_RELAY.txt` have identical complete UTF-8 bytes, including final newline. The latter is the exact proposed canonical relay body, not a posted comment. Their SHA-256 and byte counts are in `answered-v4-independent-evidence/relay-hashes.json`. A separate sidefile avoids any report self-hash cycle. Relay provenance should identify `answered-v4-independent-advisor`, with the coordinator's honest relaying identity.
+
+    Root must full-read this report and the four exact V4 bodies. The shared-store orphan-rebase recovery floor remains external to this review: no AIDA command, canonical read/write, recovery/abort/quarantine, lock manipulation or mailbox send was attempted. The retained recovery judgment establishes that historical canonical content regressed; therefore retained readback success cannot establish current preservation. Only after actual owner-controlled recovery and current full readback may root reconcile/relay missing exact bodies with preserved history. Do not infer recovery from vanished processes, a clean snapshot, or this design approval. Dispatch requires the real prerequisites and normal separately authorized workflow, not this relay alone.
+
+    Prior V1–V4 drafts, signed verdicts and peer main edits were not altered. No code, canonical comment/status/description/acceptance, queue/mail, relationship, grant/hold, PR/merge, activation, commit/push or machine reviewer record was written. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 remain untouched. No automatic approval rejection or permission bypass occurred. Outputs are limited to this requested review, its exact relay sidefile, integrity evidence and immutable source exports.
+  created_at: 2026-10-08T19:11:15.367016656Z
+  modified_at: 2026-10-08T19:11:15.367016656Z
+  relayed_from: answered-v4-independent-advisor
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
