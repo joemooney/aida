@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T17:13:35.731673633Z
+modified_at: 2026-10-08T17:13:57.008283572Z
 req_type: Epic
 tags:
 - architecture
@@ -368,6 +368,35 @@ comments:
   created_at: 2026-10-08T17:13:35.731673633Z
   modified_at: 2026-10-08T17:13:35.731673633Z
   relayed_from: answered-design-sketch-author
+- id: 01a11c81-e410-7361-b57b-f262a5259906
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED — EPIC-74 composite V2.
+
+    Independent reviewer: Codex, newly assigned V2 strict advisor, neither sketch author, coordinating/root session nor V1 reviewer. Design-only review against actual main/HEAD b46aec1e674baae5a329416d4119e67b59200a88 and fresh canonical EPIC-74/STORY-1481/1482/1483. Target/parent with canonical isolation is settled; no lane subsystem or per-spec authority override.
+
+    Exact reviewed proposals (SHA-256):
+    EPIC74_AMENDED_SKETCH_V2.md 4c33466cdae3d85ebc2329d7fb6e0b24fc17facafa5251e5d45fe41b198f93f5
+    EPIC74_ENTRYPOINT_GUARDS_V2.md d0fc5956e9ba01b3285ba8209c0011eed6fc2e01297cfab539fa0aa75c605adb
+    EPIC74_ADR_DRAFT_V2.md df2f5b61d1ad554a8ae27a8f2e56724d2e73ac83b9b593f1aa841a1379233dc9
+    EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V2.md 65dbd005da6124b92dacf2464b3c734b95013cb67ca7393d6ff3a08d9f47fc89
+
+    E1 entrypoint/guard inventory is APPROVED AS AMENDED by F3/R1 in the full review, limited to the guard inventory/refusing boundary. E3 durable child/coverage model and E4 Option<BranchRef> choices are accepted with binding amendments. The composite, ADR and combined actionable child amendment remain CHANGES REQUESTED for E2 F1-F3:
+
+    F1: distinguish epic isolation reservation from the one common authority publisher. V2 merge-before-store plus a separate Pending/setup/spawn/Verified handshake does not compose as written with signed common store-before-merge order and common C/release ownership. Prepare reservation in a bounded store-only phase, drop it before common publication; pass exact action/input/after-images into the common consumer, revalidate in its ordered store phase, and observe its receipt. Epic recovery cannot release a vendor. Supply actual owner/API and held-lock rows; no nested reverse order, second issuer, handshake or release channel. Unsupported positive setup/launch refuses before effects. Forge/network remains outside seat. Do not require implementing the absent common publisher in this epic.
+
+    F2: existing GitBackend::auto_commit_paths (604) swallows add/commit errors and atomic/bulk update is not a checked crash-atomic receipt. Name one checked durable canonical adapter at the existing store/common Git seam. Result must verify exact committed intent/evidence/tree before external effect, propagate persistence faults, preserve Pending through partial outputs, and prevent partial YAML Completed/Landed from granting authority. Reuse hook-safe adapter; no recursive child writer or hook bypass. Source absence alone is not the objection.
+
+    F3: reserve negative predicates for ordinary work too. Mandatory isolated generation/member overlap alone cannot fence an ordinary action that observed no declaration before an ancestor is newly isolated. Represent Ordinary versus isolated result explicitly; candidate graph changes recompute reserved ancestry/declaration-absence/subtree/default predicates under the same guard. Declaration creation, new descendants and reparenting must conflict; unknown live ordinary effects block declaration rather than being retroactively claimed safe.
+
+    Binding coverage amendment: explicit immutable predecessor links, cycle/missing-link refusal; original child reopen/definition freshness plus independently reviewed final diff/set and actual default result; body/umbrella/replay cannot expand coverage. Initial supported squash proof requires pinned reviewed base ancestor of source, actual base/first-parent equality and result-tree equality with reviewed source, plus forge identity; unsupported proof refuses/retains Done. Preserve raw-forge versus cooperative AIDA boundary, source pin versus base-pin distinction and local-only lease limits.
+
+    A narrowly protective refusing first slice CAN be signed while future unlanded release is blocked, but this exact composite V2 is NOT yet that complete signoff: F1-F3 still affect safe declaration/admission. First slice can refuse all isolated lifecycle positives and offer truthful selection; no full 1481 AC4/5 or whole-epic completion. Live/unlanded release actor/evidence/confirmation versus explicit permanent acceptance removal remains the only EPIC operator fork. Generic force is not release; no choice invented. Technical F1-F3 require author/common-owner design rework, not a question to Joe.
+
+    Full binding source evidence, amendments, tests and scope: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_V2_INDEPENDENT_REVIEW.md. Preserve prior V1 verdict/history; this resolves only expressly accepted items. All tests proposed, none run. Draft relay only; no implementation, status/queue, grants/holds, dispatch, live experiment, PR or merge authorization. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 unchanged.
+  created_at: 2026-10-08T17:13:57.008283572Z
+  modified_at: 2026-10-08T17:13:57.008283572Z
+  relayed_from: answered-v2-independent-advisor
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
