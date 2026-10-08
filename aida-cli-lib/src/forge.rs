@@ -1017,6 +1017,11 @@ pub(crate) fn forge_host_of(url: &str) -> Option<String> {
 pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
     let config_path = project_dir.join(".aida").join("config.toml");
     let content = std::fs::read_to_string(&config_path).ok()?;
+    ForgeKind::from_config_token(forge_provider_token(&content)?)
+}
+
+/// The raw `[forge] provider` value in a config file's text, unquoted.
+fn forge_provider_token(content: &str) -> Option<&str> {
     let mut in_forge = false;
     for raw in content.lines() {
         let line = raw.split('#').next().unwrap_or("").trim();
@@ -1032,11 +1037,79 @@ pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
         }
         if let Some((key, val)) = line.split_once('=') {
             if key.trim() == "provider" {
-                return ForgeKind::from_config_token(val.trim().trim_matches('"'));
+                return Some(val.trim().trim_matches('"'));
             }
         }
     }
     None
+}
+
+/// Read-only forge classification for checks that must not guess.
+///
+/// Same precedence as [`resolve_forge_kind`] — an explicit provider wins,
+/// except that an explicit pure-git provider yields to an `origin` naming a
+/// supported forge — but it never rewrites the config, and an unreadable
+/// config, an unrecognized provider, or a failed `origin` lookup is an
+/// error rather than a fallback to pure git. `Ok(ForgeKind::None)` is
+/// therefore an affirmative classification: the project has no change
+/// requests to look up.
+// trace:TASK-1335 | ai:claude
+pub fn checked_forge_kind(project_root: &Path) -> Result<ForgeKind, String> {
+    let config_path = project_root.join(".aida").join("config.toml");
+    let configured = match std::fs::read_to_string(&config_path) {
+        Ok(content) => match forge_provider_token(&content) {
+            Some(token) => Some(ForgeKind::from_config_token(token).ok_or_else(|| {
+                format!(
+                    "unrecognized forge provider {token:?} in {}",
+                    config_path.display()
+                )
+            })?),
+            None => None,
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("could not read {}: {e}", config_path.display())),
+    };
+    match configured {
+        Some(kind) if kind != ForgeKind::None => Ok(kind),
+        _ => Ok(checked_origin_url(project_root)?
+            .map(|url| detect_forge_kind(&url))
+            .unwrap_or(ForgeKind::None)),
+    }
+}
+
+/// `origin`'s URL, `Ok(None)` only when the repository has no `origin`.
+// trace:TASK-1335 | ai:claude
+fn checked_origin_url(project_root: &Path) -> Result<Option<String>, String> {
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .map_err(|e| format!("could not run `git {}`: {e}", args.join(" ")))
+            .and_then(|out| {
+                if out.status.success() {
+                    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+                } else {
+                    Err(format!(
+                        "`git {}` failed: {}",
+                        args.join(" "),
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    ))
+                }
+            })
+    };
+    if !git(&["remote"])?
+        .lines()
+        .any(|name| name.trim() == "origin")
+    {
+        return Ok(None);
+    }
+    let url = git(&["remote", "get-url", "origin"])?.trim().to_string();
+    if url.is_empty() {
+        return Err("`origin` has an empty URL".to_string());
+    }
+    Ok(Some(url))
 }
 
 /// Rewrite the existing `[forge] provider` line in `.aida/config.toml`.
