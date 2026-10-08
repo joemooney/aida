@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T02:45:41.508578223Z
+modified_at: 2026-10-08T02:53:44.820686230Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -221,6 +221,45 @@ comments:
     Retain/extend existing review_verdict_tests, read_verdict_file_tests, bug_775_commits_ahead_tests and bug_1774_corpus_merge_gate_tests, but parser tests alone are insufficient. No tests, implementation, grants, queue/status/hold changes, commits or merges were performed by this author. The revision answers review blockers 1 (records/producers/coverage) and 2 (canonical typed candidates/publication/all consumers); the independent advisor must judge the design, not infer signoff from this mapping.
   created_at: 2026-10-08T02:45:41.508578223Z
   modified_at: 2026-10-08T02:45:41.508578223Z
+- id: 01a1196e-59f4-76f3-8555-f77b96b01b3c
+  author: codex/authority-sketch-v2-signoff
+  content: |-
+    CHANGES REQUESTED — BUG-1802 v2
+
+    Independent advisor: Codex `authority-sketch-v2-signoff`, native thread `01a11968-cee1-7010-bc73-26f561e134ae`; not the revision author or previous reviewer. Reviewed against main `199e591b07aa76a59cd34f0a41946f918501f6ba`. Full evidence and verification limits: `.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V2_SIGNOFF.md`. Final authority-sensitive merge remains operator-owned.
+
+    The revised direction is substantially grounded. Extending retained SessionManifest/SeatGrant evidence, using one shared assignment block, and referencing it from existing verdict rounds is preferable to a duplicate global ledger. The actor/lease distinction, reissue/predecessor retention, full ancestry walk, sibling-reviewer allowance, unknown-legacy refusal, and explicit-revocation versus natural-expiry policy preserve the earlier decisions. Retained rounds, typed invalid candidates, canonical serialization, drain transport restrictions, corpus/refusal-release validation and the second check under the merge lease are required and should remain.
+
+    Source verification: `seat_authority.rs:17,104,159,235` has separately minted grant session identities and only immediate-parent validation. `session_manifest.rs:77,147,173` lacks the proposed evidence and skips corrupt records in discovery; `lib.rs:44216,49554` deletes manifests during cleanup. `agent_registry.rs:636,686,1060` provides registration/role-shell/GC surfaces, not retained complete attribution. `lib.rs:95825,96318` confirms the unauthenticated recorder/operator fallback; `pr_ship.rs:1628` drops read/parse failures. `review_verdict.rs:894,1129` retains rounds while carrying prior fields. `lib.rs:9473,9486` consumes approvals and stamps the drain identity. `pr_cmd.rs:2393` acquires the merge lease before repeating gates. These baseline claims are accurate; the proposed stronger behavior is not already implemented.
+
+    ### Required mechanism 1: close the commit/rewrite observation window
+
+    The revision's “How ALL later commits become covered” currently combines (a) immediately appending an immutable witness from post-commit/run_git_commit and (b) later collecting rewrite/import source contributors. It does not name a retained operation record or a publication state that keeps the new head untrusted until source coverage is complete. `commit.rs:306` merely runs Git; `aida-core/templates/hooks/aida-post-commit.sh` has only best-effort bypass observation. The proposed pre-commit capture and post-rewrite integration have no specified operation identity, producer ordering, completion predicate, or interrupted-operation recovery. `pr_cmd.rs:447,650` is a real AIDA rebase entrypoint that must participate.
+
+    A post-operation SHA/parents/tree does not distinguish a new ordinary commit from replacement of an unknown source commit. Once a rewrite removes the old commit from H-minus-B, the final-DAG coverage check alone cannot discover the missing source. Conversely, if post-commit makes the replacement witness usable before rewrite mapping is retained, an approval can consume incomplete contributors. Saying “missing rewrite callback remains a gap” does not specify how that gap is detected and kept blocking before or after a crash.
+
+    Required revision: choose an explicit bounded operation protocol in the existing retained evidence. Name the pre-operation producer, immutable old head/source set and assignment/actor join, pending state, and atomic finalization under the episode lock. Pending or ambiguous transitions must block recording AND consumption. Ordinary commits must also prove continuity from the last accepted observation; do not automatically classify a replacement as new work. Finalize a rewrite only after validating its mapping and unioning source contributors; an unknown source remains a sticky gap. Specify how raw supported Git hooks, `aida commit`, `aida pr rebase`, amend, cherry-pick/merge and missing hooks feed the same protocol. Unsupported operations may refuse, but cannot be silently witnessed as complete ordinary commits. Preserve the existing per-session evidence approach; no broad ledger is requested.
+
+    Witness: extend `review_record_covers_later_head_cli` with a barrier after a new head exists but before rewrite attribution completes, plus process death/missing callback there. Run actual `review record` and `pr ship` against that head. Both must refuse. Include an unobserved source replaced by amend/rebase and a fully observed source transformed by a different actor; unknown cannot become shippable, and the positive case retains both actors. This is a proposed test, not an executed failure.
+
+    ### Required mechanism 2: make the actual process-to-actor join executable
+
+    The fields are now named, but “before vendor readiness” is not yet a launch mechanism. `lib.rs:32510` starts the foreground vendor before `register_spawned_agent` at 32614. `session.rs:1179,2769,3035` likewise starts vendor execution without a startup barrier that first retains the proposed process/grant/manifest join. Codex's native conversation identity is not generally caller-minted. A command object or future optional consumer PID cannot authenticate the actual child.
+
+    Required revision: specify the bootstrap/exec handshake and exact writer that binds actual PID plus start identity to assignment, manifest and grant before writable vendor execution. Name the behavior on bind failure, parent death and resume, including foreground/background agent-new and queue/drain wrappers. A suspended bootstrap with a parent-controlled release channel is one possible implementation; a ready-made assignment type alone is insufficient. Define how descendants authenticate through that retained binding when agent-name/type/grant environment is missing, and when native-session discovery becomes immutable corroboration. No valid join means refusal, never direct-human fallback. Distinct children under a nonimplementing driver must remain distinct; same-conversation resume/reissue must retain its actor. BUG-1808 needs the corresponding launch mechanism, but BUG-1802 must also cover its direct-launch producers; it is not approved merely because another sketch mentions the fields.
+
+    Witness: extend `review_record_independent_granted_reviewer_cli`, `review_record_reissued_grant_same_actor_refused` and the actual agent/phase-launch fixture with a fake vendor whose first action records a commit or review. Delay/fail registration and kill the parent before release. No unbound vendor action may execute; a bound sibling reviewer succeeds, while author/resumed-author/author-descended reviewers refuse. Use real launch entrypoints and temporary HOME/repos only.
+
+    ### Binding refinements to preserve in the revision
+
+    - Pin the review's expected parent round and head at review start and carry them to recording. Do not manufacture the expectation by reading the latest generation only when `review record` is invoked. Name its CLI/internal input and retained assignment/round producer. A reviewer started before a refusal cannot submit afterwards and silently adopt that refusal as a newly reviewed predecessor. Add that ordering to `review_record_concurrent_rounds_preserve_refusal`.
+    - The BUG-1802 “queue child” sequence must be reconciled with BUG-1808's chosen direct-vendor phase path. There must be one issuance/setup owner, not both implementations behind different wrappers.
+    - Keep malformed/inaccessible/referenced-missing candidates blocking even when a separate approval is valid. Unknown authorship cannot be repaired by a fresh review. No legacy attribution override, inferred human identity, inherited authority envelope, or weakening of corpus/hold gates is authorized.
+    - Retain the named preflight/under-lease, drain-handshake, refusal-release, corpus, archive, revocation/expiry and closed-history witnesses. These are implementation acceptance work, not tests passed by this design review.
+
+    Disposition: **CHANGES REQUESTED** for the two unresolved evidence-publication/identity mechanisms above. No new operator policy decision is needed. Return the revised mechanisms for independent signoff; no source implementation or authority-sensitive merge is approved by this comment.
+  created_at: 2026-10-08T02:53:44.820686230Z
+  modified_at: 2026-10-08T02:53:44.820686230Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
