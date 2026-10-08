@@ -5,6 +5,10 @@
     {
       "at": "2026-10-06T01:50:02.673777191Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-08T07:48:45.350401935Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -53,6 +57,65 @@
       "kind": {
         "event": "SpecCompleted",
         "commit": "078c394e8e3363f8e25ae5f40e652127b00c12c2",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-06T01:52:44.805710582Z",
+      "spec": "BUG-1802",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T06:50:49.306766611Z",
+      "spec": "BUG-1802",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T06:52:31.984874775Z",
+      "spec": "BUG-1802",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T07:04:34.810339263Z",
+      "spec": "BUG-1802",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2461
+      }
+    },
+    {
+      "ts": "2026-10-08T07:48:34.023549344Z",
+      "spec": "BUG-1802",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2461
+      }
+    },
+    {
+      "ts": "2026-10-08T07:48:45.337390345Z",
+      "spec": "BUG-1802",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b46aec1e674baae5a329416d4119e67b59200a88",
+        "pr": 2461,
         "closed_by": "auto-bump"
       }
     }
