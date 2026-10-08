@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T06:51:40.009410468Z
-modified_at: 2026-10-08T17:01:32.442442820Z
+modified_at: 2026-10-08T17:19:13.842454611Z
 req_type: Task
 tags:
 - from-advisor:TASK-1327
@@ -124,6 +124,89 @@ comments:
   created_at: 2026-10-08T17:01:32.442442820Z
   modified_at: 2026-10-08T17:01:32.442442820Z
   relayed_from: store-reconcile-independent-advisor
+- id: 01a11c86-b9b2-76b2-9b38-06ee98922aac
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1333 — v2 explicit unprovided project-blind execution prerequisite
+
+    Same-lineage revision AUTHOR: Codex store-reconcile-sketch-author, 2026-10-08. Exact root-relay comment body; companion read/converse/draft only. No canonical post, source/status/queue/grant/launch/activation/merge action or self-signoff. A NEW DIFFERENT advisor must judge these bytes. TASK-1335's approved sketch and binding D1-D3 remain untouched.
+
+    ## Lineage and explicit supersession
+
+    Preserve v1 TASK1333_RECONSTITUTION_ROOT_SKETCH.md, SHA256 8f31c5b7ca93cbbb1e65367b88e88e6b67f44029474eb2a2ab71125c42ac5c52, canonical comment 01a11c6a-d3c9-7191-a9db-6b3792fa1294. Read full independent STORE_RECONCILE_SKETCHES_INDEPENDENT_REVIEW.md; its TASK-1333 CHANGES REQUESTED is canonically relayed as 01a11c76-879a-7031-b0ee-c04c8a2b7a45. F1333-1 is preserved, not relabeled as implementation detail. Origin TASK-1-224 / UUID 01a10ffb-7469-7fa0-96ac-b030c8c0fc28 and TASK-1327 historical pre-spawn finding remain. TASK-1-216 reporting protection and STORY-1527's separate block on TASK-1523 remain. InProgress is neither live-doer proof nor dependency acceptance.
+
+    This amendment supersedes v1's suggestion that the signed common architecture already supplies an isolated runtime/credential mechanism or parent-only authority/leaf execution profile. It does NOT. “Use the signed strict-read adapter” was insufficiently precise for this consumer. All unaffected v1 root/cwd design, tests, signed-contract precedence, refusal semantics and scope exclusions are retained. Main/HEAD/local origin-main remains b46aec1e674baae5a329416d4119e67b59200a88; no fetch or runtime experiment.
+
+    ## Accepted consumer seam, retained without redesign
+
+    reconstitute.rs::run_headless resolves trusted parent authority/config identity at the project entrypoint; each probe/matcher has explicit child cwd. Remove process-global set_current_dir and best-effort restore, not hide them behind a mutex. Parent-only canonical discovery validates grant, lineage, roster and exact Advisor delegation; neither an empty scratch root nor AIDA_DRIVE_ROOT or role text grants authority. Resolve vendor/tuning/wait ceiling in parent and reduce to allowed runtime values. No project config/MCP/hook/context file is passed as a shortcut.
+
+    The execution description is consumed by the ONE BUG-1808 common PreparedLaunchAdapter/publisher, with TASK-1607 occupancy and independently accepted TASK-1612 transport; this task adds no grant issuer, launcher, release permit, broker or persistent format. The old session::spawn_vendor_headless_with_seat with contained=false, ambient headless_worktree_root and ordinary Command remains an observed old implementation, not that dependency.
+
+    ## F1333-1 disposition: UNSUPPLIED owner contract
+
+    Required technical owner: BUG-1808 common launch/execution-adapter owner. Proposed reference name `project-blind probe execution profile` is a requirement on that owner's existing prepared execution description, NOT an existing type/profile ID, approved artifact or new schema. No canonical comment or signed report currently supplies a particular vendor/version's qualified profile. The accepted callback-v5, launch-v2 and pane/containment architecture supplies composition constraints and executable/lifetime primitives, not this working runtime/credential surface.
+
+    Current readiness: UNSUPPORTED PENDING COMMON-OWNER PROFILE. This is an engineering prerequisite, not a user product question. The common owner must publish a concrete profile/design and receive independent disposition before TASK-1333 can consume it. That profile must satisfy every row below with actual selected bytes and a working positive; none is marked provided here. This draft author neither creates that profile nor authorizes its activation.
+
+    | Contract component | Exact obligation the common owner must supply | Forbidden substitution / missing state today |
+    |---|---|---|
+    | Vendor selection / image | Identify supported vendor, exact installed version, platform, executable/wrapper package selection, compiled native leaf digest and helper digest; use existing sealed image/execveat and signed installed-Codex translation where relevant. Bind argv, cwd, stdio and image to the common immutable decision. | No mutable pathname re-open; no claim a Node wrapper is the leaf; no treating compiled fake leaf as an installed-vendor positive. Current main does not supply this consumer-qualified selection. |
+    | Runtime library/resource bytes | Enumerate actual loader, libraries, vendor resource files and dependencies needed by that exact image, with opened-object identities/digests and signed vendor loader policy; prepare independent read-only resources where consumer isolation requires them. Include explicit CA bundle, minimal DNS/time/locale files only if needed. | No blanket /usr,/etc,/opt,/run,/var or host-root bind merely because called “essential.” Vendor trusted-system-loader concession remains as signed; it does not waive baseline visibility. Missing library/resource dependency is unsupported, not a hidden fallback. |
+    | Config and startup | Construct a finite allowlisted vendor configuration from parent-resolved model/effort/output settings; inventory all config lookup paths, startup scripts, plugins, instructions and global/project MCP discovery; explicitly suppress unauthorised auto-discovery using supported vendor mechanisms. | No project AGENTS/CLAUDE/instructions, arbitrary inherited config or MCP/plugin files. The mechanism must preserve supported runtime behavior, not silently clear requested meaningful options. No concrete versioned config inventory is supplied yet. |
+    | Home and writable state | Per-arm fresh runtime HOME, separate vendor state/cache/temp directories containing ONLY enumerated prepared files. Isolate even two concurrent runs with the same vendor. Writable own output/runtime paths are distinct from source/store and other arms. | Never bind real HOME/AIDA_HOME, user agent session history/cache, package-manager credentials or whole ~/.config. A fresh empty directory alone does not prove vendor startup works. |
+    | Credentials | Specify exact selected vendor auth mode, source authority already permitted by existing user/vendor configuration, minimal credential material actually required, supported delivery path/FD/env and vendor read behavior, read/write/refresh/token lifetime and cleanup/redaction rules. Parent may only use an already-authorized mechanism; profile must demonstrate authentication with isolated runtime home and no ambient project access. | NONE supplied in the common approvals. No new credential broker/service, grant issuer, interactive login, widened token, borrowed real HOME, or invented env credential channel. If existing supported auth cannot work within isolation, this variant remains unsupported. This author does not choose or expose a secret. |
+    | Environment | Explicit complete allowlist per qualified vendor: necessary locale/runtime/network variables, safe task cwd/home/temp values, selected model settings and qualified credential carrier only. Bind final environment in existing launch description; remove ambient Git/AIDA roots, inherited client config/plugin search, proxy/credential-helper paths with project access, LD_* injection and other forbidden launch inputs per signed policy. | Deny AIDA_DRIVE_ROOT, AIDA_AGENT_CONTEXT_FILE, real AIDA_HOME/HOME and canonical project/store path hints to the probe. No bare “sanitized environment” claim: owner must enumerate keys/values or redacted identity and effective vendor behavior. |
+    | File descriptors / process observation | Follow signed minimal bootstrap FD mapping and closure, no lock/root/directory/callback/supervisor FD to native leaf. Enumerate only planned stdio and qualified credential descriptor if the existing adapter admits it. Qualify proc/root/fd/process visibility for the unchanged default no-PID profile. | A --proc mount is not automatically safe; do not assert an observed escape. Must prove the leaf cannot reopen parent authority/source/store through process paths or inherited handles; unsupported if unavailable. No mandatory new PID namespace, cgroup infrastructure or hostile-descendant lifetime promise. |
+    | Endpoints / network | Enumerate allowed vendor service endpoints and required local IPC; prevent inherited project MCP/agent sockets, credential-helper sockets or localhost services from supplying withheld project/store context. Preserve accepted shared network policy except where this consumer requires an explicitly qualified restriction. | Read-only /run is not proof of socket isolation. Environment omission alone is not proof a discoverable local endpoint is inaccessible. An unqualified local endpoint path is a real missing-profile blocker, not a new broker request or claimed firewall implementation. No assertion of general model knowledge isolation. |
+    | Child cwd and input/output objects | Bind opened/qualified per-child scratch object identity through preparation, READY/P4 and execution; reject alias/rename/symlink substitution and source/store nesting. Common adapter's “worktree” for this consumer is ONLY that scratch surface, never authority_root. | No once-checked path reopened later; no extra rw store path from ordinary launcher defaults. Baseline does not inherit runtime directory names containing its real spec ID or project identity. |
+    | Authority and leaf discovery | Parent/common publisher retains and validates real grant/manifest/assignment/roster/project identity and receipt. Supply a documented nonprivileged vendor execution mode that can run the probe without ordinary AIDA CLI bootstrap or canonical store/roster discovery in the leaf. The actual child identity is still bound to the real parent-scoped assignment internally. | No canonical grant payload, root/context path or roster copied into scratch. No new bypass of privileged child checks. If selected runtime requires the child to reopen the store to consume a grant, this execution mode is UNSUPPORTED until common owner independently resolves it. Strings and grant IDs are not isolation proof. |
+
+    These rows are acceptance obligations and named gaps, not a menu of unchosen implementation variants delegated to an implementer. The required owner output is one exact supported profile satisfying all rows, or an honest unsupported disposition with the failing row. Root can relay this technical prerequisite to BUG-1808's owner; no user question or new spec/schema/relationship mutation is performed here. Ordinary bwrap strict-read configuration is not accepted as that output.
+
+    ## Actual source grounding and why the prerequisite is real
+
+    At b46, session.rs::strict_read_essential_paths includes /usr,/bin,/sbin,/lib*,/etc,/opt,/nix,/run,/var. bwrap_confinement_args_inner uses --ro-bind / / for EMPTY allowlist, adds essential binds for nonempty allowlist, creates /proc and binds its worktree writable. run_headless currently passes contained=false. These facts establish unqualified visibility and missing consumer input validation, not a demonstrated proc or socket exploit. “Contained” and “strict-read” labels do not establish the row-specific invariants or prove a credential-authenticated vendor positive.
+
+    Read-only source and full signed reports do not reveal an accepted project-blind home/auth/endpoint contract. The common launch architecture's vendor loader boundary, ordinary no-PID containment and process-group cleanup are deliberately bounded; this task must not retroactively claim they guarantee strong baseline confidentiality. A supported consumer profile may be stricter locally without changing global defaults, but must be independently qualified and preserve ordinary launch behavior for other consumers.
+
+    ## Arm separation and metadata contract
+
+    Parent holds real subject/spec IDs and authoritative reporting paths. Use opaque per-invocation arm directory identifiers visible to leaves, not project path or spec-bearing labels. A receives only existing sanitized bounded Git subjects, README excerpt and symbol/test names; preserve BASELINE_WITHHELD exclusions for title/body, criterion labels, ADRs, graph and trace/spec markers. B receives its explicitly prepared store prompt only; live source/store is absent. Each probe's writable output/runtime home is independent. Matcher runs are separately prepared invocations receiving explicit comparison pairs and required result files, never a shared directory that arm A can read. Parent aggregates returned data and maps opaque run identity back to the real report; report metadata is not a leaf config channel.
+
+    No project-linked grant/context payload is placed in prompts, argv, env, mounted config, inherited FDs, filenames or local services merely to make a tool work. Redaction must cover the effective native leaf view, not just build_baseline_prompt. Preserve legitimate baseline README/subject inputs exactly within their existing sanitation contract; this is not a request to remove the allowed baseline's useful information. Selected credentials cannot make an AIDA store endpoint available to the baseline by accident. Logs and diagnostics shown only to parent may name the project; leaf-readable logs must follow the same arm restrictions.
+
+    ## Preserved common launch semantics and blockers
+
+    Incorporate actual callback-v5 report (0360a9b91f1c8092458e890c936425802702f813ce06a5a26b9e35026de54852), launch-v2 (f77fb2b49e605dbdc2a2afeae3112642d7211f6da1dd3d9fbbf42e59d8fcd658), pane/containment (b7606d575fd6a2b812244b4761e2f161f462a3a3497109807ac4a990c33402e5) and all canonical owner/consumer signoffs already named in v1. A–E, callback origin conditions, C7 F1/F2/F3, PANE-1, CONT-1/2/3, six pane conditions and explicit supersessions prevail. No earlier finding or required positive is erased.
+
+    P4 after actual waiting-child READY is the final current-authority/roster/member/assignment/occupancy sample. Winning pre-C revoke/expiry/transfer/root substitution causes exact current-locked restoration with peer preservation. Original live bounded immediate dispatch after immutable C consumes once without a new authority lookup at leaf exec. New/delayed/recovery attempt needs fresh authority. Lost ACK is possible execution, not retry entitlement. One publisher/issuance/receipt; Git-only PreparedGitStep is not vendor CommittedDispatch. No callback/network/wait/reap under seat, no ordinary bootstrap store lookup, no inherited Rust lock, no duplicate release constructor.
+
+    Four independent engineering prerequisites remain, not merely a single “transport done” flag:
+
+    1. TASK-1612 independently accepted transport, including F1 actual nearer adopter qualification and ordinary supported dynamic-runtime/lifetime positives. Latest recorded request 01a11c4c-b88b-78f0-bde2-8fbe2fb5e508 at checkpoint 17b6ac3ecaafd158bdff1553bb43b4c5ca149780 is preserved. No production release or caller wiring follows from its transport scope.
+    2. BUG-1808 actual common publisher/CommittedDispatch/identity/history/adapter acceptance. Latest inactive checkpoint disposition 01a11c3e-ab3f-7542-9b8c-e37baa8de847 at 6a1733a134b2e63f3adfd8e24606965a5d702f91 leaves eight production gates open.
+    3. TASK-1607 occupancy after-image composition through the same common publisher, not old spawn-then-record or a checkpoint-only core permit.
+    4. The UNSUPPLIED common-owner project-blind probe profile above, with separate independent design disposition and working supported-runtime evidence. Common architecture approval is not that evidence. No actual profile/version/hash exists to cite today; inventing one would hide F1333-1.
+
+    ## Meaningful tests retained and concretized (PROPOSED, NONE RUN)
+
+    Keep v1's six groups trusted_root_empty_cwd; baseline_surface_has_no_authority_root; no_process_cwd_race; authority_and_cwd_change_at_p4; no_forged_or_duplicate_release; output_truth_survives_launch_failure. Their positive/negative controls and true post-C semantics remain.
+
+    Extend runtime qualification to exact future profile: compiled fake leaf inventories native argv/env/FD/mount/cwd/config and probes sentinel withheld files, symlink/path aliases, proc/home paths and fixture-owned reachable local endpoints; declared allowed inputs/output work while all withheld routes fail. A second actual supported vendor/version authentication/runtime qualification must demonstrate successful startup and output under its minimal isolated home using already-authorized isolated test credentials, without real project/user data. No real vendor run is authorized in this sketch session. Fake leaf tests cannot claim the installed-vendor positive; global-host refusal cannot count as success.
+
+    Exercise absent/invalid/expired fixture credentials and endpoint/config injection versus valid permitted credential mode; assert no fallback to real HOME, no credential leakage into logs, no mount expansion on failure, and supported error/cleanup. Owner must supply a concrete positive for its credential mode before these tests are executable acceptance, not fill in an invented token env in a helper test.
+
+    Two roots A and B plus ordinary launch run concurrently: each gets its explicit cwd/config, parent cwd unchanged on success/failure. Arm-A secret attempts at B, matcher and authority roots fail, allowed baseline inputs remain useful. Race scratch/config substitution before READY/P4; match signed pre-C refusal and post-C exact-original-child single consumption. All common process/FD/actual-adopter/cancellation/lost-ACK and report truth tests remain, including exit-zero without JSON and no traced denominator.
+
+    Use disposable repositories/fake HOME/AIDA_HOME, exclusively owned servers/endpoints/processes and fixed fixtures, no live source/store/queue or north-star rerun. Unsupported host/profile = explicit missing positive, never skip-as-pass. No privilege, cgroup, namespace-default or general arbitrary-descendant teardown expansion.
+
+    ## Final author disposition
+
+    F1333-1 is addressed by identifying the exact missing common-owner prerequisite and withdrawing the unsupported claim that it was already supplied. This is NOT a claim that the profile exists, that the finding is independently cleared, or that TASK-1333 is implementable. The revised consumer contract is reviewable now; successful probe implementation remains blocked pending the accepted common-owner profile plus transport/publisher/occupancy acceptance. No operator question, new authority policy, schema, broker or alternate launcher. Source and TASK-1335 remain unchanged. Preserve external TASK-1593/TASK-1591/BUG-1811/BUG-1812 reservations. A new different advisor follows; final authority-sensitive merge remains Joe/operator-owned.
+  created_at: 2026-10-08T17:19:13.842454611Z
+  modified_at: 2026-10-08T17:19:13.842454611Z
+  relayed_from: store-reconcile-sketch-author
 history:
 - id: 01a110e0-8876-74d3-87d1-91763f517baf
   author: joe
