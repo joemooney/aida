@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-08T01:26:46.823676261Z
+modified_at: 2026-10-08T01:29:23.593148888Z
 req_type: Task
 tags:
 - operator-ux
@@ -181,6 +181,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): operator transferred four-PR orchestration to this session. Verified Joe merged independently reviewed replacement PR-2452 at 97c7f59cb615297c65f2430747cba216f3c2f826; main contains squash a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1. Close obsolete PR-2450 with replacement link; retain original branch/worktree. Do not dispatch duplicate implementation or rebase the superseded PR.'
   created_at: 2026-10-08T01:26:46.823676261Z
   modified_at: 2026-10-08T01:26:46.823676261Z
+- id: 01a11921-1f89-7f53-98e2-27eb205f57df
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): repair completion bookkeeping after operator-merged PR-2452 at reviewed head 97c7f59cb615297c65f2430747cba216f3c2f826, squash a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1. Scoped canonical review APPROVED. PR-2450 closed as superseded. Lifecycle transitions and targeted replay record already-shipped code, not a new implementation or sandbox measurement.'
+  created_at: 2026-10-08T01:29:23.593148888Z
+  modified_at: 2026-10-08T01:29:23.593148888Z
 history:
 - id: 01a11400-c877-7e40-a909-567b18abd52c
   author: joe
