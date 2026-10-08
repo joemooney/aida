@@ -18,12 +18,12 @@ description: |
 
   ## Bounds
   Guided lane only (no unattended drain, no --auto-complete). Continue on branch story-1485 (merge current origin/main, preserving sketch commits edeac57b63/faa07e4acb; no reset, no force-push). make check-ci-fast before every push. No merge or merge-hold clearance by the implementer; independent advisor review required.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:06:27.590351267Z
+modified_at: 2026-10-08T02:21:56.118052399Z
 req_type: Task
 tags:
 - guided-lane
@@ -218,6 +218,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a11951-3a16-7970-bada-ae5611218059
+  author: aida-orchestrator
+  timestamp: 2026-10-08T02:21:56.118084567Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: guided
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
@@ -227,3 +234,11 @@ filed_at:
   aida_build_sha: 978c497429
   vendor: antigravity
   session: a36129c0-3fde-4c5c-92a2-908e517184b1
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'C7 checkpoint only: REQUEST_CHANGES. Actual CLI ack transfers after the absolute request deadline and to a revoked requester grant. Gateway steps 4-5 remain unauthorized; see .aida/handoff/task1607-rework/C7_INDEPENDENT_REVIEW.md.'
+  recovery_hint: address the review findings, move TASK-1607 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-08T02:21:56.118052399Z
