@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:37.337431823Z
-modified_at: 2026-10-02T21:13:10.180179556Z
+modified_at: 2026-10-08T19:07:14.489623440Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -25,6 +25,1029 @@ comments:
   created_at: 2026-10-02T21:13:10.180179556Z
   modified_at: 2026-10-02T21:13:10.180179556Z
   session_id: 05aca398-12b9-4f85-8d34-61b3f3d760a9
+- id: 01a11ce9-9cbd-76e2-9bb2-5823b66ee92e
+  author: joe
+  content: |
+    # Prepared full canonical relay — TASK-1527 V2 independent gate
+
+    LOCAL PAYLOAD ONLY — NOT SENT. ADVISOR SIGNOFF: APPROVED AS AMENDED.
+    The design gate is independent; implementation still awaits safe-store authorized canonical relay/reopen/queue. No acceptance, merge or activation waiver. Preserve the complete three bodies below and the original signed contract references in the review. Report checksum appears here, outside the report itself.
+
+
+    ----- BEGIN EXACT V2 SKETCH | TASK1527_REWORK_SKETCH_V2.md | 63551 bytes | SHA256 f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7 -----
+    # TASK-1527 rework sketch V2 — explicit phases and witnessed outcomes
+
+    Draft authored 2026-10-08, America/Phoenix, after the 11:07 MST rework handoff.
+    Clock observed while preparing this revision: 2026-10-08T11:08:09-07:00.
+    Author: Codex, the separate sketch-author advisor. **DESIGN ONLY; AWAITING A NEW
+    DIFFERENT INDEPENDENT DESIGN SIGNOFF.** This is not an approval, canonical relay,
+    reopen, implementation, dispatch, test result, activation or merge authorization.
+
+    V1 and its READY remain byte-for-byte preserved. This is a complete replacement
+    proposal for review, not an addendum that leaves contradictory V1 transitions in
+    force. It responds to the full `TASK1527_REWORK_SKETCH_INDEPENDENT_REVIEW.md`
+    CHANGES REQUESTED verdict, including R1–R6, and the routing file
+    `cache1527-sketch-rework-v2.md`. The original signed contract is not rewritten.
+    The tables below specify proposed implementation behavior for the next design
+    gate; no new launch-failure or abandoned-worker backoff policy is proposed.
+
+    Same TASK-1527 owns the remainder; no duplicate worker feature. Root will relay
+    and reopen only after external store recovery is safe, obtain a new independent
+    advisor judgment, then route the authorized Claude Opus doer. Root and this
+    sketch author cannot approve this direction themselves. BUG-1674 implementation
+    must follow this serialized cache owner, not overlap it. External reserved
+    1593/1591/1811/1812 work remains untouched.
+
+    ## 1. Evidence, authority and unchanged constraints
+
+    Immutable source basis: `b46aec1e674baae5a329416d4119e67b59200a88`. Private exports
+    and read-only `git show` are used, never peer working-tree edits. The review's
+    comparison to `0ffe03948e25949ec8961ca81d0dd44f16580107` was corroborated: only four
+    unrelated lines in dev_cmd.rs differ. That comparison does not silently change
+    the design basis or certify a later main. No AIDA CLI is invoked for V2. Complete
+    retained contracts and the fresh reads recorded in V1 remain the inputs; store
+    recovery safety is not inferred from them. V2 READY identifies complete hashes.
+
+    Read AGENTS and the two-seat/rework/recovery disciplines in this session. Full
+    rollup, TASK-1527, all 18 TASK-1526 comments, all 11 STORY-1484 comments, all 11
+    BUG-1674 comments, and BUG-1778/1779 were read for V1 and remain applicable.
+    Binding locators:
+
+    | Contract | Canonical comment |
+    | --- | --- |
+    | STORY-1484 A1–A13/Q1–Q6 signoff | `01a0df0d-f964-78f3-a715-046e37e50915` |
+    | Earlier parent sketch, subordinate to signoff | `01a0df08-c181-7530-b249-2740141c2a0b` |
+    | TASK-1526 B1–B6 and explicit C handoff | `01a0e0fb-8d6b-7790-b04b-f808236dbe2d` |
+    | Product adoption of B decision | `01a0e0fd-bc48-7600-bc20-b0a8f781d0f7` |
+    | BUG-1674 full bounded-show/identity signoff | `01a0e0f6-7f66-7d20-b708-0936f39082eb` |
+    | Parent's show-specific companion | `01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105` |
+    | TASK-1527 post-merge review | `01a0fe76-bf24-75a0-b3b6-6da7d56239a0` |
+
+    B's handoff explicitly assigns C the replacement of the pre-C no-request
+    WriterBusy/full-rebuild Deferred branches with request handling and bounded wait.
+    BUG-1778 (`fd7437abe917015cf3cee4ae7012f188a210eb30`) and BUG-1779
+    (`9d16526e2d54233cd5cf92f73806f0bb64895b9d`) are already merged ancestors, as is
+    C (`8995bd5429241ed207d492a430a2d4a1844d69d4`). Their protections remain.
+
+    Preserve A1 strict/revalidated mutating callers; A2 diagnostic-only sidecars;
+    A3 inside-IMMEDIATE transactional head/rows/stamp recheck; A4 same-thread nesting
+    and independent-thread contention; A5 no blocking refresh wait under store/SQLite
+    write locks; A6 identity domains; A7 fresh-current-HEAD clear and **three failed
+    workers in 600 seconds**; A8 current_exe/explicit paths/null stdin/CLOEXEC/detach,
+    cap/log behavior; A9 scoped labels/output shape; A10/Q3/Q5/Q6 ownership; A11 typed
+    lock-error no full rebuild; A12 canonical sidecar helper; A13 one-attempt tolerant
+    winner and nonwriting losers. Keep WAL, busy_timeout=0 and strict retry delays
+    `[100,200,400,800,1600,3200,6400,12800]` unchanged. Preserve ordinary migration,
+    missing/unusable cache, unsupported flock and Q1/Q2 exceptions, subject to the
+    already-signed narrower show rules.
+
+    ## 2. Pinned source: existing implementation versus proposed changes
+
+    | Existing symbol / source | Verified behavior / proposed bounded change |
+    | --- | --- |
+    | `cached_git_backend.rs::freshen_for_read`, 546–560 | Typed incremental busy rolls back then drops refresh guard and returns WriterBusy, with no C request. Add policy preselection and guarded handoff after the one tolerant attempt. |
+    | `file_and_spawn_refresh`, 459–490 | Currently invokes strict refresh for no-detach/suppression and appends spawn errors to failure history. Split preselected strict decision from post-attempt handoff; launch diagnostics no longer count as workers. |
+    | `cache_cmd.rs::handle_cache_refresh`, 133–170 | Opens backend before watchdog; worker error appends failure. Use bounded early registration, cap before backend work, one shared token result update. |
+    | `refresh_worker.rs::{spawn_detached_worker,record_worker_exit}` | Reaper appends another failure on nonzero, clean exit records nothing. Capture same token and record both nonzero failure and clean nonfailure idempotently. |
+    | `refresh_request.rs::{WorkerAttempt,RequestLock,file_request,clear,clear_if_target_matches}` | Attempt fields only at/pid/error; dedicated permanent lock and atomic JSON replacement; absent requests are not recreated by failure reports. Extend fields and locked helpers, preserve old meaning of at. |
+    | `lib.rs`, 3852–3870; `cache_refresh.rs::{configure_read_policy,read_policy,wait_remaining}` | Show is command-classified, noninteractive for refresh, zero cache wait. Add a command-derived no-inline-fallback enum/flag; budget zero is not identity. |
+    | `cache_cmd.rs::print_refresh_status`, 242; `mcp.rs::tool_cache_status`, 5322–5379 | Target==storeHEAD incorrectly implies satisfied; MCP lacks request/flock diagnostics. Share strict observation/formatting, require cache freshness evidence. |
+    | `doctor_cmd.rs::scan_cache_refresh`, 2624–2639 | Counts all error rows while suppression has a time window. Reuse an explicit population summary and accurate suppression reason. |
+
+    Existing machinery is retained: flock registry, scoped collector, snapshot reads,
+    request RMW lock, worker process, reaper, commands, recursion refusal, cap,
+    rotation, no-detach and explicit tick. No new scheduling or supervision service.
+    The b46 schema has **no explicit generation or tombstone fields**. Request absence
+    and matching attempt membership implement the callback no-resurrection fence in
+    this proposal; no parallel tombstone store or global generation counter. If an
+    intervening approved implementation adds explicit generations/tombstones, preserve
+    it and return the changed integration design for review instead of overwriting it.
+
+    Existing tests do not prove the requested changes: the incremental busy test pins
+    pre-C behavior; `worker_crash_loop_stops_spawning` uses fake spawn refusals, not
+    three failed workers; SPAWN_LOG's PID 0 is not a process; reaper success currently
+    is a no-op. Existing integration tests use empty Git commits and partly ambient
+    Git environment. Their extension must witness actual changed rows/relationships,
+    real production spawning and isolated environment on every child.
+
+    ## 3. Numbered response to R1–R6
+
+    1. **R1 addressed in sections 4–5:** preselect ordinary strict exceptions before
+       any tolerant write; command-derived show fence honors no-detach with zero
+       launches and zero strict fallback. Late suppression blocks reservation/spawn
+       and leaves the spent operation observe-only; next independent invocation may
+       preselect strict. No RequestLock around SQLite to invent atomicity.
+    2. **R2 addressed in sections 6 and 10:** a pre-spawn syscall/current_exe/log-open
+       error is `launch_error`, not worker failure. No launch-specific suppression,
+       replacement threshold, delay or strict fallback is proposed. Capacity and
+       wait errors are neither worker nor launch failures. Mixed-population tests
+       distinguish exact worker counts from legacy compatibility.
+    3. **R3 addressed in sections 6–7:** dead/old/stale never implies a failed worker.
+       Clean reaped exit durably records nonfailure; known success/not_run is absorbing.
+       Orphan outcome loss remains unknown; recovery uses real flock and staleness.
+       Both report orders and the review's two lost-report counterexamples are tests.
+    4. **R4 addressed in sections 5 and 8:** all new registration/terminal lock
+       acquisitions are try-lock/bounded; worker cap is armed before backend work,
+       watchdog reporting never blocks. Modern identity table has no legacy PID-only
+       shortcut and no identity sampled from a reused PID after reap.
+    5. **R5 addressed in sections 6 and 9:** `at` remains FIRST FAILURE time for every
+       terminal worker error. Add `started_at` for launch. Old serialization keeps a
+       recently failed long-running worker in its correct window after optional fields
+       disappear. No legacy deduplication or reconstructed tokens.
+    6. **R6 addressed in section 10:** finite constants, disjoint retention categories,
+       protected recent failures, live-slot protection and finite unknown retirement
+       under age/admission pressure. No unknown outcome becomes failed; no immortal
+       Unknown slot can prevent admission forever. Pruned callbacks are no-ops.
+
+    These responses propose concrete resolutions for independent review, not a claim
+    that this author has cleared the CHANGES REQUESTED verdict.
+
+    ## 4. R1 — read-policy selection and phase table
+
+    Use the existing `CacheReadScope` to carry an internal per-canonical-cache-path
+    phase record for the invocation/MCP call. Proposed states are FreshCheck,
+    PreselectedStrict, TolerantAttempt, HandoffOnly, ObserveOnly and Served. They are
+    transient execution state, never persistence or runtime authority. A constructor
+    can advance this state without having served rows. Subsequent query/repin on
+    that same path must not restart a spent TolerantAttempt or spawn again. Reset on
+    scope exit/error and between MCP calls; distinct cache paths are distinct work.
+    One attempt here means one tolerant SQLite write attempt across constructor,
+    query and post-busy repin in this invocation for this cache, not a counter reset
+    that hides constructor work. A later independent invocation can retry normally.
+
+    Command classification at `lib.rs` configures `Ordinary` or `BoundedShow` before
+    backend creation alongside existing interactive/budget settings. Show is selected
+    from `Command::Show`, not ReadBudget==0, a sidecar, worker token or user env. Keep
+    show's current zero cache wait for human/TTY, local/global JSON and TOON.
+    Ordinary advisory zero-wait paths retain their own signed policy; do not quietly
+    turn every zero-wait caller into show. Strict mutations/cache commands are not
+    converted to this tolerant protocol. Explicit --sync/network/tree scope remains
+    as separately signed on BUG-1674, not expanded here.
+
+    | Phase / observation | Ordinary reader | BoundedShow | Next phase / locks |
+    | --- | --- | --- | --- |
+    | Compatible and already fresh | Serve pinned fresh rows if still fresh at snapshot | Same | No request/spawn/SQLite write |
+    | Incompatible/missing/unusable/migration/unsupported flock | Existing signed general strict/error path, chosen before tolerant attempt | Existing bounded explicit unavailable/upgrade outcome; never introduce a strict escape | No incompatible stale success; existing show escape sites remain separately tracked |
+    | Preselection: no-detach true | Select strict inline exception, zero detached launches | Forbid launch AND strict/full-rebuild fallback; compatible stale Deferred | No tolerant fast-fail first; show does not need to reserve |
+    | Preselection: known three-worker or legacy-compat suppression | Select ordinary A7 strict inline exception | Forbid launch AND strict fallback; compatible stale Deferred | Select before tolerant SQLite attempt |
+    | Preselection: unsuppressed, detach allowed, compatible incremental possible | One fast-fail incremental attempt | Only existing bounded permitted attempt; never enlarge zero budget to create it | Release RequestLock before SQLite; hold RefreshLock |
+    | Incremental succeeds | No spawn; later pinned rows/metadata decide fresh label | Same | Restore fast-fail scope, ObserveOnly/Served |
+    | Incremental typed busy | No second write/ladder/full rebuild | Same | Fully rollback, restore scope, retain RefreshLock, HandoffOnly |
+    | Incremental ordinary decline/full rebuild needed | Q1 interactive strict exception must be preselected when the full-rebuild condition is known before attempting; ordinary noninteractive hands off. If discovered only after a tolerant attempt, handoff only for this operation | Handoff only, no inline full rebuild | No decline-to-second-write inside post-attempt phase |
+    | Non-lock incremental error | Propagate error | Propagate bounded error | Never swallow as WriterBusy/Deferred |
+    | Handoff recheck: became fresh | No spawn | Same | ObserveOnly, then pinned snapshot |
+    | Handoff reservation sees threshold crossed since preselection | No spawn, NO second SQLite attempt; Deferred with suppression diagnostic | Same | ObserveOnly for rest of this scope/cache |
+    | Hint/reservation lock/write fails or capacity refuses | Deferred, no launch, no strict fallback from this spent phase | Same | ObserveOnly, useful compatible stale rows |
+    | Reserved then actual spawn fails | Launch diagnostic only, Deferred, no second spawn/SQLite attempt | Same | ObserveOnly |
+    | Reserved and actual launch succeeds | Release guard, wait only remaining invocation budget, observe | Same with zero cache wait | One launch per handoff phase; no loop back to writer |
+
+    **Preselection and late-threshold linearization:** under RefreshLock, and before
+    any tolerant SQLite attempt, use a short RequestLock RMW/read to obtain the
+    suppression summary and set the in-scope policy branch. Release RequestLock before
+    SQLite. Missing/corrupt hint is handled by the existing hint recovery semantics,
+    not invented suppression; if a usable summary cannot be read/serialized within
+    budget, choose Deferred rather than guessing a strict or spawning branch.
+    No-detach can preselect without request locking. The phase remains fixed after
+    selection. A suppression result that selects strict is not cancelled merely
+    because failures expire a moment later; it is an ordinary preselected strict
+    operation, not a tolerant one-attempt operation.
+
+    After the tolerant attempt, the reservation RMW rechecks suppression against its
+    current timestamp. If the third worker failure was recorded between preselection
+    and reservation, it wins at reservation: no slot/spawn, Deferred, observe-only.
+    This operation was admitted to the tolerant branch before that failure and cannot
+    be retroactively made strict without violating A13. The next **new invocation**
+    that observes suppression preselects A7 strict recovery; no later helper/backend
+    inside this invocation may fake a new admission. This is the explicit proposed
+    phase interpretation of A7/A13 submitted to the independent gate, not an A7
+    waiver or instruction to implementers to choose a policy. Test this ordering.
+
+    Reservation under RequestLock is the launch-admission linearization point. A
+    failure recorded after a successful reservation does not revoke that already
+    admitted launch; future reservations are blocked. Do not hold RequestLock through
+    spawn or SQLite to try to make an OS launch atomic with a failure report. Tests
+    must cover both sides of this point. Existing ordinary explicit strict operations
+    are not constrained to one SQLite attempt; the tolerant post-busy phase is.
+
+    For full-rebuild cases whose need cannot be determined without attempting an
+    incremental, an ordinary TTY invocation cannot run a second strict write after
+    that attempt: defer/handoff now; a fresh invocation or explicit strict command
+    may select strict. No new rule permits show inline rebuilding. Preserve known
+    Q1 TTY full-rebuild preselection, ordinary no-detach and pre-observed suppression
+    strict controls. This specified boundary needs independent ratification with R1;
+    it is not silently changing the signed retry ladder.
+
+    ## 5. C1 — guard handoff, observation and bounded lock access
+
+    `freshen_for_read`/`file_and_spawn_refresh` split policy selection from a helper
+    that can ONLY file/reserve/spawn/observe. Remove strict refresh calls from that
+    post-attempt helper. Use existing scoped `wait_remaining`/`wait_poll`/`may_wait`.
+    No source rewrite of show identity or entire deadline propagation is in scope.
+
+    | Step | Locks / transaction | Work and exit rule |
+    | --- | --- | --- |
+    | 1. Deadline and acquire | Shared invocation deadline; try RefreshLock | Start deadline once before any wait, never reset after backend open/spawn/repin |
+    | 2. Winner double-check and preselection | RefreshLock; brief RequestLock only for summary | Compatible/current check; table in section 4 selects branch; release RequestLock |
+    | 3. Tolerant incremental | RefreshLock + one IMMEDIATE attempt | Fast-fail, no retry sleep; on typed busy rollback completely and restore RAII fast-fail scope |
+    | 4. Handoff reservation | RefreshLock, NO SQLite/store write lock; bounded RequestLock | Recheck freshness, RMW request target/history, suppression/retention/capacity; reserve UUID once; atomic replace |
+    | 5. Launch | RefreshLock only | Existing current_exe worker launch, explicit paths, same token; release RequestLock before any spawn/log/subprocess work |
+    | 6. Parent result recording | RefreshLock + bounded RequestLock, no SQLite/store write lock | Record known launch outcome/child PID without overriding child's terminal result; failure here never causes replacement launch |
+    | 7. Release and observation | Release RefreshLock and RequestLock | Poll only remaining budget; never writer-loop, never second launch; final label observes durable outcome/flock |
+    | 8. Serve | ONE pinned SQLite read snapshot | Returned rows, cache_head and built_at share snapshot; later commit cannot relabel old rows fresh |
+
+    The same handoff/wait helper serves existing non-TTY full-rebuild and
+    departed-holder branches; their prior wait consumes the same remaining budget.
+    Losers never enter SQLite writer/ladder. Same-thread nested refresh still
+    short-circuits; independent threads contend. Writers do not acquire this refresh
+    flock as a new requirement. Actual transactional head rechecks remain correctness;
+    flock is single-flight, diagnostic process records never provide ownership.
+
+    All NEW request-lock acquisitions by readers use try-lock followed, if appropriate,
+    by polls limited by the same remaining deadline; zero budget permits one try.
+    No new deadline after spawn or for result recording. A failed result RMW leaves
+    the prior durable reservation: child registration/reaper may later record, but
+    parent does not retry spawning or fabricate tracking success. Every initial hint,
+    reservation, result or diagnostic-write failure preserves usable stale reads
+    (BUG-1778). Structural directory-at-file-path failure fixture is portable; chmod
+    alone is not sufficient on Windows.
+
+    Requested needs durable pending request/matching admitted attempt and an actual
+    successful launch, not reservation or PID 0. If final observation finds terminal
+    failure, terminal non-run/clean exit with no holder, missing token, or outcome
+    unknown with no observed holder, report Deferred rather than stale local spawn
+    success. WorkerRunning means real observed RefreshLock holder, including inline
+    refresh; requester/diagnostic PID is not that proof. A just-successfully spawned,
+    nonterminal matching token may report Requested; it is a launch observation, not
+    proof of future progress. Fresh pinned cache means fresh. WriterBusy only describes
+    an actual fast-fail SQLite error, never promises a worker. Hint/launch failures use
+    existing Deferred wording. Known suppression is visible without a false progress
+    promise. Keep one emit, object cache metadata, array shape/stderr, per-MCP reset.
+
+    No new RequestLock acquisition blocks while holding SQLite/store write locks.
+    Worker registration releases RequestLock before trying RefreshLock. Worker result
+    or clear under RefreshLock happens only after SQLite transaction ends. Reaper
+    uses RequestLock only; watchdog one try only. Never call a public locking helper
+    recursively from a locked RMW, acquire RefreshLock while holding RequestLock,
+    unlink permanent lock sidecars, or use unlocked writes. Bounded lock attempts do
+    not claim to interrupt arbitrary uninterruptible filesystem I/O.
+
+    ## 6. R2/R3/R5 — populations, persisted fields and result transitions
+
+    Keep one bounded `attempts` array in the existing JSON request. Proposed additive
+    serde-defaulted fields are `attempt_id` (UUID), `kind` (worker/launch),
+    `outcome`, `started_at`, `finished_at`, `worker_identity`, and `launch_error`.
+    Existing `at`, `pid`, `error` stay readable. New writers preserve bounded unknown
+    fields; an unknown enum value is preserved/unattributed, not interpreted as failure
+    or a parse-error reset. The token is passed by a private worker argument/environment
+    field from current_exe's parent; it is not permission, path authority, a lease,
+    a freshness proof or a way to choose a different cache/store.
+
+    | Record category | Evidence | Count / old fields |
+    | --- | --- | --- |
+    | Reserved launch | Durable admitted slot, no successful OS spawn yet | No worker; `error=None`, started_at/at diagnostic time, pid unknown/0 |
+    | Running worker | Successful OS child launch or self-registration of explicit worker, token matched | No failure; PID is actual child, never reaper |
+    | Failed worker | Matching child's durable error return OR captured reaped nonzero exit (signal/watchdog included) | One exact failed-worker ID; `error=Some`, `at=first failure observation time`; finished_at same |
+    | Succeeded / AlreadyFresh / not_run LockHeld | Durable normal worker result | Zero failures; terminal nonfailure; never alone authorizes clear |
+    | clean_exit | Captured exit 0 with detailed report absent | Terminal nonfailure; exact work result/current freshness still unknown |
+    | launch_error | current_exe/log-open/rotation/spawn syscall failed BEFORE a child exists | Separate diagnostic; `launch_error=Some`, `error=None`, no worker PID; NEVER counted as a failed worker |
+    | outcome_unknown | Lost terminal report/reaper, wait() error, registered process gone, unknown identity, abandoned reservation | Zero exact failures; recover by real flock/staleness; no guessed historical result |
+    | capacity / request-lock timeout / bookkeeping I/O refusal | No admission, or no reliable record update | Diagnostic only; neither worker failure nor launch_error; may leave existing token outcome unknown |
+    | Legacy error | No understood modern identity/kind, `error=Some` | Unattributed historical error, existing compatibility behavior; never claimed as a distinct worker |
+
+    **There is no new launch-specific backoff.** Launch diagnostics alone cause no
+    suppression, strict fallback, replacement threshold or delay. Each invocation's
+    phase permits at most one admitted launch, with ordinary next-invocation behavior
+    unchanged. Repeated OS launch failures can produce repeated Deferred reads and
+    bounded logs/history; fixing that with another backoff is not authorized here.
+    The OS spawn success is the worker-existence boundary. The spawner must return
+    that fact separately from later parent bookkeeping/reaper-setup errors: an error
+    after a child exists is an observation/tracking error, never a pre-spawn
+    launch_error or proof that the child failed. Preserve the child handle for owned
+    cleanup/reaping; do not retry launch from that error.
+
+    Two real failed workers plus any modern launch diagnostics still yield exact
+    failed_worker_count=2 and no A7 worker suppression. Replace the existing test that
+    uses cfg(test) spawn refusal to certify worker crash suppression.
+
+    `finish_attempt(cache, token, witnessed_outcome, now)` is the single locked RMW for
+    self-report/reaper/clean exit. It only updates a matching retained token in an
+    existing request; never creates a request or missing slot. Direct worker/tick
+    allocates its token on admission; child startup with a supplied token cannot
+    create a replacement if that token disappeared. Retarget retains tokens; clear
+    and new request do not. Repeated callback never inserts or renews age.
+
+    | Current retained state | Incoming evidence | Transition |
+    | --- | --- | --- |
+    | Reserved/running/outcome_unknown | Child registered or parent reports successful spawn | Fill corroborated identity/PID if missing, mark running only if not terminal; no conflicting identity replacement |
+    | Reserved/running/outcome_unknown | Durable worker error / reaped nonzero | Failed worker exactly once; `at=finished_at=now` on this FIRST failure observation; retain started_at |
+    | Reserved/running/outcome_unknown | Durable Refreshed/AlreadyFresh | Succeeded terminal, error=None, finished_at=now |
+    | Reserved/running/outcome_unknown | Durable LockHeld | not_run terminal, error=None, finished_at=now |
+    | Reserved/running/outcome_unknown | Reaped exit 0 | clean_exit terminal, error=None, finished_at=now; detail can remain unknown |
+    | Reserved, no child ever created | OS launch preparation/syscall error | launch_error terminal, error=None, separate diagnostic timestamp |
+    | Any nonterminal | wait error, dead/PID reused/foreign/unknown identity, elapsed age, currently stale cache | outcome remains unknown/nonterminal; NO failure transition |
+    | Known succeeded/not_run/clean_exit | Any later abnormal observer | Absorbing nonfailure; optional conflicting-evidence diagnostic, no error/count/time change |
+    | Known failed worker | Repeated self-report/nonzero reaper (either order) | Same token, same first failure time/count; do not renew 600s window |
+    | Known failed worker | Contradictory later success | Keep first witnessed failure and surface inconsistent evidence; never use an inferred-death failure to reach this state |
+    | Any terminal | Delayed parent registration/running update | No terminal override; may fill matching diagnostics only |
+    | Missing/pruned/cleared token, even refiled same target | Any callback | No-op; no reconstruction/matching by PID/error/time |
+
+    Normal production self-report error must be paired with a nonzero command return;
+    LockHeld/refreshed success with zero. Tests inject impossible contradictory
+    observers to prove absorbing protection, not to justify guessing a real outcome.
+    An observation timestamp is not asserted to be the historical instant of death.
+    Parent reaper must handle status.success() by writing clean_exit, not return
+    without recording. If that write also fails, acknowledge lost outcome; do not
+    convert it to failure later.
+
+    ## 7. R3 — parent death and honest recovery
+
+    | History | Durable interpretation | Recovery |
+    | --- | --- | --- |
+    | Parent alive, worker self-reports Err, then nonzero reaped | One witnessed failed worker; both RMW orders/repeats identical | Request stays, gate counts once |
+    | Signal-only death or watchdog nonzero with live parent | Parent's captured wait status witnesses failure of its captured token | One failure; no PID resampling needed |
+    | Parent exits; child writes terminal report | Use that report once, independently of parent survival | Fresh-current clear or pending hint as appropriate |
+    | Parent exits; registered child dies; no report or captured wait status | Outcome unknown, even with exact dead identity and stale cache | Try real flock, re-derive staleness, new admitted worker can recover; never infer failure |
+    | LockHeld returned; detailed report write fails; parent reaps zero | clean_exit nonfailure, not exact LockHeld if detail lost | Another holder/request determines recovery |
+    | LockHeld returned; report and parent observation both lost; cache later stale | Unknown, NOT failed | Same real-flock/staleness recovery |
+    | Worker successfully refreshed; HEAD moves/new request survives; success report lost; parent reaps zero | clean_exit nonfailure despite current stale cache | New worker may refresh newer HEAD |
+    | Same successful history, no surviving parent observation | Unknown, NOT failed | Same recovery; current staleness cannot reconstruct old success/failure |
+    | Parent and child disappear between spawn and identity registration | Unknown launch/outcome, not known failure | Reservation can retire by section 10; freshness remains re-derivable |
+    | wait() fails | Unknown exit outcome | Diagnostic and later real-flock recovery; do not retry count by probing PID |
+
+    There is no orphan failure inference and no abandoned-attempt suppression policy.
+    A known dead process tells us only it cannot still work. A positively live process
+    is protected for bookkeeping retention, not a reason to steal or manufacture
+    freshness. Neither live, gone nor unknown sidecar overrides the kernel flock.
+    No new supervisor, watcher, schedule, signal listener service, lock steal or kill
+    is added. The explicit accounting limit is unavoidable: if both terminal report
+    and parent's wait result are lost, exact failure evidence is unavailable. A7
+    counts witnessed failed workers, never hypothetical ones. Discarded records
+    further limit accounting as explicitly shown by the retention diagnostics.
+
+    ## 8. R4 — startup/cap and identity phase tables
+
+    Worker entry needs a narrow route before the ambient backend's constructor can
+    refresh. In `lib.rs::run` after typed command/path classification and before any
+    backend construction, route `CacheCommand::Refresh { worker: true, ... }` to a
+    small worker entry helper in cache_cmd.rs. It validates the explicit store/cache
+    pair, uses the existing path derivation, and never lets an ambient constructor
+    perform untracked work before admission. Keep other cache commands on their
+    existing strict route. `--if-requested` should likewise check/admit its request
+    before a constructor can accidentally do the pending refresh; no request is the
+    existing silent no-op. This is existing-command dispatch plumbing, not a new
+    public command or worker service.
+
+    | Startup phase | Cap / RequestLock behavior | Allowed effect / refusal |
+    | --- | --- | --- |
+    | W0 typed worker entry, explicit paths selected | Record monotonic t0 and arm existing process watchdog immediately at t0+120s floor, before new request I/O or backend open | No refresh work yet; invalid args return normal error before work |
+    | W1 early registration | ONE RequestLock try, no blocking/polling | Supplied retained token: self-register exact identity monotonically. Manual worker: atomically file/admit token if pending stale work must be done. Contention/error/full capacity: diagnostic registration_deferred, clean no-work exit; no untracked backend refresh |
+    | W2 open after admission | Watchdog already active; RequestLock released | Construct explicit backend in cache-snapshot/open mode that does not trigger tolerant constructor spawn; worker flag forbids recursion |
+    | W3 cap adjustment | When backend's existing last_full_rebuild_ms becomes available, set deadline ONCE to t0+max(120s,2×last_full_rebuild_ms); never now+cap, never extend an expired deadline | Missing/unreadable duration retains floor as existing fallback; startup time is included |
+    | W4 refresh body | Existing RefreshLock patience, normal strict worker policy; no RequestLock held while acquiring flock or in SQLite transaction | Run `run_refresh_worker`; transactional guards unchanged |
+    | W5 outcome/clear | One RequestLock try for result (or bounded by remaining cap if factoring existing worker helpers); no fresh per-call deadline | Failure to report is lost evidence/diagnostic, not another worker failure. Preserve original command result |
+    | Wcap deadline expires at any covered phase | Watchdog attempts result recording with try-lock ONCE; never waits for RequestLock | Existing nonzero cap exit still occurs; reaper may witness if self-report unavailable |
+    | Wdone normal return | Cancel/join or disarm watchdog through bounded notification | No late watchdog can kill a completed reusable process; normal CLI process may exit as usual |
+
+    W1's registration refusal is a nonfailure no-work outcome, not a failed refresh.
+    Parent reaper's exit zero can record clean_exit when the lock becomes available;
+    if not, the reservation stays unknown until recovery/retirement. OS launch really
+    occurred, but no work was claimed, so never claim fresh data from this exit. A
+    supplied token lost through clear/pruning/downgrade is not recreated: clean
+    registration_deferred exit with no backend refresh. A deliberate manual worker
+    without a supplied token may allocate one under the same admission rules.
+
+    The cap adjustment deliberately includes startup rather than granting another
+    120s after open. If metadata cannot be obtained before the armed floor expires,
+    the floor applies (the same missing-duration fallback), with honest diagnostic;
+    no blocking metadata read is allowed to delay the watchdog. No new runtime knob
+    changes the floor or multiplier. A shorter cap is test-only. Process-wide cap
+    starts before the first newly introduced bookkeeping attempt, not after it.
+    This does not promise to interrupt OS uninterruptible I/O; tests hold a normal
+    flock beyond the test cap and must show no indefinite bookkeeping wait.
+
+    Parent result recording and reaper terminal recording also use bounded/try-lock
+    updates. Reaper owns the captured child handle and token, so status is sufficient
+    outcome evidence. After spawn, parent may fill actual child PID but must not
+    sample a start identity after `wait/try_wait` has reaped that child. Simplest
+    implementation: **parent does not sample start identity at all**; child
+    self-registration supplies it. If child dies too early, leave identity unknown
+    and use captured wait status for exact outcome. This avoids a reused PID race.
+    A post-spawn parent RMW must not replace child's identity or overwrite terminal
+    state. RequestLock contention there never causes a second launch.
+
+    Modern attempt identity has its own narrow classifier built from the existing
+    probe primitives, NOT `classify_lock_owner`'s legacy-compatible policy. Do not
+    change legacy lock-info cleanup semantics.
+
+    | Modern stored/probed identity | Classification | Consequence |
+    | --- | --- | --- |
+    | Required PID/start/boot/ns missing, invalid, or local domain unavailable | Unknown | No dead/failed inference; eligible unknown-retention rules |
+    | Recorded boot or namespace differs from current local domain | Unknown/foreign | No local PID interpretation, kill or ownership claim |
+    | Same boot/ns; process probe is denied/unreadable/indeterminate | Unknown | PID lookup failure is not definite absence |
+    | Same boot/ns; comparable scheme and equal live start identity | Positively live matching worker | Protect slot while currently verified; never count age as failure |
+    | Same boot/ns; comparable scheme, live PID but different start identity | Original worker gone, PID reused | Outcome still unknown absent report/wait; do not bind new process to old token |
+    | Same boot/ns, full recorded identity, reliable probe proves PID absent | Original worker gone | Outcome still unknown; retention/recovery may proceed |
+    | Same domain but start-identity schemes differ or live start cannot be read | Unknown | Do not use PID-only fallback |
+    | Direct child wait status captured with its handle/token | Exact terminal exit evidence irrespective of later PID reuse | Use section 6; never probe a now-reused PID to fill identity |
+
+    On platforms without comparable boot/ns/start primitives, nonterminal identity
+    may remain Unknown; actual self-report/wait status still works. Hostname is display
+    only. The classifier runs outside request/store/SQLite write locks; RequestLock
+    RMW rechecks token/revision before applying its observation. Stale observations
+    never authorize killing or stealing. Positive-live protection is based on that
+    admission pass's observation, not a permanent persisted boolean.
+
+    ## 9. R5 — timestamp and mixed-writer compatibility
+
+    For a modern failed worker, preserve b46's meaning exactly:
+
+    * `started_at` = launch/reservation timestamp (additive, immutable diagnostic).
+    * `at` = first witnessed FAILURE timestamp once `error` becomes Some; set once.
+    * `finished_at` = the same first terminal timestamp for modern readers; new
+      counting uses `at` for error rows so losing finished_at cannot change window age.
+    * For pending/nonfailure rows, `at` may remain diagnostic start time and is never
+      counted without an error. Modern launch_error lives in `launch_error`, with
+      `error=None`, so field loss does not turn launch diagnostics into worker errors.
+
+    A worker that starts 900 seconds before failing now has `started_at=now-900`,
+    `at=now`, not an immediately expired error. An old serializer drops optional
+    fields but retains `{at,pid,error}` with the correct RECENT FAILURE age. Repeated
+    reports, retarget and old-writer roundtrip do not renew it. Window remains inclusive
+    0..=600 seconds; at age 601 it no longer counts. Invalid/future failure times are
+    unattributed/unusable for the existing predicate, never rewritten to now to force
+    suppression. Observation time is retained, not guessed death time.
+
+    New exact-worker summary: unique understood modern failed worker tokens in the
+    window; launch, pending, capacity, wait error and unknown outcomes excluded.
+    **Compatibility fallback uses the existing old-reader projection, explicitly
+    labelled:** if any retained legacy/unattributed error rows exist, separately
+    compute the b46-style count of retained `error` rows in the same window (including
+    modern worker errors, never modern launch_error), threshold 3. Expose that as
+    `legacy_compatibility_suppressed`, not “three distinct workers.” With only modern
+    records it is not a separate gate; exact-worker gate is the only A7 count. This
+    preserves conservative existing behavior for legacy populations rather than
+    inventing a guessed launch/unknown threshold. Two modern workers plus one modern
+    launch error do not satisfy EITHER predicate. Two modern workers plus an
+    unattributed historical error may conservatively trigger the explicitly labelled
+    legacy condition; it is not claimed to meet the exact three-worker proof.
+
+    An old writer can also create legacy errors for its own failed spawns or append
+    duplicate observers; the new reader cannot reconstruct their provenance. Never
+    deduplicate legacy rows by PID/time/error, guess missing tokens, or relabel them
+    exact. Actual old serializers ignore/drop new fields; new writers preserve
+    unknown fields within the bounded format. If token is erased, later modern
+    callback no-ops and state is explicitly downgraded/unattributed. Old pending row
+    is unknown, not failed. Modern launch diagnostics disappear under old serializer
+    rather than becoming legacy errors; report this diagnostic-loss limit honestly.
+
+    No seamless exact mixed-writer guarantee: exact counting requires retained modern
+    identity/outcome records. Conservative legacy suppression retains normal ordinary
+    strict recovery and show's no-inline/no-launch exception from section 4. Successful
+    explicit cache refresh with compatible current-HEAD clear remains recovery; no
+    manual deletion of permanent lock sidecars. Eventual normal retirement/restart of
+    old worker/MCP binaries is for the authorized activation owner, not this sketch.
+    No activation, install or runtime-authority change is performed or implied.
+
+    ## 10. R6 — finite retention, admission and serialized size
+
+    All constants below are proposed storage/diagnostic bounds for independent review,
+    **not new spawn-backoff thresholds**. Existing suppression constants stay 3 and
+    600 seconds. The single request file uses disjoint record quotas:
+
+    | Constant | Value | Category / purpose |
+    | --- | ---: | --- |
+    | MAX_ERROR_RECORDS | 10 | Modern failed-worker plus legacy `error` records |
+    | MAX_OTHER_TERMINALS | 10 | succeeded/AlreadyFresh/not_run/clean_exit; no error |
+    | MAX_LAUNCH_DIAGNOSTICS | 10 | Pre-spawn launch_error records; no error |
+    | MAX_NONTERMINALS | 8 | Reserved/running/outcome_unknown incl registered Unknown |
+    | UNKNOWN_DIAGNOSTIC_TTL_SECS | 600 | Diagnostic retention age, NEVER failure/suppression |
+    | MAX_REQUEST_BYTES | 131072 (128 KiB) | Bound for JSON written by modern helpers |
+    | MAX_ERROR_TEXT_BYTES | 1024 | Error/launch diagnostic text; UTF-8 boundary truncation |
+    | MAX_IDENTITY_TEXT_BYTES | 256 per textual component | Diagnostic bounds; invalid oversized identity becomes Unknown, never matching |
+
+    At most 38 attempt records after a normal modern RMW. Tokens/timestamps are fixed
+    length; known path/binary diagnostics and preserved unknown-field data count toward
+    the byte cap. Terminal times and started_at are immutable; no last-seen refresh
+    extends retention age. A formatter can show discarded/unattributed accounting
+    limits but must not invent exact totals for records intentionally pruned.
+
+    Run retention/admission under the EXISTING RequestLock, with liveness observations
+    collected before it and token/revision rechecked inside it. Algorithm:
+
+    1. Load complete request or use the existing missing/corrupt-hint handling. Preserve
+       target/request revision and all retained token identities. Partition understood
+       records by the disjoint categories above; unknown non-error records are
+       nonterminal/unattributed. No record is classified failed from age/identity.
+    2. Error quota: first protect the newest **three distinct modern in-window worker
+       failures** if available. Also protect enough newest remaining in-window error
+       rows to retain the existing compatibility predicate (at most three additional
+       rows). Union <=6 fits quota10. Fill remaining slots with newest in-window error
+       records, then newest expired/invalid error diagnostics up to10. Drop others.
+       Ties use stable existing array order/token; repeated reports do not reorder.
+       Success/not_run/launch/pending volume never competes for this quota. Dropping
+       a fourth+ worker error may reduce displayed historical count but cannot erase
+       the still-true >=3 predicate. Report retained counts, not lifetime totals.
+    3. Other terminal quota: keep newest10 by first terminal timestamp (invalid times
+       ordered by stable array order), prune oldest. Launch diagnostics: newest10 by
+       original diagnostic time, separately. Neither category contributes to worker
+       or legacy-error predicate. Repeated callbacks never renew timestamps.
+    4. Nonterminal quota: positively live matching workers from this observation pass
+       are protected. For all other nonterminals, including registered-gone and
+       registered-Unknown, discard diagnostics at age>=600 from immutable started_at
+       (legacy at if started_at absent). A missing/invalid/future retention timestamp
+       is unverifiable and is eligible for admission-pressure pruning; never repair
+       it to a newer timestamp or use it as a failure time. Positive-live protection
+       overrides age retirement.
+    5. If an admission needs a slot and eight nonterminals remain, remove the oldest
+       **not positively live** slot, even if younger than600; stable order breaks ties
+       or orders unknown timestamps. Label this diagnostic eviction, NOT death,
+       failure or cancellation. Thus registered Unknown records cannot permanently
+       saturate capacity. If all eight are positively live, refuse admission with
+       Deferred/capacity diagnostic; no launch, worker failure, launch_error or strict
+       fallback from the spent tolerant phase. Future operations re-probe live slots;
+       when one is no longer positively live it can be retired on admission. No timer
+       or recurring cleanup job is needed.
+    6. Reserve the new token only after suppression, capacity and byte checks pass.
+       A callback for any pruned token remains absent forever; it cannot reinsert
+       itself. Child with missing admission token exits registration_deferred without
+       untracked refresh. A worker already doing legitimate work whose diagnostic
+       token was pruned is not killed; its SQLite/flock correctness is independent,
+       but its later lost callback cannot be counted. This is an explicit accounting
+       limit of pruning Unknown records, not a claim to know that worker was dead.
+    7. Serialize atomically. Bound known diagnostic strings on insertion before the
+       byte check. Preserve unknown fields when they fit. If an existing record's
+       opaque fields make the request exceed128KiB, do NOT silently drop those fields
+       or rewrite failure timestamps/tokens to squeeze it: refuse the hint mutation
+       with a format-size diagnostic and serve usable stale reads Deferred. Existing
+       missing/corrupt hint recovery stays separate; an oversized parseable hint is
+       not secretly called corrupt. Explicit fresh-current clear can remove it under
+       existing rules. No unbounded write is emitted and no worker admitted without
+       a persisted slot. Tests report this compatibility limitation separately from
+       the normal finite Unknown-slot recovery guarantee.
+
+    All-live saturation can legitimately remain Deferred while those eight workers
+    are positively live; their completion/departure makes later admission possible.
+    Unknown saturation cannot: on the next admission one eligible record is evicted.
+    No live process or lock is retired by diagnostic eviction. Plain explicit strict
+    refresh remains the recovery verb and does not need detached admission capacity.
+    Request retarget preserves retained history; successful current-HEAD clear resets
+    it as before. Same-target clear/refile uses new UUIDs; old callbacks are no-ops.
+    No parallel tombstone store, token resurrection or unbounded history.
+
+    ## 11. Clear, status and accepted scope retained
+
+    All success clears, including plain `handle_cache_refresh`, converge on the
+    existing freshness-under-RefreshLock contract. Check compatible cache against
+    **current** store HEAD after commit, not requested target or ancestor. Then under
+    RequestLock re-read request and compare the captured revision/membership
+    (target/requested_at and tokens as applicable); leave a concurrently changed
+    request intact. No SQLite/store write lock is held while taking RequestLock.
+    A late HEAD move can always require new work; the next reader re-derives it.
+    Process exit zero, success record, target==storeHEAD and a dead PID never authorize
+    clear. No-token no-request error callback never creates a new request. Preserve
+    BUG-1779 RMW serialization and newer-request protection; no sidecar lock deletion.
+
+    Factor a small shared observation/formatter for
+    `cache_cmd::{handle_cache_command,print_refresh_status}` and
+    `mcp::tool_cache_status`, with population summary reused by doctor. Explicit CLI
+    cache status and MCP cache_status remain **strict**, refreshing each invocation/
+    call and propagating refresh errors. Do not wrap a failed strict refresh in a
+    success-shaped stale report or convert other MCP reads. Preserve current text
+    envelope/descriptor schema unless an additive declared field is explicitly
+    reviewed; A9's separate scoped label contract remains intact.
+
+    Show cache_head, store_head, built_at from compatible observation; pending target/
+    age; actual refresh-lock held/free/unsupported/unknown; diagnostic writer record
+    and classification; exact recent worker failures, separate launch diagnostics,
+    legacy/unattributed errors, unknown outcomes, retained/pruned accounting limits,
+    last errors and the specific worker/legacy suppression reason. No launch-specific
+    suppression exists. Requester PID or SQLite write lock-info is not flock-holder
+    identity; report unknown if unestablished. Target==storeHEAD with stale cache is
+    pending; only compatible observed cache freshness at current HEAD warrants
+    “cache observed fresh.” Schema/missing/read error is unavailable, not satisfied.
+    The formatter is observational and never clears/heals. Tests witness stale target
+    semantics before strict status repairs it, then real CLI/MCP transport and a
+    second MCP call after state change. Doctor wording must mention show's bounded
+    exception rather than universally promise all readers take strict recovery.
+
+    The only show changes here are command-derived helper policy and its no-launch/
+    no-inline boundary. Do not implement resolver, UUID/native path/alias selection,
+    committed historical YAML blob, dirty-object semantics, graph enrichment or
+    whole-invocation deadline machinery in this child. Existing strict escape sites
+    on flock errors and rollup-identified show identity defects remain separately
+    tracked; this delta may not introduce new ones. Preserve BUG-1801 zero cache wait.
+    BUG-1674 still requires one 4s operational deadline, aggregate wait<=1500ms,
+    external useful result<5000ms, default linkage and complete fresh post-activation
+    in-lineage 24h dogfood evidence on both limbs. None is certified by these tests.
+    TASK-1526's four-reader default-budget <2s certificate also remains outstanding;
+    its current 60s single-flight unit test is not that certificate.
+
+    ## 12. Proposed tests — all UNRUN, with positive/negative/non-vacuity controls
+
+    Use existing core modules and `aida-cli/tests/task_1527_refresh_worker.rs`, plus
+    existing CLI/MCP Python fixtures where actual command/transport boundaries are
+    needed. Names below are proposed additions/extensions, not claimed implemented.
+    No new generic harness/service, public test knobs or recurring monitor.
+
+    ### Private environment and binary evidence
+
+    Each process gets actual private HOME/XDG_CONFIG_HOME/XDG_CACHE_HOME/XDG_DATA_HOME/
+    TMPDIR, private Git config and identity, GIT_CONFIG_NOSYSTEM=1 and private
+    GIT_CONFIG_GLOBAL; scrub inherited AIDA/Git runtime/store/session/worker settings.
+    Disable telemetry, network remotes and credentials. A real private Git repo and
+    canonical store plus SQLite WAL cache are required, not mocked staleness alone.
+    Every Git helper receives this environment too. Fake gh/glab and every reachable
+    vendor launcher log argv and refuse unexpected calls; cache-only tests assert
+    zero forge/vendor launches. Actual show tests keep default linkage with controlled
+    fake responses; --no-git is diagnostic only. No live HOME/.aida-store/global
+    queues/user traffic/locks/install or production doctor runs.
+
+    Record exact source SHA/dirty diff, absolute binary path/build SHA/SHA-256,
+    toolchain/features, environment roots, commands, discovered case counts and
+    outputs. Use the built binary consistently; assert current_exe workers use that
+    same executable. Installed e142 CLI and cfg(test) PID0 cannot stand in for the
+    reviewed binary/process. Build before/after or narrowly reverted mutants only
+    when implementation is authorized; no builds now. Owned child handles and
+    readiness barriers determine cleanup, including detached children; reap before
+    deleting fixture directories. Never signal a process discovered only by a
+    possibly reused diagnostic PID. Explicit fixture `--if-requested` invocation is
+    allowed later; no schedule registration.
+
+    ### R1 witnesses
+
+    | Proposed test | Positive/negative/non-vacuity requirements |
+    | --- | --- |
+    | `incremental_busy_handoff_precedes_guard_release` | Actual changed title/status/relationships in a one-commit-stale store, gen0 committed cache, no request; separate-process BEGIN IMMEDIATE handshake. Absent and misleading/Unknown sidecar variants. Useful old rows/head/built_at, one tolerant write, no ladder/full load/rebuild, real launch and target hint before guard release. Mutating C1 call away or moving it after release must fail intended barrier assertion. |
+    | `busy_scope_constructor_query_repin_do_not_retry` | Count from BEFORE constructor through query, handoff wait and forced repin; not a reset after open. At most one tolerant SQLite attempt and one admitted launch for that cache/scope. New invocation can retry. Successful independent cache key unaffected. |
+    | `ordinary_preselection_no_detach_and_worker_suppression_are_strict` | Actual ordinary CLI with no-detach, and separately three real worker failures already recorded before preselection: zero detached launches, strict entry before any tolerant attempt, configured strict ladder preserved. Unsuppressed detach-enabled control uses one-attempt handoff. |
+    | `third_failure_between_attempt_and_reservation_defers_without_second_write` | Barrier after fast-fail rollback, before reservation; third actual worker failure recorded by independent reporter. No reservation/spawn/second write in this invocation; next new ordinary invocation selects strict. Mirror ordering: reservation admitted first, third failure later; exactly that one admitted launch allowed, next admission refused. |
+    | `show_command_policy_honors_no_detach_suppression_and_request_lock` | Actual CLI human TTY, local JSON, global JSON, TOON, default fake linkage; no-detach => ZERO launch AND ZERO strict fallback; suppression same; separately held RequestLock beyond call => useful compatible Deferred or separately permitted bounded exceptional error, zero new strict path. Huge wait env cannot override classification/zero wait. Advisory budget0 control is not mislabeled BoundedShow. |
+    | `handoff_remaining_wait_never_resets` | Partly spent/default/zero budgets, multiple backend opens, holder release/crash, fresh-during-wait; measure one shared wait, no writer-loop. Release writer after stale read and observe actual spawned worker catch up/clear without another reader. |
+
+    For all real-lock reads assert the holder is still alive and transaction held when
+    reader returns; seed schema/rows/HEAD difference explicitly. No useful-result
+    fixture may pass merely by timing out. Before/fix or narrow mutation evidence
+    must fail the behavioral assertion, not setup. Current show guard tests must
+    report pre-existing broader BUG-1674 failures to that owner without relaxing them
+    or broadening this implementation.
+
+    ### R2 and R3 witnesses
+
+    | Proposed test | Required evidence |
+    | --- | --- |
+    | `launch_failures_are_not_worker_failures` | Reach actual failed log-open and spawn syscall boundaries in private child fixture; current_exe failure can use a narrow injected failing syscall wrapper. Assert no child entry/PID, launch_error only, error=None, Deferred not Requested. A direct counter call alone is insufficient. |
+    | `two_workers_plus_launch_errors_do_not_suppress` | Two distinct real failed workers with both self-report and reaper, followed by multiple genuine launch failures; exact=2, legacy gate false, next viable launch still admitted. Third actual failed worker gives exact=3. No launch-specific suppression exists. |
+    | `self_report_reaper_failure_is_idempotent_both_orders` | Long-lived production spawner parent (MCP or process test driving same spawner), barrier-controlled self-report first and reaper first; repeated reports remain one ID/time. Revert append-on-observation to show intended failure. |
+    | `clean_exit_records_nonfailure_when_self_report_is_lost` | Deliberately fail child's terminal hint write, let parent capture zero; record clean_exit once. It cannot become failed from later stale cache/identity probe. |
+    | `known_success_and_not_run_absorb_late_abnormal_observer` | Durable success/not_run then delayed injected abnormal report; count remains0 and timestamp unchanged. Known failure repeated remains1. Contradictory outcomes are diagnostic, not a policy to infer failure. |
+    | `lockheld_lost_report_dead_stale_is_unknown_not_failure` | Real foreign refresh holder makes child return LockHeld, remove both report and parent result via controlled parent exit/report fault; holder departs stale. Old child dead, cache stale => unknown count, no failure, subsequent real-flock recovery succeeds. With live parent zero observation, terminal clean_exit instead. |
+    | `successful_refresh_head_moves_lost_report_is_not_failed` | Real child refreshes changed rows then store HEAD moves/new request survives; lose successful detail report. Parent zero => clean_exit; parent gone => unknown. Current stale HEAD cannot produce failure in either case; newer work recovers. |
+    | `signal_watchdog_and_parent_death_outcomes_are_distinct` | Genuine signal-only and watchdog nonzero with live parent each count once; parent gone + durable child error counts once; parent gone + no report/status remains unknown. Registered and unregistered gaps both tested. Assertions include exact/legacy/unknown populations and readable previous committed cache. |
+    | `wait_error_and_capacity_do_not_count_failures` | Controlled wait error / no admission capacity; neither launch_error nor failed-worker population increments. No new backoff reason. |
+
+    ### R4 witnesses
+
+    `registration_request_lock_cannot_precede_cap_unbounded`: separate process holds
+    RequestLock before child entry beyond a test-only shortened cap. Child makes one
+    try, does no backend refresh, returns registration_deferred/clean; no hang.
+    Distinct `watchdog_report_under_held_request_lock_exits_nonzero`: admit worker,
+    then hold RequestLock while worker exceeds test cap; watchdog report try fails but
+    cap exit/reap still happens. Production constants and startup-relative adjustment
+    are asserted; no changed production timeout. Force backend-open stall to prove
+    watchdog already armed, with cap adjustment measured from t0 not open completion.
+
+    `child_registration_before_parent_update_is_monotonic`: child's self-registration
+    and terminal result precede delayed parent update; no overwritten outcome/identity,
+    no replacement launch after parent RMW contention. `parent_exits_at_each_startup_boundary`
+    covers reservation-only, spawn-before-registration, registered/opening, working,
+    finished-before-report and reported-before-reap. Verify unknown versus exact
+    outcomes and no untracked refresh when token admission fails.
+
+    `modern_attempt_identity_table_does_not_use_legacy_pid_shortcut`: fixtures for
+    same-domain/equal start live-slow, same-domain PID reuse, definite absent PID,
+    foreign boot/ns, absent required fields, mismatched scheme and unreadable probes.
+    Only positive match protects live; no identity row itself counts failed.
+    `reaper_never_samples_reused_pid_identity`: reaped handle outcome is recorded
+    without probing now-reused PID; parent records only child PID, child supplies
+    start identity. Retain legacy lock-info cleanup tests unchanged.
+
+    ### R5/R6 witnesses
+
+    | Proposed test | Required evidence |
+    | --- | --- |
+    | `old_serializer_preserves_recent_long_worker_failure` | Injected clock: launch900s ago, first failure now; actual b46 serializer or byte-identical focused roundtrip drops new fields. at remains now, error remains, correct recent legacy window, at600 counted/601 expired. started_at loss does not expire error early. |
+    | `old_writer_downgrade_never_reconstructs_tokens` | Legacy pending/error, invalid/future dates, new token removed by old writer, missing callback token: no guessed match, no resurrection. Modern launch_error drops to non-error diagnostic row, not legacy worker error. Explicit fresh refresh clears normally. |
+    | `recent_failure_quota_survives_success_volume` | Three recent real worker failures plus >10 succeeded/not_run records and many launch/pending records; exact suppression retained, each quota bounded. Repeated terminal callbacks never renew at or move retention priority. |
+    | `nonterminal_all_live_saturation_defers_without_failure` | Eight positively live matching attempts; ninth admission refuses Deferred with no spawn or failure/error row. End one owned process then re-enter: non-live outcome still unknown, slot may retire and admission succeeds. |
+    | `registered_unknown_saturation_recovers_by_admission_or_age` | Eight registered Unknowns (foreign/unreadable/missing identity), next admission evicts oldest eligible immediately; no false dead/failed claim. Separate age599/600 boundary with no pressure, positive-live older-than600 retained, invalid/future age eligible under pressure. Eventual admissibility and bounded size asserted. |
+    | `pruned_tokens_never_resurrect_on_late_callbacks` | Terminal/nonterminal prune, retarget, clear/refile SAME target with new UUID then old self-report/reaper; no old slot/error inserted, no new-request corruption. Accounting loss labelled honestly. |
+    | `request_byte_cap_does_not_destroy_unknown_fields` | Normal max38 records within128KiB; bounded diagnostic text; oversized opaque legacy extension refuses mutation/launch without breaking usable stale read or inventing fresh data; explicit current-HEAD clear recovers. Unknown fields preserved when under cap. |
+    | `legacy_compatibility_is_named_not_exact_worker_evidence` | Modern2+launch errors => no suppression; legacy3 or modern2+legacy1 can trigger labelled old-projection compatibility, never exact count3. Old-writer historical ambiguity is explicit, no guessed dedup. |
+
+    ### Status and retained regression witnesses
+
+    `request_target_equal_head_with_stale_cache_remains_pending` must feed actual
+    compatible stale observation to shared formatter BEFORE strict status can repair;
+    fresh control may say observed fresh, missing/migration/error controls say unknown.
+    `strict_cli_mcp_status_share_request_lock_and_failure_populations` uses actual
+    CLI plus MCP transport, real foreign flock, absent/misleading lock-info and two
+    consecutive calls after state change; both stay strict and propagate refresh
+    failure, report correct heads/time/request/lock/populations with unknown owner
+    where appropriate. No forge/vendor subprocess is expected on these cache paths.
+
+    Retain existing BUG-1778 structural hint-error test, BUG-1779 RMW concurrency and
+    newer-target clear tests; C crash/readability/request/explicit tick/no-detach tests;
+    A3 `refresh_txn_rechecks_head_inside_txn`; migration/refill-skip/head-recapture/epic
+    regressions; losing-reader no writer; scope restoration after busy; same-thread
+    nested/independent-thread/lock-order tests; stale rows and metadata in one snapshot;
+    A9 output shapes and MCP collector reset; strict mutations and unchanged retry
+    constants. Extend tests rather than pretending existing synthetic spawns certify
+    real outcomes. Preserve default single-flight counter test while TASK-1526 keeps
+    its separate <2s evidence obligation.
+
+    ## 13. Delivery limits and next gate
+
+    Expected bounded implementation surfaces: cached_git_backend.rs; request/worker
+    modules; CacheReadScope policy/phase plumbing; cache_cmd.rs worker entry/clear;
+    small existing-dispatch changes before backend construction; shared status/MCP
+    formatting and doctor summary; existing targeted tests. No general supervisor,
+    new queue/schedule/lease/authority key, parallel cache store, public backoff setting,
+    show-resolution rewrite or duplicate feature. Update stale pre-C docs when the
+    implementation actually lands, not now. Trace later changes to TASK-1527.
+
+    All tests above are **PROPOSED AND UNRUN**. This revision used document/source
+    reads and artifact integrity checks only. No code, canonical spec/comment, queue,
+    review record, mail, lease, schedule, git/index/branch/remote, PR/merge or install
+    write. Store recovery is external. Root reads this complete V2 and READY, sends it
+    to a NEW different independent advisor design gate, and only after safe store and
+    signoff considers authorized lifecycle/implementation routing. Exact artifact
+    hashes bind that review; substantive subsequent base/schema changes require a
+    renewed design check. Full workspace validation remains **batch-once**; later
+    implementation runs targeted core/worker/CLI/MCP regressions and formatting, not
+    another per-child full workspace run. Independent implementation acceptance,
+    merge and activation remain later gates, never self-certified here.
+
+    ----- END EXACT V2 SKETCH -----
+
+    ----- BEGIN EXACT V2 READY | TASK1527_REWORK_SKETCH_V2_READY.md | 10314 bytes | SHA256 c33a623d17c912b25505c0df5fd746751cd434f63279c1b1b2f10e218c625509 -----
+    # TASK-1527 rework sketch V2 — ready for a new independent design gate
+
+    Artifact preparation timestamp from local clock: `2026-10-08T11:20:00-07:00` (America/Phoenix).
+
+    **DESIGN ONLY. R1–R6 responses proposed; no author signoff or implementation authorization.**
+
+    Complete revised artifact: `TASK1527_REWORK_SKETCH_V2.md` (63551 bytes).
+    SHA-256: `f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7`.
+
+    V1 sketch and V1 READY remain byte-for-byte intact. This complete V2 replaces their proposed implementation transitions for the next review; it does not modify their historical text or the signed canonical contract. No code, canonical state, mail, queue, review record, git, PR/merge or activation writes. All implementation tests are explicitly proposed and UNRUN.
+
+    ## Numbered revision response
+
+    | Finding | V2 location | Concrete resolution |
+    | --- | --- | --- |
+    | R1 | Sections 4–5, R1 test matrix | Explicit ordinary strict preselection before tolerant write; one scope/cache attempt through constructor/query/repin; late third failure blocks reservation and defers without second write; next invocation selects strict. Reservation is admission linearization. Actual Command::Show policy honors no-detach with zero launches and zero strict fallback; budget zero is not identity. |
+    | R2 | Sections 6, 9–10; R2/R3 test matrix | Failed pre-spawn log/current_exe/syscall is launch_error, separate from worker failure, error=None. No launch-specific backoff/threshold/strict fallback proposed. Two workers plus launch errors do not suppress. Post-spawn tracking failure is not misclassified as failed launch. |
+    | R3 | Sections 6–7 | Exact terminal transition table, clean exit nonfailure, absorbing known success/not_run, no death+stale inference. Registered/unregistered orphan outcome loss remains unknown. Lost LockHeld and successful-refresh-with-HEAD-move counterexamples explicitly tested. |
+    | R4 | Section 8, startup and identity tables | Cap armed before bookkeeping/backend work; one-try registration and no-untracked-refresh refusal; startup-relative cap adjustment; watchdog try-only report. Modern identity classifier has no legacy PID-only fallback; parent never samples child start identity after reap. |
+    | R5 | Section 9 and roundtrip test | at remains first failure time, started_at additive. Old serializer retains recent long-worker failure age even after token/finished_at loss. Explicit legacy compatibility reason, no guessed dedup or token reconstruction. |
+    | R6 | Section 10 and retention tests | Quotas 10 error / 10 other terminal / 10 launch / 8 nonterminal, 600s unknown diagnostic TTL, admission-pressure eviction of non-live/Unknown, positive-live protection, 128KiB write bound. Recent qualifying failures protected; pruned callbacks no-op; no false outcome or forever-Unknown capacity block. |
+
+    The late-suppression phase interpretation and concrete retention/startup constants are fully specified proposals for the independent gate, not self-approved policy. No replacement worker threshold, launch-error backoff or abandoned-worker suppression is proposed. Signed three-worker/600s threshold is unchanged. Legacy error projection is explicitly conservative and unattributed, never exact distinct-worker evidence.
+
+    ## Scope and routing
+
+    Root must read complete V2 and the full independent CHANGES REQUESTED report, then obtain NEW DIFFERENT independent advisor signoff. Canonical relay/reopen/queue happens only through the authorized root after external store recovery is safe; no store-health claim is made here. Same TASK-1527; eventual Claude Opus doer; no duplicate feature. Preserve BUG-1778/1779. TASK-1526 latency and BUG-1674 whole-show identity/deadline/24h gates stay separate. Cache1527 first, no overlapping BUG1674 implementation. Full workspace validation is batch-once; later doer runs targeted checks. External reserved1593/1591/1811/1812 untouched.
+
+    ## Inputs and preserved artifact hashes
+
+    Full review and routing handoff were read, not only a summary. Canonical contract evidence is retained from the previous turn; no new AIDA CLI or live store scan was performed. Source remains pinned to b46. Private prior exports were reused for exact symbol checks; two additional source excerpts (liveness and show latency fixture) were read with git show. No build/process fixture/SQLite experiment was run.
+
+    | Input path | Bytes | SHA-256 |
+    | --- | ---: | --- |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_INDEPENDENT_REVIEW.md` | 35104 | `90a7275e275cf81fdf8e865f58895e0ffc85bd0214a38eae895ab3b95164766f` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/cache1527-sketch-rework-v2.md` | 3468 | `01c1df8f85f749aa8dc01b8ab10c4b9233a7eaf2ad6b3d15d176dc9ad87cbcb5` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH.md` | 38836 | `b1bf6d72c4db16884d48069eebdb8efdd0aaebdd5f0a1d2282f875fa3eece038` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_READY.md` | 9924 | `93a1eebc3df680f23f51f86550af7d1eb695a77f56adcaeff3947d07d82db54d` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/ROLLUP_INDEPENDENT_ACCEPTANCE.md` | 23306 | `17691a223a163cad5dbd29fd91e1dd014980eb88cab046af939efc2e1807dfe2` |
+    | `/home/joe/ai/aida/AGENTS.md` | 24989 | `163440bcf8c10625b2119225096f981f567bc66e7404e7daf7d432a163cacd9e` |
+    | `/home/joe/ai/aida/.aida/discipline/two-seat-protocol.md` | 1488 | `ce3a505898a705edad433add76aef727a8a084e435f2127c057d85cea5afd135` |
+    | `/home/joe/ai/aida/.aida/discipline/rework-brief-craft.md` | 1218 | `c6570be88621b5b1399c6fcd1cb91d9ef4f02249e88254d59cbc298cd0e5069f` |
+    | `/home/joe/ai/aida/.aida/discipline/seat-recovery-playbooks.md` | 1456 | `416fc03eda7cb04af9faf840f57bec3ce564bdf1acc386ebb3f2b37803df2a27` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK-1527-root-current.json` | 4285 | `07629ba9cfef9636672acd4ea6a398e805134a59d79a0dc35ec3407197564108` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK-1526-root-current.json` | 58246 | `cfbfc09cb65081a5b76205f5970c7de940cb5d429a7b8a9982563f6cb3c75af7` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/STORY-1484-root-current.json` | 44552 | `25886ba38f7398b0aca7b5f368a9cd3a91c2e6142945781eb81b6d0256cdd907` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/BUG-1674-root-current.json` | 55640 | `9bf9a7d484fa4fe46db289b43b1eda9fb37366d02a8e230d972d0192626aabdd` |
+    | `/tmp/task1527-sketch-inputs/BUG-1778.json` | 4368 | `3df7c10e1ff18a2e54a29fbbbdc7b8c98aca4770f77134b47f36c791ab152950` |
+    | `/tmp/task1527-sketch-inputs/BUG-1779.json` | 4421 | `41da92de7c64c650db134451258bca5638cd23b9b7b561a0665362e84977732f` |
+
+    The V1 canonical-read provenance is preserved in its READY manifest. These retained records are not a globally consistent current-store snapshot. The original installed CLI was e1422ae139, not b46 runtime evidence. No future completion timestamp is assigned. The local timestamp above records artifact preparation only.
+
+    ## Pinned code inputs
+
+    Pinned commit `b46aec1e674baae5a329416d4119e67b59200a88`. Read-only diff against `0ffe03948e25949ec8961ca81d0dd44f16580107` confirms only four dev_cmd.rs lines differ; no moving main substituted. Relevant source and test blobs below are immutable and independently retrievable. Hashing a complete blob identifies the source; inspection of large files was scoped to the cited symbols, not a claim of a new exhaustive code audit.
+
+    | Path at b46 | Git blob | SHA-256 |
+    | --- | --- | --- |
+    | `aida-core/src/db/cached_git_backend.rs` | `122e16eeb25b4d0e422c6945516589272ad190be` | `544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7` |
+    | `aida-core/src/db/cache_refresh.rs` | `be889537445c7b8459843e7b2caea004d5302381` | `b83d380c8bd641c402290bb042fdd9de8cddd857979ec61f8817090b5d45764e` |
+    | `aida-core/src/db/refresh_request.rs` | `39cd8ebfc9761cfdc8681b7df390499966423a1d` | `4b473062d1f95180244c639867fde1beef9dab3714bd7e56da7d9948d2e9bbdf` |
+    | `aida-core/src/db/refresh_worker.rs` | `eb959b773f88aaccef9ba12f5ce2509ce6c30395` | `04239c61fed979aa14044b8070c9617cbdc04463f134b90022abc878eeedc40a` |
+    | `aida-core/src/db/cache_lock.rs` | `ca6c834b48a9a858262f5135512ce431857936a2` | `f1c5228c7c2bfc958b72f8c82b38a5868db9711a12f7b2159aa2d6806f9c049d` |
+    | `aida-core/src/db/cache.rs` | `01cadb5c57b1d8919b823c173967454d24e13eae` | `5b5975cb16fb37b9658d26eebffce27db9458260ac4754020aefd45f27798973` |
+    | `aida-core/src/liveness.rs` | `2d5463d60e9b61651386bd87762e8897b6427464` | `503ec861f383fe4be33d230e1b67ada82f5efce296874cd7c7cb75464d1f4a84` |
+    | `aida-cli-lib/src/cache_cmd.rs` | `e9e82a4043dab85ea02401f413d0a5c80a2b9bcd` | `e4ac71e9f4b90b2680f026290cf9d2d795f83e88f0a4607dba5f3a004625e7a8` |
+    | `aida-cli-lib/src/lib.rs` | `70547d508c895a363126feb875e6e8f97d74eb68` | `a43f01cb4c7d18bc940a8a00bbc1beae3d3f1783cfcf51f9fe371562f766e4b1` |
+    | `aida-cli-lib/src/git_backend_cmd.rs` | `0d921907938fcd0637eb2f3ec22ad78279423fc2` | `edfdd1aeac9aec151c9cd1b3b1c2783ad5734ee5854443d3f8b40e3fec4676fd` |
+    | `aida-cli-lib/src/mcp.rs` | `0b64a146f27321ad63b8a6fac47a6d74c85b917c` | `a57c9b778b6d802aa954b479a74f514f7ed062d42c77d3d5f404e17e3dd7840c` |
+    | `aida-cli-lib/src/doctor_cmd.rs` | `11077164e2de2b8f2b7669be2039697d0ca76184` | `62a402bcea6158c5f900ccdd656e9c131736f55b6f2e54bd294b6494fb0af30e` |
+    | `aida-cli/tests/task_1527_refresh_worker.rs` | `f3cf8a0d4868f9fd95a80364756035975a660251` | `6b833acd33c15b7cd8b36711ad7a11f4e67fb9bf7eef870951fdcc5b46d93e8f` |
+    | `tests/test_show_latency.py` | `c74f6e4b08d23035b2220a7793d68447c15e517f` | `c3052d05a66a7b88f2e612e567de8393928aaf25cb0eb58e511757c3bfffa524` |
+
+    ## Draft verification and limits
+
+    Checked V1 hashes unchanged, six numbered responses present, full revised artifact UTF-8 and checksum, input/source manifests, explicit phase tables and proposed witnesses for every R1–R6. No implementation validation or pass is asserted. Neither this author nor coordinating root is the independent approver. The previous independent verdict remains CHANGES REQUESTED until the separate gate disposes the exact V2 artifact.
+
+    READY intentionally does not embed its own recursive checksum. The complete revised-sketch checksum is above; hash READY separately if needed.
+
+    ----- END EXACT V2 READY -----
+
+    ----- BEGIN EXACT V2 INDEPENDENT REVIEW | TASK1527_REWORK_SKETCH_V2_INDEPENDENT_REVIEW.md | 31460 bytes | SHA256 733fb4ace28da60c0272847e9e9bb3e76c78ee8f06c89daf67452b7568f0eb55 -----
+    # TASK-1527 V2 independent advisor design gate
+
+    **ADVISOR SIGNOFF: APPROVED AS AMENDED**
+
+    Artifact timestamp: `2026-10-08T11:28:10-07:00` (America/Phoenix).
+
+    Independent gate: the separately assigned Codex advisor session for V2, not the V1 reviewer, sketch author, coordinating root, rollup author, or eventual doer. The runtime address `/root` does not make this session the earlier coordinating root. This judgment ratifies the six explicit V2 amendments below. It is design approval only, not implementation acceptance, a protected review record, lifecycle mutation, dispatch, merge, or activation permission.
+
+    Reviewed V2: `TASK1527_REWORK_SKETCH_V2.md`, **63,551 bytes**, SHA-256 **f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7**. READY is 10,314 bytes. Both were read in full, as was the complete 35,104-byte V1 independent CHANGES REQUESTED verdict. V1 artifacts remain historical and unchanged. V2 is a complete replacement proposal, not a partial patch to contradictory V1 transitions.
+
+    **Remaining necessary design remedies: none.** R1–R6 are individually discharged for design by the binding interpretations ratified here. “As amended” refers to the concrete V2 responses to those six findings, read under the original signed contracts; it does not leave six unspecified choices to an implementer. All implementation tests remain PROPOSED AND UNRUN. No original acceptance criterion is waived and no numeric backoff or performance policy is invented.
+
+    ## Authority, full reads and source binding
+
+    I read AGENTS.md and the two-seat, rework-brief and seat-recovery disciplines. I read complete V2, V2 READY, the complete V1 independent verdict, cache1527-sketch-rework-v2.md, the current gate instruction, and ROLLUP_INDEPENDENT_ACCEPTANCE.md. I read the full retained root JSON snapshots for TASK-1527, STORY-1484, TASK-1526 and BUG-1674, including every description/comment and other fields present (1, 11, 18 and 11 comments respectively). Large outputs were split into contiguous smaller reads; the omitted part of the parent’s original sketch was reread. These are retained root snapshots, not fresh live canonical reads or a consistent current-store-health certificate.
+
+    Binding precedence is unchanged:
+
+    - STORY-1484 `01a0df0d-f964-78f3-a715-046e37e50915`: A1–A13 and Q1–Q6, over its earlier sketch `01a0df08-c181-7530-b249-2740141c2a0b`.
+    - TASK-1526 `01a0e0fb-8d6b-7790-b04b-f808236dbe2d`: B1–B6 and the explicit C replacement of pre-C WriterBusy/no-request and full-rebuild Deferred branches; product adoption `01a0e0fd-bc48-7600-bc20-b0a8f781d0f7`.
+    - BUG-1674 `01a0e0f6-7f66-7d20-b708-0936f39082eb` and parent companion `01a0e0f6-c7b4-7c61-a5f5-8f1b6975a105`: narrower show exception and whole-show obligations. Later narrow implementation narratives do not rescind these.
+    - TASK-1527 `01a0fe76-bf24-75a0-b3b6-6da7d56239a0`: historical post-merge review, not independent acceptance of the remaining C1/C2 defects.
+
+    I independently exported 14 complete source/test blobs with `git show b46aec1e674baae5a329416d4119e67b59200a88:<path>` into `task1527-v2-independent-evidence/source-b46/`. The manifest records Git blob IDs and independently calculated SHA-256 hashes. Relevant control flow and tests were inspected from those exports; large source files were read by the symbols/ranges below, not claimed exhaustively audited. Exporting/hashing a whole file is distinguished from reading all its code.
+
+    Observed HEAD and main were both `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. The complete read-only b46→HEAD diff contains only four shell-helper additions in dev_cmd.rs and the single approved→Approved test argument replacement in bug_1683_live_drain_lock.rs. Separate b46→0ffe and 0ffe→ff9ac comparisons agree. All 14 relevant exported blob IDs equal HEAD's blob IDs. Thus ff9ac does not change these design inputs. Those unrelated changes receive no substantive review or approval here. No checkout/fetch/reset or peer edits were made. `git status --porcelain=v1` was empty at this session’s initial recorded observation; I do not claim the earlier reported dirty-peer state was absent at other times, or infer permission to alter it.
+
+    Source findings independently corroborated:
+
+    | Source at b46 | Inspection and consequence |
+    | --- | --- |
+    | cached_git_backend.rs:459–490, 546–560, 582–643 | C1 busy branch releases the guard without request/spawn; existing helper enters strict fallback and counts failed spawn as error. The helper cannot simply be called unchanged after busy. |
+    | cached_git_backend.rs:654–737; cache_refresh.rs:360–542 | Constructor/query/repin can revisit refresh; current collector holds budget/deadline but no per-cache spent-attempt phase. V2 needs the proposed phase state and scope reset, not just a local helper counter. |
+    | refresh_request.rs, complete | Existing permanent RequestLock, atomic replacement, retarget preservation, no absent-request recreation, at-based 3/600 predicate and ten-row history. No generation/tombstone subsystem is present. |
+    | refresh_worker.rs, complete | Production current_exe spawn, captured child reaper, clean-exit no-op, 120s/double-duration cap formula, 3s flock patience, null stdin/detach/log behavior. V2 changes result accounting, not process ownership authority. |
+    | cache_cmd.rs:1–290; git_backend_cmd.rs:1150–1234 | Ambient backend and notices precede cache dispatch; explicit worker open also precedes watchdog. An early worker entry is necessary to make preregistration/no-untracked-work real. Plain clear currently compares target/head without the proposed full freshness/revision boundary. |
+    | lib.rs:3840–3890 | Actual Command::Show classification precedes backend creation and configures zero cache wait; suitable source of a distinct policy, unlike budget equality. |
+    | cache_lock.rs:180–325; liveness.rs:655–718 | Legacy PID classification differs from modern identity requirements; missing identity/PID probe ambiguity cannot be silently treated as a positive modern match. Parent start-identity sampling after reaping is unnecessary and unsafe. |
+    | mcp.rs:5315–5390; doctor_cmd.rs:2610–2660 | MCP cache_status strictly refreshes on every call; diagnostic fields are absent. Doctor counts all error rows while its suppression predicate has a time window. Shared observation/population logic is warranted. |
+    | cache.rs:550–700 | Strict ladder and scoped ReadRefreshAttempt are distinct; retain busy_timeout=0, WAL and strict delay policy. |
+    | cached_git_backend.rs:3768–3860, 3976–4236; complete task_1527_refresh_worker.rs and test_show_latency.py | Existing unit spawns are fake/PID0, counters reset around constructor work, process test uses empty commits/ambient Git environment, show fixture uses --no-git, four-reader test uses 60s. None substitutes for the proposed end-to-end evidence. |
+
+    ## R1 — APPROVED: preselection and late-suppression phase
+
+    V2 §§4–5 resolves the actual contradiction between A7/Q1 strict exceptions and A13’s spent tolerant attempt. Ratify ordinary no-detach/pre-observed suppression strict preselection BEFORE any tolerant SQLite write. Preserve known Q1 TTY full-rebuild preselection. After admission to the tolerant branch, busy or ordinary decline enters handoff/observe only: no second SQLite write, ladder, full rebuild, or a constructor/query/repin trick that resets the phase. Unknown-before-attempt full-rebuild need discovered afterward follows that same handoff rule; a subsequent independent invocation or explicit strict command can select strict. This preserves the strict exception when selected and the one-attempt constraint once selected, rather than making one override the other mid-operation.
+
+    Ratify reservation RMW as launch-admission linearization. If the third witnessed worker failure lands after tolerant preselection but before reservation, it blocks reservation/spawn, leaves Deferred and no second write, and the next independent ordinary invocation can select strict. If reservation wins first, that admitted launch is allowed; later reservations stop. The OS launch need not be atomic with a failure report, and RequestLock must not span SQLite or spawn. This is a concrete phase interpretation of A7/A13, not permission to ignore suppression for future work.
+
+    Show uses actual command-derived BoundedShow policy. No-detach and suppression mean BOTH zero launch and zero strict fallback. Zero budget alone does not classify an advisory caller as show. The narrow fence is approved without certifying existing broader show escape sites. Shared remaining deadline includes new RequestLock polls and parent recording; zero allows one try. Hint/lock/write/capacity failure preserves useful compatible Deferred rather than a new strict escape.
+
+    Proposed witnesses are sufficient for this design gate: real separate BEGIN IMMEDIATE holder and changed title/status/relationships, absent/misleading sidecars, guard-held file/reserve/launch barrier, counting from before constructor through repin, ordinary strict controls, both sides of the third-failure/reservation race, actual human TTY/local JSON/global JSON/TOON show, and unrelated budget-zero control. The mutation must fail the ordering or attempt assertion, not fixture setup. Current source cannot pass those witnesses unchanged.
+
+    ## R2 — APPROVED: launch diagnostics are separate, with no new backoff
+
+    V2 §§6,9–10 uses actual OS child creation as the existence boundary. current_exe/log-open/rotation/spawn syscall failures before a child exists are terminal launch diagnostics with launch_error and error=None. They cannot enter either modern exact-worker suppression or the old error projection. No launch-specific threshold, delay, strict fallback or replacement policy is approved. Repeated failed launches remain possible across invocations with bounded diagnostics; this is the honest consequence of preserving the signed three-WORKER rule.
+
+    After a child exists, parent bookkeeping/reaper setup errors cannot relabel it a failed launch or justify another launch. Retain the child handle for owned cleanup and captured exit evidence. Wait errors, registration/capacity refusal and request bookkeeping failures are not invented worker failures. A genuine nonzero child outcome can count even when start identity was never registered; the captured handle/token supplies its provenance.
+
+    Tests reach genuine failed log-open and spawn boundaries, use narrowly injected current_exe failure where needed, and prove two real failed workers plus launch failures still allow a viable launch; a third real failed worker suppresses. Synthetic counter rows or cfg(test) spawn refusal cannot certify this. V2’s explicit absence of launch backoff resolves R2 without guessing numeric policy.
+
+    ## R3 — APPROVED: witnessed outcomes and absorbing nonfailure
+
+    V2 §§6–7 correctly separates “process is gone” from “process failed.” Known success, AlreadyFresh, LockHeld/not_run and captured clean_exit are terminal nonfailures and absorb later abnormal observations. Real error/nonzero updates count once by token and retain first failure time in either self-report/reaper order. Contradictory observers are surfaced diagnostically; the design never manufactures a first failure from death/age/current staleness.
+
+    Both V1 counterexamples are now explicit: lost LockHeld report followed by stale cache; successful refresh with a later HEAD move/new request and lost success report. Captured exit zero establishes nonfailure in both; without either terminal report or wait result, outcome remains unknown. A known-dead orphan can permit ordinary flock/staleness recovery without being counted failed. Signal-only and watchdog failures are still witnessed through a live parent’s captured wait status or durable failure report. No new supervisor is needed to invent unrecoverable history.
+
+    Known nonfailure absorbing versus first witnessed failure immutability is internally consistent for normal production pairing (Err/nonzero and success/zero). The contradictory-evidence tests check robustness, not a new source of failure inference. Clean exit never proves current cache freshness or grants clearing authority. Both observer orders, parent-death boundaries, genuine signal/watchdog cases and the two lost-report histories are required implementation witnesses; their recovery and exact/unknown count assertions make them non-vacuous.
+
+    ## R4 — APPROVED: early cap, try-only registration and modern identity
+
+    V2 §8 supplies the missing ordering. Route the typed worker with explicit paths before an ambient constructor/notices can refresh; arm the existing watchdog at monotonic t0 before new request I/O/backend open. Registration is one RequestLock try. Missing supplied token, contention, write/size/capacity refusal yields clean registration_deferred and NO backend refresh; it is not a failed refresh. A manual no-token worker may deliberately admit a new token under the same rules; a supplied lost token may never be replaced.
+
+    Ratify the startup-relative cap adjustment: initial deadline t0+120s, then once metadata is available t0+max(120s,2×last_full_rebuild_ms), never now+cap and never reviving an expired deadline. If metadata cannot be obtained before the armed floor, floor applies. These are the existing floor/multiplier and missing-duration fallback applied early, not a new timeout number. Including startup closes an actual unbounded region while preserving the approved formula for known metadata. Watchdog reporting is one try and cannot postpone nonzero exit; normal completion disarms it. Bounds do not purport to interrupt kernel-uninterruptible I/O.
+
+    Ratify the modern identity table: comparable local boot/ns and equal start identity is positive live; comparable local unequal start identifies the original process as gone/PID reused but not failed; absent/foreign/unreadable/uncomparable identity is Unknown. Legacy diagnostic cleanup remains unchanged. Existing bool/Option probes must be interpreted conservatively where they cannot distinguish absence from unreadability. Parent does not sample start identity; the child supplies it. Reaper uses its captured handle/token, not a fresh PID lookup. Probe outside RequestLock and recheck retained token/revision inside it; observations do not grant kill/steal/freshness authority.
+
+    The planned held-RequestLock startup and watchdog cases distinguish prompt clean refusal from a real cap failure; backend-open stall proves the cap is armed first. Delayed parent updates, post-spawn contention, each parent-exit boundary and PID/domain cases address the actual source hazards. No Cargo/process run is needed to approve this explicit design; results must be obtained later.
+
+    ## R5 — APPROVED: first-failure at and labelled conservative compatibility
+
+    V2 §9 preserves b46’s at semantics for error rows. started_at is additive launch time; at becomes FIRST witnessed failure time when error first appears, and finished_at matches it. Repeated reports/retarget cannot renew that time. A worker started 900 seconds earlier and failing now remains a recent error after a real old serializer drops the new fields. Counting uses at; losing finished_at does not prematurely expire the failure. Inclusive 0..600 and expiry at601 remain unchanged. Invalid/future timestamps are not repaired into fresh evidence.
+
+    Ratify the explicitly named legacy compatibility fallback already allowed by V1 R5: when legacy/unattributed errors remain, compute the retained b46 error projection in the same window, separately from exact modern distinct-worker IDs. Modern2+launch never suppresses. Modern2+legacy1 may conservatively suppress under the labelled compatibility condition, never described as three proven workers. Old code can have written duplicate observations or spawn errors; no correct deduplication/provenance recovery is available from at/pid/error. This preserves a documented legacy limit rather than falsely promising exact mixed-writer semantics.
+
+    New writers preserve bounded unknown fields; old writers can erase tokens. Such callbacks no-op instead of reconstructing identity by PID/time/error. Launch diagnostics lose detail under old serialization but remain non-error rows. Tests require actual b46 serialization or a byte-identical focused roundtrip, the long-worker/600/601 boundaries, token loss, legacy pending/future times, launch downgrade and explicit fresh recovery. Old processes’ retirement/activation is a later owning-seat operation, not part of this approval.
+
+    ## R6 — APPROVED: finite retention and recoverable Unknown pressure
+
+    Ratify the actual V2 constants as diagnostic storage/admission bounds: 10 error records, 10 other terminals, 10 launch diagnostics, 8 nonterminals; 600s Unknown diagnostic age; 128KiB modern serialized-write cap; 1024-byte error text and 256-byte identity components. These are not a new suppression predicate or a change to the signed 3/600 worker rule. The original ten-error capacity is preserved; additional disjoint categories prevent successes/launches/pending volume from displacing the qualifying failures.
+
+    The priority algorithm is sufficient: protect newest three distinct modern in-window failures plus enough remaining recent errors for the compatibility predicate (union at most six, within ten), then fill the remainder in specified stable order. Other terminals and launch errors have separate quotas. Repeated callbacks do not add or age-refresh rows. Thus success volume cannot turn a still-valid suppression predicate false merely by filling history.
+
+    Nonterminal liveness is an admission-pass observation, not persisted authority. Positive-live matches are protected despite age. Other records, including registered Unknown, retire at age>=600 or under immediate admission pressure when all eight slots are occupied; unverifiable dates are pressure-eligible, never rewritten. Unknown pressure therefore cannot create permanent capacity lockout. Eight positively live attempts legitimately refuse the ninth without failure accounting; a later operation reprobes them. Eviction removes diagnostics only, never kills/cancels work or declares death/failure. Unknown on an unsupported platform can be pruned while real work continues; SQLite/flock correctness remains, and exact accounting for the removed token is honestly unavailable.
+
+    Membership fencing is adequate without a parallel tombstone store: terminal/nonterminal pruning and clear/refile remove tokens permanently to callbacks, retarget retains still-present tokens, same-target refile allocates fresh UUIDs. A child missing its supplied admission exits before work; a worker already admitted and running is not killed by diagnostic eviction. Its late callback is a no-op, not a resurrection.
+
+    The byte bound is a write bound, not a claim to bound all reads of arbitrary existing files. Oversized parseable opaque extensions are not silently dropped or called corrupt: refuse mutation/admission and serve compatible Deferred; explicit compatible fresh-current clear remains recovery. That compatibility limitation is distinct from normal Unknown-slot saturation, which must recover automatically. No infinite history/tombstones/supervisor is introduced.
+
+    The proposed three-failure-plus-success-volume, all-live ninth-slot, Unknown pressure and 599/600 age, invalid/future age, expired601 failure, pruning/retarget/same-target ABA and byte-cap witnesses exercise all these boundaries. A failure at setup or a model-only success is not sufficient. Tests must show the actual serialized file and admitted/no-admitted worker behavior.
+
+    ## Whole-design consistency and implementation evidence gate
+
+    Accepted C1 fundamentals remain: rollback and restore fast-fail scope before hint work; preserve RefreshLock through file/reserve/spawn; release it before bounded observation. Child registration releases RequestLock before attempting RefreshLock. Parent/reaper/watchdog do no SQLite/store work while holding RequestLock, and no locked helper recursively calls a public locking helper. The child can register promptly during the parent’s launch window but cannot refresh through the held flock.
+
+    Accepted C2 fundamentals remain: one token per admitted attempt, one terminal RMW, no duplicate self-report/reaper count, no token reconstruction. Current freshness under RefreshLock plus captured request revision/membership under RequestLock authorizes clear; success/exit0/target==HEAD/ancestor equality alone does not. Preserve BUG-1778 hint-error degradation at every new write point and BUG-1779 serialized RMW/newer-request protection. Permanent sidecar locks are never unlinked.
+
+    The returned label belongs to the pinned rows/head/built_at. Requested needs durable matching admission and actual launch, and cannot survive observed terminal/no-progress evidence; WorkerRunning requires real observed refresh flock, not a requester PID. A newly launched nonterminal Requested is a launch observation, not a guarantee of future progress. One shared invocation/per-MCP-call scope emits once and resets on exit/error; strict callers remain strict. A stale earlier result cannot be retroactively labelled fresh by a later backend.
+
+    CLI cache status and MCP cache_status continue strict refresh on every invocation/call and propagate errors. The observational shared formatter does not clear or heal and distinguishes actual cache freshness from target==HEAD. The stale-target formatter witness MUST precede strict repair; separately exercise actual CLI/MCP transport and two calls after a state change. The cache_status text envelope/descriptor contract is preserved; no blanket conversion of other MCP tools or schema expansion is approved. Doctor shares the same retained population summary and describes the bounded-show exception honestly.
+
+    V2 §12 is a sufficient proposed evidence plan, not evidence already produced. Its actual production-spawn, real separate SQLite/flock holders, changed rows/relationships, readiness barriers, both race orders, private HOME/XDG/TMP/Git configuration, scrubbed inherited settings, same-current_exe binary proof, fake reachable forge/vendor launchers and owned-child cleanup directly address the weak existing fixtures. Record tested source/binary hashes/features, exact commands/discovered cases/results and targeted mutation failures. A timing-only tiny fixture, timeout-only useful-result claim, PID0, or three fake spawn failures cannot pass the implementation gate. Preserve the targeted transaction/migration/head-recapture/refill/epic/nesting/strict-mutation/label regressions and unchanged strict retry delays. Full workspace validation remains batch-once, not a new build per design child.
+
+    ## Routing and retained open obligations
+
+    The new independent design gate is satisfied by this exact V2 plus this full verdict. **Do not implement from this local report alone.** Coordinating root must read it in full and, only after the separate store-safety prerequisite is established, perform the authorized canonical full relay and same-TASK-1527 reopen/queue handoff. No store-safety certification is supplied here. The eventual designated Claude Opus doer remains separate from this advisor. No duplicate worker feature or parent reimplementation is warranted. A substantive intervening source/schema change needs a fresh design compatibility check, not a silent base substitution.
+
+    TASK-1526 still needs the original default-budget four-concurrent-reader, one-commit-stale, exactly-one-refresh, every-reader<2s certificate. The existing 60s counter test remains useful but cannot supply that certificate. STORY-1484 closure:pending remains until its actual children meet their full acceptance.
+
+    BUG-1674 stays separately open for pinned selected UUID/native path/requested alias, bounded committed historical YAML, dirty/partial-object and identity-incomplete semantics, no whole-store fallback, default linkage, one4s operational deadline, aggregate cache wait<=1500ms, useful external result<5000ms, and complete fresh post-activation in-lineage24h normal-concurrency evidence satisfying both configured doctor limbs (<=10% over1s and no5s ceiling breach). No shortened window, quiet substitute, failure filtering or raised budget is authorized. BUG-1801 zero cache wait is preserved but does not close that contract. Serialize its overlapping implementation after TASK-1527; this design approves only the narrow command-derived handoff fence here.
+
+    No live AIDA invocation, canonical comment/status, mail, queue, review record, PR/merge, store recovery, install or activation was performed. No code, Cargo, fixtures or process experiments were needed or run. No operator question, subagent or reserved-task action was taken. Only the requested local report and its new evidence/relay directory were written; V1/V2 source artifacts were preserved.
+
+    ## Full read and integrity manifest
+
+    The entries marked full below were actually read in full, not merely hashed. V1 sketch/READY are preservation-only inputs in this session: their historical findings were evaluated through the fully read V1 verdict, and their bytes are checked for preservation. Complete root JSON includes all retained fields, not just extracted acceptance text. Hashes establish input identity, not live store health.
+
+    | Input | Read mode | Bytes | SHA-256 |
+    | --- | --- | ---: | --- |
+    | `/home/joe/ai/aida/AGENTS.md` | full | 24989 | `163440bcf8c10625b2119225096f981f567bc66e7404e7daf7d432a163cacd9e` |
+    | `/home/joe/ai/aida/.aida/discipline/two-seat-protocol.md` | full | 1488 | `ce3a505898a705edad433add76aef727a8a084e435f2127c057d85cea5afd135` |
+    | `/home/joe/ai/aida/.aida/discipline/rework-brief-craft.md` | full | 1218 | `c6570be88621b5b1399c6fcd1cb91d9ef4f02249e88254d59cbc298cd0e5069f` |
+    | `/home/joe/ai/aida/.aida/discipline/seat-recovery-playbooks.md` | full | 1456 | `416fc03eda7cb04af9faf840f57bec3ce564bdf1acc386ebb3f2b37803df2a27` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_V2.md` | full | 63551 | `f2f43a05e77beb5356846b779093409a906a5a1b45e5dfa88eda54b0fcba62c7` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_V2_READY.md` | full | 10314 | `c33a623d17c912b25505c0df5fd746751cd434f63279c1b1b2f10e218c625509` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_INDEPENDENT_REVIEW.md` | full | 35104 | `90a7275e275cf81fdf8e865f58895e0ffc85bd0214a38eae895ab3b95164766f` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/cache1527-sketch-rework-v2.md` | full | 3468 | `01c1df8f85f749aa8dc01b8ab10c4b9233a7eaf2ad6b3d15d176dc9ad87cbcb5` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/cache1527-v2-independent-review.md` | full | 2360 | `7996fb9dc11826fd365ca1baf8a99e4bc003d84d18618c1373bfb0eea9bc66ab` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/ROLLUP_INDEPENDENT_ACCEPTANCE.md` | full | 23306 | `17691a223a163cad5dbd29fd91e1dd014980eb88cab046af939efc2e1807dfe2` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/STORY-1484-root-current.json` | full | 44552 | `25886ba38f7398b0aca7b5f368a9cd3a91c2e6142945781eb81b6d0256cdd907` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK-1526-root-current.json` | full | 58246 | `cfbfc09cb65081a5b76205f5970c7de940cb5d429a7b8a9982563f6cb3c75af7` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK-1527-root-current.json` | full | 4285 | `07629ba9cfef9636672acd4ea6a398e805134a59d79a0dc35ec3407197564108` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/BUG-1674-root-current.json` | full | 55640 | `9bf9a7d484fa4fe46db289b43b1eda9fb37366d02a8e230d972d0192626aabdd` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH.md` | preservation hash only | 38836 | `b1bf6d72c4db16884d48069eebdb8efdd0aaebdd5f0a1d2282f875fa3eece038` |
+    | `/home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1527_REWORK_SKETCH_READY.md` | preservation hash only | 9924 | `93a1eebc3df680f23f51f86550af7d1eb695a77f56adcaeff3947d07d82db54d` |
+
+    ## Immutable source manifest
+
+    All paths below are exported under `task1527-v2-independent-evidence/source-b46/`. Hashes cover complete blobs; inspection scope is stated above. Every listed b46 blob equals the observed ff9ac HEAD blob.
+
+    | Path | Git blob | SHA-256 |
+    | --- | --- | --- |
+    | `aida-core/src/db/cached_git_backend.rs` | `122e16eeb25b4d0e422c6945516589272ad190be` | `544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7` |
+    | `aida-core/src/db/cache_refresh.rs` | `be889537445c7b8459843e7b2caea004d5302381` | `b83d380c8bd641c402290bb042fdd9de8cddd857979ec61f8817090b5d45764e` |
+    | `aida-core/src/db/refresh_request.rs` | `39cd8ebfc9761cfdc8681b7df390499966423a1d` | `4b473062d1f95180244c639867fde1beef9dab3714bd7e56da7d9948d2e9bbdf` |
+    | `aida-core/src/db/refresh_worker.rs` | `eb959b773f88aaccef9ba12f5ce2509ce6c30395` | `04239c61fed979aa14044b8070c9617cbdc04463f134b90022abc878eeedc40a` |
+    | `aida-core/src/db/cache_lock.rs` | `ca6c834b48a9a858262f5135512ce431857936a2` | `f1c5228c7c2bfc958b72f8c82b38a5868db9711a12f7b2159aa2d6806f9c049d` |
+    | `aida-core/src/db/cache.rs` | `01cadb5c57b1d8919b823c173967454d24e13eae` | `5b5975cb16fb37b9658d26eebffce27db9458260ac4754020aefd45f27798973` |
+    | `aida-core/src/liveness.rs` | `2d5463d60e9b61651386bd87762e8897b6427464` | `503ec861f383fe4be33d230e1b67ada82f5efce296874cd7c7cb75464d1f4a84` |
+    | `aida-cli-lib/src/cache_cmd.rs` | `e9e82a4043dab85ea02401f413d0a5c80a2b9bcd` | `e4ac71e9f4b90b2680f026290cf9d2d795f83e88f0a4607dba5f3a004625e7a8` |
+    | `aida-cli-lib/src/lib.rs` | `70547d508c895a363126feb875e6e8f97d74eb68` | `a43f01cb4c7d18bc940a8a00bbc1beae3d3f1783cfcf51f9fe371562f766e4b1` |
+    | `aida-cli-lib/src/git_backend_cmd.rs` | `0d921907938fcd0637eb2f3ec22ad78279423fc2` | `edfdd1aeac9aec151c9cd1b3b1c2783ad5734ee5854443d3f8b40e3fec4676fd` |
+    | `aida-cli-lib/src/mcp.rs` | `0b64a146f27321ad63b8a6fac47a6d74c85b917c` | `a57c9b778b6d802aa954b479a74f514f7ed062d42c77d3d5f404e17e3dd7840c` |
+    | `aida-cli-lib/src/doctor_cmd.rs` | `11077164e2de2b8f2b7669be2039697d0ca76184` | `62a402bcea6158c5f900ccdd656e9c131736f55b6f2e54bd294b6494fb0af30e` |
+    | `aida-cli/tests/task_1527_refresh_worker.rs` | `f3cf8a0d4868f9fd95a80364756035975a660251` | `6b833acd33c15b7cd8b36711ad7a11f4e67fb9bf7eef870951fdcc5b46d93e8f` |
+    | `tests/test_show_latency.py` | `c74f6e4b08d23035b2220a7793d68447c15e517f` | `c3052d05a66a7b88f2e612e567de8393928aaf25cb0eb58e511757c3bfffa524` |
+
+    ## Exact relay payload and nonrecursive integrity
+
+    `task1527-v2-independent-evidence/CANONICAL_RELAY_BODY.md` contains the exact complete V2 bytes, exact complete V2 READY bytes and exact complete final review bytes, with explicit boundaries and independent hashes. It is a prepared text body only; nothing was transmitted. Root must preserve all those bodies in any authorized relay, not substitute a summary of the six judgments.
+
+    This report deliberately does not embed its own hash or the relay hash. `artifact-integrity.json` is a separate final receipt containing report and relay byte counts/hashes and verification that the embedded byte ranges equal their originals, plus preserved-input rechecks. That avoids a recursive selfhash dependency. The receipt and relay are created after this report is final. No implementation result is asserted by artifact verification.
+
+    ----- END EXACT V2 INDEPENDENT REVIEW -----
+  created_at: 2026-10-08T19:07:14.489623440Z
+  modified_at: 2026-10-08T19:07:14.489623440Z
+  relayed_from: task1527-rework-v2-independent-advisor
 history:
 - id: 01a0fdf1-836d-7331-9d3e-ac3a67bb447b
   author: joe
