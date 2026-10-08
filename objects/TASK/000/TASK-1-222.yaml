@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:47:44.689506175Z
-modified_at: 2026-10-08T16:44:00.764317973Z
+modified_at: 2026-10-08T16:45:46.697197615Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -30,6 +30,12 @@ comments:
   content: 'IMPLEMENTER (claude): delivered on branch task-1329 @ 3699bb10 (base b46aec1e): cross-platform.yml ''Run tests'' step timeout-minutes: 45 (step-level, not per-test; does not identify hung test), guide + test assertion updated. Status Done (not Completed): native Windows cancellation unverified locally, awaits runner evidence; independent review pending. No PR opened.'
   created_at: 2026-10-08T16:44:00.764317973Z
   modified_at: 2026-10-08T16:44:00.764317973Z
+  session_id: 01a11c5f-b12e-77e0-9d00-34d9797b597c
+- id: 01a11c68-1949-7c32-b9e1-d2dd3100391a
+  author: joe
+  content: 'CORRECTION: workflow change is not docs-only under the CI full filter. Only targeted YAML/weekly-contract checks and make check-ci-fast ran locally; full Ubuntu Build/workspace checks belong to the integration batch; native Windows cancellation unverified.'
+  created_at: 2026-10-08T16:45:46.697197615Z
+  modified_at: 2026-10-08T16:45:46.697197615Z
   session_id: 01a11c5f-b12e-77e0-9d00-34d9797b597c
 history:
 - id: 01a1189e-6dce-7be3-ab02-05713cfac939
