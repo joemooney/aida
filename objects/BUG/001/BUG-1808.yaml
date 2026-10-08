@@ -8,11 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T04:13:19.428244322Z
+modified_at: 2026-10-08T04:13:22.087075222Z
 req_type: Bug
 tags:
 - atomicity
 - authority
+- closure:pending
 - from-qci:BUG-021
 - queue-work
 - roles
