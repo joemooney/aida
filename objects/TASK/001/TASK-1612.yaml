@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:13:23.384864566Z
-modified_at: 2026-10-08T16:15:52.459903192Z
+modified_at: 2026-10-08T17:21:28.243481759Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -40,6 +40,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe, explicit 2026-10-08 authorization): independent checkpoint REQUEST_CHANGES at 17b6ac3ecaafd158bdff1553bb43b4c5ca149780 read in full. Blocking HostProfile::probe PID1 declaration does not qualify actual nearer subreaper adopter; unchanged-public-profile probe proves mismatch. Same-spec/same-branch F1 rework is required, with actual qualification or honest unsupported refusal, isolated public-profile adopter/reaping controls, and missing ordinary supported-host lifetime validation. Concrete numbered brief .aida/handoff/orchestrator/run-20261008/task1612-rework.md preserves exact report/evidence and all release/production gates. Keep existing lineage/lease and InProgress; no unreviewed dependency supplied to BUG-1808, no PR/merge/status completion. New independent reviewer after rework.'
   created_at: 2026-10-08T16:15:52.459903192Z
   modified_at: 2026-10-08T16:15:52.459903192Z
+- id: 01a11c88-c6b3-7633-8ece-dbf3593a7a8d
+  author: joe
+  content: 'REQUESTED CHANGE F1 (independent early transport witness, not a final production verdict): adopter qualification can kill the normal CLI with SIGPIPE when cleanup writes to hold/release pipes after their readers have been reaped. Public HostProfile::probe on exact abc8 with owned nearer subreaper exits -13 under SIG_DFL; ignored-SIGPIPE and static controls corroborate. Portability-only later candidate09d7 remains pending. Preserve report .aida/handoff/task1612/adopter-independent-abc8/F1-reproduced.md; same-lineage numbered rework .aida/handoff/orchestrator/run-20261008/task1612-sigpipe-rework.md requires bounded closed-reader-safe cleanup without changing process-wide signal policy and positive/failure public-API subprocess regressions under the real caller disposition. No production release, dependency acceptance or merge approval. New different reviewer required after remedy.'
+  created_at: 2026-10-08T17:21:28.243481759Z
+  modified_at: 2026-10-08T17:21:28.243481759Z
+  relayed_from: task1612-adopter-independent-review
 history:
 - id: 01a119b7-9c62-7890-901e-794aa2127b48
   author: aida-session-start
