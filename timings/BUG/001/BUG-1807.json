@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1807",
+  "publishes": [
+    {
+      "at": "2026-10-08T05:36:54.145193212Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T02:10:58.558121101Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T02:42:52.022794052Z",
+      "spec": "BUG-1807",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1807",
+        "branch": "bug-1807-gitlab-handoff",
+        "first_seen": "2026-10-08T02:42:52.022741569+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-08T03:45:53.947949438Z",
+      "spec": "BUG-1807",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "e9533b55deddfdf81d7267f8f6d091ae54e0fa41"
+      }
+    },
+    {
+      "ts": "2026-10-08T03:49:45.536840766Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-08T03:50:59.202767417Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:27:00.343940774Z",
+      "spec": "BUG-1807",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2454,
+        "verdict": "APPROVED",
+        "reviewed_sha": "0f927344807e94b02699014fe4c3e85850e6dd80"
+      }
+    },
+    {
+      "ts": "2026-10-08T05:27:50.820624857Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-08T05:28:29.317920901Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-08T05:36:19.438549344Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-08T05:36:28.922060757Z",
+      "spec": "BUG-1807",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2454
+      }
+    },
+    {
+      "ts": "2026-10-08T05:36:54.132383413Z",
+      "spec": "BUG-1807",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7aa944a4b3dfff6d2e03dcdb7463f677d4c57805",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}

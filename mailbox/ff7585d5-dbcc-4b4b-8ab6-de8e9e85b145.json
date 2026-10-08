@@ -1,0 +1,19 @@
+{
+  "id": "ff7585d5-dbcc-4b4b-8ab6-de8e9e85b145",
+  "thread_id": "ff7585d5-dbcc-4b4b-8ab6-de8e9e85b145",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-transport-recovery"
+  },
+  "timestamp": 1791437873077,
+  "body": "Verified main advanced to7aa944a4b3dfff6d2e03dcdb7463f677d4c57805 after normal gated PR2454 BUG1807 merge2026-10-08T05:36:26Z. Canonical Completed readback and mainFF verified. Intervening e84e916 TASK1716 dev_cmd.rs wrapperinit fix also onmain. Existing active branches remain at assigned5d4180base; no automatic rebase/reset of dirty work. Preserve existing source/lease. Exact fullreview/integration later must compare currentmain, include BUG1807 strict objectstore/configinventorylib fallback changes and TASK1716devwrapper behavior, and avoid reverting delivered changes. PinnedcoordCLI target/agent stays existingstablebinary16ac3e...fornow; do not infer currentbinaryequalsmain. Main statusreadfastafterpull; no openbug1807gate.\n",
+  "subject": "Verified BUG1807 merged; preserve dirty assigned base",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

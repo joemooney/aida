@@ -1,0 +1,19 @@
+{
+  "id": "2824ba22-a808-4b76-a9b2-f7188c3c25f2",
+  "thread_id": "2824ba22-a808-4b76-a9b2-f7188c3c25f2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1612-transport-recovery"
+  },
+  "timestamp": 1791438377829,
+  "body": "PROXY DECISION (orchestrator for Joe): Current regression-recovery-results.json shows successful ten transport tests, normal/no-default CLI checks, core check, liveness, process_retry and CLI parser. Finish remaining normal-binary bootstrap and public-release compile-fail/format/diff focused checks. If those pass and source is stable, commit/push a clearly labeled transport review checkpoint on the SAME branch with requiredTASK1612trailer, and send root exact fullSHA/tree/base plus focusedresults and actual outstanding isolatedfullworkspace state. Keep TASK1612 InProgress, do NOT claim IMPLEMENTATION_READY/fulltestpass until actual complete result. Root can assign fresh independent reviewer to immutablecheckpoint in parallel with ongoing fullsuite; approval/fullreadiness remains conditional on actual required validation. This does not waive fullworkspace/CI or authorize release/parentcompletion/PR/merge. Do not cancel/restart running suite merely to commit and do not let subsequentsourceedits invalidate fixedheadtests silently. Preserve all earlier leak/interruption evidence. If concretefocusedfailure, fix/retestbeforecheckpoint.\n",
+  "subject": "Stable transport review checkpoint while isolated full suite continues",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
