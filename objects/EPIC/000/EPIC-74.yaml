@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T19:11:12.873768214Z
+modified_at: 2026-10-08T19:11:14.149404213Z
 req_type: Epic
 tags:
 - architecture
@@ -957,6 +957,41 @@ comments:
     Coverage chain/reopen/final-diff/narrow squash, Option<BranchRef> parent, no force release and accepted unchanged profile contracts are retained. Whole positive design needs new advisor; S1–S4 signed design remains intact, implementation NOT READY.
   created_at: 2026-10-08T19:11:12.873768214Z
   modified_at: 2026-10-08T19:11:12.873768214Z
+  relayed_from: answered-sketch-author
+- id: 01a11ced-44e5-7631-9ae7-5011a011b39e
+  author: joe
+  content: |
+    # EPIC-74 child acceptance amendment v4 — proposed, not applied
+
+    Codex same sketch-author lineage, 2026-10-08; committed main 0ffe03948e25949ec8961ca81d0dd44f16580107. Exact draft relay body only; no canonical mutation during recovery. Preserve V1–V3 and signed S1–S4 verbatim in ADR v4/evidence. Full positive amendment needs NEW different independent review. Original canonical acceptance/statuses remain unchanged.
+
+    Companions: EPIC74_AMENDED_SKETCH_V4.md, EPIC74_ADR_DRAFT_V4.md, EPIC74_ENTRYPOINT_GUARDS_V4.md. Target/parent vocabulary and canonical epic isolation remain selected; no lane seat/flag/system. Guided dependency order 1481 -> 1482 -> 1483 retained. No dispatch/implementation authorization.
+
+    | Owner / acceptance | V4 proposal and signed scope |
+    | --- | --- |
+    | 1481 title/description | Canonical epic target declaration and main-line exclusion with UUID generations/sticky history. No release entitlement inferred. |
+    | 1481 AC1 | All actual matrix handlers/aliases exclude isolated main-line actions with env absent/misleading, explicit/force/resume/existing PR/refreshed members. Errors not empty success. S3 refuses isolated lifecycle/shipping/completion and all clear. |
+    | 1481 AC2 | S1 positive ordinary/isolated-subtree discovery/selection is real but not lifecycle permission. First-slice isolated setup/claim/queue/worktree/launch all refuse; future owner-supported positives require separately signed full contract. |
+    | 1481 AC3 | Store-only declaration under S1/S2 checks complete in-flight inventory and every peer old/candidate predicate; no own Ordinary-absence reservation. Exact declaration/sticky history committed together through checked writer; receipt returned afterward, never self-hashed. Clone after sync honors isolation. S4 actual all-writer/schema/adoption/hooks/strict-read readiness required. |
+    | 1481 AC4 | Explicit outside-context/force pickup refuses. Old generic force override remains unfulfilled, not covert release. |
+    | 1481 AC5 | Old close-without-landing remains unresolved operator capability. Signed protective slice may refuse it without resolving that future fork. No full AC4/5/whole-story completion credit. |
+    | 1482 title/description | Targeted PRs, verified Done evidence and exact default landing coverage. No new status. |
+    | 1482 AC1 | UNSIGNED positive extension: immutable intent/input plus finite typed owner-result slots; actual common identity/forge result late-bound by sole owner, concrete after-image checked. All producers/recovery/merge consumers obey cooperative predicates and actual source/base rules; no source-pin claim of atomic base. |
+    | 1482 AC2 | Live/replay/direct status/review-covers/umbrella/retry use same committed-snapshot coverage validator. Original child reopen/definition evidence stays fresh independently of new landing SHA. Partial dirty status never grants eligibility. |
+    | 1482 AC3 | show/status distinguish verified Done-to-target evidence from unmerged Done without relying on current env/active declaration. |
+    | 1482 AC4 | Immutable evidence/coverage predecessor IDs with missing/cycle refusal; reviewed set and final diff exclude reverted/omitted work; trailers candidates only. Acyclic backward receipts survive clone/remap/clear. |
+    | 1483 AC1 | Option<BranchRef>: ordinary default absent/empty None/no Git invocation; off-default absent actual identified default; same-target no-op. Parent sync merge conflict stops; shared branch not auto-rebased. |
+    | 1483 AC2 | Drift behind validated parent, error on unknown; no main fallback. |
+    | 1483 AC3 | UNSIGNED full extension: narrow squash B ancestor S, actual first-parent/base B, result tree S, exact forge identities/default reachability plus original fresh reviewed coverage. O settles checked landing output with declaration STILL active. Separate locked L freshly validates current coverage/membership/in-flight/peers, then only verified fully-landed Active->Landed/inactive transition; all history retained. Own settled record is historical, own Pending never ignored. New child/reopen/live/unlanded/peer Pending blocks. No clear itself completes anything. |
+    | 1483 AC4 | Closed-unmerged, partial/intermediate-parent, uncertain/persistence-fault outcome preserves isolation; readback/reconciliation never retries vendor/forge effect. Pending retained through full result commit, terminal observation references backward only. |
+
+    S1–S4 is a signed bounded DESIGN with implementation NOT READY, not a replacement requirement or full positive approval. No clear is supported by S3 even if proposed L looks implementable. Known missing checked writer/common hook/strict read/hook-safe adapter/all-writer proof remains delivery prerequisite; current functions are not stand-ins.
+
+    Add paired tests declaration_commits_without_self_conflicting_absence; reservation_receipt_is_acyclic_and_clone_verifiable; late_common_identity_binds_only_declared_slots; forge_result_binds_without_rewriting_reserved_inputs; unexpected_slot_identity_budget_or_field_refuses; verified_landing_then_clear_revalidates_current_inventory; clear_peer_pending_new_child_reopen_or_live_work_refuses; settled_own_observation_does_not_deadlock_clear; expected_default_advance_is_not_peer_reinterpretation. Crash after K0/K1/K2/L commit before receipt delivery: exact committed UUID/payload readback, history/Pending/isolation preserved as appropriate, no effect replay. Preserve all prior matrix/coverage/reopen/revert/body/clone/narrow-squash positives and negatives. Canonical encoding golden-byte tests prove digest projections, not YAML formatting. All proposed, NOT RUN.
+
+    Profile V2+V3 scope remains unchanged accepted accurate blocked contract. No extra profile design, operator prompt, source/spec edits, statuses/queues/grants/holds/activation, code commits/PR/merge or external reserved work. DOC-5/ADR docs publication waits for actual authorized delivery, not this artifact.
+  created_at: 2026-10-08T19:11:14.149404213Z
+  modified_at: 2026-10-08T19:11:14.149404213Z
   relayed_from: answered-sketch-author
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
