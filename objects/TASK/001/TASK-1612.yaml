@@ -1,0 +1,34 @@
+id: 01a119b7-4438-7820-933e-a0eaf6e799cc
+spec_id: TASK-1612
+agreed_id: TASK-1612
+title: Build sealed executable and owned waiting-child transport without production release
+description: |
+  Bounded prerequisite child of BUG-1808. Implement only the independently approved core-accessible sealed executable image and owned waiting-child transport from BUG-1808 launch amendment01a119ac-133b-7580-9381-e1febdeb8849, as amended by fresh independent launch owner verdict01a119b5-ea32-7ed0-b5e9-11858700f78b and full TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md. Callback approval01a119af-a347-7961-b01d-66603478a59b remains binding for future Git integration; this child has no Git publication. This is infrastructure, not completion of BUG-1808/TASK-1607/BUG-1802.
+
+  ## Acceptance
+
+  1. Core-accessible SealedExecImage copies selected helper and compiled native leaf bytes into independently owned executable sealing-enabled memfds, verifies immutable seals/digest/ELF and explicit opened-object credential/loader policy, and uses descriptor execveat rather than reopening mutable paths. Supported Linux profile is explicit; unsupported platform/kernel/image/credential modes refuse before any lifecycle effects, no path fallback.
+  2. WaitingChild uses an early minimal bootstrap without normal CLI/store/cache/hook initialization, authenticates actual owned PID/boot/start and creating supervisor/thread, and supplies private bounded sequenced channel/READY plus exact mapped-FD/CLOEXEC rules. No lock handle is inherited. Wrong process, stale/duplicate/partial frames, missing identity, replaced source bytes and missing sealed descriptors fail safely.
+  3. Owned cancellation/parent-death handling and bounded settlement do not signal guessed/reused/peer PIDs, do not assume recovery owns waitpid, preserve possible-execution distinctions, and prove creating-thread/pre-prctl/orphan-adopter behavior in isolated fixtures. Returned exec failure retries only the same identity/image/deadline, never automatically spawns a replacement.
+  4. PRODUCTION RELEASE IS UNAVAILABLE. No persistent assignment/grant/manifest/member schema, occupancy policy, live caller wiring, current-authority check, callback publisher, vendor dispatch or public/env construction of a release permit. Only cfg(test) fixture code can exercise a compiled fake leaf using a test-only permit absent from normal builds. Future production consumption requires the common publisher-owned private CommittedDispatch. Document the integration seam without inventing competing formats.
+  5. Isolated real bootstrap/syscall witnesses cover sealed helper/leaf source symlink and in-place replacement after selection/binding; compiled matching native leaf positive and replacement negative; FD inventory, credential/script/unknown-loader negatives; parent/thread death/cancellation/drop/channel faults, startup deadlines and bounded reaping. Full fixture state must prove no live AIDA/user/vendor lifecycle effects. Tests use fake HOME and owned processes only. Document unsupported and untested cases honestly.
+  6. Trace code and commits to this child and BUG-1808, run targeted tests plus workspace build/checks/formatting appropriate to new core/CLI seams, push clean branch, and obtain fresh independent exact-head code review. No install/activation, gate changes, completion credit to parents or proxy authority merge.
+
+  ## Scope boundary
+
+  Complete publication/assignment/process/grant/manifest/member/attempt/receipt schema and the signed callback adapter are subsequent BUG-1808 work. TASK-1607 supplies occupancy only after that shared owner; BUG-1802 provenance policy follows later. Pane/containment/installed vendor adapters and full production gateway/history acceptance remain outstanding; rejecting them here is not their completion. The first transport component does not reduce parent acceptance. Final authority-sensitive merge remains operator-owned.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T04:13:23.384864566Z
+modified_at: 2026-10-08T04:13:23.384864566Z
+req_type: Task
+execution_mode: guided
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: codex
