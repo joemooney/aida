@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:19:42.865695554Z
-modified_at: 2026-10-08T02:31:18.327809864Z
+modified_at: 2026-10-08T03:25:52.873972834Z
 req_type: Bug
 tags:
 - from-qci:BUG-020
@@ -37,6 +37,12 @@ comments:
   content: 'PROXY DECISION: independent bug1806-reviewer APPROVED exactd6b4ed43b819346e6ededd2f47215065ba68b065. Verified canonical provenance and INDEPENDENT_REVIEW.md; 21targetedRust,180Bashprobes,templates/fmt/whitespace passed; implementer21fastCIpassed. No authority model/schema changes; bounded shell-eval bugfix ready for integration with BUG1807 once independently approved. Zsh unavailable disclosed. No merge or Completed claim.'
   created_at: 2026-10-08T02:31:13.539190843Z
   modified_at: 2026-10-08T02:31:13.539190843Z
+- id: 01a1198b-c569-7112-abdf-62d68670382b
+  author: joe
+  content: |
+    PROXY DECISION: BUG-1806 remains independently approved at d6b4ed43b819346e6ededd2f47215065ba68b065, exact remote head/base verified. BUG-1807 has a separate reproduced enumeration blocker and remains in rework. Separate the integration batch: use the unchanged approved BUG-1806 branch as a one-item batch PR, with no new merge or source resolution, and normal required CI/exact-head shipping gates. No approval override or authority expansion. This replaces the planned joint batch for this spec; BUG-1807 will integrate only after its own fresh approval.
+  created_at: 2026-10-08T03:25:52.873972834Z
+  modified_at: 2026-10-08T03:25:52.873972834Z
 history:
 - id: 01a11945-177d-7112-8e88-af7023e58138
   author: aida-session-start
