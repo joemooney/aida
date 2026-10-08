@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1614",
+  "publishes": [
+    {
+      "at": "2026-10-08T05:53:58.606282724Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T04:27:25.340897673Z",
+      "spec": "TASK-1614",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T04:27:33.666767219Z",
+      "spec": "TASK-1614",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T04:53:17.226665551Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2455
+      }
+    },
+    {
+      "ts": "2026-10-08T04:58:17.754683769Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:02:34.522219083Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:05:30.329684634Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:11:25.559442443Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:16:36.524399399Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:49:13.984895474Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-08T05:53:16.571431692Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-08T05:53:25.518118003Z",
+      "spec": "TASK-1614",
+      "seat": "reviewer",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2455
+      }
+    },
+    {
+      "ts": "2026-10-08T05:53:58.593647800Z",
+      "spec": "TASK-1614",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8ea2fe47c0e6128127a67251ad4545a412fb5d28",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
