@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T06:15:08.172715154Z
+modified_at: 2026-10-08T06:26:01.397742051Z
 req_type: Bug
 tags:
 - atomicity
@@ -1317,6 +1317,22 @@ comments:
     This is a negative checkpoint comment, NOT a standard approved parent review record, Done/Completed, PR, hold release, activation, dependency acceptance or merge permission. BUG-1808 remains In Progress / implementation BLOCKED and NOT READY.
   created_at: 2026-10-08T06:15:08.172715154Z
   modified_at: 2026-10-08T06:15:08.172715154Z
+- id: 01a11a30-b21e-73a2-a3fa-15b0272858a3
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Address actual independent checkpoint REQUEST_CHANGES report .aida/handoff/bug1808/INFRASTRUCTURE_INDEPENDENT_REVIEW.md at head21d84bd8d555916ad74c1c577b7c02181999ee32. Reviewer realcanonicalcomment01a11a26-ba8c-7d50-89da-aa673e288114/native01a11a18-13af-7dc1-9563-15b120fd9562, correctednormal-slotrerunconfirmedbothfailures. Root read complete report and actualconfirmed-findings.log. This is bounded existingcontractimplementation, no productfork/newauthority. SameBUG1808, SAMEWT/branch/lease, keep parentInProgress/fullproductionNOTREADY. No newlauncher/schema/activation/parentapproval/PR/merge.
+
+    F1: aida-core/src/publication/records.rs FileImage::byte_count (161/167) acceptsowner-unreadablemode, effects.rs VerifiedFileSet::apply (130/155/161), durable.rs read_regular/write_mode_with. Real mode0200 effect accepted then installed, allComplete/retry/Restore EACCES leaving ownedfile0200. Remedyvalidate recoverable mode profile for ALLbefore+afterimages before ANYtargetwrite; rejecting absentownerread is approved supportedprofile. Do NOTchmod-on-recovery/blindunlink/relaxexactimagepredicates orcurrentFD-onlycrash workaround. Reproduce independent_tests::accepted_unreadable_afterimage_must_not_strand_recovery from actualevidence. Tests0000/0200refusewhole-set beforevalidfirsteffectwrite; readable0400/0600/0640/0700positivecontrols; preservedpeer/sidecar/exactmodeguards.
+
+    F2: observations.rs ObservationChain::require_checkpoint(186), append(198–255), cachedcheckpoint/tip. Deletesequence0afterretaincheckpoint, currentcheckpointOk, replay0Chain, append1success, reopenfailsgap. Freshlyvalidateboundedretainedprefix/count/digests+durability atreceipt/newappend, fencefutureappendaftermissing/changed/unreadable/unsyncablereplayuntil explicitreopen/revalidation. Preserve originalerror/evidence, no recreatinggap/trustingcachedtip. Reproduce independent_tests::receipt_checkpoint_must_detect_current_lost_tail. Addlive-objectdeletedtailreceiptrefusal/no seq1, changedprefix/read+syncerror thenanotherappendfenced, healthyreplay/append/reopen/budgets/immutablecollisionpositives.
+
+    Read exact report/linefindings/tests/remedies and original plan/canonicalBUG1808allindependentv3/v4/v5/launch/paneconditions. OriginaldoerCodex1804374usage_limit_exceeded beforefinal; rootstoppeditsidleTUIafteractualfencedcore/CLI/fastresultsexit0, alloriginalsourceclean/pushed21d84. CurrentIMPLEMENTATION_BLOCKED.md broadisolationstatementwaswithdrawn; correctedfencedresultscore1340/CLI/fast21passed inindependentGit/source snapshot. Read actual checks/fenced*.json/proof/runner inownerWT, preserve source/result distinctions and all earlierfaults. StablecoordCLI /home/joe/ai/aida/target/agent/aida, no globalinstall. Originalcanonicalreviewrequestedchangesis checkpointONLYnotstandardparentrecord.
+
+    Implement traceBUG1808|ai:claude fixes only inexistingprivate modules/tests; meaningfultargetedtests+fmt+diff+appropriatefastchecks inindependentGit/cwd/fakeHOME/runtime with NOlivetargetsymlinks, ordinaryCargo2slots XDG_RUNTIME_DIR=/run/user/1000forbuild, privateXDGonlytests, worktree-privateCARGO_TARGET_DIR, no slotbypass/sharedtargetdebug. No live user/store/queue/vendor experiments or sharedsnapshotrestore. NativeClaudeactualroleimplementer strongOpus. Respectexistinglease01a119db6f34 andcurrentcleanbranch, doNOTmakeanotherWT/lease/rebase/reset whilepeersadvance. TASK1612unreviewed17b6...MUSTNOTbecopied/mergedyet.
+
+    Commit+push properAIclaude subject(trailerBUG1808), no PR/merge/selfreview/Done. Save exactnewhead/tree/base+actualcommands/results and .aida/handoff/bug1808/INFRASTRUCTURE_REWORK_READY.md bothassignedWT/main(orcopyrootnotoverwrite distinctartifacts), notifyadvisor via supportedmailbox. RootallocatesNEWfreshstrictreviewerafterrework, notpreviousreviewer. Fullcommonunimplementedphases1–8remainrequired, notexcusedbythischeckpoint. User authorizedbypass; this suppliesnogrant/TTYexception. No childagents unlessrootseparatelyroutes.
+  created_at: 2026-10-08T06:26:01.374598535Z
+  modified_at: 2026-10-08T06:26:01.374598535Z
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
