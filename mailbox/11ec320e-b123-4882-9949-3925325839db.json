@@ -1,0 +1,19 @@
+{
+  "id": "11ec320e-b123-4882-9949-3925325839db",
+  "thread_id": "11ec320e-b123-4882-9949-3925325839db",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1321-worktree-claude"
+  },
+  "timestamp": 1791476607546,
+  "body": "Actual source author is Claude; use trace:TASK-1321 | ai:claude and [AI:claude] commit, despite old generic brief saying codex. Preserve tests/result isolation and record honest fullcheck limitations; do not treat primary runtime sessions symlinks as isolated via fake HOME alone.",
+  "subject": "Trace author and isolated full checks",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

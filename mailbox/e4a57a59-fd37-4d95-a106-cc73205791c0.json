@@ -1,0 +1,18 @@
+{
+  "id": "e4a57a59-fd37-4d95-a106-cc73205791c0",
+  "thread_id": "e4a57a59-fd37-4d95-a106-cc73205791c0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791476650100,
+  "body": "Independent audit saved at /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1565_DECISION_ACCEPTANCE.md. PASS for decision acceptance: canonical answered:0 selects Keep current budget with explicit masking-regressions consequence; B/C conditional criteria do not apply; main already distinguishes proportion and ceiling in finding text and independent OR predicate. Existing named unit tests were read, not run. No missing implementation under selected A. Live installed-binary doctor returned exit 1: 38/353 over 1000ms (10.765%), worst 224309ms against 5000ms ceiling, 237 off-lineage samples excluded. Both arms breach; no causal attribution to contention or a specific bug and no claim of a regression fix. Installed binary e1422ae139 is older than inspected main b46aec1e674baae5a329416d4119e67b59200a88; limitation recorded. No source/spec/status/queue/hold/grant changes, lease, commits, PR, or merge. Root handles disposition.",
+  "subject": "TASK-1565 independent acceptance audit: PASS, live guard remains red",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

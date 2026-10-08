@@ -1,0 +1,19 @@
+{
+  "id": "b79b1bd6-d3e7-4288-9ca9-33be1c8c8ed3",
+  "thread_id": "b79b1bd6-d3e7-4288-9ca9-33be1c8c8ed3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "answered-design-sketch-author"
+  },
+  "timestamp": 1791476607506,
+  "body": "Launcher identifies this session as companion/read-converse-draft only. Respect that boundary: prepare local proposals and exact canonical comment bodies for root to post if mutation is refused; do not bypass companion gates. Root remains independent of author and will use a NEW advisor for signoff. No code or dispatch.",
+  "subject": "Companion scope: proposals only, coordinator posts if writes refused",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

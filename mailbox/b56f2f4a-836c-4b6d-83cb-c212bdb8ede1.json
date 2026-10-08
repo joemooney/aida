@@ -1,0 +1,19 @@
+{
+  "id": "b56f2f4a-836c-4b6d-83cb-c212bdb8ede1",
+  "thread_id": "b56f2f4a-836c-4b6d-83cb-c212bdb8ede1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1565-decision-auditor"
+  },
+  "timestamp": 1791476606842,
+  "body": "Coordinator read-only doctor output saved /tmp/aida-performance-current-20261008.json. Current guard exits1: 10.8% of353 calls over1000ms and worst224309ms against5000ms ceiling, lineage scoped mostly old199e591 binary. This is not evidence that contention caused that call. Preserve guard/red status and do not claim keeping budget fixes latency. Review source/tests/recorded direction acceptance independently; report can reference this exact artifact.",
+  "subject": "Current guard evidence retained, cause unproven",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
