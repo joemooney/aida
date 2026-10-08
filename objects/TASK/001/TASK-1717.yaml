@@ -46,7 +46,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T19:07:53.906693751Z
-modified_at: 2026-10-08T20:29:25.096957674Z
+modified_at: 2026-10-08T20:39:59.495317050Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -477,6 +477,178 @@ comments:
   created_at: 2026-10-08T20:29:25.096950210Z
   modified_at: 2026-10-08T20:29:25.096950210Z
   relayed_from: task1717-store-lock-claude
+- id: 01a11d3e-8707-7aa2-8154-f2fe8997c8f6
+  author: mcp
+  content: |
+    PROXY REVIEW RELAY — FULL fresh whole-A4 source verdict REQUEST_CHANGES on a6fac83f5c4c7197786d1833b0e27e59e18d889d. Root read entire report and verified immutable mailbox skip/write, push ignored add/commit, reconcile recovery/no-op and sync_objects nested-publication seams. Source blockers stand without unqualified runtime execution. This is evidence, NOT a protected machine record, production acceptance or new implementation dispatch. Same existing authorized author receives bounded numbered remedy. Preserve first failures, pending B and prior exact report artifacts.
+
+    # TASK-1717 independent whole-A4 source review
+
+    **Verdict: REQUEST_CHANGES — exact candidate a6fac83f5c4c7197786d1833b0e27e59e18d889d.**
+
+    Fresh Codex reviewer session, 2026-10-08, source checkpoint begun at approximately 13:30 MST. This session did not implement the candidate or author/approve its design. This is a read-only source judgment and an evidence-qualification report, NOT a protected machine review record, grant, dispatch, canonical relay, or parent completion. No tests, Cargo, build, CI, installation, activation, recovery, source changes, canonical comments/status/queue/claim, or forge operations were performed. Source blockers below permit this verdict before Batch B finishes. Runtime acceptance remains unfinalized, not passed.
+
+    ## Exact identity and read set
+
+    | Input | Independently observed value |
+    |---|---|
+    | Candidate | `a6fac83f5c4c7197786d1833b0e27e59e18d889d` |
+    | Tree | `0f5fe5aaa42e35bd73290e7d5c90decbed436592` |
+    | Single parent / whole diff base | `bf65220959c7601427247286abc7eb16278af5a5` |
+    | Main observed during review | `c67728c1dcaf8a577539d920bdc6a3c86126cebb` |
+    | Remote candidate | Two read-only `git ls-remote origin refs/heads/task-1717` observations returned the exact candidate; no fetch or ref update |
+    | READY read first | 17,334 bytes; SHA256 `79e725d3a415c960a72ba31038291a2cf169ed33ff031dd33fd85b0a3ae26255`; explicitly PENDING_B |
+    | Full canonical design relay file | 67,383 bytes; SHA256 `4485c529993380f1d40f8bf96434f3d0ed2a2dc19f11b7891587daa8741c8ba7` |
+    | Complete V2 sketch | 32,977 bytes; SHA256 `b6c367d14a87c09a5ee054203313e7b6047863808b1dab44b3f313080c507d82` |
+    | Complete independent V2 report | 33,789 bytes; SHA256 `25e4da169b0f5fc26bc21638b0b086dd92e633c73dc3763e9efc8cae1f8ae042` |
+    | Parent | Normal MCP `show_requirement(TASK-1332)` resolves TASK-1-225, Approved, tagged closure-pending |
+
+    Read owning TASK-1717 through normal MCP, including its description, complete parent V2/report relay and READY comment; read the parent through MCP including original five groups, V1 findings, V2/amendments and subsequent unaccepted A2 proposal notice. Verified the entire local V2 sketch is present byte-for-byte in both canonical readbacks and the entire independent report is present in the child readback. Read full task1717-implement.md and two-seat/rework/recovery disciplines, the supplied project AGENTS instructions, and the static-first/final-evidence briefs. The complete governing report was read, including its TASK-1333 dependency section; that section does not grant this child any implementation authority.
+
+    All candidate source came from `git show a6fac83f:<path>` / `git diff bf652209 a6fac83f`, not the author's moving worktree or main source. Inspected complete nine-path diff and all 1,147 lines of the new CLI test, plus relevant unchanged callees/startup/templates/cache/lock helpers at that same Git object. The evidence directory contains all nine full candidate blobs and the complete diff, with blob IDs and SHA256 in [manifest.json](TASK1717_INDEPENDENT_STATIC_EVIDENCE/manifest.json). Source references below are candidate line numbers; the evidence source snapshots preserve them.
+
+    ### Whole path union
+
+    | Path | Added | Removed | Audited surface |
+    |---|---:|---:|---|
+    | aida-cli-lib/src/git_backend_cmd.rs | 193 | 125 | Db Sync local window, post-window auto-bump, rejection retry, mirror |
+    | aida-cli-lib/src/lib.rs | 387 | 191 | Canonical collision scan, allocation helpers, --sync, autopush, mailbox, pull/push and mirrors |
+    | aida-cli-lib/src/mailbox_store.rs | 19 | 2 | Snapshot digest, canonical reader/rank/write |
+    | aida-cli-lib/src/remote_create.rs | 157 | 129 | Discovery, execute preimage/frontier, validation, rollback, exact push |
+    | aida-cli/tests/task_1717_store_writer_lock.rs | 1147 | 0 | All fixture helpers and 16 witnesses |
+    | aida-core/src/db/git_backend.rs | 58 | 1 | Post-acquisition safety and queue-writer test |
+    | aida-core/src/db/mod.rs | 5 | 0 | Public native closure/observation exports |
+    | aida-core/src/db/store_lock.rs | 145 | 2 | Existing lock, synchronous closure, reentrancy/identity tests |
+    | aida-core/src/git_ops.rs | 170 | 13 | Exact push, merge-gate wrapper, sync_objects, core witnesses |
+
+    Total: nine paths, 2,281 insertions, 463 deletions. This is not the older eight-path view. No TASK-1335 source was copied or stacked; no claim is made that a clean textual merge with main proves integrated acceptance. External TASK-1593/TASK-1591/BUG-1811/BUG-1812 reservations are untouched.
+
+    ## Numbered blocking findings
+
+    All reproductions below are **source-derived proposed private reproductions, not executions by this reviewer**. Some error swallowing/tolerant readers predate this commit; they are identified as carried-forward failures of explicit A4/A3 acceptance, not misrepresented as newly invented regressions.
+
+    ### F1 — Required reentrant hooks are still executed after mutation with no unsupported-profile disposition
+
+    **Priority P1.** `git_backend_cmd.rs::db_sync_local_window` (stage/commit around 1193), `lib.rs::handle_push_command` (73536), and core `git_ops.rs::merge_gate_locked` / `sync_objects` run ordinary Git hooks while holding the store lock. This is the intended continuous window for supported hooks. However, neither the new closure nor these callers qualifies/refuses a required reentrant writer profile before staging or canonical writes. The shipped `aida-core/templates/hooks/aida-commit-msg:22` actually sources `.aida/commit-config` as executable shell. READY's sentence “unsupported/unproved (not exercised)” is documentation, not the binding A3 pre-mutation disposition.
+
+    Reproduction: in a private store, select an executable commit hook (or sourced commit-config) that calls the pinned real CLI to edit an existing spec in the same store. Invoke a dirty `db sync`. The parent has staged data and waits for its Git/hook child; the child opens the same permanent lock on another process/thread and waits for the parent until timeout. No ownership inheritance or reentrancy crosses this boundary. An error-ignoring hook can instead conceal the failure. This is distinct from the supported early Internal sentinel detector, which source does dispatch before storage initialization at lib.rs:5123 and which must remain supported.
+
+    Required outcome: preserve the supported hooks and their effects. A required unsupported reentrant profile must get the agreed named disposition before canonical/index mutation, or use the independently accepted owner adapter. Do not disable hooks, spoof env ownership, transfer FDs, drop another caller's guard, or unlock around commit. Required test: actual writer-reentry and executable-config negative with unchanged preimages, paired with healthy literal-config, real installed/template, trailer and sentinel positives on a qualified binary. Do not classify this away as excluded CAS work: these are ordinary A4 commit callbacks.
+
+    ### F2 — The new “canonical” reads are not strict; mailbox can replace an unreadable/newer record
+
+    **Priority P1.** `mailbox_store.rs::write_snapshot_locked:113` calls `read_canonical_messages`, which delegates to `read_messages_in:57`. That helper silently continues on read errors (67–69) and parse errors (70–72). The digest then treats missing map entries as new (120–127) and atomically replaces the same filename. Holding the lock does not make that evidence complete. A valid tombstone with an unreadable file but writable directory can be overwritten by an older local message; malformed canonical bytes are similarly overwritten without a warning. This violates the explicit strict canonical reread and preservation contract.
+
+    Related claimed strict scans in `lib.rs::ensure_no_spec_id_collisions_canonical:17945` and `git_backend_cmd.rs::db_sync_local_window:1218` use `GitBackend::load`. Its unchanged object loader (`object_store.rs:545`, especially 604–639) warns/skips unparseable/unreadable records and returns `Ok`; additionally the sync preimage uses `unwrap_or_default()` at 1219. Thus “non-cache” is established, “strict” is not. An invalid newly pulled canonical object can pass the new collision validation and be pushed; it is not a failing load merely because the helper returns Result.
+
+    Reproduction: put a canonical mailbox message with the same ID as a stale local copy behind a read failure (non-root private fixture) or invalid JSON; run explicit digest and automatic pull/push digest. Separately have a bare peer deliver an invalid YAML object before db sync --pull --push. Observe the current reader branches' skip/overwrite or incomplete validation. Required outcome: errors in the canonical write-decision scan are preserved and prevent treating an unknown record as absent or a partial scan as validated. Keep ordinary tolerant inbox/read behavior if required; use strict mutation validation at these seams. Test healthy tombstone/new-ID/idempotence and valid union alongside read/parse failures, with exact bytes/index/HEAD and no false publication.
+
+    ### F3 — Touched local windows discard stage/commit failure and announce success
+
+    **Priority P1.** `lib.rs::handle_push_command:73545–73556` ignores both `git_ops::add` and `commit` errors, prints `Committed`, captures the old HEAD and can report `store push complete`/return success after pushing that old commit. With no origin it returns `Ok(None)` even though the local commit failed. `pull_store_leg_locked:74271` and `pull_store_before_id_allocation:18031` also discard those failures; pull can replace the original hook error with a later dirty-tree/rebase error. These are inherited patterns moved into the new acceptance-critical windows, not fixed by locking. `publish_mailbox_snapshot:72679` prints “published” before the enclosing commit succeeds, exacerbating false mailbox success reporting.
+
+    Reproduction: private fixture with a pending canonical note/message and a pre-commit hook that prints a unique diagnostic and exits nonzero; run `aida push --store-only` against an up-to-date local bare origin, and repeat without origin. Source predicts old-HEAD success plus retained staged work, not the intended committed local result. Exercise pull and pre-allocation through their real entrypoints too.
+
+    Required outcome: propagate the original local failure into the leg's existing error/best-effort policy, preserve pending data, and do not print committed/published or push an old head as completion of the failed local transaction. Best-effort callers may warn/defer, but must retain the true error. Required tests: failing stage/hook/commit plus healthy no-origin and online controls; verify exact exit, diagnostic, canonical/index/HEAD and remote observations. No broad reset or rollback of unrelated pending work.
+
+    ### F4 — Remote reconcile still has unchecked rollback and escaping partial-mutation error paths
+
+    **Priority P2.** The new locked preimage at `remote_create.rs:2343` is correct for the ordinary late-peer race. But `reset_to_pre:2361` ignores spawn/status failure, and the error at 2396 promises “the local store is unchanged” regardless. `BlockRegistry::load(...)?` at 2434 exits after successful merges without going through the owned rollback at all. Other fallible post-merge HEAD reads similarly escape the local recovery path. `ls_objects:2405` converts a failed tree read into an empty set, weakening loss validation. These carried-forward paths are now inside the claimed complete current-preimage/validation/rollback window and still violate its failure contract.
+
+    There is also an execute early return at 2321 using the unlocked discovery `needs_action`; a local writer can advance after discovery and before this branch, producing a stale “every hub already agrees” result without the new locked frontier check. This does not itself erase the peer, but it is an unqualified current-state success path.
+
+    Reproduction: a healthy merge/fast-forward followed by malformed block-registry validation, and a merge refusal with an owned injected reset failure; compare complete locked preimage and report. Separately pause after equal-tip discovery, let an ordinary local writer advance, then resume execute. Required outcome: all owned partial-mutation failures receive coherent checked recovery while holding the same guard, preserving original and cleanup diagnostics; never claim unchanged unless established. A fresh locked no-op decision must consider current local state. Required tests: rollback success/failure, validation read failure, stale no-op and healthy union/late-peer controls. Do not repair with stale discovery reset or broad restoration over peers.
+
+    ### F5 — Public core sync_objects can push while an enclosing store guard is still held
+
+    **Priority P2.** `git_ops.rs::sync_objects:3818` acquires a reentrant inner closure and pushes at 3840 after only that inner scope ends. Its new documentation at 3815 expressly permits a writer's “own enclosing store-writer transaction.” In that use, the outer guard remains held. `push_exact:290` only debug-asserts no lock; debug therefore panics after the local commit, while release builds proceed into hooks/network under the outer store guard. The public closure provides no way for sync_objects to release its caller's guard, nor should it.
+
+    Reproduction: core caller `with_store_write_lock(root, || { write_required_bytes(); sync_objects(root, message) })` with a local bare origin and an observing pre-push hook. This also exposes the tension between “bytes before calling” (unguarded prerequisite bytes) and “enclosing transaction” (held guard over push). The single top-level core witness does not exercise this composition. Absence of current production callers does not waive a named public core A4 obligation.
+
+    Required outcome: make the supported bytes/local-commit/capture and outermost publication composition explicit and safe. Unsupported nested publication must be rejected before local effects, or the supported caller must capture under its outer transaction and publish only after that caller releases it; never silently release caller ownership. Add same-thread nested/local positive, independent thread/process exclusion, and a real pre-push observation on both debug and ordinary release behavior as applicable. Keep existing lexical LIFO semantics.
+
+    ### F6 — Whole-A4 evidence remains incomplete and cannot qualify an executable
+
+    **Blocking acceptance gap, not an assertion that unrun tests failed.** `aida-cli/tests/task_1717_store_writer_lock.rs` has useful real-process barriers and 16 meaningful happy/race tests, but not the full required set. See the tables below. Batch B is PENDING_B in the supplied READY. The available mutable-target logs do not bind a surviving unmutated CLI/core test executable to exact build inputs or provide post-restoration controls.
+
+    Required outcome: preserve historical failures; supply actual B mutation/restoration results, exact source/build-input/profile/environment provenance, immutable CLI/core-test copies and SHA256, and post-restoration four-A/two-B controls. Then fill the missing required route, failure, hook/cache and lifetime witnesses using qualified artifacts and private fixtures. A version string, source header, git checkout restoration or historical run 7 is insufficient. No duplicate cold build, broad suite or independent execution is requested in this checkpoint. Root must notify final evidence before any later focused reviewer probe.
+
+    ## Whole-A4 criterion assessment
+
+    “Source present” below is not a runtime pass. All execution credit is withheld pending artifact qualification, even where an author log contains a pass.
+
+    | Criterion / actual route | Exact source assessment | Acceptance state |
+    |---|---|---|
+    | Single existing permanent canonical store lock | store_lock::acquire reused; root canonicalization, same-thread count, lexical synchronous closure, no new guard transfer | Source present; same-thread and symlink tests exist |
+    | Post-acquisition safe-state check | with_store_write_lock checks after acquire; GitBackend::lock_store checks outermost acquisition | Source present; B M3/control pending |
+    | P backend/cache ordering | CachedGitBackend still takes inner store lock before cache write/rebuild; no cache-backed load introduced in the new windows | Source ordering inspected; stale-cache contention positive missing |
+    | Db Sync stage/commit/pull/abort/capture | One outer closure; branch/dirty and preimages inside; auto-bump/GC/push outside; retry reacquires current store | Source present, F1/F2; initial non-rejection push errors retain old warning policy, not proof of success |
+    | Repeated rejection and mirrors | Second false return now errors; exact captured source and accepted SHA mirror fanout | Named real CLI witness exists; qualified execution pending |
+    | handle_pull_command | Snapshot local mailbox outside, digest+pending commit+structural pull+scan+summary+nested gate inside; deferred reconcile/GC outside | F1–F4 relevant; swallowed errors prevent complete acceptance |
+    | handle_push_command | Digest/commit/capture inside, push and mirror outside; local no-origin branch retained | F1/F3; direct full route/no-origin witness missing in new suite |
+    | maybe_sync_pull | Dirty check/pull/owned abort inside; foreign rebase refused before closure | Source present; second abort result discarded and error reduced to first line; abort-failure evidence absent |
+    | allocation pull | Pending commit and each rebase have windows; remote probe remains outside | Error swallowing F3; branch/current fast-path/cached collision decisions still outside lock; full strict-current collision acceptance not established |
+    | allocation push | Captures branch/SHA under guard and recaptures after rejection | Initial cached collision check precedes capture guard; not a strict same-window validation; moved-origin add test alone does not close this gap |
+    | auto_push_store_best_effort / maybe_auto_push_store | Local stage/commit/capture guarded; timed exact-refspec push outside; wrapper delegates | Source present; actual lifecycle barrier/no-origin/error witness missing |
+    | core sync_objects | Local stage/commit/capture and rejection-rebase windows, exact push | F5; top-level test only, no nested bytes/outer publication positive |
+    | core/direct/nested merge_gate | Wrapper before mkdir/counter/object scan/write/stage/commit; nested pull shares inode | Source present; M4/control pending; partial-write/commit error cases not established |
+    | remote reconcile execute | Current locked preimage/frontier in mutation path; exact union push outside | Healthy late-peer source fix present; F4 blocks complete error/no-op contract |
+    | canonical mailbox explicit/automatic | Explicit digest same outer guard through stage/commit; auto pull/push nest digest under their outer guard; lifecycle delegates explicit function | Good finite boundaries; F2/F3 block strict read/truthful outcome. Old maybe_publish wrapper has test-only callers in exact source; no active caller gap invented |
+    | local mailbox send/watermark | Separate local layer; no canonical store guard added | Real local-send-under-holder witness exists; qualified execution pending |
+    | hooks, early Internal, seat/FD | Internal before storage, role restoration skips Internal; ordinary push outside newly added guard | F1/F6; fixture-scoped FD observations do not prove all future/caller-held seats absent |
+    | maintenance lifetime | Opportunistic GC remains outside local closure; no RAII settlement claim needed | Source separation present; actual detached/foreground lifetime witness missing |
+    | scope and trace | TASK-1717 traces present, no CAS/authority/schema/role/hold changes in diff | Scope preserved; parent/global exclusivity explicitly not accepted |
+
+    The allocation gap must be resolved against the already-retained-edit A4 contract, not by expanding into fresh CAS/node/block authority. Likewise excluded ledger/coordination/doctor/dispenser/release/compaction work remains parent work; its exclusion is not a reason to drop any named A4 route.
+
+    ## Five original witness groups: source coverage and remaining work
+
+    | Group | Witnesses actually present in candidate | Required portions not established |
+    |---|---|---|
+    | 1 sync_vs_edit_serializes | Pending-commit pre-commit barrier, post-commit/post-rewrite continuity, external holder before stage, foreign rebase marker preservation | Full bytes/history/index/admin comparisons at every specified phase; failing-hook/abort-failure/killed-holder outcomes |
+    | 2 sync_vs_sync_and_queue | Real second sync via symlink, queue, explicit digest, direct gate, distinct project progress; core nested/thread/symlink tests | Sibling worktree discovery separate from symlink; complete queue content/history assertions; post-restoration B controls |
+    | 3 rejection_retry_preserves_peer | Local edit during pre-push, peer remote push, current retry, repeated rejection, mirror accepted SHA | Candidate-qualified executable; retained FETCH_HEAD/private-ref evidence through real route; nested/core retry/error coverage |
+    | 4 pull_sync_allocation_remote_reconcile_share_guard | Store-only pull, --sync, moved-origin real add, remote reconcile rollback and healthy union, explicit mailbox tombstone/idempotence/local send | Direct push and automatic lifecycle barriers, no-origin/offline positives, invalid canonical and failure paths, stale no-op, strict current allocation checks, known same-object structural union through new CLI window |
+    | 5 no_hook_cache_lock_cycle | Template trailer profile, stale sentinel detector observation, reconstructed installed-shaped profile; barrier FD/flock observations | Actual installed bytes/config identity and executable provenance; literal supported config; pre-mutation custom refusal; missing sentinel separate from stale; stale-cache + competing refresh + healthy cache update; fetch/hook/abort failure; killed holder/permanent sidecar survival; maintenance lifetime |
+
+    The installed-profile test at lines 1112–1147 synthesizes prepare-commit-msg and pre-push strings and uses template pre-commit/commit-msg. It does not load or hash the actual installed profile. The test's pre-push also suppresses command failure with `|| true`, so command completion alone does not establish mirror callback success. The stale-sentinel test removes pre-commit but writes a stale sentinel; that is not a separate missing-sentinel execution. The template healthy test has telemetry disabled, so absence of the violation file alone is weak evidence of sentinel-match behavior; its trailer/remote assertions remain useful.
+
+    FD filtering at lines 409 onward intentionally ignores paths outside the fixture root. This explains the cargo-slot first failure and is reasonable for proving the fixture store FD did not leak. It does not prove “no inherited lock FD” without qualification: the original logs actually show the inherited cargo slot in hook/Git/AIDA. Limit the claim to tested store/fixture locks, enumerate known harness FDs, and qualify any seat/home path elsewhere. Do not bypass the global Cargo slot wrapper to manufacture a clean observation.
+
+    ## Actual commands, logs, first failures and provenance
+
+    Independent actions: `pwd`; bounded path discovery (initial broad `rg --files`/find returned noisy/truncated output and was replaced with exact paths); `cat`/`sed`/`git show`/`git grep` source reads; `git rev-parse`; `git diff --stat/--numstat` and complete per-path diffs; two `git ls-remote` reads; normal MCP show_requirement for child/parent; Python text/hash comparisons and snapshotting; writing this report and its evidence directory. None executed the candidate. No binary `--version` was treated as qualification. No `git status` of the author's mutating source was treated as delivery evidence. No branch/worktree creation or source checkout was performed.
+
+    Captured author logs are under [author-logs](TASK1717_INDEPENDENT_STATIC_EVIDENCE/author-logs/), with original paths/lengths/SHA256 in the manifest. These are attributed historical observations, not independent test runs or a proof of exact compilation inputs.
+
+    | Author evidence | Actual observed result / limit |
+    |---|---|
+    | warm.log | Test-profile no-run compilation, exit=0; path identifies mutable pool6 worktree/target, no exact-input hash manifest |
+    | bin.log | dev profile CLI compilation, exit=0; no immutable output or before/after source inventory |
+    | regress1.log | 249 passed / 1 failed / 7,566 filtered; actual failure `piped_inbox_read_advances_watermark_even_when_stdout_closes_early`: no inbox header |
+    | READY AIDA_BIN explanation | Author attributes failure to pool2 session-env AIDA_BIN and reports isolated `env -u AIDA_BIN` pass; no corresponding standalone rerun log was qualified here. Not silently called a candidate baseline pass |
+    | core_regress.log | 189 passed / 0 failed / 1 ignored / 1,130 filtered; includes useful existing core tests, but no source-pinned artifact proof |
+    | t1.log | 5 passed / 11 failed. Preserved FD-slot assertions, post-rewrite/pre-commit timeouts, missing mailbox commit and mirror-count mismatch |
+    | Fixture amendments | Exact final source contains fixture-only FD filtering, env_clear for CLI, unpublished local commit to force rewrite, real Message fields, and in-place mirror key insertion. These substantiate plausibility of the explanations, not a reason to erase t1 |
+    | t2.log | 16 passed / 0 failed in 110.24s; predates mutation controls, not restoration proof |
+    | READY extra detector assertion | Author reports failure because telemetry disabled, then telemetry-enabled pass. Exact source enables it in that test; separate execution log not qualified here |
+    | mutantA.log | Recompiles core/CLI on mutable pool6 target, then four failures: empty commit message; db sync exited rather than waited; mailbox HEAD lock mismatch; rollback HEAD 407b2de… versus late f07bbbc… |
+    | Batch B | PENDING_B at supplied checkpoint. No M3/M4 completion or restored core executable qualified |
+    | Formatting / six core tests | READY reports fmt check=0 and six task_1717 core passes; not independent executions and no separately qualified surviving artifact here |
+    | Workspace/CI/clippy | Not run by this reviewer; author says not run for this child. Other root C/D work is not borrowed as this candidate's acceptance |
+
+    The mutantA log demonstrates why the current mutable pool6 debug/aida cannot be assumed to be run 5's binary. Even a subsequent source restoration cannot undo already-built machine code. The logs name package directories and profiles, not the complete exact source/dependency/generated/build-script/environment inputs at compilation time. CARGO_BIN_EXE_aida pins a pathname, not immutable contents; hook PATH prepends that directory but does not solve mutable binary provenance. Template tests read files using CARGO_MANIFEST_DIR at runtime, another input that needs pinning rather than assuming the compiled test embeds their bytes.
+
+    No complete build-input/immutable-executable qualification has been supplied to this review, and no final-evidence notification has arrived. No tests were run to work around that. A source REQUEST_CHANGES does not await runtime proof; conversely fixing source findings does not auto-approve the presently incomplete evidence.
+
+    ## Handoff
+
+    Root is the sole canonical relay owner. Relay this complete verdict and numbered findings without reducing it to an approval or machine record. No queue/status/brief/mail mutation is performed here. The review ends with REQUEST_CHANGES on the exact source checkpoint and unfinalized dynamic acceptance. Await new evidence or a separately authorized exact candidate for further review; do not silently follow a moving head.
+
+    Parent TASK-1332 / TASK-1-225 remains closure-pending. Common A2/CAS/hijack/publisher/production gates remain independently unaccepted even if a later corrected A4 child passes. Nothing here requests a new authority mechanism, production launch, hook bypass, role/env grant, reserved-task change, or broader implementation dispatch.
+  created_at: 2026-10-08T20:39:59.495311028Z
+  modified_at: 2026-10-08T20:39:59.495311028Z
+  relayed_from: 01a11d35-a35e-74c2-9098-e3afda25d44e
 history:
 - id: 01a11ced-b107-7dc1-8529-7566a13c6121
   author: aida-session-start
