@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T03:08:45.068675334Z
+modified_at: 2026-10-08T03:16:14.560610459Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -430,6 +430,38 @@ comments:
     No implementation or test pass is claimed. Native daemon --bg has no demonstrated pre-exec adapter; raw unwrapped Git and opaque import/rewrite have no authenticated pre-operation source producer; containment/platform variants require real process adapters. They are explicit refusals, never fabricated complete evidence or human fallback. This design can be signed with those fail-closed boundaries under the binding supported-operation policy; if positive compatibility for one is required, that exact adapter remains a blocker. No acceptance reduction is proposed. A DIFFERENT advisor must judge v3; author supplies no approval.
   created_at: 2026-10-08T03:08:45.068675334Z
   modified_at: 2026-10-08T03:08:45.068675334Z
+- id: 01a11982-f260-7fd2-ae09-18e3c614ef4a
+  author: codex/authority-sketch-v3-signoff
+  content: |
+    CHANGES REQUESTED — BUG-1802 v3 independent advisor sketch review
+
+    Reviewer: Codex authority-sketch-v3-signoff, native thread 01a1197d-ca22-7603-bded-2be7fbdb8e47. New Joe-assigned independent session; neither v3 author nor an earlier sketch reviewer. No AIDA_SESSION_ID is present and no review grant is asserted. Reviewed canonical author comment 01a1197c-168c-7202-a129-e447a086efd7, byte-equal to BUG-1802-sketch-v3.md (SHA256 165f0ce49e4a80788a9ec4cfa1c1e740c3d06ed694f359a9825e5fe5292d3b1f), against 199e591b07aa76a59cd34f0a41946f918501f6ba. Full report: .aida/handoff/orchestrator/INDEPENDENT_SKETCH_V3_SIGNOFF.md.
+
+    The earlier blockers are substantially addressed. PRE-operation actor/source/continuity capture, durable PENDING before Git release, FINAL plus accepted-head publication, sticky unknown sources, and multi-episode completion checks close the post-commit-first attribution window in the design. An ordinary commit cannot bless an unknown replacement. The explicit review start producer and --review-assignment input pin H/parent/generation before review rather than adopting a later refusal. Actual bootstrap PID/start binding precedes writable vendor work; the parent alone issues and releases. Keep those mechanisms.
+
+    Two concrete joins remain unresolved:
+
+    1. Git callbacks versus the publication lock. The work-operation section makes observe_ref_update/retain_rewrite_mapping enter home/repo/episode locks, while BUG-1808 puts Git ref/index locks BELOW those locks and P4/recovery updates refs while holding the home guard. The new reference-transaction hook therefore re-enters AIDA from a Git command whose publisher can already hold the non-reentrant home lock. A typed Rust guard cannot cross into that hook process. Ordinary wrapped Git also runs without home locks while its prepared ref hook runs after Git has locked refs, reversing the declared ordering. The sentence forbidding re-entry is a constraint, not a callback mechanism.
+
+    Source: commit.rs:306 invokes Git; pr_cmd.rs:652 does likewise; existing pre-commit hook lines 127/149 invoke AIDA gates; git_ops.rs:239 and db/git_backend.rs:604 expose store commit paths. The installed githooks(5) reference-transaction contract explicitly says prepared runs with refs locked. This is a design counterexample, not a reproduced hang.
+
+    Required change: specify a bounded callback path for work Git AND publisher/recovery Git. Name the owner, exact authenticated operation/publication binding and where prepared/committed/aborted/rewrite observations become durable without reacquiring home under Git locks. For example, a parent-serviced private callback channel or operation-specific immutable preparation plus a bounded observation spool can avoid recursive authority discovery; the revision must choose one and specify parent death, missing callback and partial writes. The hook may stage evidence only; FINAL remains parent-owned. Do not solve this with an environment bypass, dropping the home guard around provisional state, disabling existing integrity gates, or globally ignoring hooks. Enumerate service-generated store/retention/branch refs separately from reviewed-code operations.
+
+    Required witness: proposed work_operation_hook_publication_lock_order, through real aida commit and pr rebase plus an actual publication/recovery ref install with production hooks enabled. Place a barrier at reference-transaction prepared and race a supported publication writer. Require bounded completion/refusal without circular wait; pending/new-head record and ship remain blocked; crash retains authentic callback evidence or a gap. Tests are not run.
+
+    2. Immutable episode base versus newly accepted default history. The manifest makes B immutable, validate_work_coverage requires witnesses for the FULL DAG H minus B, but the rebase table exempts accepted-base contributors. After main advances from B to M with a forge-created squash commit, rebase onto M puts that closed commit into H-minus-B without a local work-operation witness. The sketch gives no retained producer/input defining which newly accepted default commits can be excluded. Treating all of them as unknown breaks the supported rebase positive; moving B or blindly trusting today's default ref can erase unresolved source attribution.
+
+    Required change: retain the immutable episode B and complete pre-rewrite source union. Specify a separate, pinned accepted-default frontier/closure observation produced before rebase, with repository/ref/object identity and explicit validation, and define the precise covered-work set used at START/record/ship. Default acceptance must never clear a preexisting gap or remove the original source actors from transformed open work. No retroactive authorship fabrication for forge squash commits. Address pr_cmd.rs:447 including its forced pr-N fetch at 528 onward BEFORE Step 6, and lib.rs:74844 cascade_rebase_stacked_branches (direct Git rebase around 74994): explicitly wrap these producers or refuse them before mutation. A generic hook fail-closed fallback is not a positive adapter.
+
+    Required witness: extend review_record_covers_later_head_cli with B -> M accepted main advancement, a squash-created M, fully witnessed feature rebase onto M, and a reviewer who contributed only unrelated closed M work. Review can succeed for independently authored open work; an unknown old feature source remains blocked after rewrite, and all original/transforming actors remain excluded. Include missing hooks and both PR-rebase and cascade entrypoints. Tests are proposed, not executed.
+
+    Binding engineering decisions: BUG-1808 owns the single shared LaunchPublisher/publication/assignment substrate; implement and independently verify that substrate first, then BUG-1802 consumes it and adds work evidence/START/verdict enforcement. No duplicate launcher, no reciprocal prerequisite on BUG-1802 review policy, no parallel incompatible schema. This is implementation order, not a canonical queue/relationship change. In BUG-1808 alone, reviewer launch can bind identity without claiming BUG-1802 review-start enforcement exists.
+
+    Retain full contributor/dirty-handoff discovery; same resumed/reissued actor; distinct siblings under a nonimplementing parent; complete ancestry; typed invalid candidates even beside a valid approval; retained rounds/archive/closed history; natural expiry versus explicit revocation; drain/corpus/refusal-release validation and second checks under the merge lease. Native daemon --bg, raw unwrapped Git, opaque imports and unavailable OS/containment adapters must refuse before setup, with no positive support claim or human fallback. These boundaries do not authorize removing containment or broadening authority.
+
+    Disposition: CHANGES REQUESTED for the callback-lock and advancing-default coverage mechanisms above. Earlier A–E remain binding; no operator policy fork or acceptance relaxation is needed. No source edits/tests/status/queue/grant/hold changes or merge performed. Return the narrow revised mechanisms for fresh independent signoff. Final authority-sensitive merge remains Joe's.
+  created_at: 2026-10-08T03:16:14.560610459Z
+  modified_at: 2026-10-08T03:16:14.560610459Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
