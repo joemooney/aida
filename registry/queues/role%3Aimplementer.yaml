@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a119c5-79b1-74e3-a497-bbcab69545ab
+  position: 295000
+  added_by: role:implementer
+  note: 'PROXY rework after full independent TASK1715_DELIVERY_INDEPENDENT_AUDIT.md REQUEST_CHANGES. F1 delivery branch contains only audit row, real74c implementation is separate/nonancestor. F2 normalize numeric GitHub/GitLab via configured forge before shared queue-work path. F3 complete help/lifecycle/templates and parser-dispatch/shared-refusal coverage. Full numbered brief: task1715-numbered-rework.md. Live creator1623529 retains CLIlease01a119ea3c02; no competing implementation, force-end, sharedPR2458/BUG1811 mutation or stalelease bypass. Fresh isolated Sonnet doer only after legitimate ownerhandoff, then new different independent reviewer.'
+  added_at: 2026-10-08T19:24:00.835685424Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a11874-024a-71b2-935d-56a2a7e89778
   position: 296000
   added_by: role:implementer
