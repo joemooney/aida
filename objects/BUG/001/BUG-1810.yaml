@@ -1,0 +1,27 @@
+id: 01a11a17-a74f-7783-ad57-826f02f2917b
+spec_id: BUG-1810
+agreed_id: BUG-1810
+title: Linked-worktree prepare-commit-msg can stamp code HEAD as Aida-Store
+description: |
+  Observed during BUG-1808 inactive infrastructure checkpoint; not introduced by that new code. The unchanged production prepare-commit-msg hook (SHA256501f535d102ce25c43213efe58274433de40b96d3e14cd4d4d32e4a87f5b714e) emitted Aida-Store:5d4180e5ded8a55ad1b02beac5571c190d3da0ac, the code base, on commit21d84bd8d555916ad74c1c577b7c02181999ee32. A real isolated linked-worktree fixture with an exact copy of that hook reproduced code_before=b2184cc12477b7313832005d8ea602da370e85aa, store_head=282e14c892c003e88f170c9a4214d91a80f46d71, trailer=b2184cc12477b7313832005d8ea602da370e85aa. Root read actualchecks/production-store-trailer-probe.json and owner IMPLEMENTATION_BLOCKED.md, preserved byteidentical main .aida/handoff/bug1808/checks evidence. No live store write or history rewrite, no hook fix claimed.
+
+  ## Acceptance
+  Resolve and stamp the actual canonical distributed store snapshot in ordinary main and linked worktree commits, using configured store locations and correct repository identity rather than inherited code Git discovery. Real production-hook fixtures must assert trailer matches verified store OID and differs from distinct code OID. Exercise unavailable/corrupt/misresolved store with explicit honest behavior, never silently use code HEAD. Preserve message edits, configured guards, actual final-message checking and existing supported legacy behavior; do not bypass hooks or rewrite historical commits. Common BUG1808 signed Git preparation must bind correct canonical store snapshot/final message, not import this faulty lookup as provenance. This draft captures the discovered defect for triage; no separate doer or completion/activation is authorized by filing it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T05:58:40.207284193Z
+modified_at: 2026-10-08T05:58:40.207284193Z
+req_type: Bug
+tags:
+- from-advisor
+- git-hook
+- store-provenance
+filed_at:
+  code_sha: 8ea2fe47c0e6128127a67251ad4545a412fb5d28
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: codex
