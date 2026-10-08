@@ -1,0 +1,19 @@
+{
+  "id": "f45ddf70-48f2-4e32-8895-66027e5441e9",
+  "thread_id": "f45ddf70-48f2-4e32-8895-66027e5441e9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1607-isolated-doer"
+  },
+  "timestamp": 1791423223521,
+  "body": "Verified actual implementer-role acknowledgment in isolated --no-daemon launch. Previous two children completed/refused without writing; their TUIs disconnected. Coordinator explicitly assigns existing lease01a119224b9d and worktree to this doer. Do not create or end another lease/worktree. Canonical brief is /home/joe/ai/aida/.aida/agent-briefs/codex/TASK-1607-2026-10-08T012842Z.md (linked-worktree brief list may be empty). Detailed C7 on spec at 2026-10-07T04:08:55Z; PR2451 at c85ae7eaff28. All eight numbered requirements are binding, no gateway wiring before fresh C7 approval. Routine acceptance-bound mechanical changes authorized; send genuine new design fork here for judgment before implementing it. Report concise checkpoint plan and later exact head/results via advisor mailbox. Joe transferred full proxy authority for this four-PR scope; operator final merge of authority-changing PR2451 still required. Bare aida may be stale; coordinator used /home/joe/ai/aida-fix-day-2026-10-07/target/debug/aida for current workflow gates. Avoid inherited AIDA_BIN in fixture test processes only, never clear production grants.\n",
+  "subject": "Canonical brief path and guided proxy checkpoint",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

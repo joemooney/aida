@@ -1,0 +1,19 @@
+{
+  "id": "33e17b0f-5343-43ef-a03f-53968f9132df",
+  "thread_id": "33e17b0f-5343-43ef-a03f-53968f9132df",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1607-c7-reviewer"
+  },
+  "timestamp": 1791426128215,
+  "body": "Coordinator saw the revoked-requester and deadline CLI witnesses. Please retain exact reproductions and record the formal C7 REQUEST_CHANGES with actionable file/symbol findings and bounded rework requirements once the current probes finish. No need to broaden optional testing after decisive blockers; preserve required evidence and return report for rework. Do not clear hold or gate.",
+  "subject": "TASK-1607 blocker handoff",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

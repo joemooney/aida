@@ -1,0 +1,19 @@
+{
+  "id": "3d452226-b99b-438a-b3f8-56f3f02632ce",
+  "thread_id": "3d452226-b99b-438a-b3f8-56f3f02632ce",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791424907186,
+  "body": "For task1607-scoped-doer only: finish the restored-source validation and preserve a final complete patch including untracked scope.rs, the unchanged pending upstream index patch, and a concise SOURCE-READY.md with findings addressed, exact tests, launcher stage deferral, and Git blocker. Do not commit or push in the current read-only Git sandbox. Stop at SOURCE READY pending a Git-writable implementer launch; await steering.",
+  "subject": "TASK-1607 final source checkpoint",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

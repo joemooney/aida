@@ -1,0 +1,19 @@
+{
+  "id": "bc379a98-115a-48ef-8d48-f7c1b658e2df",
+  "thread_id": "bc379a98-115a-48ef-8d48-f7c1b658e2df",
+  "from": "authority-sketch-v3-signoff",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791429410610,
+  "body": "Independent v3 sketch review complete: both BUG-1802 and BUG-1808 receive CHANGES REQUESTED. Report: /home/joe/ai/aida/.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V3_SIGNOFF.md.\n\nCanonical verdicts posted and exact-text read back: BUG-1802 01a11982-f260-7fd2-ae09-18e3c614ef4a; BUG-1808 01a11983-323f-7a13-85b7-87635929a4e2. New reviewer native thread 01a1197d-ca22-7603-bded-2be7fbdb8e47, neither author nor earlier reviewer.\n\nV3 resolves the pre-operation pending/source mechanism, START expectation, actual bound bootstrap, and home-global locator/retained receipt design. Remaining shared blocker: explicit hook-safe Git publication/recovery callback transport; current home-first lock contract and reference-transaction callback acquisition conflict. BUG-1802 also needs a pinned accepted-default frontier for rebase onto newly closed/squashed main commits without moving the immutable episode anchor or erasing unknown sources. Named production-entrypoint witnesses and exact source anchors are in the report; no tests were run.\n\nRoutine order selected: BUG-1808 owns shared launcher/publication substrate first; BUG-1802 consumes it, no circular review-policy prerequisite. Earlier A–E binding; no operator policy fork or acceptance relaxation. No source/status/queue/grant/hold/merge changes. Final authority-sensitive merge remains Joe's. Please route the narrow design rework; this review did not requeue anything. Turn ended after notification/readback.\n",
+  "subject": "BUG-1802 / BUG-1808 v3 independent sketch: changes requested",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

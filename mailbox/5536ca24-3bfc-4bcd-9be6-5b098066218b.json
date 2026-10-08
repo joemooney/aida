@@ -1,0 +1,19 @@
+{
+  "id": "5536ca24-3bfc-4bcd-9be6-5b098066218b",
+  "thread_id": "5536ca24-3bfc-4bcd-9be6-5b098066218b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1607-scoped-doer"
+  },
+  "timestamp": 1791423442665,
+  "body": "Prior two wrong-role pickups made no edits; prior isolated implementer also made no edits and completed its turn before this launch. Your named process is the sole implementation owner. If inherited CARGO_TARGET_DIR points outside writable roots, use a local ignored build directory under the assigned worktree or a task-specific /tmp build directory rather than changing sandbox/grants or touching other agent artifacts. Keep raw test logs and concise blocker/checkpoint reports in /home/joe/ai/aida/.aida/handoff/task1607-rework/. Coordinator can relay any store comment if canonical writes refuse. Do not fix launcher/sandbox infrastructure as part of this PR. Final authority-changing merge remains operator-only; preserve all existing gates.\n",
+  "subject": "Scoped build artifacts and checkpoint reporting",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

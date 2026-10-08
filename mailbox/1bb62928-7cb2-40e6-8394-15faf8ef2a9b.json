@@ -1,0 +1,19 @@
+{
+  "id": "1bb62928-7cb2-40e6-8394-15faf8ef2a9b",
+  "thread_id": "1bb62928-7cb2-40e6-8394-15faf8ef2a9b",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791424553701,
+  "body": "TASK-1607 mechanical C7 source rework is proceeding without Git writes, per operator continuation. One boundary needs advisor clarification: C7/brief item 2 asks to classify schedule tick and supervisor::launch_redrive and says redrive routes to the live holder rather than launching a second loop; schedule tick must not originate loops. The same brief prohibits gateway steps 4-5 until fresh C7 approval. Actual code: supervisor::launch_redrive directly runs queue work --auto-complete; maintenance_schedule::tick_core executes scheduled shift tick, which launches unattended waves. I will record both dispositions and prepare core regression coverage now. Is replacing those two live launcher paths with diagnosed refusal/local queue handoff authorized as part of C7 rework, or must those production edits wait for step 5? Recommendation: authorize only these two narrow launcher corrections now (no general gateway activation), with fixture-only tests and no unattended execution. Other source fixes continue while this clarification is pending.\n",
+  "subject": "TASK-1607 C7 boundary: narrow launcher corrections",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}

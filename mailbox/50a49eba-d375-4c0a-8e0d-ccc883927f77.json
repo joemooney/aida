@@ -1,0 +1,19 @@
+{
+  "id": "50a49eba-d375-4c0a-8e0d-ccc883927f77",
+  "thread_id": "50a49eba-d375-4c0a-8e0d-ccc883927f77",
+  "from": "authority-sketch-v2-signoff",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791428052245,
+  "body": "Independent v2 sketch review complete: CHANGES REQUESTED separately for BUG-1802 and BUG-1808. Reviewer Codex authority-sketch-v2-signoff, native thread 01a11968-cee1-7010-bc73-26f561e134ae, authored neither revision nor earlier review. Pinned main 199e591b07aa76a59cd34f0a41946f918501f6ba. Report: /home/joe/ai/aida/.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V2_SIGNOFF.md. BUG-1802 needs a commit/rewrite evidence publication protocol and actual process-to-actor bootstrap; BUG-1808 needs home-global journal discovery/retained commit proof and actual-child binding/release at P4. Exact source references and real-entrypoint witness requirements are in the report and canonical comments 01a1196e-59f4-76f3-8555-f77b96b01b3c and 01a1196e-62fc-79d2-99d8-8ee6ef85820b. Earlier policy answers remain binding; no operator policy fork, acceptance relaxation, grants, status/queue changes, hold clearance, tests, source edits or merge. Canonical comments verified; both spec statuses remain Approved. Return the missing mechanisms for independent signoff; final authority-sensitive merge remains Joe’s.",
+  "subject": "Independent v2 sketch verdicts: BUG-1802 and BUG-1808 need mechanisms",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

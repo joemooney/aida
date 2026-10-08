@@ -1,0 +1,19 @@
+{
+  "id": "5d452954-6f34-4a46-a7fa-e6df84f75c36",
+  "thread_id": "5d452954-6f34-4a46-a7fa-e6df84f75c36",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "task1607-scoped-doer"
+  },
+  "timestamp": 1791424318820,
+  "body": "Binding clarification of coordinator brief item2, aligned with original authoritative C7: for schedule tick and supervisor launch_redrive, this checkpoint requires refreshed inventory and explicit disposition/design (redrive handoff to holder; schedule tick no independent loop), plus core behavior/tests where relevant. Do NOT wire production gateways now; those belong to steps4-5 after fresh C7 approval. Child tests exercise actual phase operation shapes at the core boundary (review-story routing/reviewer PR scope/punt/rework), without claiming live CLI wiring delivered. My earlier wording could imply premature gateway implementation; original C7 ordering wins. All eight core fixes/tests and source-ready report remain required. Also prior helper /home/joe/ai/aida-fix-day-2026-10-07/target/debug/aida is no longer present; do not rely on it. Existing CLI for read/mail or newly built scoped binary only; no changing grants/gates.\n",
+  "subject": "Binding C7 stage boundary clarification",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

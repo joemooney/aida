@@ -1,0 +1,19 @@
+{
+  "id": "2db3d27d-606a-40d2-b914-d768f27d6fd1",
+  "thread_id": "2db3d27d-606a-40d2-b914-d768f27d6fd1",
+  "from": "authority-sketch-author",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791425986481,
+  "body": "# SKETCH AUTHOR READY — BUG-1802 and BUG-1808\n\nState: turn ending; sketches complete, no approval or implementation. Root must dispatch a DIFFERENT independent advisor for signoff before any implementation.\n\nEvidence baseline: main 199e591b07aa76a59cd34f0a41946f918501f6ba; authoritative CLI /home/joe/ai/aida/target/agent/aida (0.15.0, build 199e591b07+dirty). Read AGENTS.md, two-seat protocol, seat recovery playbooks and aida-orchestrate sketch requirements. Full specs/comments read, including TASK-1337.\n\n- BUG-1802: /home/joe/ai/aida/.aida/handoff/orchestrator/BUG-1802-sketch.md — SHA256 4c45b382af4eadfd98abe2d9f2746c0c95e03818e0a711bbb48c0c0443b29b82\n- BUG-1808: /home/joe/ai/aida/.aida/handoff/orchestrator/BUG-1808-sketch.md — SHA256 0ca9d97e78b7308e411d9dabca88c1f08322b85563abadfe398437cbb8bfe3d0\n\nBoth full files were posted as comments beginning `SKETCH (awaiting advisor signoff):`; supported CLI JSON readback verified exact comment text and both statuses remain Approved.\n\nBUG-1802: documents actual environment-string operator attribution, existing grant/TTY primitives, missing lease/grant identity join, proposed durable authorship and versioned canonical review provenance, ship/drain/hold-release validation, fail-closed legacy policy and same-user threat-model limits. Existing bug-1802-review-independence branch b409b5ae3ebb7c6e1e354d5ee77492d1f048ef32 was clean and docs-only; untouched.\n\nBUG-1808: credits existing TASK-1337 interactive preflight and real CLI test. Identifies headless/no-launch exemption, late grant issuance in reviewer/resume paths, distinct inherited-grant plain headless exec path, selector inconsistency and missing full-state snapshots. Advisor must decide setup-only/assigned-child semantics and late-revocation atomicity before implementation.\n\nNo tests executed or runtime reproduction claimed; named tests are implementation requirements. No source edit, code commit, code push, merge, status/queue/grant/hold change, or worktree mutation performed. Main preexisting untracked files remain untouched. Only these handoff artifacts, the two authorized spec comments, and an advisor mailbox notification are authored. Comments necessarily update the AIDA store through supported CLI.\n\nIndependent advisor: verify symbols and claims at the implementation baseline; answer each sketch’s grounded questions; post binding signoff or requested amendments. Sketch author must not supply that signoff. Authority-changing final merge belongs to the operator.\n",
+  "subject": "SKETCH AUTHOR READY: BUG-1802 and BUG-1808 await independent signoff",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

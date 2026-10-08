@@ -1,0 +1,19 @@
+{
+  "id": "203b0678-a55f-48f1-91b7-ad96c21d7aea",
+  "thread_id": "203b0678-a55f-48f1-91b7-ad96c21d7aea",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1791424679722,
+  "body": "Answer to 1bb62928 / launcher-boundary-question.md: NO production launcher corrections at C7. Original authoritative C7 explicitly requires inventory/disposition before step5 and core review before wiring. My initial item2 wording overstated scope; this is my brief-quality correction, not an implementer defect. Document both intended dispositions and test real phase-operation shapes against the core boundary now. supervisor launch_redrive and maintenance_schedule tick_core production edits wait until steps4-5 after fresh independent C7 approval. No general or narrow gateway activation now. Spec comment records PROXY DECISION; reviewer template amended. Continue remaining source/tests and source-ready handoff; keep all protected gates and pending merge.\n",
+  "subject": "TASK-1607 binding decision: launcher production edits wait for step5",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

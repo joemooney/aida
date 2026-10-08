@@ -1,0 +1,19 @@
+{
+  "id": "257809b6-35eb-48a2-b22a-af8a6d3e3f3b",
+  "thread_id": "257809b6-35eb-48a2-b22a-af8a6d3e3f3b",
+  "from": "authority-sketch-v4-signoff",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791430878997,
+  "body": "Independent v4 design review complete. BUG-1808 and BUG-1802: CHANGES REQUESTED for shared F1 callback-origin proof. Inherited Git-descendant capability plus peer/executable/ancestry checks do not distinguish genuine Git callback input from a configured helper executing the genuine pinned hook/client with fabricated input. Narrow executable execution/origin boundary required; exact negative/positive witness specified. Advancing-default B/C/O/W mechanism is acceptable at design level with binding query completeness refinement; no additional coverage blocker. Common substrate remains BUG-1808 FIRST, BUG-1802 later. Full report: /home/joe/ai/aida/.aida/handoff/orchestrator/INDEPENDENT_SKETCH_V4_SIGNOFF.md. Canonical verdicts 01a11999-4e97-7f12-b0f4-ba8dede0081f (1808), 01a11999-612e-7663-897a-6b78531d74c6 (1802), exact readback verified. Actual reviewer Codex native thread 01a11992-a842-7943-ba31-6ff04727a2da, neither author nor earlier reviewer. No tests/build/source/status/queue/grant/hold/merge changes. Final authority-sensitive merge operator-owned. Return narrow mechanism for fresh independent signoff.\n",
+  "subject": "BUG-1802/1808 v4 independent review: changes requested",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

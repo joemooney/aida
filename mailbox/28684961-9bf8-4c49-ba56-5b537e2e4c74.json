@@ -1,0 +1,19 @@
+{
+  "id": "28684961-9bf8-4c49-ba56-5b537e2e4c74",
+  "thread_id": "28684961-9bf8-4c49-ba56-5b537e2e4c74",
+  "from": "bug1807-strict-lookup-reviewer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791429617102,
+  "body": "BUG-1807 fresh independent review at 1508607da5a31797f29fda12800ad5b3d6f91dc6: REQUEST_CHANGES.\n\nP2 blocker: load_review_story_inventory preflights read_dir but calls list_objects, whose Path::exists guard converts a later root metadata EACCES into empty inventory. Fixture-only one-shot syscall fault injection against the independently rebuilt real CLI reproduced exit 0, 17 -> 18 objects, duplicate STORY-3, and successful MR-35 handoff. Fix the actual enumeration boundary to propagate missing/unreadable root errors; add between-preflight-and-enumeration regression.\n\nAll requested Rust filters, supplied CLI fixture, preserved corrupt/remap/session/session-failure probes, formatting/diff checks passed. Additional missing-store/objects, unreadable-shard, and dangling-object probes passed. The original steady malformed-object defect is fixed; the enumeration race remains.\n\nReport: /home/joe/ai/aida/.aida/handoff/bug1807/STRICT_LOOKUP_INDEPENDENT_REVIEW.md\nEvidence: /home/joe/ai/aida/.aida/handoff/bug1807/strict-independent-evidence/\n\nAuthoritative review record request-changes refused (exit 1): a refusing verdict must name --pr <N>. No PR exists; no invented PR, manual verdict JSON, hold clearance, merge or completion change. Clean detached scratch removed without force. Coordinator continuation is needed for rework and eventual legitimate verdict recording.\n",
+  "subject": "BUG-1807 independent REQUEST_CHANGES at 1508607da5",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "reviewer"
+}

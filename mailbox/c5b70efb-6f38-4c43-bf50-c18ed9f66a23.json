@@ -1,0 +1,19 @@
+{
+  "id": "c5b70efb-6f38-4c43-bf50-c18ed9f66a23",
+  "thread_id": "c5b70efb-6f38-4c43-bf50-c18ed9f66a23",
+  "from": "codex",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791424755111,
+  "body": "TASK-1607 progress at C7 source-only checkpoint: launcher binding decision received and followed; no production launcher/gateway edits. Inventory/disposition and runtime operation-shape regressions added. Child assigned/review/PR-spec scope derives from persisted spawn or start-validated own lease plus direct local implements relationships; shell one-shots avoid claims; bounded seat lock + shared main-root config; config trust inventory; help trace fix and exhaustive JSON audit regenerated; fork-inheritance lock test bounded.\n\nObserved: 49 seat tests passed before final Unknown-shell/launcher/help additions; 12 process-probe tests passed; 8 config-trust tests passed; fake-HOME/repo CLI black-box help/JSON/kill suite passed; make check-ci-fast rerun passed 21 gates. Initial fast run hit sccache connection reset; rerun used RUSTC_WRAPPER empty (cache disabled, no validation gate disabled). Machine-wide Cargo slots remain enforced through same existing /run sidecars opened read-only/flocked; local adapter retained in canonical handoff. Fast portability step's embedded optional fetch was refused by sandbox; checks used coordinator-fetched origin/main. No index change: cached patch checksum still equals saved pending-upstream-index.patch. No direct Git write commands invoked during source rework.\n\nNow proving a key child refusal is non-vacuous by temporarily removing the Child restriction, running exactly the reviewer/rework/punt runtime regression, and restoring exact source in finally; then final target/fmt/fast reruns and source diff/report. Store refused ADR-68 refinement comment lock; exact text saved as .aida/handoff/task1607-rework/adr68-refinement.md for reconciliation. No commit/push/merge/hold clearance/completion/approval claim. Final state will be SOURCE READY pending authorized Git-writable implementer launch, not C7 REVIEW READY.\n",
+  "subject": "TASK-1607 C7 source progress; launcher decision applied",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}
