@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:30:26.622729865Z
-modified_at: 2026-10-08T16:31:37.819605353Z
+modified_at: 2026-10-08T16:42:50.782544076Z
 req_type: Story
 tags:
 - agent-launch
@@ -180,6 +180,21 @@ comments:
     Out of scope: command exemption lists; restoring old authority code; TTY bypass; new seats, grants or delegation; global sandbox/approval edits; credential broker design; production wake/activation; vendor policy claims based only on stale docs; implementation, merge, push or edits to the reserved specs.
   created_at: 2026-10-08T16:31:37.819605353Z
   modified_at: 2026-10-08T16:31:37.819605353Z
+- id: 01a11c65-6a1e-70e0-a611-216029612fbd
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED.
+
+    Independent reviewer: Codex, new strict advisor, not the sketch author or coordinator. Reviewed STORY1486_AMENDED_SKETCH.md SHA-256 6bed750343f488083dc2fced9eb794e65f2c89dc8f32a5d205812358a7a81f75 against main b46aec1e674baae5a329416d4119e67b59200a88 and the canonical operator answer at 2026-10-08T15:54:29.273727039Z.
+
+    Profile WITHOUT exemptions and preserved approval prompts is settled. Replace original exemption AC3 accordingly. The current native/headless/bwrap/root-list surfaces do not establish the strong Git-read-only contract. Require a supported backend and explicit operation/resource/threat boundary, actual-launch capability matrix, path/handle race closure, monotonic child restriction and out-of-process tool/network coverage. Preserve pure preview, portability, managed merge, existing seat validation and executable resolution. Inspect effective inherited config/argv, not just generated files.
+
+    Retain strong AC2. Unsupported restricted launch must refuse before session/grant/lease/worktree/spawn effects; refusal alone is not functional completion. No authority is inferred to narrow the guarantee to AIDA-mediated commands or to introduce a broker/new privileged enforcement architecture. That scope fork remains explicit until separately authorized. Approval never lifts the restriction. No exemptions, TTY bypass, new grants or global harness changes.
+
+    Full rework details, acceptance amendments, named positive/adversarial tests, source references and publication limits: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_INDEPENDENT_REVIEW.md, sections P1–P3. No implementation/dispatch/status/queue/merge authorization. TASK-1593 TASK-1591 BUG-1811 BUG-1812 remain external reservations. No tests were executed by this design review.
+  created_at: 2026-10-08T16:42:50.782544076Z
+  modified_at: 2026-10-08T16:42:50.782544076Z
+  relayed_from: answered-sketch-independent-advisor
 decision_request:
   question: The portability and session-seat prerequisites have landed. Should the launch permission profile now include approval-prompt exemptions, exclude exemptions, or remain on hold?
   choices:
