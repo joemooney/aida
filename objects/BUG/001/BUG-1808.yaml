@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T20:53:23.496392364Z
+modified_at: 2026-10-08T21:15:51.584381381Z
 req_type: Bug
 tags:
 - atomicity
@@ -2420,6 +2420,371 @@ comments:
   created_at: 2026-10-08T20:53:23.496385934Z
   modified_at: 2026-10-08T20:53:23.496385934Z
   relayed_from: 01a11d0a-1bb9-7783-a55e-752d55c00d36
+- id: 01a11d5f-5da0-77e1-8cc3-49c6972f1a74
+  author: mcp
+  content: |
+    FINAL SOURCE-CORRECTED A2 V2 INDEPENDENT REVIEW — 41945 bytes SHA256 8cb6e8b75748ae223c50739afaa411f59e601cd77f4563bac41a0739447a3873, separate receipt hash verified. Root read complete initial body and exact corrected F6 diff; verified source discovery/identity gate, actual launch-reaching callers and remove_store_worktree non-deletion. Earlier41053 initial checkpoint preserved, never canonically relayed as final. CHANGES REQUESTED, all8production gates OPEN; new codedispatch refusal remains. Full judgment follows:
+
+    # BUG-1808 / TASK-1332 A2 store-CAS owner join — V2 independent design review
+
+    **Binding disposition: CHANGES REQUESTED.** 2026-10-08, America/Phoenix.
+
+    This is a new, different, independent design review of the whole V2 owner-join sketch. The reviewer is a Claude Opus 5.5 Claude Code session started for this review only. It did not author V1, V2, either READY, any earlier BUG-1808/TASK-1332 sketch, the earlier V1 independent review, or any common, A2-gate or root decision. No authenticated implementation-review grant is asserted. This session's runtime label has no bearing on identity with the external coordinating root.
+
+    V2 is a substantial improvement. Findings 1, 3, 6 and 8 of the earlier review are largely answered, and R-1/R-2/R-3 are carried correctly. Even so, the source and the Git 2.43 manuals contradict several of V2's stated facts, and some joins are still implicit. In particular:
+    - **The pre-push identity gate is inert in the context V2 selects.** It reads its allowlist from the store worktree.
+    - **The P-side network profile is not the profile V2 verifies.**
+    - **The production origin is HTTPS, and no witness covers it.**
+    - **The ACCEPTED report is discarded when lineage is resolved.**
+    - **Open admissions have no bounded settlement and no cross-invocation lineage**, so a restart can allocate a second id or range.
+    - **The ordering between the admission COMMIT and its locator is unspecified, and P has no record type.**
+    - **The F-1 matrix labels three launch-reaching callers as ordinary.**
+
+    None of these needs a broker, a new issuer, a freeze, a distributed transaction or a product relaxation. Each is a concrete design correction.
+
+    Root must read this entire report before relaying it. Root is the sole canonical relay. No component dispatch, inactive-component permission, production activation, parent completion, PR, merge or authority-sensitive approval follows from this report. No question goes to Joe.
+
+    ## 1. Exact review binding
+
+    | Item | Bytes | SHA256 |
+    |---|---|---|
+    | Submitted `BUG1808_STORE_CAS_OWNER_JOIN_SKETCH_V2.md` | 54,432 | `bf21133d6b2149e4b972c5e03785db50a011a9026dbe45511849057f90f386eb` (verified before review) |
+    | Submitted `BUG1808_STORE_CAS_OWNER_JOIN_READY_V2.md` | 5,170 | `6a17a1fbda998662e5c996e6e061acaaf2a4559dfafbf4164aba34d6ea638d7b` (verified before review) |
+    | V1 sketch (read in full where V2 says V1 "survives": §§2, 4–9) | 53,274 | `4f20ee848da54457d809fb6197d9d67589e52ea2ffacb8028290a371d224f00b` |
+    | V1 READY | 6,532 | `77dfb3d9291723ef71ef96694a600fa1df1b215f63f6eac89071a35b95e92dc4` |
+    | Earlier independent review (read in full) | 42,958 | `cf95d8678dc723538b31f13b08867a937681cd0bbf463b71f2c775a6620aec05` |
+    | Rework brief `bug1808-a2-numbered-design-rework-v2.md` | 3,279 | `3c37be1d4470f9d518215928d37230bcbb448ee309f491877cd801c404d7c927` |
+    | TASK-1332 V2 independent review (A2 text read) | 33,789 | `25e4da169b0f5fc26bc21638b0b086dd92e633c73dc3763e9efc8cae1f8ae042` |
+    | TASK-1717 latest independent review (verdict line read) | 28,119 | REQUEST_CHANGES at candidate `a6fac83f5c4c7197786d1833b0e27e59e18d889d` |
+    | Source pin (author base) | — | `bf65220959c7601427247286abc7eb16278af5a5`, tree `77bdc293f818c791ffd9b6a26e4e8552722ce5ca` |
+    | Current main | — | `c67728c1dcaf8a577539d920bdc6a3c86126cebb`. The diff touches only claim.rs, events.rs, git_backend_cmd.rs, lib.rs (5 lines, role/trace), pr_cmd.rs, role_cmd.rs, ci.yml and patch_events.sh. Every source file cited below is blob-identical at c677. No C adapter appears. |
+    | Inactive checkpoint | — | `6a1733a134b2e63f3adfd8e24606965a5d702f91`, tree `b8545647645319e3d1ef09da8e358b6768488e34` |
+    | Git | — | `git version 2.43.0` (Ubuntu `1:2.43.0-1ubuntu7.3`). Local manuals are hashed in the receipt. |
+
+    **Canonical inputs and freshness.**
+    - The normal CLI `aida show BUG-1808` (resolved to `target/worktrees/aida-pool-aida-2/debug/aida`) failed with exit 1 and the first error `error: "database disk image is malformed"`. `aida show BUG-1808 --full` failed the same way.
+    - This session has no AIDA MCP tool.
+    - The reviewer therefore used the qualified retained normal-MCP `show_requirement` captures in `bug1808-cas-independent-evidence/`, verified byte-identical to their recorded manifest (`INPUT_AND_SOURCE_PINS.json`):
+      - `BUG-1808-mcp.md`: 407,094 bytes, `57130bde…b3ba8`.
+      - `TASK-1332-mcp.md`: 71,097 bytes, `6b971dda…944fa`.
+      - `TASK-1717-mcp.md`: 84,583 bytes, `5848870b…64ba8c`.
+    - **Freshness, stated honestly:** these captures date from about 13:18. They predate root's canonical relay of the V1 review and of V2. Any canonical comment posted after 13:18 was not seen.
+    - No raw canonical YAML, SQLite, cache heal, repair or bypass was used.
+    - Signed text consulted from these captures:
+      - The per-entrypoint issuance table and the shared launch contract (adapters table, "Standalone low-level spawn wrappers…" clause, "newly discovered queue-reachable issuer must join this table").
+      - The proxy decisions accepting the v5, launch-v2 and pane signoffs.
+      - The checkpoint dispositions.
+      - The A2 commission comment.
+      - The TASK-1332 V2 A2(1)–(5) obligations.
+    - **Reading limit:** this review did not re-read all 407 KB of BUG-1808 line by line. It relied on those binding sections and on the earlier review's verified precedence table.
+
+    **Actions not taken.** No code, build, Cargo, tests, check-ci, SQLite, Git mutation, native hook execution, runtime experiment, CI, launch, activation, install, canonical comment, status, queue, mail, protected record, grant, hold, PR, push or merge. Git was used read-only (`git show <pin>:<path>`, `git rev-parse`, `git ls-tree`, `git grep`, `git config --get`). Pinned sources were extracted to the session scratchpad. The only new files are this report and its receipt. All older files are preserved.
+
+    ## 2. Credit: what V2 now closes
+
+    - **Decoder vocabulary.** It never states "never accepted". `[remote failure]`, a missing line and a hook failure are INDETERMINATE. The exact-OID refspec and the `<from>`/`<to>` binding are present. This matches git-push(1): `rejected` means "Git did not try to send the ref at all", and `remote failure` means "the remote end did not report the successful update".
+    - **Pre-push local-ref field.** githooks(5) for 2.43 grounds it: an object-name source "will be supplied as it was originally given". W3 still has to execute this, but it is no longer an open fact.
+    - **Kept packs.** The index-pack `--keep`/`--keep=<msg>` semantics, repack's retention of `.keep` packs, `gc.autoPackLimit` ignoring kept packs, and `multi-pack-index expire` exempting `.keep` packs are all confirmed in the local 2.43 manuals.
+    - **Install ordering.** §7 validates before the first effect, revalidates at the install boundary, names a historical-acceptance horizon and has no reset to L/B/C. That answers the earlier finding 3 in substance (but see finding 7).
+    - **Own-marker rule.** The predicate in §10 (exact ADMISSION image plus `new_owner == before-owner`) correctly preserves B's marker against A. No clock is used and locks are not nested.
+    - **Gate ledger.** The eight gates are listed distinctly and honestly OPEN. TASK-1612 PARTIAL is not counted, and the TASK-1717 S/L proof is not counted as common acceptance.
+    - **Source anchors.** All anchors I sampled match bf652209: the F-1 lines, `seat_authority` 93/104/136/147/159/211/235, the family symbols, `identity_gate.rs:193/263/399`, `remote_create.rs` `mirror_push_refspecs`, and the six `ObservationKind` values and seven `TargetRoot` values at 6a1733. The MCP surface exposes none of the 16 writers (`claim_task` writes a local lease only).
+
+    ## 3. Binding findings (all must be resolved in a V3 before any approval)
+
+    ### F1 — The pre-push identity gate is inert in the selected hook context, and V2 asserts the opposite
+
+    **File/symbol.**
+    - V2 §5 ("the identity gate runs `git log <advertised-old>..C` in the discovered `project_root` … so the real gate evaluates C") and W3.
+    - Source:
+      - `lib.rs:4890–4898` dispatches `identity check-push` with `find_project_root()`.
+      - `lib.rs:36815 find_project_root_from` walks up to "the nearest ancestor holding `.git` (… a linked worktree resolves to ITSELF)".
+      - `identity_gate.rs:55 read_allowed_emails` reads `config_path_for_project(root)` = `<root>/.aida/config.toml` (`lib.rs:17117`) and returns an empty list when the file is absent. `identity_gate.rs:399` returns `Ok(())` on an empty list.
+      - The generated hook's fail-closed fallback tests `[ -f .aida/config.toml ]` relative to the hook's cwd.
+
+    **Fact.**
+    - githooks(5) says pre-push runs in "the root of the working tree". The push runs from the store worktree (`.aida-store`, a linked worktree whose `.git` file points to `.git/worktrees/-aida-store`).
+    - Discovery therefore yields `project_root = .aida-store`.
+    - `git show aida-store:.aida/config.toml` fails ("exists on disk, but not in 'aida-store'"), and `.aida-store/.aida/` contains no `config.toml`. The allowlist is empty and the gate passes without inspecting C.
+    - Today's store pushes have the same context (`git_ops::push(store_root, …)` at `coordination.rs:761/870/922/1163/1304/1336`). This is therefore a pre-existing TASK-1330 gap that V2 misreports as enforcement.
+    - This is grounded in source and manuals only; it was not executed.
+
+    **Repro schedule.** Under the generated mirror+identity profile, the project `.aida/config.toml` sets `[identity] allowed_emails = ["a@x"]`. The sealed construction commits C as `b@y`. The push from `.aida-store` runs the gate, which discovers `.aida-store`, reads no allowlist and exits 0. C lands. W3's "forbidden author refuses under the generated profile" fails, or passes only if the fixture plants a config in the store worktree, which is a vacuous fixture.
+
+    **Required outcome.**
+    - `PrePushProfile` records the gate's actual discovery: `project_root` = store worktree, plus the exact allowlist source path with its digest or proven absence.
+    - The design states truthfully that store pushes from the store worktree are not gated by the project allowlist at bf652209, and preserves that existing behavior. Silently moving the push cwd to the main checkout would be a behavior change.
+    - Whether store pushes must enforce the project allowlist is a TASK-1330 owner decision. Root relays it there; it is not decided inside A2 and is not a Joe question.
+    - No hooks-off and no `--no-verify`.
+
+    **Proposed test.** `store_cas_prepush_gate_actual_discovery`: (a) an allowlist only in the project config means the gate is inert, and the profile records the absence; (b) an allowlist at `<store>/.aida/config.toml` means a forbidden author refuses, giving no status line → INDETERMINATE → stop at two unchanged; (c) an allowed author passes. Guard removal: drop the recorded discovery digest, and a planted config between plan and spawn must refuse before the spawn.
+
+    ### F2 — The endpoint profile is verified on the wrong repository, and multi-URL/HTTPS transports are unbound
+
+    **File/symbol.** V2 §5 `EndpointProfile` ("Global and system scopes apply unchanged because the same HOME/environment is used"; "re-resolved and compared immediately before EACH network spawn (P fetch and push)"; "the two resolved URLs"), §4 P hops, §15 common conditions ("Local bare origins with an owned receive-pack wrapper").
+
+    **Facts.**
+    1. **Conditional includes differ for P.** git-config(1) for 2.43: `includeIf "gitdir:"`, `"onbranch:"` and `"hasconfig:remote.*.url:"` are evaluated against the repository's actual gitdir, checked-out branch and configured remotes. P has a different gitdir, no branch checkout and no origin remote. P's effective `core.sshCommand`, `credential.*`, `http.*`, `url.*.insteadOf`, `user.*` and `core.hooksPath` can therefore differ from the store worktree's. V2 re-resolves the store worktree before the P fetch, not P. The R fetch, the T observation fetch and the recovery fetch can use a different endpoint or credential path from the push.
+    2. **Global hooks path applies to P.** A global `core.hooksPath` overrides P's "private empty hooks directory" unless P's repository config pins it. Fetch into P runs the reference-transaction hook from that path.
+    3. **Multiple URLs.** git-push(1): "Pushing to a remote affects all defined pushurls or all defined urls … Fetch, however, will only fetch from the first defined url". `git remote get-url --push origin` prints only the first. Several push URLs produce several `To <url>` blocks, so acceptance can differ per URL. A `pushurl` different from `url` means T may be observed in a repository other than the one pushed to.
+    4. **HTTPS origin.** The production origin here is `https://github.com/joemooney/aida.git` (`remote.origin.url`), so pushes run through the remote-helper path (`git-remote-https` / `send-pack --helper-status` / `transport-helper.c`), not native send-pack status. V2's decoder grounding cites only `transport.c::print_one_push_report`, and every witness uses local bare origins. The production transport has no witness.
+
+    **Required outcome.**
+    - Resolve the endpoint with `get-url --all` (fetch and push).
+    - Refuse before mutation, with a named reason, unless there is exactly one push URL and the fetch and push URLs resolve to the same repository after rewriting. Otherwise make it an explicit UNSUPPORTED profile. Never pick the first URL silently.
+    - Compute P's effective transport/identity/hooks profile in P with the same `--show-origin --show-scope` listing, and require digest equality with the store profile. Alternatively, run every P network spawn with explicit pinned overrides that make equality provable.
+    - Pin P's `core.hooksPath` to the private empty directory in P's repository config.
+    - Ground the decoder in both the 2.43 native path and the helper path (`transport-helper.c` status mapping and `send-pack --helper-status`). Map helper `error … expecting report` and helper death to INDETERMINATE.
+
+    **Proposed tests.** `store_cas_endpoint_profile_p_equivalence`:
+    - an `includeIf gitdir:` setting `core.sshCommand`/`user.email` for the project path only refuses (or is equalized) before the P fetch;
+    - a global `core.hooksPath` with a reference-transaction sentinel never runs in P;
+    - two push URLs refuse;
+    - `pushurl ≠ url` refuses.
+
+    `store_cas_porcelain_http_helper`: run through a local smart-HTTP fixture (`git http-backend`) with a server that updates and then drops the response. Expect INDETERMINATE, then ACCEPTED by lineage. Pair it with healthy fast-forward and declined controls.
+
+    ### F3 — Lineage resolution discards the report class and leaves its quantifiers undefined. The origin-rewind premise is false.
+
+    **File/symbol.** V2 §6 resolution steps 1–4, the retry policy and the "INDETERMINATE+ABA" paragraph. `store_cmd.rs` `store_compact` (bf652209) and `git_ops.rs:2548 squash_orphan_to_snapshot`.
+
+    **Facts.**
+    1. **The ACCEPTED report is discarded.** Steps 1–4 use only T and R_i. With ACCEPTED_REPORTED or REMOTE_ALREADY_C, and then T advanced from R_i without containing C_i, step 2 classes the result NOT_IN_OBSERVED_TIP. The retry policy then re-runs the family predicate, which allocates again for #9/#13. That fresh allocation follows positive acceptance evidence. A server-confirmed acceptance that is not in a later tip is a rewind after acceptance, not "may not have landed".
+    2. **Undefined quantifiers.** Step 2 quantifies "for every unsettled C_i". Steps 3 and 4 use a single unbound `R_i`. With candidates on different bases (C_1 on R_1, C_2 on R_2 ≠ R_1), the aggregate state is undefined.
+    3. **Supported origin rewinds exist.** §4/§6 assume "origin only fast-forwards under supported writers". `aida store compact --squash` is a supported, explicitly gated AIDA command. It prints the required next step `git -C .aida-store push --force-with-lease origin aida-store`, tells every other clone to "fetch + hard reset", and documents `reset --hard <backup>` recovery. This is a documented, operator-run rewind of origin, and potentially a return to an earlier tip (ABA).
+    4. **Unnecessary candidates.** For INDETERMINATE with an unchanged base (T == R_i), V2 builds a NEW C_{i+1}, which multiplies candidates and record stamps. Re-pushing the same admitted C_i is idempotent (`=` up to date if it landed) and needs no new lineage entry.
+    5. **Observation failure is unspecified.** If the post-push fetch of T fails because the network dropped right after the push, no outcome is defined.
+
+    **Required outcome.**
+    - Resolve each candidate separately and define the aggregate.
+    - A report of acceptance combined with an observation that lacks the candidate gives REWOUND_AFTER_ACCEPT, which is BLOCKED with no retry, no reallocation and no local effect.
+    - Treat compaction force-push and backup restore as supported rewind epochs: REWOUND, retained, never "not in tip → retry". State the ABA bound against them explicitly.
+    - When T == R_i, retry by re-pushing the same C_i under the same admission. A new candidate is built only after the base has changed.
+    - A failed observation leaves the operation ADMITTED/UNKNOWN with the family's truthful unreachable result: never Acquired, never installed.
+
+    **Proposed tests.** Extend W1-a/W1-b with:
+    - a wrapper that reports `ok` and then a peer force-rewinds: expect BLOCKED and no second range;
+    - mixed-base C_1/C_2: expect a defined aggregate;
+    - the documented squash, force-with-lease, re-sync and restore-backup sequence during an open admission;
+    - a fetch failure after `ok`: expect UNKNOWN, never Acquired;
+    - identical-C re-push after a lost status: expect `=` adoption with exactly one lineage entry.
+
+    Guard removal: delete the report-class join, and the force-rewind case must allocate a second range (an executed failure).
+
+    ### F4 — Open admissions have no bounded settlement and no cross-invocation lineage
+
+    **File/symbol.** V2 §8 (64 open per store, "A live owner is skipped", "PENDING_POSSIBLE: stays open", recovery runs "before its own decision"), §6 stop rules, §13 rows 5, 9 and 13, W5.
+
+    **Repro schedules (reasoned).**
+    1. **Duplicate id after restart.**
+       - Automatic node registration (#9) op1 pushes C_1 on R, and the status is lost.
+       - The owner dies. T == R, so recovery classes PENDING_POSSIBLE and leaves it open.
+       - The operator reruns registration as op2, which recovers first (still pending) and then decides on R independently, choosing id N1.
+       - A delayed receive-pack lands C_1 (N1 for this clone). op2's push is non-ff, it refetches, and the predicate picks the next free id, N2. Origin now holds two registry entries for this clone, and node.toml is N2.
+       - op1's later recovery sees ACCEPTED, but its before-image validation fails, giving INCOMPLETE. An orphan registration remains.
+       - This contradicts row 9 ("Indeterminate then restart → one id"), row 13 and W5 ("no duplicate allocation").
+    2. **Heartbeat fills the open bound.** A long drain's heartbeat (#5) under flaky network ends each tick op as UNKNOWN_RETAINED, which stays open. The owner process is alive, so recovery skips it. The 64-slot bound fills, and every C family on that store refuses "unsettled store-CAS operations need recovery". No path can settle them.
+    3. **REWOUND never settles.** REWOUND / UNKNOWN_RETAINED (F3, for example after the documented compaction) also never settles.
+
+    **Required outcome.**
+    - Key lineage by (store, family, subject/intent digest) across invocations.
+    - A new invocation for the same subject in an allocation, identity or claim family must first resolve open same-subject admissions:
+      - adopt an ACCEPTED candidate and install it via §7, or
+      - refuse with a named "unsettled prior attempt" reason while it is PENDING or UNKNOWN.
+      - It must never decide independently.
+    - An owner settles its own earlier operations when a later observation resolves them.
+    - Specify a bounded settlement of UNKNOWN, REWOUND and PENDING operations through an existing common recovery or operator surface, with retained evidence and no silent expiry, or state the liveness limit as an unsupported production join that keeps the affected rows BLOCKED.
+    - Recovery still never builds a candidate or allocates.
+
+    **Proposed test.** `store_cas_restart_adopts_open_same_subject`, covering #9 automatic, #13 automatic and manual, #1 and #2: delayed C_1 lands after restart, giving exactly one id, range or claim, with the second invocation adopting or refusing. Also `store_cas_open_bound_liveness`: flaky heartbeat ticks never strand the store. Guard removal: drop the same-subject pre-decision join, and a second id must appear (an executed failure).
+
+    ### F5 — ADMISSION atomicity, discovery, P placement and the kept-pack effect are unspecified against the actual records
+
+    **File/symbol.** V2 §§4, 8 and 14. At 6a1733:
+    - `publication/records.rs` `TargetRoot` (7 roots, none for an owner-private repository);
+    - `FileEffect{target, before, after}` with `FileImage::{Absent, Regular{payload, mode}}` (file images only, no ref effect);
+    - `durable.rs` (`COMMIT.json` is raw bytes);
+    - `observations.rs` `Observation.payload: Vec<u8>`.
+
+    **Facts and gaps.**
+    1. **Locator ordering.** The order of the P locator write (`refs/cas/open/<op>/<tx>`) relative to ADMISSION (ii)–(v) is not stated.
+       - Written after COMMIT: a crash between COMMIT and the locator leaves a committed, possibly retired admission that is undiscoverable if discovery uses locators. The "64 open" count and the cross-check both use them.
+       - Written before COMMIT: a crash leaves an orphan locator, which V2 calls RECOVERY-BLOCKED, wedging a harmless rollback.
+    2. **P has no record mapping.** It has no TargetRoot and no path. Its refs are Git refs, not FileEffects, so "Settlement journals the deletion of … P refs" has no record type in the checkpoint.
+    3. **Kept-pack after-bytes are unknown at PREPARED.** `index-pack --stdin --keep` run directly in the common directory writes its own files. Pack bytes and name are not known at PREPARED, so V2's "exact before (absent) and after bytes for `.pack/.idx/.rev/.keep`" cannot be journaled before the effect. A crash leaves index-pack `tmp_pack_*`/`tmp_idx_*` files that are owned by no journal entry.
+    4. **Recovery holds HOME across the network.** Recovery runs "after HOME is entered" and does "Fetch T into P". That is a network spawn under HOME, contradicting §9 ("No AIDA lock is held during the network fetch") and making every HOME entry network-dependent.
+    5. **Undefined symbol.** §4 "After acceptance" uses `closure(T) ^ M'` without defining M'.
+
+    **Required outcome.**
+    - Discovery is authoritative from the durable HOME publication record (the retained receipt index); the locator is only a cross-check. Either the locator is written inside the ADMISSION write set before COMMIT with exact rollback, or it is derived. Specify each crash point's disposition: before (ii), between (ii) and (iv), between (iv) and the locator, and between (v) and the spawn.
+    - Define P's location as one per store under a named `GitCommonDir` subpath with recorded device/inode. If P is missing or replaced, the result is RECOVERY-BLOCKED.
+    - Either add a typed ref-effect record to the common owner (named as REQUIRED, like the codecs) or keep P refs out of journaled effects with explicit idempotent cleanup rules.
+    - Build pack, idx and rev privately, verify them, record exact images, and install them through the adapter as FileEffects. The order must be `.keep` → `.pack` → `.rev` → `.idx`, each fsynced with directory fsync, so a concurrent repack never sees an index without its keep.
+    - Recovery's fetch drops HOME, then reacquires and revalidates.
+    - Define M'.
+    - Choose ONE `RemoteObservation` mapping. Do not leave "if the next reviewer finds InstallVerification too narrow". Overloading `InstallVerification` (a local-install kind) for remote state is not acceptable. A seventh kind is an extension of the signed common record and needs common-owner disposition, so name it as REQUIRED.
+
+    **Proposed tests.** W5 additions: crash at each named ADMISSION boundary, including COMMIT then locator; an orphan locator with no COMMIT is rolled back, not blocked; a crash during the kept-pack install never leaves an idx without its keep; recovery from another repository runs no network while holding HOME.
+
+    ### F6 — Object lifetime still depends on closure(M) reachability, which supported paths can break during an open admission
+
+    **File/symbol.** V2 §4 ("M is published history and an ancestor of every supported future canonical tip … The single supported rewriter of history is explicit store compaction"), the kept pack `{C, L} ^M`, W2. Also `store_cmd.rs` (manual re-sync guidance) and the default `+refs/heads/*:refs/remotes/origin/*` fetch refspec (present in this repository's config).
+
+    **Fact.**
+    - The kept pack deliberately omits closure(M), so C's shared-store lookup needs M's trees and blobs to stay present.
+    - After a peer's documented compaction, this clone's documented "fetch + hard reset" re-sync moves both `refs/heads/aida-store` and the force-updated remote-tracking ref off M's history.
+    - An ordinary `git gc --prune=now`, which is exactly W2's barrier, then removes closure(M). The store's lowered `gc.auto=500` makes automatic gc frequent, although default prune expiry delays deletion.
+    - Push or install of C then fails for a missing object. This is not a correctness loss (nothing is accepted), but the claimed healthy object-lifetime positive does not hold, and the "single supported rewriter" premise is false.
+
+    **Required outcome.**
+    - Either make the kept closure independent of M (for example, keep the closure relative to a base that the admission itself pins, within a declared byte budget),
+    - or enumerate every AIDA path that can unreference M's history in the shared store and make each refuse while an admission is open. The list must include local squash, any doctor or heal store reset, and any AIDA-run re-sync. The reviewer's `git grep` at bf652209 found no AIDA path that deletes `refs/heads/aida-store`. Note: `git_ops.rs:1636 remove_store_worktree` runs only `git worktree remove --force`; its doc comment, "optionally delete the branch", is stale and it has no branch-deletion parameter, so it is NOT such a path. If V3 finds an actual ref-deleting or ref-rewriting caller, it must be listed with its source anchor. Classify operator-run manual Git outside AIDA as UNSUPPORTED, detected by a closure verification immediately before the spawn and at install, and reported as RECOVERY-BLOCKED, never as rejection or acceptance.
+    - No maintenance freeze and no hidden ref.
+
+    **Proposed test.** W2 control: open admission, then peer squash with force-with-lease, then local documented re-sync, then `gc --prune=now`. Expect either the push to succeed through an M-independent pin, or a named pre-spawn refusal with retained evidence. Plus, for each AIDA path V3 enumerates as able to unreference M (local `store compact --squash` at minimum), the same path during an open admission refuses with a named reason.
+
+    ### F7 — The §7 install is ambiguous when ordinary sync rebases or imports during the push window
+
+    **File/symbol.** V2 §7 step 3 ("Integrate H's local-only commits onto T"), step 4(b) ("no local commit after L_i …"), §8 (i); TASK-1717 protective S (fetch/rebase/push) runs while no AIDA lock is held during the push.
+
+    **Facts.**
+    - "H's local-only commits" includes L_i's local commits, which C_i already contains as rebased copies. Re-applying them onto T duplicates or conflicts unless patch-equivalence drops them, and union-resolved copies are not patch-equivalent.
+    - An ordinary sync during the push window can:
+      - rebase H so that L_i is no longer an ancestor, leaving 4(b) undefined;
+      - import T so that H already contains C_i;
+      - push L's original commits so that origin holds both the original and the rebased copies.
+
+    **Required outcome.**
+    - Define the integrated set exactly, as `L_i..H` or by stated patch identity.
+    - Specify each case: H descends from T (no ref update; local effects only after validation); L_i is no longer an ancestor of H (validate the family record by content against T, and decide SUPERSEDED, INCOMPLETE or INSTALLED by a stated rule); H contains the original L commits while T has the rebased copies.
+    - Never reset, and preserve unrelated H.
+
+    **Proposed test.** W4 additions: an ordinary sync rebase and an ordinary sync import landing between ADMISSION and install; an ordinary sync push of the original L commits racing C_i. Each gives exactly one installed effect with no duplicated content.
+
+    ### F8 — F-1 matrix: three callers are labelled "ordinary/SUPPORTED" although the source reaches vendor launch or covered launchers after the shared claim
+
+    **File/symbol.** V2 §11 rows for session start, queue integrate and solo; signed BUG-1808 launch contract ("Standalone low-level spawn wrappers still used outside queue work must either take an ActivatedAssignment or own a separate correctly preflighted launch publication"; "Any newly discovered queue-reachable issuer must join this table before signoff/implementation acceptance"; the drain/auto-complete wrapper row).
+
+    **Facts at bf652209.**
+    - `aida session start --launch`: `handle_session_command` passes `launch` to `session_start` (`lib.rs:27054`). The shared claim runs at `38569`. Then at `39581` `session::new_session(...)` calls `run_claude_session` (session.rs:712), which execs a vendor after the claim. The stakeholder-persona branch (`38376`) returns before the claim and is not affected.
+    - `aida queue integrate`: acquires the drain lock claim (`queue_cmd.rs:14512`), then spawns `aida queue work <pr> --from-pr` drives (`integrate.rs:879 drive_args`, used at `queue_cmd.rs:15358`; the promotion rebase child is at `14849`). These are covered queue-work launchers run under its own drain claim, structurally the signed drain-wrapper row.
+    - `aida solo`: acquires the solo claim (`solo_cmd.rs:145` → `solo_lock.rs:131`), then runs `burndown run` (a covered drain, BLOCKED in V2's own matrix) and `queue integrate` as steps.
+
+    **Required outcome.** No inferred exemption from the absence of a literally named P4.
+    - Split session start: no-launch remains ordinary SUPPORTED, with existing order and residue disclosed. `--launch` is BLOCKED until the common owner classifies it under the signed standalone-spawn clause.
+    - Mark queue integrate and solo BLOCKED until classified, like `do guided`.
+    - Keep worktree add/enter ordinary (verified: no vendor launch on that path).
+    - State explicitly whether the signed "Direct session attachment / role reissue" row covers any of these.
+    - The protective family repair still serves all callers, but it does not count toward their acceptance.
+
+    **Proposed test.** W8 rows for `session start --launch`, `queue integrate` (with a child `--from-pr` drive) and `solo` (with burndown/integrate steps). Each runs the pre-P4 claim → revoke/expiry → unreachable schedule and remains a recorded OPEN failure, never a pass. Plain `session start` and worktree add/enter keep their real positives.
+
+    ### F9 — Peer before-images are captured without peer exclusion; missing-peer positive and delivery idempotence are undefined
+
+    **File/symbol.** V2 §10 ("Images captured at ADMISSION, under HOME→REPO→STORE of OUR repository … the peer marker's exact bytes … the peer `.aida/node.toml`"), peer step 3 and step 5, the crash table. Source: `git_ops.rs:3322 hijack_node`, which marks in place when the old clone is reachable, else `HijackOutcome::Reattributed` as an ordinary success.
+
+    **Facts.**
+    1. **Capture without peer exclusion.** The peer images are read without the peer root's permanent lock, and that lock cannot be taken under ours without nesting.
+    2. **Missing peer is an ordinary positive today.** An absent or unreachable old clone is the existing healthy `Reattributed` outcome. V2 step 5 makes "missing" a non-delivery report, without distinguishing absent at S0 from vanished between ADMISSION and delivery.
+    3. **Recovery can report a false conflict.** If the peer marker is already installed (current bytes equal M_ours), step 2 compares against the ADMISSION image and reports a false `notification-conflict`.
+    4. **Step 3 predicate is incoherent.** In the before-owner's own clone it requires a marker with `new_owner == before-owner`, which a real older re-attribution would not carry.
+
+    **Required outcome.**
+    - Capture peer root identity and images in a separate peer-lock-alone step before ADMISSION, holding none of our locks, and revalidate under the peer lock at delivery.
+    - Peer absent at capture gives the existing `Reattributed` healthy positive, with no peer step.
+    - Current bytes equal to M_ours means already delivered, which is idempotent success.
+    - Define the step-3 predicate from registry lineage, naming the exact owner fields compared.
+    - No clocks, no nesting, never overwrite.
+
+    **Proposed test.** W7 additions: a peer writing node.toml concurrently with capture; absent peer gives Reattributed (pass); peer vanishing after capture gives not-delivered; recovery after the peer COMMIT reports delivered, not conflict.
+
+    ### F10 — Unsupported authority joins need per-row acceptance disposition, and the core-route negative is vacuous
+
+    **File/symbol.** V2 §9 surfaces table and U-1..U-3; §13 rows 1, 2, 7 and 16 (healthy positives listed without U-n disposition); row 7 negative "a direct core call does not borrow CLI proof". Source: `aida-core/src/team.rs:217/223/290/296/380` are public with no check. CLI wrappers: `team_cmd.rs:207/246/265/290` (`require_direct_tty` only). `seat_authority.rs:136/147`.
+
+    **Facts.**
+    - The A2 commission requires "family authority at remote acceptance" and that a "fresh local sample then unlock does not establish authority at remote success". V2's surface (a), "Sampled at S0 and again at ADMISSION … Git does not serialize it afterwards", is exactly that sample.
+    - V2 asserts "the source has none [no such contract] for roster writes" but cites no signed text. Rows then list healthy positives as if U-1..U-3 were acceptance-neutral.
+    - Core roster writers have no authorization, so "does not borrow CLI proof" has no defined observable outcome.
+    - V1 §6(b)'s "TTY human … never revocable" prose is never explicitly withdrawn (V2 §1 lets non-restated V1 text "survive").
+
+    **Required outcome.**
+    - For each row, state whether any signed contract requires the authority at remote acceptance, citing the exact text.
+      - If one does: the row's production join is BLOCKED by U-n, and U-n is never an acceptance waiver.
+      - If none does: state the acceptance-neutral disclosure with its citation.
+    - Define the core-route negative concretely, for example: the receipt records no invocation-authorization evidence for a core caller, and no CLI-derived TTY sample is recorded as authority. Preserve today's core permissiveness unless the owner records a decision.
+    - Explicitly withdraw V1 §6(b).
+
+    **Proposed test.** W6 additions: a direct core `team::allow_seat_cas` call checks the receipt fields; a revoke between ADMISSION and acceptance is reported per the row's declared disposition (BLOCKED rows record OPEN).
+
+    ## 4. Required amendments (non-blocking individually; all must be in V3)
+
+    1. **Self-containment.** V2 §1's "everything else in V1 survives only as far as the review did not reject it" is not reviewable. V3 must either be self-contained or carry an explicit table of surviving V1 sections. V1 §4 `record_stamp` "set ONCE per operation" contradicts V2 §8's per-attempt stamp. V1 §8's "HOME (when enlisted)" contradicts V2 §9.
+    2. **Stale TASK-1717 status.** "TASK-1717 … unreviewed head" is stale. Its candidate `a6fac83f` received REQUEST_CHANGES (`TASK1717_INDEPENDENT_REVIEW.md`). It remains a non-dependency.
+    3. **Decoder grammar.** It must cover the porcelain `To <anonymized-url>` header, which must match the profile URL, and the `Done` trailer (present only on success). "Several lines" must mean several ref status lines.
+    4. **Long STORE hold on first P seeding.** Seed P from immutable objects outside locks, and under STORE only verify L and fetch incrementally. Declare numeric P and kept-pack budgets.
+    5. **HIJACKED.toml exclude portability.** V1 D15 (the marker is not in the store `.gitignore` and relies on local excludes) must be carried as a W7 case.
+    6. **Heartbeat cost.** Row 5 runs a full ADMISSION/push per tick on the heartbeat thread under HOME. State its bound and its interaction with DrainGuard join and the 64-slot bound (see F4).
+
+    ## 5. Full 17-row family criterion table (reviewer disposition)
+
+    "OK" means the row's own predicate, no-origin/unreachable, install and witness text is acceptable as written, subject to the cross-cutting findings that apply to every row: F1, F2, F3, F5, F6 and F7. No row is approved for production. All rows remain under gates 1, 2, 3, 4, 7 and 8.
+
+    | Row | Predicate / surfaces | No origin / unreachable | Install / recovery | Positive + negative + guard removal | Disposition |
+    |---|---|---|---|---|---|
+    | 1 `acquire_claim:676` | OK (decide_claim, force scope) | OK (Unavailable, never Acquired); add failed observation after `ok` (F3) | F4 same-subject restart join missing | OK; add F8 callers | CHANGES: F3, F4, F8, F10 |
+    | 2 `acquire_lock_claim:1072` | OK | OK | F4 | OK; integrate/solo are not ordinary (F8) | CHANGES: F4, F8 |
+    | 3 `release_claim:839` | OK (after fetch; D7 removed) | OK | Lineage-only deletion OK | OK | OK as amended by the cross-cutting findings |
+    | 4 `release_stale_foreign_claim:893` | OK (clone and heartbeat) | OK | OK | OK | OK as amended |
+    | 5 `heartbeat_lock_claim:1275` | OK | OK (skip tick) | Open-op accumulation (F4) | Add liveness case | CHANGES: F4, amendment 6 |
+    | 6 `release_lock_claim:1311` | OK | OK | OK | OK | OK as amended |
+    | 7 roster `*_cas` | OK intent/migration | OK (L under HOME / Err) | HOME install OK | Core negative vacuous | CHANGES: F10 |
+    | 8 `link_cas:219` | OK | OK | OK | OK | OK as amended |
+    | 9 `register_node_full_identity:2877` | OK | OK (BUG-40 L) | Restart → second id (F4); ok→rewind (F3) | W5 claim unmet | CHANGES: F3, F4 |
+    | 10 `register_node_remote_only:3078` | OK | OK | OK (no node.toml) | OK | OK as amended |
+    | 11 `set_node_identity_field:3189` | OK | OK | Self before-image OK | OK | OK as amended |
+    | 12 `unregister_node:3492` | OK; lineage-only deletion correct | R-3 OK; absent `Ok(false)` | OK | OK | OK as amended |
+    | 13 block Claim:21244 / auto:21965 | OK; per-attempt range | Auto L at 22030; explicit R-3 | Restart → second range (F4); ok→rewind (F3) | W5 claim unmet | CHANGES: F3, F4 |
+    | 14 `write_cas_opts:340` | OK (mutate, then debounce; no job re-run) | OK (offline retention L) | 4(b) supersession with the retained L commit OK | OK | OK as amended |
+    | 15 `write_batch_cas_opts:460` | OK (reapply_delta) | As 14 | As 14 | OK | OK as amended |
+    | 16 `hijack_node:3322` | OK expected before-owner | R-3 OK; unreachable Err | Peer capture/positive/idempotence (F9) | Add F9 cases | CHANGES: F9, F10 |
+    | 17 `suggest_free_node_id:2802` | — | — | — | — | Excluded S row: correct |
+
+    **State-transition table (§14).** The transitions are complete for the happy, reject and unknown paths. Required additions:
+    - REWOUND_AFTER_ACCEPT (F3).
+    - Same-subject adoption/refusal at PLANNED (F4).
+    - Locator and HOME-record discovery transitions (F5).
+    - Pre-spawn closure-verification failure, giving RECOVERY-BLOCKED (F6).
+    - Peer capture as its own step (F9).
+
+    The API owners named are PROPOSED symbols under the common owner. That is acceptable for a design, but none exists at bf652209 or 6a1733.
+
+    ## 6. Gates, rulings and dispatch
+
+    - **Gate ledger (V2 §12) is accepted as stated:**
+      - gates 1, 2, 3, 4, 7 and 8 are A2 prerequisites, all OPEN;
+      - gates 5 and 6 are parent prerequisites, OPEN;
+      - TASK-1612 `a5e1bc4f` is PARTIAL and not accepted transport;
+      - TASK-1717 (REQUEST_CHANGES) and its S/L proof are not common acceptance.
+    - **R-1, R-2 and R-3** are preserved as ruled. R-2 is still not certified by the namespace name alone (F5).
+    - **D-F1a and the other product forks** are correctly withdrawn.
+    - **Inactive pure components.** V2 says the decoder, lineage resolver, family predicates and marker planner "may be CONSIDERED separately only after a fresh review accepts this design". This review does not accept it. No inactive-component permission exists. The decoder (F2, F3) and the lineage resolver (F3, F4) are themselves under change. Dispatch refusal binds: no new doer, queue, `--spec`, environment grant, old binary or alternate API.
+    - **Pre-existing defect for root to route** (not a Joe question, and no product change here): the TASK-1330 identity gate does not apply the project allowlist to store pushes made from the store worktree (F1).
+
+    ## 7. Handoff
+
+    **Root handoff:** CHANGES REQUESTED for V2 (`bf21133d…f386eb`) and READY_V2 (`6a17a1fb…ea638d7b`).
+
+    The revision owner is the existing A2 design author, through root. Requested artifact: a V3 sketch and READY that resolve F1–F10 with the stated outcomes and tests, carry amendments 1–6, and preserve all older files byte-for-byte. A NEW, DIFFERENT independent advisor must review V3.
+
+    This reviewer has sent no canonical comment, mail or queue action. It waits for root.
+
+    **Source-accuracy amendment (same review, before canonical relay).** At root's request, F6 was corrected. The initial draft (41,053 bytes, `2150b25d…de7fff`) cited `remove_store_worktree` as deleting the store branch and proposed a nonexistent `--delete-branch` witness. Source shows that it does not delete the branch. The verdict, the remaining F6 issue (peer compaction plus the documented local re-sync plus GC breaking closure(M)), F6's required choice and every other finding are unchanged.
+
+    Commands and first errors are listed in the receipt. All counterexamples are reasoned schedules from pinned source and the local Git 2.43 manuals. None was executed.
+  created_at: 2026-10-08T21:15:51.584374643Z
+  modified_at: 2026-10-08T21:15:51.584374643Z
+  relayed_from: bug1808-a2-v2-independent-gate
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
