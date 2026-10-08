@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T15:54:26.330611719Z
+modified_at: 2026-10-08T16:31:20.799766818Z
 req_type: Epic
 tags:
 - architecture
@@ -58,6 +58,87 @@ comments:
   created_at: 2026-09-29T06:28:11.269268693Z
   modified_at: 2026-09-29T06:28:11.269268693Z
   session_id: 01a0eb4e-6ae3-7cd1-bc89-0fd039463774
+- id: 01a11c5a-e2df-7160-ac9d-012fd9331b18
+  author: codex-sketch-author
+  content: |
+    SKETCH (awaiting advisor signoff): EPIC-74 — target/parent branches with canonical epic isolation
+
+    Author: Codex, separate sketch-author advisor, 2026-10-08. This is my proposal, not an independent verdict or Joe's signoff. Source baseline: main b46aec1e674baae5a329416d4119e67b59200a88, also origin's advertised main at inspection. No implementation or child dispatch authorized by this artifact.
+
+    ## Recorded direction and reconciliation
+
+    Canonical EPIC-74 decision_request answered=0 at 2026-10-08T15:54:26.321418310Z selects “Target and parent branch model”; its consequence explicitly requires an amended sketch and ADR across the children while preserving store-side exclusion. This is choice 1 in the operator UI, not a new permission grant. Evidence: answered-sketch-evidence/EPIC-74.json. Read alongside the three child snapshots and docs/plans/2026-09-28-epic-74-target-branch-vs-lane.md.
+
+    Retain that plan's two facts: the epic stores shared isolation; target and parent describe branch operations. Do not add a lane seat, lane flag, lane tag, lane lifecycle, or parallel lane command family. Correct two overstatements in the September plan: PR creation is not the whole integration surface, and merging target into a non-default parent does NOT imply Completed. Its proposed always-nonempty parent was a departure from Joe's original wording, not a recorded choice about empty values; keep that bounded fork visible below.
+
+    ## Owner, trigger, data and proposed interfaces
+
+    The epic owns one optional typed target_branch declaration in the canonical requirement object. Propose epic-only validation in Requirement/storage mutations; absence means ordinary default-branch work. A non-default declaration isolates its transitive descendants. This typed field is a proposed schema change, not a field claimed to exist today. No separate lane database. Branch identities include repository identity; do not equate identically named branches in different repositories.
+
+    Proposed editing surface: existing edit/MCP requirement update gains an epic target-branch field and explicit clear operation. Existing list/show/status display the declaration, descendant count and target/parent/default. Existing worktree enter and launch context derive branch context from the focused epic. Existing AIDA mutation authority remains required; an env variable never grants permission to change the declaration. Exactly who may remove isolation in the presence of live work remains a signoff issue below.
+
+    Selection triggers: queue view and explicit pickup, queue auto-complete, burndown plan/run, shift candidate collection, integrate plan/run, groom and backlog groom, direct session/agent start, and their MCP entry points. Every action path reads canonical isolation even when AIDA_TARGET_BRANCH and AIDA_PARENT_BRANCH are absent. A display cache may label stale context, but an action gate must not use stale absence as permission.
+
+    Propose one shared resolver, resolve_spec_branch_context (new symbol), returning epic UUID, canonical revision, repository/default identity, effective target, optional parent and exclusion reason. Reuse the graph's parent relationships; detect cycles and conflicting multiple epic ancestors. No “nearest wins” guess for contradictory declarations. A non-default session selects only the declared subtree. Ambient target/parent values can describe a requested context; they cannot override a contradictory epic declaration or remove isolation. Unscoped/mismatched context refuses work on an isolated spec and explains how to enter its epic worktree. Print effective target before PR creation.
+
+    Ordinary target defaults from the repository default, not literal main. For a declared off-default target, absent parent resolves to repository default. Proposed PR base is the target for child work; landing is an ordinary reviewed target-to-parent PR. Sync merges parent into target by default, with conflict-stop and no automatic resolution. Explicit rebase remains limited to the existing single-owner safety checks and explicit authorization; never rewrite a shared target by default. Show commits-behind-parent and an explicitly configured warning threshold using branch vocabulary.
+
+    ## Completion evidence, including squash landing
+
+    Reuse Done and Completed. A verified child merge into a non-default branch yields Done with “merged to <target>; awaiting default-branch landing”. The display must be backed by persisted merge evidence (repo, PR/MR, actual base, source/merge SHA, covered spec UUIDs and declaration revision), not merely today's environment. Proposed evidence is a typed extension to existing git linkage/history, not a new status or lane tag. Unmerged Done retains its existing meaning and is not relabeled as a verified target merge.
+
+    Completed requires fresh verified default-branch landing evidence, valid spec attribution and existing reopen fences. target==default is necessary for direct completion but an env equality is never sufficient proof of merge. A target-to-parent merge with parent!=default remains Done; a later verified default landing can complete its covered specs. Do not bulk-complete every current descendant just because it is Done: exclude unmerged, reopened, newly added or omitted children.
+
+    For squash landing, snapshot covered child evidence and source head when opening the landing PR; preserve canonical trailing-ID conventions for exactly that set and independently validate coverage at merge. A branch advancing after review invalidates the snapshot. If reliable inclusion cannot be established, retain Done and report missing evidence, rather than fabricate completion or change the existing trailer parser to accept title prose. Clearing isolation alone never completes anything. Closing an unmerged landing PR leaves isolation and Done evidence intact. Remove the declaration only after verified final default landing and explicit coverage checks; partial landing leaves isolation in place. Branch deletion remains a separate authorized cleanup after verification, never automatic merely because a PR closed.
+
+    ## Races and fail-closed behavior
+
+    Selection and action are separate checks. Bind the plan to canonical store revision and branch/ref identities; re-read before lease/status/worktree effects, PR create, and under the existing merge lease immediately before merge. If the declaration, ancestry, actual PR base, reviewed head or default identity changes, stop/replan. A previously queued item is not grandfathered in. PR retargeting is an invalidated plan, not authority to land directly on default.
+
+    Use existing canonical write locks and merge leases; compare the expected declaration revision for edit/clear and evidence writes. A landing racing a new child merge must not clear the declaration or complete unseen work. Failed state persistence leaves isolation intact and exposes an idempotent reconciliation path from immutable merge evidence. Canonical parse/read failure, unresolved ancestry/default/base, ambiguous ownership, missing refs or incompatible context refuses the affected action. Visible queue summaries identify excluded counts; failures are errors, not an empty successful queue. Across clones this guarantee applies to the synchronized canonical revision; an offline clone cannot know an unpublished remote declaration. Do not claim distributed instantaneous consensus.
+
+    Current pr_ship_target_branch falls back to literal main after a failed metadata read. It cannot supply authoritative target identity for this design; the protected path must require a positively resolved real PR base. Keep preflight and locked recheck, CI/review/hold gates and ownership refusals already shipped by TASK-1606/TASK-1602. A generic --force must not silently mean “land this epic”; the old child acceptance's override needs explicit reconciliation below.
+
+    Material boundary: store exclusion governs AIDA-mediated selection and shipping. Same-user raw Git/forge access can bypass it; this sketch does not add branch protection, a credential broker or a protected OS boundary. The guarantee must be documented at that scope.
+
+    ## Current files and symbols to extend, not replace
+
+    | Surface | Current seam and proposed change |
+    | --- | --- |
+    | Canonical model/persistence | aida-core/src/models.rs Requirement; aida-core/src/db/git_backend.rs and storage.rs: typed optional epic declaration, validation and revision-checked persistence; expose consistently through CLI edit and aida-cli-lib/src/mcp.rs |
+    | Graph eligibility | aida-core/src/pickability.rs pickability: reuse graph reasoning; add shared branch-context resolver and action guard without weakening other blockers |
+    | Queue/direct start | aida-cli-lib/src/queue_cmd.rs resolve_queue_work_plan, queue_fresh_pickup_policy, handle_queue_work, auto_complete_head_candidates; lib.rs agent_new_with_config and session start: enforce before effects |
+    | Other selectors | burndown.rs partition and its candidate construction; shift.rs gather_candidates/select_wave; backlog.rs handle_groom/handle_groom_pickable; integrate.rs classify_candidate and queue_cmd.rs handle_queue_integrate: same exclusion reason and recheck |
+    | PR/merge | forge.rs default_branch_of and declared base fields; pr_cmd.rs pr_ship_target_branch, resolve_mr_target_branch and PR creation paths; pr_ship.rs PrShipOptions and derive_squash_subject_spec_ids_resolving: carry context and verify actual base; preserve attribution rules |
+    | Reconcile | lib.rs auto_bump_done_to_completed_with, auto_bump_evidence_is_stale, handle_db_reconcile_status; git_backend_cmd.rs pull caller: default-only evidence, no off-default promotion, preserve TASK-1600/TASK-1338 fences |
+    | Worktree/display/docs | worktree.rs, status_cmd.rs, lib.rs show renderers; docs/explanations/feature-lanes.md and docs/cli/04-git-lifecycle.md: truthful target/parent display; rename prose only after accepted amendment |
+
+    Default helpers in aida-core/src/git_ops.rs default_branch_name and forge.rs default_branch_of exist; fallback behavior is not proof of authoritative remote identity. Source hashes are in answered-sketch-evidence/source-hashes.json. TASK-1613's ongoing thin ship-wrapper work is an integration dependency at that seam, not a duplicate PR-ceremony implementation in this epic.
+
+    ## Named meaningful tests proposed
+
+    - off_default_subtree_excluded_without_env_each_selector: parameterize queue view/pickup, burndown, shift, integrate, groom/backlog and direct CLI/MCP start; queued approved child never reaches work-start or default PR mutation; visible exclusion asserted.
+    - epic_declaration_survives_clone_boundary: declare on A, sync B, unset both env vars, assert B refuses child pickup and shipping to default.
+    - conflicting_epic_ancestors_and_corrupt_store_refuse_before_effects: verify no lease/status/worktree/PR mutation.
+    - declaration_changes_between_plan_and_merge_refuse: interleave isolation edit, relationship edit and PR retarget at barriers; assert forge merge was never invoked.
+    - child_pr_targets_epic_branch_on_each_forge: GitHub and GitLab fixtures, drain and direct ship; actual base matches target and default ref is unchanged.
+    - off_default_merge_done_and_reconcile_keeps_done: live ship, pull and replay agree; label uses stored evidence with env absent.
+    - non_default_parent_landing_does_not_complete: target->integration->trunk requires final verified landing; trunk default fixture rejects literal-main assumptions.
+    - squash_landing_completes_only_verified_covered_children: include a reopened child, new descendant and omitted Done spec; only correctly attributed fresh coverage completes.
+    - closed_unmerged_landing_and_failed_evidence_write_preserve_isolation: no completion/declaration clear; reconciliation retry is idempotent.
+    - parent_sync_conflict_preserves_work_and_reports_drift: clean merge and conflict fixtures, no auto-resolve/rebase/delete.
+
+    These are proposed tests, not implemented or run. No build required for this sketch pass.
+
+    ## Open forks and gates
+
+    Independent advisor must review this exact sketch, the child amendment artifact and an ADR before implementation. Suggested mechanical choices (epic-only field, rejecting conflicting ancestry, no new lane nouns) are proposals, not self-approved policy.
+
+    Operator-only residual forks, if the advisor cannot resolve them inside the recorded direction: (1) old STORY-1481 --force override versus store isolation—either remove the override for isolation or define a separately explicit audited isolation-release operation; do not interpret generic --force as release meanwhile; (2) clearing isolation with live/unlanded child work—explicit operator release with inventory versus refusing until work is quiescent; (3) default-target parent representation—optional/empty and no sync versus explicit same-as-default no-op. No question is sent to absent Joe and no option is silently decided. Safe interim behavior is refusal of the affected mutation, not a new permanent product decision. Nested distinct target epics and multi-repository landing are unsupported pending an explicit extension; do not auto-resolve them.
+
+    Out of scope: source changes now, statuses/queues/holds/grants, child dispatch, automatic wake, seat redesign, broker enforcement, new approval exemptions, speculative per-spec target overrides. TASK-1593, TASK-1591, BUG-1811 and BUG-1812 remain exclusively with Joe's external agent; no edits or new acceptance assigned to them.
+  created_at: 2026-10-08T16:31:20.799766818Z
+  modified_at: 2026-10-08T16:31:20.799766818Z
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
