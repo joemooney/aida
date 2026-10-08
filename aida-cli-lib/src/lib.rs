@@ -45191,7 +45191,8 @@ pub(crate) fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) 
         "--limit",
         "1",
         "--json",
-        "number,title,url,headRefName",
+        // trace:BUG-1812 | ai:antigravity
+        "number,title,url,headRefName,isDraft",
         "-q",
         r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
     ]);
@@ -46014,7 +46015,7 @@ pub(crate) fn detect_open_pr_for_spec_by_head_or_commit(
             "--limit",
             "100",
             "--json",
-            "number,title,url,headRefName",
+            "number,title,url,headRefName,isDraft",
             "-q",
             r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
         ])
@@ -46604,6 +46605,7 @@ mod task_192_fail_closed_fact_tests {
     fn pr(labels: &[&str]) -> status_cleanup::OpenPrItem {
         status_cleanup::OpenPrItem {
             number: 2035,
+            is_draft: false,
             title: "broken".into(),
             head_branch: "broken-pr".into(),
             ci_rollup: Some("fail".into()),
@@ -61984,6 +61986,7 @@ pub(crate) fn reviews_awaiting_human(
         Err(_) => return Vec::new(),
     };
     let unmerged = specs_with_unmerged_commits(project_root);
+    let open_prs = collect_open_prs(project_root);
     let mut out = Vec::new();
     for req in &candidates {
         let Some(spec_id) = req.spec_id.clone().or_else(|| req.agreed_id.clone()) else {
@@ -62028,7 +62031,12 @@ pub(crate) fn reviews_awaiting_human(
         }
         let wip = bucket == HumanReviewBucket::WipBranch;
         match surface {
-            ReviewSurface::OpenChange { number, .. } => {
+            ReviewSurface::OpenChange {
+                number, ref branch, ..
+            } => {
+                if open_prs.by_branch.get(branch).is_some_and(|pr| pr.is_draft) {
+                    continue;
+                }
                 let forge = crate::forge::resolve_forge_kind(project_root);
                 // BUG-1672: the PR-keyed file is only the drain's record; a
                 // keyboard `aida review` writes the spec-keyed file and a
@@ -81394,6 +81402,7 @@ mod bug_1291_orphan_sweep_tests {
     fn open_pr(number: u64, title: &str, head_sha: Option<&str>) -> status_cleanup::OpenPrItem {
         status_cleanup::OpenPrItem {
             number,
+            is_draft: false,
             title: title.to_string(),
             head_branch: format!("claude/pr-{number}"),
             ci_rollup: Some("pass".to_string()),
@@ -81706,6 +81715,7 @@ pub(crate) fn parse_open_pr_snapshot(
         by_branch.insert(
             head_branch.clone(),
             status_cleanup::OpenPrItem {
+                is_draft: false,
                 number,
                 title,
                 head_branch,
@@ -85236,7 +85246,7 @@ pub(crate) fn collect_awaiting_report_inner(
                             .into_iter()
                             .any(|v| !v.is_closed() && v.kind.approves())
                     });
-                    awaiting_you::project_held_pr(record, &pr.title, approved_at_head)
+                    awaiting_you::project_held_pr(record, &pr.title, approved_at_head, pr.is_draft)
                 })
             })
             .collect(),
@@ -85339,6 +85349,7 @@ pub(crate) fn collect_awaiting_report_inner(
                     bodies,
                     spec_completed,
                     has_marker_hold: held_numbers.contains(&pr.number),
+                    is_draft: pr.is_draft,
                 }
             })
             .collect();
