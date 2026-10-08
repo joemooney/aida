@@ -42,7 +42,7 @@ pub(crate) struct WorktreeLeaseSpec {
 /// The known AIDA spec-type branch prefixes (`task-688-...` -> `TASK-688`).
 const SPEC_TYPES: &[&str] = &[
     "fr", "func", "nfr", "sys", "user", "bug", "epic", "story", "task", "spike", "sprint", "adr",
-    "meta", "doc",
+    "meta", "doc", "faq",
 ];
 
 /// Extract a SPEC-ID (e.g. `TASK-688`) from a branch name like

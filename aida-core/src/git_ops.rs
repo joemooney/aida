@@ -3649,6 +3649,7 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             crate::models::RequirementType::Decision => "ADR",
             crate::models::RequirementType::Term => "TERM",
             crate::models::RequirementType::Doc => "DOC",
+            crate::models::RequirementType::Faq => "FAQ",
         };
 
         // BUG-82: walk past any candidate that already resolves to an

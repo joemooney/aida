@@ -36,6 +36,8 @@ const DEFAULT_PROTOCOLS: &[(&str, &str)] = &[
     ("task", "Purpose: complete the bounded technical or operational outcome.\nDeliverable: the artifact or repository change named by the spec.\nBefore done: acceptance is satisfied and relevant checks pass.\nReviewer: checks completeness, focus, and unintended side effects.\nHuman boundary: expand scope only through a new or edited requirement."),
     ("decision", "Purpose: make and preserve an architecture decision.\nDeliverable: an ADR recording context, options, decision, and consequences.\nBefore done: status is accepted and references connect the decision to affected work.\nReviewer: checks alternatives, evidence, reversibility, and consequences.\nHuman boundary: the accountable human accepts consequential or taste-based choices."),
     ("doc", "Purpose: keep the durable documentation true and useful.\nDeliverable: the named documentation update.\nBefore done: examples and links are verified against current behavior.\nReviewer: checks audience fit, accuracy, discoverability, and drift risk.\nHuman boundary: policy claims require their accountable owner."),
+    // trace:TASK-1614 | ai:antigravity
+    ("faq", "Purpose: capture a frequently asked question and its verified answer.\nDeliverable: a concise question and actionable answer.\nBefore done: the answer is verified against current behavior and indexed.\nReviewer: checks clarity, accuracy, and if the question is common enough.\nHuman boundary: none."),
 ];
 
 const DEFAULT_LANE_PROTOCOLS: &[(&str, &str)] = &[
@@ -637,7 +639,7 @@ mod tests {
             get_type_protocol(&store, "bug").unwrap().body,
             "custom bug contract"
         );
-        for kind in ["spike", "bug", "story", "task", "decision", "doc"] {
+        for kind in ["spike", "bug", "story", "task", "decision", "doc", "faq"] {
             assert!(get_type_protocol(&store, kind).is_some(), "missing {kind}");
         }
     }

@@ -358,6 +358,7 @@ impl SqliteBackend {
             RequirementType::Decision => "Decision",
             RequirementType::Term => "Term",
             RequirementType::Doc => "Doc",
+            RequirementType::Faq => "Faq",
         }
     }
 
@@ -385,6 +386,7 @@ impl SqliteBackend {
             "Decision" => RequirementType::Decision,
             "Term" => RequirementType::Term,
             "Doc" => RequirementType::Doc,
+            "Faq" => RequirementType::Faq,
             _ => RequirementType::Functional,
         }
     }

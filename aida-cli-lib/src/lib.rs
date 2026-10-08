@@ -18721,6 +18721,7 @@ pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
         "term" | "glossary" => Ok(RequirementType::Term),
         // trace:STORY-104 | ai:claude
         "doc" | "documentation" => Ok(RequirementType::Doc),
+        "faq" => Ok(RequirementType::Faq),
         _ => anyhow::bail!("Unknown requirement type: {}", s),
     }
 }
@@ -19597,6 +19598,7 @@ pub(crate) fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementType::Decision => "Decision",
         RequirementType::Term => "Term",
         RequirementType::Doc => "Doc",
+        RequirementType::Faq => "Faq",
     };
     println!("{}: {}", "Type".blue(), type_str);
 
@@ -20349,7 +20351,8 @@ pub(crate) fn edit_requirement_cli(
             "term" | "glossary" => RequirementType::Term,
             // trace:STORY-104 | ai:claude
             "doc" | "documentation" => RequirementType::Doc,
-            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc", type_str),
+            "faq" => RequirementType::Faq,
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq", type_str),
         };
         if new_type != req.req_type {
             changes.push(Requirement::field_change(
@@ -20887,6 +20890,7 @@ pub(crate) fn parse_type(type_str: &str) -> Result<RequirementType> {
         "term" | "glossary" => Ok(RequirementType::Term),
         // trace:STORY-104 | ai:claude
         "doc" | "documentation" => Ok(RequirementType::Doc),
+        "faq" => Ok(RequirementType::Faq),
         _ => anyhow::bail!("Invalid requirement type: {}", type_str),
     }
 }
