@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:06.737868438Z
-modified_at: 2026-10-08T15:54:21.981352506Z
+modified_at: 2026-10-08T16:20:14.889189814Z
 req_type: Task
 tags:
 - follow-up
@@ -35,6 +35,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): retain Draft for operator disposition. This makes currently refused orchestrator-protected operations authorize on a new platform by resolving Unknown to Alive; authority-changing implementation/merge must not be rubber-stamped by proxy. Parent TASK-1607 is unmerged with RequestChanges. Native platform validation and independent sketch signoff required; no dispatch before those gates. Proposed direction remains the existing tri-state fail-closed contract, never assume Alive on errors.'
   created_at: 2026-10-07T23:07:51.847189255Z
   modified_at: 2026-10-07T23:07:51.847189255Z
+- id: 01a11c50-b9a9-7b12-b470-a8b4937260c8
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): apply recorded operator answer Retain refusal (2026-10-08). Keep native macOS enablement unimplemented and Draft; park until TASK-1607 common integration is independently accepted and Joe explicitly revisits macOS enablement with native test capability. Deferral is not completion.'
+  created_at: 2026-10-08T16:20:14.889189814Z
+  modified_at: 2026-10-08T16:20:14.889189814Z
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
