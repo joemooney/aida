@@ -115,7 +115,7 @@ impl Fixture {
             "--type",
             "task",
             "--status",
-            "approved",
+            "Approved",
             "--title",
             "bounded fixture",
             "--tags",
