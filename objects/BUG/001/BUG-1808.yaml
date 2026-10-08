@@ -17,6 +17,10 @@ tags:
 - from-qci:BUG-021
 - queue-work
 - roles
+relationships:
+- rel_type: Parent
+  target_id: 01a119b7-4438-7820-933e-a0eaf6e799cc
+  created_at: 2026-10-08T04:13:27.031197239Z
 comments:
 - id: 01a1194e-b7e8-75c1-a588-15d62bcaf0cb
   author: joe
