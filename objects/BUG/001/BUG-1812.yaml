@@ -3,7 +3,7 @@ spec_id: BUG-1812
 agreed_id: BUG-1812
 title: human and awaiting promote checkpoint-only approval to merge readiness
 description: 'Observed 2026-10-08 advisor human-audit: aida human lists STORY-1485 and TASK-1607 as awaiting-merge / reviewed and approved / just needs merging for PR-2451. aida awaiting --json held_prs action recommends aida merge-hold clear 2451. Actual forge PR-2451 is OPEN DRAFT at 56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f with aida:merge-hold and aida:merge-hold-recorded. Both specs remain InProgress. Canonical TASK-1607 latest independent signoff and coordinator disposition explicitly say C7 approval at 56f7b55 is checkpoint-only, common BUG-1808 implementation and consumer integration plus full real-entrypoint acceptance and exact-head independent review remain outstanding. Do not distort spec lifecycle or clear holds to silence reporting. Acceptance: derive whole-spec merge readiness independently of checkpoint/design approvals; draft held incomplete implementation must not appear as just-needs-merging or receive hold-clear next action. Preserve checkpoint evidence without granting parent or whole-spec completion credit. Add a regression reproducing this actual shape with checkpoint approval, current SHA, draft PR, holds and InProgress parent/child. Also investigate reviews-awaiting false positives for already Accepted ADR-66 associated with TASK-1594 and documentation principle PRIN-5 associated with claude/task-1455; their branches do not establish a fresh human approval requirement.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
