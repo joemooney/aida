@@ -16,6 +16,10 @@ tags:
 - kind:observation
 - linked:TASK-1604
 - severity:minor
+relationships:
+- rel_type: Parent
+  target_id: 01a11cea-36b2-7a81-889c-22f40c6f43da
+  created_at: 2026-10-08T19:08:09.132041278Z
 comments:
 - id: 01a1189e-559a-7dc2-8c66-06c0293a6b7f
   author: joe
