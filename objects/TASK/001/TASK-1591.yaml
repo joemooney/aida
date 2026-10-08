@@ -3,12 +3,12 @@ spec_id: TASK-1591
 agreed_id: TASK-1591
 title: Multi-seat roster support and CLI commands
 description: 'Support an array of allowed seats per user in registry/team.toml. Add CLI commands: aida team allow-seat <user> <seat> and aida team disallow-seat <user> <seat>.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T15:36:47.299354246Z
-modified_at: 2026-10-08T17:09:12.591402913Z
+modified_at: 2026-10-08T18:13:37.927527824Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a11cb8-87ec-7473-9beb-988b28ea51e1
+  author: aida-auto-bump
+  timestamp: 2026-10-08T18:13:37.900473068Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a11cb8-8807-7362-b4e2-10548faa26bf
+  timestamp: 2026-10-08T18:13:37.927525415Z
+  agent: implementer
+  commit_sha: ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578
+  summary: Completed via merge ff9ac13c
 filed_at:
   code_sha: 5f2e20a8437c043aa1deaf25bee105cc5eda84cb
   branch: doc-6-implementation
@@ -40,3 +53,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 1b8bdda092
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T18:13:37.900469020Z
+  completion_sha: ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578
