@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T03:20:45.321161613Z
+modified_at: 2026-10-08T03:49:38.774606299Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -46,6 +46,12 @@ comments:
   content: 'PROXY DECISION: accept independent REQUEST_CHANGES at1508607da5 in STRICT_LOOKUP_INDEPENDENT_REVIEW.md. object_store::list_objects uses exists(), swallowing metadata errors into empty inventory after preflight; deterministic EACCES produced duplicate17->18. Require strict fallible enumeration at actual boundary, preserve tolerant readers, prove injected IO failure and no duplicate. Concrete brief bug1807-enumeration-rework.md. Canonical refusing-verdict no-PR refusal retained, not bypassed.'
   created_at: 2026-10-08T03:20:45.300624255Z
   modified_at: 2026-10-08T03:20:45.300624255Z
+- id: 01a119a1-8756-7573-9b39-986825226104
+  author: joe
+  content: |
+    PROXY DECISION: independent ENUMERATION_INDEPENDENT_REVIEW.md and actual canonical approval cover exact e9533b55deddfdf81d7267f8f6d091ae54e0fa41. All reproduced strict-inventory failure-to-absence findings are resolved, with six actual fired IO faults and preserved object/queue bytes. Accept the branch for a one-item integration PR; mark Done pending remote required CI and merge. Main advanced to5d4180e5ded8a55ad1b02beac5571c190d3da0ac through independently reviewed BUG1806; git merge-tree reports no conflict/no source resolution. No authority-model expansion or gate override.
+  created_at: 2026-10-08T03:49:38.774606299Z
+  modified_at: 2026-10-08T03:49:38.774606299Z
 history:
 - id: 01a11947-25b0-77e2-95b8-9b94c8063d39
   author: aida-session-start
