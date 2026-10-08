@@ -193,10 +193,18 @@ impl StoreWriteGuard {
 /// function. It is not handed to child processes: the lock file is opened
 /// close-on-exec, so a hook or `git` child neither holds nor inherits it.
 /// Do not run network pushes, forge calls or cache refreshes inside `f`.
+///
+/// Before `f` changes anything, the outermost holder also refuses a hook
+/// profile git would run inside the transaction that can call back into an
+/// `aida` writer (see `git_ops::ensure_store_hooks_supported`): such a hook
+/// would wait on this lock forever.
 // trace:TASK-1717 | ai:claude
 pub fn with_store_write_lock<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
-    let _guard = acquire(root)?;
+    let guard = acquire(root)?;
     crate::git_ops::ensure_store_write_safe(root)?;
+    if guard.is_outermost() {
+        crate::git_ops::ensure_store_hooks_supported(root)?;
+    }
     f()
 }
 

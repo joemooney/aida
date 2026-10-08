@@ -17938,12 +17938,15 @@ pub(crate) fn group_spec_id_collisions(rows: Vec<(String, Uuid, String)>) -> Vec
 }
 
 /// [`ensure_no_spec_id_collisions`] for a caller holding the store write
-/// lock: a full scan of the canonical objects, never the cache. Refreshing
+/// lock: a full, strict scan of the canonical objects (an unreadable or
+/// unparsable object is an error, not a skip), never the cache. Refreshing
 /// the cache would mean waiting on the cache lock while holding the store
 /// lock, and a stale cache could miss a duplicate the rebase just brought in.
 // trace:TASK-1717 | ai:claude
 pub(crate) fn ensure_no_spec_id_collisions_canonical(store_path: &std::path::Path) -> Result<()> {
-    let store = aida_core::GitBackend::new(store_path)?.load()?;
+    let mut store = RequirementsStore::default();
+    store.requirements = aida_core::git_ops::load_requirements_strict(store_path)
+        .context("cannot check for duplicate ids: the canonical store did not read completely")?;
     let collisions = find_spec_id_collisions(&store);
     if collisions.is_empty() {
         return Ok(());
@@ -18029,13 +18032,18 @@ pub(crate) fn pull_store_before_id_allocation(
 
     // trace:TASK-1717 | ai:claude — the pending commit is a store-writer
     // transaction of its own; the commit is kept whatever the network does.
+    // A failed stage/commit (a refusing hook) stops the allocation with the
+    // original error; the pending changes stay as they were.
     aida_core::db::with_store_write_lock(store_path, || {
-        if git_ops::has_changes(store_path).unwrap_or(false) {
-            let _ = git_ops::add(store_path, &["."]);
-            let _ = git_ops::commit(
-                store_path,
-                "chore: sync pending changes before id allocation",
-            );
+        if git_ops::has_changes(store_path)? {
+            git_ops::add(store_path, &["."])
+                .and_then(|_| {
+                    git_ops::commit(
+                        store_path,
+                        "chore: sync pending changes before id allocation",
+                    )
+                })
+                .context("could not commit pending store changes before id allocation")?;
         }
         Ok(())
     })?;
@@ -72634,7 +72642,11 @@ pub(crate) fn mailbox_autosync_enabled(project_root: &std::path::Path) -> bool {
 /// trace:STORY-643 | ai:claude
 pub(crate) fn maybe_publish_mailbox_for_sync(store_path: &std::path::Path, reason: &str) -> usize {
     match mailbox_publish_snapshot(store_path, reason) {
-        Some(local) => publish_mailbox_snapshot(store_path, &local, reason),
+        Some(local) => {
+            let n = publish_mailbox_snapshot(store_path, &local, reason);
+            report_mailbox_published(n, reason);
+            n
+        }
         None => 0,
     }
 }
@@ -72665,8 +72677,9 @@ pub(crate) fn mailbox_publish_snapshot(
 
 /// Write a [`mailbox_publish_snapshot`] into the canonical store, inside the
 /// caller's store-writer transaction (the sync's pending-changes commit picks
-/// the files up). Best-effort: a failure is warned and counts as nothing
-/// published.
+/// the files up). Returns how many messages were written; the caller reports
+/// them with [`report_mailbox_published`] only once its commit succeeded.
+/// Best-effort: a failure is warned and counts as nothing written.
 // trace:TASK-1717 | ai:claude
 pub(crate) fn publish_mailbox_snapshot(
     store_path: &std::path::Path,
@@ -72674,14 +72687,7 @@ pub(crate) fn publish_mailbox_snapshot(
     reason: &str,
 ) -> usize {
     match mailbox_store::digest_snapshot_to_canonical(store_path, local) {
-        Ok(0) => 0,
-        Ok(n) => {
-            eprintln!(
-                "  {} published {n} mailbox message(s) to the canonical store ({reason})",
-                crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
-            );
-            n
-        }
+        Ok(n) => n,
         Err(e) => {
             eprintln!(
                 "  {} mailbox publish skipped ({reason}): {e}",
@@ -72689,6 +72695,17 @@ pub(crate) fn publish_mailbox_snapshot(
             );
             0
         }
+    }
+}
+
+/// Report mailbox messages a sync committed to the canonical store.
+// trace:TASK-1717 | ai:claude
+pub(crate) fn report_mailbox_published(n: usize, reason: &str) {
+    if n > 0 {
+        eprintln!(
+            "  {} published {n} mailbox message(s) to the canonical store ({reason})",
+            crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+        );
     }
 }
 
@@ -73534,18 +73551,24 @@ pub(crate) fn handle_push_command(
         // that commit and runs after the lock is released.
         let mailbox = mailbox_publish_snapshot(store_path, "push");
         let window = aida_core::db::with_store_write_lock(store_path, || {
-            if let Some(local) = &mailbox {
-                publish_mailbox_snapshot(store_path, local, "push");
-            }
+            let published = mailbox
+                .as_ref()
+                .map(|local| publish_mailbox_snapshot(store_path, local, "push"))
+                .unwrap_or(0);
             // Commit any pending orphan-branch changes regardless of origin —
             // the user's local edits should land in a commit either way so
             // subsequent operations have a clean tree. trace:BUG-44 | ai:claude
-            if git_ops::has_changes(store_path).unwrap_or(false) {
+            // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing
+            // hook) fails the leg with git's error: nothing is pushed and
+            // the pending changes are kept, uncommitted.
+            if git_ops::has_changes(store_path)? {
                 let msg = message.unwrap_or("chore: sync pending changes");
-                let _ = git_ops::add(store_path, &["."]);
-                let _ = git_ops::commit(store_path, msg);
+                git_ops::add(store_path, &["."])
+                    .and_then(|_| git_ops::commit(store_path, msg))
+                    .context("could not commit pending store changes; nothing was pushed")?;
                 println!("  Committed: {}", msg);
             }
+            report_mailbox_published(published, "push");
             if !store_has_origin {
                 return Ok(None);
             }
@@ -74263,17 +74286,32 @@ fn pull_store_leg_locked(
     store_path: &std::path::Path,
     quiet: bool,
     no_gate: bool,
+    mailbox_published: usize,
 ) -> std::result::Result<(), String> {
     use aida_core::git_ops;
     // Mirror `aida db sync --pull`: commit any pending orphan
     // changes first, then pull --rebase. Without the pre-commit
     // step, rebase refuses on a dirty tree and leaves the user
     // half-pulled.
-    if git_ops::has_changes(store_path).unwrap_or(false) {
-        let _ = git_ops::add(store_path, &["."]);
-        let _ = git_ops::commit(store_path, "chore: sync pending changes");
+    // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing hook)
+    // ends the leg with git's own error before any pull; the pending changes
+    // are kept, uncommitted.
+    let pending = git_ops::has_changes(store_path).map_err(|e| {
+        let failure = format!("store leg could not read pending changes: {e:#}");
+        eprintln!("  {} {failure}", "Warning:".yellow().bold());
+        failure
+    })?;
+    if pending {
+        if let Err(e) = git_ops::add(store_path, &["."])
+            .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
+        {
+            let failure = format!("store leg could not commit pending changes: {e:#}");
+            eprintln!("  {} {failure}", "Warning:".yellow().bold());
+            return Err(failure);
+        }
         println!("  Committed pending orphan changes before pull");
     }
+    report_mailbox_published(mailbox_published, "pull");
     let branch = git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
     println!("{}", pull_store_start_line());
 
@@ -74715,10 +74753,11 @@ pub(crate) fn handle_pull_command(
         // lock. The code-derived reconcile and maintenance run after release.
         let mailbox = mailbox_publish_snapshot(store_path, "pull");
         let window = aida_core::db::with_store_write_lock(store_path, || {
-            if let Some(local) = &mailbox {
-                publish_mailbox_snapshot(store_path, local, "pull");
-            }
-            Ok(pull_store_leg_locked(store_path, quiet, no_gate))
+            let published = mailbox
+                .as_ref()
+                .map(|local| publish_mailbox_snapshot(store_path, local, "pull"))
+                .unwrap_or(0);
+            Ok(pull_store_leg_locked(store_path, quiet, no_gate, published))
         });
         let pulled = matches!(window, Ok(Ok(())));
         match window {

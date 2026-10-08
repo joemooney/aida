@@ -1,0 +1,2 @@
+#!/bin/bash
+env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -C /home/joe/ai/aida/.aida-store rev-parse HEAD

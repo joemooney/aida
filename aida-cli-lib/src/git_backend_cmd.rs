@@ -1155,9 +1155,9 @@ struct DbSyncWindow {
 
 /// `aida db sync`'s local transaction: commit pending changes, then pull
 /// --rebase, then scan the result. The caller holds the store write lock for
-/// the whole call, so reads here are canonical (the object files, never the
-/// cache) and a failed rebase is cleaned up by `pull_rebase` before the lock
-/// is released.
+/// the whole call, so reads here are canonical and strict (the object files,
+/// never the cache; a bad object is an error) and a failed rebase is cleaned
+/// up by `pull_rebase` before the lock is released.
 // trace:TASK-1717 | ai:claude
 fn db_sync_local_window(
     store_path: &std::path::Path,
@@ -1214,9 +1214,11 @@ fn db_sync_local_window(
         // trace:BUG-432 | ai:claude
         println!("  No `origin` remote — skipping pull (local-only project).");
     } else if pull {
-        // Snapshot local state before pull for conflict detection
-        let canonical = aida_core::GitBackend::new(store_path)?;
-        let local_reqs = canonical.load().map(|s| s.requirements).unwrap_or_default();
+        // Snapshot local state before pull for conflict detection.
+        // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable
+        // object is an error, not silently left out of the comparison.
+        let local_reqs = aida_core::git_ops::load_requirements_strict(store_path)
+            .context("cannot sync: the local store did not read completely")?;
 
         println!("Pulling from origin/{}...", branch);
         if let Err(e) = aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
@@ -1234,7 +1236,9 @@ fn db_sync_local_window(
             );
         }
         println!("  Pull complete.");
-        let remote = canonical.load()?;
+        let mut remote = RequirementsStore::default();
+        remote.requirements = aida_core::git_ops::load_requirements_strict(store_path)
+            .context("the pulled store did not read completely; nothing was pushed")?;
         let collisions = crate::find_spec_id_collisions(&remote);
         if !collisions.is_empty() {
             anyhow::bail!(

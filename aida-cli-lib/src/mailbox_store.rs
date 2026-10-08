@@ -74,6 +74,36 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
     Ok(out)
 }
 
+/// Every message in the CANONICAL layer, for a write decision: an unreadable
+/// directory or file, or a `.json` file that does not parse as a message, is
+/// an error. The tolerant [`read_canonical_messages`] (for inbox views) skips
+/// those; a digest that skipped one would treat that id as absent and could
+/// overwrite a newer canonical state (a tombstone) with a stale local copy.
+// trace:TASK-1717 | ai:claude
+fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<Message>> {
+    let dir = canonical_dir(store_root);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", dir.display())),
+    };
+    let mut out = Vec::new();
+    for entry in entries {
+        let path = entry
+            .with_context(|| format!("reading {}", dir.display()))?
+            .path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let bytes = std::fs::read(&path)
+            .with_context(|| format!("reading canonical message {}", path.display()))?;
+        let msg = serde_json::from_slice::<Message>(&bytes)
+            .with_context(|| format!("canonical message {} is not valid", path.display()))?;
+        out.push(msg);
+    }
+    Ok(out)
+}
+
 /// Read every message in the LOCAL layer.
 pub(crate) fn read_local_messages(project_root: &Path) -> Result<Vec<Message>> {
     read_messages_in(&mailbox_dir(project_root))
@@ -110,7 +140,7 @@ pub(crate) fn digest_snapshot_to_canonical(store_root: &Path, local: &[Message])
 
 fn write_snapshot_locked(store_root: &Path, local: &[Message]) -> Result<usize> {
     use std::collections::HashMap;
-    let canonical_by_id: HashMap<String, Message> = read_canonical_messages(store_root)?
+    let canonical_by_id: HashMap<String, Message> = read_canonical_messages_strict(store_root)?
         .into_iter()
         .map(|m| (m.id.clone(), m))
         .collect();
