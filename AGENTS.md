@@ -37,6 +37,15 @@ See [git lifecycle](docs/cli/04-git-lifecycle.md).
 
 # AGENTS.md
 
+Common publication work is currently private, inactive core infrastructure:
+durable evidence writes, descriptor-relative regular-file restoration,
+bounded append-only observations, grant-chain preflight and Git callback
+input parsing. It supplies no production publisher, authority
+or release API. Integration remains gated on the reviewed transport, complete
+writer enlistment and real entrypoint acceptance. See the
+[implementation plan](docs/plans/2026-10-07-bug-1808-common-publication.md).
+<!-- trace:BUG-1808 | ai:codex -->
+
 Shell role updates require a successful CLI exit and one complete pair of
 standalone eval markers. Failed diagnostics are preserved verbatim; unmarked
 legacy output is display-only. Existing shells need the updated shell-init

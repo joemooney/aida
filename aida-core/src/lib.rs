@@ -103,6 +103,15 @@ pub mod idle;
 pub mod import;
 pub mod integrations;
 pub mod project_manifest;
+// Private until every publication reader/writer and the reviewed transport are
+// integrated; compiling these primitives must not activate a partial route.
+// trace:BUG-1808 | ai:codex
+#[allow(dead_code)]
+mod publication;
+// Purpose-separated Git publication; no vendor release authority.
+// trace:BUG-1808 | ai:codex
+#[allow(dead_code)]
+mod git_publication;
 // trace:TASK-737 | ai:claude
 pub mod lifecycle;
 // Shared /proc process-liveness probe + lease/spec liveness classifiers, lifted

@@ -14,6 +14,22 @@ label old evidence as reopened work instead of recommending reconciliation.
 
 # AIDA — Overview
 
+The common publication implementation has private building blocks under
+`aida-core/src/publication` and `git_publication`. They validate finite file
+effects and exact payload digests, restore/complete regular files through
+pinned parent descriptors, distinguish visible-but-unsynced evidence from
+unchanged write failures, and retain bounded append-only observation chains.
+Receipt checkpoints detect missing terminal records. They also check active
+grant ancestry and parse bounded Git callback input, including Git 2.43's
+ordinary rebase pseudoref callbacks. These modules have no production callers or vendor
+release capability. File effects require the eventual owner's locks and durable
+journal; they do not supply discovery, Git effects or a recovery decision.
+Parsing does not authenticate a callback, and preflight
+does not issue authority. The global recovery owner, retained assignments,
+sealed Git domain, writer integration and real launch adapters remain pending
+under the [implementation plan](docs/plans/2026-10-07-bug-1808-common-publication.md).
+<!-- trace:BUG-1808 | ai:codex -->
+
 Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
 workspace build so feature-disabled stubs stay buildable. This check-only guard
 uses the existing full-CI filter and skips docs-only changes.
