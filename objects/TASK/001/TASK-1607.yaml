@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T02:54:40.218085571Z
+modified_at: 2026-10-08T02:54:40.888038404Z
 req_type: Task
 tags:
 - guided-lane
@@ -271,6 +271,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: C7 checkpoint only: REQUEST_CHANGES. F1/F2 requester/deadline fixes pass; holder grant resolved before seat lock still authorizes ack/release after revocation during contention. See .aida/handoff/task1607-rework/C7_REREVIEW_88E8B97.md. No gateway activation, completion, hold clearance or merge authorization.. Triage reason: PROXY DECISION: accept independent C7 REQUEST_CHANGES at 88e8b971f5, F3 holder authority snapshot crosses lock acquisition. Require fresh local holder authorization under lock, preserving passing F1/F2 and no gateway activation. Full verdict C7_REREVIEW_88E8B97.md; concrete handoff task1607-c7-f3-rework.md.'
   created_at: 2026-10-08T02:54:40.218084169Z
   modified_at: 2026-10-08T02:54:40.218084169Z
+- id: 01a1196f-34c5-73e2-8e3a-30a084a03033
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 88e8b971f534
+    Recorded: 2026-10-08T02:50:16.825758085+00:00
+    Findings:
+    1. P1 F3: cmd.rs run_release:163 and run_ack:184 capture current_caller before acquiring seat lock; mod.rs require_holder trusts stale Caller.grant. Exact-head actual CLI tests revoke holder grant after its child opens the contended lock; ack and release both exit 0, transfer generation 1 to 2 and demote holder although role current rejects the grant. Revalidate holder authority locally under lock before transition; cover contention revocation/expiry/roster loss plus valid control without weakening requester/deadline/CAS checks. Evidence: rereview-88e8b97/authority-race.py and holder-race-ack/release.log.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-08T02:54:40.837044344Z
+  modified_at: 2026-10-08T02:54:40.837044344Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
