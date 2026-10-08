@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-06T01:52:54.298969424Z
+modified_at: 2026-10-08T02:19:07.100324068Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -21,6 +21,66 @@ comments:
   created_at: 2026-10-06T01:52:54.298969424Z
   modified_at: 2026-10-06T01:52:54.298969424Z
   session_id: c4533f5c-49cf-4219-829a-015580ac4dc4
+- id: 01a1194e-a5dc-7561-89af-aede0be2bc2e
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): BUG-1802 — bind review authority and independence to durable identity
+
+    Author scope: sketch only; no approval, implementation, status/queue/grant/hold change, commit or merge. Independent advisor must verify and amend this proposal before implementation. Inspected main 199e591b07aa76a59cd34f0a41946f918501f6ba on 2026-10-07; read full specification and its reopening comment with target/agent/aida. Inspected clean branch bug-1802-review-independence at b409b5ae3ebb7c6e1e354d5ee77492d1f048ef32: its merge-base diff is only 93 added lines in aida-core/templates/skills/aida-implement.md. It is prose, not substrate enforcement; leave its worktree untouched. TASK-1599's completion is not evidence this bug is fixed.
+
+    Owner / trigger
+
+    The recording boundary owns validation when a CLI reviewer records a verdict, and the merge boundary owns independent validation whenever an approval is consumed. An independent implementer is the future code owner; a different advisor signs this sketch and reviews authority changes; the operator owns the final authority-changing merge. Trigger is the PR-2424 failure: an implementer can write approval and receive operator attribution merely by lacking agent-name/type environment variables.
+
+    Observed surfaces and existing primitives
+
+    - aida-cli-lib/src/lib.rs::handle_review_record_at resolves head, calls review_recorded_by, writes a refusal hold if needed, builds/writes verdict, clears review markers and emits an event. Identity validation must precede ALL these writes, including a refusing verdict's hold/label mutation and subsequent shelve_spec_on_failure status/queue changes.
+    - lib.rs::review_recorded_by_from currently assigns '(operator)' when both name and type are absent, and otherwise calls arbitrary agent names reviewer seats. Neither is authority evidence.
+    - aida-cli-lib/src/seat_authority.rs::SeatGrant/current_grant/current_seat validate local grant identity, subject, expiry/revocation, roster ceiling and parent delegation. validate_child_delegation/issue_child provide launch lineage; require_direct_human adds managed-agent rejection to require_direct_tty (stdin AND stderr). AIDA_SESSION_ROLE is routing/display, not authority. current_grant returns None for both missing and invalid evidence: new recording classification must distinguish those cases, never turn a bad grant into operator fallback.
+    - lib.rs::has_integrity_floor_authority currently tests authority_stdin_is_terminal; reuse the concept of BUG-1693's human floor but require the stronger direct-human check for attribution. merge_hold.rs::PrincipalIdentity explicitly documents that a well-formed identity is not authentication; human_clear_actor is a recusal check, not a substitute for the floor.
+    - lib.rs::SessionLease.id and seat_authority.rs::SeatGrant.session_id are separately minted identities. session_manifest.rs::SessionManifest joins lease id to vendor conversation id, not automatically to grant session id. Git owner/email, role strings, PR author and shared OS user cannot establish independent sessions.
+    - aida-cli-lib/src/review_verdict.rs::{RecordedVerdict,parse_recorded_verdict,build_verdict_object,record_verdict_at_path,write_verdict_object,archive_current_round,verdict_path} own JSON, retained rounds and per-SHA history. Nonempty recorded_by is already required, but is just a string. build_verdict_object preserves arbitrary prior fields, so a new authority field must be explicitly replaced/cleared for each new round, never inherited.
+    - lib.rs::stamp_pr_review_verdict currently stamps 'aida drain reviewer'; retain the actual reviewer identity and distinguish recorder/transport from reviewer. Audit handle_review_record_at's PR handshake plus review_pr_handshake_path and reviewer-file ingestion; a parent drain must not launder unsigned child JSON into authenticated approval.
+    - aida-cli-lib/src/pr_cmd.rs::{ship_preflight_gates,pr_ship_approval_gate,ship_refusal_release,pr_ship_hold_root}; pr_ship.rs::{merge_gate_verdict_candidates,approval_head_refusal,approved_match_head}; merge_hold.rs::{refusal_release,enforce_corpus_gate_before_merge}; lib.rs::{drain_merge_match_head,stamp_pr_review_verdict}. Ship reads candidates from local/main roots and archives. Approval provenance must survive all of these paths, including the second check under the merge lease.
+
+    Proposed contract / bounded implementation
+
+    1. Add one typed, read-only review-actor resolver using canonical project root and validated SeatGrant. Allow an independent reviewer/advisor grant to author an approval; reject implementer grants, same implementation session/seat instance, and implementation-descended reviewer sessions. Sharing a principal/OS user is not by itself self-review: separate reviewer and implementer children of an independent driver remain possible. Compare session/instance and ancestry, not merely role labels. All verdicts bind their real recorder; a disallowed attempt fails without changing the standing verdict, marker, hold or event stream. Do not weaken emergency hold-placing commands.
+    2. Persist a durable implementation attribution binding when the implementation session is launched: canonical spec UUID (plus display ID), repository identity, branch/head context, lease ID, grant ID/session ID, subject/principal, seat and parent lineage. Retain it after lease cleanup and across rework sessions. Corroborate launch/registry evidence; do not assume a live lease's absence proves non-authorship. Identify all implementation sessions relevant to the reviewed work. This is a necessary schema consequence, not an optional comparison to the current lease owner. Unknown/missing/contradictory authorship evidence prevents an approval from satisfying a gate.
+    3. Proposed additive versioned provenance envelope on each verdict round: schema_version; reviewer identity kind (granted-session or direct-human), session/grant/seat/subject/principal and ancestry reference; distinct recording transport; canonical repository/spec/PR identity; exact full reviewed SHA; immutable implementation-binding references; recording timestamp and validation policy version. Names are proposed, to be finalized by the independent advisor. recorded_by remains a derived display string for compatibility, never a permission input. Do not duplicate grant secrets or treat a copied envelope as proof: validate references against canonical records and target identity.
+    4. Direct-human recording requires require_direct_human, explicit human confirmation identifying spec/PR/head and independent-review attestation, and known user identity. Missing agent environment is insufficient; reject a managed/implementer context even at a pseudo-TTY. Human-at-TTY establishes who records, not automatically independence. Existing grant/session evidence of implementation still refuses self-approval. Ambiguous legacy implementation provenance needs an explicit separately reviewed attribution-repair procedure; do not invent evidence or auto-repair it during recording.
+    5. Resolve canonical review/provenance root from repository/main-worktree identity, checking drive-root launch context rather than trusting arbitrary path/env input. Preserve local reviewer outputs as input artifacts; only canonical validated records can confer approval. A local-only approval cannot clear canonical refusal/hold evidence. Do not relocate requirements out of AIDA or claim these existing .aida JSON files already live in the git-canonical requirements store.
+    6. Add a common authority/independence classifier to approval consumption at ship preflight and immediately before merge under the lease, including refusal-release and drain approval matching. Keep stale-head, corpus, marker, hold and supervision gates intact. Unknown, legacy, malformed, conflicting, wrong-repository or wrong-head provenance refuses with a concrete re-review/repair diagnostic (existing ship review refusal category). An unrelated valid approval must not hide a contradictory current relevant candidate. Preserve no-review-required policy separately; do not accidentally make every PR require approval solely because this bug is fixed.
+
+    Compatibility, migration and races
+
+    Old JSON remains readable and displayed as legacy/unverified; it cannot satisfy a new approval gate. Preserve old refusals, findings, rounds, per-SHA archives and closure evidence. Never backfill session identity from '(operator)', 'aida drain reviewer', mtime, role environment or current reader. Require a fresh independent review for open legacy work unless a separately approved repair can establish missing facts. Closed historical work remains historical; do not reopen statuses or rewrite the live corpus as part of rollout. Update all struct literals, consumers, template recorder examples and schema/contract tests; migration is additive and dry-run/reportable, not a live bulk mutation by this author.
+
+    Bind identity at recording time so ordinary reviewer expiry/exit after a valid review does not silently erase historical evidence. Missing/corrupt durable evidence refuses; distinguish expiration from explicit revocation/invalidation policy (advisor question below). Pin target head, canonical root and provenance to one operation; reread before merge. Serialize record read/archive/write on a permanent per-key lock (atomic rename alone prevents torn bytes, not lost concurrent rounds). Never reuse the prior round's authority when stamping CI metadata. Concurrent refusal/approval, head movement, grant revocation during record, and worktree/lease cleanup must all fail closed or preserve the latest blocking evidence. Canonical publication failure must not print success or clear a marker.
+
+    Named tests to add (fixtures, fake HOME/AIDA_HOME and fake forge only)
+
+    - review_record_implementer_cannot_self_approve_cli: real CLI, with/without agent env, forged reviewer name/role, pseudo-TTY, unchanged canonical/local verdicts, holds and markers.
+    - review_record_independent_granted_reviewer_cli and review_record_direct_human_tty: independent reviewer passes; managed agent at TTY and non-TTY operator attempt fail; actual PTY confirmation path exercised.
+    - review_record_identity_survives_cleanup_and_rework: same author after role change/lease deletion and author-descended child refuse; independent sibling reviewers under driver pass; shared OS principal is not blanket refusal.
+    - review_provenance_roundtrip_and_legacy_policy in src/tests/review_verdict_tests.rs: old JSON read, legacy approval denied, refusal preserved, archives/rounds retain original provenance, no inherited proof on new round.
+    - ship_rejects_untrusted_review_provenance_entrypoint: local/canonical conflict, wrong repo/spec/SHA, missing binding, forged '(operator)', legacy archive, and missing/corrupt evidence all refuse before fake forge merge; canonical independent approval passes ordinary gates.
+    - review_record_concurrent_rounds_preserve_refusal and ship_rechecks_provenance_under_merge_lease: deterministic barriers for concurrent record/head/revocation changes, failure before publication, and exact-head merge.
+    - Extend existing src/tests/bug_775_commits_ahead_tests.rs, bug_1774_corpus_merge_gate_tests.rs, read_verdict_file_tests.rs and pr_cmd.rs approval wiring tests. Verify drain stamp preserves reviewer identity rather than becoming it.
+
+    Threat model / out of scope
+
+    This closes supported CLI/workflow self-approval and ambient-identity mistakes within AIDA's local grant trust model. The same Unix user can edit local grants/JSON, strip environment markers, invoke PTYs or merge through an admin forge credential. Current primitives cannot cryptographically prove a human or resist that attacker. Do not advertise that protection. A protected broker/OS-separated attestation store/forge enforcement would be separate architecture, with its own approval. No grant widening, hold clearance, roster mutation, raw forge bypass, prose-only substitute, main/old-branch editing, or proxy merge belongs in this task.
+
+    Grounded questions for independent advisor (no approval inferred)
+
+    A. Approve reviewer/advisor-only granted approval plus direct-human path? Define seat-instance/ancestor exclusion precisely; common driver ancestry must remain valid, implementer-owned subagents must not.
+    B. Which durable launch record becomes canonical for implementation and review attribution? SessionLease and SeatGrant IDs currently do not join; approve the minimal new binding and retention schema before coding. Unknown stays blocked.
+    C. Accept fresh-review requirement for legacy approvals and missing implementation bindings, or specify an audited human attribution-repair command with evidence requirements? A string-only migration cannot be safe.
+    D. Should explicit post-record grant revocation invalidate an otherwise historical valid approval, and how is historical revocation distinguished from normal expiry/cleanup? Until defined, ambiguous authority cannot authorize merge.
+    E. Confirm local supported-workflow threat boundary is acceptable; if hostile same-user resistance is required, this sketch is insufficient and needs protected-broker design first.
+  created_at: 2026-10-08T02:19:07.100324068Z
+  modified_at: 2026-10-08T02:19:07.100324068Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
