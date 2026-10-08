@@ -264,7 +264,7 @@ The marker is best-effort when the code repository cannot be read.
 **Don't reach for it when** — you have a dirty tree you don't want auto-stashed (`--no-stash` makes it refuse instead) — decide consciously. And risky (file-overlap) cases will still prompt; don't `--auto` your way through a conflict-likely rebase blind.
 
 **Key options (rationale only).**
-- `--dry-run` — classify only. The "what would happen" that should precede any real rebase.
+- `--dry-run` — classify only. The "what would happen" that should precede any real rebase. Run from inside a linked worktree (`git worktree add`), it classifies that worktree's branch and working tree, not the primary checkout's. <!-- trace:TASK-1321 | ai:claude -->
 - `--auto` — execute the *safe* classes (behind-only, diverged-safe) without prompting; risky still prompts. The right default for "just catch me up if it's clean."
 - `--no-fetch` — classify against the already-cached upstream (when you just fetched and don't want to again).
 
