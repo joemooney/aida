@@ -778,6 +778,10 @@ fn kernel_sender_credentials_reject_peer_and_cancel_never_targets_peer() {
     let mut child = f
         .start(FixtureBehavior::Normal, Duration::from_secs(10))
         .unwrap();
+    let mut cancellation_target = f
+        .start(FixtureBehavior::Normal, Duration::from_secs(10))
+        .unwrap();
+    let cancellation_identity = cancellation_target.identity().clone();
     let socket = child.socket().unwrap();
     let b = child.frame(FIXTURE_RELEASE, child.identity());
     let (read, write) = error_pipe().unwrap();
@@ -794,7 +798,7 @@ fn kernel_sender_credentials_reject_peer_and_cancel_never_targets_peer() {
                 events: libc::POLLIN,
                 revents: 0,
             };
-            libc::poll(&mut p, 1, 3000);
+            libc::poll(&mut p, 1, 10000);
             libc::_exit(0);
         }
     }
@@ -804,9 +808,16 @@ fn kernel_sender_credentials_reject_peer_and_cancel_never_targets_peer() {
     child.settle(Duration::from_secs(2)).unwrap();
     assert!(child.reaped.is_some());
     assert!(!f.output.exists());
-    // A corrupted observation cannot retarget the owned kernel handle.
-    child.identity = Some(peer_identity.clone());
-    child.cancel().unwrap();
+    // Exercise an actual signal, not a no-op cancellation of the already-reaped
+    // rejected child. Corrupt both observations while the owned target is live;
+    // only its original kernel handle may determine the cancellation target.
+    assert!(cancellation_identity.is_current());
+    cancellation_target.pid = peer;
+    cancellation_target.identity = Some(peer_identity.clone());
+    let canceled = cancellation_target.cancel().unwrap();
+    assert!(canceled.reaped && !canceled.possibly_executed);
+    assert_eq!(canceled.wait_status, Some(libc::SIGKILL));
+    assert!(!cancellation_identity.is_current());
     assert!(peer_identity.is_current());
     assert_eq!(
         unsafe { libc::write(write.as_raw_fd(), b"x".as_ptr().cast(), 1) },
