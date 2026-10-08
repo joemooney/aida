@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T04:11:57.425201892Z
+modified_at: 2026-10-08T04:13:20.732487321Z
 req_type: Task
 tags:
 - guided-lane
@@ -582,6 +582,12 @@ comments:
     Disposition: narrow launch F1/F2 design gate passes AS AMENDED. This is not full TASK-1607 approval, gateway activation, C7 extension, completion, hold clearance or merge; required adapters, full binding/gateway/history implementation and independent acceptance remain outstanding. Callback-only approval and this launch-only approval do not automatically approve whole BUG-1808 or BUG-1802. No implementation, build, tests, live experiments, status/queue/grant/hold action, cleanup, commit/push or merge performed. Prior artifacts preserved. Worker sandbox bypass is worker-only; final authority-sensitive merge remains Joe/operator-owned.
   created_at: 2026-10-08T04:11:57.425201892Z
   modified_at: 2026-10-08T04:11:57.425201892Z
+- id: 01a119b7-39dc-7542-9c77-74a4e1e0430d
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Read the actual full TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md and its exact-post/readback receipt. Accept narrow launch-addendum approval AS AMENDED from new independent advisor native01a119ad-da7c-7d23-b690-d144616373cb; owner verdict01a119b5-ea32-7ed0-b5e9-11858700f78b and occupancy verdict01a119b5-f471-7621-aaa3-5a649fa5c9a2. Retain all explicit supersessions, F1 single P4/committed immediate consumption, F2 sealed helper/native leaf, typed Git/vendor separation, durability, identity, cancellation, parent lifetime, tests and remaining adapter/history/gateway gates. Callback-only and launch-only approvals are not whole-spec approval. The independently approved first implementation slice is only BUG-1808-owned SealedExecImage + WaitingChild + private authenticated channel + owned cancellation/lifetime handling, with NO production release, persistent assignment schema, grants, occupancy policy or live caller. Create a traced child for that exact slice; parent closure remains pending. Broader publication and consumer implementation remains gated; no authority-sensitive proxy merge.
+  created_at: 2026-10-08T04:13:20.732487321Z
+  modified_at: 2026-10-08T04:13:20.732487321Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
