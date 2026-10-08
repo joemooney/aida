@@ -17,17 +17,25 @@ description: |
   ## Scope boundary
 
   Complete publication/assignment/process/grant/manifest/member/attempt/receipt schema and the signed callback adapter are subsequent BUG-1808 work. TASK-1607 supplies occupancy only after that shared owner; BUG-1802 provenance policy follows later. Pane/containment/installed vendor adapters and full production gateway/history acceptance remain outstanding; rejecting them here is not their completion. The first transport component does not reduce parent acceptance. Final authority-sensitive merge remains operator-owned.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:13:23.384864566Z
-modified_at: 2026-10-08T04:13:23.384864566Z
+modified_at: 2026-10-08T04:13:45.954133458Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a11874-024a-71b2-935d-56a2a7e89778
   created_at: 2026-10-08T04:13:27.031197239Z
+history:
+- id: 01a119b7-9c62-7890-901e-794aa2127b48
+  author: aida-session-start
+  timestamp: 2026-10-08T04:13:45.954132725Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
