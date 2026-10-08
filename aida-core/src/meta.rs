@@ -540,7 +540,7 @@ mod tests {
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count, 15);
+        assert_eq!(meta_count, 16);
 
         // Seeding again should be a no-op
         seed_meta_requirements(&mut store).unwrap();
@@ -629,7 +629,7 @@ mod tests {
             store.add_requirement_with_id(protocol, None, Some("META"));
         }
 
-        assert_eq!(seed_missing_type_protocols(&mut store), 7);
+        assert_eq!(seed_missing_type_protocols(&mut store), 8);
         assert_eq!(seed_missing_type_protocols(&mut store), 0);
         assert_eq!(
             get_type_protocol(&store, "spike").unwrap().body,

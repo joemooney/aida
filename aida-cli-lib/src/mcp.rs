@@ -89,7 +89,7 @@ use crate::punt::{self, append_to_ledger, ledger_path, read_ledger, PuntRecord};
 // sync with `parse_requirement_type` below and the `add_requirement` /
 // `update_requirement` schema enums. trace:TASK-716 | ai:claude
 const VALID_MCP_REQUIREMENT_TYPES: &str =
-    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc";
+    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq";
 
 /// BUG-591: the archive (STORY-441) + deferred (STORY-584) view-tier predicate,
 /// shared by `list_requirements` and `search_requirements` so the MCP read
@@ -7176,7 +7176,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "type": {
                         "type": "string",
-                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc. (change-request is the workflow type for a proposed change; principle/vision/constraint/decision/term are the ADR + knowledge-graph family.) Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
+                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq. (change-request is the workflow type for a proposed change; principle/vision/constraint/decision/term are the ADR + knowledge-graph family.) Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
                         "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "story"
                     },
