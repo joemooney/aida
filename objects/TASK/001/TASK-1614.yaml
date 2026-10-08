@@ -3,12 +3,12 @@ spec_id: TASK-1614
 agreed_id: TASK-1614
 title: Add 'faq' requirement type
 description: Add a new 'faq' requirement type to AIDA to support capturing frequently asked questions with a dedicated FAQ prefix. This will allow for better separation from standard 'doc' types.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:25:31.165279693Z
-modified_at: 2026-10-08T04:27:31.578973770Z
+modified_at: 2026-10-08T05:53:56.903755977Z
 req_type: Task
 history:
 - id: 01a119c4-1a89-7410-a9c0-47f5efa6198b
@@ -25,6 +25,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a11a13-549d-7990-af63-b6844d4551d5
+  author: aida-auto-bump
+  timestamp: 2026-10-08T05:53:56.893103347Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a11a13-54a7-78e0-8ad0-6ebb885c4c1a
+  timestamp: 2026-10-08T05:53:56.903754313Z
+  agent: implementer
+  commit_sha: 8ea2fe47c0e6128127a67251ad4545a412fb5d28
+  summary: Completed via merge 8ea2fe47
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
@@ -32,3 +45,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 199e591b07
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T05:53:56.893097087Z
+  completion_sha: 8ea2fe47c0e6128127a67251ad4545a412fb5d28
