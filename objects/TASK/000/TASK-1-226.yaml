@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T19:29:35.295610367Z
+modified_at: 2026-10-08T20:26:08.915350809Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -331,6 +331,89 @@ comments:
   content: 'Independent REQUEST_CHANGES at ef014aeb07eca288a6faa51922252fbc33209684: F1335-1..6 full report and numbered rework under .aida/handoff/orchestrator/run-20261008/TASK1335_INDEPENDENT_REVIEW.md and task1335-numbered-rework.md. SAME live author/branch/lease remains InProgress; no new dispatch or status reset. Canonical UUID dedup, rooted covers support, all completion-path live closure/identity checks before mutation, honest actual effects, full checked TOML/schema. No broad workspace/CI or no-PR Done bypass; NEW DIFFERENT review after revision.'
   created_at: 2026-10-08T19:29:35.272178540Z
   modified_at: 2026-10-08T19:29:35.272178540Z
+- id: 01a11d31-da93-7453-830b-fab61e9b8fcd
+  author: mcp
+  content: |
+    PROXY DECISION (orchestrator for Joe): immutable REWORK SOURCE CHECKPOINT, NOT final READY or approval. Root verified own worktree clean and committed b98b5175991ccbcbcb47b4157cc73e272702b251. A NEW DIFFERENT read-only reviewer will audit the entire b46...b98 implementation and F1-F6/D1-D3 while the existing author finishes targeted checks. Pending checks and pre-final failures remain explicit; no new implementer dispatch, queue mutation or protected review record. Rejected ef014 remains rejected and excluded from D. Full author checkpoint follows unchanged.
+
+    # TASK-1335 rework — immutable source checkpoint (NOT final READY)
+
+    Purpose: lets a NEW, DIFFERENT reviewer start a static audit while targeted tests wait for a Cargo slot.
+    This is not the final `TASK1335_REWORK_READY.md`. The full whole-acceptance result is still owed.
+    Author: Claude Code (claude-opus-5-5), same implementer seat, same pool4 `task-1335` worktree/branch. 2026-10-08 ~13:20 MST.
+
+    ## Exact identity
+
+    | Item | Value |
+    |---|---|
+    | Checkpoint commit | `b98b5175991ccbcbcb47b4157cc73e272702b251` |
+    | Tree | `f0448eddb55c6f5ba5b9ee287762846152687ffd` |
+    | Parent (rejected head) | `ef014aeb07eca288a6faa51922252fbc33209684` |
+    | Merge base with main | `b46aec1e674baae5a329416d4119e67b59200a88` |
+    | Remote | `git ls-remote origin refs/heads/task-1335` → `b98b5175991ccbcbcb47b4157cc73e272702b251`; push also mirrored to gitlab |
+    | Worktree | clean after commit (`git status --short` → 0 lines) |
+    | Pre-commit hook | ran (`cargo fmt --check` and others) and passed; commit-msg format validated |
+
+    Files changed by the rework (ef014aeb..b98b517): `aida-cli-lib/src/lib.rs`, `aida-cli-lib/src/forge.rs`, `aida-cli-lib/src/reconcile_evidence.rs`, `aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs` (+924/−155).
+    `AGENTS.md` and `docs/cli/10-storage.md` are unchanged since ef014aeb.
+
+    SHA256 at checkpoint:
+
+    | File | SHA256 |
+    |---|---|
+    | lib.rs | 749d6544538e7e9378789f4ed7a716ce3e5a26eac62d4a02be5d1c71ecb76070 |
+    | forge.rs | d3469aefabe7e45eac3c0bc1fd2a470d9d0b0d3978438aaea59cc9c00fcf0d34 |
+    | reconcile_evidence.rs | 60a31d25f4564fe40749ded2a6c1da87975ecae7eef466a68507d1f0dcb64f77 |
+    | CLI test | 8156431d1171dbb748a885f353d5c05d5a1ce8a2f19422457bb4269ea2381a96 |
+    | AGENTS.md | 5f66702b3f18b307cc8ce81bf7892bf2d4d7bd928964bb6383b32187dea1ba3e |
+    | docs/cli/10-storage.md | 68aaee4ead715593fe5ff97faf359f163cbce8a443ea4b7f3bf26168543b31ff |
+
+    ## Where each finding is addressed (static pointers)
+
+    - **F1335-1 (rooted covers support):**
+      - `lib.rs::plan_reconcile_seam` fixed-point loop and `covers_chain_rooted`.
+      - Anchors are a live Completed `implements` target, or a surviving NON-covers normal flip, matched by UUID. Another covers candidate never counts.
+    - **F1335-2 (every completion decided at the live seam):**
+      - `SeamItem`/`SeamKind`/`SeamVerdict` and `plan_reconcile_seam` decide holds, normal flips AND stale-review flips against the live store inside `update_atomically`, before ANY mutation.
+      - Checks per item: scan UUID, unambiguous resolution, path status, `auto_bump_evidence_is_stale`, then least-fixed-point `split_closure_held_flips` over all surviving completions.
+      - Every mutation targets the decided UUID index; the old first-match hold write is gone.
+      - Stale-review flips get scan outcomes (UUID); stale ones are recorded as `StaleAfterReopen`.
+      - A newly blocked stale story → `HeldAtWrite`.
+    - **F1335-3 (checked forge read):** `forge.rs::checked_forge_provider` parses the config as `toml::Table` (`[forge]` table, dotted, inline).
+      - Missing `forge` or `provider` → no provider.
+      - Unparseable document, non-table `forge`, non-string provider or unknown token → error.
+      - The compatibility `resolve_forge_kind`/`read_forge_config` policy is unchanged.
+    - **F1335-4 (diagnostic row schema):** `reconcile_evidence.rs::count_diagnostic_rows` requires string `title` and `body` on every row, else `BadDiagnosticRow`. That surfaces as warning plus `unknown (open-PR diagnostic unavailable)` with exit 0.
+    - **F1335-5 (no peer credit):** `confirmed` and `confirmed_stale` (and therefore `OtherEffects`, the summary, `record_role_activity` and `emit_spec_completed`) come only from this run's `SeamVerdict::Apply`. The after-load status filter was removed.
+    - **F1335-6 (one completion per UUID):** in `plan_reconcile_seam`, the first `Apply` completion per UUID in seam order wins. Later aliases → `SameAs` → `CandidateReason::SameRequirementAs`, reported on targeted runs and never re-applied.
+
+    Real-CLI tests added or changed in the test file:
+    - New: `configured_forge_is_read_from_any_toml_spelling`, `covers_support_is_rooted_not_circular`, `stale_review_path_is_decided_at_the_live_seam`, `independent_effects_report_only_this_runs_writes`, `aliases_of_one_requirement_complete_once`, `closed_unmerged_work_earns_no_credit`.
+    - Diagnostic-row matrix added to `genuine_no_match_vs_diagnostic_and_required_outage`.
+    - Sweep-normal added to the historical outage matrix.
+    - `write_seam_rechecks_reopen_closure_and_covers` now covers:
+      - a REAL covered-spec reopen, Completed → Approved `--force`.
+      - a UUID replacement and a new ambiguity introduced by a peer store commit at the barrier.
+      - completion-event counts.
+
+      The covered reopen needs advisor authority. It uses the repo's existing test-only `tests/support::grant_seat_for` fixture, which writes a grant record under the fixture's fake HOME and a roster in the fixture store. No live grant, role or environment is involved.
+
+    ## Test status at checkpoint
+
+    | Check | Status |
+    |---|---|
+    | `cargo check -p aida-cli-lib --tests` (rw-check1.log) | PASS (no warnings), pre-checkpoint source; `cargo fmt` since applied |
+    | `cargo test -p aida-cli-lib --lib -- reconcile_evidence checked_forge_provider read_forge_config task_1600 reconcile_status open_pr non_github_forge` (rw-lib1.log) | PASS: 85 passed, 0 failed. Includes `pr_ship::tests::task_1600_incident_titles_and_bodies_do_not_grant_completion` and `task_1600_only_store_resolving_trailers_and_branch_recovery_survive`. Source at that run equals the checkpoint except for `cargo fmt` whitespace and test-file edits. **Final-tree rerun PENDING.** |
+    | CLI run rw-cli1 (pre-final test edits) | 12 passed, **2 FAILED**. (1) `covers_support_is_rooted_not_circular`: the product refused the cycle and multi-hop cases correctly, but STORY-83's line reads `commit … (covers chain)`, not `covers chain evidence`; the test match was loosened to per-line. (2) `write_seam_rechecks_reopen_closure_and_covers`: the barrier `edit TASK-74 --status approved --force` was refused for lacking advisor authority (gh exit 3), so the batch was deferred; the barrier now uses the advisor grant fixture. |
+    | CLI rw-cli2 (`write_seam covers_support` only) | **TIMED OUT at my 590s bound** (slot wait plus rebuild; no result). Kept as evidence. |
+    | CLI rw-cli3 (same two tests, 2400s bound, background) | **PENDING**: queued for a Cargo slot at checkpoint time |
+    | Full 14-test CLI file on the final tree | **PENDING** |
+    | clippy `-D warnings`, `--no-default-features` check, `make check-ci-fast` on the final tree | **PENDING** |
+
+    No pending item is claimed as passed. Logs are in the implementer scratch `logs/` (rw-*.log) and will be copied to `TASK1335_REWORK_CHECKS/` with the final READY.
+  created_at: 2026-10-08T20:26:08.915343340Z
+  modified_at: 2026-10-08T20:26:08.915343340Z
+  relayed_from: task1335-reconcile-diagnostics
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
