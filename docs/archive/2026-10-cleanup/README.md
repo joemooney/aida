@@ -27,7 +27,7 @@ Counts come from `git log 738653fb3e` restricted to that window:
 
 | Measure | Value |
 |---------|-------|
-| Commits | 810 (August 28, September 649, October 1–7 133) |
+| Commits | 810 (August 28, September 643, October 1–7 139; calendar months by recorded author date) |
 | Commits touching `*.md` or `docs/` | 336 |
 | Markdown files added | 167, mostly skill mirrors (`.claude/skills`, 61), plans (23), template masters (23), and discipline-pack mirrors (14) |
 | Most frequent commit scopes | integrate (108), drain (51), queue (45), orchestrator (29), review (27), cli (20) |
