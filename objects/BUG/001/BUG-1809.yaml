@@ -1,0 +1,33 @@
+id: 01a119dd-37f1-72d0-bcc7-00bf85f5c78a
+spec_id: BUG-1809
+agreed_id: BUG-1809
+title: Single-spec show can wait indefinitely on cache Git ancestry subprocess
+description: |
+  Observed runtime finding: single-spec canonical show can block for minutes in cache Git ancestry probe despite zero refresh-wait intent. Exact coordinator /home/joe/ai/aida/target/agent/aida, label199e591b07+dirty, executable SHA16ac3e172d155637ba68d5352b2c56bfad4d79dbeed495a094fd2e80d935b8b9; label does not prove exact source equivalence. Current main5d4180e5. Do not call this a source-confirmed BUG1801 regression without reproduction from exact built source.
+
+  2026-10-08 around04:39–04:51UTC: root showBUG1806--json and independent advisor pre-post show both waited on git merge-base --is-ancestor cachedstore9880df767d84eb9376544a2ed880d91643d66d55 tocurrent4c1e8ae437a847b86193ea7596d33a2b72852529. Git kernelwait folio_wait_bit_common, mapped SATArepo pack/commit-graph; IOpressure someavg60~67%,full~50%, memoryavailable~60GB. Root ownedread stopped safely; bounded30s--no-git retry produced no successful result. Canonical no-git switch did not avoid cache ancestry. Independent reviewer eventually completed normally. Official cache rebuild succeeded projecting4905requirements; subsequent same show returnedCompleted promptly. No direct store/cache edits or gate bypass. Evidence .aida/handoff/orchestrator/status-read-io-observation.md and cache-rebuild-recovery.log, reviewer canonical-read-delay.txt.
+
+  Source seams to verify: aida-core/src/db/cached_git_backend.rs ancestry checks around408/537, git_ops::is_ancestor, zero read-refresh budget propagation. Distinguish lock-wait budget from unbounded Git subprocess I/O. Determine whether exact current source reproduces before changing code.
+
+  ## Acceptance
+
+  1. Reproduce under deterministic owned delayed ancestry/Git fixture from exact built source and record affected single-show formats.
+  2. Single-spec reads return canonical object with honest stale/deferred cache context within their read budget rather than synchronously waiting for an unbounded ancestry child. Preserve real worker-state distinctions; no false background-progress promise.
+  3. Strict mutation/cache-rebuild/gate operations remain strict; do not bypass canonical consistency or authority. Parent return and eventual owned child cleanup remain honest under timeout/uninterruptible I/O.
+  4. Add meaningful delayed-subprocess and matching normal-source controls, preserving BUG1801 latency coverage. No live diskfault experiments or broadhosttuning.
+
+  This is captured draft follow-up outside the currently assigned PR/bug delivery lanes, not queued or implemented, not an excuse to mark current gates passed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T04:54:50.609181650Z
+modified_at: 2026-10-08T04:54:50.609181650Z
+req_type: Bug
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: codex
