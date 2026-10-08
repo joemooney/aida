@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-07T23:08:36.884420627Z
+modified_at: 2026-10-08T16:48:31.844491881Z
 req_type: Task
 tags:
 - from-advisor:TASK-1604
@@ -26,6 +26,60 @@ comments:
   content: 'SKETCH REQUEST, no implementation: owning TASK-1332. Reuse existing reentrant store writer lock across sync staging/commit/rebase. Independently inspect git_backend_cmd.rs, db::store_lock, network fetch/rebase writers; specify owner/trigger, exact lock surface and reentrancy/deadlock order, fetch vs mutation boundary, failure preservation, helper symbols, concurrent-process tests with fake HOME/stores, out-of-scope store format/authority changes. Record SKETCH (awaiting advisor signoff) on spec, then obtain a DIFFERENT advisor signoff before queue/implementation. No live shared-store race test; no code or merge.'
   created_at: 2026-10-07T23:08:36.884420627Z
   modified_at: 2026-10-07T23:08:36.884420627Z
+- id: 01a11c6a-9e64-7b20-8553-eeb3d3862692
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1332 — serialize store sync with the existing writer lock
+
+    Author: Codex store-reconcile-sketch-author, separate AUTHOR advisor, 2026-10-08. This is an unsigned design proposal for a NEW DIFFERENT advisor. No implementation, authority grant, queue/status change, launch, merge or self-signoff. Companion read/converse/draft boundary: this entire file is the exact proposed canonical comment body for root relay; it has NOT been posted.
+
+    ## Evidence and preserved identity
+
+    Inspected actual clean tracked main/HEAD/origin-main b46aec1e674baae5a329416d4119e67b59200a88. Origin/main is the locally recorded ref, not a freshly fetched remote claim. Full canonical read is store-reconcile-evidence/TASK-1332.json: UUID 01a1101a-d324-7002-9942-3eb492b0fc4c, origin TASK-1-225, display TASK-1332, Approved. Preserve observation from TASK-1604, proxy decision 01a1189e-559a-7dc2-8c66-06c0293a6b7f and sketch request 01a118a0-3c94-76c0-a0d5-48b60378bace. These are the two canonical comments returned; no previous canonical sketch body was returned. No race against the live store was reproduced here or claimed in the finding.
+
+    ## Owner, trigger and proposed boundary
+
+    The store operation caller owns one lexical mutation window, using the SAME aida-core/src/db/store_lock.rs::acquire and permanent .aida/store-write.lock already used by GitBackend. Trigger: db sync, another AIDA store writer, or a pull/retry concurrently changes the same canonical store index/HEAD/worktree. Add a narrow public closure API in db/mod.rs backed by the private existing guard (proposed name with_store_write_lock); do not expose a transferable guard, create a second lock, inherit a guard into a process, or add a schema. Reentrancy is SAME THREAD and canonical store root, not same process, environment token, grant or child process. Preserve nested LIFO guard lifetime.
+
+    In git_backend_cmd.rs::handle_git_backend_command's DbCommand::Sync arm (currently around 7742), acquire before branch/dirty/index/preimage reads. Check ensure_store_write_safe after acquisition, then hold continuously across staging, pending commit, local requirement snapshot, pull/rebase, structural/conflict cleanup or abort, post-mutation integrity checks, and capture of the exact resulting SHA. Failure drops the RAII guard after cleanup; never release midway and later abort/reset someone else's state. Guard timeout is the existing AIDA_STORE_LOCK_TIMEOUT_SECS failure, before staging. Existing rebase-in-progress state refuses rather than committing into a detached intermediate HEAD.
+
+    For this bounded repair retain fetch_rebase_target inside the existing pull helper and therefore inside the store window: fetch is network I/O, but it currently shares one API with rebase. Moving fetch out would require an additional pinned-target/liveness contract and is not required to fix the race. The existing invocation-private ref and --no-write-fetch-head behavior from TASK-1604 remain. Admit that a slow fetch holds the writer lock; other writers time out honestly. Do not hold seat, SQLite write, cache-refresh, queue, drain or manifest locks while entering this network-bearing operation. Do not claim the writer timeout bounds Git network duration.
+
+    Exit the store window before auto_bump_done_to_completed, forge calls, general CLI/cache refresh, mailbox publication, origin push, mirror fan-out or retry backoff. Origin push uses the captured full SHA as its source refspec so releasing the lock cannot silently select a later HEAD. On rejection acquire a fresh window, reread current local state, safely commit current pending edits if that entrypoint already has that policy, fetch/rebase/validate and capture another SHA; release and retry the push. Preserve a concurrent writer's new object and history rather than replaying an old snapshot. A second rejected push must remain rejected, not the current unconditional “Push complete after rebase” after an unchecked false return. No force push. Mirror only origin-confirmed SHA under BUG-1803; never use a newly advanced local tip as evidence of successful origin publication.
+
+    ## Actual seams and network-writer audit
+
+    - db/store_lock.rs: canonicalized key, thread-local hold count, permanent flock, 20 ms contention poll and bounded acquisition; existing BUG-1612/BUG-1677 tests. GitBackend::lock_store is pub(crate), hence the closure export is needed by CLI. Do not make a CLI-local duplicate.
+    - db/git_backend.rs::lock_queue_write and backend mutations already use this lock. db/cached_git_backend.rs::save/update_atomically/update_spec_atomically_with_subject take store before cache. cache_refresh::may_wait refuses refresh waits while a store or SQLite write is held. Read preimages through GitBackend/strict canonical reads inside sync, not CachedGitBackend::load (which may refresh).
+    - git_ops.rs::{fetch_rebase_target,pull_rebase,pull_rebase_auto_merge,merge_union_auto}: preserve target pinning, union rules, abort and original Git errors. These generic Git helpers also serve non-store operations; do not indiscriminately give every Git repo a store lock. Enforce the store wrapper at store callers.
+    - lib.rs::handle_pull_command: pending mailbox publication currently precedes dirty-stage-commit, structural rebase, collision check/merge_gate, deferred code reconcile and GC. Publish mailbox outside the store guard through its normal writer discipline, then protected reread/commit/rebase/collision/merge_gate; move deferred forge reconciliation and optional maintenance outside the finite mutation block. If maintenance itself mutates store Git state, give that maintenance its own audited store window, with no child writer cycle.
+    - lib.rs::{pull_store_before_id_allocation,push_store_after_id_allocation,handle_block_command,auto_allocate_block_inner,maybe_sync_pull,handle_dev_release,handle_push_command}: protect their local pending-write/precommit/rebase/abort windows too, preserving each caller's existing offline/no-origin policy. maybe_sync_pull's dirty check must be under lock and its defensive abort must not occur after unlocking. Allocation/network retry remains bounded by its existing configuration; no new distributed ID policy.
+    - remote_create.rs::handle_remote_reconcile: discovery/fetch may be outside; on --execute acquire before local dirty/HEAD/frontier decision and recompute against current HEAD. Hold through all fast-forward/union writes, validation and any existing reset-to-pre recovery. Its current pre snapshot comes from before network discovery: resetting to that stale SHA could delete a peer write. Use a current locked preimage; release before hub pushes. Dry-run never gets mutation credit. Remote-only/fetch/mirror paths do not need a whole-worktree guard merely for network reads, but must not mutate shared index/HEAD or trigger an unguarded fallback merge.
+
+    The above is an implementation audit inventory, not an assertion that every call is already fixed. Deliver a callsite checklist in the eventual PR; an omitted active mutating caller means the race remains open.
+
+    ## Lock ordering and refusal
+
+    Existing local order is store -> SQLite/cache writes, never cache-refresh waiter -> store or child process -> inherited store ownership. The signed future publication order (home -> repo -> seats -> store -> queues -> drain -> manifests -> verdict -> merge -> Git) is not permission to run network under seats. Ordinary network sync must occur outside its seat critical section; future publisher integration must prepare network inputs outside seat and consume its one common Git adapter. This task neither implements nor bypasses that publisher.
+
+    Audit actual production hooks, not just unit closures: the installed pre-commit recognizes store paths/branch and exits through its store guard; installed prepare-commit-msg currently reads the canonical store HEAD; pre-push invokes aida remote mirror-push. These are local observations, not portable template guarantees. Installed post-rewrite exits for linked worktrees; installed post-commit normally consumes a pre-commit tree sentinel, but its mismatch path invokes `aida internal record-no-verify-bypass`. That path must be tested with actual CLI startup/cache behavior, including sentinel mismatch; an observe-only body does not prove initialization cannot wait on the parent. Revalidate configured hook bytes before implementation claims deadlock freedom. A child AIDA writer cannot reenter the parent's thread-local lock. Keep push hooks and generic CLI reentry outside the guard. Never disable required hooks, set a lock-bypass variable, or transfer lock ownership to solve a cycle. A required mutating commit/rebase hook under the same store window is a real integration blocker requiring the signed hook-safe adapter or a separately reviewed remedy, not an undocumented unlock gap. Preserve original Git/abort errors and any remaining rebase state; no generic “network problem” substitution or destructive automatic recovery.
+
+    ## Meaningful isolated acceptance witnesses (proposed, NOT RUN)
+
+    Use temporary repos plus local bare remotes, fake HOME/AIDA_HOME, owned processes, production CLI entrypoints and deterministic barriers; strip ambient AIDA identity and guard real vendors. No shared store or user queue.
+
+    1. sync_vs_edit_serializes: block actual sync after dirty read, staging, commit and before rebase in separate fixture variants; concurrent actual spec edit must wait/timeout without index/HEAD/object/history mutation, then succeed after release. Pair uncontended sync and edit; verify both changes, histories and valid HEAD survive. Counter-test with only the new outer guard omitted must expose the intended ordering failure in scratch.
+    2. sync_vs_sync_and_queue: two processes, canonical path versus symlink/sibling discovery, plus existing backend queue writer. Verify one common lock inode, no HEAD/index lock race and no lost queue entry. A distinct store proceeds concurrently. Same-thread nested backend writes complete; another thread/process cannot claim reentrancy.
+    3. rejection_retry_preserves_peer: origin rejects first captured SHA; peer writes between windows; retry rereads/rebases both changes. Success actually reaches origin; second rejection remains a failure. Mirrors never publish an unconfirmed local SHA. Preserve sentinel FETCH_HEAD and remove only invocation-owned temporary refs.
+    4. pull_sync_allocation_remote_reconcile_share_guard: parameterize the listed real entrypoints, including --sync, auto-merge and multi-hub --execute. Introduce peer write between discovery and lock; locked preimage prevents rollback loss. Unknown conflict/invalid canonical object refuses with original error; clean and known union conflicts succeed.
+    5. no_hook_cache_lock_cycle: run supported installed/template store hooks with stale cache, competing refresh and writer; assert finite completion, no recursive child store writer, no inherited lock FD, and acquisition timeout before mutation. Test failing hook, fetch failure, abort failure and killed holder; next writer either succeeds on safe state or refuses the retained unsafe state without unlinking the sidecar. Pair healthy hook and cache update positives.
+
+    ## Scope, dependencies and open engineering questions
+
+    No store format/schema, parallel lock, lock-file deletion, distributed lock, authority change, live experiment, hook bypass or force operation. TASK-1593, TASK-1591, BUG-1811 and BUG-1812 reservations remain untouched. Before implementation, independent advisor must approve this window and audit breadth. Required hook reentry, any caller that already holds a seat/cache lock, and mutation-capable maintenance require explicit disposition from actual source/fixtures; not a reason to quietly omit those paths. No operator question is requested. This author provides no approval and has not claimed a live doer.
+  created_at: 2026-10-08T16:48:31.844491881Z
+  modified_at: 2026-10-08T16:48:31.844491881Z
+  relayed_from: store-reconcile-sketch-author
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
