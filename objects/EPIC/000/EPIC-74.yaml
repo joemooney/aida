@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T16:42:36.749814393Z
+modified_at: 2026-10-08T17:13:19.095156301Z
 req_type: Epic
 tags:
 - architecture
@@ -154,6 +154,67 @@ comments:
   created_at: 2026-10-08T16:42:36.749814393Z
   modified_at: 2026-10-08T16:42:36.749814393Z
   relayed_from: answered-sketch-independent-advisor
+- id: 01a11c81-4ff7-7c40-a418-1c743d4c18a6
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): EPIC-74 v2 — canonical target isolation and verified default landing
+
+    Codex, same sketch-author lineage, 2026-10-08. Full independent v1 verdict is CHANGES REQUESTED; this is rework, not a verdict. Main remains b46aec1e674baae5a329416d4119e67b59200a88. This entire file is an exact proposed canonical comment body for coordinator relay; NOT posted by this pass. V1 files/comments remain historical and unchanged.
+
+    Binding companion proposals in this same directory: EPIC74_ENTRYPOINT_GUARDS_V2.md, EPIC74_ADR_DRAFT_V2.md, EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT_V2.md. They are necessary parts of this sketch, not optional implementation notes. All await a new different independent advisor. ADR publication under docs is future doer work after review, not performed here.
+
+    ## Direction, owner and trigger
+
+    The actual canonical answer is choice 1 / answered=0 at 2026-10-08T15:54:26.321418310Z: target/parent branches plus canonical epic isolation. It does not answer release authority. Keep an epic-only typed target declaration; no lane seat, flag, command family, status or per-spec override. Reuse Done/Completed, ordinary worktree/PR workflows, existing grants, review and hold gates. September plan docs/plans/2026-09-28-epic-74-target-branch-vs-lane.md is reconciled here: “target merges to parent => Completed” is true only for verified coverage at the actual repository default, and a single PR-base override is insufficient.
+
+    Epic UUID owns isolation generations and retained history in its canonical object. Requirement graph and its reciprocal Parent/Child edges determine membership, with sticky UUID membership for previously isolated work; broken reciprocity, cycles, conflicting/nested distinct declarations or multi-repository ambiguity refuse. A source-side parent has Parent edges to children and children have Child edges back. Default/target identities use immutable forge/repository identity plus validated full refs. A changed default cannot reinterpret an old generation as ordinary default work.
+
+    Triggers are every read/selection/admission/ship/retarget/completion and isolation-affecting writer listed in the entrypoint matrix. A display may report stale context, but cannot present unverified work as eligible. Mutation reads are strict canonical reads. Environment carries a requested view only: unset or misleading env never releases or bypasses isolation. Only the verified epic context can select its subtree, and selection is not action admission.
+
+    Parent is Option<BranchRef>. Ordinary default-target absent/empty parent becomes None: sync reports no-op without invoking Git. Off-default absent parent resolves to a positively identified actual default; no main/master fallback. Explicit parent==target is a reported no-op. Effective parent is pinned in the operation inputs. Generic --force never releases isolation. These are the technical choices in E4, not new operator permissions.
+
+    ## Staged first slice and later functionality
+
+    STORY-1481's proposed narrowly reviewable slice establishes isolation, truthful views and ALL negative action gates. It blocks isolated shipping/completion through direct ship, already-open PRs, resume, wave/drain/MR recovery and old plans before STORY-1482 exists. In-scope selection previews work; any action whose downstream target safety is not available refuses before queue row, lease, status, worktree, child spawn or forge mutation. An epic worktree entry can be supported only as bounded setup with guarded downstream operations; it is not permission to launch a default-shipping pipeline.
+
+    This slice refuses all release-equivalent mutations, including target reset to default, clear, detach/reparent, epic deletion/retype, import/restore and default reinterpretation. This is a blocked capability pending authority disposition, not permanent deletion of the old close/force promise and not satisfaction of full 1481 AC4/5. Advisor decides whether that explicit partial acceptance is independently reviewable; no dispatch or implementation is authorized here.
+
+    STORY-1482 may enable positive child merge to the validated off-default target only after the action protocol and adapter conditions below pass. Record Done with durable original child evidence. STORY-1483 adds parent merge sync/drift and reviewed target->parent landing. Conflicts stop; shared branches are not automatically rebased/deleted. Completed requires verified default landing coverage, never env equality or clearing a field. Intermediate-parent/partial landing remains Done for uncovered work and retains isolation. Closed-unmerged landing changes neither isolation nor evidence.
+
+    ## E2: final check through action
+
+    The companion ADR specifies one composition of the existing store writer lock with current branch merge leases, not another lock file. Acquire optional sorted target merge leases first, then canonical StoreWriteGuard; never acquire a merge/queue/cache lock while holding that guard. Validate all dependency inputs and persist a Pending action intent while holding the guard. Keep the same store guard across the actual bounded local effect or forge request and outcome persistence. Existing isolation-affecting writers must acquire the same guard and enforce retained-generation invariants. They cannot mutate graph/isolation between final check and effect. Release the guard before cache work, later child execution, post-merge pulls or slow monitoring. Each later phase needs its own fresh admission.
+
+    This requires a new explicit guarded transaction callback over existing lock_store/update_spec_atomically facilities, not calling stale whole-store save or recursively spawning an AIDA writer while the parent holds its store guard. Local queue/lease effects that require separate locks use durable admission intent as described in the ADR; writers honor it until commit/recovery. No new queue lock order is smuggled into this proposal. The matrix specifies each first effect.
+
+    Whole store HEAD is evidence, not the compare token: graph membership, isolation/reopen generations, repository/default identity, reviewed coverage and actual refs form the input vector. Own Pending/Verified evidence and status output writes do not change those input generations. A real graph/default/reopen mutation does. Dirty store, conflicting recovery or unknown generation refuses. Unknown remote outcome leaves Pending, blocks conflicting writers and requires query-before-retry; no success inferred from exit or timeout.
+
+    Merge lease is local/branch-scoped and not a graph or cross-clone mutex. Current Forge::merge_change pins source head on supported adapters, not target/base. V2 serializes AIDA retargeting under the same store protocol and branch leases; it rechecks actual base/head/default under the guard, supplies head match on every path including wave, and checks returned actual merge identity. Raw forge retargeting can still race the request: disclose this outside-AIDA limitation. If the requested guarantee needs atomic expected base/default and the adapter lacks it, refuse; do not claim head pin supplies it. Multiple unsynchronized clones and unsupported old writers cannot be certified by a local lock; protected positive action must refuse when the required single canonical-writer domain is not established. Cross-clone read exclusion after sync remains supported. No distributed coordinator is invented.
+
+    ## E3: one durable coverage algorithm
+
+    EPIC74_ADR_DRAFT_V2.md defines typed version-1 isolation, child evidence, action intent and landing coverage stored in the existing epic object/history, replicated with the canonical store and indexed by UUID. Declaration clear retains history/tombstones and child membership fences. Deleting that evidence is not a release path. Proposed validate_isolated_completion is mandatory in live ship, auto-bump, replay/reconcile, review-covers/umbrella promotion, direct status-to-Completed mutation and retry. Unknown/missing schema or lineage is a refusal, not fallback to legacy trailer-only completion for a known isolated UUID.
+
+    Require both original child merge evidence fresh for the child's reopen generation and independent review of the exact covered set against the final landing diff. Commit ancestry is a mechanical inclusion prerequisite where applicable, not semantic coverage. Reverted ancestors and omitted work are explicitly excluded by coverage review; otherwise no completion. New landing squash SHA does not refresh old child work after reopen. Preserve existing SHA/history reopen fences in addition to generations.
+
+    Pin repository, landing PR/MR, source SHA/tree, base ref/SHA, diff digest, coverage set digest and review identity. At actual landing require forge-confirmed source/base/result and result reachable from positively identified authoritative default; a changed base/source or reopen generation invalidates the reviewed manifest. Verify squash result against reviewed content; unsupported merge mode/adapter refuses rather than guessing from patch-id or title. Body trailers supply candidate IDs only and cannot add to the reviewed set. Clone replay after clear uses the same records and validator. Partial writes and ambiguous network outcomes reconcile by action ID exactly once, retaining isolation until verified.
+
+    ## Files/symbols and meaningful verification
+
+    Current seams: models.rs Requirement; db/git_backend.rs lock_store, update_spec_atomically_with_subject, bulk_update_atomically; db/store_lock.rs StoreWriteGuard; storage.rs persistence; pickability.rs pickability; queue_cmd.rs handle_queue_command/resolve_queue_work_plan/handle_queue_work/auto_complete_head_candidates*; shift.rs gather_candidates/select_wave/launch_wave_isolated; backlog.rs handle_groom/handle_groom_pickable; integrate.rs classify_candidate; lib.rs merge_wave_pr, auto-complete runner merge, session_start, agent_new_with_config, handle_worktree_enter, auto_bump_done_to_completed_with, collect_covers_completed_review_flips, handle_db_reconcile_status; mcp.rs tool_claim_task/metadata peek handlers; pr_cmd.rs pr_ship_handler/pr_ship_create_pr/resolve_mr_target_branch; forge.rs MergeOptions/merge_change; merge_lock.rs acquire. Guard matrix and ADR assign their exact duties. Proposed resolver/validator/types do not exist today.
+
+    Named paired-positive/zero-effect tests and race barriers are specified in the matrix and amendment. Core cases: declaration_change_after_final_check_serializes_with_action; ancestry_detach_target_reset_and_epic_delete_cannot_release; store_pull_generation_change_invalidates_plan; mcp_claim_isolation_refuses_before_lease; slice1_direct_ship_and_resume_fail_closed_before_slice2; same_head_pr_retarget_during_merge_is_not_head_pinned; reopened_child_old_work_in_new_squash_stays_open; reverted_child_ancestor_is_not_coverage; squash_body_omitted_id_cannot_bypass_manifest; clone_replay_after_clear_retains_coverage_fence; remote_merge_success_local_persist_failure_reconciles_once. These are obligations, not run tests. No live build/launch/approval/kernel experiments.
+
+    ## Remaining blockers and exclusions
+
+    NEEDS_OPERATOR_SCOPE for live/unlanded release remains the old acceptance gap: no chosen actor/evidence/confirmation or permission to remove that capability. Until an actual recorded disposition, release-equivalent actions refuse. No new question is sent to absent Joe. Parent representation is settled technically and is no longer an open fork. No generic force exemption is proposed.
+
+    Technical proposals need new independent review, particularly lock composition/admission reservations, all-writer closure, same-clone boundary, durable schema and actual forge capabilities. An ADR draft is supplied, not accepted. Full epic is not implementation-ready; the bounded first slice may only be judged by a different advisor, not dispatched here.
+
+    No changes to source, status, queues, grants, holds or reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812. Reuse shipped authority/CLI behavior; coordinate future seams with TASK-1613 and store-writer work TASK-1332 without duplicating them. No autonomous wake, TTY bypass, broker, cross-host consensus, approval exemptions, code/PR/merge/push or self-signoff.
+  created_at: 2026-10-08T17:13:19.095156301Z
+  modified_at: 2026-10-08T17:13:19.095156301Z
+  relayed_from: answered-design-sketch-author
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
