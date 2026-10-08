@@ -638,33 +638,38 @@ unverifiable stale value misfired both ways before BUG-233; only
 - `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
 - anything else → `"mode": "standalone"`
 
-Write the file (create its parent dir first). `comment_url` is intentionally
-omitted at this stage — step 7a backfills it once the PR comment has been
-posted in step 7:
+Record the verdict through the canonical writer. It stamps `recorded_by`,
+`recorded_at`, the reviewed SHA, and any displaced round at write time. Raw
+JSON writes omit provenance and later create unreconcilable retained rounds.
+Do not infer metadata for old records or weaken the reconciliation check.
+<!-- fix-day:2026-10-07 PR-2435 provenance writer | ai:codex -->
+
+Use the actual covered spec, actual PR number, and exact reviewed head. For
+multiple covered specs, record each as in step 3; `--pr` writes the shared PR
+handshake. The reviewer must run this command before the PR comment:
 
 ```bash
-mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
-cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-{
-  "verdict": "Approved",
-  "summary": "<one-line rationale>",
-  "mode": "standalone",
-  "findings": []
-}
-EOF
+aida review record <SPEC-ID> --pr <N> --verdict approved \
+  --sha <FULL-REVIEWED-SHA> --summary "<one-line rationale>"
+# For a blocking verdict, use request-changes or rejected and repeat:
+# --finding "<concrete finding>" for each finding.
 ```
 
-- `verdict` — exactly `Approved`, `RequestChanges`, or `Rejected`.
+Read back `AIDA_REVIEW_VERDICT_FILE` and verify the verdict, reviewed SHA,
+recorder, and timestamp before reporting success. A writer failure stops the
+review handoff. Never replace the file with a raw JSON verdict afterward.
+Optional advisory fields or `merge` escalation may be added to the recorded
+object while preserving all provenance fields and retained rounds; this is
+metadata enrichment, not another act of review. `comment_url` is added in
+step 7a after the PR comment is posted.
+
+- `verdict` — canonical approved, request-changes, or rejected.
 - `summary` — a one-line rationale.
-- `mode` — `standalone` or `orchestrator-phase-3` (corroborated above); lets
-  a consumer tell a one-off review from an orchestrator handshake artifact.
-- `findings` — an array of concrete review findings for the rework handoff.
-  Use `[]` for a clean approval; for `RequestChanges` / `Rejected`, include
-  one string per actionable issue. These are what the rework implementer sees
-  before `/aida-pickup`; do not use `blocking_findings`.
-- `comment_url` — filled in by step 7a after step 7 posts the comment.
-  Omit here; the orchestrator's `read_verdict_file` does not require it
-  (only `verdict` is load-bearing).
+- `recorded_by` and `recorded_at` — stamped by the writer for this act of review.
+- `reviewed_sha` — the exact reviewed commit supplied with `--sha`.
+- `findings` — supplied through repeated `--finding`; omitted findings preserve
+  prior findings according to the recorder's existing contract.
+- `comment_url` — added in step 7a; omit before the comment is posted.
 - `merge` — **escalation handshake.** Normally omit this field. Set it to
   `escalated-to-human` only when, under a headless `--no-human` drain, the
   *merge* decision turns on something you should not decide unattended —
@@ -696,18 +701,10 @@ EOF
 Example with the STORY-439 fields filled in (`--no-human=both`,
 diff was bigger than the implementer claimed):
 
-```bash
-cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-{
-  "verdict": "Approved",
-  "summary": "ships cleanly",
-  "mode": "orchestrator-phase-3",
-  "implementation_complexity": "high",
-  "complexity_agreement": "implementer-underestimated",
-  "implementation_effort": "1d"
-}
-EOF
-```
+Record first with `aida review record` above, then enrich the existing JSON
+object with `implementation_complexity: high`,
+`complexity_agreement: implementer-underestimated`, and
+`implementation_effort: 1d`. Preserve its provenance and rounds.
 
 **Escalating the merge decision.** Escalating is the honest move when you
 would otherwise be *guessing* whether to merge — it is distinct from
@@ -718,11 +715,9 @@ for a crashed reviewer that wrote nothing. The orchestrator then stops
 cleanly — no merge, exit `0`, *not* a failure — and leaves the PR for a
 human to merge. Example:
 
-```bash
-cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-{"verdict": "Approved", "merge": "escalated-to-human", "summary": "code passes, but the migration in this PR is irreversible — a human should own the merge", "mode": "orchestrator-phase-3"}
-EOF
-```
+Record the actual verdict first with `aida review record`, then add
+`merge: escalated-to-human` to that recorded object with the escalation rationale
+in `summary`. Preserve `recorded_by`, `recorded_at`, `reviewed_sha`, and `rounds`.
 
 The orchestrator reads this file after the session exits: `Approved` → it
 merges; `merge: escalated-to-human` → it stops cleanly at phase 3 (exit `0`,

@@ -82,6 +82,9 @@ elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title.*mergedA
     exit 0
   fi
   printf '%s\n' '{"state":"OPEN","title":"fixture","mergedAt":null,"baseRefName":"main","headRefName":"task-1287-fixture","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"acme/aida-fixture"},"isDraft":false}'
+elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,mergeable,reviewDecision,headRefOid'; then
+  # trace:TASK-1606 | ai:codex — preflight now reads forge mergeability.
+  printf 'OPEN\tMERGEABLE\t\tabc\n'
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; then
   test -f "$state/label" && printf '%s\n' true || printf '%s\n' false
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
@@ -374,13 +377,17 @@ fn gitlab_ship_refines_failed_watcher_for_informational_jobs() {
         let output = fixture.ship();
         assert!(output.status.success(), "{}", output_text(&output));
         let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
-        let watch = calls
-            .find("ci status")
-            .expect("must retain pipeline watcher");
         let rows = calls
             .find("pipelines/1/jobs")
-            .expect("must refine failed watcher");
-        assert!(watch < rows, "{calls}");
+            .expect("must classify job rows");
+        let merge = calls
+            .find("merge_requests/1287/merge")
+            .expect("must merge after green classified jobs");
+        assert!(rows < merge, "{calls}");
+        assert!(
+            !calls.contains("ci status"),
+            "bounded wait must not invoke unbounded watcher: {calls}"
+        );
         assert!(calls.contains("merge_requests/1287/merge"), "{calls}");
         assert_eq!(
             std::fs::read_to_string(fixture.state.join("events")).unwrap(),
@@ -406,13 +413,14 @@ fn gitlab_ship_rejects_unlisted_failures_and_unavailable_job_rows() {
         assert!(!output.status.success(), "{}", output_text(&output));
         let calls = std::fs::read_to_string(fixture.state.join("glab-calls")).unwrap();
         assert!(
-            calls.contains("ci status") && calls.contains("pipelines/1/jobs"),
+            !calls.contains("ci status") && calls.contains("pipelines/1/jobs"),
             "{calls}"
         );
         assert!(!calls.contains("merge_requests/1287/merge"), "{calls}");
         let text = output_text(&output);
         if unavailable {
-            assert!(text.contains("CI failed"), "{text}");
+            assert_eq!(output.status.code(), Some(20), "{text}");
+            assert!(text.contains("CI did not pass"), "{text}");
         } else {
             assert!(
                 text.contains("CI is red") && text.contains("Optional"),
@@ -639,4 +647,53 @@ fn drive_merge_during_wait_skips_ci_and_merge_without_claiming_credit() {
             std::fs::read_to_string(fixture.repo.join(".aida/events.jsonl")).unwrap_or_default();
         assert!(!events.contains("PrMerged"), "{events}");
     }
+}
+
+// trace:TASK-1606 | ai:codex
+#[test]
+fn ownership_and_ci_share_one_wait_deadline() {
+    use std::io::{BufRead, BufReader};
+    let fixture = Fixture::new(false);
+    let path = drive_state(&fixture);
+    std::fs::write(
+        fixture.state.join("rows"),
+        r#"[{"name":"Build","workflow":"CI","bucket":"pending"}]"#,
+    )
+    .unwrap();
+    std::fs::write(fixture.state.join("required"), "[]").unwrap();
+    let started = std::time::Instant::now();
+    let mut child = operator_ship(&fixture)
+        .args(["--wait", "2"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stderr = BufReader::new(child.stderr.take().unwrap());
+    let mut prefix = String::new();
+    loop {
+        let mut line = String::new();
+        assert!(stderr.read_line(&mut line).unwrap() > 0, "{prefix}");
+        let waiting = line.contains("waiting for drive release");
+        prefix.push_str(&line);
+        if waiting {
+            break;
+        }
+    }
+    // The ownership poll consumes the budget, then release leads into CI
+    // with no new two-second allowance.
+    std::fs::remove_file(path).unwrap();
+    child.stderr = Some(stderr.into_inner());
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(21),
+        "{prefix}{}",
+        output_text(&output)
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_millis(3500),
+        "a second CI budget was incorrectly granted"
+    );
+    let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
+    assert!(!calls.contains("pr merge"), "{calls}");
 }

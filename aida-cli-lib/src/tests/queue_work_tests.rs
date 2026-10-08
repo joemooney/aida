@@ -1081,9 +1081,8 @@ fn orchestrated_reviewer_can_pick_current_implementer_routed_spec() {
         "role:implementer",
         "implementer",
     );
-    crate::drain_state::DrainState::new_single("BUG-1106", &token, false)
-        .write(dir.path())
-        .unwrap();
+    // trace:TASK-1603 | ai:codex
+    crate::drain_state::register_run(dir.path(), "BUG-1106", &token, false, true).unwrap();
     let store = storage.load().unwrap();
     let req = store
         .requirements
@@ -2634,6 +2633,87 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
     assert_eq!(req.status, RequirementStatus::InProgress);
 }
 
+// trace:TASK-1603 | ai:codex
+#[test]
+fn phase1_registration_failure_leaves_status_unstarted() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().join("requirements.yaml"));
+    let mut req = Requirement::new("first batch member".into(), String::new());
+    req.spec_id = Some("TASK-1603".into());
+    req.status = RequirementStatus::Approved;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    let token = Uuid::now_v7().to_string();
+    // No batch snapshot: fail before applying the parent's status bump.
+    assert!(prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .is_err());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved,
+    );
+    drain_state::DrainState::new_batch("first-member", &["TASK-1603".into()])
+        .write(dir.path())
+        .unwrap();
+    // An ownership-record write failure also stops before the status bump.
+    let records = dir.path().join(".aida/orchestrator-runs");
+    std::fs::write(&records, "blocks directory creation").unwrap();
+    assert!(prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .is_err());
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::Approved
+    );
+    std::fs::remove_file(records).unwrap();
+    let bumped = prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "TASK-1603",
+        &token,
+        false,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        bumped,
+        Some(("TASK-1603".into(), RequirementStatus::Approved))
+    );
+    assert!(orchestrator::run_is_live(dir.path(), &token));
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("TASK-1603")
+            .unwrap()
+            .status,
+        RequirementStatus::InProgress,
+    );
+}
+
 #[test]
 fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
     let _env = quiet_queue_env();
@@ -3972,4 +4052,156 @@ fn requeued_dependent_still_skipped_by_blocked_by_gate() {
             .any(|(id, reason)| id == "NFR-56" && reason.starts_with("blocked-by STORY-52")),
         "{blocked:?} {blocked_after:?}"
     );
+}
+
+// trace:TASK-1337 | ai:codex
+#[test]
+fn pickup_role_conflict_reports_which_role_wins() {
+    let message =
+        queue_work_role_mismatch("advisor", "cluster-derived", Some("implementer")).unwrap();
+    assert!(message.contains("cluster-derived wins before setup"));
+    assert!(message.contains("--role implementer"));
+    assert!(queue_work_role_mismatch("advisor", "cluster-derived", Some("advisor")).is_none());
+    let override_message =
+        queue_work_role_mismatch("reviewer", "--role flag", Some("implementer")).unwrap();
+    assert!(override_message.contains("--role flag wins"));
+}
+
+// trace:TASK-1337 | ai:codex
+#[test]
+fn held_branch_preflight_offers_retirement_only_when_clean_unleased_unlocked() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    let other = tmp.path().join("other");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "held",
+            other.to_str().unwrap(),
+        ],
+    );
+    let clean = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(clean.contains("idle, clean, and unleased"));
+    assert!(other.exists(), "offer must not remove the worktree");
+    git(&root, &["worktree", "lock", other.to_str().unwrap()]);
+    let locked = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(!locked.contains("git worktree remove"));
+    git(&root, &["worktree", "unlock", other.to_str().unwrap()]);
+    std::fs::write(other.join("dirty"), "keep me").unwrap();
+    let dirty = preflight_queue_work_branch(&root, Some("held"))
+        .unwrap_err()
+        .to_string();
+    assert!(!dirty.contains("git worktree remove"));
+    assert!(preflight_queue_work_branch(&root, Some("available")).is_ok());
+}
+
+// trace:TASK-1603 | ai:codex
+fn newly_unblocked_member_reaches_phase_one(batch: bool) {
+    let _env = quiet_queue_env();
+    let (dir, storage) = bug_1608_fixture(RequirementStatus::Approved, false);
+    storage
+        .update_atomically(|store| {
+            for req in &mut store.requirements {
+                req.tags.insert("batch:dynamic-registration".into());
+            }
+        })
+        .unwrap();
+    let select = || {
+        if batch {
+            resolve_batch_members(&storage, "u", "dynamic-registration", Some("implementer"))
+                .unwrap()
+                .into_iter()
+                .map(|(_, spec, _, _)| spec)
+                .collect::<Vec<_>>()
+        } else {
+            let (pick, _, _) = resolve_next_n_head(&storage, "u", Some("implementer"));
+            pick.into_iter().map(|pick| pick.spec).collect::<Vec<_>>()
+        }
+    };
+    let initial = select();
+    assert_eq!(initial, vec!["STORY-52"]);
+    let snapshot = if batch {
+        drain_state::DrainState::new_batch("dynamic-registration", &initial)
+    } else {
+        drain_state::DrainState::new_next_n(2, &initial)
+    };
+    snapshot.write(dir.path()).unwrap();
+    let first = Uuid::now_v7().to_string();
+    prepare_registered_auto_complete_phase1(&storage, dir.path(), "STORY-52", &first, true, false)
+        .unwrap();
+    drain_state::set_phase(dir.path(), "STORY-52", 1, "implementer");
+    bug_1608_set_status(&storage, "STORY-52", RequirementStatus::Completed);
+    drain_state::set_member_outcome(dir.path(), "STORY-52", true, None);
+    drain_state::clear_run(dir.path(), &first);
+    assert_eq!(select(), vec!["NFR-56"]);
+    assert_eq!(
+        drain_state::DrainState::read(dir.path())
+            .unwrap()
+            .members
+            .len(),
+        1
+    );
+    let second = Uuid::now_v7().to_string();
+    // This is the production checked registration/status boundary, before
+    // the phase-one launcher. The callback is hermetic: no vendor is spawned.
+    let bumped = prepare_registered_auto_complete_phase1(
+        &storage,
+        dir.path(),
+        "NFR-56",
+        &second,
+        false,
+        false,
+    )
+    .expect("refreshed eligible member must register before phase-one launch");
+    assert_eq!(bumped, Some(("NFR-56".into(), RequirementStatus::Approved)));
+    let admitted = drain_state::DrainState::read(dir.path()).unwrap();
+    assert_eq!(admitted.members.len(), 2);
+    assert!(admitted.current_phase.is_none());
+    assert_eq!(admitted.members[1].state, "queued");
+    let launch_phase_one = || {
+        assert!(orchestrator::run_is_live(dir.path(), &second));
+        assert!(!orchestrator::run_is_live(dir.path(), &first));
+        assert_eq!(
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_by_spec_id("NFR-56")
+                .unwrap()
+                .status,
+            RequirementStatus::InProgress
+        );
+        drain_state::set_phase(dir.path(), "NFR-56", 1, "implementer");
+        std::fs::write(dir.path().join("phase-one-launched"), &second).unwrap();
+    };
+    launch_phase_one();
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("phase-one-launched")).unwrap(),
+        second
+    );
+    assert_eq!(
+        drain_state::DrainState::read(dir.path()).unwrap().members[1].state,
+        "in-phase-1"
+    );
+    drain_state::clear_run(dir.path(), &second);
+}
+
+#[test]
+fn batch_registers_newly_unblocked_member_before_phase_entry() {
+    newly_unblocked_member_reaches_phase_one(true);
+}
+
+#[test]
+fn next_n_registers_newly_unblocked_member_before_phase_entry() {
+    newly_unblocked_member_reaches_phase_one(false);
 }

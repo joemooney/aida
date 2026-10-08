@@ -107,8 +107,10 @@ fn failing_eval_list_subcommand_is_not_evaled() {
 #[cfg(unix)]
 fn successful_eval_list_subcommand_still_evals_its_payload() {
     let stub = "#!/usr/bin/env bash\n\
+                echo '#aida:eval:begin'\n\
                 echo \"# aida role enter\"\n\
                 echo \"export AIDA_BUG779_MARKER=applied\"\n\
+                echo '#aida:eval:end'\n\
                 exit 0\n";
     let (stdout, stderr, _) = run_wrapper(
         stub,

@@ -89,7 +89,7 @@ use crate::punt::{self, append_to_ledger, ledger_path, read_ledger, PuntRecord};
 // sync with `parse_requirement_type` below and the `add_requirement` /
 // `update_requirement` schema enums. trace:TASK-716 | ai:claude
 const VALID_MCP_REQUIREMENT_TYPES: &str =
-    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc";
+    "functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq";
 
 /// BUG-591: the archive (STORY-441) + deferred (STORY-584) view-tier predicate,
 /// shared by `list_requirements` and `search_requirements` so the MCP read
@@ -6376,6 +6376,7 @@ fn parse_requirement_type(s: &str) -> Option<RequirementType> {
         "decision" | "adr" => Some(RequirementType::Decision),
         "term" | "glossary" => Some(RequirementType::Term),
         "doc" => Some(RequirementType::Doc),
+        "faq" => Some(RequirementType::Faq),
         _ => None,
     }
 }
@@ -7034,7 +7035,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Filter by the semantic type of the requirement.",
-                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "story"
                     },
                     "priority": {
@@ -7175,8 +7176,8 @@ pub fn tool_descriptors() -> Value {
                     },
                     "type": {
                         "type": "string",
-                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc. (change-request is the workflow type for a proposed change; principle/vision/constraint/decision/term are the ADR + knowledge-graph family.) Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
-                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "description": "Required requirement type. Valid types: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq. (change-request is the workflow type for a proposed change; principle/vision/constraint/decision/term are the ADR + knowledge-graph family.) Normalizes the assigned SPEC-ID prefix (e.g., 'task' becomes 'TASK-N').",
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "story"
                     },
                     "status": {
@@ -7246,7 +7247,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "New semantic type. Changing the type does NOT renumber the existing SPEC-ID.",
-                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "story"
                     },
                     "status": {
@@ -7332,7 +7333,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Restrict results to this semantic type.",
-                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "bug"
                     },
                     "status": {
@@ -7548,7 +7549,7 @@ pub fn tool_descriptors() -> Value {
                     "type": {
                         "type": "string",
                         "description": "Only events for requirements of this type (mirrors `aida history --type`).",
-                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc"],
+                        "enum": ["functional", "non-functional", "system", "user", "change-request", "bug", "epic", "story", "task", "spike", "sprint", "folder", "meta", "principle", "vision", "constraint", "decision", "term", "doc", "faq"],
                         "example": "bug"
                     },
                     "author": {
@@ -9729,7 +9730,7 @@ mod tests {
             .pointer("/inputSchema/properties/type/description")
             .and_then(|v| v.as_str())
             .expect("type property must have a description");
-        for expected in ["task", "bug", "folder", "meta", "doc"] {
+        for expected in ["task", "bug", "folder", "meta", "doc", "faq"] {
             assert!(
                 type_description.contains(expected),
                 "type description should name valid taxonomy member {expected}"
@@ -9762,6 +9763,7 @@ mod tests {
         assert!(err.contains("Missing required parameter: type"));
         assert!(err.contains("task"));
         assert!(err.contains("doc"));
+        assert!(err.contains("faq"));
 
         let invalid = serde_json::json!({
             "title": "Invalid type",
@@ -9793,6 +9795,7 @@ mod tests {
             ("folder", "FOLDER-"),
             ("meta", "META-"),
             ("doc", "DOC-"),
+            ("faq", "FAQ-"),
         ];
 
         for (type_name, expected_prefix) in valid_types {
@@ -10600,7 +10603,7 @@ mod tests {
             .and_then(|v| v.as_array())
             .unwrap();
         let names: Vec<&str> = type_enum.iter().filter_map(|v| v.as_str()).collect();
-        for t in ["folder", "meta", "doc", "sprint"] {
+        for t in ["folder", "meta", "doc", "faq", "sprint"] {
             assert!(names.contains(&t), "type enum must include {t}: {names:?}");
         }
     }

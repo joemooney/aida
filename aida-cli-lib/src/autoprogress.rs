@@ -252,6 +252,7 @@ fn is_drainable_type(ty: &str) -> bool {
             | "constraint"
             | "term"
             | "doc"
+            | "faq"
     )
 }
 

@@ -73,6 +73,10 @@ pub(crate) fn wrapper_shells() -> &'static [&'static str] {
 // trace:TASK-1174 | ai:claude
 pub(crate) fn run_wrapper_in(shell: &str, stub: &str, body: &str) -> (String, String, Option<i32>) {
     let dir = tempfile::tempdir().unwrap();
+    // trace:BUG-1806 | ai:codex
+    // Shell fixtures must not inherit real role grants or user startup files.
+    let home = dir.path().join("home");
+    std::fs::create_dir(&home).unwrap();
     let bin = dir.path().join("aida");
     crate::test_exec::write_executable(&bin, stub);
     let script = format!(
@@ -82,6 +86,10 @@ pub(crate) fn run_wrapper_in(shell: &str, stub: &str, body: &str) -> (String, St
         body = body,
     );
     let out = std::process::Command::new(shell)
+        .env_clear()
+        .env("HOME", &home)
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .current_dir(dir.path())
         .args(shell_args(shell))
         .arg(&script)
         .output_retrying_etxtbsy()

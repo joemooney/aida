@@ -1487,11 +1487,11 @@ registered = "2026-05-09T00:00:00Z"
     #[test]
     fn test_agreed_counters_serialization_is_order_stable() {
         let mut a = AgreedCounters::default();
-        for p in &["FR", "TASK", "BUG", "STORY", "EPIC", "DOC", "CR"] {
+        for p in &["FR", "TASK", "BUG", "STORY", "EPIC", "DOC", "FAQ", "CR"] {
             a.next(p);
         }
         let mut b = AgreedCounters::default();
-        for p in &["CR", "DOC", "EPIC", "STORY", "BUG", "TASK", "FR"] {
+        for p in &["CR", "DOC", "FAQ", "EPIC", "STORY", "BUG", "TASK", "FR"] {
             b.next(p);
         }
         let ser_a = toml::to_string_pretty(&a).unwrap();

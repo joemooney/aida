@@ -18721,6 +18721,7 @@ pub(crate) fn parse_requirement_type(s: &str) -> Result<RequirementType> {
         "term" | "glossary" => Ok(RequirementType::Term),
         // trace:STORY-104 | ai:claude
         "doc" | "documentation" => Ok(RequirementType::Doc),
+        "faq" => Ok(RequirementType::Faq),
         _ => anyhow::bail!("Unknown requirement type: {}", s),
     }
 }
@@ -19597,6 +19598,7 @@ pub(crate) fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementType::Decision => "Decision",
         RequirementType::Term => "Term",
         RequirementType::Doc => "Doc",
+        RequirementType::Faq => "Faq",
     };
     println!("{}: {}", "Type".blue(), type_str);
 
@@ -20349,7 +20351,8 @@ pub(crate) fn edit_requirement_cli(
             "term" | "glossary" => RequirementType::Term,
             // trace:STORY-104 | ai:claude
             "doc" | "documentation" => RequirementType::Doc,
-            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc", type_str),
+            "faq" => RequirementType::Faq,
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq", type_str),
         };
         if new_type != req.req_type {
             changes.push(Requirement::field_change(
@@ -20887,6 +20890,7 @@ pub(crate) fn parse_type(type_str: &str) -> Result<RequirementType> {
         "term" | "glossary" => Ok(RequirementType::Term),
         // trace:STORY-104 | ai:claude
         "doc" | "documentation" => Ok(RequirementType::Doc),
+        "faq" => Ok(RequirementType::Faq),
         _ => anyhow::bail!("Invalid requirement type: {}", type_str),
     }
 }
@@ -46652,6 +46656,52 @@ mod task_192_fail_closed_fact_tests {
     }
 }
 
+/// Complete inventory for the review-story creation gate only. Bulk readers
+/// intentionally tolerate bad objects; absence here must not use that contract.
+// trace:BUG-1807 | ai:codex
+fn load_review_story_inventory(project_root: &std::path::Path) -> Result<RequirementsStore> {
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        let objects = store_path.join("objects");
+        let mut store = aida_core::GitBackend::read_metadata_only(&store_path)?;
+        store.requirements = aida_core::object_store::list_objects_strict(&objects)?
+            .into_iter()
+            .map(|(_, path)| aida_core::object_store::read_object_from_path(&path))
+            .collect::<Result<Vec<_>>>()?;
+        return Ok(store);
+    }
+
+    // The normal resolver is best effort. Before allowing legacy resolution,
+    // distinguish absent config from unreadable config or unavailable storage.
+    for root in project_root.ancestors() {
+        if aida_core::store_locate::is_system_temp_dir(root) {
+            break;
+        }
+        let path = root.join(".aida/config.toml");
+        match std::fs::read_to_string(&path) {
+            Ok(config) => {
+                toml::from_str::<toml::Table>(&config)
+                    .with_context(|| format!("Cannot parse {}", path.display()))?;
+                anyhow::ensure!(
+                    !config_declares_distributed(&config)
+                        && aida_core::store_locate::store_path_candidates(&config).is_empty(),
+                    "Configured canonical review-story storage is unavailable at {}",
+                    path.display()
+                );
+                break;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => return Err(err).with_context(|| format!("Cannot read {}", path.display())),
+        }
+    }
+    let path = aida_core::resolve_requirements_path_in(
+        project_root,
+        None,
+        None,
+        std::path::Path::new(""),
+    )?;
+    Storage::new(path).load()
+}
+
 pub(crate) fn canonical_review_story<'a>(
     store: &'a RequirementsStore,
     forge: ReviewForge,
@@ -48486,6 +48536,11 @@ pub(crate) fn try_auto_queue_pr_review(
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 
+    // trace:BUG-1807 | ai:codex
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let noun = kind.change_noun();
+    let cli = kind.cli_name();
+
     // STORY-516: forge-routed. Reconstruct OpenPrInfo from the ChangeRef so the
     // downstream pr.number/url/title uses stay unchanged. trace:STORY-516 | ai:claude
     let pr = match change_lookup_for_branch(project_root, branch) {
@@ -48497,25 +48552,25 @@ pub(crate) fn try_auto_queue_pr_review(
         },
         crate::forge::ChangeLookup::NoChange => {
             return AutoQueueOutcome::skipped_by_design(format!(
-                "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
+                "auto-queue: no open {noun} for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
         crate::forge::ChangeLookup::CliMissing => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
+                "auto-queue: `{cli}` CLI not on PATH — would have queued reviewer story for branch `{}`. Install {cli} to enable.",
                 branch
             ));
         }
         crate::forge::ChangeLookup::CliFailed(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
+                "auto-queue: `{cli}` lookup failed for branch `{}` ({}) — no reviewer story filed",
                 branch, reason
             ));
         }
         crate::forge::ChangeLookup::Unreachable(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: GH API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
+                "auto-queue: {noun} API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
                 branch, reason
             ));
         }
@@ -48540,7 +48595,7 @@ pub(crate) fn try_auto_queue_pr_review(
     // drain's reviewer phase had nothing to pick up. Resolve the forge the
     // same way the review-prompt path does (config `[forge]`, else origin).
     // trace:BUG-1223 trace:TASK-1254 | ai:claude
-    let review_forge = review_forge_for_kind(crate::forge::resolve_forge_kind(project_root));
+    let review_forge = review_forge_for_kind(kind);
     let (base, head) = pr_base_head(project_root, review_forge, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
@@ -48571,48 +48626,56 @@ pub(crate) fn try_auto_queue_pr_review(
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 
-    if let Some(store_path) = detect_distributed_store_from(project_root) {
-        let storage = Storage::new(store_path);
-        if let Ok(store) = storage.load() {
-            let persisted =
-                drain_state::DrainState::read(project_root).and_then(|state| state.review_spec);
-            if let Some(existing) = canonical_review_story(
-                &store,
-                review_forge,
-                pr.number,
-                Some(&spec_ids),
-                persisted.as_deref(),
-            ) {
-                let existing_id = existing.display_id();
-                let note = format!(
-                    "auto-queue retry reused canonical review story; covers {} spec{}",
-                    spec_ids.len(),
-                    if spec_ids.len() == 1 { "" } else { "s" }
-                );
-                if let Err(err) =
-                    aida_subcmd_queue_add_for_reviewer(project_root, &existing_id, &note)
-                {
-                    return AutoQueueOutcome::skipped_needs_attention(format!(
+    // Read canonical objects for both distributed and legacy stores. A failed
+    // lookup cannot establish absence: do not file a duplicate on read failure.
+    // trace:BUG-1807 | ai:codex
+    let store = match load_review_story_inventory(project_root) {
+        Ok(store) => store,
+        Err(err) => {
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: cannot read review stories for {noun}-{} — reviewer handoff not confirmed: {err:#}",
+                pr.number
+            ));
+        }
+    };
+    {
+        let persisted =
+            drain_state::DrainState::read(project_root).and_then(|state| state.review_spec);
+        if let Some(existing) = canonical_review_story(
+            &store,
+            review_forge,
+            pr.number,
+            Some(&spec_ids),
+            persisted.as_deref(),
+        ) {
+            let existing_id = existing.display_id();
+            let note = format!(
+                "auto-queue retry reused canonical review story; covers {} spec{}",
+                spec_ids.len(),
+                if spec_ids.len() == 1 { "" } else { "s" }
+            );
+            if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &existing_id, &note)
+            {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
                         "auto-queue: canonical review story {existing_id} exists for {} but reviewer queue insertion failed: {err}",
                         format_review_label(review_forge, pr.number)
                     ))
                     .with_pr(pr.number)
                     .with_specs(spec_ids)
                     .with_review_spec(existing_id);
-                }
-                return AutoQueueOutcome::already_exists(format!(
-                    "{} #{} reuses canonical review story {}",
-                    format_review_label(review_forge, pr.number)
-                        .split_once('-')
-                        .map(|(prefix, _)| prefix)
-                        .unwrap_or("PR"),
-                    pr.number,
-                    existing_id
-                ))
-                .with_pr(pr.number)
-                .with_specs(spec_ids)
-                .with_review_spec(existing_id);
             }
+            return AutoQueueOutcome::already_exists(format!(
+                "{} #{} reuses canonical review story {}",
+                format_review_label(review_forge, pr.number)
+                    .split_once('-')
+                    .map(|(prefix, _)| prefix)
+                    .unwrap_or("PR"),
+                pr.number,
+                existing_id
+            ))
+            .with_pr(pr.number)
+            .with_specs(spec_ids)
+            .with_review_spec(existing_id);
         }
     }
 
@@ -48624,7 +48687,7 @@ pub(crate) fn try_auto_queue_pr_review(
         session_short,
         branch
     ));
-    desc.push_str(&format!("- PR: <{}>\n", pr.url));
+    desc.push_str(&format!("- {noun}: <{}>\n", pr.url));
     desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
     if spec_ids.is_empty() {
         // BUG-776 gates this branch off — a zero-coverage story is no longer
@@ -48675,7 +48738,7 @@ pub(crate) fn try_auto_queue_pr_review(
         Some(id) => id,
         None => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `aida add` failed for PR #{} (see warning above)",
+                "auto-queue: `aida add` failed for {noun}-{} (see warning above)",
                 pr.number
             ));
         }
@@ -48698,11 +48761,12 @@ pub(crate) fn try_auto_queue_pr_review(
     );
     if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note) {
         return AutoQueueOutcome::skipped_needs_attention(format!(
-            "auto-queue: filed {new_id} for PR #{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
+            "auto-queue: filed {new_id} for {noun}-{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
             pr.number
         ))
         .with_pr(pr.number)
-        .with_specs(spec_ids);
+        .with_specs(spec_ids)
+        .with_review_spec(new_id);
     }
 
     let covers = if spec_ids.is_empty() {
@@ -48711,12 +48775,23 @@ pub(crate) fn try_auto_queue_pr_review(
         spec_ids.join(", ")
     };
     AutoQueueOutcome::filed(format!(
-        "filed {} (covers {}) → reviewer queue (PR #{})",
+        "filed {} (covers {}) → reviewer queue ({noun}-{})",
         new_id, covers, pr.number
     ))
     .with_pr(pr.number)
     .with_specs(spec_ids)
     .with_review_spec(new_id)
+}
+
+// trace:BUG-1807 | ai:codex
+fn require_review_handoff(outcome: &AutoQueueOutcome) -> Result<(), auto_complete::PhaseFailure> {
+    match outcome.status {
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists => Ok(()),
+        _ => Err(auto_complete::PhaseFailure::new(format!(
+            "reviewer handoff not confirmed: {}; retry `aida pr auto-queue-review`",
+            outcome.summary
+        ))),
+    }
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
@@ -55349,6 +55424,9 @@ pub(crate) struct InFlightBuckets {
     pub(crate) awaiting: std::collections::BTreeMap<String, Vec<String>>,
     /// Done specs with no commit referencing the id yet.
     pub(crate) no_commit: Vec<String>,
+    /// Deliberately reopened after the merged evidence; replay is not recovery.
+    // trace:TASK-1338 | ai:codex
+    pub(crate) reopened: Vec<String>,
 }
 
 /// TASK-234: bucket Done specs by git state. gh-free by design — the
@@ -55390,6 +55468,7 @@ pub(crate) fn classify_in_flight_specs(
     let mut stuck: Vec<(String, Option<u64>, String)> = Vec::new();
     let mut awaiting: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut no_commit: Vec<String> = Vec::new();
+    let mut reopened = Vec::new();
 
     for req in specs {
         let id = req
@@ -55423,7 +55502,10 @@ pub(crate) fn classify_in_flight_specs(
             .as_deref()
             .map(|m| is_ancestor(full, m))
             .unwrap_or(false);
-        if on_default {
+        if on_default && auto_bump_evidence_is_stale(project_root, req, full) {
+            // trace:TASK-1338 | ai:codex
+            reopened.push(id);
+        } else if on_default {
             stuck.push((id, parse_squash_pr_number(subject), ago.to_string()));
         } else {
             let contains = git(&[
@@ -55464,6 +55546,7 @@ pub(crate) fn classify_in_flight_specs(
         stuck,
         awaiting,
         no_commit,
+        reopened,
     }
 }
 
@@ -55740,7 +55823,14 @@ pub(crate) fn render_in_flight_grouped(
         stuck,
         awaiting,
         no_commit,
+        reopened,
     } = classify_in_flight_specs(specs, project_root);
+
+    // trace:TASK-1338 | ai:codex
+    if !reopened.is_empty() {
+        println!("  Reopened after merged work: {}", reopened.join(", "));
+        println!("    Next: finish the reopened work; old merge evidence will not close it.");
+    }
 
     // ---- Awaiting merge, grouped by branch ----
     // TASK-250: an open-PR branch is sub-classified into State 1/2/3
@@ -75430,6 +75520,13 @@ pub(crate) fn auto_bump_evidence_is_stale(
     req: &Requirement,
     sha: &str,
 ) -> bool {
+    // trace:TASK-1338 | ai:codex
+    // Older human reopens predate reopened_at_sha. Ignore automated status
+    // rewrites when finding the latest deliberate decision: a replayed bump
+    // must not erase the decision it incorrectly overwrote.
+    if human_reopen_after_evidence(project_root, req, sha) {
+        return true;
+    }
     let Some(info) = req.implementation_info.as_ref() else {
         return false;
     };
@@ -75439,6 +75536,63 @@ pub(crate) fn auto_bump_evidence_is_stale(
     info.reopened_at_sha.as_deref().is_some_and(|reopen_sha| {
         sha.is_empty() || sha_at_or_before_reopen(project_root, sha, reopen_sha)
     })
+}
+
+/// Legacy reopen history fences old evidence even without a SHA marker.
+/// A subsequent deliberate status decision or genuinely later commit permits
+/// progress; automated replay never supersedes a human reopen.
+// trace:TASK-1338 | ai:codex
+fn human_reopen_after_evidence(
+    project_root: &std::path::Path,
+    req: &Requirement,
+    sha: &str,
+) -> bool {
+    let latest = req
+        .history
+        .iter()
+        .filter(|entry| !aida_core::conflict::is_automated_status_author(&entry.author))
+        .filter_map(|entry| {
+            entry
+                .changes
+                .iter()
+                .find(|change| change.field_name == "status")
+                .map(|change| (entry.timestamp, change))
+        })
+        .max_by_key(|(timestamp, _)| *timestamp);
+    let Some((reopened_at, change)) = latest else {
+        return false;
+    };
+    if !matches!(
+        change.old_value.to_ascii_lowercase().as_str(),
+        "done" | "completed"
+    ) || !change.new_value.eq_ignore_ascii_case("approved")
+    {
+        return false;
+    }
+    if !crate::git_arg_guard::is_hex_sha(sha) {
+        return true;
+    }
+    let committed_at = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "show",
+            "-s",
+            "--format=%ct",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            sha,
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<i64>()
+                .ok()
+        });
+    // Unknown evidence cannot override a recorded deliberate reopen.
+    committed_at.is_none_or(|timestamp| timestamp <= reopened_at.timestamp())
 }
 
 // Filter before closure projection so stale evidence cannot move a reopened
@@ -95622,7 +95776,7 @@ pub(crate) fn handle_review_claim(
         pr,
         head.as_deref(),
         spec.map(|s| s.to_ascii_uppercase()).as_deref(),
-        &review_recorded_by().replace("aida review record", "aida review claim"),
+        &review_recorded_by(&project_root).replace("aida review record", "aida review claim"),
     );
     marker.pid = 0;
     marker.ttl_secs = ttl_mins.saturating_mul(60);
@@ -95823,7 +95977,18 @@ pub(crate) fn handle_review_record_at(
             "no commit could be resolved for this review — pass `--sha <commit>`; an unstamped verdict is unverifiable and will not be recorded"
         );
     }
-    let recorded_by = review_recorded_by();
+
+    // BUG-1802: bind recording identity and enforce policy.
+    // trace:BUG-1802 | ai:antigravity
+    let recorded_by = review_recorded_by(&project_root);
+    #[cfg(not(test))]
+    if recorded_by == "aida review record (operator)" {
+        crate::seat_authority::require_direct_human()
+            .context("aida review record attribution fallback")?;
+    }
+    if crate::seat_authority::current_seat(&project_root).as_deref() == Some("implementer") {
+        anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
+    }
 
     // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
     // standing marker (its text and who placed it) and any prior verdict
@@ -96229,21 +96394,27 @@ mod story_1405_review_marker_tests {
 /// Audit identity for a supported seat-written verdict. The launched seat's
 /// name is stable and distinguishable from the drain's own metadata writer.
 // trace:BUG-1467 | ai:codex
-pub(crate) fn review_recorded_by() -> String {
+pub(crate) fn review_recorded_by(project_root: &std::path::Path) -> String {
     review_recorded_by_from(
         std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
         std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
+        crate::seat_authority::current_seat(project_root).as_deref(),
     )
 }
 
-pub(crate) fn review_recorded_by_from(name: Option<&str>, kind: Option<&str>) -> String {
+pub(crate) fn review_recorded_by_from(
+    name: Option<&str>,
+    kind: Option<&str>,
+    role: Option<&str>,
+) -> String {
+    let role_disp = role.unwrap_or("reviewer");
     match (
         name.map(str::trim).filter(|s| !s.is_empty()),
         kind.map(str::trim).filter(|s| !s.is_empty()),
     ) {
-        (Some(name), Some(kind)) => format!("{name} ({kind} reviewer seat)"),
-        (Some(name), None) => format!("{name} (reviewer seat)"),
-        (None, Some(kind)) => format!("{kind} reviewer seat"),
+        (Some(name), Some(kind)) => format!("{name} ({kind} {role_disp} seat)"),
+        (Some(name), None) => format!("{name} ({role_disp} seat)"),
+        (None, Some(kind)) => format!("{kind} {role_disp} seat"),
         (None, None) => "aida review record (operator)".to_string(),
     }
 }
@@ -96254,7 +96425,7 @@ mod bug_1467_reviewer_record_tests {
 
     #[test]
     fn launched_reviewer_identity_is_distinct_from_the_drain_writer() {
-        let identity = review_recorded_by_from(Some("review-pr-1986"), Some("claude"));
+        let identity = review_recorded_by_from(Some("review-pr-1986"), Some("claude"), None);
         assert_eq!(identity, "review-pr-1986 (claude reviewer seat)");
         assert_ne!(identity, "aida drain reviewer");
     }
@@ -99806,21 +99977,6 @@ pub(crate) fn run_auto_complete(
             return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         }
     }
-    // TASK-133: capture the pre-spawn status bump (BUG-369) so the parent can
-    // restore it if phase 1 fails without the child ever acquiring a lease.
-    // `Some((display_id, prior_status))` when a flip happened; `None` when the
-    // spec was already InProgress/Planned and the parent left it untouched.
-    let phase1_bump = match prepare_auto_complete_phase1_status(storage, spec) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!(
-                "{} {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                e
-            );
-            std::process::exit(1);
-        }
-    };
     let lifecycle_skip = match resolve_lifecycle_skip(storage, spec) {
         Ok(s) => s,
         Err(e) => {
@@ -99910,25 +100066,27 @@ pub(crate) fn run_auto_complete(
         variant,
     );
 
-    // STORY-301: surface the drain so a user inside the spawned Claude session
-    // can see what command launched it, how far it has got, and what happens
-    // when they exit. A single-spec drain owns the file — it writes it now
-    // with the run-UUID + zen flag baked in, and clears it on return; a batch
-    // / nextN member updates the existing file's run-fields via `set_run` (the
-    // batch orchestrator created the file before this member started).
-    // Best-effort: a write failure leaves the drain running, just unobservable
-    // — and crucially, phase children correctly fall back to treating
-    // themselves as interactive when the corroboration check finds no live
-    // drain-state. The zen flag is the carried typed field, not a bare env
-    // re-read (ADR-10). trace:STORY-301 trace:TASK-336 trace:ADR-10 | ai:claude
-    let run_zen = driver.is_zen_run();
+    // trace:TASK-1603 | ai:codex
+    // Publish ownership before changing status or launching any phase child.
+    // This is authority state, not optional telemetry: a missing/failed write
+    // would make the first child apply standalone lease rules to our own bump.
     let owns_drain_state =
         owns_drain_state && std::env::var_os("AIDA_PIPELINED_BATCH_CHILD").is_none();
-    if owns_drain_state {
-        let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
-    } else {
-        drain_state::set_run(&project_root, spec, &run_token, run_zen);
-    }
+    // Retain the prior status for TASK-133's lease-less failure recovery.
+    let phase1_bump = match prepare_registered_auto_complete_phase1(
+        storage,
+        &project_root,
+        spec,
+        &run_token,
+        driver.is_zen_run(),
+        owns_drain_state,
+    ) {
+        Ok(bump) => bump,
+        Err(e) => {
+            eprintln!("could not prepare orchestrator ownership/status for {spec}: {e} — no phase launched");
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
+    };
     // STORY-492: a resume re-entry seeds the driver with the branch + PR the
     // skipped phases would otherwise have discovered, so the resumed phases
     // (CI / reviewer / merge / …) have the context they need.
@@ -100070,14 +100228,10 @@ pub(crate) fn run_auto_complete(
         }
     }
 
-    // TASK-336: the run-UUID is no longer needed once `orchestrate` has
-    // returned — every phase child has been spawned and reaped. Clear it on
-    // the drain-state file so a would-be straggler child carrying this token
-    // no longer corroborates against the file (especially between batch
-    // members, where the file lives on until the batch ends). For a single-
-    // spec drain the file is removed entirely just below; this clear is
-    // belt-and-braces in case the removal races a final child probe.
-    drain_state::clear_run(&project_root);
+    // trace:TASK-1603 | ai:codex
+    // All this run's children have been reaped. Revoke its token only;
+    // concurrent members must retain authority through their later phases.
+    drain_state::clear_run(&project_root, &run_token);
 
     // TASK-266: log the run to `~/.aida/auto-complete.jsonl` and, on a phase
     // failure, auto-draft a Draft BUG so the friction surfaces back to the
@@ -100927,15 +101081,9 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
     fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
         let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
         self.next_pipelined_handle += 1;
-        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
-            eprintln!(
-                "{} could not prepare pipelined member {}: {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                spec,
-                e
-            );
-            return handle;
-        }
+        // trace:TASK-1603 | ai:codex
+        // The child registers its run before bumping status. Pre-bumping here
+        // creates an InProgress/no-lease window before it has ownership.
         let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
@@ -103222,15 +103370,9 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
     fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
         let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
         self.next_pipelined_handle += 1;
-        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
-            eprintln!(
-                "{} could not prepare pipelined member {}: {}",
-                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                spec,
-                e
-            );
-            return handle;
-        }
+        // trace:TASK-1603 | ai:codex
+        // The child registers its run before bumping status. Pre-bumping here
+        // creates an InProgress/no-lease window before it has ownership.
         let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
@@ -105294,6 +105436,25 @@ pub(crate) fn auto_complete_phase1_target_status(
     }
 }
 
+/// Registration and the status bump share one checked entry point, so an
+/// ownership failure cannot leave Approved work InProgress without a lease.
+// trace:TASK-1603 | ai:codex
+fn prepare_registered_auto_complete_phase1(
+    storage: &Storage,
+    project_root: &std::path::Path,
+    spec: &str,
+    run_token: &str,
+    zen: bool,
+    owns_drain_state: bool,
+) -> Result<Option<(String, RequirementStatus)>> {
+    drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
+    let result = prepare_auto_complete_phase1_status(storage, spec);
+    if result.is_err() {
+        drain_state::clear_run(project_root, run_token);
+    }
+    result
+}
+
 /// BUG-369: mark orchestrator-driven phase-1 work as InProgress before the
 /// implementer subprocess starts. `aida punt` correctly allows only
 /// InProgress → NeedsAttention; without this pre-spawn flip, an early design
@@ -107183,6 +107344,10 @@ pub(crate) fn classify_rebase_subprocess_exit(
 /// reads on the consumer side.
 // trace:BUG-1295 | ai:claude
 pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
+    // trace:TASK-1606 | ai:codex
+    if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
+        return failure.reason as i32;
+    }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| sig.code)
         .unwrap_or(1)
@@ -113354,6 +113519,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         self.end_implementer_session()
     }
 
+    // trace:BUG-1807 | ai:codex
+    fn confirm_review_handoff(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        if self.lifecycle_forge == crate::forge::ForgeKind::None {
+            return Ok(());
+        }
+        let branch = self.branch.as_deref().unwrap_or_default();
+        let outcome = try_auto_queue_pr_review(
+            &self.project_root,
+            branch,
+            self.implementer_lease.as_deref().unwrap_or("(no-sess)"),
+            AutoQueueOrigin::SessionEnd,
+        );
+        require_review_handoff(&outcome)
+    }
+
     fn verify_ci_for_review(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         if self.lifecycle_forge == crate::forge::ForgeKind::None {
             return Ok(());
@@ -116964,3 +117144,85 @@ pub mod worktree_dismiss;
 #[cfg(test)]
 #[path = "tests/bug_1800_worktree_undecidable_cache_tests.rs"]
 mod bug_1800_worktree_undecidable_cache_tests;
+
+// trace:BUG-1807 | ai:codex
+#[cfg(test)]
+mod bug_1807_handoff_tests {
+    use super::*;
+
+    #[test]
+    fn only_confirmed_queue_ownership_allows_completion() {
+        assert!(require_review_handoff(&AutoQueueOutcome::filed("queued MR-35")).is_ok());
+        assert!(require_review_handoff(&AutoQueueOutcome::already_exists("queued MR-35")).is_ok());
+        for outcome in [
+            AutoQueueOutcome::skipped_needs_attention("MR-35 queue insertion failed"),
+            AutoQueueOutcome::skipped_by_design("no open MR"),
+        ] {
+            assert!(require_review_handoff(&outcome).is_err());
+        }
+    }
+
+    #[test]
+    fn reviewer_pickup_commands_parse_for_both_forges() {
+        for label in ["MR-35", "PR-35"] {
+            assert!(
+                Cli::try_parse_from(["aida", "queue", "work", label, "--role", "reviewer"]).is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn configured_missing_canonical_store_never_uses_legacy_inventory() {
+        let root = tempfile::tempdir().unwrap();
+        Storage::new(root.path().join("requirements.yaml"))
+            .save(&RequirementsStore::default())
+            .unwrap();
+        std::fs::create_dir(root.path().join(".aida")).unwrap();
+        for config in [
+            "mode = \"distributed\"\nstore_path = \".aida-store\"\n",
+            "store_path = \".aida-store\"\n",
+        ] {
+            std::fs::write(root.path().join(".aida/config.toml"), config).unwrap();
+            assert!(load_review_story_inventory(root.path()).is_err());
+            assert!(!root.path().join(".aida-store").exists());
+        }
+        // A partial store must not become an empty inventory or get repaired
+        // as a side effect of this read gate.
+        std::fs::create_dir(root.path().join(".aida-store")).unwrap();
+        assert!(load_review_story_inventory(root.path()).is_err());
+        assert!(!root.path().join(".aida-store/objects").exists());
+    }
+
+    #[test]
+    fn existing_mr35_story_is_recognized_without_github_collision() {
+        let mut store = RequirementsStore::default();
+        for (id, title) in [
+            ("STORY-1", "Review PR-35: unrelated"),
+            ("STORY-2", "Review MR-35: fixture"),
+        ] {
+            let mut req = aida_core::Requirement::new(title.into(), String::new());
+            req.spec_id = Some(id.into());
+            req.status = RequirementStatus::Approved;
+            store.requirements.push(req);
+        }
+        // Legacy lookup must read this project's existing story, too.
+        let root = tempfile::tempdir().unwrap();
+        Storage::new(root.path().join("requirements.yaml"))
+            .save(&store)
+            .unwrap();
+        let store = load_review_story_inventory(root.path()).expect("legacy store");
+        assert_eq!(
+            canonical_review_story(&store, ReviewForge::GitLab, 35, None, None)
+                .unwrap()
+                .display_id(),
+            "STORY-2"
+        );
+        assert_eq!(
+            canonical_review_story(&store, ReviewForge::GitHub, 35, None, None)
+                .unwrap()
+                .display_id(),
+            "STORY-1"
+        );
+        assert!(canonical_review_story(&store, ReviewForge::GitLab, 3, None, None).is_none());
+    }
+}

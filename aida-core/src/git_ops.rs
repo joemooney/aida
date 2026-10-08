@@ -1105,25 +1105,53 @@ pub enum ObjectChange {
 /// false for the same fail-safe reason.
 // trace:BUG-636 | ai:claude
 pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
+    is_ancestor_with_timeout(repo, ancestor, descendant, std::time::Duration::ZERO)
+}
+
+/// Like `is_ancestor`, but aborts if the operation takes longer than `timeout`.
+/// A zero timeout means wait indefinitely.
+pub fn is_ancestor_with_timeout(
+    repo: &Path,
+    ancestor: &str,
+    descendant: &str,
+    timeout: std::time::Duration,
+) -> Result<bool> {
     if ancestor.is_empty() || descendant.is_empty() {
         return Ok(false);
     }
-    // `git merge-base --is-ancestor A B` exits 0 when A is an ancestor of B,
-    // 1 when it is not, and 128 on a bad object. Our `git` wrapper only exposes
-    // success/failure; non-zero (not-ancestor OR error) both mean "don't trust
-    // an incremental diff" → false.
-    // trace:BUG-1622 | ai:claude
-    let result = git(
-        repo,
-        &[
-            "merge-base",
-            "--is-ancestor",
-            "--end-of-options",
-            ancestor,
-            descendant,
-        ],
-    )?;
-    Ok(result.success)
+    let args = &[
+        "merge-base",
+        "--is-ancestor",
+        "--end-of-options",
+        ancestor,
+        descendant,
+    ];
+    if timeout.is_zero() {
+        let result = git(repo, args)?;
+        return Ok(result.success);
+    }
+
+    let mut child = std::process::Command::new("git")
+        .current_dir(repo)
+        .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
+
+    let start = std::time::Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status.success());
+        }
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(anyhow::anyhow!("git merge-base --is-ancestor timed out"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
 
 /// The root commits (commits with no parent) reachable from `rev`, sorted.
@@ -3649,6 +3677,7 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             crate::models::RequirementType::Decision => "ADR",
             crate::models::RequirementType::Term => "TERM",
             crate::models::RequirementType::Doc => "DOC",
+            crate::models::RequirementType::Faq => "FAQ",
         };
 
         // BUG-82: walk past any candidate that already resolves to an

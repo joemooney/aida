@@ -1,3 +1,17 @@
+Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+delegation before persisting an implicit queue row or changing calibration, lease,
+worktree, or spec state. Occupied branches receive a manual retirement offer only
+when idle, clean, unlocked, and unleased. Setup failures retain a manual
+`aida worktree enter` and guided-session continuation.
+<!-- trace:TASK-1337 | ai:codex -->
+
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
 # AIDA — Overview
 
 Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
@@ -88,6 +102,27 @@ mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
 commit-evidence and ledgered `--force` rules.
+
+**Drain launch ownership.** A single, batch, or nextN member publishes its
+run UUID and zen provenance before the phase-1 status bump and phase-child
+launch. Ownership persistence is required: missing/corrupt batch state or a
+failed write returns a phase-1 failure before that run changes status or
+spawns a phase child. Pipelined parents leave the bump to the registered
+member process. Each active member publishes an independent UUID record in
+`.aida/orchestrator-runs/`, including its PID and zen provenance. Children
+require that record, a live member PID and a live parent drain snapshot;
+current-run snapshot fields are telemetry only. Cleanup revokes only the
+exiting member's UUID, so overlapping members keep authority. A delayed
+child may leave its queue head Approved briefly; the scheduler waits for
+progress and retries selection without treating that duplicate as exhaustion.
+Stale or bare environment flags grant no authority. Refreshed batch/nextN
+selection can admit newly unblocked or newly tagged members; checked run
+registration adds them to the parent snapshot before token corroboration.
+Snapshot read/modify/write updates serialize on the permanent
+`.aida/drain-state-write.lock` sidecar, preserving dynamic membership through
+concurrent phase updates and sibling cleanup. The child still requires both
+live PIDs and recorded membership.
+<!-- trace:TASK-1603 | ai:codex -->
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
@@ -204,7 +239,7 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 
 For contributors, reviewers of architecture sketches, and anyone choosing what AIDA benchmarks against. The layering is validated by dependency direction (store and intent modules import no control-plane module; the control plane depends heavily on the store) and by the removal test (remove the control plane and the whole memory lane still works; remove the store and nothing meaningful does). Source: the [2026-09-24 positioning deep-dive](docs/positioning/2026-09-24-spike-86-positioning-from-engineering.md), §3.
 
-1. **The intent store (the data plane).** The git-canonical requirement graph: YAML objects on the orphan `aida-store` branch, stable IDs, typed relationships, comments, the rebuildable cache, and the intent layer that makes the store worth keeping — acceptance criteria, `// trace:` comments, reconstitution, contradiction and gap detection. This is what "requirements management" names, and it is the product.
+1. **The intent store (the data plane).** The git-canonical requirement graph: YAML objects on the orphan `aida-store` branch, stable IDs, typed relationships, comments, the rebuildable cache, and the intent layer that makes the store worth keeping — acceptance criteria, `// trace:` comments, reconstitution, contradiction and gap detection. This is what "requirements management" names, and it is the product. Reconstitution reports probe failures even when recall has no traced-test denominator; a successful agent exit still requires readable, valid probe output, with artifact and headless-log paths retained in failure reasons (see [reporting](docs/cli/08-reporting.md#aida-reconstitute)).
 2. **The control plane (the corpus-integrity layer).** The layer that decides whether work may advance and reports the state of work in flight: the queue, the drain, the orchestrator and its phases, seats, leases, worktree assignment, review verdicts, merge-holds, `BlockedBy` gating, required-check rollups, the event feed, and the surfaces that report on all of it (`aida ps`, drain status, awaiting, doctor). It exists to keep the store true while unreliable agent workers change the code; that is why it takes about half the engineering without being the product. Its two sub-facets have industry names — admission / merge gating (a merge queue) and state reconciliation (actual vs reported vs desired) — and its characteristic defect is a surface asserting a state that is not true: false-green, false-empty, stale reading as current.
 3. **The execution layer.** Isolated worktrees and sessions in which agents (Claude Code, Codex CLI, Antigravity, any harness with a shell) do the work, one spec per worktree, with role-pure seats and deterministic handoffs.
 4. **The surfaces.** CLI, MCP, TUI and web. They display store and control-plane state; none of them is the control plane and none of them is the product's face.
@@ -354,6 +389,17 @@ aida dev deactivate                    # the wrapper auto-evals this too
 
 `aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.
 
+The shell helper applies role/session/dev/worktree environment updates only
+after a successful CLI exit with one complete pair of standalone
+`#aida:eval:begin` / `#aida:eval:end` markers. Failed stdout is sent verbatim to
+stderr without evaluation; unmarked or malformed successful output is displayed.
+Older binaries emitting bare shell output must be updated for automatic shell
+mutations. Already-loaded helpers are not replaced by a binary upgrade: install
+the updated helper with `aida dev shell-init --install` and reload the shell
+configuration. The binary's existing bare-output behavior for absent or legacy
+helpers is unchanged. Isolated regression: `bash tests/test_role_wrapper_boundary.sh`.
+<!-- trace:BUG-1806 | ai:codex -->
+
 For project conventions (commit format, scaffold/template architecture, CLI reference) see [CLAUDE.md](CLAUDE.md).
 
 ---
@@ -419,3 +465,33 @@ spawn. An exit-zero report therefore does not prove that an agent ran. See the
 [pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
 TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
 <!-- trace:TASK-1327 | ai:codex -->
+
+`aida pr ship` checks known review, mergeability, stale CI definition, and hold
+blockers before waiting for CI, and repeats the checks before merge. An optional
+`--wait <secs>` deadline covers registration and settlement; the default is
+unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
+stale definition, and hold refusals for scripts. See
+[git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
+<!-- trace:TASK-1606 | ai:codex -->
+
+Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
+`PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
+existing canonical review story in distributed or legacy stores; an unreadable
+store or failed queue insertion cannot establish a successful handoff. The
+creation gate requires every canonical object to be readable and parseable,
+without changing tolerant readers elsewhere or falling back to legacy state
+when configured canonical storage is unavailable. The CI
+checkpoint confirms the queue operation even when resuming without a lease.
+<!-- trace:BUG-1807 | ai:codex -->
+
+Review-story creation uses strict fallible object enumeration; missing roots,
+iteration failures, symlinked type/shard directories, and invalid YAML filenames
+refuse handoff without authorizing absence. Tolerant bulk readers retain their
+existing behavior.
+<!-- trace:BUG-1807 | ai:codex -->
+
+The review-story config probe validates TOML before legacy fallback and refuses
+configured but unavailable canonical storage. Its mode policy and existing
+store-location checks are covered by `scripts/config-trust.toml`; the probe adds
+no executable, command, or credential selection.
+<!-- trace:BUG-1807 | ai:codex -->
