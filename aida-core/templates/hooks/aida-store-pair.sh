@@ -23,8 +23,15 @@ esac
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -z "$PROJECT_ROOT" ] && exit 0
 
+COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+MAIN_ROOT=""
+[ -n "$COMMON_DIR" ] && MAIN_ROOT=$(dirname "$COMMON_DIR")
+
+CANDIDATES=("$PROJECT_ROOT/.aida-store" "$PROJECT_ROOT/aida-store")
+[ -n "$MAIN_ROOT" ] && [ "$MAIN_ROOT" != "$PROJECT_ROOT" ] && CANDIDATES+=("$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store")
+
 STORE_PATH=""
-for candidate in "$PROJECT_ROOT/.aida-store" "$PROJECT_ROOT/aida-store"; do
+for candidate in "${CANDIDATES[@]}"; do
     if [ -d "$candidate/.git" ] || [ -f "$candidate/.git" ]; then
         STORE_PATH="$candidate"
         break
@@ -32,7 +39,7 @@ for candidate in "$PROJECT_ROOT/.aida-store" "$PROJECT_ROOT/aida-store"; do
 done
 [ -z "$STORE_PATH" ] && exit 0
 
-STORE_SHA=$(git -C "$STORE_PATH" rev-parse HEAD 2>/dev/null) || exit 0
+STORE_SHA=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -C "$STORE_PATH" rev-parse HEAD 2>/dev/null) || exit 0
 [ -z "$STORE_SHA" ] && exit 0
 
 # Skip if the trailer is already there (handles re-edit of an in-progress
