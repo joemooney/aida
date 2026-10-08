@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:48:11.551846892Z
-modified_at: 2026-10-08T21:10:17.662388978Z
+modified_at: 2026-10-08T21:33:53.426189381Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -157,6 +157,151 @@ comments:
   content: 'CORRECTION / source qualification for just-relayed Batch D report: TASK-1321 fixture DOES write private HOME/.gitconfig with user.name/user.email and init.defaultBranch. The failure is not proof that the fixture provides no identity at all. git_out does not override inherited GIT_CONFIG_GLOBAL, while D''s sandbox explicitly sets it to an empty file, suppressing that private HOME config. Root verified exact65e19b9 source. This establishes a concrete fixture/harness interaction, not yet a product bug or a need to manufacture AIDA actor/grant authority. Private Git commit metadata is distinct from validated AIDA actor/grant identity. Do not fix by changing live/global identity or supplying AIDA grants; any future focused validation must declare the private Git-config isolation contract and preserve the first failed result. No test rerun/green claim or code dispatch occurs here. The transport lock failure remains real, cause unverified.'
   created_at: 2026-10-08T21:10:17.662382317Z
   modified_at: 2026-10-08T21:10:17.662382317Z
+- id: 01a11d6f-df92-7430-8e58-84260266a34b
+  author: mcp
+  content: |
+    PROXY EVIDENCE RELAY — final independent batch D review; PARTIAL, no approval/merge/completion. Corrected raw transport count is 10 core pass / 1 fail / 5 ignored worker entrypoints, plus 2 CLI bootstrap passes. The post-run private clone contains an ordinary private .aida-store directory, not a live symlink; its creator is unverified. Earlier validation prose is superseded where inconsistent by this final review. No new implementation dispatch or rerun is authorized by this relay.
+
+    # Batch D — final independent source/artifact review
+
+    **VERDICT: PARTIAL. The exact whole candidate is not accepted as fully validated. No APPROVE, protected machine record, completion, dependency acceptance, activation or merge clearance is issued.**
+
+    Fresh Codex reviewer session `01a11d64-ea50-7ee2-8995-1fd68793ebc7`, 2026-10-08 America/Phoenix. This session is not a member author, prior member/D reviewer, coordinating root or integrator. No implementation or fix was authored. This is a new final source/artifact judgment after the completed run, not an amendment to or continuation of the old reviewer’s checkpoint. The old 35,850-byte `BATCH_D_INDEPENDENT_REVIEW.md` remains intact.
+
+    Independent inspection of the whole 13-path change found no additional demonstrated blocking production-code defect in the bounded slice. It does **not** resolve the two observed member-test failures or the missing acceptance evidence. The TASK-1321 failure is the documented private Git-config/harness interaction, not missing fixture identity or proof of a product defect. The TASK-1612 lock witness failed with its actual holder/cause unidentified; neither a production leak nor harmless parallel interference is established. Earlier serial positives do not override this result.
+
+    ## Exact candidate and preservation
+
+    | Item | Pin |
+    | --- | --- |
+    | Head | `65e19b9bd1f617567235c0bf42df70f9e3a89729` |
+    | Tree | `2ce32ba6fc46a7fa4893d329767ea9902cc8795b` |
+    | Base and observed merge base | `bf65220959c7601427247286abc7eb16278af5a5` |
+    | TASK-1321 final member | `7dd7d0cf6a45657061f535ed63a134f80f7adc5c` |
+    | TASK-1612 final member | `a5e1bc4f18aee6fb642b8c2d272b35e94b98ec68` |
+    | Branch/worktree | `integrate/proxy-20261008-d`, `/home/joe/ai/aida-worktrees/aida-proxy-batch-d` |
+    | Exact review command | `git diff bf65220959c7601427247286abc7eb16278af5a5...65e19b9bd1f617567235c0bf42df70f9e3a89729` |
+    | Exact diff SHA256 | `7acf7a6336a39285b1d547eb897c8afe1d8b3422260e3cca5a769428f80f2a90` |
+
+    Both exact members and the base are ancestors of D. Excluded TASK-1335 candidate `ef014aeb07eca288a6faa51922252fbc33209684` is not an ancestor. The base-to-D path set equals the union of TASK-1321’s parent-to-member and TASK-1612’s fixed-base-to-member path sets; the members have no shared changed path. There are seven additions, six modifications, 3,731 insertions and two deletions, all mode 100644. `git diff --check` returned 0. The D worktree had no tracked changes.
+
+    Ten whole blobs equal their owning member. For the three overlapping main/member files, independently compared ordered added/deleted line sequences in both directions: member-base→member equals base→D, and member-base→base equals member→D. All six comparisons passed. This checks preservation of both sides, not merely absence of merge conflicts. Per-path blob IDs, SHA256s and comparison outcomes are in the separate integrity receipt.
+
+    | All 13 paths | Preservation and independent source assessment |
+    | --- | --- |
+    | `aida-cli-lib/src/rebase_cmd.rs` | Exact TASK-1321 blob. Resolver changes classification root only under `dry_run`; execute still uses store root. |
+    | `aida-cli/tests/task_1321_rebase_linked_worktree.rs` | Exact member blob. Full risky/safe/primary/nested fixture and assertions read; inherited global-config override explains setup failure. |
+    | `docs/cli/04-git-lifecycle.md` | Exact member blob. Linked-worktree dry-run documentation; no authority change. |
+    | `aida-cli/tests/waiting_child_bootstrap.rs` | Exact TASK-1612 blob. Actual normal CLI early refusal and public prepare/cancel tests; both passed in D. |
+    | `aida-core/src/launch_transport/image.rs` | Exact member blob. Complete opened-object, sealed-byte, executable/credential/loader policy inspected. |
+    | `aida-core/src/launch_transport/linux.rs` | Exact member blob. Complete adopter/SIGPIPE, prepare/remapping, bootstrap/channel, cancellation/reap and test-only exec paths inspected. |
+    | `aida-core/src/launch_transport/mod.rs` | Exact member blob. Narrow exports and early argument dispatch; supported-build guard retained. |
+    | `aida-core/src/launch_transport/tests.rs` | Exact member blob. Full fixture code read, including lock assertion, subprocess workers, native positives and lifetime/namespace cases. |
+    | `aida-core/src/lib.rs` | Exact member blob. Public module export only. |
+    | `docs/plans/2026-10-07-task-1612-waiting-child-transport.md` | Exact member blob. Scope, validation and unsupported cases retained. |
+    | `AGENTS.md` | Both sides preserved: transport paragraph and upstream content. |
+    | `OVERVIEW.md` | Both sides preserved: transport boundary and upstream additions. |
+    | `aida-cli-lib/src/lib.rs` | Both sides preserved: three early-bootstrap lines and all upstream changes, including review-record protections. |
+
+    Local main was observed at `c67728c1dcaf8a577539d920bdc6a3c86126cebb`. This is the reported external TASK-1593 advance, not part of D. No remote lookup/fetch, integration, new whole-overlap assessment against a resulting union, or affected check was performed. This judgment cannot transfer to a later union. Normal latest-main integration, actual whole-overlap review and evidence chosen against the resulting change remain later work.
+
+    ## Inputs and authority boundaries
+
+    Read the full old D review, full PREPARED report (19,382 bytes) and full current VALIDATED report (12,097 bytes, including its 14:10 correction). The earlier 10,753-byte validation-report description is not the byte length of the corrected file now retained. Read both PREPARED-only member correction briefs, full TASK1321 READY/review/recovery handoff, and full TASK1612 ADOPTER_REWORK_READY and SIGPIPE_REWORK_INDEPENDENT_REVIEW, including the final unknown-sender stop correction.
+
+    Read retained TASK1612 requirement JSON with all six criteria and three decision/rework comments. TASK1321’s bounded acceptance and unchanged-authority instructions were assessed through its complete linked independent review and recovery assignment; no fresh canonical read or raw YAML access was made. No claim of newly verified canonical status or relay is made. The user’s confirmed root relay/correction is assignment context, not a machine record created here.
+
+    Read the common launch amendment, consumer launch-v2 amendment, full launch-v2 signed report and receipt, callback-v5 signed report and pane/containment signed report with their binding amendments. The launch receipt’s nine input hashes, both posted verdict-body hashes and report hash independently match the retained files. These are documentary integrity comparisons, not new authenticated signoffs or a fresh whole older-parent approval. Callback/pane scope is applied through those signed reports; no whole-parent implementation audit is claimed.
+
+    The launch owner amendment is `01a119ac-133b-7580-9381-e1febdeb8849` (SHA256 `4d67af90b7320da207c7f1181ff7ab95d52d27d0fe5e4890be256d1afbf571ec`); consumer amendment is `01a119ac-15f8-7141-a1dd-87492a75b840` (`2b809a68e9c9ebcc3f5ee078d88693651bd13e8d94dd30dd82877254eff5d368`). Binding owner/consumer decisions are `01a119b5-ea32-7ed0-b5e9-11858700f78b` and `01a119b5-f471-7621-aaa3-5a649fa5c9a2`; report hash is `f77fb2b49e605dbdc2a2afeae3112642d7211f6da1dd3d9fbbf42e59d8fcd658`.
+
+    Only the non-releasing transport prerequisite is in scope. Future vendor release needs the common publisher’s private `CommittedDispatch`; Git-only `PreparedGitStep` must remain purpose-separated and subject to the stricter sealed callback-runtime contract. No grant, publisher, occupancy, assignment schema or live vendor integration is introduced here. All common production gates remain OPEN; the assigned TASK-1717 REQUEST_CHANGES disposition remains binding and is not re-reviewed or cleared here. Inactivity supplies no permission to implement or activate a component.
+
+    TASK-1612 AC6 expressly excludes proxy authority merge; final authority-sensitive merge stays operator-owned. Actual new-code dispatch and protected recorder floors also remain binding. Inspected `handle_review_record_at` retains direct-human gating for operator attribution fallback and implementer self-review refusal; `review_recorded_by_from` still falls back when managed identity fields are absent. This report and its JSON integrity receipt do not impersonate either protected record format. No recorder invocation, identity substitution, stale-binary retry or alternate publication route was attempted.
+
+    ## Whole acceptance assessment
+
+    “Supported source” below is this reviewer’s inspection plus attributed retained evidence, not a new execution or full acceptance.
+
+    | Requirement area | Judgment |
+    | --- | --- |
+    | TASK-1321 invoked checkout and JSON | Supported source. `invoked_checkout_root` compares canonical common Git directories and resolves cwd toplevel; nested siblings select themselves, missing/non-Git/unrelated cwd keeps store fallback. D’s two resolver unit tests passed. D’s actual e2e did not reach its behavioral assertions: gap F1. |
+    | TASK-1321 unchanged policies | Supported source. Only dry-run chooses the new root. Classification, confirmation, stash/abort and execution gates are unchanged. The real execute path intentionally still targets primary. This dry-run/execute asymmetry is preserved scope, not a claim of equivalence. Store/actor/grant authority is not derived from cwd. |
+    | TASK-1321 regression/no effects | Meaningful fixture source and historical member evidence, but D e2e qualification remains incomplete. Assertions check risky 1/3 dirty overlap, safe 1/3 clean, primary 0/0, nested cwd and preserved HEADs/dirty content. `--no-fetch` does not establish absence of default-fetch effects; prior reviewer disclosed cold cache/notice/dispenser writes. No literal all-files-no-write promise. |
+    | TASK-1321 final validation | Open: actual D workspace non-pass, later gates unrun, no hosted evidence. |
+    | TASK-1612 AC1 sealed images | Supported source for Linux x86_64 GNU. Helper/leaf snapshots use explicit executable sealing memfds, read-only owned reopen, immutable seals and sealed-byte digest; before/after opened-source checks cover permissions/noexec/set-id/capabilities. ELF/interpreter/dynamic-path and environment restrictions inspected. No mutable source-path exec fallback. Trusted system loader/libraries remain an explicit limit, not closed Git-runtime proof. |
+    | TASK-1612 AC2 bootstrap/identity/channel/FDs | Supported source with unresolved execution witness F2. Entry precedes SIGPIPE handler, coordinating binary export, filing identity, telemetry/cache/normal CLI. clone3 supplies owned birth pidfd; description binds PID/boot/start and creator TID, nonce/digest/deadline, cwd/stdio/credentials. Mapping duplicates high first, closes extras before helper exec; helper immediately restores CLOEXEC on 3–6. READY checks actual helper image. Credential-bearing seqpacket receive validates full frame and closes unexpected received rights. D bootstrap tests pass, but lock witness cannot be called fully passed. |
+    | TASK-1612 AC3 lifetime/cancel/settlement/retry | Supported source and retained D lifetime/channel/retry outcomes. !Send/!Sync handle, creator identity/PDEATHSIG pre-prctl check, pidfd-only cancellation and owned waitid preserve uncertainty and avoid peer-PID signaling. Recovery cannot manufacture wait ownership. Actual adopter is requalified during prepare. Same-process ETXTBSY retry is test-only and bounded by original deadline; no replacement process. |
+    | TASK-1612 AC4 no production release | Supported source. Public exports allow image/profile/description/prepare/observe/cancel. `FIXTURE_RELEASE`, permit and leaf exec decoder/body are cfg(test)-only. Normal bootstrap can READY/refuse/timeout/cancel, never release a native leaf. D release compile-fail doctest passed. No production call site besides early bootstrap was found by pinned-source search. No release env flag or new persistent authority format. |
+    | TASK-1612 AC5 real isolated witnesses | PARTIAL. D has meaningful replacement/native, channel, default-SIGPIPE/adopter, lifetime, namespace and bootstrap positives, but the combined seals/FD/native test fails before its final native positive. Historical member serial/independent positives remain attributed to those artifacts and cannot override D. Namespace CI parity remains open (F4). |
+    | TASK-1612 AC6 trace/check/review/merge | PARTIAL. Source traces and final member provenance retained; D build/no-default gates passed, independent whole-source review completed here. Workspace failed, fmt/clippy and later gates unrun, hosted/protected-record gates open. No install, activation, parent completion or proxy merge. |
+
+    Actual-adopter review: `qualify_adopter` refuses a caller subreaper, creates owned C with birth pidfd, observes G while C pins its child identity, reaps C, observes G’s actual new parent, requires G’s reaping, and verifies adopter identity. `prepare_inner` repeats the observation. This is point-in-time qualification: later ancestry/subreaper/reaping changes are not proven absent. Creating-thread death can leave a zombie owned by the still-live supervisor until its exit; tests distinguish death from eventual adopter collection. Kernel/I/O stalls stay unsettled.
+
+    SIGPIPE review: supervisor controls use nonblocking stream sockets and `send(MSG_NOSIGNAL | MSG_DONTWAIT)`, including cleanup after reader exit. Remaining report/error `write`s are child-side. No process-wide caller SIGPIPE change was added; subprocess workers explicitly restore SIG_DFL. The older signal-13 failure and final member witnesses are retained, and D’s owning lifetime test passes. Qualification itself creates temporary nonexecuting processes; it is not effect-free at the OS level.
+
+    Two nonblocking documentation inaccuracies persist: `HostProfile::probe`’s old internal PID-1-declaration comment conflicts with its implemented qualification, and the plan says three ignored workers while source has five. No source/doc fix was made.
+
+    ## Actual completed validation and artifact qualification
+
+    Read `summary.txt`, complete `failure-map.txt`, all raw failure sections, the full member-test failure blocks, bootstrap results, transport outcome rows, result totals, gate boundaries, doctest and terminal failure list from `check-ci.log`. Read all five runner scripts, environment/preflight/audit/probe artifacts and template completion. Parsed all 103 raw result lines independently: **9,881 passed / 51 failed / 12 ignored**. Fifteen targets failed. These are the recorded workspace result-line totals, not proof that every acceptance witness passed.
+
+    | Step | Actual result |
+    | --- | --- |
+    | Driver start | 12:36:38 MST |
+    | Wrapper probe / classification audit | exit 0 / exit 0; direct rustc, zero sccache mentions; 45 classified workflow gates |
+    | Gate 1: CLI no-default-features check | PASS, 82.8 s |
+    | Gate 2: build all packages | PASS, 167.7 s |
+    | Gate 3: TUI seam guard | PASS, 66.4 s |
+    | Gate 4: protobuf mirror drift guard | PASS, 169.7 s |
+    | Gate 5: workspace tests | FAIL, 4,839.7 s; 51 failed in 15 targets |
+    | CI body | **exit 1**, end **14:05:25 MST** |
+    | Gates 6–37 | **UNRUN** |
+    | Separate templates | PASS, exit 0, 14:05:25–**14:07:20 MST** |
+    | Bounded driver | **exit 0**, end **14:07:20 MST**; not CI success |
+
+    `inner.sh` deliberately continues to templates and ends with reporting; therefore driver status does not propagate CI failure. The explicit CI-body exit and failed gate govern. `driver-signals.strace` is empty, but watches only the top-level timeout (no `-f`): it cannot establish absence of signals to descendants. No test-killed-by-signal diagnosis is established for this run. Old unexplained SIGTERMs create no new quiet-window prerequisite.
+
+    **Transport count correction:** the raw D log names **10 passing core transport tests, one failing core transport test and five ignored subprocess worker entrypoints**, not “12 other transport tests plus two bootstrap.” The two normal CLI bootstrap tests pass separately, as does the release compile-fail doctest. The earlier independent member report’s twelve private runtime cases are another denominator. The ignored workers are invoked by their owning tests; they are not five extra independent D pass rows. Preserve the prior wording as history, but use these raw denominators for this verdict.
+
+    The remaining 49 failures across 13 binaries are UNCLASSIFIED: agent_write_confirm (1), bug_1289_format_json (4), bug_1502_format_json_audit (8), bug_1513_queue_list_for_role (1), bug_1683_live_drain_lock (1), bug_1687_defer_status_lens (4), bug_1771_status_lens_filters (3), bug_1795_queue_list_filter_outputs (4), journey (2), queue_work_dry_run (14), task_1290_criteria_gate (4), task_1561_worktree_parent_placement (2), task_163_why_live_drain (1). Many fail in authority-sensitive fixture setup; that does not classify them as baseline, harmless or fixed by c677. Earlier baseline evidence for one member’s agent_write_confirm failure is not a batch-wide classification.
+
+    All five script and thirteen log manifest entries match their recorded SHA256s; decompressed `check-ci.log.gz` equals the raw log. Retained private clone HEAD/tree/base match D, tracked status is clean, and all thirteen changed source files plus Cargo.toml/Cargo.lock/workflow/gate-runner/tier/Makefile inputs match pinned blobs. Scripts also equal the actual retained driver files. These corroborate the run’s source/artifact association; this reviewer did not execute or requalify a binary by rerunning it. Retained member source-proof hashes match their exact member, and their binary/runtime provenance remains historical member evidence, not a D executable or new independent runtime result.
+
+    Fence: private independent `.git` directory, no object alternates, explicit env-i/private HOME/AIDA_HOME/XDG/TMPDIR, 0700 runtime, file-only Git and empty private global config. Normal Cargo shim enters the existing slot wrapper then restores private runtime. Wrapper SHA256 is `6e04f9dc4d34f6571316e8ec8e7b43ac383764e1e4c801be96555df05b798954`. No reviewer Cargo execution occurred.
+
+    Retained preflight lists 17 absent vendor names and guard exit 97. Its `VERIFY fail=1` is preserved: `xcursorgen` matched the broad `*cursor*` pattern, and the script only prints the failure value. Guard log totals are 216 gh hits (including the preflight self-test) and one crontab hit. Guards are not cloud CI equivalence or OS network confinement; absolute binaries and language network APIs are not excluded by PATH. CI/GITHUB_ACTIONS are unset, and this host’s userns setting differs from the workflow ordering.
+
+    Post-run inspection also found a **private ordinary `.aida-store` directory** inside the retained clone (not a symlink), containing `.aida` and `objects`; `.aida/sessions` is absent. Its contents were not opened. Thus the prepared “no store” condition must not be asserted as a final absence inventory. This observation does not demonstrate a link to or write to live canonical state; the directory’s creating test was not attributed. No cleanup/healing was attempted. Full-suite runtime side-effect freedom is not certified by tracked Git cleanliness.
+
+    ## Numbered findings and bounded required evidence
+
+    1. **F1 — TASK-1321 e2e qualification gap: private config contract is inconsistent with this fence.** At `task_1321_rebase_linked_worktree.rs:49–57`, `git_out` changes HOME but inherits `GIT_CONFIG_GLOBAL`; at lines 93–97 the fixture writes its own private `.gitconfig` identity. The sandbox’s empty explicit global file suppresses that config. Raw log lines 1643–1675 show the first `git commit` failing before any rebase assertion. This is a concrete fixture/harness interaction, not an absent identity or product-root defect. Bounded remedy when separately authorized: choose and document private Git-config ownership. Fixture hardening that explicitly points Git subprocesses (including Git reached via the fixture CLI) at the fixture’s private config is defensible for its claimed hermetic contract; alternatively, a documented harness correction must preserve private config/credential isolation. Do not set live/global user identity or an AIDA actor/role/grant. Future evidence must reach all risky/safe/primary/nested JSON and no-head/dirty-edit assertions on qualified final source/binary, not just successful setup. Preserve the first failure. Any source change needs a different review. Nothing is dispatched here.
+
+    2. **F2 — TASK-1612 FD/lock/native witness remains failed; cause and final positive are open.** At `launch_transport/tests.rs:304–391`, the fixture acquires `owned-lock`, deliberately clears CLOEXEC, prepares the real sealed helper, asserts exact helper inventory 0–6 and CLOEXEC for 3–6, drops the original lock and attempts a second nonblocking flock. Line 385 returns -1 instead of 0. Its errno/holder is not logged. The earlier inventory assertions passed on this execution path, and `f.positive` after this assertion was not reached. Therefore the panic label “helper inherited lock” does not identify a retaining process or prove a production leak. Parallel other-fork inheritance is plausible from source (raw fork/clone fixtures coexist) but unverified. Bounded required evidence when authorized: identify holder/open-description lifetime in an owned process domain, distinguish the waiting helper from unrelated concurrently forked children and any syscall error, then fix the demonstrated layer. If fixture contamination is established, isolate this witness’s process ownership while retaining deliberately non-CLOEXEC lock propagation, real sealed helper, full inventory and actual native positive. Use a paired descriptor-retention mutant and meaningful parallel witnesses. Do not force the workspace serial, weaken assertions, sleep/retry to green, remove the positive or relax image/loader/grant policy. A production fix requires grounded production evidence and a fresh different whole-transport review. This review performs none of those experiments.
+
+    3. **F3 — Whole-candidate acceptance lacks passing validation.** `scripts/check-ci-gates.py` stops at the first failing gate. The 51 failures remain actual failures; 49 are unclassified. Gates 6–37, including formatting and clippy, have no D execution credit. Required outcome is legitimate final-source validation/classification and the required remaining hosted/trace/doc-intent/hold evidence through the ordinary route, without a blanket baseline assumption or fabricated fixture authority. This finding does not authorize another suite, baseline chase or CI run. Subsequent integration changes require new source/evidence qualification.
+
+    4. **F4 — Namespace-dependent hosted validation remains unproven.** `namespace_init_is_qualified_only_as_the_actual_adopter` and `opened_noexec_mount_and_runtime_search_path_are_rejected` unconditionally require private namespaces. In pinned `.github/workflows/ci.yml`, the userns-enabling live-bwrap step follows `Run tests`. Local positives do not establish the hosted runner’s earlier permission. Required outcome is actual supported-runner positive evidence, or a separately authorized correction if it fails; skip/refusal cannot replace these positive witnesses. No hosted failure is invented and no gate edit is authorized.
+
+    5. **F5 — Artifact reporting must preserve limited guarantees.** Driver 0 is not CI 0; preflight printed fail=1; signal tracing is top-level-only; transport outcome counts need the correction above; private store absence is only a preparation claim, not the post-run inventory. The new report and receipt carry these qualifications. No old artifact is overwritten, and none of these limits licenses rerunning the run.
+
+    6. **F6 — Later composition/publication/merge gates remain outside this review’s permission.** D is still based on bf652209, not the later main union. Common production acceptance, TASK-1717’s REQUEST_CHANGES, actual code-dispatch/recorder floors, ordinary PR/hosted gates and TASK-1612 operator-owned merge remain binding even if a bounded source judgment is favorable. Required outcome is the legitimately authorized subsequent flow and fresh exact-union review. A Markdown/JSON artifact cannot clear those gates. No Joe prompt or new approval request is raised by this review.
+
+    ## Complete unrun/skip disposition
+
+    Gates 6–37 remain UNRUN: GitLab live-smoke workflow guard; Weekly Windows workflow contract; External-prose classifier inventory; MCP stdio compatibility; history template CLI/config/MCP contract; single-spec show latency; MCP doc-consistency; merge-hold fixtures; advisor-code-guard hook; git-guardrails parse; shipped full-access launch refusal fixtures; no-origin pull warning; two-remote pull byte-identical; advisor-code-gate substrate; pre-commit provenance move-detection; agent-skill-hook installer fixtures; distributed/sibling-store integration; home-guard self-test; minimal CLI build; CLI manual drift; monitor contract drift; performance profile; formatting; removed mode flags; Rust portability ratchet; prose classification fixtures; file-time portability fixtures; executable fixture ratchet; clippy; glyph lint; trace/doc-header stranding; docs-drift scheduling.
+
+    The runner’s eight explicit skips are separate from those unrun local gates: docs-only flow-control echo, toolchain pinning, Linux dependency installation, report-only cross-target check, live bwrap confinement, commit SPEC-ID trace validation, report-only diff trace coverage and doc-intent. None is a local pass. Required Ubuntu Build/merge-hold and remote-only/native evidence are not supplied by this local run.
+
+    ## Review operations and integrity
+
+    Only read-only Git/source/artifact inspection and hash/text comparisons were used: `git show/diff/grep/rev-parse/merge-base/ls-tree/status/worktree list`, bounded `cat/sed/rg`, and Python over existing bytes. The exact diff was inspected by all changed hunks and complete added transport/test files. A few broad listings/combined reads exceeded output limits; required source/report sections were subsequently read in bounded chunks. No truncated output was accepted as a complete report read.
+
+    No builds, tests, probes, CI, baseline run, vendor/forge spawn, SQLite experiment, AIDA CLI/MCP operation, canonical/raw-YAML access, lease/grant/hold/status/queue/mail/record write, source fix, commit/push/PR/merge, installation, activation or cleanup occurred. No process was signaled. Only this new report, its separate integrity receipt and a private `/tmp` hash worksheet were written. Prior first failures and reports remain preserved; retained checks are attributed to their actual authors/runs. The final result is **PARTIAL for this exact complete candidate**, with the bounded evidence gaps above, not automatic approval waiting for a checkbox.
+  created_at: 2026-10-08T21:33:53.426183016Z
+  modified_at: 2026-10-08T21:33:53.426183016Z
+  relayed_from: batch-d-final-fresh-review
 history:
 - id: 01a10f36-4a11-70a9-b7af-7a1a01372452
   author: joe
