@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a11873-bcab-7c73-b023-e4614448bdd9
-  position: 298000
+  position: 297000
   added_by: role:implementer
-  note: 'PROXY DECISION: accept independent REQUEST_CHANGES at1508607da5 in STRICT_LOOKUP_INDEPENDENT_REVIEW.md. object_store::list_objects uses exists(), swallowing metadata errors into empty inventory after preflight; deterministic EACCES produced duplicate17->18. Require strict fallible enumeration at actual boundary, preserve tolerant readers, prove injected IO failure and no duplicate. Concrete brief bug1807-enumeration-rework.md. Canonical refusing-verdict no-PR refusal retained, not bypassed.'
-  added_at: 2026-10-08T03:20:45.474174625Z
+  note: 'PROXY DECISION: PR #2454 required Ubuntu run 37724570741 failed the config-trust inventory guard: lib.rs has 48 config.toml sites, inventory records 47. Strict review-story canonical-store probe is the new site. Route bounded trust classification/inventory correction to a separate doer, preserve actual guard, run full checks, then fresh exact-head independent review; no CI waiver. Brief: .aida/handoff/orchestrator/bug1807-ci-inventory-rework.md; actual log: .aida/handoff/bug1807/ci-37724570741-failed.log.'
+  added_at: 2026-10-08T04:01:28.687294841Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a11409-166a-7532-811a-eb943fe701d0
