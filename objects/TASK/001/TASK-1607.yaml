@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T01:57:58.574146610Z
+modified_at: 2026-10-08T02:04:56.856192199Z
 req_type: Task
 tags:
 - guided-lane
@@ -121,6 +121,63 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): C7 stage-boundary clarification. The original C7 requires schedule tick and supervisor launch_redrive inventory plus explicit disposition BEFORE step5; production launcher corrections wait for steps4-5 AFTER fresh independent C7 core approval. Do not replace either live launcher now. Document intended redrive handoff/no-independent-schedule-loop disposition and test operation shapes at the core boundary. My eight-item brief wording overstated the current coding scope; this is a brief-quality correction, not implementer rework failure. C7 is checkpoint approval only, never final TASK1607 completion or authority-changing merge clearance.'
   created_at: 2026-10-08T01:57:58.574146610Z
   modified_at: 2026-10-08T01:57:58.574146610Z
+- id: 01a11941-ac98-75a2-b9b0-2b13406343dd
+  author: joe
+  content: |
+    # TASK-1607 — SOURCE READY
+
+    C7 source rework is ready for an operator-authorized Git-writable implementer launch. This is not C7 REVIEW READY and is not independent approval. No commit, push, merge-to-main, hold clearance, completion edit, or gateway activation was performed.
+
+    ## Checkpoint and scope
+
+    Verified implementer role, actual worktree `/home/joe/ai/aida-worktrees/aida-task-1607`, branch `story-1485`, lease `01a119224b9d`. Existing HEAD remains `c85ae7eaff280b703dda6aa9d7bc8768c73c1787`; this is the existing commit, not a new rework commit. Coordinator's pending merge of `199e591b07aa76a59cd34f0a41946f918501f6ba` is preserved. No Git metadata writes were attempted during the source-only continuation. Imported staged upstream changes remain byte-identical to `pending-upstream-index.patch` (SHA-256 `8c3700dbf34ecde719da7248668ac3ac7f7e1abe2a2a8e4d8ee3366d66f7782d`).
+
+    The binding advisor decision (`launcher-binding-decision.txt`, mailbox reply `203b0678`) corrects brief item 2: production launcher edits wait until step5 after fresh independent C7 core approval. `supervisor.rs` and `maintenance_schedule.rs` are untouched. There is no narrow gateway exception.
+
+    ## Eight-item disposition
+
+    1. **Child operation scope:** `seat_occupancy/mod.rs`, `runtime.rs`, and new `scope.rs` bind child authority to persisted PID/start identity, including after reparenting/holder exit. Own start-validated, unambiguous lease is fallback only; parent leases add no scope. The local persisted review graph grants only the assigned spec, its review story, and direct PR/MR specs; no transitive overlap or title-prose authority. Runtime operation tests cover implementer completion/session-end review routing, reviewer record/rework/completion, punt/advice routing, and refusal of unrelated/bulk routing, peer Spawn, LoopStart, and Handoff. Future production wiring must supply the scoped local snapshot before the seat lock.
+    2. **Launcher inventory/disposition:** sketch addendum inventories actual phase symbols plus schedule tick/shift tick and supervisor redrive. Core tests show unattended LoopStart without a validated grant refuses and descendants cannot borrow holder authority. Intended later disposition is delivery to the live holder, never a competing loop. Production changes remain deferred per advisor decision.
+    3. **ADR-68 refinement:** grant-valid plain-shell one-shot Route/Spawn passes without installing a holder; harness/loop anchors still claim. Persisted child/demotion classification precedes the exemption; unknown identity refuses. Tests prove a later harness can claim, sibling harness fencing remains, and LoopStart/Handoff stay restricted. Exact ADR refinement is saved in `adr68-refinement.md`; canonical store comment failed on its store-write lock and needs reconciliation when available.
+    4. **Bounded flock:** `SeatStore::lock_with_timeout` polls contention with a ten-second production deadline and busy/stalled diagnosis; permanent sidecar remains. A short-deadline stalled-holder test proves bounded refusal without record mutation.
+    5. **Shared policy root:** `SeatConfig::load` resolves the main-worktree root consistently with state storage. Config-trust inventory includes the reader and policy keys. Conflicting sibling/main fixture configs prove shared policy and state roots.
+    6. **CLI surface audit:** regenerated six session-seat audit rows. Internal trace/header text moved to plain comments. Generated-help regression and hermetic CLI checks verify help contains no internal spec IDs, both status JSON spellings work, unsupported JSON leaves refuse, and kill remains disabled.
+    7. **Flock regression robustness:** permit-drop and multi-handle tests use bounded retry for contention caused by fork-inherited open file descriptions; comments explain the failure mode. No indefinite wait.
+    8. **C1–C8 preservation:** no gateway activation or hard-kill capability. Demotion, spoof, unknown identity, reservations, and generation fencing remain covered. New review scope is a local snapshot prepared before locking; no network/forge calls were added under the seat lock. Seat-before-queue lock ordering remains documented. Production gateway timing/activation remains the later approval checkpoint.
+
+    AGENTS.md and OVERVIEW.md point to the updated architecture checkpoint; the signed-off sketch and existing commits are preserved.
+
+    ## Validation
+
+    All tests use fixture repositories, fake HOME where applicable, and test-owned processes; no live-store, timer, user-file, or peer-session tests.
+
+    Commands use `CARGO_TARGET_DIR=$PWD/target/task1607-c7`, the local ignored adapter directory on PATH, and `RUSTC_WRAPPER=` after a transient shared sccache connection failure. The Cargo adapter acquires the existing machine-wide queue and slot flocks through read-only handles before invoking the original wrapper; it does not bypass the build gate. The final fast run's optional fetch is refused before Git executes, while the actual portability ratchet uses coordinator-fetched origin/main. Adapter copies and initial failures are retained alongside final raw logs.
+
+    | Command/check | Result | Raw evidence |
+    | --- | --- | --- |
+    | `cargo test -p aida-cli-lib --no-default-features --lib seat_occupancy` | 51 passed, 0 failed | `target-tests-final.log` |
+    | `cargo test -p aida-cli-lib --no-default-features --lib session_seat_generated_help_contains_no_internal_spec_ids` | 1 passed, 0 failed | `help-regression-test.log` |
+    | `cargo test -p aida-core process_probe` | 12 passed, 0 failed | `process-probe-tests.log` |
+    | Built aida-cli-lib test binary, filter `bug_1723_config_trust` | 8 passed, 0 failed | `config-trust-tests.log` |
+    | `cargo build -p aida-cli` | passed | `cli-build-final.log` |
+    | `python3 verify-seat-cli.py` | 6 help paths, both JSON spellings, 4 unsupported JSON refusals, 2 kill refusals; no state created | `seat-cli-blackbox.log` |
+    | JSON audit regeneration plus `cmp` against checked-in audit | passed | `json-audit-verify.log` |
+    | `cargo fmt --all -- --check` | passed | `fmt-check.log` |
+    | `make check-ci-fast` | 21 gates passed (fast tier), exit 0 | `check-ci-fast.log` |
+    | `git diff --check` and staged-diff checksum comparison | passed | `index-preservation.txt` |
+
+    Non-vacuity proof: temporarily removing the Child restriction caused the fully qualified runtime reviewer/rework/punt regression to fail on an unrelated TASK-99 route (one selected test). Exact source bytes were restored, then all 51 final seat tests passed. See `mutation-proof.log` and `child-guard-removed.log`.
+
+    No full-workspace test suite, full-tier CI, remote CI, or live forge smoke test is claimed. Fast-tier skips are the repository's normal classification, not disabled gates.
+
+    ## Review artifacts and next boundary
+
+    `source-rework.patch` contains only this continuation's unstaged tracked-source diff against the pending merge index, plus the new `scope.rs`. `source-files.sha256` records source bytes. `source-diff-stat.txt` lists tracked changes; `pending-upstream-index.patch` and `index-preservation.txt` document preservation. All raw logs and fixture scripts are retained here.
+
+    Next: operator-authorized Git-writable implementer launch to inspect and commit the concrete source plus preserved pending merge, run required checks as appropriate, and push the same PR branch. Only then request fresh independent C7 review of the actual committed head. No approval, hold clearance, gateway wiring, or merge is implied by this source checkpoint.
+  created_at: 2026-10-08T02:04:56.856192199Z
+  modified_at: 2026-10-08T02:04:56.856192199Z
+  relayed_from: implementer
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
