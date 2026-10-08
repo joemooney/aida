@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-07T22:20:18.378078722Z
+modified_at: 2026-10-08T02:19:11.720778153Z
 req_type: Bug
 tags:
 - atomicity
@@ -16,6 +16,69 @@ tags:
 - from-qci:BUG-021
 - queue-work
 - roles
+comments:
+- id: 01a1194e-b7e8-75c1-a588-15d62bcaf0cb
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): BUG-1808 — complete routed-child preflight before pickup mutations
+
+    Author scope: sketch only, awaiting a different advisor; no implementation or approval. Inspected main 199e591b07aa76a59cd34f0a41946f918501f6ba and full BUG-1808/TASK-1337 specs and comments using target/agent/aida. BUG-1808 is Approved and guided. TASK-1337 is already Completed on main; its code must be extended, not duplicated or described as absent. No live queue-work repro was run because that would risk exactly the forbidden mutations.
+
+    Owner / trigger
+
+    Queue-work dispatch owns read-only selection and launch planning before setup. Every child-launch boundary retains final authorization. Trigger: a nondelegating implementer selecting implementer-routed work must be refused without changing requirement status, queue membership, refs, worktree, lease or manifest. A valid advisor/product/integrator launcher may select another role's routed work without changing its own authorization identity. Root dispatches implementation only after independent signoff; authority-changing merge remains operator-owned.
+
+    Verified existing behavior / exact surfaces
+
+    - aida-cli-lib/src/queue_cmd.rs::handle_queue_work already calls resolve_queue_work_plan with read-only synthesis=true, resolves infer_queue_work_role, prints queue_work_role_mismatch, preflights branch occupancy with preflight_queue_work_branch, then persists synthesized queue rows. Calibration, pull/cleanup and session_start follow. TASK-1337's early delegation check is specifically guarded by !no_launch && !no_human; dry-run/list also bypass it. Interactive fresh pickup is already covered.
+    - seat_authority.rs::validate_child_delegation is read-only and checks current_grant, explicit delegable_seats and roster_allows; issue_child repeats it at issuance. Reuse these primitives. current_grant checks validity, subject, revocation/expiry, roster and parent lineage. Shell role/--role never grants authority.
+    - queue_cmd.rs::resolve_queue_work_plan uses role_hint for cross-user queue fallback, but its no-argument head path constructs role_filter directly from AIDA_SESSION_ROLE. Its synthetic explicit row also reads the shell role. infer_queue_work_role prefers --role, then routed-majority, then scope default. This is a concrete selector consistency target, not permission to silently change role precedence.
+    - queue_cmd.rs::queue_work_role_mismatch presently suggests --role <shell-role>. That can confuse an advisor launcher selecting implementer work: the desired selector is the child's routed role, not a request to transform the launcher seat.
+    - queue_cmd.rs::handle_queue_command's QueueCommand::Work arm routes batch/nextN/auto-complete before ordinary handle_queue_work; inspect every early mutation in those routes. resolve_batch_members and the direct handle_queue_work caller in the rework flow must share the same policy.
+    - session.rs::spawn_vendor_headless_with_seat and spawn_claude_headless_resume create logs before issue_child; spawn_reviewer_launch_plan also issues a reviewer grant. queue_cmd.rs::run_standalone_reviewer calls these after pickup setup and after preparing/removing verdict files. The early !no_human guard leaves these late refusals possible.
+    - Important distinction: session.rs::exec_vendor_headless (plain headless implementer) does NOT issue a new child grant in its body; it inherits the environment. Do not claim every headless arm issues late, or add a new delegation requirement to an already-issued phase child without tracing its launcher. Interactive handle_queue_work issues its child grant near launch (line 12421 at inspected main).
+    - lib.rs::SessionLease, session_manifest.rs::SessionManifest and queue_cmd.rs::write_queue_work_manifest are setup surfaces; TASK-1603's ownership registration/status-bump ordering must remain intact. Review auto_complete.rs phase dispatch and lib.rs::run_auto_complete/run_implementer paths before moving any ownership or status action.
+    - Existing tests: aida-cli/tests/queue_work_dry_run.rs::{task_1337_delegation_refuses_before_any_pickup_mutation,task_1337_held_branch_refuses_before_any_pickup_mutation,task_1337_post_setup_launch_error_prints_manual_guided_continuation,assert_pickup_unstarted}. First test already exercises a real interactive guided CLI refusal. assert_pickup_unstarted checks Approved, no lease and no new queue membership, not full byte-for-byte snapshots of all prohibited state. seat_authority.rs::tests::env_role_alone_confers_no_seat_and_grants_fail_closed verifies preflight itself creates no grant.
+
+    Proposed flow and semantics
+
+    1. Resolve one read-only launch plan at the outer dispatch boundary: canonical authority root, selector and origin, exact chosen spec UUIDs/queue rows, child seat(s), launch kind (interactive/headless/fresh/resume/setup-only/already-issued phase), branch/worktree intent and caller's validated grant identity. Reuse TASK-1337 helpers instead of adding a second role resolver. Honor explicit --role consistently for head/explicit/batch selection; review scopes remain reviewer as currently documented. Preserve --strict; do not persist convenience queue synthesis during planning.
+    2. Print selection and authorization separately: 'queue selector implementer (--role); selected <spec>; child seat implementer; launcher advisor (validated grant)'. If selection cannot find a routed item, report that fact and suggest an authorized launcher use `aida queue work <SPEC> --role implementer --strict` (or role appropriate to selected work). If delegation fails, say which validated parent seat cannot delegate which child seat; changing --role is not a grant remedy. Give a human-terminal delegation remedy only as manual guidance, never execute role enter or widen grants. Unknown/malformed grant or authority root refuses explicitly, not empty queue or network failure.
+    3. For a route that actually delegates, invoke validate_child_delegation with the EXACT child seat before any implicit queue write, calibration/spec tags, status bump, pull/ref fetch, dormant-session cleanup, branch/worktree creation, lease/manifest write, review-marker/verdict reset, grant issuance or orchestration ownership registration. Headless versus interactive is not the authority distinction. For nextN/batch, preflight the initial bounded member set/needed phase roles before creating run state; dynamically admitted members are checked before their admission writes. Never change TASK-1603's register-before-phase-bump invariant after authorization succeeds.
+    4. Carry the same plan into setup; don't reselect after preflight. Revalidate selected queue/spec revision and effective child seat at the first write. At issue_child, retain its existing fresh validation; a passed preflight is not a grant and cannot bypass expiry/revocation/roster checks.
+    5. Explicitly model an already-issued orchestrator phase child separately from a launcher. Validate its grant/seat plus live run-token/spec membership with existing orchestrator_authorizes_explicit_queue_pickup/orchestrator::detect evidence; do not authorize arbitrary implementers by environment flags. If the actual path is delegation, require delegation. If it is executing a previously authorized assignment, validate that assignment and don't demand the intentionally empty child delegation set. Inconclusive ownership/lineage refuses. The exact plain exec_vendor_headless binding needs advisor resolution before code.
+    6. --dry-run/--list-sessions stay non-mutating; preview can report not-authorized without issuing anything. --no-launch creates setup despite deferring execution, so it needs an explicit preauthorized setup policy rather than inheriting today's accidental exemption. Proposed conservative default: require routed-child delegation before setup unless it is a corroborated assigned phase. Do not silently break the TUI path that supplies --session-id with --no-launch; test it and obtain binding policy below.
+
+    Races and failure-state contract
+
+    Known delegation refusals must occur before the first mutation; cleanup after partial setup is not equivalent. Preserve pre-existing branches, queue rows, leases and manifests exactly, including approved-but-unqueued and existing in-progress fixtures. Snapshot and revalidate queue revision/spec routing and grant identity; a changed role cannot slip between selection and setup. Use existing permanent queue lock/atomic update machinery (never unlink ~/.aida/queue/<role>.lock). Do not invent a global authority bypass to avoid a race.
+
+    Grant revocation/expiry or roster changes can happen AFTER preflight but before issue_child. Reject the launch and preserve evidence; never launch with stale authority. The requested 'all pre-command state unchanged' is stronger than current preflight + later issuance. Implementation must either stage setup and publish only after final validation with well-defined locks, or compensate ONLY artifacts created by this invocation using compare-and-swap ownership checks. Never roll back a peer's queue row/status/ref. If safe compensation cannot be guaranteed, stop with exact residual-state diagnostics and surface the atomicity limitation to advisor before accepting the implementation; do not claim acceptance was met. This is a grounded design fork, not authorization for a broad transaction rewrite. Ordinary vendor exec failure after successful authorization remains TASK-1337's manual continuation behavior; do not conflate it with an authorization refusal.
+
+    Tests / evidence (new names are proposed)
+
+    Extend aida-cli/tests/queue_work_dry_run.rs using its real-binary temporary-repo fixtures and support::grant_seat; fake HOME/AIDA_HOME, fake forge/vendor, no real grants/queues/store or vendor launch. Snapshot canonical object bytes/status history, queue file contents and row metadata, all refs plus FETCH_HEAD, git worktree inventory, directories, leases/manifests, stack/calibration state, grant inventory, orchestration ownership files, review marker/verdict files. Initialize read caches first; explicitly account for benign lock/cache bookkeeping rather than silently excluding lifecycle writes.
+
+    - bug_1808_headless_delegation_refusal_is_atomic: real CLI implementer with empty delegation set, implementer-routed queued and implicit unqueued fixtures; interactive/guided, headless fresh, supported resume and standalone reviewer cases. Assert nonzero exit, delegation diagnostic, identical snapshots and no vendor sentinel. Plain headless unauthorized consumer must not inherit launcher authority.
+    - bug_1808_explicit_selector_does_not_change_launcher_authority: real CLI authorized advisor/product/integrator + --role implementer selects correct row and gets past preflight; same selector on nondelegating implementer refuses. Include no-arg head, explicit spec and batch; assert selection failure is not described as delegation failure.
+    - bug_1808_all_entrypoints_preflight_before_mutation: actual CLI batch/nextN/auto-complete wrappers and direct/rework path, including synthesized row and calibration flags. Dry-run/list leave state unchanged; no-launch exercises approved policy.
+    - bug_1808_preflight_races_fail_closed: deterministic synchronization between plan, first write and issuance; expire/revoke grant, shrink roster, replace queue routing, race a peer update. Assert no child, no stale authorization and no lost peer state; exact residual snapshots where rollback is required.
+    - bug_1808_assigned_phase_is_not_recursive_delegation: real entrypoint with corroborated parent/run/spec assignment versus forged/stale run env; valid assigned phase remains functional, unknown refuses.
+    - Keep all three TASK-1337 integration tests, branch occupancy manual-only behavior, current role precedence unit tests in src/tests/queue_work_tests.rs, authority tests and existing drain reliability tests. Use failure injection / temporarily removed guard in scratch tests to demonstrate snapshots detect premature writes. Source-string assertions alone are insufficient. Run targeted suites, formatting and project-required CI checks after implementation; this sketch claims no test execution.
+
+    Out of scope
+
+    No grant/roster expansion, queue re-routing in live state, automatic branch retirement, foreign-worktree cleanup, bypass flags, relaxation of guided/supervision gates, scheduling, or changes to review authority (BUG-1802). No duplication of TASK-1337's successful interactive fix. Direct agent-new/reconstitution fixes outside queue-work reachable routes require separate scope decisions; do not silently absorb TASK-1333.
+
+    Questions for independent advisor
+
+    A. Is the no-launch/TUI setup path required to preflight delegation even when no process is launched? Conservative proposal above prevents preallocated unauthorized state but changes setup-only compatibility.
+    B. For plain headless exec, which canonical launch/run binding distinguishes an assigned child from a launcher, and must it receive a fresh child grant? Existing exec_vendor_headless inherits env while other spawn functions issue; no blanket exemption or recursive delegation assumption is justified.
+    C. Does strict unchanged-state acceptance include authority revocation after successful preflight? If yes, approve a bounded staging/CAS compensation design (with concrete locks and ownership) before implementation; otherwise amend acceptance explicitly to distinguish initial preflight refusal from late revocation, without weakening final fail-closed launch checks.
+    D. Should batch/drain authorization cover all planned phase seats before any run record, or only current child with later members independently preflighted? Recommend all statically known seats up front plus each dynamic admission, retaining TASK-1603 ownership ordering.
+    E. Confirm explicit --role should govern no-arg selection as well as cross-user fallback and launch role; its current role_filter re-reads shell env. Diagnostics must not instruct the launcher to become the child seat.
+  created_at: 2026-10-08T02:19:11.720778153Z
+  modified_at: 2026-10-08T02:19:11.720778153Z
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
