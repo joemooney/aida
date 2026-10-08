@@ -478,3 +478,9 @@ iteration failures, symlinked type/shard directories, and invalid YAML filenames
 refuse handoff without authorizing absence. Tolerant bulk readers retain their
 existing behavior.
 <!-- trace:BUG-1807 | ai:codex -->
+
+The review-story config probe validates TOML before legacy fallback and refuses
+configured but unavailable canonical storage. Its mode policy and existing
+store-location checks are covered by `scripts/config-trust.toml`; the probe adds
+no executable, command, or credential selection.
+<!-- trace:BUG-1807 | ai:codex -->

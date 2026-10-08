@@ -119,7 +119,15 @@ sites = 1
 # enumerated under [keys.worktree.*] below.
 [readers."aida-cli-lib/src/lib.rs"]
 channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
-sites = 47
+# load_review_story_inventory adds a worktree/probe site: validate TOML and
+# refuse legacy fallback when mode declares distributed storage or the existing
+# store_path parser finds a canonical-location candidate. It checks mode (policy)
+# and top-level / deployment.store_path (frozen location exceptions), including
+# the resolver's legacy line scan; this probe only tests candidate presence and
+# does not open a candidate or select an executable, command, or credential.
+# No new key class or authority exception is introduced.
+# trace:BUG-1807 | ai:codex
+sites = 48
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]

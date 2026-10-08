@@ -3,6 +3,8 @@ GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures
 refuse creation without legacy fallback. Queue insertion must succeed
 before the CI checkpoint reports a handoff.
+The canonical-store fallback probe is inventoried in `scripts/config-trust.toml`;
+its existing mode/location checks introduce no new authority-bearing keys.
 See [CLI fixture coverage](tests/test_gitlab_review_handoff.py).
 <!-- trace:BUG-1807 | ai:codex -->
 
