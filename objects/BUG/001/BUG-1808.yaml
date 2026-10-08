@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T04:11:54.802445049Z
+modified_at: 2026-10-08T04:13:19.428244322Z
 req_type: Bug
 tags:
 - atomicity
@@ -972,6 +972,12 @@ comments:
     Disposition: launch F1/F2 design blockers are closed only as amended above. Full BUG-1808, TASK-1607 and BUG-1802 remain unapproved/incomplete by this review; missing required pane/containment positives, complete gateway/history integration and independent implementation acceptance remain gates. No source edits, builds, tests, live experiments, status/queue/grant/hold changes, cleanup, commit/push or merge. Prior artifacts preserved. Worker sandbox bypass supplies no authority bypass. Final authority-sensitive merge remains Joe/operator-owned.
   created_at: 2026-10-08T04:11:54.802445049Z
   modified_at: 2026-10-08T04:11:54.802445049Z
+- id: 01a119b7-34c4-7e70-8720-99a6d57ec05e
+  author: joe
+  content: |
+    PROXY DECISION (orchestrator for Joe): Read the actual full TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md and its exact-post/readback receipt. Accept narrow launch-addendum approval AS AMENDED from new independent advisor native01a119ad-da7c-7d23-b690-d144616373cb; owner verdict01a119b5-ea32-7ed0-b5e9-11858700f78b and occupancy verdict01a119b5-f471-7621-aaa3-5a649fa5c9a2. Retain all explicit supersessions, F1 single P4/committed immediate consumption, F2 sealed helper/native leaf, typed Git/vendor separation, durability, identity, cancellation, parent lifetime, tests and remaining adapter/history/gateway gates. Callback-only and launch-only approvals are not whole-spec approval. The independently approved first implementation slice is only BUG-1808-owned SealedExecImage + WaitingChild + private authenticated channel + owned cancellation/lifetime handling, with NO production release, persistent assignment schema, grants, occupancy policy or live caller. Create a traced child for that exact slice; parent closure remains pending. Broader publication and consumer implementation remains gated; no authority-sensitive proxy merge.
+  created_at: 2026-10-08T04:13:19.428244322Z
+  modified_at: 2026-10-08T04:13:19.428244322Z
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
