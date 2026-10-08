@@ -39,6 +39,7 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
     let output = Command::new("git")
         .current_dir(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
+        .args(transaction_git_config())
         .args(args)
         .output()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
@@ -48,6 +49,23 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
     })
+}
+
+/// `-c` options for a git command run inside a store-writer transaction:
+/// no automatic maintenance. `git commit`, `fetch`, `merge` and `rebase`
+/// otherwise start `maintenance --auto` (or `gc --auto`), which would run
+/// optional, possibly detached maintenance and its `pre-auto-gc` hook while
+/// the store write lock is held. Store maintenance runs after the
+/// transaction instead (`opportunistic_store_gc`). Empty when this thread
+/// holds no store write lock. The settings reach child git processes
+/// through `GIT_CONFIG_PARAMETERS`.
+// trace:TASK-1717 | ai:claude
+pub fn transaction_git_config() -> &'static [&'static str] {
+    if crate::db::any_store_write_lock_held() {
+        &["-c", "maintenance.auto=false", "-c", "gc.auto=0"]
+    } else {
+        &[]
+    }
 }
 
 /// Check if a directory is a git repository.
@@ -1298,6 +1316,22 @@ pub fn current_branch(repo: &Path) -> Result<String> {
 /// Check if the working tree has uncommitted changes.
 pub fn has_changes(repo: &Path) -> Result<bool> {
     let result = git(repo, &["status", "--porcelain"])?;
+    Ok(!result.stdout.is_empty())
+}
+
+/// [`has_changes`] for a store writer deciding whether to stage, commit or
+/// publish: a `git status` that fails (unreadable index, corrupt repository)
+/// is an error carrying git's stderr, never "clean". [`has_changes`] keeps
+/// its tolerant contract for its other callers.
+// trace:TASK-1717 | ai:claude
+pub fn has_changes_checked(repo: &Path) -> Result<bool> {
+    let result = git(repo, &["status", "--porcelain"])?;
+    anyhow::ensure!(
+        result.success,
+        "git status failed in {}: {}",
+        repo.display(),
+        result.stderr.trim()
+    );
     Ok(!result.stdout.is_empty())
 }
 
@@ -3659,8 +3693,17 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
     let mut sources_config = false;
     for name in IN_TRANSACTION_HOOKS {
         let path = dir.join(name);
-        let Ok(meta) = std::fs::metadata(&path) else {
-            continue;
+        let meta = match std::fs::metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "refusing AIDA store write: cannot inspect the `{name}` hook {}",
+                        path.display()
+                    )
+                })
+            }
         };
         if !meta.is_file() || !is_executable(&meta) {
             continue;
@@ -3674,8 +3717,18 @@ pub fn ensure_store_hooks_supported(store: &Path) -> Result<()> {
         if body.contains(".aida/commit-config") {
             sources_config = true;
         }
-        if is_shipped_hook(&body) {
-            continue;
+        match classify_hook(name, &body) {
+            HookKind::Shipped => continue,
+            HookKind::OtherAidaGenerated => anyhow::bail!(
+                "refusing AIDA store write: the `{name}` hook ({}) is an AIDA-generated hook whose body is not \
+                 this aida build's shipped `{name}` hook (installed by another AIDA version, or edited after \
+                 install). Git runs it while this command holds the store write lock, and its safety there is \
+                 not established. Nothing was changed. Run `aida upgrade` to install the current hook; if you \
+                 changed it on purpose, remove its two `# AIDA Generated` / `# To customize` header lines so it \
+                 is checked as a custom hook.",
+                path.display()
+            ),
+            HookKind::Custom => {}
         }
         if let Some(line) = aida_writer_call(&body) {
             anyhow::bail!(
@@ -3727,11 +3780,71 @@ fn is_executable(_meta: &std::fs::Metadata) -> bool {
     true
 }
 
-fn is_shipped_hook(body: &str) -> bool {
-    let body = body.trim_end();
-    crate::templates::EMBEDDED_TEMPLATES
+/// The shipped template each git hook name may carry: `aida init` writes
+/// the first four into `.git/hooks/` (with a generated header); the
+/// agent-skills sync hook is installed for the three checkout hooks in the
+/// AIDA checkout itself. A template is supported only under its own name.
+// trace:TASK-1717 | ai:claude
+const SHIPPED_HOOKS: &[(&str, &str)] = &[
+    ("pre-commit", "hooks/aida-pre-commit.sh"),
+    ("post-commit", "hooks/aida-post-commit.sh"),
+    ("commit-msg", "hooks/aida-commit-msg"),
+    ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+    ("post-rewrite", "hooks/aida-sync-agent-skills.sh"),
+    ("post-checkout", "hooks/aida-sync-agent-skills.sh"),
+    ("post-merge", "hooks/aida-sync-agent-skills.sh"),
+];
+
+#[derive(Debug, PartialEq, Eq)]
+enum HookKind {
+    /// This build's shipped hook for that name, bare or as `aida init`
+    /// wrote it (generated header after the shebang, any header version).
+    Shipped,
+    /// Carries the AIDA generated header but its body is not this build's
+    /// shipped hook for that name: another version, or edited.
+    OtherAidaGenerated,
+    /// Anything else: checked by [`aida_writer_call`].
+    Custom,
+}
+
+// trace:TASK-1717 | ai:claude
+fn classify_hook(name: &str, body: &str) -> HookKind {
+    let (generated, unwrapped) = strip_generated_header(body);
+    let shipped = SHIPPED_HOOKS
         .iter()
-        .any(|(key, tpl)| key.starts_with("hooks/") && tpl.trim_end() == body)
+        .filter(|(hook, _)| *hook == name)
+        .filter_map(|(_, key)| crate::templates::EMBEDDED_TEMPLATES.get(key))
+        .any(|tpl| tpl.trim_end() == unwrapped.trim_end());
+    match (shipped, generated) {
+        (true, _) => HookKind::Shipped,
+        (false, true) => HookKind::OtherAidaGenerated,
+        (false, false) => HookKind::Custom,
+    }
+}
+
+/// Remove exactly the two header lines `wrap_with_aida_header` puts after
+/// the shebang (`# AIDA Generated: v… | checksum:…` and `# To customize: …`).
+/// Returns whether they were present and the hook with them removed. The
+/// header's version and checksum confer nothing: only the remaining body is
+/// compared with a template.
+fn strip_generated_header(body: &str) -> (bool, String) {
+    let (shebang, rest) = if body.starts_with("#!") {
+        let split = body.find('\n').map(|nl| nl + 1).unwrap_or(body.len());
+        body.split_at(split)
+    } else {
+        ("", body)
+    };
+    let mut lines = rest.splitn(3, '\n');
+    let (Some(first), Some(second)) = (lines.next(), lines.next()) else {
+        return (false, body.to_string());
+    };
+    let generated = first.starts_with("# AIDA Generated: v")
+        && first.contains(" | checksum:")
+        && second == "# To customize: copy this file and modify the copy";
+    if !generated {
+        return (false, body.to_string());
+    }
+    (true, format!("{shebang}{}", lines.next().unwrap_or("")))
 }
 
 /// The first line of a hook that invokes `aida` as anything other than
@@ -3766,17 +3879,63 @@ fn aida_writer_call(body: &str) -> Option<String> {
             if !(prev_ok && next_ok) {
                 continue;
             }
+            // Inside a quoted string (echo/printf prose, a path assigned to a
+            // variable) the word is data, unless that string runs a command
+            // substitution.
+            if let Some(open) = quoted_from(&line[..at]) {
+                let inside = &line[open..at];
+                if !(inside.contains("$(") || inside.contains('`')) {
+                    continue;
+                }
+            }
             let before = line[..at].trim_end();
+            let rest = line[end..].trim_start();
             let probe = ["command -v", "which", "type"]
                 .iter()
                 .any(|p| before.ends_with(p));
-            let internal = line[end..].trim_start().starts_with("internal ");
-            if !probe && !internal {
+            // `$(command -v aida) edit …` runs what the probe found.
+            let probe_runs = probe
+                && rest
+                    .strip_prefix(')')
+                    .map(|after| after.trim_start())
+                    .is_some_and(|after| after.starts_with(|c: char| c.is_ascii_alphanumeric()));
+            let internal = rest.starts_with("internal ");
+            if (!probe || probe_runs) && !internal {
                 return Some(line.to_string());
             }
         }
     }
     None
+}
+
+/// If the end of `prefix` is inside a quoted string, the byte offset where
+/// that string's quote opened. Backslash escapes are honored outside single
+/// quotes.
+fn quoted_from(prefix: &str) -> Option<usize> {
+    let mut open: Option<(char, usize)> = None;
+    let mut escaped = false;
+    for (i, c) in prefix.char_indices() {
+        match open {
+            Some(('\'', _)) => {
+                if c == '\'' {
+                    open = None;
+                }
+            }
+            _ if escaped => escaped = false,
+            _ if c == '\\' => escaped = true,
+            Some(('"', _)) => {
+                if c == '"' {
+                    open = None;
+                }
+            }
+            _ => {
+                if c == '\'' || c == '"' {
+                    open = Some((c, i));
+                }
+            }
+        }
+    }
+    open.map(|(_, i)| i)
 }
 
 /// A `.aida/commit-config` line that only sets a variable: blank, comment,
@@ -4034,7 +4193,7 @@ fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
 // trace:TASK-1717 | ai:claude
 pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
     anyhow::ensure!(
-        !crate::db::store_write_lock_held(aida_repo),
+        !crate::db::any_store_write_lock_held(),
         "sync_objects publishes to origin and cannot run inside a store-writer transaction: \
          commit inside the transaction and publish after it ends"
     );
@@ -6693,12 +6852,47 @@ mod tests {
     // trace:TASK-1717 | ai:claude
     #[test]
     fn task_1717_hook_classification() {
-        // Shipped templates are supported verbatim.
-        for (key, body) in crate::templates::EMBEDDED_TEMPLATES.iter() {
-            if key.starts_with("hooks/") {
-                assert!(is_shipped_hook(body), "{key}");
-            }
+        // Every shipped git hook is supported under its own name, bare and
+        // exactly as `aida init` writes it (generated header after the
+        // shebang). An older generated header over the SAME body is too.
+        for (name, key) in SHIPPED_HOOKS {
+            let tpl = crate::templates::EMBEDDED_TEMPLATES[key];
+            let wrapped = crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{name}")),
+                tpl,
+            );
+            assert!(wrapped.contains("# AIDA Generated: v"), "{name}");
+            assert_eq!(classify_hook(name, tpl), HookKind::Shipped, "{name} bare");
+            assert_eq!(
+                classify_hook(name, &wrapped),
+                HookKind::Shipped,
+                "{name} wrapped"
+            );
+            let older = wrapped.replacen("# AIDA Generated: v", "# AIDA Generated: v0.0.1-old-", 1);
+            assert_eq!(
+                classify_hook(name, &older),
+                HookKind::Shipped,
+                "{name} older header"
+            );
+            // A changed body under the generated header is not trusted.
+            let edited = format!("{}\necho changed\n", wrapped.trim_end());
+            assert_eq!(
+                classify_hook(name, &edited),
+                HookKind::OtherAidaGenerated,
+                "{name}"
+            );
         }
+        // A shipped template is not supported under another hook's name.
+        let track = crate::templates::EMBEDDED_TEMPLATES["hooks/aida-track-commits.sh"];
+        assert_ne!(classify_hook("post-commit", track), HookKind::Shipped);
+        let pre = crate::templates::EMBEDDED_TEMPLATES["hooks/aida-pre-commit.sh"];
+        assert_ne!(classify_hook("commit-msg", pre), HookKind::Shipped);
+        // Header lines anywhere but right after the shebang are user text.
+        let moved = format!("#!/bin/sh\necho hi\n# AIDA Generated: v1 | checksum:00\n# To customize: copy this file and modify the copy\n{pre}");
+        assert_eq!(classify_hook("pre-commit", &moved), HookKind::Custom);
+        // The shipped pre-commit's prose and binary-path strings are data,
+        // so even a drifted copy without a header is not misread as a writer.
+        assert_eq!(aida_writer_call(pre), None);
         // Store-reading and aida-internal hooks are supported.
         for ok in [
             "#!/bin/bash\nenv -u GIT_DIR git -C /home/u/aida/.aida-store rev-parse HEAD\n",
@@ -6714,6 +6908,8 @@ mod tests {
             "#!/bin/sh\n/usr/local/bin/aida queue add TASK-1\n",
             "#!/bin/sh\nfoo && aida db sync\n",
             "#!/bin/sh\n\"$AIDA_BIN\" edit TASK-1\n",
+            "#!/bin/sh\n$(command -v aida) edit TASK-1\n",
+            "#!/bin/sh\necho \"$(aida edit TASK-1)\"\n",
         ] {
             assert!(aida_writer_call(bad).is_some(), "{bad}");
         }

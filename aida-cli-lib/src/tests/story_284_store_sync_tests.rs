@@ -190,3 +190,43 @@ fn auto_push_failure_is_non_fatal_for_per_write_and_session_end() {
     std::fs::write(store.join("metadata.yaml"), "name: test2\n").unwrap();
     maybe_auto_push_store(&store, StoreAutoPushMode::SessionEnd, "test-session-end");
 }
+
+// trace:TASK-1717 | ai:claude — the session-end auto-push mode against a
+// configured but unreachable origin: the pending change is committed under
+// the store lock and kept, the push is deferred, and the lock is released.
+// (The `session_end` command needs a live session; this drives the same
+// `maybe_auto_push_store(SessionEnd)` call it makes.)
+#[test]
+fn task_1717_session_end_auto_push_keeps_the_commit_when_origin_is_unreachable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .current_dir(&store)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "-b", "aida-store"]);
+    git(&["config", "user.email", "aida@example.test"]);
+    git(&["config", "user.name", "AIDA Test"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "seed"]);
+    git(&[
+        "remote",
+        "add",
+        "origin",
+        "/definitely/missing/aida-store.git",
+    ]);
+    std::fs::write(store.join("metadata.yaml"), "name: session\n").unwrap();
+    write_config(tmp.path(), "[store.sync]\nauto_push = \"session-end\"\n");
+    maybe_auto_push_store(&store, StoreAutoPushMode::SessionEnd, "session-end");
+    assert_eq!(
+        git(&["log", "-1", "--format=%s"]),
+        "chore: sync pending changes"
+    );
+    assert_eq!(git(&["status", "--porcelain", "--untracked-files=no"]), "");
+    assert!(!aida_core::db::store_write_lock_held(&store));
+}

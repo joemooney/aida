@@ -1189,12 +1189,15 @@ fn db_sync_local_window(
     // could report "yes" while nothing gets staged, and the
     // follow-up `git commit` would fail with an empty error.
     // trace:BUG-1-051 | ai:claude
-    let has_changes = aida_core::git_ops::has_changes(store_path)?;
+    // trace:TASK-1717 | ai:claude — a failing `git status` is an error,
+    // never "clean".
+    let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
     if has_changes {
         let msg = message.unwrap_or("chore: sync pending changes");
         aida_core::git_ops::add_all(store_path, ".")?;
-        aida_core::git_ops::commit(store_path, msg)?;
-        println!("Committed: {}", msg);
+        if aida_core::git_ops::commit(store_path, msg)? {
+            println!("Committed: {}", msg);
+        }
     } else if !pull && !push {
         println!("Nothing to commit.");
     }

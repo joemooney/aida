@@ -382,6 +382,13 @@ impl Drop for Holder {
 /// Disposable distributed project with an attached store and a local bare
 /// origin carrying both branches. Hooks: the barrier hook only.
 fn fixture() -> Fx {
+    fixture_with(false)
+}
+
+/// `scaffolded`: run a default `aida init` (the real scaffolder writes its
+/// generated git hooks into `.git/hooks`) and leave `core.hooksPath` unset;
+/// otherwise `--no-hooks` plus the test's barrier hooks.
+fn fixture_with(scaffolded: bool) -> Fx {
     let tmp = tempfile::tempdir().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let home = base.join("home");
@@ -406,20 +413,25 @@ fn fixture() -> Fx {
         obs,
         grant: None,
     };
-    fx.run_ok(&[
+    let mut init = vec![
         "init",
         "--force",
         "--no-skills",
-        "--no-hooks",
         "--no-agent-config",
         "--no-roles",
-    ]);
+    ];
+    if !scaffolded {
+        init.push("--no-hooks");
+    }
+    fx.run_ok(&init);
     fx.run_ok(&["add", "seed spec", "--type", "task"]);
-    git(
-        &fx.repo,
-        &["config", "core.hooksPath", fx.hooks.to_str().unwrap()],
-    );
-    fx.install_barrier_hooks(&["pre-commit", "post-commit", "post-rewrite", "pre-push"]);
+    if !scaffolded {
+        git(
+            &fx.repo,
+            &["config", "core.hooksPath", fx.hooks.to_str().unwrap()],
+        );
+        fx.install_barrier_hooks(&["pre-commit", "post-commit", "post-rewrite", "pre-push"]);
+    }
     git(
         &fx.repo,
         &["remote", "add", "origin", fx.origin.to_str().unwrap()],
@@ -520,12 +532,18 @@ fn sync_vs_edit_serializes_at_the_pending_commit() {
     let sync = fx.spawn(&["db", "sync"], true);
     fx.wait_reached("pre-commit");
 
+    let parked = snapshot(&fx);
     let mut edit = fx.spawn(&["edit", "TASK-1", "--title", "edited during sync"], false);
     assert_parked_on_lock(&mut edit, &fx.store, "aida edit");
     assert_eq!(
         fx.head(),
         before,
         "nothing may commit while sync holds the lock"
+    );
+    assert_eq!(
+        snapshot(&fx),
+        parked,
+        "the waiting writer touched no bytes, index or admin state"
     );
 
     fx.release("pre-commit");
@@ -748,6 +766,17 @@ fn rejection_retry_preserves_peer_and_concurrent_local_commit() {
     std::fs::write(&cfg, body).unwrap();
 
     fx.write_store_file("notes/pending.txt", "pending\n");
+    // The retry's fetch uses a private ref and never writes FETCH_HEAD.
+    let fetch_head = PathBuf::from(git(
+        &fx.store,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "FETCH_HEAD",
+        ],
+    ));
+    std::fs::write(&fetch_head, "sentinel FETCH_HEAD\n").unwrap();
     fx.arm("pre-push");
     let sync = fx.spawn(&["db", "sync", "--push"], true);
     fx.wait_reached("pre-push");
@@ -787,6 +816,15 @@ fn rejection_retry_preserves_peer_and_concurrent_local_commit() {
         git(&mirror, &["rev-parse", "refs/heads/aida-store"]),
         origin,
         "mirror gets exactly what origin accepted"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&fetch_head).unwrap(),
+        "sentinel FETCH_HEAD\n"
+    );
+    assert_eq!(
+        git(&fx.store, &["for-each-ref", "refs/aida/"]),
+        "",
+        "private fetch refs removed"
     );
     assert_push_ran_unlocked(&fx);
 }
@@ -1643,50 +1681,6 @@ fn killed_holder_releases_the_lock_and_the_sidecar_survives() {
     assert_eq!(fx.subjects("HEAD")[0], "chore: sync pending changes");
 }
 
-/// A sync that pulls a peer's spec edit leaves the cache serving it.
-#[test]
-fn sync_pull_leaves_a_fresh_cache() {
-    let fx = fixture();
-    assert!(fx.run(&["list"]).status.success(), "warm the cache");
-    let peer = fx.base.join("peer-title");
-    git(
-        &fx.base,
-        &[
-            "clone",
-            "-q",
-            "-b",
-            "aida-store",
-            fx.origin.to_str().unwrap(),
-            peer.to_str().unwrap(),
-        ],
-    );
-    let object = task_1_object(&peer);
-    let body = std::fs::read_to_string(peer.join(&object)).unwrap();
-    let body: String = body
-        .lines()
-        .map(|l| {
-            if l.starts_with("title:") {
-                "title: peer retitled".to_string()
-            } else {
-                l.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-        + "\n";
-    assert!(
-        body.contains("peer retitled"),
-        "fixture object shape: {body}"
-    );
-    std::fs::write(peer.join(&object), body).unwrap();
-    git(&peer, &["commit", "-qam", "chore: peer retitle"]);
-    git(&peer, &["push", "-q", "origin", "aida-store"]);
-    let out = fx.run(&["db", "sync", "--pull"]);
-    assert!(out.status.success(), "{}", text(&out));
-    let shown = fx.run(&["show", "TASK-1"]);
-    assert!(text(&shown).contains("peer retitled"), "{}", text(&shown));
-}
-
 /// Missing sentinel (no pre-commit, no sentinel file): the detector runs
 /// under the held lock and records the bypass. Matching sentinel with
 /// telemetry ON: nothing recorded.
@@ -1730,4 +1724,472 @@ fn missing_and_matching_sentinel_paths() {
         .unwrap();
     assert!(out.status.success(), "{}", text(&out));
     assert!(!log.exists(), "matching sentinel records nothing");
+}
+
+/// Full observable store state: HEAD, index entries, status, admin markers
+/// and every worktree file's content hash (runtime `.aida/` excluded).
+fn snapshot(fx: &Fx) -> String {
+    use std::hash::{Hash, Hasher};
+    let out = |args: &[&str]| {
+        let o = git_try(&fx.store, args);
+        format!(
+            "{:?}|{}|{}",
+            o.status.code(),
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        )
+    };
+    let git_dir = PathBuf::from(git(&fx.store, &["rev-parse", "--absolute-git-dir"]));
+    let admin: Vec<String> = [
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "index.lock",
+    ]
+    .iter()
+    .map(|f| format!("{f}={}", git_dir.join(f).exists()))
+    .collect();
+    fn walk(dir: &Path, root: &Path, out: &mut Vec<String>) {
+        let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().flatten().collect();
+        entries.sort_by_key(|e| e.path());
+        for e in entries {
+            let p = e.path();
+            let rel = p.strip_prefix(root).unwrap().display().to_string();
+            if rel == ".git" || rel == ".aida" {
+                continue;
+            }
+            if p.is_dir() {
+                walk(&p, root, out);
+            } else {
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                std::fs::read(&p).unwrap_or_default().hash(&mut h);
+                out.push(format!("{rel}:{:x}", h.finish()));
+            }
+        }
+    }
+    let mut files = Vec::new();
+    walk(&fx.store, &fx.store, &mut files);
+    format!(
+        "{}\n{}\n{}\n{}\n{}",
+        out(&["rev-parse", "HEAD"]),
+        out(&["ls-files", "-s"]),
+        out(&["status", "--porcelain", "-uall"]),
+        admin.join(","),
+        files.join("\n")
+    )
+}
+
+fn retitle_on_peer(fx: &Fx, name: &str, title: &str) -> String {
+    let peer = fx.base.join(name);
+    git(
+        &fx.base,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "aida-store",
+            fx.origin.to_str().unwrap(),
+            peer.to_str().unwrap(),
+        ],
+    );
+    let object = task_1_object(&peer);
+    let body: String = std::fs::read_to_string(peer.join(&object))
+        .unwrap()
+        .lines()
+        .map(|l| {
+            if l.starts_with("title:") {
+                format!("title: {title}")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(peer.join(&object), body).unwrap();
+    git(&peer, &["commit", "-qam", "chore: peer retitle"]);
+    git(&peer, &["push", "-q", "origin", "aida-store"]);
+    object
+}
+
+fn set_auto_push(fx: &Fx, mode: &str) {
+    let cfg = fx.repo.join(".aida/config.toml");
+    let body: String = std::fs::read_to_string(&cfg)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            if l.starts_with("auto_push = ") {
+                format!("auto_push = \"{mode}\"")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    assert!(body.contains(&format!("auto_push = \"{mode}\"")));
+    std::fs::write(&cfg, body).unwrap();
+}
+
+// ── B1: the profile the real scaffolder installs ───────────────────────────
+
+/// Default `aida init` (generated-header hooks in `.git/hooks`, no
+/// `core.hooksPath`): every A4 route runs to success and the hooks' effects
+/// are intact — the store-pair trailer pins the prior head, and every store
+/// commit ran its pre-commit (sentinel written and consumed; with the field
+/// study on, no bypass is recorded).
+#[test]
+fn scaffolded_hook_profile_runs_every_route() {
+    let fx = fixture_with(true);
+    let pre_commit = std::fs::read_to_string(fx.repo.join(".git/hooks/pre-commit")).unwrap();
+    assert!(
+        pre_commit.contains("# AIDA Generated: v"),
+        "real scaffolded hook: {pre_commit:.200}"
+    );
+    assert!(git_try(&fx.repo, &["config", "core.hooksPath"])
+        .stdout
+        .is_empty());
+    let study = |args: &[&str]| {
+        let out = fx
+            .cmd(&fx.repo, args, false)
+            .env("AIDA_TELEMETRY", "1")
+            .env("AIDA_FIELD_STUDY", "1")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {}", text(&out));
+        out
+    };
+    fx.peer_push("peer.txt", "peer\n");
+    fx.write_store_file("notes/pending.txt", "pending\n");
+    let before = fx.head();
+    study(&["db", "sync", "--pull", "--push"]);
+    assert_eq!(fx.origin_head(), fx.head());
+    let pending_commit = git(
+        &fx.store,
+        &[
+            "log",
+            "--format=%B",
+            "--grep",
+            "chore: sync pending changes",
+            "-1",
+        ],
+    );
+    assert!(
+        pending_commit.contains(&format!("Aida-Store: {before}")),
+        "trailer: {pending_commit}"
+    );
+    let common = PathBuf::from(git(
+        &fx.store,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    ));
+    assert!(
+        !common.join("aida-precommit-sentinel").exists(),
+        "sentinel written and consumed"
+    );
+    // Pre-existing detector behavior (not this change): git's rebase
+    // sequencer runs post-commit, but not pre-commit, for each commit it
+    // replays, so the shipped detector records the one replayed local commit
+    // as a bypass. Exactly one record: the sync's own commit ran pre-commit.
+    let log = fx.home.join(".aida/rule-violations.jsonl");
+    let replayed = std::fs::read_to_string(&log).unwrap_or_default();
+    assert_eq!(replayed.lines().count(), 1, "{replayed}");
+    std::fs::remove_file(&log).unwrap();
+
+    fx.write_store_file("notes/pull.txt", "pull\n");
+    study(&["pull", "--store-only"]);
+    fx.write_store_file("notes/push.txt", "push\n");
+    study(&["push", "--store-only"]);
+    assert_eq!(fx.origin_head(), fx.head());
+    fx.peer_push("peer2.txt", "peer\n");
+    study(&["add", "scaffolded add", "--type", "task"]);
+    assert!(fx
+        .subjects(&fx.origin_head())
+        .iter()
+        .any(|s| s.contains("scaffolded add")));
+    let local = fx.repo.join(".aida/mailbox");
+    std::fs::create_dir_all(&local).unwrap();
+    std::fs::write(
+        local.join("m-scaffold.json"),
+        message_json("m-scaffold", false),
+    )
+    .unwrap();
+    study(&["mailbox", "sync"]);
+    assert_eq!(fx.subjects("HEAD")[0], "mailbox: digest 1 message(s)");
+    study(&["db", "merge-gate"]);
+    let violations =
+        std::fs::read_to_string(fx.home.join(".aida/rule-violations.jsonl")).unwrap_or_default();
+    assert!(
+        violations.is_empty(),
+        "every later store commit ran its pre-commit: no bypass recorded: {violations}"
+    );
+    assert_eq!(git(&fx.store, &["status", "--porcelain"]), "");
+}
+
+/// An AIDA-generated hook whose body is not this build's shipped hook
+/// (another version, or edited) is refused before any change, naming the
+/// upgrade path; an older header over the shipped body is accepted.
+#[test]
+fn drifted_generated_hook_is_refused_with_upgrade_guidance() {
+    let fx = fixture_with(true);
+    let hook = fx.repo.join(".git/hooks/pre-commit");
+    let original = std::fs::read_to_string(&hook).unwrap();
+    let older = original.replacen("# AIDA Generated: v", "# AIDA Generated: v0.0.1-", 1);
+    std::fs::write(&hook, &older).unwrap();
+    fx.write_store_file("notes/pending.txt", "pending\n");
+    let ok = fx.run(&["db", "sync"]);
+    assert!(
+        ok.status.success(),
+        "older header, shipped body: {}",
+        text(&ok)
+    );
+
+    std::fs::write(&hook, format!("{}\necho drifted\n", older.trim_end())).unwrap();
+    fx.write_store_file("notes/second.txt", "second\n");
+    let before = snapshot(&fx);
+    let out = fx.run(&["db", "sync"]);
+    assert!(!out.status.success(), "{}", text(&out));
+    assert!(text(&out).contains("aida upgrade"), "{}", text(&out));
+    assert_eq!(snapshot(&fx), before, "nothing changed");
+}
+
+// ── B2: a failing `git status` is never "clean" ────────────────────────────
+
+/// Make the store's index unreadable for the current (non-root) user; HEAD
+/// stays readable, so `git status` exits non-zero with empty output.
+fn break_index(fx: &Fx) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let index = PathBuf::from(git(
+        &fx.store,
+        &["rev-parse", "--path-format=absolute", "--git-path", "index"],
+    ));
+    std::fs::set_permissions(&index, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let st = git_try(&fx.store, &["status", "--porcelain"]);
+    assert!(
+        !st.status.success(),
+        "this host reads a mode-000 index (root?); the failure cannot be induced"
+    );
+    index
+}
+
+fn mend_index(index: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(index, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[test]
+fn unreadable_status_fails_push_and_auto_push_without_false_success() {
+    let fx = fixture();
+    let local = fx.repo.join(".aida/mailbox");
+    std::fs::create_dir_all(&local).unwrap();
+    std::fs::write(local.join("m-b2.json"), message_json("m-b2", false)).unwrap();
+    let origin = fx.origin_head();
+    let index = break_index(&fx);
+    let before = snapshot(&fx);
+    let out = fx.run(&["push", "--store-only"]);
+    let t = text(&out);
+    assert!(!out.status.success(), "{t}");
+    assert!(t.contains("cannot read the store status"), "{t}");
+    for lie in ["published", "store push complete", "Committed"] {
+        assert!(!t.contains(lie), "false `{lie}`: {t}");
+    }
+    assert!(
+        !fx.store.join("mailbox/m-b2.json").exists(),
+        "no canonical write"
+    );
+    assert_eq!(snapshot(&fx), before);
+    assert_eq!(fx.origin_head(), origin);
+
+    // Per-write auto-push defers with the real error, never "auto-pushed".
+    set_auto_push(&fx, "per-write");
+    let out = fx.run(&["edit", "TASK-1", "--title", "while broken"]);
+    let t = text(&out);
+    assert!(!t.contains("auto-pushed"), "{t}");
+    assert_eq!(fx.origin_head(), origin);
+
+    // Allocation and reconcile stop on the same failure.
+    let add = fx.run(&["add", "not while broken", "--type", "task"]);
+    assert!(!add.status.success(), "{}", text(&add));
+    assert!(text(&add).contains("git status failed"), "{}", text(&add));
+    fx.peer_push("peer.txt", "peer\n");
+    let rec = fx.run(&["remote", "reconcile", "--execute", "--yes"]);
+    assert!(!rec.status.success(), "{}", text(&rec));
+    assert!(text(&rec).contains("git status failed"), "{}", text(&rec));
+
+    // Healthy control once the index is readable again.
+    mend_index(&index);
+    set_auto_push(&fx, "manual");
+    let pull = fx.run(&["pull", "--store-only"]);
+    assert!(pull.status.success(), "{}", text(&pull));
+    let out = fx.run(&["push", "--store-only"]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(fx.store.join("mailbox/m-b2.json").exists());
+    assert_eq!(fx.origin_head(), fx.head());
+}
+
+// ── Section 7 gaps ─────────────────────────────────────────────────────────
+
+/// Group 1: the rebase this sync started conflicts and its automatic abort
+/// FAILS. Both failures are reported, the rebase state is kept as git left
+/// it, the next writer refuses it without changing anything, and manual
+/// recovery restores the local commit.
+#[test]
+fn owned_rebase_abort_failure_is_reported_and_preserved() {
+    let fx = fixture();
+    fx.peer_push("clash.txt", "origin side\n");
+    fx.write_store_file("notes/clash.txt", "local side\n");
+    git(&fx.store, &["add", "-A"]);
+    git(&fx.store, &["commit", "-qm", "chore: local clash"]);
+    let local = fx.head();
+    install(
+        &fx.hooks.join("reference-transaction"),
+        "#!/bin/sh\n[ \"$1\" = prepared ] || exit 0\ncase \"$(ps -o args= -p $PPID)\" in *rebase*--abort*) echo T1717-ABORT-BLOCKED >&2; exit 1;; esac\nexit 0\n",
+    );
+    let out = fx.run(&["db", "sync", "--pull"]);
+    let t = text(&out);
+    assert!(!out.status.success(), "{t}");
+    assert!(t.contains("rebase --abort` also failed"), "{t}");
+    let git_dir = PathBuf::from(git(&fx.store, &["rev-parse", "--absolute-git-dir"]));
+    assert!(
+        git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists(),
+        "{t}"
+    );
+    let kept = snapshot(&fx);
+    let edit = fx.run(&["edit", "TASK-1", "--title", "onto a broken rebase"]);
+    assert!(!edit.status.success(), "{}", text(&edit));
+    assert!(
+        text(&edit).contains("rebase in progress"),
+        "{}",
+        text(&edit)
+    );
+    assert_eq!(snapshot(&fx), kept, "the refused writer changed nothing");
+    std::fs::remove_file(fx.hooks.join("reference-transaction")).unwrap();
+    git(&fx.store, &["rebase", "--abort"]);
+    assert_eq!(fx.head(), local, "the local commit survives");
+}
+
+/// Group 4: a configured but unreachable origin is not "no origin": `add`
+/// files locally and says so; per-write auto-push keeps the commit and
+/// defers.
+#[test]
+fn unreachable_origin_files_locally_and_defers() {
+    let fx = fixture();
+    git(
+        &fx.repo,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "/nonexistent/t1717/origin.git",
+        ],
+    );
+    let add = fx.run(&["add", "filed offline", "--type", "task"]);
+    assert!(add.status.success(), "{}", text(&add));
+    assert!(text(&add).contains("unreachable"), "{}", text(&add));
+    assert!(fx
+        .subjects("HEAD")
+        .iter()
+        .any(|s| s.contains("filed offline")));
+    set_auto_push(&fx, "per-write");
+    let out = fx.run(&["edit", "TASK-1", "--title", "edited offline"]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(text(&out).contains("push deferred"), "{}", text(&out));
+    assert_eq!(fx.subjects("HEAD")[0], "update TASK-1");
+}
+
+/// Group 4: both sides edit the same spec object; the pull's window unions
+/// the structural conflict and the rebase completes.
+#[test]
+fn pull_window_unions_a_same_spec_conflict() {
+    let fx = fixture();
+    let object = retitle_on_peer(&fx, "peer-same", "peer side");
+    fx.run_ok(&["edit", "TASK-1", "--title", "local side"]);
+    let out = fx.run(&["pull", "--store-only"]);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(text(&out).contains("auto-merged"), "{}", text(&out));
+    let merged = std::fs::read_to_string(fx.store.join(&object)).unwrap();
+    assert!(
+        merged.contains("local side") || merged.contains("peer side"),
+        "{merged}"
+    );
+    assert_eq!(git(&fx.store, &["status", "--porcelain"]), "");
+    let git_dir = PathBuf::from(git(&fx.store, &["rev-parse", "--absolute-git-dir"]));
+    assert!(!git_dir.join("rebase-merge").exists());
+}
+
+/// Group 5: with another process holding the cache refresh lock, a pulling
+/// sync completes without waiting on it (no cache refresh inside the store
+/// window); a cache-backed `list` meanwhile does not show the pulled title
+/// (the holder is real); once released, `list` serves it.
+#[test]
+fn stale_cache_with_a_competing_refresh_holder() {
+    let fx = fixture();
+    fx.run_ok(&["list"]);
+    retitle_on_peer(&fx, "peer-title", "peer retitled");
+    let cache = aida_core::CachedGitBackend::default_cache_path(&fx.store);
+    let refresh = aida_core::db::cache_sidecar_path(&cache, "refresh.lock");
+    let release = fx.base.join("release-refresh");
+    let held = fx.base.join("held-refresh");
+    let mut holder = Command::new("flock")
+        .arg(&refresh)
+        .args([
+            "-c",
+            &format!(
+                ": > '{}'; while [ ! -f '{}' ]; do sleep 0.02; done",
+                held.display(),
+                release.display()
+            ),
+        ])
+        .spawn()
+        .unwrap();
+    wait_for(&held, "refresh holder");
+    let started = Instant::now();
+    let out = fx.run(&["db", "sync", "--pull"]);
+    let sync_time = started.elapsed();
+    let during = fx.run(&["list"]);
+    std::fs::write(&release, "").unwrap();
+    holder.wait().unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(
+        sync_time < Duration::from_secs(20),
+        "the store window never waits on a cache refresh"
+    );
+    assert!(
+        !text(&during).contains("peer retitled"),
+        "refresh was really held: {}",
+        text(&during)
+    );
+    let after = fx.run(&["list"]);
+    assert!(after.status.success(), "{}", text(&after));
+    assert!(text(&after).contains("peer retitled"), "{}", text(&after));
+}
+
+/// Group 5: opportunistic `git gc --auto` runs after the store window: its
+/// pre-auto-gc hook sees the store lock free and no store lock held by aida.
+#[test]
+fn gc_runs_after_the_store_window() {
+    let fx = fixture();
+    fx.install_barrier_hooks(&["pre-auto-gc"]);
+    git(&fx.store, &["config", "gc.autoPackLimit", "1"]);
+    for f in ["p1.txt", "p2.txt"] {
+        fx.local_commit(f);
+        git(&fx.store, &["repack", "-q"]);
+    }
+    git(&fx.store, &["push", "-q", "origin", "aida-store"]);
+    fx.peer_push("peer.txt", "peer\n");
+    let out = fx
+        .cmd(&fx.repo, &["db", "sync", "--pull"], true)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out));
+    let lines = fx.obs_lines("pre-auto-gc");
+    assert!(!lines.is_empty(), "gc --auto ran its hook");
+    for line in &lines {
+        if let Some(v) = line.strip_prefix("lock=") {
+            assert_eq!(v, "free", "{lines:?}");
+        }
+        if let Some(v) = line.strip_prefix("aida_locks=") {
+            assert!(fixture_locks(&fx, v).is_empty(), "{lines:?}");
+        }
+    }
 }

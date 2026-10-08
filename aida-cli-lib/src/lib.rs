@@ -18035,7 +18035,9 @@ pub(crate) fn pull_store_before_id_allocation(
     // A failed stage/commit (a refusing hook) stops the allocation with the
     // original error; the pending changes stay as they were.
     aida_core::db::with_store_write_lock(store_path, || {
-        if git_ops::has_changes(store_path)? {
+        if git_ops::has_changes_checked(store_path)
+            .context("cannot read the store status before id allocation")?
+        {
             git_ops::add(store_path, &["."])
                 .and_then(|_| {
                     git_ops::commit(
@@ -52120,8 +52122,11 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
     // lock. A rebase that was already in progress (someone else's recovery)
     // is reported and left alone, never aborted.
     let pulled = aida_core::db::with_store_write_lock(store_path, || {
-        if matches!(aida_core::git_ops::has_changes(store_path), Ok(true)) {
-            return Ok(SyncPull::Dirty);
+        // A failing `git status` is a failed pull, not a clean tree.
+        match aida_core::git_ops::has_changes_checked(store_path) {
+            Ok(true) => return Ok(SyncPull::Dirty),
+            Ok(false) => {}
+            Err(e) => return Ok(SyncPull::Failed(e)),
         }
         let branch = aida_core::git_ops::current_branch(store_path)
             .unwrap_or_else(|_| "aida-store".to_string());
@@ -52138,6 +52143,7 @@ pub(crate) fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
                         let _ = std::process::Command::new("git")
                             .arg("-C")
                             .arg(store_path)
+                            .args(aida_core::git_ops::transaction_git_config())
                             .args(["rebase", "--abort"])
                             .output();
                     }
@@ -72537,7 +72543,9 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
     let captured = aida_core::db::with_store_write_lock(store_path, || {
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
-        if git_ops::has_changes(store_path).unwrap_or(false) {
+        // A failing `git status` defers the push (warned below); it is
+        // never read as "nothing pending".
+        if git_ops::has_changes_checked(store_path)? {
             git_ops::add_all(store_path, ".")
                 .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
                 .context("could not commit pending store changes")?;
@@ -72595,6 +72603,9 @@ pub(crate) fn digest_mailbox_to_canonical(
 ) -> Result<usize> {
     let local = mailbox_store::read_local_messages(project_root)?;
     aida_core::db::with_store_write_lock(store_root, || {
+        // A store whose status cannot be read is refused before any
+        // canonical write.
+        aida_core::git_ops::has_changes_checked(store_root)?;
         let n = mailbox_store::digest_snapshot_to_canonical(store_root, &local)?;
         if n == 0 {
             return Ok(0);
@@ -73551,6 +73562,10 @@ pub(crate) fn handle_push_command(
         // that commit and runs after the lock is released.
         let mailbox = mailbox_publish_snapshot(store_path, "push");
         let window = aida_core::db::with_store_write_lock(store_path, || {
+            // A store whose status cannot be read fails the leg before the
+            // digest or anything else touches it.
+            git_ops::has_changes_checked(store_path)
+                .context("cannot read the store status; nothing was written or pushed")?;
             let published = mailbox
                 .as_ref()
                 .map(|local| publish_mailbox_snapshot(store_path, local, "push"))
@@ -73561,12 +73576,14 @@ pub(crate) fn handle_push_command(
             // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing
             // hook) fails the leg with git's error: nothing is pushed and
             // the pending changes are kept, uncommitted.
-            if git_ops::has_changes(store_path)? {
+            if git_ops::has_changes_checked(store_path)? {
                 let msg = message.unwrap_or("chore: sync pending changes");
-                git_ops::add(store_path, &["."])
+                let committed = git_ops::add(store_path, &["."])
                     .and_then(|_| git_ops::commit(store_path, msg))
                     .context("could not commit pending store changes; nothing was pushed")?;
-                println!("  Committed: {}", msg);
+                if committed {
+                    println!("  Committed: {}", msg);
+                }
             }
             report_mailbox_published(published, "push");
             if !store_has_origin {
@@ -74296,7 +74313,7 @@ fn pull_store_leg_locked(
     // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing hook)
     // ends the leg with git's own error before any pull; the pending changes
     // are kept, uncommitted.
-    let pending = git_ops::has_changes(store_path).map_err(|e| {
+    let pending = git_ops::has_changes_checked(store_path).map_err(|e| {
         let failure = format!("store leg could not read pending changes: {e:#}");
         eprintln!("  {} {failure}", "Warning:".yellow().bold());
         failure
@@ -74753,6 +74770,13 @@ pub(crate) fn handle_pull_command(
         // lock. The code-derived reconcile and maintenance run after release.
         let mailbox = mailbox_publish_snapshot(store_path, "pull");
         let window = aida_core::db::with_store_write_lock(store_path, || {
+            // A store whose status cannot be read ends the leg before the
+            // digest or anything else touches it.
+            if let Err(e) = git_ops::has_changes_checked(store_path) {
+                let failure = format!("store leg could not read pending changes: {e:#}");
+                eprintln!("  {} {failure}", "Warning:".yellow().bold());
+                return Ok(Err(failure));
+            }
             let published = mailbox
                 .as_ref()
                 .map(|local| publish_mailbox_snapshot(store_path, local, "pull"))

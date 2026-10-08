@@ -2084,6 +2084,7 @@ fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(repo)
+        .args(aida_core::git_ops::transaction_git_config())
         .args(args)
         .output()
         .ok()?;
@@ -2326,7 +2327,7 @@ pub fn handle_remote_reconcile(
     // the validation, and the rollback of any failure after the first merge.
     // The pushes run after release and name the union commit.
     let reconciled = aida_core::db::with_store_write_lock(&store_dir, || {
-        if git_ops::worktree_is_dirty(&store_dir) {
+        if git_ops::has_changes_checked(&store_dir)? {
             anyhow::bail!(
                 "the store worktree at {} has uncommitted changes — commit or clean them first",
                 store_dir.display()
@@ -2616,15 +2617,16 @@ fn rollback_to_preimage(store_dir: &Path, pre: &str, err: anyhow::Error) -> anyh
     let reset = Command::new("git")
         .arg("-C")
         .arg(store_dir)
+        .args(git_ops::transaction_git_config())
         .args(["reset", "--hard", pre])
         .output();
     let state = match reset {
         Ok(out) if out.status.success() => match git_ops::head_sha(store_dir) {
-            Ok(head) if head == pre && !git_ops::worktree_is_dirty(store_dir) => {
+            Ok(head) if head == pre && matches!(git_ops::has_changes_checked(store_dir), Ok(false)) => {
                 format!("the local store is back at {}", short(pre))
             }
             Ok(head) => format!(
-                "rollback ran but the local store is at {} with changes, not {}; inspect {}",
+                "rollback ran but the local store (at {}, expected {}) is not verifiably clean; inspect {}",
                 short(&head),
                 short(pre),
                 store_dir.display()
