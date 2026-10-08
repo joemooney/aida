@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-08T16:31:20.799766818Z
+modified_at: 2026-10-08T16:42:36.749814393Z
 req_type: Epic
 tags:
 - architecture
@@ -139,6 +139,21 @@ comments:
     Out of scope: source changes now, statuses/queues/holds/grants, child dispatch, automatic wake, seat redesign, broker enforcement, new approval exemptions, speculative per-spec target overrides. TASK-1593, TASK-1591, BUG-1811 and BUG-1812 remain exclusively with Joe's external agent; no edits or new acceptance assigned to them.
   created_at: 2026-10-08T16:31:20.799766818Z
   modified_at: 2026-10-08T16:31:20.799766818Z
+- id: 01a11c65-334d-7b31-8d02-bd60bb8ceb29
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED.
+
+    Independent reviewer: Codex, new strict advisor, not the sketch author or coordinator. Reviewed EPIC74_AMENDED_SKETCH.md SHA-256 1105ae45cfa11db5a9c407e097ae5b95473bc4db8dbfa8ed1d515ac510e4f9a9 and EPIC74_CHILD_ACCEPTANCE_PROPOSED_AMENDMENT.md SHA-256 a50d69f0fcefa57f4e9953e8dcd9f31ae80fed90f6913f367e153a1a6b04d4c2 against main b46aec1e674baae5a329416d4119e67b59200a88 and the canonical operator answer at 2026-10-08T15:54:26.321418310Z.
+
+    The target/parent direction is settled. Required rework: exhaustive entrypoint/guard matrix including MCP claim, direct ship, resume and MR recovery; safe slice-1 refusal until target shipping exists; a specified canonical graph/action lock or reservation protocol closing the AFTER-final-check race; honest head-versus-base pin limits; durable squash coverage and child-reopen generations enforced across live/replay/body-trailer promotion; and an ADR. Accept the technical parent representation Option<BranchRef>: None/no sync for ordinary default work, repository-default parent for off-default absent parent. No lane system or per-spec override.
+
+    Generic force cannot implicitly release isolation. The existing force/close-without-landing acceptance leaves a real authority fork: no recorded answer selects who may release live/unlanded work or its required evidence. Keep that fork explicit and refuse release-equivalent mutations until resolved; do not invent permanent capability removal or new editor/agent authority. Target reset, reparent/delete and default changes must not bypass isolation. Partial landing never clears; new squash SHA never refreshes old reopened child work by itself.
+
+    Full binding rework details, acceptance amendments, named tests, source references and publication limits: .aida/handoff/orchestrator/run-20261008/ANSWERED_DESIGN_SKETCHES_INDEPENDENT_REVIEW.md, sections E1–E4 and EPIC acceptance table. This is not implementation/dispatch/status/queue/merge authorization. TASK-1593 TASK-1591 BUG-1811 BUG-1812 remain external reservations. No tests were executed by this design review.
+  created_at: 2026-10-08T16:42:36.749814393Z
+  modified_at: 2026-10-08T16:42:36.749814393Z
+  relayed_from: answered-sketch-independent-advisor
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
