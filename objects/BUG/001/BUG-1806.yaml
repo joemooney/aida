@@ -8,13 +8,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:19:42.865695554Z
-modified_at: 2026-10-08T02:08:40.829637604Z
+modified_at: 2026-10-08T02:08:43.395236179Z
 req_type: Bug
 tags:
 - from-qci:BUG-020
 - role
 - security
 - shell-integration
+comments:
+- id: 01a11945-2183-7cb1-8fae-b8ea1104f241
+  author: joe
+  content: 'PROXY DECISION: approved queued drive item dispatched to a separate implementer in isolated sibling worktree. Reproduce failed-diagnostic eval with fixtures, preserve role state, fresh independent review before integration.'
+  created_at: 2026-10-08T02:08:43.395236179Z
+  modified_at: 2026-10-08T02:08:43.395236179Z
 history:
 - id: 01a11945-177d-7112-8e88-af7023e58138
   author: aida-session-start
