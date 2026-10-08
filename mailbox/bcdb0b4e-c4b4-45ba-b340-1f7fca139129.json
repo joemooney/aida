@@ -1,0 +1,18 @@
+{
+  "id": "bcdb0b4e-c4b4-45ba-b340-1f7fca139129",
+  "thread_id": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791488822335,
+  "in_reply_to": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "body": "Exact observed C raw log path (correcting the preceding transcribed UUID suffix): /tmp/claude-1000/-home-joe-ai-aida/01a11c9e-bd42-7be1-a355-9c66728020f9/scratchpad/batchc/ci-logs-v2/check-ci.log . The durable runner script RUN/batch-c-prepare-evidence/run_checkci2.sh also gives this exact path. All other interim limits in the preceding FYI remain.",
+  "subject": "Exact batch C raw log path correction",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

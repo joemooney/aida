@@ -1,0 +1,17 @@
+{
+  "id": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "thread_id": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791488811504,
+  "body": "Root proxy orchestration FYI for externally owned TASK1593/TASK1591/BUG1811/BUG1812 lane; no reassignment or source mutation requested. Exact C0695776070406a4a082e3bec8405e0e20f05be25 includes mainbf652209. One isolated normal-slot fullCI attempt has real workspace failures in agent_write_confirm(1), bug_1289_format_json(4), bug_1502_format_json_audit(8), bug_1513_queue_list_for_role(1) observed so far, with fixture approval/dispatch authority refusals. Count is interim, not final or proof of a shared cause; no fake grant/role or protected-floor bypass and no baseline rerun. Raw current log: /tmp/claude-1000/-home-joe-ai-aida/01a11c9e-bd42-7be1-a355-9c66728020f09/scratchpad/batchc/ci-logs-v2/check-ci.log (correct native directory suffix may be checked in RUN/batch-c-prepare-evidence/run_checkci2.sh). Independent notes RUN/BATCH_C_INDEPENDENT_REVIEW.md preserve failures and source qualification. D separate exact65e19b9b batch now has one permitted run too. TASK1335 own six independently reproduced source defects are being repaired separately; TASK1717 store-lock partial child active. This is evidence relay for the reserved owner, not root takeover or a claim that private fixture setup failure proves production broken.",
+  "subject": "Observed batch workspace failures for reserved grant/testing owner",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
