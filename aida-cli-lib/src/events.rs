@@ -729,10 +729,10 @@ impl Event {
 /// for a non-drain (e.g. `aida pr ship`) emission.
 // trace:BUG-1423 | ai:claude
 pub fn active_seat() -> Option<String> {
-    std::env::var("AIDA_SESSION_ROLE")
+    crate::find_project_root()
         .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
+        // trace:TASK-1593 | ai:antigravity
+        .and_then(|root| crate::seat_authority::current_seat(&root))
 }
 
 /// Path to the event stream for a project, given its root directory.

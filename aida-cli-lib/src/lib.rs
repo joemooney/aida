@@ -53241,6 +53241,7 @@ pub(crate) fn effective_role_resolved() -> (String, bool) {
 /// a ceiling, not an active seat; the environment role remains display/routing
 /// metadata. Missing or invalid grants get the least-privilege implementer
 /// baseline.
+// trace:TASK-1593 | ai:antigravity
 pub(crate) fn effective_role_with_roster() -> (String, team::RoleSource) {
     match find_project_root() {
         Ok(root) => match seat_authority::current_seat(&root) {
