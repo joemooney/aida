@@ -466,6 +466,9 @@ stale definition, and hold refusals for scripts. See
 Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
 `PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
 existing canonical review story in distributed or legacy stores; an unreadable
-store or failed queue insertion cannot establish a successful handoff. The CI
+store or failed queue insertion cannot establish a successful handoff. The
+creation gate requires every canonical object to be readable and parseable,
+without changing tolerant readers elsewhere or falling back to legacy state
+when configured canonical storage is unavailable. The CI
 checkpoint confirms the queue operation even when resuming without a lease.
 <!-- trace:BUG-1807 | ai:codex -->

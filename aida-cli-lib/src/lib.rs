@@ -46652,6 +46652,56 @@ mod task_192_fail_closed_fact_tests {
     }
 }
 
+/// Complete inventory for the review-story creation gate only. Bulk readers
+/// intentionally tolerate bad objects; absence here must not use that contract.
+// trace:BUG-1807 | ai:codex
+fn load_review_story_inventory(project_root: &std::path::Path) -> Result<RequirementsStore> {
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        let objects = store_path.join("objects");
+        // list_objects treats a missing root as empty. Require readable storage
+        // first, without GitBackend::new's directory-creation side effect.
+        std::fs::read_dir(&objects)
+            .with_context(|| format!("Cannot enumerate {}", objects.display()))?;
+        let mut store = aida_core::GitBackend::read_metadata_only(&store_path)?;
+        store.requirements = aida_core::object_store::list_objects(&objects)?
+            .into_iter()
+            .map(|(_, path)| aida_core::object_store::read_object_from_path(&path))
+            .collect::<Result<Vec<_>>>()?;
+        return Ok(store);
+    }
+
+    // The normal resolver is best effort. Before allowing legacy resolution,
+    // distinguish absent config from unreadable config or unavailable storage.
+    for root in project_root.ancestors() {
+        if aida_core::store_locate::is_system_temp_dir(root) {
+            break;
+        }
+        let path = root.join(".aida/config.toml");
+        match std::fs::read_to_string(&path) {
+            Ok(config) => {
+                toml::from_str::<toml::Table>(&config)
+                    .with_context(|| format!("Cannot parse {}", path.display()))?;
+                anyhow::ensure!(
+                    !config_declares_distributed(&config)
+                        && aida_core::store_locate::store_path_candidates(&config).is_empty(),
+                    "Configured canonical review-story storage is unavailable at {}",
+                    path.display()
+                );
+                break;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => return Err(err).with_context(|| format!("Cannot read {}", path.display())),
+        }
+    }
+    let path = aida_core::resolve_requirements_path_in(
+        project_root,
+        None,
+        None,
+        std::path::Path::new(""),
+    )?;
+    Storage::new(path).load()
+}
+
 pub(crate) fn canonical_review_story<'a>(
     store: &'a RequirementsStore,
     forge: ReviewForge,
@@ -48579,11 +48629,14 @@ pub(crate) fn try_auto_queue_pr_review(
     // Read canonical objects for both distributed and legacy stores. A failed
     // lookup cannot establish absence: do not file a duplicate on read failure.
     // trace:BUG-1807 | ai:codex
-    let Some(store) = load_store_for_lookup(project_root) else {
-        return AutoQueueOutcome::skipped_needs_attention(format!(
-            "auto-queue: cannot read review stories for {noun}-{} — reviewer handoff not confirmed",
-            pr.number
-        ));
+    let store = match load_review_story_inventory(project_root) {
+        Ok(store) => store,
+        Err(err) => {
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: cannot read review stories for {noun}-{} — reviewer handoff not confirmed: {err:#}",
+                pr.number
+            ));
+        }
     };
     {
         let persisted =
@@ -117102,6 +117155,28 @@ mod bug_1807_handoff_tests {
     }
 
     #[test]
+    fn configured_missing_canonical_store_never_uses_legacy_inventory() {
+        let root = tempfile::tempdir().unwrap();
+        Storage::new(root.path().join("requirements.yaml"))
+            .save(&RequirementsStore::default())
+            .unwrap();
+        std::fs::create_dir(root.path().join(".aida")).unwrap();
+        for config in [
+            "mode = \"distributed\"\nstore_path = \".aida-store\"\n",
+            "store_path = \".aida-store\"\n",
+        ] {
+            std::fs::write(root.path().join(".aida/config.toml"), config).unwrap();
+            assert!(load_review_story_inventory(root.path()).is_err());
+            assert!(!root.path().join(".aida-store").exists());
+        }
+        // A partial store must not become an empty inventory or get repaired
+        // as a side effect of this read gate.
+        std::fs::create_dir(root.path().join(".aida-store")).unwrap();
+        assert!(load_review_story_inventory(root.path()).is_err());
+        assert!(!root.path().join(".aida-store/objects").exists());
+    }
+
+    #[test]
     fn existing_mr35_story_is_recognized_without_github_collision() {
         let mut store = RequirementsStore::default();
         for (id, title) in [
@@ -117118,7 +117193,7 @@ mod bug_1807_handoff_tests {
         Storage::new(root.path().join("requirements.yaml"))
             .save(&store)
             .unwrap();
-        let store = load_store_for_lookup(root.path()).expect("legacy store");
+        let store = load_review_story_inventory(root.path()).expect("legacy store");
         assert_eq!(
             canonical_review_story(&store, ReviewForge::GitLab, 35, None, None)
                 .unwrap()

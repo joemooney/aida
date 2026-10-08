@@ -79,6 +79,66 @@ def check(binary, forge, fail_first=False):
         stories = [p for p in objects if f"Review {noun}-35:" in p.read_text()]
         assert len(stories) == 1, stories
         story = stories[0].stem
+        # The creation gate must reject an incomplete canonical inventory even
+        # when its stale cache still holds the valid pre-corruption story.
+        # trace:BUG-1807 | ai:codex
+        original = stories[0].read_bytes()
+        def refused_inventory(label):
+            before = {p: p.read_bytes() for p in objects if p != stories[0]}
+            result = run([binary, "pr", "auto-queue-review", "--branch", "bug-fixture"], root, env)
+            output = result.stdout + result.stderr
+            assert result.returncode != 0, (label, output)
+            assert "cannot read review stories" in output, (label, output)
+            assert "reviewer handoff not confirmed" in output, (label, output)
+            assert "→ reviewer queue" not in output, (label, output)
+            assert "reuses canonical" not in output, (label, output)
+            assert "✓ filed" not in output, (label, output)
+            assert f"aida queue work {noun}-35 --role reviewer" not in output
+            assert set((root / ".aida-store/objects").rglob("*.yaml")) == set(objects)
+            assert all(p.read_bytes() == data for p, data in before.items())
+            print(f"PASS {noun} {label}: exit={result.returncode}, objects={len(objects)} unchanged", flush=True)
+            print(output, flush=True)
+
+        malformed = original + b"\ninvalid: [unterminated\n"
+        stories[0].write_bytes(malformed)
+        refused_inventory("malformed canonical story")
+        assert stories[0].read_bytes() == malformed
+        stories[0].write_bytes(original)
+
+        # chmod is not evidence of unreadability under root. Verify denial,
+        # otherwise explicitly skip this permission-specific scenario.
+        mode = stories[0].stat().st_mode
+        try:
+            stories[0].chmod(0)
+            try:
+                stories[0].read_bytes()
+            except PermissionError:
+                refused_inventory("unreadable canonical story")
+            else:
+                print("SKIP permission denial: this user can read chmod-000 files", flush=True)
+        finally:
+            stories[0].chmod(mode)
+        assert stories[0].read_bytes() == original
+
+        objects_dir = root / ".aida-store/objects"
+        mode = objects_dir.stat().st_mode
+        try:
+            objects_dir.chmod(0)
+            try:
+                list(objects_dir.iterdir())
+            except PermissionError:
+                result = run([binary, "pr", "auto-queue-review", "--branch", "bug-fixture"], root, env)
+                output = result.stdout + result.stderr
+                assert result.returncode != 0, output
+                assert "reviewer handoff not confirmed" in output, output
+                assert "→ reviewer queue" not in output and "reuses canonical" not in output
+                print(f"PASS {noun} unreadable objects directory: exit={result.returncode}", output, flush=True)
+            else:
+                print("SKIP directory denial: this user can read chmod-000 directories", flush=True)
+        finally:
+            objects_dir.chmod(mode)
+        assert set(objects_dir.rglob("*.yaml")) == set(objects)
+        assert stories[0].read_bytes() == original
         second = aida("pr", "auto-queue-review", "--branch", "bug-fixture")
         assert f"reuses canonical review story {story}" in second.stdout, second.stdout
         assert len(list((root / ".aida-store/objects").rglob("*.yaml"))) == len(objects)
