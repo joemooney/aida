@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T04:13:20.732487321Z
+modified_at: 2026-10-08T04:31:06.982717178Z
 req_type: Task
 tags:
 - guided-lane
@@ -588,6 +588,97 @@ comments:
     PROXY DECISION (orchestrator for Joe): Read the actual full TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md and its exact-post/readback receipt. Accept narrow launch-addendum approval AS AMENDED from new independent advisor native01a119ad-da7c-7d23-b690-d144616373cb; owner verdict01a119b5-ea32-7ed0-b5e9-11858700f78b and occupancy verdict01a119b5-f471-7621-aaa3-5a649fa5c9a2. Retain all explicit supersessions, F1 single P4/committed immediate consumption, F2 sealed helper/native leaf, typed Git/vendor separation, durability, identity, cancellation, parent lifetime, tests and remaining adapter/history/gateway gates. Callback-only and launch-only approvals are not whole-spec approval. The independently approved first implementation slice is only BUG-1808-owned SealedExecImage + WaitingChild + private authenticated channel + owned cancellation/lifetime handling, with NO production release, persistent assignment schema, grants, occupancy policy or live caller. Create a traced child for that exact slice; parent closure remains pending. Broader publication and consumer implementation remains gated; no authority-sensitive proxy merge.
   created_at: 2026-10-08T04:13:20.732487321Z
   modified_at: 2026-10-08T04:13:20.732487321Z
+- id: 01a119c7-7ee6-72d0-8b37-8d02e1a6d693
+  author: pane-containment-sketch-author
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1607 — consume the exact common pane/containment adapter amendment
+
+    Author: Codex `pane-containment-sketch-author`, actual native thread `01a119b9-0611-7dc1-bb46-7faea22314dd`, NEW Joe-assigned separate author, neither approver nor earlier reviewer. AIDA_SESSION_ID absent; required-binary role current --check returned advisor. No authenticated review grant is asserted. Dated 2026-10-07 America/Phoenix. Canonical operations use `/home/joe/ai/aida/target/agent/aida`. No implementation/build/test/live experiment/status/queue/grant/hold mutation, commit/push or merge. Worker sandbox bypass is worker-only; final authority-sensitive merge remains Joe/operator-owned.
+
+    ## Exact owner and binding inputs
+
+    Consume `BUG-1808-pane-containment-addendum.md`, SHA256 `2a0c2bf1d4a900edc0838b79e78e89a30b542221ba085b1eec85b0decaba5b12`, as an UNSIGNED proposal, in full including its PANE-1/CONT-1/CONT-2/CONT-3 forks, adapter tables, process/FD/credential mechanisms, lifetime limits, immutable publication table and proposed tests. Canonical owner comment is pinned by exact body/hash in PANE_CONTAINMENT_SKETCH_READY.md after posting. This consumer cannot approve or silently select its pending forks.
+
+    Source owner remains `/home/joe/ai/aida-worktrees/aida-task-1607`, branch story-1485, exact `56f7b55b32fba77a2b8bdbdd2573d59cce0ca29f`; main source exact `5d4180e5ded8a55ad1b02beac5571c190d3da0ac`. Source byte comparisons are in pane-containment-evidence/source-hashes.json. No existing owner checkout, lease, source or plan was changed.
+
+    | Previous binding body | Canonical comment | SHA256 |
+    |---|---|---|
+    | Common launch amendment | 01a119ac-133b-7580-9381-e1febdeb8849 | 4d67af90b7320da207c7f1181ff7ab95d52d27d0fe5e4890be256d1afbf571ec |
+    | TASK launch-v2 amendment | 01a119ac-15f8-7141-a1dd-87492a75b840 | 2b809a68e9c9ebcc3f5ee078d88693651bd13e8d94dd30dd82877254eff5d368 |
+    | Actual common launch verdict | 01a119b5-ea32-7ed0-b5e9-11858700f78b | b5ffa4f24dae87cd216be4fd99859f5599dfa6ebf7b15ac76e95c44de68aeff4 |
+    | Actual TASK launch verdict | 01a119b5-f471-7621-aaa3-5a649fa5c9a2 | 7110514b12d631da61b7e2fa2dc04784793ef53cc3b288b0344e7cdef65c3f71 |
+    | Actual callback-only verdict | 01a119af-a347-7961-b01d-66603478a59b | ebeb47637924fdc4df22fef47e8481f1b889ff071ed4ec27a26ce897487b592d |
+
+    The actual full TASK1607_LAUNCH_V2_INDEPENDENT_SIGNOFF.md AND its posting receipt, INDEPENDENT_SKETCH_V5_SIGNOFF.md, PRODUCTION_GATEWAY_INVENTORY.md, PRODUCTION_GATEWAYS_READY.md and C7_F3_INDEPENDENT_REVIEW.md were inspected. Author readiness is not signoff. C7 approval is only steps 1–3 at this owner hash; the production report remains NOT READY. Its historical LIVE_CHILD_UNRECORDED/RETRY_AUTHORIZED witness was not rerun. The 1321 candidates/222 files are still an index, not coverage proof.
+
+    Preserve signed STORY-1485 sketch faa07e4acb, ADR67–70, C1–C8 and all refinements; the actual narrow independent launch and callback signoffs and their explicit supersessions are binding. This amendment neither reopens F1/F2 nor claims whole-spec approval. TASK-1612 remains isolated transport implementation with production release unavailable; no overlap with its source/plan or competing schema is authorized.
+
+    ## Precise narrow supersession request
+
+    Only replace the UNSPECIFIED adapter part of TASK-1607-launch-v2-addendum.md's `pane_host::host_implementer_in_tmux` row (“Until independently concretized/implemented, refuse managed pane at P0…”), and its `os_wrapped_program_and_args / bwrap / namespaces` row (“Refuse this managed variant before writes until exact image-FD passage…”), with the exact owner's proposed mechanisms. The actual consumer launch verdict's third gateway bullet names these remaining gates; it is not permission to drop their positives. The temporary refusal remains operational until independent design disposition AND implementation evidence. Preserve no uncertain pane fallback, no silently unwrapped execution and all daemon/platform refusals. No other prior independent clause is superseded by this author.
+
+    ## One occupancy contribution to the owner's process join
+
+    The proposed `SeatPermit::commit_waiting_child` contributes the freshly locked O predicate and provisional child after-image to the SINGLE BUG-1808 publication. It does not spawn, authorize a relay, issue a second grant, write an independently committed seat row or release a vendor. `ChildSpawn` references the common retained assignment/activation/publication/receipt and the ACTUAL native bootstrap/leaf host identity, committed generation, issuer and image. It does not substitute tmux pane_pid, bwrap monitor, S namespace PID1, TUI tab, Node launcher or AIDA dispatcher identity. Host and inner identity mapping comes from common HostProcessJoin, not a second occupancy schema.
+
+    At this owner hash, runtime.rs::SeatPermit::record_child captures after spawn, creates an empty start on failure and calls SeatGuard::save independently; mod.rs::ChildSpawn lacks these reciprocal joins. Those are actual integration gaps, not evidence that passing a Command into the old permit is enough. Replace only through the common owner integration; fs_atomic rename alone cannot satisfy file/directory fsync requirements.
+
+    | Consumer variant / existing command trigger | Issuance and identity consumption | Commitment / result |
+    |---|---|---|
+    | Foreground `agent new`, ordinary/guided/headless `queue work`, standalone reviewer, supported resume and advisor_watch session helpers | The authorized invocation is issuer once; native bootstrap B descriptor-execs V under original S/creating thread. Resume retains actor; fresh siblings have distinct actors. Helpers consume exact existing assignment. | Fresh A/J/O/I/W at P4 commits setup + immediate B together; no `record_child` after already running vendor and no late delegated grant issuance. |
+    | Former `exec_claude`, `exec_codex_session`, `exec_claude_resume`, `exec_vendor_headless` | Retain O/S as supervisors; actual spawned B=V identity is bound. The old CLI PID is not blindly reused as leaf evidence. | Same publisher and receipt, no process-local guard across exec. |
+    | RealPhaseDriver / batch / nextN pipelined phase | O binds token-specific member_uuid, phase/attempt/actor/grant, actual B and living parent/member snapshot. `RealBatchDriver` and `RealNextNDriver::start_spec_through_ci` scheduling child is not native leaf. | TASK-1603 registration and snapshot admission precede status/phase/release. Root/first admission/setup/first launch remain ONE refusal boundary; later authorized phases are separate. No shared-current-only or inherited-environment proof. |
+    | `queue work ... --auto-complete --panes tmux`, routed `burndown run --panes tmux`, AIDA_PANES=tmux | Consume owner's proposed private-server display adapter: O -> S -> B=V; M -> R is display only. R receives only owned PTY master after exact pidfd/credential/image authentication. | Pane/R readiness is not B READY or authority. Required real tmux positive before support; no shell/rc, default-zero rc, wrong-pane or fallback success. Private-server product choice remains PANE-1 review gate. |
+    | `App::spawn_tab -> queue_work_argv -> PtyHost::spawn` | TUI host -> actual queue publisher O -> S/B. TUI's tab/session string does not mint grant or holder. Native leaf must be observed separately from PTY/AIDA launcher PID. | Persist successful tab only against retained common C/result. Replace guessed negative-pid/group fallback with authenticated owner/owned-handle operation; no peer signal. Requested unsupported Codex resume diagnoses before writes. |
+    | `[contained] os_wrap` / AIDA_OS_WRAP paths through os_wrapped_program_and_args | O -> exact audited descriptor-exec W -> S -> B=V. No-PID and explicit PID-namespace profiles are distinct; host pidfd/SCM_CREDENTIALS/proc namespace joins come from owner. | Stock bwrap is NOT already accepted. CONT-1 private descriptor-exec bundle, CONT-2 host visibility, CONT-3 descendant-lifetime choices remain explicit review/deployment gates; no broad refusal counted complete. |
+    | Pane plus containment | Compose same owner adapter observations and SAME B/C, no nested publisher. | Both terminal and namespace joins before P4; no unwrapped/background alternative after uncertainty. |
+    | Explicit `--no-launch`, delayed TUI start | Setup-only has no CommittedDispatch. New activation needs current A/J/O and new living B/channel. | New refusal leaves earlier authorized setup intact; never consume an old setup receipt as release authority. |
+    | Native daemon, unsupported OS, --kill | Retain signed refusal/scaffolding. | Never expand grants/TTY or synthesize starts to supply a false positive. |
+
+    ## Immutable C and fresh subsequent authority
+
+    Home -> canonical repo -> sorted seats -> store -> queues -> drain -> manifests -> verdict -> merge -> Git remains the total order. Drop lower locks before acquiring seat; never hide recursive home acquisition in current_caller/requester resolution. Both holder and requester, absolute deadlines and full parent grant chain are freshly validated under the seat lock at their relevant transitions. Seat peek/status and roster/revoke/generation writers enlist home-first. No restoration of the stale F3 caller snapshot.
+
+    Before P4: unsupported/Unknown adapter identity, selected-seat/delegation/branch refusal, expiry, revocation, transfer, roster loss or invalid member/attempt leads to exact pre-C ABORT. Only report unchanged refusal after current-locked lifecycle/history/ref/peer restoration AND owned temporary process/FD/pane cleanup have succeeded. A late supported peer update must survive. No empty-start row or durable seat reservation. If cleanup/durability is uncertain, report interruption/recovery blocking, not acceptance.
+
+    At P4: freshly checked actual B identity, original S/creator thread, immutable image/adapter/mount/FD join, current occupancy and finite prepared effects bind SAME C. Complete durable commit/install/history/possible-execution intent and coordinator retirement before release. The file-fsync/rename/dir-fsync obligations apply to every layer; readback does not replace fsync. No release on any storage or observation fault; visible valid C never rolls back.
+
+    After C: this original living, bounded immediate B/channel consumes historical committed proof once even if generation transfers or issuer expires/revokes afterward. No second current-holder/grant/member lookup at leaf exec. Child's LATER protected work requires fresh authority separately and cannot hide unfinished setup of this invocation. New PID/parent/channel/image/argv/member/phase/attempt, setup-only delayed activation, reconstructed recovery or explicit retry/resume is NEW authorization. Alive/Unknown/possibly-executed old attempt fences its replacement; unrelated seat transfer remains possible. Lost ACK, EOF or proven death never erases possible execution. Recovery cannot release or automatically respawn vendor.
+
+    S relays only the owner's exact immutable committed release over the same transport; it cannot independently decide occupancy or construct a public CommittedDispatch. Only failed synchronous same-PID exec syscall may use signed bounded ETXTBSY retry with same image/channel/deadline. No guard crosses exec; READY/child waits/network/mail/forge/Git callbacks/termination/reaping/backoff are outside seat.
+
+    ## Required remaining production work, not narrowed by adapters
+
+    Retain EVERY inventory row: CLI/MCP/core/backend queue writers (including direct backend.queue_add and bulk conditional removal), schedule/backlog/assign/archive/defer/doctor/init, findings/promote/review routing, advisor_watch, all launch/phase/pane/PTy/resume gateways, handoff, supervisor delivery to valid live holder and no independent timer loop. C1 assigned own-scope direct review/implements graph remains; assigned child cannot peer-spawn or start a loop. Missing env/seat/role cannot erase bound/demoted lineage. Valid plain-shell one-shot exemption retains its narrow scope and cannot manufacture a holder. LoopStart always requires occupancy.
+
+    History remains UUID-idempotent projection into existing events/history; durable successful projection precedes clearing outbox. A launch receipt is not a replacement history ledger. Preserve C2/C3 notices, C4 demotion/env-omission fencing, C5 amendment disclosure, C6 macOS/Windows release disclosures and TASK-1609/1610, C7 checkpoint-only scope, C8 local-only region, disabled --kill. Keep TASK-1337 role/delegation/branch-before-setup, idle-clean-unlocked-unleased manual retirement, and post-authorized startup-failure worktree-enter/guided continuation. Keep TASK-1603 independent token records, living member/parent joins, checked dynamic snapshot registration and permanent sidecars.
+
+    Git PreparedGitStep credentials/dispatch are Git-only; vendor CommittedDispatch is private common publisher output. Stricter sealed Git runtime/config/attributes/hooks/loader cannot be replaced by vendor's trusted system loader or broad vendor filesystem policy. Actual formatter/restaging/store trailer/glyph/skill-sync effects and parent-serviced callback pump remain under home without seat. No Git callback under seat; no child normal CLI re-entry. Recovery quiesces exact old Git domains, uses fresh Git-only credentials and never creates a vendor permit. Callback v5 actual six amendments remain binding in full.
+
+    ## Proposed deterministic real-entrypoint acceptance — NONE RUN
+
+    Run future tests only in fake HOME/AIDA_HOME/temp stores/repositories with owned fixture processes, private tmux and namespace resources. A fixture native vendor writes/fsyncs first-action PID/start/image sentinel. Real installed-version Codex translation compatibility must additionally be witnessed in isolated state: Node never serves as vendor PID, exact pinned wrapper/package selection, argv/cwd/stdio, four manager flags/package root, signal forwarding and exit behavior. A missing required installed positive stays open; no blanket wrapper refusal satisfies it.
+
+    | Named obligation (also consume full owner matrix) | Required paired outcome |
+    |---|---|
+    | `task1607_launch_publication_final_check_race` foreground, actual PTY, pane, bwrap and pipelined | Matching valid launch commits/executes exactly once. Pre-P4 supported revoke/expiry/roster/transfer/member replacement refuses with exact history/peer preimages. Post-C same original live B executes once with old generation; NEW invalid activation refuses unchanged. |
+    | `task1607_launch_exact_binding_positive` adapter extension | Native V identity is same B and differs from TUI/tmux/relay/bwrap/S/Node. ChildSpawn joins exactly one grant/manifest/publication/member/phase/attempt/receipt; own-scope success and peer-route/spawn refusal are nonvacuous. |
+    | `bug1808_pane_foreign_peer_and_fd_refusal` consumer path | Actual foreign same-UID pane/genuine relay with copied challenge, wrong start/server, missing/extra/wrong FD, stale sequence/replay refuses; matching real private-pane positive succeeds. Foreign peer survives untouched. |
+    | `bug1808_containment_real_entrypoint_host_join` and `bug1808_namespace_ambiguity_and_credential_fence` | Actual broad-ro/strict-read/settings, current no-PID and explicit PID profile controls; two namespace-local PID2 children never alias. Wrong host/inner map, overflow credentials, wrong pidfd, leaked cap, unavailable proc, changed mounts and missing descriptor refuse before P4. |
+    | `task1607_launch_exec_image_binding` | Replace sealed-source helper/native/vendor wrapper/package metadata/relay/W via symlink and in-place edits before READY and bind; only selected bytes run or startup cancels. Matching installed Codex/native controls required; no path re-resolution after commit. |
+    | `bug1808_adapter_parent_thread_death` and `bug1808_containment_descendant_settlement` | O/creating-thread/W/S loss at controlled pre-prctl, post-credential-drop/rearm, READY, P4, intent/send and preexec barriers prevents early sentinel and proves real adopter behavior. Postexec or unsynchronized exec race retains possible execution. No-PID descendant limitation is explicitly evaluated under chosen CONT-3 remedy, not hidden. |
+    | `bug1808_adapter_replay_cancel_lost_ack` | Duplicate/replayed/partial/truncated release, cancel-before-send, send/cancel race, lost ACK and delayed channel never cause second issuance or fallback. Same-PID returned ETXTBSY only; all other retries are new transactions after settlement. |
+    | `bug1808_adapter_interrupted_publication_recovery` | Every payload/seat/journal/C/receipt/history/locator file-fsync/rename/dir-fsync fault: no release on fault; exact PREPARED restoration vs immutable-C roll-forward; foreign-repo/nonchild recovery, peer history preserved, no auto-respawn. |
+    | `task1607_adapter_real_pty_result_and_signal_ownership` | Actual TUI launcher result, fresh/resume handling, input/resize/pause/drop and setup-only activation. Tab state cannot claim launch from host spawn or rc default. No guessed process/group signal and no peer damage. |
+    | `task1607_launch_no_network_or_wait_under_lock` | Real phase/PTY/pane/containment and production Git callback paths assert only bounded local P4 under seat; all waits, callbacks, termination and forge/network occur outside. No helper-only pass. |
+
+    Full before/barrier/after snapshots: canonical objects/history/store HEAD; refs/reflogs/index/FETCH_HEAD/admin dirs; queue order/metadata/calibration; all grants/leases/manifests/registry/receipts; seat children/generation/requests/tombstones/outbox; run/member/phase/attempt snapshot; review/punt/hold/signal artifacts; locator/journal/staging; permanent lock inode identities; full owned and peer PID/start/TID/parent/namespace/credential/mount/FD snapshots and vendor sentinel evidence. Old setup remains exact for new activation refusal. Production hook/cross-repo recovery and all original launch/C7/TASK-1337/TASK-1603 tests remain. Later guard-removal/restoration proves refusal nonvacuity; neither these proposed names nor documentary hashes are passes.
+
+    ## Review request and stop boundary
+
+    Different fresh independent advisor reviews common owner FIRST and this exact-hash consumer SECOND, including private-server product semantics, private descriptor-exec containment bundle, namespace visibility and no-PID descendant-lifetime forks. This author chooses no policy on the advisor's behalf. Required adapter positives are neither delivered nor waived. Common BUG-1808 publication/identity/callback implementation precedes this occupancy integration; BUG-1802 is later. TASK-1612 keeps only its approved transport-only non-release work. No broad implementation authorization, production readiness, status/completion/queue/grant/hold change, global hook/deployment or authority-sensitive merge follows from these sketches.
+  created_at: 2026-10-08T04:31:06.982717178Z
+  modified_at: 2026-10-08T04:31:06.982717178Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
