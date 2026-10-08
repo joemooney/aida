@@ -765,7 +765,7 @@ Review the staged diff and check it satisfies the spec.
 
 For anything that changes state, skip both and use the CLI verb — most AIDA
 commands already are one (`/aida-commit` → `aida commit`, `/aida-pr` →
-`aida pr ship`).
+`aida ship <SPEC> --no-merge`, followed by `aida pr auto-queue-review`).
 
 ### A.2 Tool guardrail hook → Codex hook (nearly mechanical)
 

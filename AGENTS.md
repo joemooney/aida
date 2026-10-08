@@ -1,3 +1,9 @@
+`/aida-pr` is a thin `aida ship <SPEC> --no-merge` redirect with an explicit
+`aida pr auto-queue-review` call after PR creation/reuse. The ship stop mode
+does not autoqueue review or create drafts. Preserve independent review and
+managed-session stop/handoff contracts; full shipping requires merge authority.
+<!-- trace:TASK-1613 | ai:codex -->
+
 GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
 GitHub retains `PR-N`. Autoqueue uses fallible directory iteration (including
 entry errors) and strictly parses canonical objects before filing; read failures

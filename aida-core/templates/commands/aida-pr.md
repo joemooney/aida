@@ -1,31 +1,31 @@
 ---
-description: Run /aida-pr.
+description: Open implemented work for independent review through aida ship
 ---
-# AIDA PR
 
-Wrap up the current batch of commits and open a pull request with linked specs and a test plan.
+# AIDA PR compatibility command
 
-## Usage
+<!-- trace:TASK-1613 | ai:codex -->
 
+Follow `.claude/skills/aida-pr/SKILL.md`. Check `aida orchestrator status`
+first: in corroborated orchestrator mode the parent owns preflight and PR
+creation, so the child follows its commit/push/exit contract instead of the
+publication sequence below. For an authorized open-for-review handoff:
+
+```bash
+aida ship <SPEC> --no-merge --dry-run
+aida ship <SPEC> --no-merge
+aida pr auto-queue-review
 ```
-/aida-pr                           Auto-derive everything from the current branch + git log
-/aida-pr --base epic-20-batch4     Stack on a previous batch's PR (defaults to `main`)
-/aida-pr --quiet                   Skip the preview banner + 3s pause (autonomous flows)
-```
 
-## Instructions
+Only autoqueue after successful PR creation/reuse; `--no-merge` does not queue
+review automatically. Report the actual autoqueue outcome, including skips
+and failures. Preserve a clear PR description, linked specs, and validation
+evidence; creation derives title/body from the latest commit.
 
-Follow the workflow in `.claude/skills/aida-pr/SKILL.md`:
-
-1. Walk `git log <base>..HEAD --oneline` and extract `(REQ-ID)` suffixes from each commit subject
-2. Verify every derived REQ-ID is in `Completed` status (pause and ask if any are still open)
-3. Pre-flight `cargo fmt --all -- --check` on Rust workspaces — refuse to proceed if drift exists (TASK-61)
-3b. Run `aida doc suggest --range <base>..HEAD` — warn-only nudge to capture a `Doc` when the batch adds new public CLI/MCP surface with no linked doc; never blocks (TASK-939)
-4. Print the "about to happen" banner — Completed / Now I will / Then you can — then pause ~3s so the user can abort before any side effect; `--quiet` or `AIDA_NO_BANNER=1` skips it (TASK-259)
-5. Push code + orphan store (`aida push` or equivalent two-step) before opening the PR
-6. Compose a PR title (`EPIC-N batch M: <one-line summary>`) and a body that mirrors recent PRs (per-spec sections, test plan)
-7. Show the title + first paragraph to the user and require sign-off
-8. Run `gh pr create` (HEREDOC body for proper formatting); print the URL
-9. Shipped a new CLI slice verb in this batch? Update its parent skill to call it (no re-impl) — see `.aida/discipline/skill-cli-symmetry.md` <!-- trace:TASK-736 -->
-
-Pairs with `/aida-commit` (commit first, then PR) and `/aida-code-review` (reviewer side after the PR opens).
+Full `aida ship` continues through CI, merge, sync, and cleanup and requires
+an authorized finish-and-merge path with independent review satisfied.
+`aida pr ship` is its lower-level merge tail, not the review-handoff command.
+Do not self-merge by default or mark Completed before merge. Honor draft-only
+policy (`--no-merge` does not create a draft), supervised judgment, and managed/
+headless orchestrator stop/handoff restrictions. The legacy skill options and
+manual lifecycle ceremony are retired; use `aida ship --help` for CLI options.

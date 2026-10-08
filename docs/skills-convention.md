@@ -8,7 +8,9 @@ master, never the symlink. See `CLAUDE.md` → "Template architecture".
 ## Next-steps rendering — Path / What happens / Why table
 
 Several skills end with a hand-off prompt: `/aida-pickup` after `aida queue
-done`, `/aida-pr` after the PR opens, `/aida-review` after the merge lands.
+done`, `/aida-review` after the merge lands. `/aida-pr` is now a thin CLI
+redirect: `aida ship <SPEC> --no-merge`, then `aida pr auto-queue-review`;
+it reports the handoff outcome without a separate manual lifecycle menu.
 These prompts present the user with the moves available from here.
 
 **When the prompt offers 2+ paths forward, render it as a markdown table**
@@ -89,7 +91,7 @@ orchestrator's own phase 2). trace:TASK-286 trace:BUG-116
 | Skill | Orchestrator-mode end-of-session |
 |-------|----------------------------------|
 | `/aida-pickup` | `⇒ Submit the PR` (`/aida-pr`) · `⏏ Abort the chain` |
-| `/aida-pr` | `⇒ Exit — let the orchestrator continue` (Ctrl+D) · `⏏ Abort the chain` |
+| `/aida-pr` | Follow the child commit/push/exit contract; parent owns preflight, PR creation, and review handoff |
 | `/aida-review` | Write the verdict file, render the loud Ctrl+D exit block, stop — never the manual hand-off table |
 
 ### The one-line rule for skill authors
@@ -104,11 +106,10 @@ block so the rule travels with the template.
 ### Skills that follow this convention
 
 - `aida-pickup.md` — Step 6, six state-aware templates (incl. orchestrator mode)
-- `aida-pr.md` — Step 12, three templates (orchestrator mode + two auto-queue outcomes)
 - `aida-review.md` — Step 11, two post-merge templates; Step 7a orchestrator-mode early stop
 
 Any new skill that ends with a multi-option hand-off prompt should adopt the
-same table. Pairs with the pre-action banner convention in `/aida-pr` (TASK-259)
-— banner is pre-action, the table is post-action.
+same table. The compatibility `/aida-pr` redirect delegates preview to
+`aida ship --no-merge --dry-run` instead of maintaining its old banner/menu.
 
 trace:TASK-260 trace:BUG-116 | ai:claude

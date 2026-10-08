@@ -495,3 +495,9 @@ configured but unavailable canonical storage. Its mode policy and existing
 store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
+
+The `/aida-pr` compatibility entry point delegates review publication to
+`aida ship <SPEC> --no-merge`, then explicitly calls `aida pr auto-queue-review`
+and reports its outcome. Full `aida ship` remains an authorized merge path;
+managed implementers retain their orchestrator stop/handoff contract.
+<!-- trace:TASK-1613 | ai:codex -->

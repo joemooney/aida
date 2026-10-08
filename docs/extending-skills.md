@@ -97,14 +97,16 @@ rule on the next AIDA upgrade. Instead:
 cat > .claude/skills/aida-pr.local.md <<'EOF'
 ## Project-specific addendum
 
-Before opening the PR with `gh pr create`, enforce this project's title
+Before running `aida ship <SPEC> --no-merge`, prepare the latest commit
+subject for the CLI-derived PR title and enforce this project's title
 convention: the title must start with `[<SPEC-ID>]` (square brackets,
 spec ID, space, then the conventional-commits subject).
 
 Example: `[STORY-305] feat(skills): per-project skill extensions`
 
 If the title you assembled does not match `^\[[A-Z]+-[0-9]+\] `, rewrite
-it before invoking `gh pr create`. This is required, not a suggestion —
+it through the existing forge edit tooling after PR creation and before
+review handoff. Retain every linked spec in the trailing parenthesized group;
 the repo's PR title lint will block the merge otherwise.
 EOF
 

@@ -43,11 +43,11 @@ A typical implementer→reviewer→merge run looks like:
   │    /aida-rebase fired proactively (STORY-114) if base drifts         │
   │                                                                      │
   │ 3. WRAP UP & PR                                                      │
-  │    aida queue done STORY-86 — detects stale base first (TASK-100),   │
-  │      offers rebase before flipping to Done                           │
-  │    /aida-pr — opens GitHub PR; auto-queues review (STORY-66/90)      │
-  │      records PR-N in session manifest                                │
-  │    /aida-pr "Next steps" block (TASK-110): Wait CI → End → Start     │
+  │    Finish implementation; use the gated Done checkpoint             │
+  │    (the CLI owns status and stale-base checks)                      │
+  │    /aida-pr → ship --no-merge; explicit auto-queue-review           │
+  │    Report autoqueue result; follow caller session tracking          │
+  │    Follow assigned stop/handoff contract; no self-merge             │
   │                                                                      │
   │ 4. CI + END                                                          │
   │    aida session end (TASK-111 — CI-aware):                           │
@@ -129,7 +129,12 @@ When the implementer signals "done" via `aida queue done STORY-86`, AIDA inspect
 
 - **TASK-100** — detects stale base, offers rebase before allowing the done transition. Catches it pre-PR rather than post.
 
-Then `/aida-pr` opens the PR and writes the PR number into the session manifest (load-bearing input for TASK-111 below).
+The compatibility `/aida-pr` now delegates to `aida ship <SPEC> --no-merge`
+and explicitly calls `aida pr auto-queue-review` after success. The ship call
+alone does not queue review. Report the queue result and follow the assigned
+session handoff contract; do not assume this redirect writes the PR number
+into the session manifest. The lifecycle notes below describe the historical
+manual flow, not additional steps to reimplement in the redirect.
 
 ---
 
