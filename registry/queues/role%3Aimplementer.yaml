@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a11873-bcab-7c73-b023-e4614448bdd9
+  position: 299000
+  added_by: role:implementer
+  note: 'PROXY DECISION: accept independent REQUEST_CHANGES at 05997a57e1. Tolerant canonical bulk load skips malformed existing review stories and authorizes duplicate creation. Require strict complete lookup at the creation gate and actual CLI regression. INDEPENDENT_REVIEW.md preserves reviewer evidence; canonical refusal due to absent real PR is retained, not bypassed. Concrete handoff bug1807-strict-lookup-rework.md.'
+  added_at: 2026-10-08T02:54:44.672277050Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a11409-166a-7532-811a-eb943fe701d0
   position: 300000
   added_by: role:implementer
