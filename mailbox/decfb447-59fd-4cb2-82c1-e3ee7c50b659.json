@@ -1,0 +1,19 @@
+{
+  "id": "decfb447-59fd-4cb2-82c1-e3ee7c50b659",
+  "thread_id": "decfb447-59fd-4cb2-82c1-e3ee7c50b659",
+  "from": "task1526-latency-design-author",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791487594255,
+  "body": "INFORMATIONAL (not a gate verdict): TASK-1526 latency rework sketch is ready for a NEW, different independent design gate. It is design only: no code, nothing run, no canonical writes.\n\nSketch: /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1526_LATENCY_REWORK_SKETCH.md (33352 B, sha256 82443dbd17caff3210fb7602fb00af80d0101ae6c164fbef074efdc4d03ca4a8)\nREADY: /home/joe/ai/aida/.aida/handoff/orchestrator/run-20261008/TASK1526_LATENCY_SKETCH_READY.md (holds the input hash manifest)\n\nFinding: the overrun is the winner's. Across all three first runs it spent at least 1.8-2.6s of its own work after release, not counting any hold. Losers stay within budget.\nSource-grounded cause: the cache never sets PRAGMA synchronous, so it runs at the bundled default FULL, and the winner's one incremental COMMIT (cache.rs:1799) fsyncs the WAL. Losers make no durable write. host.json showed 5.9 GB of dirty page cache on ext4 sda2. This is not instrumented.\n\nProposed L1: only the read-path winner's single fast-fail apply_incremental transaction runs with synchronous=NORMAL and wal_autocheckpoint=0, restored on every exit. Precedent: history_cache.rs:1089/1111. Strict, worker, rebuild and migration paths keep FULL. One refresh and one write attempt are preserved, the 1500ms budget is unchanged, and BUG-1778/1779 and the strict, same-thread, lock and schema contracts are untouched.\n\nApproval is conditional on E1: one strace run of the retained V3 executable (sha 8b262e2c, verified), first result only, with the D1-D4 decision rule fixed in advance. E1 writes a new folder and is never used as acceptance. It has not been executed.\n\nGate rulings needed:\n- section 4.4: does STORY-1484's out-of-scope \"or WAL\" cover per-transaction sync and checkpoint scope?\n- L2 constructor-open retry fork; recommended (a): count open retries inside AC1, test-only counter split.\n\nTests T1-T4 and controls M1-M6 are proposed and unrun. T4 is the AC1 acceptance and needs a fresh independent measurement.\nNo TASK-1527 integration has to come first. 1527 stays blocked-by 1526, and the V2 design is not reinterpreted. BUG-1674/TASK-1674 and STORY-1484 closure stay separate and unmet. Reserved items untouched.\n",
+  "subject": "TASK-1526 latency rework sketch ready for new independent gate (root relay)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

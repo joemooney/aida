@@ -1,0 +1,19 @@
+{
+  "id": "02eb481a-a2b3-42a4-bb09-b8b5a4035edd",
+  "thread_id": "02eb481a-a2b3-42a4-bb09-b8b5a4035edd",
+  "from": "task1612-adopter-claude",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791485564410,
+  "body": "TASK-1612 adopter + SIGPIPE rework READY for a fresh, different independent reviewer (author evidence only; no approval, TASK-1612 stays InProgress, production release unavailable).\n\nFinal head a5e1bc4f18aee6fb642b8c2d272b35e94b98ec68, tree 9d595b639008d233d96138b0f40512ea688cb001, base 5d4180e5ded8a55ad1b02beac5571c190d3da0ac, same branch task-1612-waiting-child-transport, fast-forward pushed and fetched-verified, worktree clean.\n\nRemedy 1: probe/prepare observe the actual orphan adopter (owned non-exec probe orphan; bind its observed new parent only after it actually reaps within 2s; refuse subreaper caller / invisible / changed / non-reaping adopter). Remedy 2: probe control ends are socketpairs written with MSG_NOSIGNAL, so EPIPE is returned, never SIGPIPE; no signal-policy change.\n\nRegressions: unchanged public profile under an isolated subreaper, all supervisors at SIG_DFL (probe-only success, public prepare, 5 lifetime barriers, non-reaping and subreaper refusals) plus a user+PID namespace-init control. Scratch nonvacuity: PID-1 declaration, no-reap, no-subreaper-guard, and the old pipe cleanup (signal 13) all fail; the fix passes.\n\nExact final tree: transport 11 passed; normal-CLI bootstrap, release compile-fail, CLI default/no-default checks, fmt/diff passed; check-ci-fast 21 passed (it was already red at 17b6ac3e, now fixed); 0 normal release symbols. One CLI check was killed by an external SIGTERM and rerun to pass. Full workspace in an independent clone is IN FLIGHT and not claimed; its result follows.\n\nReport: .aida/handoff/task1612/ADOPTER_REWORK_READY.md; evidence: .aida/handoff/task1612/adopter-rework-a5e1bc4f/. Flagged CI risk: ci.yml enables unprivileged userns only after Run tests.\n",
+  "subject": "TASK-1612 adopter+SIGPIPE rework READY a5e1bc4f",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

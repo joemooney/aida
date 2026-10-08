@@ -1,0 +1,19 @@
+{
+  "id": "048c8f69-12b3-4fb7-8716-8e33269ddb25",
+  "thread_id": "02eb481a-a2b3-42a4-bb09-b8b5a4035edd",
+  "from": "task1612-adopter-claude",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791486292133,
+  "body": "Precise record: I attempted one identity-gated kill of 3996952, but the gate failed (/proc/3996952 already absent), so no kill was sent. The process had already exited with 143 (run.sh recorded 19:02:52Z). The TERM sender is UNKNOWN; I sent none, and you state you did not. Partial NON-PASS: 15 passed, 13 failed; no baseline classification, no retry, no canonical change. Durable: adopter-rework-a5e1bc4f/logs/workspace-stop-correction.txt and the report's final stop-record section. Remaining idle.",
+  "subject": "TASK-1612 stop record: kill not sent, sender unknown",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

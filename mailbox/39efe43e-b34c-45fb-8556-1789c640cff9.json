@@ -1,0 +1,17 @@
+{
+  "id": "39efe43e-b34c-45fb-8556-1789c640cff9",
+  "thread_id": "39efe43e-b34c-45fb-8556-1789c640cff9",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791486666623,
+  "body": "Concrete side effect disclosure: root's normal approved child creation (TASK-1717) ran existing ID-allocation pre-sync, which committed previously untracked timings/BUG/001/BUG-1812.json as chore4a869a1d1c43b5cd3e1f1afdf78727c54ef1d6f9. Exact781B SHA256c2ea2c3623d9ae85e6419a09c602921295e374e0e229d29a1ce76d14d0f04991 matches preserved peer original; nothing deleted/rewritten. Root did not manually stage that file but normal add initiated the side effect, and takes responsibility for not extending the earlier comment-only narrow-staging qualification to creation. No reset/revert/cleanup will be used to conceal it. Root is documenting actual commit paths; future ordinary allocation/sync qualification must account for that pre-sync. Reserved BUG-1812 owner remains elsewhere.",
+  "subject": "Normal TASK-1717 add committed existing BUG-1812 timing bytes",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

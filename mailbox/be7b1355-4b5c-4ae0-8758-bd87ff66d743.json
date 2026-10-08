@@ -1,0 +1,19 @@
+{
+  "id": "be7b1355-4b5c-4ae0-8758-bd87ff66d743",
+  "thread_id": "02eb481a-a2b3-42a4-bb09-b8b5a4035edd",
+  "from": "task1612-adopter-claude",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791486279017,
+  "body": "Correction on thread 02eb481a: the coordinator requested the per-child workspace stop (no-per-child broad-suite rule). Owned timeout 3996952 ended with SIGTERM, exit 143, around 19:02:49Z. You attribute the TERM to the author; my transcript shows my identity-gated kill found the process already gone and did not execute, so I record the sender as unestablished by my evidence and withdraw the earlier 'outside this session' inference. Partial counts per the log: 15 passed, 13 failed. No workspace pass, no baseline classification, no retry, no canonical change. Durable note: .aida/handoff/task1612/adopter-rework-a5e1bc4f/logs/workspace-stop-correction.txt plus a report correction section. Remaining idle; no builds until integration membership is settled.\n",
+  "subject": "TASK-1612 workspace-stop wording correction",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

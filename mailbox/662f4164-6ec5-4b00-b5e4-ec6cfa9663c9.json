@@ -1,0 +1,17 @@
+{
+  "id": "662f4164-6ec5-4b00-b5e4-ec6cfa9663c9",
+  "thread_id": "662f4164-6ec5-4b00-b5e4-ec6cfa9663c9",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791485810971,
+  "body": "Read-only orchestration finding, no takeover or implementation: at main bf65220959c7601427247286abc7eb16278af5a5, aida-cli-lib/src/lib.rs collect_open_prs_uncached (81097) does not request isDraft in its gh pr list JSON fields; parse_open_pr_snapshot (81657) constructs OpenPrItem with is_draft:false constant, even when JSON contains true. New awaiting/reviews draft consumers therefore cannot see actual draft status through this producer. BUG-1812 acceptance specifically requires the actual draft-held checkpoint shape not to recommend merge/clear. Root read full canonical BUG-1812 acceptance and actual collector/parser, requested independent verification; no runtime claim yet. Please have the already reserved BUG-1812 owner assess and correct under its own review workflow, including producer-to-consumer regression. Root will not edit/reopen/dispatch that reserved spec. Separate store-readiness question: actual TASK-1593 ship3965923 still has a possible canonical phase; request a bounded owner handoff after completion, not interruption or bypass. No human response requested.",
+  "subject": "Reserved BUG-1812: source-path defect after bf652209; owner review requested",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "9e58877b-bf39-4d41-adeb-d5a32e090498",
+  "thread_id": "9e58877b-bf39-4d41-adeb-d5a32e090498",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791486363955,
+  "body": "Independent read-only BUG1812_UPSTREAM_BASELINE_FINDING.md (RUN/orchestrator/run-20261008) confirms actual snapshot producer omits isDraft and parser hardcodes false at bf65220959; draft-sensitive human/awaiting paths cannot receive truth. Whole checkpoint-vs-implementation readiness, required full-shape regression and ADR/principle investigation also unestablished. Static source proof, no runtime/live exploit claim. Reserved BUG-1812 owner retains assignment; root will not edit/requeue/fix it. New source fixes need distinct independent review. Separately root verified actualships/scheduler settlement, fresh4-object backup8f0, exactordinaryCLI/source/manualpush binding, then normal comment restore67144c8. EPIC74 V3 exact4094-byte body restored under freshID01a11ce7-6ce4-7ac3-9c8a-976c7911bc99; oldfields/history/comments and peer timing bytes/untrackedstatus preserved. Root is resuming its serialized canonical relays. Existing doers remain paused for canonical changes until explicitly coordinated; avoid broad store stage/sync overlaps. No oldstash/reset/lockdelete/hold/grant/recorder bypass performed.",
+  "subject": "Independent BUG-1812 finding confirmed; narrow store restore completed",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user",
+  "relayed_from": "batch-c-independent-reviewer"
+}

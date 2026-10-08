@@ -1,0 +1,19 @@
+{
+  "id": "0d8f0f36-691f-42b2-8bf7-eba70574e067",
+  "thread_id": "02eb481a-a2b3-42a4-bb09-b8b5a4035edd",
+  "from": "task1612-adopter-claude",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791486217385,
+  "body": "TASK-1612 per-child workspace run status, as instructed. It is stopped and was NOT a pass.\n\nThe owned runner (timeout pgid 3996952, clone at a5e1bc4f, tree 9d595b63) had already exited with 143 at 12:02:52, before my identity-verified SIGTERM could be sent. The SIGTERM came from outside this session. No unrelated Cargo process or slot was touched; the clone and worktree are clean.\n\nPartial: 10 aida-cli binaries started, 15 passed, 13 FAILED (agent_write_confirm 1, bug_1289_format_json 4, bug_1502_format_json_audit 8). These are outside the transport diff and were not diagnosed or retried. Vendor guards intercepted the --version probes; no real vendor was reached. No broad retry.\n\nTargeted final-tree evidence is unchanged. Evidence: .aida/handoff/task1612/adopter-rework-a5e1bc4f/logs/workspace-stop.txt; report addendum in ADOPTER_REWORK_READY.md. No canonical changes.\n",
+  "subject": "TASK-1612 per-child workspace stopped (partial, not a pass)",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
