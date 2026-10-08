@@ -70,7 +70,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-02T09:58:21.276137615Z
-modified_at: 2026-10-04T04:44:40.217681985Z
+modified_at: 2026-10-08T15:54:24.884900184Z
 req_type: Task
 tags:
 - measurement
@@ -195,4 +195,6 @@ decision_request:
   - label: Make measurement contention-aware
     consequence: Record host load and either bucket or exclude samples above your chosen metric threshold; you must specify the metric, numeric threshold, and behavior.
     resolution: directive:contention-aware-needs-operator-threshold
+  answered: 0
   asked_at: 2026-10-04T04:44:08.324637229Z
+  answered_at: 2026-10-08T15:54:24.884890966Z
