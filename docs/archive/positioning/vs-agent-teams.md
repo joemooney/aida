@@ -126,5 +126,5 @@ A serious multi-agent project uses **both**: AIDA for the spec / lifecycle / tra
 - [vs-claude-code-subagents.md](vs-claude-code-subagents.md) — the agent-layer distinction (subagents are the *callable*; AIDA roles are the *position*).
 - [vs-claude-code-workflows.md](vs-claude-code-workflows.md) — the orchestration-layer distinction (a Workflow is a *scriptable fan-out*; AIDA is a *durable substrate + lifecycle*).
 - [Claude Code Agent Teams docs](https://code.claude.com/docs/en/agent-teams) — the vendor's authoritative surface; re-verify capability claims here against it.
-- [docs/archive/competitive-analysis/2026-06-09-weekly-scan.md](../competitive-analysis/2026-06-09-weekly-scan.md) — the weekly scan (Lane B, finding B1) that prompted this doc.
-- [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](../competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.
+- [docs/competitive-analysis/2026-06-09-weekly-scan.md](../competitive-analysis/2026-06-09-weekly-scan.md) — the weekly scan (Lane B, finding B1) that prompted this doc.
+- [docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](../competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.

@@ -7,10 +7,10 @@ Companion to `2026-06-28-multi-vendor-coordination-deck.md`.
 This presentation is grounded in the proposal and the newer competitive scans, with public-source checks for the highest-risk claims.
 
 - Swept AIDA research and competitive docs:
-  - `docs/archive/research/2026-06-16-research-proposal-multi-vendor-coordination.md`
+  - `docs/research/2026-06-16-research-proposal-multi-vendor-coordination.md`
   - `docs/research/2026-07-08-coordinating-multi-vendor-agent-fleets.md`
-  - `docs/archive/research/2026-06-16-layered-evaluation-framework.md`
-  - `docs/archive/research/2026-06-26-agent-coordination-market-landscape.md`
+  - `docs/research/2026-06-16-layered-evaluation-framework.md`
+  - `docs/research/2026-06-26-agent-coordination-market-landscape.md`
   - `docs/competitive-analysis/marketplace-roster.md`
 - Re-checked primary/public surfaces for Beads, Gas Town, GNAP, Goosetown, goose, agmsg, tap, Claude Code Agent Teams, Codex subagents, MCP/AAIF, and A2A.
 - Reviewed GitHub's April 2026 orchestration primer and Developers Digest's 2026 multi-agent coordination guide for mainstream production concerns and pattern vocabulary.

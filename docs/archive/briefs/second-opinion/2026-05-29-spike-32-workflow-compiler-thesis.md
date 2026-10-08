@@ -11,7 +11,7 @@
 
 AIDA is an "AI Design Assistant" — a git-canonical requirements / spec-graph substrate that orchestrates coding work across multiple agent CLIs (Claude Code, Codex, Antigravity). Today AIDA's *orchestrator* is a Rust-built 6-phase pipeline (implementer → CI-wait → reviewer → merge → pull → build) that the operator runs from a TUI. The orchestrator IS the runtime — it spawns Claude Code sessions, watches for completion, advances phases, handles failures with shelving/escalation.
 
-On 2026-05-29 a strategic-recompose synthesis (see `docs/archive/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md`) concluded that Anthropic now ships natively a large fraction of what AIDA's orchestrator does — workflows, agent dispatch, agent view, /goal, agent teams. The synthesis verdict: AIDA's orchestrator should transition from runtime to **compiler** — emitting Claude Code workflow.js artifacts that Claude Code's runtime then replays.
+On 2026-05-29 a strategic-recompose synthesis (see `docs/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md`) concluded that Anthropic now ships natively a large fraction of what AIDA's orchestrator does — workflows, agent dispatch, agent view, /goal, agent teams. The synthesis verdict: AIDA's orchestrator should transition from runtime to **compiler** — emitting Claude Code workflow.js artifacts that Claude Code's runtime then replays.
 
 **On the same day the user corrected my framing of Claude Code Workflows:** Workflows are the **dynamic-generation lane** (decide fan-out at runtime per invocation), NOT the deterministic-orchestration lane. Determinism in Claude Code comes from saving a run's script and replaying that fixed artifact (`claude workflow save <run> as <name>`).
 
@@ -121,8 +121,8 @@ If we ship SPIKE-32, what's the 60-second screencap that makes the value viscera
 
 ## Files / specs to read for grounding
 
-- `docs/archive/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` — the original synthesis
-- `docs/archive/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/01-dynamic-workflows.md` — SPIKE-14 write-up (note: had the wrong "deterministic" framing; corrected via memory)
+- `docs/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` — the original synthesis
+- `docs/competitive-analysis/2026-05-29-claude-code-2.1.154-decompose/01-dynamic-workflows.md` — SPIKE-14 write-up (note: had the wrong "deterministic" framing; corrected via memory)
 - `aida list --tags from-strategic-recompose` — SPIKEs 30-34 (shipped) plus SPIKE-32 (this one)
 - Anthropic's docs at <https://code.claude.com/docs/en/workflows> — the actual workflows surface
 

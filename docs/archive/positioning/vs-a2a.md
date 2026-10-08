@@ -59,6 +59,6 @@ This is "meet the ecosystem," not "adopt a dependency."
 
 ## Related
 
-- `docs/archive/research/2026-06-26-agent-coordination-market-landscape.md` — "the standards bodies are building the floor and the guardrails, not the record."
+- `docs/research/2026-06-26-agent-coordination-market-landscape.md` — "the standards bodies are building the floor and the guardrails, not the record."
 - `docs/competitive-analysis/marketplace-roster.md` — MCP/A2A/ACP standards row + the "durable coordination record" open-frontier gap.
 - `docs/positioning/composition.md` — how AIDA composes with the tools it doesn't replace.

@@ -10,7 +10,7 @@ Spec: SPIKE-25
 - Local observation: `codex mcp --help` and `codex mcp list`.
 - Local source check: `aida-cli/src/mcp.rs`, `tests/test_mcp_stdio.py`,
   `docs/agents/codex-mcp-setup.md`,
-  `docs/archive/audits/codex-mcp-roundtrip-verdict.md`,
+  `docs/agents/codex-mcp-roundtrip-verdict.md`,
   `docs/agents/cross-agent-onboarding.md`.
 - OpenAI Codex MCP docs: <https://developers.openai.com/codex/mcp>
 - OpenAI Docs MCP guide: <https://developers.openai.com/learn/docs-mcp>

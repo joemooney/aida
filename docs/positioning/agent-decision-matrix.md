@@ -22,7 +22,7 @@ not in aspiration. The source documents are:
 
 - `docs/archive/audits/porting-claude-code-to-codex.md` — the conceptual Claude-to-Codex
   migration analysis (what ports cleanly, what does not, and why).
-- `docs/archive/audits/claude-surfaces-codex-parity.md` — the ground-truth surface-by-
+- `docs/agents/claude-surfaces-codex-parity.md` — the ground-truth surface-by-
   surface inventory (file and symbol references for every Claude-specific hook,
   hook event, status line, headless path, and TUI dependency).
 - `docs/plans/2026-06-25-codex-defer-resume-design.md` — the escalation/resume
@@ -288,7 +288,7 @@ to change.
 
 - `docs/archive/audits/porting-claude-code-to-codex.md` — the full conceptual migration
   analysis this page distils, including the worked before/after examples.
-- `docs/archive/audits/claude-surfaces-codex-parity.md` — the surface-by-surface inventory
+- `docs/agents/claude-surfaces-codex-parity.md` — the surface-by-surface inventory
   with file/symbol references and per-axis coverage.
 - `docs/plans/2026-06-25-codex-defer-resume-design.md` — the escalation/resume
   design behind the approval/defer row.

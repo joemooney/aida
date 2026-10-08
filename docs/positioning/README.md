@@ -7,9 +7,11 @@ Sister documents:
 - [README.md](../../README.md#what-makes-aida-distinct) — the elevator pitch: AIDA's defensible niche in eight bullets. <!-- trace:TASK-289 | ai:claude -->
 - [OVERVIEW.md](../../OVERVIEW.md) — the big-picture vision.
 - [WHY-AIDA.md](../WHY-AIDA.md) — narrative for "why does this exist?"
-- [competitive-analysis/](../competitive-analysis/) — the living landscape scan + ecosystem tracking (dated snapshots and per-topic files).
+- [competitive-analysis/](../competitive-analysis/README.md) — the living landscape tracking; its dated snapshots are in [`../archive/competitive-analysis/`](../archive/competitive-analysis/).
 
 The docs here are **focused comparisons**: one file per neighbor, each answering "when AIDA, when X, when both?" in one sitting.
+
+> **Where the comparisons live.** The 2026-10 documentation cleanup moved the per-neighbour `vs-*.md` comparisons to [`../archive/positioning/`](../archive/positioning/) as dated snapshots, so read each one as of its date; the table below links to them there. The framing documents (engineering-derived positioning, memory lane, decision matrix, composition, when-not-to-use) remain here. Every move is listed in the [cleanup record](../archive/2026-10-cleanup/README.md).
 
 ---
 

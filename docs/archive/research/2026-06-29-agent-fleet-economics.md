@@ -31,7 +31,7 @@ amortizes.
 hand-back so each agent's compiled `target/` cache survives, instead of
 destroy-and-recreate (a cold `target/` per agent).
 
-**Measurement** (2026-06-29, `docs/archive/research/2026-06-29-warm-pool-build-delta.md`):
+**Measurement** (2026-06-29, `docs/research/2026-06-29-warm-pool-build-delta.md`):
 
 | Flow | Cold build | Warm reuse |
 |---|---|---|
@@ -80,7 +80,7 @@ survive measurement on identical tasks.
 
 **Implication:** for fleet work, the **token-efficient CLI is the primary,
 cheaper agent surface**; a typed/structural surface is an option you pay a
-premium for, not a default. (`docs/archive/positioning/vs-axi.md`.)
+premium for, not a default. (`docs/positioning/vs-axi.md`.)
 
 ---
 
@@ -156,8 +156,8 @@ moving) being practical rather than a money fire.
 
 ## Sources
 
-- `docs/archive/research/2026-06-29-warm-pool-build-delta.md` — compute measurement
+- `docs/research/2026-06-29-warm-pool-build-delta.md` — compute measurement
 - `bench/agent-surface/results/report.md` — the 72-cell surface benchmark
 - `docs/plans/2026-06-29-story-712-zero-token-supervision.md` — supervision design + token math
-- `docs/archive/positioning/vs-axi.md` — the surface-cost positioning
+- `docs/positioning/vs-axi.md` — the surface-cost positioning
 - Related memory: token economics of agent fleets (the three levers)

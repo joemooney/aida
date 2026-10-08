@@ -14,12 +14,12 @@ The two articles do not change AIDA's core research question, but they improve t
 
 ## Docs Updated
 
-- `docs/archive/research/2026-06-16-research-proposal-multi-vendor-coordination.md`
+- `docs/research/2026-06-16-research-proposal-multi-vendor-coordination.md`
   - Added control-plane vocabulary from the GitHub article.
   - Replaced the over-broad "no current practice" wording with a narrower claim that acknowledges Beads/Gas Town, GNAP, Goosetown, and messaging tools.
   - Added production orchestration economics and production-control metrics to the research proof points.
 
-- `docs/archive/research/2026-06-16-layered-evaluation-framework.md`
+- `docs/research/2026-06-16-layered-evaluation-framework.md`
   - Narrowed the gate language to match the gate-vs-rule ablation results: own load-bearing gates; do not gate every prompt rule without field evidence.
   - Added observability and cost-control criteria.
 
@@ -27,11 +27,11 @@ The two articles do not change AIDA's core research question, but they improve t
   - Updated the dated roster note to point at the 2026-06-26 refresh.
   - Corrected the stale "cross-vendor + free + self-hosted + durable is unoccupied" claim after the Gas Town OSS cross-vendor update.
 
-- `docs/archive/research/2026-06-28-multi-vendor-coordination-deck.md`
+- `docs/research/2026-06-28-multi-vendor-coordination-deck.md`
   - Added orchestration frameworks as a market lane.
   - Added runtime controls to the proposed substrate and production metrics to the research plan.
 
-- `docs/archive/research/2026-06-28-multi-vendor-coordination-research-notes.md`
+- `docs/research/2026-06-28-multi-vendor-coordination-research-notes.md`
   - Added the two requested articles as explicit sources.
   - Added a short extraction of reusable material for presentation framing.
 

@@ -488,7 +488,7 @@ Run `aida` (no args) for the full CLI surface.
 
 <!-- trace:TASK-276 | ai:claude -->
 
-You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) carries one focused comparison per neighbouring tool, each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
+You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) indexes one focused comparison per neighbouring tool (dated snapshots, kept under [`docs/archive/positioning/`](docs/archive/positioning/)), each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
 
 - [**AIDA vs GitHub Spec Kit**](docs/archive/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
 - [**AIDA vs AWS Kiro**](docs/archive/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.

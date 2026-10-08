@@ -1,6 +1,6 @@
 # Multi-vendor coordination refresh — what changed since the June baseline (2026-07-19)
 
-**Specs:** TASK-1058 (parent EPIC-48) · **Status:** dated snapshot (immutable once landed; supersede with a new dated file) · **Baseline:** `docs/archive/research/2026-06-26-agent-coordination-market-landscape.md` (market) + `2026-05-31-round2-moat-gaps-moves.md` (moat/moves) · **Evidence:** this repo's own commits, specs, benchmarks, and code — **not** a fresh web scan. External-market claims that would need re-verification online are marked **[needs-web-verify]** rather than asserted.
+**Specs:** TASK-1058 (parent EPIC-48) · **Status:** dated snapshot (immutable once landed; supersede with a new dated file) · **Baseline:** `docs/research/2026-06-26-agent-coordination-market-landscape.md` (market) + `2026-05-31-round2-moat-gaps-moves.md` (moat/moves) · **Evidence:** this repo's own commits, specs, benchmarks, and code — **not** a fresh web scan. External-market claims that would need re-verification online are marked **[needs-web-verify]** rather than asserted.
 
 > Frozen at time T per the immutability discipline. Scope note: everything below is evidenced *inside* this repository (git log, spec graph, benchmark artifacts, source). Where the June baseline's market claims are repeated, they carry the baseline's date, not today's.
 

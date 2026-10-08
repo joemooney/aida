@@ -296,7 +296,7 @@ ai-provenance:
 - ✅ `INTEGRATION_COMPLETE.md` - Success summary
 - ✅ `FINAL_RECOMMENDATION.md` - Decision rationale
 - ✅ `FINAL_STATUS.md` - Status at end of Phase 3
-- ✅ `INTEGRATION_docs/archive/reviews/2026-05-generated-review.md` - Review of cleanup work
+- ✅ `INTEGRATION_REVIEW.md` - Review of cleanup work
 - ✅ `INTEGRATION_SUMMARY.md` - This document (final summary)
 - ✅ `INTEGRATION_INDEX.md` - Navigation guide
 

@@ -3,7 +3,7 @@
 **Date:** 2026-06-28 · **Trigger:** operator surfaced the "L8 Principal's
 Agentic Engineering Workflow" video + the `kunchenguid` GitHub. **Type:** new
 high-signal builder sighting + a direct interface-layer challenge. **Deep dive:**
-`docs/archive/positioning/vs-axi.md`.
+`docs/positioning/vs-axi.md`.
 
 ## Why this is logged
 
@@ -81,4 +81,4 @@ not architecture.
   agent-facing AXI output mode (the load-bearing investigation).
 - **TASK** — token-efficient agent-output mode (`--toon` / minimal schemas /
   content-first), agent path only, emoji human path unchanged.
-- `docs/archive/positioning/vs-axi.md` — the full head-to-head.
+- `docs/positioning/vs-axi.md` — the full head-to-head.

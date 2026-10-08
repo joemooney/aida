@@ -290,7 +290,7 @@ Expected:
 This proves Codex is not writing to a private shadow state — it is operating on the same
 spec graph, lease files, and queue the CLI and every other agent read. That cross-surface
 agreement is the definition of a successful round-trip (per the STORY-398 verdict in
-`docs/archive/audits/codex-mcp-roundtrip-verdict.md`).
+`docs/agents/codex-mcp-roundtrip-verdict.md`).
 
 ---
 

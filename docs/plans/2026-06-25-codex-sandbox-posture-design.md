@@ -233,6 +233,6 @@ uniform boundary; otherwise Codex-native is stronger and the default."
 - `aida-cli/src/compete.rs` -- the current `codex exec
   --dangerously-bypass-approvals-and-sandbox` adapter (correct for the bake-off,
   the wrong default for a drain).
-- `docs/archive/audits/porting-claude-code-to-codex.md` -- flags `os_wrap` as the
+- `docs/agents/porting-claude-code-to-codex.md` -- flags `os_wrap` as the
   Claude-launch-specific piece "needing a deliberate Codex wrapper"; this doc is
   that deliberation, and its answer is "native-first, wrapper opt-in."

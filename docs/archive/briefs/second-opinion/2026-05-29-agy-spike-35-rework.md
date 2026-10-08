@@ -12,12 +12,12 @@ You replied to the Code Review compose brief with:
 > Verdict: Delegation is strategically sound, provided AIDA remains the "Bouncer."
 >
 > Concerns:
-> 1. Git-rebase conflicts on shared docs/archive/reviews/2026-05-generated-review.md (SPIKE-35 Option 3 failure)
+> 1. Git-rebase conflicts on shared REVIEW.md (SPIKE-35 Option 3 failure)
 > 2. GitHub Actions write-back permission loop (Option 1 failure)
 > 3. bughunter-severity parsing failures (SPIKE-36)
 >
 > Recommendation: Reshape the set and ship.
-> 1. Pivot SPIKE-35 to Option 2 (Local per-spec generation): write docs/archive/reviews/2026-05-generated-review.md at the implementer's terminal during `aida queue work` and commit it.
+> 1. Pivot SPIKE-35 to Option 2 (Local per-spec generation): write REVIEW.md at the implementer's terminal during `aida queue work` and commit it.
 > 2. Make SPIKE-37 opt-in: default to ZDR local-mode review to prevent billing surprises.
 > 3. Equip /aida-review: wrap the local /code-review --comment command to offer ZDR users a free, interactive high-quality review.
 
@@ -25,19 +25,19 @@ Those are exactly the calls I want to make. Please ship the rework.
 
 ## What's currently in the repo (the v1 I shipped tonight)
 
-Commit `ebff464b` on main. See `aida-cli/src/rules_sync.rs::sync_review_md`. It writes ONE root `docs/archive/reviews/2026-05-generated-review.md` aggregating every active spec. The `aida rules sync --review-md` flag triggers it. The output file is at the repo root, committed (not gitignored). This is your Option 3 — the one with rebase-conflict risk.
+Commit `ebff464b` on main. See `aida-cli/src/rules_sync.rs::sync_review_md`. It writes ONE root `REVIEW.md` aggregating every active spec. The `aida rules sync --review-md` flag triggers it. The output file is at the repo root, committed (not gitignored). This is your Option 3 — the one with rebase-conflict risk.
 
 ## What I want you to build — SPIKE-35 v2
 
 **Architecture:** per-spec fragments + assemble-at-PR-time.
 
 1. **Per-spec fragment**: write a small REVIEW fragment at `.aida/review/<SPEC-ID>.md` for each active spec with traces. ONE-spec rules. Gitignored (per-clone derived state, like SPIKE-31's `.claude/rules/aida-specs/`). Mirror SPIKE-31's reconciliation pattern — write/unchanged/remove.
-2. **Root docs/archive/reviews/2026-05-generated-review.md assembly**: a separate command — `aida review assemble [-o docs/archive/reviews/2026-05-generated-review.md]` or `aida rules sync --review-md --assemble` — merges all active per-spec fragments into a root docs/archive/reviews/2026-05-generated-review.md and commits it. The operator runs this at PR-open time (or `/aida-pr` runs it automatically), so conflicts only happen at PR-open, not on every drain step.
+2. **Root REVIEW.md assembly**: a separate command — `aida review assemble [-o REVIEW.md]` or `aida rules sync --review-md --assemble` — merges all active per-spec fragments into a root REVIEW.md and commits it. The operator runs this at PR-open time (or `/aida-pr` runs it automatically), so conflicts only happen at PR-open, not on every drain step.
 3. **Stable spec ordering** by SPEC-ID so concurrent assembles don't produce different bytes.
 
 **Key behavior change vs v1:**
 - `aida rules sync --review-md` now writes per-spec fragments (gitignored)
-- Root docs/archive/reviews/2026-05-generated-review.md is only assembled when the operator explicitly asks (PR-open time)
+- Root REVIEW.md is only assembled when the operator explicitly asks (PR-open time)
 - Rebase conflicts vanish because per-spec fragments don't collide cross-spec
 
 ## What I want you to prototype — SPIKE-37

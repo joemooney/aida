@@ -103,4 +103,4 @@ aida drain status                 # should detect + suggest the resumable crashe
 
 - Parent: SPIKE-45 (P1, the durable-execution gap). Sibling shipped: STORY-489 (P2 graph-query, CLI+MCP), STORY-490 (P5 drain legibility).
 - Builds on: STORY-301 (drain-state.json), EPIC-28 (shelving/FailureReason), BUG-307 (lease auto-release), TASK-336 (run_uuid corroboration).
-- Competitive: `docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` (P1 = "git-canonical AND crash-resumable", the edge no competitor pairs).
+- Competitive: `docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md` (P1 = "git-canonical AND crash-resumable", the edge no competitor pairs).

@@ -76,4 +76,4 @@ aida supervise watch --objective EPIC-63 --execute  # realign + reflexes
 
 ## Related
 
-ADR-29, STORY-1051, STORY-1052, STORY-1107, EPIC-62, docs/archive/testimonials/2026-09-12-llm-field-report.md
+ADR-29, STORY-1051, STORY-1052, STORY-1107, EPIC-62, docs/testimonials/2026-09-12-llm-field-report.md

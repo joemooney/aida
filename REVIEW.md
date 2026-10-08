@@ -74,7 +74,7 @@ User-driven 2026-05-09. The orphan store and the code repo evolve independently 
 - `aida-core/src/scaffolding/mod.rs`
 - `aida-core/templates/hooks/aida-store-pair.sh`
 
-### TASK-583: SPIKE-35 v2 follow-ups: align bughunter-severity schema, regen stale docs/archive/reviews/2026-05-generated-review.md, drop thinking-comment
+### TASK-583: SPIKE-35 v2 follow-ups: align bughunter-severity schema, regen stale REVIEW.md, drop thinking-comment
 
 **Status**: InProgress
 
@@ -84,7 +84,7 @@ Master review of spike-35-v2 (SPIKE-35 v2 + SPIKE-37) found 3 minor follow-ups â
 
 1. Severity-schema mismatch: extract_bughunter_severity gate checks 'normal' (correct â€” real Code Review key) AND 'critical' (NOT a real key; inert dead code). Real documented schema is {normal, nit, pre_existing}. Drop the dead 'critical' gate-check; align test fixtures (currently use critical/cosmetic) to the documented normal/nit/pre_existing keys so tests validate against the real schema, not an assumed one. Ref: code.claude.com/docs/en/code-review check-run output.
 
-2. Stale v1 docs/archive/reviews/2026-05-generated-review.md: the root docs/archive/reviews/2026-05-generated-review.md committed in ebff464b (v1, one-global-file format) is still tracked. v2 assembles docs/archive/reviews/2026-05-generated-review.md from per-spec fragments at PR-open time, so the committed v1 content is stale until next assemble. Regenerate via 'aida review assemble' + commit, or remove and let /aida-pr assemble it.
+2. Stale v1 REVIEW.md: the root REVIEW.md committed in ebff464b (v1, one-global-file format) is still tracked. v2 assembles REVIEW.md from per-spec fragments at PR-open time, so the committed v1 content is stale until next assemble. Regenerate via 'aida review assemble' + commit, or remove and let /aida-pr assemble it.
 
 3. Leftover thinking-comment: rules_sync/main.rs delegated_reviewer_tests has a '// wait, ... is not valid JSON under standard serde_json' comment that reads as half-finished thought. Tidy.
 

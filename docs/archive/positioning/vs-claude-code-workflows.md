@@ -192,4 +192,4 @@ A serious multi-agent project uses **both**: AIDA for spec / lifecycle / traceab
 - SPIKE-32 (`aida show SPIKE-32`) — compile spec graph → `workflow.js` (the saved-script lane).
 - SPIKE-29 (`aida show SPIKE-29`) — Claude Code agent teams, the third orchestration surface.
 - SPIKE-34 (`aida show SPIKE-34`) — re-shape `aida agent new` as a `claude --bg` wrapper (the divest move).
-- [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](../competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.
+- [docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](../competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.

@@ -182,4 +182,4 @@ echo "smoke 2 OK"
 ## Related
 
 - Composes with: BUG-115 (aggregate-low warning logic — same family; auto-claim makes warnings rare, BUG-115 makes them precise when they do fire)
-- See also: `docs/archive/positioning/vs-karpathy-md.md` (first-users alpha framing — block concept should be invisible)
+- See also: `docs/positioning/vs-karpathy-md.md` (first-users alpha framing — block concept should be invisible)

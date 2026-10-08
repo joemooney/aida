@@ -3,7 +3,7 @@
 **Date**: 2026-05-30
 **Status**: addendum + extension to the 2026-05-29 Round 1 synthesis
 **Audience**: Joe + future AIDA-maintaining advisor sessions
-**Round 1**: `docs/archive/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` (frozen — per `feedback_dated_artifacts_immutable`)
+**Round 1**: `docs/competitive-analysis/2026-05-29-strategic-recompose-post-2.1.154.md` (frozen — per `feedback_dated_artifacts_immutable`)
 
 This is the Round 2 sweep. Three new Claude Code surfaces — managed Code Review, the GitHub Actions integration, and the GitLab CI/CD integration — plus one substantive correction to the Round 1 workflows positioning. Round 1 covered runtime orchestration; Round 2 covers the **review/CI seam** plus a sharper architectural framing for SPIKE-32.
 
@@ -23,7 +23,7 @@ Memory captured: `feedback_workflows_saved_script_lane.md` so I don't re-conflat
 
 | Surface | What ships | Round 2 verdict |
 |---|---|---|
-| **Managed Code Review** | Team/Enterprise GitHub App. Multi-agent review on Anthropic infra. `🔴 / 🟡 / 🟣` severity. Reads `CLAUDE.md` (low priority) + `docs/archive/reviews/2026-05-generated-review.md` (highest priority — reviewer-only injection). Machine-readable `bughunter-severity: {…}` in the check run. Triggers: `@claude review` (subscribe) / `@claude review once`. $15-25 per review. ZDR holdouts. Local equivalent: `/code-review --comment --fix`. | **COMPOSE — heavy** |
+| **Managed Code Review** | Team/Enterprise GitHub App. Multi-agent review on Anthropic infra. `🔴 / 🟡 / 🟣` severity. Reads `CLAUDE.md` (low priority) + `REVIEW.md` (highest priority — reviewer-only injection). Machine-readable `bughunter-severity: {…}` in the check run. Triggers: `@claude review` (subscribe) / `@claude review once`. $15-25 per review. ZDR holdouts. Local equivalent: `/code-review --comment --fix`. | **COMPOSE — heavy** |
 | **`claude-code-action@v1`** | Published GitHub Action. `@claude` mentions + arbitrary events. Skills + plugin marketplace support. Multi-cloud (Anthropic/Bedrock/Vertex). `prompt` + `claude_args` interface. | **COMPOSE — light** (distribute AIDA reviewer as a wrapped action) |
 | **GitLab CI/CD** | Beta, GitLab-maintained. `claude -p` in `.gitlab-ci.yml`. WIF auth. Uses `gitlab-mcp-server`. | **COMPOSE — defer** (no near-term GitLab users; pattern noted) |
 
@@ -45,7 +45,7 @@ This is the most consequential overlap in either round.
 - Verification step (filters false positives by checking actual behavior)
 - Inline comments with collapsible reasoning
 - Machine-readable severity tally on the check run
-- `docs/archive/reviews/2026-05-generated-review.md` as a highest-priority injection surface
+- `REVIEW.md` as a highest-priority injection surface
 - 20-minute median latency
 
 **The composed architecture:**
@@ -58,7 +58,7 @@ This is the most consequential overlap in either round.
                  │ SPIKE-35: emit
                  ▼
 ┌──────────────────────────────────────────┐
-│ docs/archive/reviews/2026-05-generated-review.md (checked-in artifact)          │
+│ REVIEW.md (checked-in artifact)          │
 │   acceptance-grounded reviewer rules     │
 │   severity calibration by spec status    │
 │   skip-rules from cross-spec trace graph │
@@ -79,7 +79,7 @@ This is the most consequential overlap in either round.
 └──────────────────────────────────────────┘
 ```
 
-Round 1 said AIDA divests "process supervision of Claude Code instances." Round 2 extends: **AIDA divests the multi-agent review work**, contributes spec-grounded instructions via docs/archive/reviews/2026-05-generated-review.md, and consumes the structured verdict back. The substrate-as-bouncer pattern carries through — AIDA decides what gets reviewed and how findings are gated; Anthropic's multi-agent fleet does the reviewing.
+Round 1 said AIDA divests "process supervision of Claude Code instances." Round 2 extends: **AIDA divests the multi-agent review work**, contributes spec-grounded instructions via REVIEW.md, and consumes the structured verdict back. The substrate-as-bouncer pattern carries through — AIDA decides what gets reviewed and how findings are gated; Anthropic's multi-agent fleet does the reviewing.
 
 ---
 
@@ -87,7 +87,7 @@ Round 1 said AIDA divests "process supervision of Claude Code instances." Round 
 
 | # | Title | Priority | Effort | Verdict |
 |---|---|---|---|---|
-| 35 | Emit docs/archive/reviews/2026-05-generated-review.md from spec graph | High | Medium | The substrate-as-bouncer move for the reviewer surface. Same shape as SPIKE-31 for path-gated rules. |
+| 35 | Emit REVIEW.md from spec graph | High | Medium | The substrate-as-bouncer move for the reviewer surface. Same shape as SPIKE-31 for path-gated rules. |
 | 36 | Parse `bughunter-severity` as orchestrator phase 3 gate | High | Small | Cheapest delegation move; consumes the check-run JSON tally. |
 | 37 | Trigger Code Review via `@claude review once` from `/aida-review` | Medium | Small | Comment-trigger compose; pairs with SPIKE-36. |
 | 38 | Publish `aida-review` GitHub Action wrapping `claude-code-action@v1` | Medium | Medium | Distribution surface; other AIDA-using projects inherit reviewer behavior in CI. |
@@ -107,15 +107,15 @@ The workflows-lane correction does NOT collapse SPIKE-32 — it sharpens it.
 
 SPIKE-32's spec description has been updated with this framing. The pre-req gate (SPIKE-30 + SPIKE-31 must confirm direction) is now met: both Completed. SPIKE-32 stays months-not-weeks, but the design pass can start when the operator says.
 
-Second-opinion brief written: `docs/archive/briefs/second-opinion/2026-05-29-spike-32-workflow-compiler-thesis.md`.
+Second-opinion brief written: `docs/briefs/second-opinion/2026-05-29-spike-32-workflow-compiler-thesis.md`.
 
 ---
 
 ## What this means for AIDA's positioning docs
 
-`docs/archive/positioning/vs-ultrareview.md` and `vs-claude-code-subagents.md` predate Code Review's GA. Both need refresh. The new line:
+`docs/positioning/vs-ultrareview.md` and `vs-claude-code-subagents.md` predate Code Review's GA. Both need refresh. The new line:
 
-> AIDA scaffolds docs/archive/reviews/2026-05-generated-review.md per spec; Claude Code's managed Code Review consumes it; AIDA's orchestrator parses the severity tally and decides lifecycle. AIDA isn't trying to BE the reviewer — AIDA is the substrate that makes Code Review spec-grounded.
+> AIDA scaffolds REVIEW.md per spec; Claude Code's managed Code Review consumes it; AIDA's orchestrator parses the severity tally and decides lifecycle. AIDA isn't trying to BE the reviewer — AIDA is the substrate that makes Code Review spec-grounded.
 
 Not refreshing inline in this doc — the positioning docs are living guidance and should be updated in their own commits.
 

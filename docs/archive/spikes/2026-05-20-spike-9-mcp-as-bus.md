@@ -189,5 +189,5 @@ Estimated complexity: medium. Touches one file substantially; doesn't change arc
 - **STORY-306** — headless advisor escalation; uses file-handshakes today, would gain MCP equivalents via this story's implementation
 - **STORY-285** — findings filing; same
 - **TASK-294** — directive channel; will compose with `post_directive` / `list_directives` if/when both ship
-- **TASK-337** — `docs/archive/positioning/vs-claude-code-subagents.md`; positioning of AIDA's MCP coordination vs Claude Code Agent Teams
+- **TASK-337** — `docs/positioning/vs-claude-code-subagents.md`; positioning of AIDA's MCP coordination vs Claude Code Agent Teams
 - **Claude Code Agent Teams** (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) — Claude-Code-locked equivalent that AIDA's MCP-as-coordination-surface supersedes for cross-agent use

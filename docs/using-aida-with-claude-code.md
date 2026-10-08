@@ -131,4 +131,4 @@ AIDA owns the layer those tools structurally don't: the **persistent, vendor-neu
 - [docs/agents/aida-mcp-install-matrix.md](agents/aida-mcp-install-matrix.md) — connecting AIDA's MCP server to Claude Code, Codex, Cursor, Windsurf, and the rest.
 - [docs/agents/claude-plugin-package.md](agents/claude-plugin-package.md) — packaging AIDA's Claude Code-facing setup for the marketplace.
 - [OVERVIEW.md](../OVERVIEW.md) — the Trojan-horse framing and the full vision.
-- [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the current moat / commoditization synthesis.
+- [docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md](archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md) — the 2026-05-31 moat / commoditization synthesis (archived dated snapshot).

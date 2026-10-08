@@ -260,7 +260,7 @@ aida history --all                      # Done renders distinct from Completed
 - **STORY-86** — New status 'Done': distinguish 'work finished on branch' from 'merged to main' (Completed)
 - Builds on: **EPIC-21** — Code↔store commit pairing (provides Aida-Store trailer infrastructure)
 - Composes with: **STORY-81** (implementation_info auto-populate), **TASK-43** (aida pull as hook point), **BUG-65** (activity log on edit/done)
-- See also: `docs/archive/positioning/vs-karpathy-md.md` (status-machine identity is one of AIDA's defensible niches)
+- See also: `docs/positioning/vs-karpathy-md.md` (status-machine identity is one of AIDA's defensible niches)
 
 ---
 

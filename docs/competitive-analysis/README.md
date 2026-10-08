@@ -19,6 +19,8 @@ We organize our market intelligence into three functional layers:
 
 ## Index
 
+> The 2026-10 documentation cleanup moved the dated snapshots, category summaries, and spike write-ups indexed below to [`../archive/competitive-analysis/`](../archive/competitive-analysis/); the links point there. The living files in this directory are the [marketplace roster](marketplace-roster.md), [ecosystem watch](ecosystem-watch.md), and [signals to watch](signals-to-watch.md). Every move is listed in the [cleanup record](../archive/2026-10-cleanup/README.md).
+
 | File / Directory | Type | Scope & Context |
 |---|---|---|
 | **[2026-06-05-ecc-deep-dive.md](../archive/competitive-analysis/2026-06-05-ecc-deep-dive.md)** | Competitive Analysis | **ECC vs. AIDA Deep-Dive**: Independent codebase-backed analysis of the `affaan-m/ecc` repository (v2.0.0-rc.1) compared to AIDA's git-canonical substrate and orchestrator. Details the 4 layers of ECC (marketplace prompts, distribution engine, hooks, Rust TUI control plane), maps competitive vectors, synthesizes gaps, and outlines a concrete "Manifest-Driven Multi-Harness Distribution" Epic roadmap for AIDA. |
@@ -31,7 +33,7 @@ We organize our market intelligence into three functional layers:
 | **[2026-05-26-ai-coding-agents.md](../archive/competitive-analysis/2026-05-26-ai-coding-agents.md)** | Category Analysis | **AI Coding Agents (Cline/Aider/Plandex/Goose/Continue)**: Framework lens (task-model / state / linkage / autonomy / multi-agent) applied to single-agent CLI coding tools. Source-verified. Identifies AIDA's structured spec graph + git-canonical substrate + lifecycle-as-substrate as differentiators; pulls 5 opportunities to learn from neighbors (Aider auto-commit, Plandex sandbox diff, Continue declarative checks, Goose compile target, Cline coordinator+specialist). |
 | **[tui-prior-art.md](../archive/competitive-analysis/tui-prior-art.md)** | Architectural Spike | **Terminal User Interfaces**: An empirical UX study of six agent TUIs (CMux, Vibe Tree, Conductor, etc.) informing AIDA's child-hosting PTY design. |
 | **[skillfold-spike.md](../archive/competitive-analysis/skillfold-spike.md)** | Architectural Spike | **Skillfold Compatibility**: A deep-dive gap analysis evaluating the compilation of AIDA's skill templates to declarative skillfold YAML. |
-| **[category-summaries/](category-summaries/)** | Directory | **Ecosystem Lens Breakdowns**: Category-level summaries analyzing architectural shifts. |
+| **[category-summaries/](../archive/competitive-analysis/category-summaries/)** | Directory | **Ecosystem Lens Breakdowns**: Category-level summaries analyzing architectural shifts. |
 | ├─ **[coordination-protocols.md](../archive/competitive-analysis/category-summaries/coordination-protocols.md)** | Category Summary | **Agent Concurrency**: Compares declarative compilers (Skillfold), lock daemons (Wit), and AIDA's git-native advisory leases. |
 | ├─ **[swarm-orchestrators.md](../archive/competitive-analysis/category-summaries/swarm-orchestrators.md)** | Category Summary | **Agent swarms**: Analyzes WASM swarms (Claude Flow) and economic swarms (Swarm-Protocol) against AIDA's requirements graph. |
 | ├─ **[parallel-session-managers.md](../archive/competitive-analysis/category-summaries/parallel-session-managers.md)** | Category Summary | **Workspace Isolation**: Surveys Git worktree multiplexers and database backends, cross-referencing our TUI prior-art study. |

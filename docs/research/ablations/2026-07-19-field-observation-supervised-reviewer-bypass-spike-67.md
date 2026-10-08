@@ -9,7 +9,7 @@
 
 On 2026-07-09, during a **supervised interactive** walkthrough (`--supervised` drive)
 of TASK-1123 — a deliberately trivial doc task (append one dated bullet to
-`docs/archive/reviews/2026-07-flow-smoke.md`) — the codex implementer ran `aida pr ship` end-to-end inside its
+`docs/flow-smoke.md`) — the codex implementer ran `aida pr ship` end-to-end inside its
 own implementer session: implement → push → CI → **squash-merge**. PR **#1376** merged
 at 2026-07-09T04:40Z with **zero independent reviews** (`gh pr view 1376` →
 `reviews: []`, re-verified 2026-07-19 while writing this up).
@@ -99,7 +99,7 @@ harvest over-counts the class the ablations already falsified.
   unconditionally. The implementer opens the PR and stops; the independent reviewer
   gates the merge in every mode.
 - **2026-07-12 verification walkthrough** (TASK-1126, recorded in
-  `docs/archive/reviews/2026-07-flow-smoke.md`): the guard suite re-ran green — 47 `pr_ship` tests including
+  `docs/flow-smoke.md`): the guard suite re-ran green — 47 `pr_ship` tests including
   the should-block-ship-merge truth table, plus 18 `drain_lock` tests covering the
   invariant the guard depends on.
 - **BUG-713** fixed the codex prompt at the source; the remaining delivery-rot

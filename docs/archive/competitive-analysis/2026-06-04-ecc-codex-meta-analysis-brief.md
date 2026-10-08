@@ -22,8 +22,8 @@ Do not be diplomatic. The report you are reviewing went out of its way to critic
 
 | Artifact | Location | Note |
 |---|---|---|
-| **The report under review** | `docs/archive/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md` | This is your primary target. Its §9.3 is yours to fill. |
-| **Draft 3** (committed doc) | `docs/archive/competitive-analysis/2026-06-05-ecc-deep-dive.md` | One of the three analyses; note its known defects (fabricated SPIKE header, `file://` leaks, future date). |
+| **The report under review** | `docs/competitive-analysis/2026-06-04-ecc-analyses-review-and-rebuttal.md` | This is your primary target. Its §9.3 is yours to fill. |
+| **Draft 3** (committed doc) | `docs/competitive-analysis/2026-06-05-ecc-deep-dive.md` | One of the three analyses; note its known defects (fabricated SPIKE header, `file://` leaks, future date). |
 | **Draft 1** (verbatim) | Appendix A below | README-only analysis; chat-only otherwise. |
 | **Draft 2** (verbatim, Claude's) | Appendix B below | The deep dive; chat-only otherwise. The report's §5 self-critiques this — check that self-critique is fair, not performative. |
 | **ECC clone (full, ecc2 built)** | `/tmp/ecc-analysis/` | ~1.9G (includes a built `ecc2/target`). Use for verification. |
@@ -72,7 +72,7 @@ cd ~/ai/aida && ./target/debug/aida list --type bug --status approved | head
 
 ## 5. Deliverable
 
-Produce `docs/archive/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md` containing:
+Produce `docs/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md` containing:
 
 1. **Verdict table** — C1–C8, each AGREE/DISPUTE/REFINE + one-line evidence.
 2. **The three attacks** (§9.2 targets): your evidence on the asymmetry claim, the `ecc2` reality, and the 207k plausibility.

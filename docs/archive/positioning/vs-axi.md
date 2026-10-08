@@ -3,7 +3,7 @@
 > One focused comparison, in the `docs/positioning/` series. Neighbor: **AXI**
 > — "Agent eXperience Interface", Kun Chen's (`kunchenguid`) family of
 > agent-native tools. Snapshot: 2026-06-28. Paired note:
-> `docs/archive/competitive-analysis/2026-06-28-axi-ecosystem.md`.
+> `docs/competitive-analysis/2026-06-28-axi-ecosystem.md`.
 
 *Last updated: 2026-07-19 (EPIC-56 incorporation status refreshed). Landscape snapshot: 2026-06-28.*
 
@@ -142,7 +142,7 @@ zero-token supervision (STORY-712), and the worktree warm-pool (STORY-714).
 "Adopt AXI ergonomics" has moved from recommendation to shipped state; the live
 item remains substrate investment. AXI-side movement since the 2026-06-28
 snapshot (stars, adoption, benchmark replication) has not been re-verified
-offline — see `docs/archive/competitive-analysis/2026-07-19-multivendor-coordination-refresh.md`.*
+offline — see `docs/competitive-analysis/2026-07-19-multivendor-coordination-refresh.md`.*
 
 ## Tripwires
 
@@ -157,6 +157,6 @@ offline — see `docs/archive/competitive-analysis/2026-07-19-multivendor-coordi
 
 ## See also
 
-- `docs/archive/competitive-analysis/2026-06-28-axi-ecosystem.md` — the dated note + ecosystem map
-- `docs/archive/positioning/vs-karpathy-md.md` — the markdown-as-floor argument (tasks-axi is its agent-ergonomic incarnation)
+- `docs/competitive-analysis/2026-06-28-axi-ecosystem.md` — the dated note + ecosystem map
+- `docs/positioning/vs-karpathy-md.md` — the markdown-as-floor argument (tasks-axi is its agent-ergonomic incarnation)
 - The AXI 10 principles: <https://github.com/kunchenguid/axi>

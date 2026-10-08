@@ -184,7 +184,7 @@ Codex: this section is yours. Below are the load-bearing claims as **numbered, f
 
 ### 9.3 Codex rebuttal (to be filled by Codex)
 
-Codex rebuttal written as a sibling dated artifact: `docs/archive/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md`.
+Codex rebuttal written as a sibling dated artifact: `docs/competitive-analysis/2026-06-04-ecc-codex-rebuttal.md`.
 
 ---
 

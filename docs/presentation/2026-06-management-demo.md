@@ -137,7 +137,7 @@ The surface looks trivial **on purpose.** The depth compounds:
 <!--
 This is the buy-in slide for a technical audience — they will respect "the hard part is underneath."
 If asked "couldn't a vendor add this?" → "They'd have to ship the YAML-canonical store, node-aware IDs, the cache/projection model, the MCP server, the trace convention, the relationship graph, the role/session/worktree model, and the lifecycle engine. Months. And because ours lives in git, it's vendor-neutral by construction — that's the part a single-vendor tool structurally can't copy."
-THE CLAUDE-CODE QUESTION WILL COME (technical room). Expand the one-liner: "Claude Code's subagents, Workflows, and agent teams orchestrate a TASK — fan out agents, produce an answer, end. AIDA is the persistent layer underneath: the requirement graph, stable IDs, code→spec traces, the lifecycle. A Workflow can't tell you what exists or why six months from now — and it can't even drive a Codex session. AIDA runs ON their orchestration and outlives any single run, across every vendor. Their orchestration getting better makes AIDA better — we delegate to it." Backing detail: docs/archive/positioning/vs-claude-code-workflows.md + vs-claude-code-subagents.md.
+THE CLAUDE-CODE QUESTION WILL COME (technical room). Expand the one-liner: "Claude Code's subagents, Workflows, and agent teams orchestrate a TASK — fan out agents, produce an answer, end. AIDA is the persistent layer underneath: the requirement graph, stable IDs, code→spec traces, the lifecycle. A Workflow can't tell you what exists or why six months from now — and it can't even drive a Codex session. AIDA runs ON their orchestration and outlives any single run, across every vendor. Their orchestration getting better makes AIDA better — we delegate to it." Backing detail: docs/positioning/vs-claude-code-workflows.md + vs-claude-code-subagents.md.
 -->
 
 ---
@@ -284,7 +284,7 @@ This is the "what just happened in the LIVE demo, under the hood" slide — pair
 - **vs. Karpathy-style structured markdown** — that's the **floor**. AIDA adds the graph, identifier stability, enforced traces, MCP.
 - **vs. SaaS PM tools (Linear/Jira)** — **git-canonical, no SaaS dependency**; the data is yours and vendor-neutral.
 
-<small>Full neighbor-by-neighbor analysis: `docs/positioning/`, `docs/archive/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md`</small>
+<small>Full neighbor-by-neighbor analysis: `docs/positioning/`, `docs/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md`</small>
 
 ---
 

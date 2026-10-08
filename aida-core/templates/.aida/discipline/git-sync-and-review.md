@@ -1096,13 +1096,13 @@ Related: [[feedback_declare_the_seat_when_dispatching]], [[feedback_serial_not_f
 ### feedback_new_cli_leaf_must_regenerate_format_json_audit
 
 Adding a leaf to `aida-cli-lib/src/cli.rs` **obligates** regenerating
-`docs/archive/audits/cli-format-json-audit.md`. The audit is clap-derived, so a new
+`docs/cli-format-json-audit.md`. The audit is clap-derived, so a new
 subcommand makes `checked_in_audit_is_exhaustive_and_every_honoured_probe_parses`
 (`aida-cli/tests/bug_1502_format_json_audit.rs`) fail with
 `assertion left == right failed: regenerate the BUG-1502 audit`.
 
 Regenerate — never hand-edit:
-`scripts/generate-format-json-audit.py <AIDA_BINARY_BUILT_ON_THE_BRANCH> docs/archive/audits/cli-format-json-audit.md`
+`scripts/generate-format-json-audit.py <AIDA_BINARY_BUILT_ON_THE_BRANCH> docs/cli-format-json-audit.md`
 
 **Why:** TASK-1562 shipped `aida worktree reclaim` with 19 green unit tests, a
 mutation proof, and `make check-ci-fast` all passing, and still took a red CI

@@ -108,7 +108,7 @@ But workflows are **runtime-only**. They don't have:
 - Reasoning supervisor for inconclusive outcomes
 - Findings / calibration / discipline pack
 
-These are AIDA's actual moat, exactly as the article-derived analysis predicted (`docs/archive/competitive-analysis/2026-05-26-agent-memory-libraries.md`). Workflows make the case sharper.
+These are AIDA's actual moat, exactly as the article-derived analysis predicted (`docs/competitive-analysis/2026-05-26-agent-memory-libraries.md`). Workflows make the case sharper.
 
 ### The compose architecture
 

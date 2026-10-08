@@ -62,14 +62,14 @@ For background: AIDA = git-canonical spec graph + Rust orchestrator that drains 
 
 ### 5. Delegation to managed Code Review is right (vs. native reviewer)
 
-**Assumption:** AIDA should divest reviewer-as-Claude-session in favor of triggering Anthropic's managed Code Review and parsing its severity tally. Spec-grounded behavior survives via docs/archive/reviews/2026-05-generated-review.md injection.
+**Assumption:** AIDA should divest reviewer-as-Claude-session in favor of triggering Anthropic's managed Code Review and parsing its severity tally. Spec-grounded behavior survives via REVIEW.md injection.
 
 **What could be wrong:**
-- docs/archive/reviews/2026-05-generated-review.md is a "highest-priority instruction" but Claude doesn't always follow instructions. Substrate-via-prose ≠ substrate-via-code
+- REVIEW.md is a "highest-priority instruction" but Claude doesn't always follow instructions. Substrate-via-prose ≠ substrate-via-code
 - Per-PR cost ($15-25) compounds for orgs running 50+ PRs/week — could be $1000+/month vs $0 today
 - ZDR holdouts force a permanent two-mode architecture (managed + native fallback)
 
-**Evidence:** ship SPIKE-35 + SPIKE-36 on this repo for 2 weeks; measure (a) whether Code Review actually follows docs/archive/reviews/2026-05-generated-review.md severity-recalibration, (b) cost trajectory, (c) reliability of severity parse.
+**Evidence:** ship SPIKE-35 + SPIKE-36 on this repo for 2 weeks; measure (a) whether Code Review actually follows REVIEW.md severity-recalibration, (b) cost trajectory, (c) reliability of severity parse.
 
 ### 6. The "saved-script" framing is right for SPIKE-32
 
@@ -89,13 +89,13 @@ For background: AIDA = git-canonical spec graph + Rust orchestrator that drains 
 
 **Evidence:** propose to a teammate "you need to run `aida rules sync` to load spec scope into Claude" — see if they'd actually do it consistently. If not, committed > gitignored.
 
-### 8. docs/archive/reviews/2026-05-generated-review.md should be per-PR not per-spec
+### 8. REVIEW.md should be per-PR not per-spec
 
-**Assumption:** SPIKE-35 emits a single docs/archive/reviews/2026-05-generated-review.md (root-level, regenerated on spec changes or PR opens) rather than per-spec REVIEW-SPEC-N.md files (Code Review doesn't support multiple docs/archive/reviews/2026-05-generated-review.md files anyway).
+**Assumption:** SPIKE-35 emits a single REVIEW.md (root-level, regenerated on spec changes or PR opens) rather than per-spec REVIEW-SPEC-N.md files (Code Review doesn't support multiple REVIEW.md files anyway).
 
-**What could be wrong:** one docs/archive/reviews/2026-05-generated-review.md means N specs' rules collide. Each spec's "skip-rule" applies to every other spec's review. The selectivity that path-gated rules give us (SPIKE-31) doesn't exist for docs/archive/reviews/2026-05-generated-review.md.
+**What could be wrong:** one REVIEW.md means N specs' rules collide. Each spec's "skip-rule" applies to every other spec's review. The selectivity that path-gated rules give us (SPIKE-31) doesn't exist for REVIEW.md.
 
-**Evidence:** read what Code Review does when docs/archive/reviews/2026-05-generated-review.md has competing instructions across sections.
+**Evidence:** read what Code Review does when REVIEW.md has competing instructions across sections.
 
 ---
 

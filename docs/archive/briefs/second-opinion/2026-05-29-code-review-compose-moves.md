@@ -24,7 +24,7 @@ On 2026-05-29 I researched three new Anthropic surfaces I hadn't previously cata
 - Team/Enterprise GitHub App
 - Multi-agent review on Anthropic infra ($15-25 per review)
 - Posts inline findings tagged 🔴 Important / 🟡 Nit / 🟣 Pre-existing
-- Reads `CLAUDE.md` (low priority) AND `docs/archive/reviews/2026-05-generated-review.md` (highest priority — reviewer-only)
+- Reads `CLAUDE.md` (low priority) AND `REVIEW.md` (highest priority — reviewer-only)
 - **Machine-readable severity output:** last line of check-run details is `bughunter-severity: {"normal":N,"nit":M,"pre_existing":K}` — parseable by `gh api ... | jq`
 - Manual triggers: `@claude review` (subscribes to push reviews) or `@claude review once` (one-shot)
 - Local equivalent: `/code-review [--comment] [--fix] [path|PR]` in any Claude Code session
@@ -47,7 +47,7 @@ On 2026-05-29 I researched three new Anthropic surfaces I hadn't previously cata
 
 | # | Title | Priority | What it does |
 |---|---|---|---|
-| 35 | Emit docs/archive/reviews/2026-05-generated-review.md from spec graph | High | Like SPIKE-31's path-gated rules but for reviewer behavior. AIDA generates docs/archive/reviews/2026-05-generated-review.md per-PR or per-spec with acceptance criteria, severity calibration, and skip-rules from the spec graph. Code Review reads docs/archive/reviews/2026-05-generated-review.md as highest-priority instruction. |
+| 35 | Emit REVIEW.md from spec graph | High | Like SPIKE-31's path-gated rules but for reviewer behavior. AIDA generates REVIEW.md per-PR or per-spec with acceptance criteria, severity calibration, and skip-rules from the spec graph. Code Review reads REVIEW.md as highest-priority instruction. |
 | 36 | Parse `bughunter-severity` as orchestrator phase-3 gate | High | AIDA orchestrator phase 3 stops spawning its own reviewer Claude session, parses Code Review's check-run severity tally instead. `normal>0` → RequestChanges, `normal==0` → Approve. Delegates the actual review work. |
 | 37 | Trigger Code Review via `@claude review once` from `/aida-review` | Medium | AIDA's reviewer skill comments `@claude review once` on the PR; SPIKE-36 then parses the verdict. Doesn't replace SPIKE-36 — combines with it. |
 | 38 | Publish `aida-review` GitHub Action wrapping `claude-code-action@v1` | Medium | Distribution surface: other AIDA-using projects can compose AIDA's discipline pack + reviewer behavior into their CI without local install. |
@@ -57,11 +57,11 @@ On 2026-05-29 I researched three new Anthropic surfaces I hadn't previously cata
 
 ### A. Is delegation actually the right move?
 
-**My claim:** Code Review has a fleet of specialized agents + a verification step + millions of dollars of training. AIDA's spec-grounded reviewer is one Claude session reading one prompt. Code Review is strictly more capable on the generic "is this code correct" dimension. AIDA's value-add is acceptance-criteria grounding (docs/archive/reviews/2026-05-generated-review.md injection) + lifecycle integration (parsing the verdict + acting on it). Delegation makes sense.
+**My claim:** Code Review has a fleet of specialized agents + a verification step + millions of dollars of training. AIDA's spec-grounded reviewer is one Claude session reading one prompt. Code Review is strictly more capable on the generic "is this code correct" dimension. AIDA's value-add is acceptance-criteria grounding (REVIEW.md injection) + lifecycle integration (parsing the verdict + acting on it). Delegation makes sense.
 
-**Possible counter:** delegation puts the reviewer outside AIDA's substrate. Spec-graph context only flows in via docs/archive/reviews/2026-05-generated-review.md. If AIDA's substrate is the moat, putting the reviewer OUTSIDE the moat moves the value where Anthropic captures it, not AIDA. Better to keep AIDA's own reviewer that reads MCP and write to MCP.
+**Possible counter:** delegation puts the reviewer outside AIDA's substrate. Spec-graph context only flows in via REVIEW.md. If AIDA's substrate is the moat, putting the reviewer OUTSIDE the moat moves the value where Anthropic captures it, not AIDA. Better to keep AIDA's own reviewer that reads MCP and write to MCP.
 
-**Question:** which framing is right? Is docs/archive/reviews/2026-05-generated-review.md injection enough substrate flow, or are we leaking the moat?
+**Question:** which framing is right? Is REVIEW.md injection enough substrate flow, or are we leaking the moat?
 
 ### B. ZDR / non-Team-tier holdout
 
@@ -78,12 +78,12 @@ Code Review is $15-25 per review. AIDA's existing reviewer phase runs on operato
 
 **Question:** is this a deal-breaker? Should SPIKE-37 (`@claude review once` trigger) be an opt-in flag per-PR rather than the default?
 
-### D. Where does SPIKE-35 (docs/archive/reviews/2026-05-generated-review.md emit) actually fire?
+### D. Where does SPIKE-35 (REVIEW.md emit) actually fire?
 
 Options:
-1. **Per-PR generation in CI** — a GitHub Action runs `aida rules sync --review-md` on each PR sync, writes docs/archive/reviews/2026-05-generated-review.md, Code Review reads it on next review. Tight integration but spreads AIDA's reach into CI.
-2. **Per-spec generation locally** — `aida rules sync` writes docs/archive/reviews/2026-05-generated-review.md for InProgress specs at the implementer's terminal. Commits go into the PR. Code Review reads it via the committed file.
-3. **One root docs/archive/reviews/2026-05-generated-review.md, regenerated on `aida pull`** — covers the whole repo's active scope. Less precise but simpler.
+1. **Per-PR generation in CI** — a GitHub Action runs `aida rules sync --review-md` on each PR sync, writes REVIEW.md, Code Review reads it on next review. Tight integration but spreads AIDA's reach into CI.
+2. **Per-spec generation locally** — `aida rules sync` writes REVIEW.md for InProgress specs at the implementer's terminal. Commits go into the PR. Code Review reads it via the committed file.
+3. **One root REVIEW.md, regenerated on `aida pull`** — covers the whole repo's active scope. Less precise but simpler.
 
 **Question:** which option is right? The trade-off is integration intimacy (option 1 highest, option 3 lowest) vs operator complexity.
 
@@ -99,7 +99,7 @@ Should AIDA's `/aida-review` skill BECOME a wrapper around `/code-review --comme
 
 - Whether AIDA's orchestrator's phase 3 (reviewer) is a real phase — it is, it's been shipped for months
 - Whether AIDA should COMPETE with Code Review by building our own multi-agent reviewer — that's been decided no, the multi-agent fleet is Anthropic's moat
-- Whether docs/archive/reviews/2026-05-generated-review.md is real — it is, per <https://code.claude.com/docs/en/code-review#review-md>
+- Whether REVIEW.md is real — it is, per <https://code.claude.com/docs/en/code-review#review-md>
 
 ## Files / surfaces to read for grounding
 

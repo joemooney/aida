@@ -49,7 +49,7 @@ TASK-575 (frontmatter hardening on destructive skills) is probably the most defe
 
 ## Deliverable
 
-`docs/archive/audits/skill-catalog-audit-2026-05-29.md` — a table (skill | trigger | overlaps | keep/merge/cut/defer | rationale) + a one-paragraph verdict on the trio. Commit to a branch + report.
+`docs/aida/skill-catalog-audit-2026-05-29.md` — a table (skill | trigger | overlaps | keep/merge/cut/defer | rationale) + a one-paragraph verdict on the trio. Commit to a branch + report.
 
 ## Desired return shape
 
