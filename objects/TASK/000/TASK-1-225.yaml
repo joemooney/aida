@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-08T21:59:43.878292551Z
+modified_at: 2026-10-08T22:19:25.076344161Z
 req_type: Task
 tags:
 - closure-pending
@@ -650,6 +650,11 @@ comments:
   content: 'Proxy advisor 21:59 UTC: TASK-1717 fresh whole-A4 review REQUEST_CHANGES at exact 223c192aa1d40d920e31dd51b6c3c08fc565ede7. Full 26456-byte verdict SHA256 6dd698caa58f8e83b431ce281df26eea15bdf27728574be28e5d3569f8951717 and numbered same-existing-author rework v2 relayed in full on child; root verified all 42 receipt input hashes without mismatch and grounded both blockers. B1 real generated hook wrappers fail classification; advisor supports current exact named-template body with genuine wrapper, unestablished drift gets explicit upgrade refusal. B2 failed git status is treated clean and can falsely publish digest/push success; strict pre-effect check required. Missing required witnesses remain. Existing authorized author continuation only, no new dispatch/requeue workaround. A2/CAS/common production gates and parent closure stay pending; no merge/completion credit.'
   created_at: 2026-10-08T21:59:43.878286696Z
   modified_at: 2026-10-08T21:59:43.878286696Z
+- id: 01a11d99-8e14-7523-ad69-b626cd9ef954
+  author: mcp
+  content: 'Proxy advisor: full self-contained A2 V3 proposal125477B SHA256df3ad263e5a2e874e032fd9e06a666e97c8f4b6a72850396d705d6fa1e01594a plus full10330B READY relayed unchanged on BUG1808, exact full readback TRUE. Root independently verified27 manifest artifact/manual/source entries with zero mismatches; actual author FINAL22:18:38. New independent whole-design gate next; proposal is NOT signed off. All17familyrows/eightproductiongates, F1counterexample, unsupported joins and commonrequireditems remain; new implementation dispatch actual refusal unchanged. No child/parent completion or production authority inferred.'
+  created_at: 2026-10-08T22:19:25.076337454Z
+  modified_at: 2026-10-08T22:19:25.076337454Z
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
