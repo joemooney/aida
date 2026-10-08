@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-08T01:42:52.654277454Z
+modified_at: 2026-10-08T01:57:58.574146610Z
 req_type: Task
 tags:
 - guided-lane
@@ -116,6 +116,11 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): Git fetch/main merge mechanically succeeded at assigned checkout, pending MERGE_HEAD199e591b07aa76a59cd34f0a41946f918501f6ba without conflicts. AIDA refused advisor commit (seat boundary); no bypass or role spoof performed. Implementer is preparing source/test C7 rework under unchanged sandbox, preserving staged upstream merge. No commit/push or C7-ready claim yet. After concrete source/test result, Git-writable implementer launch needs operator-authorized posture; canonical handoff task1607-rework/sandbox-block-2026-10-08T0140Z.md records actual readonly metadata mounts. Do not dispatch another worker or delete the dirty worktree.'
   created_at: 2026-10-08T01:42:52.654277454Z
   modified_at: 2026-10-08T01:42:52.654277454Z
+- id: 01a1193b-4aae-7051-a832-a64145c4ebf2
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): C7 stage-boundary clarification. The original C7 requires schedule tick and supervisor launch_redrive inventory plus explicit disposition BEFORE step5; production launcher corrections wait for steps4-5 AFTER fresh independent C7 core approval. Do not replace either live launcher now. Document intended redrive handoff/no-independent-schedule-loop disposition and test operation shapes at the core boundary. My eight-item brief wording overstated the current coding scope; this is a brief-quality correction, not implementer rework failure. C7 is checkpoint approval only, never final TASK1607 completion or authority-changing merge clearance.'
+  created_at: 2026-10-08T01:57:58.574146610Z
+  modified_at: 2026-10-08T01:57:58.574146610Z
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
