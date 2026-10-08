@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-04T07:48:21.100386397Z
-modified_at: 2026-10-08T20:13:47.507105560Z
+modified_at: 2026-10-08T20:19:53.440632274Z
 req_type: Doc
 relationships:
 - rel_type: References
@@ -189,6 +189,11 @@ comments:
   content: 'PROXY DECISION execution correction: the planned B3 documentation handoff did NOT dispatch. Normal preferred MCP queue_add DOC-6 --for implementer returned: ''Cannot queue work for execution via MCP: routing work needs dispatch authority (product, advisor, or integrator role).'' No CLI/alternate-API retry, role/env/grant substitution, new implementer lease, or native --spec dispatch will bypass that refusal. The full independent audit remains saved/verified. B3 is a concrete eligible doc-only scope for a legitimately dispatch-authorized seat; DOC-6 remains partial. Existing functional authority/roster owner was sent peer request 398ef497-44a4-4bce-8534-47e9b03dbfa0 for B1/B2/R1 disposition, not root takeover. All runtime/authority positives still unverified.'
   created_at: 2026-10-08T20:13:47.507099596Z
   modified_at: 2026-10-08T20:13:47.507099596Z
+- id: 01a11d2c-1fe0-7530-be24-f31ff02a1421
+  author: mcp
+  content: 'Additional bounded maintained-guidance finding verified during advisor read: .aida/discipline/advisor-role.md section feedback_advisor_role_for_queue_after_647 still recommends AIDA_SESSION_ROLE=advisor prefixes to confer queue/approval authority and says internal storage.queue_add bypasses the CLI gate. Those historical instructions conflict with current validated-grant semantics and the actual MCP queue refusal; root did NOT follow them. Future B3 documentation work should reconcile the maintained/template source of this migrated lesson to current canonical ADR-66 without introducing a new authority convention. Preserve its historical provenance as historical; no environment elevation advice in current operating guidance. This is documentation-source inventory only, not a root patch or queue authorization.'
+  created_at: 2026-10-08T20:19:53.440625238Z
+  modified_at: 2026-10-08T20:19:53.440625238Z
 filed_at:
   code_sha: e0d83a99494f0f884fdcfed9f8213413f11756cf
   branch: story-1473
