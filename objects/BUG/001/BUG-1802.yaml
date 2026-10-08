@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-05T04:22:30.303689845Z
-modified_at: 2026-10-08T02:19:07.100324068Z
+modified_at: 2026-10-08T02:24:23.350453645Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -81,6 +81,45 @@ comments:
     E. Confirm local supported-workflow threat boundary is acceptable; if hostile same-user resistance is required, this sketch is insufficient and needs protected-broker design first.
   created_at: 2026-10-08T02:19:07.100324068Z
   modified_at: 2026-10-08T02:19:07.100324068Z
+- id: 01a11953-7936-7782-a03e-d9ec75676654
+  author: joe
+  content: |
+    CHANGES REQUESTED — BUG-1802 independent sketch review
+
+    Reviewed independently against main 199e591b07aa76a59cd34f0a41946f918501f6ba. This session did not author the sketch or implementation. Authority-changing final merge remains the operator's. This is a sketch verdict, not a code-review approval or permission to implement the unresolved design.
+
+    Verified evidence
+
+    Read AGENTS.md, two-seat protocol, rework/recovery discipline, aida-orchestrate sketch gate, full spec/comments through /home/joe/ai/aida/target/agent/aida, both sketch files and SKETCH_AUTHOR_READY.md. CLI reports 0.15.0, build 199e591b07+dirty; inspected tracked source matches the pinned commit. The old bug-1802-review-independence branch at b409b5ae3ebb7c6e1e354d5ee77492d1f048ef32 has only 93 added template lines relative to its merge base; untouched. TASK-1599 did not implement this fix.
+
+    lib.rs::review_recorded_by_from (96318) really uses missing name/type to assign operator attribution. handle_review_record_at (95825) writes protection, verdict, markers and events without authenticated review identity. stamp_pr_review_verdict (9486) substitutes a drain string. pr_ship::approval_head_refusal/open_approvals/approved_match_head, pr_cmd::ship_refusal_release and merge_hold::refusal_release consume verdict/head evidence without the requested identity validation. merge_gate_verdict_candidates also silently drops unreadable/unparseable files: adding only a field validator after that filter would leave a missing-approval bypass.
+
+    Existing identities are not interchangeable: SessionLease.id (lib.rs:33377), SeatGrant.session_id (seat_authority.rs:17), SessionManifest.session_id/claude_session_id and AgentRegistryEntry.id/native_session_id/resumed_from. OrchestratedLeaseReceipt (lib.rs:106723) already joins conversation, lease, branch and worktree; it has no grant/spec UUID/head attribution and recover_lost_child_state removes a partial receipt. Registry GC and manifest pruning also preclude assuming those are permanent evidence. current_grant validates the immediate parent, not an arbitrary complete ancestor chain. require_direct_human checks TTY and two managed-agent environment markers; it does not authenticate absence of an agent against persistent launch identity.
+
+    Binding answers to sketch questions A–E
+
+    A. Approval requires a valid reviewer/advisor grant or a direct-human TTY path, with actual identity and independence established before writes. No role/name-string fallback. Reject an implementer grant, the same durable implementation actor/session (including resumed/reissued identity), or a reviewer whose ancestor is an implementation actor for this work. Two distinct children of a nonimplementing driver are allowed; common OS user/principal or common driver ancestry alone is not self-review. Traverse validated ancestry with cycle/missing-record refusal; current_grant alone does not establish that property. A TTY plus missing environment strings cannot override positive managed-session/implementation evidence. Keep existing emergency hold placement intact.
+
+    B. Prefer extending and retaining existing launch/session/grant evidence plus the existing review JSON rounds. Do not mandate a new global provenance ledger, broker, requirement format or duplicate authority store. The minimal necessary join is canonical repository + spec UUID + reviewed-work lineage -> all relevant implementation actor/session identities -> retained grant/launch evidence, and independently reviewer actor/session -> its valid recording authority. A display ID, lease owner, git email, PR author or latest lease alone cannot supply this join. The exact producer/retention/coverage design is the blocker below; this answer does not bless the sketch's unspecified new binding.
+
+    C. Keep historical closed verdicts, refusals, findings, retained rounds and closure evidence readable and untouched. Legacy approvals cannot authorize new shipping. Fresh review alone does not repair unknown implementation identity: re-review can authorize only when retained evidence actually establishes independence. Missing evidence refuses with its precise gap. No automatic backfill or new human attribution-repair override is authorized. Target-scoped, valid fresh rounds can supersede old rounds under existing ordering; unrelated historical legacy records must not poison every future PR.
+
+    D. Validate authority at recording and retain that evidence so normal time expiry/process exit does not erase a valid review. Explicit revocation (reviewer or relevant ancestor) blocks subsequent use for an unmerged target; historical closed work stays closed. On this baseline role_cmd::handle_role_end calls revoke_current: it is explicit revocation under this conservative rule, even if used as routine logout, so it can require re-review before shipping. Do not silently reinterpret revoked_at as harmless cleanup. Missing/corrupt references or ambiguous ordering refuse. No new retroactive invalidation or bypass command is required.
+
+    E. The supported-workflow/local-grant boundary is sufficient for this bug; no same-Unix-user tamper-resistance claim. A protected broker would require separate architecture/operator direction. No roster/grant/human-floor expansion is authorized here.
+
+    Required sketch revision before signoff
+
+    1. Name the existing record(s) to extend, exact minimal added fields and retention owner, and every producer/consumer symbol. Provide a concrete sequence for interactive pickup, standalone headless, orchestrated phase, direct session/agent launch, resume, rework, role reissue and session cleanup. Identify where the implementation actor becomes bound to the actual reviewed branch/head and how the complete relevant author set is established. A launch record containing an initial head is not proof of authorship of later commits. Unknown coverage must refuse; a fresh session cannot wash away a prior implementation identity. Show how uninstrumented/legacy changes are detected instead of accepted as an empty author set. Do not code a broad ledger to paper over this unresolved join.
+    2. Specify canonical target resolution, retained-record validation and serialization at publication/consumption. Carry an explicit invalid/missing/corrupt candidate result through merge_gate_verdict_candidates; never filter an untrusted approval into the existing no-review-required case. Apply the same check at ship preflight and under the merge lease, drain merge matching, corpus/rework-release paths and reviewer handshake ingestion. --override-stale-approval cannot override bad identity. Drain transport may annotate CI but cannot manufacture reviewer proof or inherit a prior round's proof. Specify ordering that prevents a concurrent refusal from being erased and canonical publication failure from clearing a marker.
+
+    Required named witnesses (proposed tests, not executed)
+
+    Keep the sketch's real-CLI review_record_implementer_cannot_self_approve_cli, review_record_independent_granted_reviewer_cli, review_record_direct_human_tty, review_record_identity_survives_cleanup_and_rework, ship_rejects_untrusted_review_provenance_entrypoint and ship_rechecks_provenance_under_merge_lease. Add review_record_reissued_grant_same_actor_refused; ship_malformed_approval_is_not_no_review; drain_review_transport_cannot_authenticate_child_json; ship_revoked_review_refuses_but_expired_review_retains_record_time_authority. Drive actual review record / pr ship and production drain phase/merge entrypoints with fake forge/vendor and isolated HOME, including refusal-release, canonical/local conflicts, retained archive, valid sibling reviewer, head movement and concurrent refusal. Unit parser tests alone cannot witness this fix. Preserve closed legacy history in a fixture and prove it is not rewritten/reopened.
+
+    Disposition: CHANGES REQUESTED for the concrete identity/coverage and gate-publication design above, not for a new operator policy decision. No blanket block on BUG-1808. Revision returns to an independent advisor; no status/queue/hold/grant changes or implementation authorized by this verdict.
+  created_at: 2026-10-08T02:24:23.350453645Z
+  modified_at: 2026-10-08T02:24:23.350453645Z
 history:
 - id: 01a10ac3-87ca-732a-b7da-0b08b74e0585
   author: joe
