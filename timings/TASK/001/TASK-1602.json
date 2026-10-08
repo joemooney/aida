@@ -5,9 +5,102 @@
     {
       "at": "2026-10-06T13:51:57.996414283Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-08T05:36:13.674305431Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-06T07:21:42.199826312Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11016-f431-7cc1-aa66-79a3b90f24f8",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:21:46.471783440Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:22:03.363702057Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a11017 exited with code 1 after 16593ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1602` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1602 --force-claim` to take over here, or `aida edit TASK-1602 --stat"
+      }
+    },
+    {
+      "ts": "2026-10-06T07:22:03.366813120Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T07:22:22.738814797Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11016-f97a-7472-8ea2-11bd670c7da9",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a11017 exited with code 1 after 16661ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1602` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1602 --force-claim` to take over here, or `aida edit TASK-1602 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1602 — the store reports TASK-1602 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1602`."
+      }
+    },
+    {
+      "ts": "2026-10-06T13:03:02.760041416Z",
+      "spec": "TASK-1602",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:42:04.751744395Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11173-32c9-7180-a8e5-6e14aa133ead",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:42:10.740096721Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11173-32c9-7180-a8e5-6e14aa133ead",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-06T13:42:54.414738655Z",
       "spec": "TASK-1602",
@@ -16,6 +109,190 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:59:05.113752150Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11173-32c9-7180-a8e5-6e14aa133ead",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:00:34.516099799Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11173-32c9-7180-a8e5-6e14aa133ead",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-06T14:11:23.158848515Z",
+      "spec": "TASK-1602",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2444
+      }
+    },
+    {
+      "ts": "2026-10-06T14:11:26.452358507Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a1118e-146e-7ac3-8775-cc657d98cb1d",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-06T14:11:26.987548707Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a1118e-146e-7ac3-8775-cc657d98cb1d",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:11:32.244455085Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a1118e-146e-7ac3-8775-cc657d98cb1d",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-06T14:11:33.261556323Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a1118e-146e-7ac3-8775-cc657d98cb1d",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 3,
+        "slug": "reviewer",
+        "vendor": "codex",
+        "seat": "reviewer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-06T14:19:03.608424074Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a1118e-146e-7ac3-8775-cc657d98cb1d",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "reviewer verdict is RequestChanges — not Approved",
+        "recovery_hint": "Address the review feedback, then push fixups: `aida queue rework TASK-1602 --work`"
+      }
+    },
+    {
+      "ts": "2026-10-06T16:06:23.390503789Z",
+      "spec": "TASK-1602",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T16:27:42.307221158Z",
+      "spec": "TASK-1602",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1602",
+        "branch": "task-1602",
+        "first_seen": "2026-10-06T16:27:42.307201927+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:58:10.769975349Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11415-1e4b-7063-b907-5adcd14c9939",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:58:13.416909218Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11415-1e4b-7063-b907-5adcd14c9939",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T02:13:28.735538233Z",
+      "spec": "TASK-1602",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T02:25:06.583502457Z",
+      "spec": "TASK-1602",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-1602"
+      }
+    },
+    {
+      "ts": "2026-10-07T02:25:09.832739581Z",
+      "spec": "TASK-1602",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2444
+      }
+    },
+    {
+      "ts": "2026-10-07T03:39:33.379020137Z",
+      "spec": "TASK-1602",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-07T03:39:51.516383468Z",
+      "spec": "TASK-1602",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2444
+      }
+    },
+    {
+      "ts": "2026-10-08T05:36:13.645635533Z",
+      "spec": "TASK-1602",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "738653fb3e6de71d0975047adb143c5f31a25d85",
+        "pr": 2444,
+        "closed_by": "auto-bump"
       }
     }
   ]
