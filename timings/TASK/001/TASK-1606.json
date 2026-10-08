@@ -5,9 +5,63 @@
     {
       "at": "2026-10-07T02:12:35.611547479Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-08T01:31:11.989643488Z",
+      "closed_by": "reconcile-status"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-07T01:35:59.013164278Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:37:17.319323119Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:46:11.389855526Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:59:08.641984522Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-07T01:59:12.293195009Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-07T01:59:48.273200591Z",
       "spec": "TASK-1606",
@@ -16,6 +70,197 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-07T02:18:59.683826057Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 2,
+        "slug": "ci",
+        "vendor": "codex",
+        "seat": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T02:23:13.448730891Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-07T02:23:18.038455003Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11416-005b-7300-9a34-d381ac3475b8",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "ci",
+        "kind": "ci-red",
+        "detail": "CI is red on PR-2450: Build (ubuntu-latest)",
+        "recovery_hint": "CI failed: Build (ubuntu-latest) (run 37560853513; `gh run view 37560853513`). Push fixups to the same branch: `aida queue work TASK-1606 --branch task-1606 --steal`"
+      }
+    },
+    {
+      "ts": "2026-10-07T02:24:59.762737536Z",
+      "spec": "TASK-1606",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-07T03:36:28.107589775Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T03:37:32.528419068Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11470-166a-7c41-81e4-c40cd8cb5aa2",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-07T03:37:33.502861945Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11470-166a-7c41-81e4-c40cd8cb5aa2",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T03:37:58.827426200Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11470-1d13-7e42-8e02-b2b1f4c1fb31",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a11470 exited with code 1 after 25219ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1606` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1606 --force-claim` to take over here, or `aida edit TASK-1606 --stat"
+      }
+    },
+    {
+      "ts": "2026-10-07T03:38:01.119815129Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11470-1d13-7e42-8e02-b2b1f4c1fb31",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "codex",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-07T03:38:19.197347314Z",
+      "spec": "TASK-1606",
+      "run_uuid": "01a11470-1d13-7e42-8e02-b2b1f4c1fb31",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a11470 exited with code 1 after 19641ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: spec `TASK-1606` is InProgress but no local lease holds it. Two common causes: (a) a prior `aida queue work` or `--auto-complete` run left the status stuck (the parent died after the Approved → InProgress bump without ever saving a lease), or (b) another worktree / machine genuinely owns the work. Recovery: `aida queue work TASK-1606 --force-claim` to take over here, or `aida edit TASK-1606 --stat. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance TASK-1606 — the store reports TASK-1606 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work TASK-1606`."
+      }
+    },
+    {
+      "ts": "2026-10-07T03:48:11.769041983Z",
+      "spec": "TASK-1606",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1606",
+        "branch": "task-1606",
+        "first_seen": "2026-10-07T03:48:11.768995633+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-07T04:05:18.986141284Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T04:05:18.986251103Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-07T23:37:41.550484786Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "eb96823bda625d6e343d8bfbab996585541d0a79"
+      }
+    },
+    {
+      "ts": "2026-10-08T00:59:03.198814850Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "97c7f59cb615297c65f2430747cba216f3c2f826"
+      }
+    },
+    {
+      "ts": "2026-10-08T01:10:50.617378439Z",
+      "spec": "TASK-1606",
+      "seat": "implementer",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2452
+      }
+    },
+    {
+      "ts": "2026-10-08T01:29:55.899356378Z",
+      "spec": "TASK-1606",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-08T01:31:11.871746385Z",
+      "spec": "TASK-1606",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1",
+        "closed_by": "reconcile-status"
       }
     }
   ]
