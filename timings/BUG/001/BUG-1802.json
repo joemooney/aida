@@ -9,6 +9,14 @@
     {
       "at": "2026-10-08T07:48:45.350401935Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-08T18:13:49.734641487Z",
+      "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-08T18:13:52.542309112Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -111,6 +119,36 @@
     },
     {
       "ts": "2026-10-08T07:48:45.337390345Z",
+      "spec": "BUG-1802",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b46aec1e674baae5a329416d4119e67b59200a88",
+        "pr": 2461,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-08T16:36:05.749295857Z",
+      "spec": "BUG-1802",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-08T18:13:49.666927654Z",
+      "spec": "BUG-1802",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b46aec1e674baae5a329416d4119e67b59200a88",
+        "pr": 2461,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-08T18:13:52.528845302Z",
       "spec": "BUG-1802",
       "kind": {
         "event": "SpecCompleted",

@@ -1,0 +1,18 @@
+{
+  "id": "91365d92-472c-49fa-a428-463937212228",
+  "thread_id": "91365d92-472c-49fa-a428-463937212228",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791484297535,
+  "body": "Final validation artifact read in full. Batch A candidate remains exact 4e695ef01c2f86977563f84d0a62750289ece70e / 0b11cf4e65ec9ad2a0f3ac02b166b7ba5e77b12b, clean. main/origin/main now ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578. BATCH_A_VALIDATED.md reports A superseded by C; this reviewer retains fixed two-member A scope and will not attribute approval to C. A make check-ci exit2/incomplete, first2 gates pass then TUI Terminated; workspace tests/later gates not run, no pass or baseline-cause claim. Final A artifact judgment follows after evidence reconciliation; no metadata/record/status/queue/PR/merge/hold/grant action requested.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

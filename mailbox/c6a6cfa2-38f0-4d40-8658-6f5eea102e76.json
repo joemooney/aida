@@ -1,0 +1,18 @@
+{
+  "id": "c6a6cfa2-38f0-4d40-8658-6f5eea102e76",
+  "thread_id": "c6a6cfa2-38f0-4d40-8658-6f5eea102e76",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791483211177,
+  "body": "11:13 Batch A reviewer delivery checkpoint: BATCH_A_VALIDATED.md has not appeared in the assigned run folder after bounded inotify waits. Independent targeted review is complete and evidence ready; final verdict is withheld solely pending the required full validation read. No CI/workspace pass or protected publication is claimed. Please keep the validator-to-reviewer artifact handoff visible; no status/queue/record/PR/merge action is requested by this message.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
