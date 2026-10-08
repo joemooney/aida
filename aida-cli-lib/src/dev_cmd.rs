@@ -1452,32 +1452,48 @@ AIDA_WRAPPER_OUTPUT
             # stdout, which must never be eval'd — it prints as-is. The
             # binary only emits the marker block when AIDA_SHELL_WRAPPER
             # advertises `init-cd`, so older wrappers never see markers.
-            local _aida_out _aida_rc _aida_pre _aida_eval _aida_rest _aida_post
+            local _aida_out _aida_rc _aida_pre='' _aida_post='' _aida_eval=''
+            local _aida_line _aida_state=0 _aida_valid=1
             local _aida_b='#aida:eval:begin'
             local _aida_e='#aida:eval:end'
             local _aida_nl='
 '
-            _aida_out=$(command aida "$@")
-            _aida_rc=$?
-            case "$_aida_out" in
-                *"$_aida_b"*)
-                    _aida_pre="${_aida_out%%"$_aida_b"*}"
-                    _aida_rest="${_aida_out#*"$_aida_b"}"
-                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
-                    _aida_post="${_aida_rest#*"$_aida_e"}"
-                    _aida_pre="${_aida_pre%"$_aida_nl"}"
-                    _aida_eval="${_aida_eval#"$_aida_nl"}"
-                    _aida_eval="${_aida_eval%"$_aida_nl"}"
-                    _aida_post="${_aida_post#"$_aida_nl"}"
-                    [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
-                    [ "$_aida_rc" -eq 0 ] && [ -n "$_aida_eval" ] && eval "$_aida_eval"
-                    [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
-                    ;;
-                *)
-                    [ -n "$_aida_out" ] && printf '%s\n' "$_aida_out"
-                    ;;
-            esac
-            return "$_aida_rc"
+            if _aida_out=$(command aida "$@"; _aida_rc=$?; printf '.'; exit "$_aida_rc"); then
+                _aida_rc=0
+            else
+                _aida_rc=$?
+            fi
+            _aida_out=${_aida_out%.}
+            if [ "$_aida_rc" -ne 0 ]; then
+                printf '%s' "$_aida_out" >&2
+                return "$_aida_rc"
+            fi
+            while IFS= read -r _aida_line; do
+                case "$_aida_line" in
+                    "$_aida_b")
+                        [ "$_aida_state" -eq 0 ] || _aida_valid=0
+                        _aida_state=1 ;;
+                    "$_aida_e")
+                        [ "$_aida_state" -eq 1 ] || _aida_valid=0
+                        _aida_state=2 ;;
+                    *)
+                        case "$_aida_state" in
+                            0) _aida_pre="$_aida_pre$_aida_line$_aida_nl" ;;
+                            1) _aida_eval="$_aida_eval$_aida_line$_aida_nl" ;;
+                            2) _aida_post="$_aida_post$_aida_line$_aida_nl" ;;
+                        esac ;;
+                esac
+            done <<AIDA_WRAPPER_OUTPUT
+${_aida_out%"$_aida_nl"}
+AIDA_WRAPPER_OUTPUT
+            if [ "$_aida_valid" -eq 1 ] && [ "$_aida_state" -eq 2 ]; then
+                printf '%s' "$_aida_pre"
+                [ -n "$_aida_eval" ] && eval "$_aida_eval"
+                printf '%s' "$_aida_post"
+            else
+                printf '%s' "$_aida_out"
+            fi
+            return 0
             ;;
         "tui"|"tui "*)
             # STORY-681: `aida tui` is now self-sufficient — it dispatches
