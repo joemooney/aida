@@ -1,0 +1,19 @@
+id: 01a119e6-0475-7b41-961c-92ce15574ff6
+spec_id: TASK-1716
+agreed_id: TASK-1716
+title: Fix init block in dev shell-init to use robust marker parsing
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-08T05:04:27.253635993Z
+modified_at: 2026-10-08T05:04:27.253635993Z
+req_type: Task
+filed_at:
+  code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: antigravity
