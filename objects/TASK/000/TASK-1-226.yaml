@@ -10,12 +10,12 @@ description: |-
   Hypothesis: completion credit for these titles resolves through the trailing (#PR) group via a forge lookup; when that lookup fails the spec is skipped with no per-spec warning, and the operator-facing message ("no eligible spec had a referencing commit") misattributes the cause. Expected: either credit the explicit (SPEC-ID) group without the forge, or surface the forge failure as the reason and exit nonzero-ish so the operator retries.
 
   Repro: with forge unreachable, `aida db reconcile-status --spec TASK-1588 --dry-run`. Recovery check: rerun when forge calls succeed — if it still refuses, the parser is discarding the (SPEC-ID) group as title prose (TASK-1600 trailing-group rule) and that is a worse bug.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-08T17:01:54.583991054Z
+modified_at: 2026-10-08T17:04:48.583587367Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -121,6 +121,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a11c79-85c7-74c1-8cd0-bb8569ed9702
+  author: aida-session-start
+  timestamp: 2026-10-08T17:04:48.583586867Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main
