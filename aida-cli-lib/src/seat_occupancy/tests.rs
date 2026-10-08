@@ -34,6 +34,7 @@ fn chain(links: &[(u32, &str)]) -> Vec<ProcFacts> {
 
 fn grant(session: &str, seat: &str) -> GrantRef {
     GrantRef {
+        subject: session.to_string(),
         id: format!("grant-{session}"),
         session_id: session.to_string(),
         seat: seat.to_string(),
@@ -140,6 +141,7 @@ impl World {
             now: *self.now.borrow(),
             probe: &probe,
             scope: None,
+            requester_valid: Some(&|_, _| true),
         };
         f(&ctx)
     }
@@ -863,4 +865,104 @@ fn shell_one_shot_exemption_preserves_unknown_and_demotion_refusals() {
         .with(|ctx| gate(&mut rec, ctx, &shell, &route("TASK-7")))
         .unwrap_err();
     assert!(err.reason.contains("demoted"), "{err}");
+}
+
+// trace:TASK-1607 | ai:codex
+#[test]
+fn unpolled_deadlines_fence_transfer_not_the_holder() {
+    for action in ["ack", "release", "gate", "resume"] {
+        for elapsed in [119, 120, 121] {
+            let w = World::new();
+            let mut rec = SeatRecord::empty("orchestrator");
+            claimed(&w, &mut rec, &orch_a());
+            let req = pending(&w, &mut rec, &orch_c());
+            w.advance(elapsed);
+            // No poller reconciles this request: each entry must do so itself.
+            let ok = w.with(|ctx| match action {
+                "ack" => ack(&mut rec, ctx, &orch_a(), &req.id, 1).is_ok(),
+                "release" => release(&mut rec, ctx, &orch_a(), 1, Some(&req.id)).is_ok(),
+                "gate" => gate(&mut rec, ctx, &orch_a(), &route("TASK-2")).is_ok(),
+                _ => takeover(
+                    &mut rec,
+                    ctx,
+                    &orch_c(),
+                    Duration::seconds(900),
+                    Some(&req.id),
+                )
+                .is_ok(),
+            });
+            assert_eq!(
+                ok,
+                if action == "gate" {
+                    elapsed >= 120
+                } else {
+                    elapsed < 120
+                },
+                "{action} at {elapsed}"
+            );
+            if elapsed >= 120 {
+                assert!(rec.request.is_none());
+                assert_eq!(rec.generation, 1);
+                assert_eq!(rec.holder.as_ref().unwrap().grant_session, "sess-a");
+                assert!(rec.tombstones.is_empty());
+                assert!(w
+                    .with(|ctx| gate(&mut rec, ctx, &orch_a(), &route("TASK-2")))
+                    .is_ok());
+                assert_eq!(
+                    rec.outbox
+                        .iter()
+                        .filter(|e| e.kind == SeatEventKind::TakeoverTimedOut)
+                        .count(),
+                    1
+                );
+                let fresh = pending(&w, &mut rec, &orch_c());
+                assert_ne!(fresh.id, req.id);
+                assert!(w
+                    .with(|ctx| ack(&mut rec, ctx, &orch_a(), &req.id, 1))
+                    .is_err());
+                assert_eq!(rec.request.as_ref().unwrap().id, fresh.id);
+            }
+        }
+    }
+}
+
+// trace:TASK-1607 | ai:codex
+#[test]
+fn invalid_or_unknown_authority_cancels_ack_and_release_without_demotion() {
+    for release_request in [false, true] {
+        for unknown in [false, true] {
+            let w = World::new();
+            let mut rec = SeatRecord::empty("orchestrator");
+            claimed(&w, &mut rec, &orch_a());
+            let req = pending(&w, &mut rec, &orch_c());
+            w.with(|ctx| {
+                let invalid = |r: &TakeoverRequest, seat: &str| {
+                    assert_eq!(r, &req);
+                    assert_eq!(seat, "orchestrator");
+                    false
+                };
+                let ctx = Ctx {
+                    requester_valid: if unknown { None } else { Some(&invalid) },
+                    ..*ctx
+                };
+                let result = if release_request {
+                    release(&mut rec, &ctx, &orch_a(), 1, Some(&req.id))
+                } else {
+                    ack(&mut rec, &ctx, &orch_a(), &req.id, 1)
+                };
+                assert!(result.is_err());
+            });
+            assert_eq!(rec.generation, 1);
+            assert_eq!(rec.holder.as_ref().unwrap().grant_session, "sess-a");
+            assert!(rec.tombstones.is_empty());
+            assert!(rec.request.is_none());
+            assert!(!rec
+                .outbox
+                .iter()
+                .any(|e| e.kind == SeatEventKind::Transferred));
+            assert!(w
+                .with(|ctx| gate(&mut rec, ctx, &orch_a(), &route("TASK-2")))
+                .is_ok());
+        }
+    }
 }

@@ -122,6 +122,10 @@ pub(crate) struct TakeoverRequest {
     pub id: String,
     pub requester_session: String,
     pub requester_grant_id: String,
+    // Legacy requests lack a bound subject and must fail closed at transfer.
+    // trace:TASK-1607 | ai:codex
+    #[serde(default)]
+    pub requester_subject: Option<String>,
     pub requester_anchor: ProcessIdentity,
     pub requester_command: String,
     pub expected_holder_session: String,
@@ -202,6 +206,7 @@ impl SeatEventKind {
 /// The validated grant the caller carries, if any (STORY-1473 resolver).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct GrantRef {
+    pub subject: String,
     pub id: String,
     pub session_id: String,
     pub seat: String,
@@ -367,6 +372,9 @@ impl SeatOp {
 /// Facts the state machine needs from outside: the time and a process probe.
 pub(crate) struct Ctx<'a> {
     pub now: DateTime<Utc>,
+    // Invoked at transfer under the seat lock; never a pre-lock authority snapshot.
+    // trace:TASK-1607 | ai:codex
+    pub requester_valid: Option<&'a dyn Fn(&TakeoverRequest, &str) -> bool>,
     pub probe: &'a dyn Fn(&ProcessIdentity) -> Probe,
     /// Local persisted review graph, read before taking the seat lock.
     pub scope: Option<&'a scope::ChildScopeGraph>,
@@ -393,10 +401,31 @@ pub(crate) fn holder_liveness(h: &Holder, ctx: &Ctx) -> Probe {
 /// Drop tombstones and child records whose processes are provably dead.
 /// Unknown entries stay: they might still be running.
 pub(crate) fn prune(rec: &mut SeatRecord, ctx: &Ctx) {
+    expire_request(rec, ctx);
     rec.tombstones
         .retain(|t| !matches!((ctx.probe)(&t.process), Probe::Dead(_)));
     rec.children
         .retain(|c| !matches!((ctx.probe)(&c.identity), Probe::Dead(_)));
+}
+
+// Absolute deadlines are reconciled by every lifecycle/gate entry, even if the
+// requester used --no-wait or exited. The holder and generation stay intact.
+// trace:TASK-1607 | ai:codex
+fn expire_request(rec: &mut SeatRecord, ctx: &Ctx) -> bool {
+    let Some(r) = rec.request.as_ref().filter(|r| ctx.now >= r.deadline) else {
+        return false;
+    };
+    let ev = new_event(
+        rec,
+        ctx,
+        SeatEventKind::TakeoverTimedOut,
+        Some(&r.expected_holder_session),
+        Some(&r.requester_session),
+        rec.generation,
+    );
+    rec.outbox.push(ev);
+    rec.request = None;
+    true
 }
 
 /// What a refusal shows (advisor condition C3): who holds the seat and how to
@@ -1068,6 +1097,27 @@ pub(crate) fn ack(
 /// request. Precondition: holder validated, request pending.
 fn hand_over(rec: &mut SeatRecord, ctx: &Ctx, reason: &str) -> Result<Handover, Refusal> {
     let req = rec.request.clone().expect("pending request");
+    // Recheck persisted authority at the actual transition. Missing evidence,
+    // including legacy subject-less requests, cancels without demoting holder.
+    // trace:TASK-1607 | ai:codex
+    if !ctx
+        .requester_valid
+        .is_some_and(|validate| validate(&req, &rec.seat))
+    {
+        let mut ev = new_event(
+            rec,
+            ctx,
+            SeatEventKind::TakeoverCancelled,
+            Some(&req.expected_holder_session),
+            Some(&req.requester_session),
+            rec.generation,
+        );
+        ev.detail = Some("requester authority is invalid or unavailable".into());
+        rec.outbox.push(ev);
+        rec.request = None;
+        return Err(refuse(rec, ctx,
+            "requester authority is invalid or unavailable; request cancelled; you still hold the seat", false));
+    }
     let generation_from = rec.generation;
     let from = rec.holder.as_ref().map(|h| h.grant_session.clone());
     let ack_ev = new_event(
@@ -1258,6 +1308,7 @@ pub(crate) fn takeover(
         id: Uuid::new_v4().to_string(),
         requester_session: grant.session_id.clone(),
         requester_grant_id: grant.id.clone(),
+        requester_subject: Some(grant.subject.clone()),
         requester_anchor: rc.anchor.identity.clone(),
         requester_command: rc.anchor.command_label(),
         expected_holder_session: holder_session.clone(),
@@ -1308,16 +1359,7 @@ pub(crate) fn poll_takeover(
             if ctx.now < r.deadline {
                 return WaitState::Waiting;
             }
-            let ev = new_event(
-                rec,
-                ctx,
-                SeatEventKind::TakeoverTimedOut,
-                Some(&r.expected_holder_session),
-                Some(&r.requester_session),
-                rec.generation,
-            );
-            rec.outbox.push(ev);
-            rec.request = None;
+            expire_request(rec, ctx);
             WaitState::TimedOut
         }
         _ => match &rec.holder {

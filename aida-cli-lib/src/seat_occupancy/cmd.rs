@@ -124,6 +124,36 @@ fn run_claim(project_root: &Path, seat: &str) -> Result<()> {
     Ok(())
 }
 
+// Local reads only, performed while the caller holds the seat lock. No grant
+// snapshot crosses lock acquisition. Reuse the same resolver as role current.
+// trace:TASK-1607 | ai:codex
+fn with_transfer_ctx<T>(project_root: &Path, f: impl FnOnce(&super::Ctx) -> T) -> T {
+    with_system_ctx(|ctx| {
+        let validate = |req: &TakeoverRequest, seat: &str| {
+            req.requester_subject
+                .as_deref()
+                .and_then(|subject| {
+                    crate::seat_authority::validated_grant(
+                        project_root,
+                        &req.requester_grant_id,
+                        subject,
+                        chrono::Utc::now(),
+                    )
+                })
+                .is_some_and(|g| {
+                    g.session_id == req.requester_session
+                        && g.seat == seat
+                        && g.parent_grant_id.is_none()
+                        && chrono::Utc::now() < req.deadline
+                })
+        };
+        f(&super::Ctx {
+            requester_valid: Some(&validate),
+            ..*ctx
+        })
+    })
+}
+
 fn run_release(
     project_root: &Path,
     seat: &str,
@@ -132,8 +162,9 @@ fn run_release(
 ) -> Result<()> {
     let caller = current_caller(project_root);
     let mut guard = store(project_root)?.lock(seat)?;
-    let out =
-        with_system_ctx(|ctx| super::release(&mut guard.rec, ctx, &caller, generation, request));
+    let out = with_transfer_ctx(project_root, |ctx| {
+        super::release(&mut guard.rec, ctx, &caller, generation, request)
+    });
     guard.save()?;
     match out? {
         Handover::Released { generation } => {
@@ -152,7 +183,9 @@ fn run_release(
 fn run_ack(project_root: &Path, seat: &str, request: &str, generation: u64) -> Result<()> {
     let caller = current_caller(project_root);
     let mut guard = store(project_root)?.lock(seat)?;
-    let out = with_system_ctx(|ctx| super::ack(&mut guard.rec, ctx, &caller, request, generation));
+    let out = with_transfer_ctx(project_root, |ctx| {
+        super::ack(&mut guard.rec, ctx, &caller, request, generation)
+    });
     guard.save()?;
     match out? {
         Handover::Transferred {
@@ -397,4 +430,94 @@ fn run_status(project_root: &Path, seat: &str, json: bool) -> Result<()> {
         println!("Demoted:     {d}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod transfer_authority_tests {
+    use super::*;
+
+    // Exercise the production callback inside the real seat guard: creating the
+    // context must not cache authority across a later local revocation/change.
+    // trace:TASK-1607 | ai:codex
+    #[test]
+    fn transfer_context_reads_current_authority_and_binds_subject_session_seat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+        let id = crate::seat_authority::test_support::mint_grant_for(
+            tmp.path(),
+            "requester",
+            "orchestrator",
+            &[],
+        );
+        let grant_path = crate::aida_home_dir()
+            .unwrap()
+            .join(".aida/session-grants")
+            .join(format!("{id}.json"));
+        let original = std::fs::read(&grant_path).unwrap();
+        let grant: crate::seat_authority::SeatGrant = serde_json::from_slice(&original).unwrap();
+        let now = chrono::Utc::now();
+        let request = TakeoverRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            requester_session: grant.session_id.clone(),
+            requester_grant_id: id,
+            requester_subject: Some("requester".into()),
+            requester_anchor: aida_core::process_probe::ProcessIdentity {
+                pid: 1,
+                start: "fixture-only-not-probed".into(),
+            },
+            requester_command: "fixture".into(),
+            expected_holder_session: "holder".into(),
+            expected_generation: 1,
+            created_at: now,
+            deadline: now + chrono::Duration::seconds(120),
+        };
+        let store = SeatStore::at(tmp.path().join(".aida/seat-occupancy"));
+        let _guard = store.lock("orchestrator").unwrap();
+        with_transfer_ctx(tmp.path(), |ctx| {
+            let validate = ctx.requester_valid.unwrap();
+            assert!(validate(&request, "orchestrator"));
+            assert!(!validate(&request, "advisor"));
+            let mut changed = request.clone();
+            changed.requester_session = "other".into();
+            assert!(!validate(&changed, "orchestrator"));
+            changed = request.clone();
+            changed.requester_subject = Some("other".into());
+            assert!(!validate(&changed, "orchestrator"));
+            changed.requester_subject = None;
+            assert!(
+                !validate(&changed, "orchestrator"),
+                "legacy request cannot borrow authority"
+            );
+            for mutation in ["revoked", "expired", "missing", "corrupt"] {
+                let mut invalid = grant.clone();
+                match mutation {
+                    "revoked" => invalid.revoked_at = Some(now),
+                    "expired" => invalid.expires_at = now,
+                    _ => {}
+                }
+                std::fs::write(&grant_path, serde_json::to_vec(&invalid).unwrap()).unwrap();
+                if mutation == "missing" {
+                    std::fs::remove_file(&grant_path).unwrap();
+                }
+                if mutation == "corrupt" {
+                    std::fs::write(&grant_path, b"broken").unwrap();
+                }
+                assert!(!validate(&request, "orchestrator"), "{mutation}");
+                std::fs::write(&grant_path, &original).unwrap();
+                assert!(validate(&request, "orchestrator"));
+            }
+            let roster = crate::detect_distributed_store_from(tmp.path())
+                .unwrap()
+                .join("registry/team.toml");
+            let roster_bytes = std::fs::read(&roster).unwrap();
+            for content in ["[members]\n", "malformed ["] {
+                std::fs::write(&roster, content).unwrap();
+                assert!(!validate(&request, "orchestrator"));
+            }
+            std::fs::remove_file(&roster).unwrap();
+            assert!(!validate(&request, "orchestrator"));
+            std::fs::write(&roster, roster_bytes).unwrap();
+            assert!(validate(&request, "orchestrator"));
+        });
+    }
 }

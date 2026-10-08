@@ -103,11 +103,21 @@ pub(crate) fn roster_allows(project_root: &Path, principal: &str, seat: &str) ->
 
 pub(crate) fn current_grant(project_root: &Path) -> Option<SeatGrant> {
     let id = std::env::var(GRANT_ENV).ok()?;
-    let grant = read_grant(&id).ok()?;
-    let now = Utc::now();
+    validated_grant(project_root, &id, &crate::current_user_id(None), Utc::now())
+}
+
+// Shared local authority validation for current callers and persisted takeover requesters.
+// trace:TASK-1607 | ai:codex
+pub(crate) fn validated_grant(
+    project_root: &Path,
+    id: &str,
+    subject: &str,
+    now: DateTime<Utc>,
+) -> Option<SeatGrant> {
+    let grant = read_grant(id).ok()?;
     if grant.revoked_at.is_some()
         || now >= grant.expires_at
-        || grant.subject != crate::current_user_id(None)
+        || grant.subject != subject
         || !roster_allows(project_root, &grant.principal, &grant.seat)
     {
         return None;

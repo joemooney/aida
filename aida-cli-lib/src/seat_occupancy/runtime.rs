@@ -15,6 +15,7 @@ use super::{Caller, ClaimNotice, Ctx, Gate, GrantRef, SeatOp, ORCHESTRATOR};
 /// The validated grant (STORY-1473 resolver) as the state machine sees it.
 pub(crate) fn grant_ref(project_root: &Path) -> Option<GrantRef> {
     crate::seat_authority::current_grant(project_root).map(|g| GrantRef {
+        subject: g.subject.clone(),
         id: g.id.clone(),
         session_id: g.session_id.clone(),
         seat: aida_core::team::canonical_role(&g.seat),
@@ -83,6 +84,7 @@ pub(crate) fn with_system_ctx<T>(f: impl FnOnce(&Ctx) -> T) -> T {
         now: chrono::Utc::now(),
         probe: &probe,
         scope: None,
+        requester_valid: None,
     };
     f(&ctx)
 }
@@ -185,6 +187,7 @@ pub(crate) fn authorize_as_scoped(
             now: ctx.now,
             probe: ctx.probe,
             scope,
+            requester_valid: ctx.requester_valid,
         };
         super::gate(&mut guard.rec, &ctx, caller, &op)
     });
@@ -284,6 +287,7 @@ mod tests {
         Caller {
             chain: Ok(vec![looper.facts(), anchor.facts()]),
             grant: Some(GrantRef {
+                subject: "fixture".into(),
                 id: format!("g-{session}"),
                 session_id: session.to_string(),
                 seat: ORCHESTRATOR.to_string(),

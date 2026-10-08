@@ -1,3 +1,10 @@
+C7 takeover ack/release revalidate persisted requester authority locally under
+the seat lock. Absolute deadlines reconcile on lifecycle/gate entry without a
+live poller; expired or invalid-authority requests retain the holder. Legacy
+requests without a subject binding fail closed. Fresh independent review is
+still required before gateway activation.
+<!-- trace:TASK-1607 | ai:codex -->
+
 Seat occupancy C7 core rework uses process-bound child scope plus persisted
 review/implements relationships for assigned-work routing, bounded seat-lock
 acquisition, and one shared main-worktree policy/state root. Plain-shell
