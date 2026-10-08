@@ -1,3 +1,9 @@
+GitLab reviewer handoffs use `MR-N` and `aida queue work MR-N --role reviewer`;
+GitHub retains `PR-N`. Autoqueue reads canonical review stories before filing
+and confirms queue insertion before the CI checkpoint reports a handoff.
+See [CLI fixture coverage](tests/test_gitlab_review_handoff.py).
+<!-- trace:BUG-1807 | ai:codex -->
+
 Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
 delegation before persisting an implicit queue row or changing calibration, lease,
 worktree, or spec state. Occupied branches receive a manual retirement offer only

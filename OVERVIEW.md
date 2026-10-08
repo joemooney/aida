@@ -462,3 +462,10 @@ unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
 stale definition, and hold refusals for scripts. See
 [git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
 <!-- trace:TASK-1606 | ai:codex -->
+
+Reviewer handoffs identify GitLab changes as `MR-N` and GitHub changes as
+`PR-N`, with explicit `--role reviewer` pickup commands. Autoqueue reuses an
+existing canonical review story in distributed or legacy stores; an unreadable
+store or failed queue insertion cannot establish a successful handoff. The CI
+checkpoint confirms the queue operation even when resuming without a lease.
+<!-- trace:BUG-1807 | ai:codex -->

@@ -48486,6 +48486,11 @@ pub(crate) fn try_auto_queue_pr_review(
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 
+    // trace:BUG-1807 | ai:codex
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let noun = kind.change_noun();
+    let cli = kind.cli_name();
+
     // STORY-516: forge-routed. Reconstruct OpenPrInfo from the ChangeRef so the
     // downstream pr.number/url/title uses stay unchanged. trace:STORY-516 | ai:claude
     let pr = match change_lookup_for_branch(project_root, branch) {
@@ -48497,25 +48502,25 @@ pub(crate) fn try_auto_queue_pr_review(
         },
         crate::forge::ChangeLookup::NoChange => {
             return AutoQueueOutcome::skipped_by_design(format!(
-                "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
+                "auto-queue: no open {noun} for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
         crate::forge::ChangeLookup::CliMissing => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
+                "auto-queue: `{cli}` CLI not on PATH — would have queued reviewer story for branch `{}`. Install {cli} to enable.",
                 branch
             ));
         }
         crate::forge::ChangeLookup::CliFailed(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
+                "auto-queue: `{cli}` lookup failed for branch `{}` ({}) — no reviewer story filed",
                 branch, reason
             ));
         }
         crate::forge::ChangeLookup::Unreachable(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: GH API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
+                "auto-queue: {noun} API unreachable for branch `{}` ({}) — no reviewer story filed (transient; retry once the API is reachable)",
                 branch, reason
             ));
         }
@@ -48540,7 +48545,7 @@ pub(crate) fn try_auto_queue_pr_review(
     // drain's reviewer phase had nothing to pick up. Resolve the forge the
     // same way the review-prompt path does (config `[forge]`, else origin).
     // trace:BUG-1223 trace:TASK-1254 | ai:claude
-    let review_forge = review_forge_for_kind(crate::forge::resolve_forge_kind(project_root));
+    let review_forge = review_forge_for_kind(kind);
     let (base, head) = pr_base_head(project_root, review_forge, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
@@ -48571,48 +48576,53 @@ pub(crate) fn try_auto_queue_pr_review(
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 
-    if let Some(store_path) = detect_distributed_store_from(project_root) {
-        let storage = Storage::new(store_path);
-        if let Ok(store) = storage.load() {
-            let persisted =
-                drain_state::DrainState::read(project_root).and_then(|state| state.review_spec);
-            if let Some(existing) = canonical_review_story(
-                &store,
-                review_forge,
-                pr.number,
-                Some(&spec_ids),
-                persisted.as_deref(),
-            ) {
-                let existing_id = existing.display_id();
-                let note = format!(
-                    "auto-queue retry reused canonical review story; covers {} spec{}",
-                    spec_ids.len(),
-                    if spec_ids.len() == 1 { "" } else { "s" }
-                );
-                if let Err(err) =
-                    aida_subcmd_queue_add_for_reviewer(project_root, &existing_id, &note)
-                {
-                    return AutoQueueOutcome::skipped_needs_attention(format!(
+    // Read canonical objects for both distributed and legacy stores. A failed
+    // lookup cannot establish absence: do not file a duplicate on read failure.
+    // trace:BUG-1807 | ai:codex
+    let Some(store) = load_store_for_lookup(project_root) else {
+        return AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: cannot read review stories for {noun}-{} — reviewer handoff not confirmed",
+            pr.number
+        ));
+    };
+    {
+        let persisted =
+            drain_state::DrainState::read(project_root).and_then(|state| state.review_spec);
+        if let Some(existing) = canonical_review_story(
+            &store,
+            review_forge,
+            pr.number,
+            Some(&spec_ids),
+            persisted.as_deref(),
+        ) {
+            let existing_id = existing.display_id();
+            let note = format!(
+                "auto-queue retry reused canonical review story; covers {} spec{}",
+                spec_ids.len(),
+                if spec_ids.len() == 1 { "" } else { "s" }
+            );
+            if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &existing_id, &note)
+            {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
                         "auto-queue: canonical review story {existing_id} exists for {} but reviewer queue insertion failed: {err}",
                         format_review_label(review_forge, pr.number)
                     ))
                     .with_pr(pr.number)
                     .with_specs(spec_ids)
                     .with_review_spec(existing_id);
-                }
-                return AutoQueueOutcome::already_exists(format!(
-                    "{} #{} reuses canonical review story {}",
-                    format_review_label(review_forge, pr.number)
-                        .split_once('-')
-                        .map(|(prefix, _)| prefix)
-                        .unwrap_or("PR"),
-                    pr.number,
-                    existing_id
-                ))
-                .with_pr(pr.number)
-                .with_specs(spec_ids)
-                .with_review_spec(existing_id);
             }
+            return AutoQueueOutcome::already_exists(format!(
+                "{} #{} reuses canonical review story {}",
+                format_review_label(review_forge, pr.number)
+                    .split_once('-')
+                    .map(|(prefix, _)| prefix)
+                    .unwrap_or("PR"),
+                pr.number,
+                existing_id
+            ))
+            .with_pr(pr.number)
+            .with_specs(spec_ids)
+            .with_review_spec(existing_id);
         }
     }
 
@@ -48624,7 +48634,7 @@ pub(crate) fn try_auto_queue_pr_review(
         session_short,
         branch
     ));
-    desc.push_str(&format!("- PR: <{}>\n", pr.url));
+    desc.push_str(&format!("- {noun}: <{}>\n", pr.url));
     desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
     if spec_ids.is_empty() {
         // BUG-776 gates this branch off — a zero-coverage story is no longer
@@ -48675,7 +48685,7 @@ pub(crate) fn try_auto_queue_pr_review(
         Some(id) => id,
         None => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `aida add` failed for PR #{} (see warning above)",
+                "auto-queue: `aida add` failed for {noun}-{} (see warning above)",
                 pr.number
             ));
         }
@@ -48698,11 +48708,12 @@ pub(crate) fn try_auto_queue_pr_review(
     );
     if let Err(err) = aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note) {
         return AutoQueueOutcome::skipped_needs_attention(format!(
-            "auto-queue: filed {new_id} for PR #{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
+            "auto-queue: filed {new_id} for {noun}-{} but reviewer queue insertion failed: {err}; the unqueued story remains a durable retry signal",
             pr.number
         ))
         .with_pr(pr.number)
-        .with_specs(spec_ids);
+        .with_specs(spec_ids)
+        .with_review_spec(new_id);
     }
 
     let covers = if spec_ids.is_empty() {
@@ -48711,12 +48722,23 @@ pub(crate) fn try_auto_queue_pr_review(
         spec_ids.join(", ")
     };
     AutoQueueOutcome::filed(format!(
-        "filed {} (covers {}) → reviewer queue (PR #{})",
+        "filed {} (covers {}) → reviewer queue ({noun}-{})",
         new_id, covers, pr.number
     ))
     .with_pr(pr.number)
     .with_specs(spec_ids)
     .with_review_spec(new_id)
+}
+
+// trace:BUG-1807 | ai:codex
+fn require_review_handoff(outcome: &AutoQueueOutcome) -> Result<(), auto_complete::PhaseFailure> {
+    match outcome.status {
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists => Ok(()),
+        _ => Err(auto_complete::PhaseFailure::new(format!(
+            "reviewer handoff not confirmed: {}; retry `aida pr auto-queue-review`",
+            outcome.summary
+        ))),
+    }
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
@@ -113427,6 +113449,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         self.end_implementer_session()
     }
 
+    // trace:BUG-1807 | ai:codex
+    fn confirm_review_handoff(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        if self.lifecycle_forge == crate::forge::ForgeKind::None {
+            return Ok(());
+        }
+        let branch = self.branch.as_deref().unwrap_or_default();
+        let outcome = try_auto_queue_pr_review(
+            &self.project_root,
+            branch,
+            self.implementer_lease.as_deref().unwrap_or("(no-sess)"),
+            AutoQueueOrigin::SessionEnd,
+        );
+        require_review_handoff(&outcome)
+    }
+
     fn verify_ci_for_review(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         if self.lifecycle_forge == crate::forge::ForgeKind::None {
             return Ok(());
@@ -117037,3 +117074,63 @@ pub mod worktree_dismiss;
 #[cfg(test)]
 #[path = "tests/bug_1800_worktree_undecidable_cache_tests.rs"]
 mod bug_1800_worktree_undecidable_cache_tests;
+
+// trace:BUG-1807 | ai:codex
+#[cfg(test)]
+mod bug_1807_handoff_tests {
+    use super::*;
+
+    #[test]
+    fn only_confirmed_queue_ownership_allows_completion() {
+        assert!(require_review_handoff(&AutoQueueOutcome::filed("queued MR-35")).is_ok());
+        assert!(require_review_handoff(&AutoQueueOutcome::already_exists("queued MR-35")).is_ok());
+        for outcome in [
+            AutoQueueOutcome::skipped_needs_attention("MR-35 queue insertion failed"),
+            AutoQueueOutcome::skipped_by_design("no open MR"),
+        ] {
+            assert!(require_review_handoff(&outcome).is_err());
+        }
+    }
+
+    #[test]
+    fn reviewer_pickup_commands_parse_for_both_forges() {
+        for label in ["MR-35", "PR-35"] {
+            assert!(
+                Cli::try_parse_from(["aida", "queue", "work", label, "--role", "reviewer"]).is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn existing_mr35_story_is_recognized_without_github_collision() {
+        let mut store = RequirementsStore::default();
+        for (id, title) in [
+            ("STORY-1", "Review PR-35: unrelated"),
+            ("STORY-2", "Review MR-35: fixture"),
+        ] {
+            let mut req = aida_core::Requirement::new(title.into(), String::new());
+            req.spec_id = Some(id.into());
+            req.status = RequirementStatus::Approved;
+            store.requirements.push(req);
+        }
+        // Legacy lookup must read this project's existing story, too.
+        let root = tempfile::tempdir().unwrap();
+        Storage::new(root.path().join("requirements.yaml"))
+            .save(&store)
+            .unwrap();
+        let store = load_store_for_lookup(root.path()).expect("legacy store");
+        assert_eq!(
+            canonical_review_story(&store, ReviewForge::GitLab, 35, None, None)
+                .unwrap()
+                .display_id(),
+            "STORY-2"
+        );
+        assert_eq!(
+            canonical_review_story(&store, ReviewForge::GitHub, 35, None, None)
+                .unwrap()
+                .display_id(),
+            "STORY-1"
+        );
+        assert!(canonical_review_story(&store, ReviewForge::GitLab, 3, None, None).is_none());
+    }
+}

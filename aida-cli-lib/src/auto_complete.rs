@@ -1525,6 +1525,13 @@ pub(crate) trait PhaseDriver {
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
+    /// Confirm the reviewer queue before reporting the through-CI handoff,
+    /// including a resume or lifecycle tag that bypassed session teardown.
+    // trace:BUG-1807 | ai:codex
+    fn confirm_review_handoff(&mut self) -> Result<(), PhaseFailure> {
+        Ok(())
+    }
+
     /// Prove phase 2's terminal result belongs to the head phase 3 would
     /// review. This boundary hook runs before PhaseEntered(reviewer).
     // trace:BUG-1460 | ai:codex
@@ -2370,9 +2377,9 @@ fn render_through_ci_checkpoint(
         .map(|n| format!("{noun}-{n}"))
         .unwrap_or_else(|| format!("{noun}-N"));
     let review_cmd = if let Some(n) = pr_number {
-        format!("aida queue work {noun}-{n} --for reviewer")
+        format!("aida queue work {noun}-{n} --role reviewer")
     } else {
-        format!("aida queue work {noun}-N --for reviewer")
+        format!("aida queue work {noun}-N --role reviewer")
     };
     // The spec's worktree still holds the PR branch here, so a suggested
     // `--delete-branch` is guaranteed to fail its local-cleanup step — and an
@@ -2423,7 +2430,8 @@ fn finish_through_ci_success(
         }
         extra.push(("variant", "through-ci".to_string()));
         if let Some(pr) = ctx.pr_number {
-            extra.push(("pr", format!("PR-{pr}")));
+            // trace:BUG-1807 | ai:codex
+            extra.push(("pr", format!("{}-{pr}", ctx.forge.change_noun())));
         }
         let borrowed: Vec<(&str, &str)> = extra.iter().map(|(k, v)| (*k, v.as_str())).collect();
         println!(
@@ -4188,6 +4196,18 @@ pub(crate) fn orchestrate_with_resume(
         emit_done(Phase::Ci, spec, json, start.elapsed().as_millis());
     }
     if variant.last_phase() <= 2 {
+        // trace:BUG-1807 | ai:codex
+        if let Err(failure) = driver.confirm_review_handoff() {
+            return resolve_phase_failure(
+                driver,
+                Phase::Ci,
+                spec,
+                json,
+                &start,
+                &failure,
+                durations,
+            );
+        }
         let ctx = driver.hint_context();
         return finish_through_ci_success(spec, &credited, json, &start, durations, &ctx);
     }
@@ -6471,6 +6491,7 @@ mod tests {
         /// to drive a specific typed failure (e.g. `LaunchRefused`) through
         /// the orchestrator without inventing a bespoke mock method per kind.
         fail_kind: Option<FailureKind>,
+        handoff_fails: bool,
         verdict: Verdict,
         /// BUG-241: what [`PhaseDriver::reconcile_failure`] returns. Defaults
         /// to `GenuineFailure` so every pre-BUG-241 failure test is unchanged.
@@ -6637,6 +6658,7 @@ mod tests {
                 calls: Vec::new(),
                 fail_at: None,
                 fail_kind: None,
+                handoff_fails: false,
                 verdict: Verdict::Approved,
                 reconcile: PhaseReconcile::GenuineFailure,
                 punt: None,
@@ -7038,6 +7060,13 @@ mod tests {
                 ));
             }
             Ok(())
+        }
+        fn confirm_review_handoff(&mut self) -> Result<(), PhaseFailure> {
+            if self.handoff_fails {
+                Err(PhaseFailure::new("MR-35 reviewer queue insertion failed"))
+            } else {
+                Ok(())
+            }
         }
         fn verify_ci_for_review(&mut self) -> Result<(), PhaseFailure> {
             if self.ci_no_checks_head_advance {
@@ -10717,6 +10746,30 @@ mod tests {
         assert_eq!(phases, vec![Phase::Implementer, Phase::Ci]);
     }
 
+    // trace:BUG-1807 | ai:codex
+    #[test]
+    fn bug_1807_through_ci_refuses_success_when_handoff_fails() {
+        for skip_ci in [false, true] {
+            let mut driver = MockPhaseDriver::all_ok();
+            driver.handoff_fails = true;
+            let result = orchestrate_with_lifecycle_skip(
+                &mut driver,
+                "BUG-1807",
+                AutoCompleteVariant::ThroughCi,
+                false,
+                EscalateMode::Blocks,
+                LifecycleSkip {
+                    no_ci_wait: skip_ci,
+                    ..Default::default()
+                },
+                false,
+            );
+            assert_ne!(result.exit_code, 0);
+            assert_eq!(result.failed_phase, Some(Phase::Ci));
+            assert!(!driver.calls.contains(&Phase::Reviewer));
+        }
+    }
+
     // trace:TASK-1155 trace:ADR-11 | ai:codex
     #[test]
     fn through_ci_checkpoint_names_pr_ci_review_and_merge_next_steps() {
@@ -10726,7 +10779,7 @@ mod tests {
         assert!(rendered.contains("PR: PR-123"));
         assert!(rendered.contains("CI: green"));
         assert!(rendered.contains("Review: routed to reviewer queue"));
-        assert!(rendered.contains("Next: aida queue work PR-123 --for reviewer"));
+        assert!(rendered.contains("Next: aida queue work PR-123 --role reviewer"));
         // trace:BUG-758 | ai:claude — no --delete-branch (worktree holds the
         // branch), and ';' not '&&' so the pull leg cannot be dropped.
         assert!(rendered.contains("After review: gh pr merge 123 --squash; aida pull"));
@@ -10737,7 +10790,7 @@ mod tests {
             render_through_ci_checkpoint("TASK-1155", Some(123), crate::forge::ForgeKind::GitLab);
         assert!(gitlab.contains("TASK-1155 MR checkpoint"));
         assert!(gitlab.contains("MR: MR-123"));
-        assert!(gitlab.contains("Next: aida queue work MR-123 --for reviewer"));
+        assert!(gitlab.contains("Next: aida queue work MR-123 --role reviewer"));
         assert!(gitlab.contains("After review: glab mr merge 123 --squash; aida pull"));
         assert!(!gitlab.contains("gh pr"));
     }
