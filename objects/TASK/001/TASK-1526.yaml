@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-08T19:07:38.936953577Z
+modified_at: 2026-10-08T19:15:24.244565706Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -861,6 +861,11 @@ comments:
   created_at: 2026-10-08T19:07:12.866675908Z
   modified_at: 2026-10-08T19:07:12.866675908Z
   relayed_from: task1526-default-budget-evidence
+- id: 01a11cf1-15d4-7f93-aa75-7ba7414634ca
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): independent default-budget measurement is REQUEST_CHANGES, not a new latency waiver. TASK-1526 reopened Approved on actual current code SHA bf65220959; preserve all historical merge/work and full evidence comment. A separate design-only author is investigating a bounded remedy under the existing two-second/default1500ms/single-flight/useful-snapshot contract; no product implementation before a new independent design disposition. TASK-1527 full V2 sketch and fresh independent APPROVED-AS-AMENDED report are now canonical, but it remains blocked-by TASK-1526; no dependency removal or queued implementation is inferred. Preserve BUG-1778/1779 fixes and separate BUG-1674 full-show/24h obligations and parent STORY-1484 closure. No numeric budget, load filtering, repeated-green selection, authority change or completion credit.'
+  created_at: 2026-10-08T19:15:24.244565706Z
+  modified_at: 2026-10-08T19:15:24.244565706Z
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
