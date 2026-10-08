@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-08T21:55:01.906765703Z
+modified_at: 2026-10-08T22:18:57.700151228Z
 req_type: Bug
 tags:
 - atomicity
@@ -2790,6 +2790,1318 @@ comments:
   content: 'PROXY COORDINATION UPDATE — existing A2 DESIGN commission continues, no new implementation dispatch. After TASK1526 corrected design-review final/normal advisor retirement, normal original A2 author-name resume failed: no ended resumable agent found. Honest NEW cold design-owner continuation bug1808-a2-v3-cold-continuation now launched with FULL V1/V2/sourcecorrected final41945review+receipt and numberedV3 tenF1–F10/sixamendments/17row/eightgates handoff. Originalauthorlineage preserved, not claimed resumed, no competing A2author, alltestsPROPOSEDUNRUN. No code/Cargo/test/canonical/rawYAML/queue/record/hold/grant/PRmerge/activation authorized. Root will require actualFULLselfcontainedV3+READY thenNEWDIFFERENTwholeindependentgate. Actualnewimplementationdispatch remainsREFUSED, designapprovalcannotreleaseit. Original6a1733a1inactiveF1/F2checkpointONLY/all8productiongatesOPEN unchanged; no componentdispatch/WTreclaim. FinalV2F6correction retained: remove_store_worktree does not delete branch/no--delete-branch option. Sourceidentityfinding1330alreadyrelayedowner, no rootreopen/reservedtakeover.'
   created_at: 2026-10-08T21:55:01.906759214Z
   modified_at: 2026-10-08T21:55:01.906759214Z
+- id: 01a11d99-2324-7352-911b-da560a0ac046
+  author: mcp
+  content: |
+    PROXY RELAY — A2 V3 DESIGN PROPOSAL, NOT SIGNOFF. Root read all1147 sketch lines (125477bytes, SHA256 df3ad263e5a2e874e032fd9e06a666e97c8f4b6a72850396d705d6fa1e01594a), full10330byte READY SHAa18f7a7ac9bc90c1af7669b66ebbd4092c76c64eed74701d8ced7279f0cb9c8e, and manifest; independently verified27 artifact/manual/source manifest entries with zero mismatches. Actual author FINAL22:18:38 cold successor01a11d82. All17 rows/eight production gates remain subject to NEW DIFFERENT whole-design review; no code/test/witness execution, no inactive-component dispatch/activation/grant/parentcompletion. Actual new implementation dispatch refusal unchanged. Full unmodified proposal+READY follow.
+
+    SKETCH V3 (awaiting a NEW DIFFERENT whole independent design review): BUG-1808 common owner — TASK-1332 A2 store-CAS prepared-Git/publication join
+
+    # 0. Provenance, status and what this document replaces
+
+    **Author.** Claude Opus 5.5 (`claude-opus-5-5`), Claude Code session scratch id `01a11d82-2650-7743-9549-a2cd5bc9d7ba`, 2026-10-08 (America/Phoenix).
+    - This is an honest cold successor to the existing BUG-1808 A2 design commission (lineage name `bug1808-store-cas-owner-join-author`).
+    - It is NOT the original runtime `01a11d0a-1bb9-7783-a55e-752d55c00d36` and is NOT a context resume. Root reports that the normal original-name resume failed with EXIT 1 (no ended resumable agent) and that no other A2 author is active.
+    - V1 and V2 were written by session `aida-e8`. Everything below was re-derived from those retained files and from source; none of it relies on that session's memory.
+    - The session-start role label this runtime received ("advisor") is not a grant and is not used as authority. This document is authorship, not signoff.
+
+    **Commission.** The cold continuation brief `bug1808-a2-v3-cold-continuation.md` (5928 bytes, SHA256 `e94ade92…7602e1c`) embeds the numbered design rework `bug1808-a2-numbered-design-rework-v3.md` (3926 bytes, `ae991ce7…f369ef`).
+
+    **Answers.** This version answers the final, source-corrected V2 independent review `BUG1808_STORE_CAS_OWNER_JOIN_V2_INDEPENDENT_REVIEW.md` (41945 bytes, SHA256 `8cb6e8b75748ae223c50739afaa411f59e601cd77f4563bac41a0739447a3873`, CHANGES REQUESTED) and its receipt (7344 bytes, `e3b71d44…d745c48`). It resolves F1–F10 and amendments A1–A6, and keeps R-1/R-2/R-3, F-1, the 17-row matrix and the 8 OPEN gates.
+
+    **Self-containment (amendment A1).**
+    - V3 is complete on its own. It REPLACES V1 (`4f20ee84…224f00b`) and V2 (`bf21133d…f386eb`) in full. No V1 or V2 text "survives".
+    - Anything from those versions that still holds is restated here. Anything not restated is withdrawn.
+    - §2.3 lists the explicit withdrawals.
+    - All earlier files, including the uncorrected review draft `BUG1808_A2_V2_REVIEW_INITIAL_CHECKPOINT.md` (41054 bytes, `18067f1c…aec05`), are preserved byte-for-byte. That draft's F6 claim that `remove_store_worktree` deletes the store branch is superseded by the final review. V3 uses only the final review.
+
+    **Scope and status.**
+    - DESIGN ONLY. Every type, API, step and test named below is PROPOSED, and every test is PROPOSED and UNRUN.
+    - None of the following was done: code, build, Cargo command, test, check-ci, SQLite access, hook execution, runtime experiment, Git mutation, network fetch or push, canonical CLI or MCP read or write, status, queue, mail, protected record, grant, hold, lease, PR, commit, push, merge, install or activation.
+    - Git was used read-only: `show`, `rev-parse`, `ls-tree`, `grep`, `config --get`, `rev-list`, `reflog show`, `for-each-ref`. Local manuals were read with `man -l`.
+    - The only files written are this sketch, its READY and a hash manifest, in this private handoff directory.
+    - Reserved TASK-1593, TASK-1591, BUG-1811 and BUG-1812 are untouched. No subagent and no self-review was launched. Root is the sole canonical relay. No question goes to Joe.
+
+    # 1. Inputs, pins, precedence and evidence limits
+
+    ## 1.1 Source pins
+
+    | Pin | Value | Use |
+    |---|---|---|
+    | Source basis | `bf65220959c7601427247286abc7eb16278af5a5`, tree `77bdc293f818c791ffd9b6a26e4e8552722ce5ca` | Every `file:line` below is at bf652209 unless marked c677. |
+    | Current main (fresh check) | `c67728c1dcaf8a577539d920bdc6a3c86126cebb` (reserved TASK-1593; not consumed) | `git diff --stat bf..c677` touches only ci.yml, claim.rs, events.rs, git_backend_cmd.rs, lib.rs (5 lines), pr_cmd.rs, role_cmd.rs and patch_events.sh. |
+    | Inactive common checkpoint | `6a1733a134b2e63f3adfd8e24606965a5d702f91` (branch `bug-1808-delegation-publication`) | Its `publication::{records,durable,effects,observations,preflight}` and `git_publication` modules are present only there. They have no production caller and are not on main. |
+    | TASK-1612 | `a5e1bc4f18aee6fb642b8c2d272b35e94b98ec68` | PARTIAL. Not an accepted transport and not an A2 dependency. |
+    | TASK-1717 (amendment A2) | Latest: independent **REQUEST_CHANGES on rework candidate `223c192aa1d40d920e31dd51b6c3c08fc565ede7`** (`TASK1717_REWORK_INDEPENDENT_REVIEW.md`, 26456 bytes, `6dd698ca…951717`). Earlier: REQUEST_CHANGES on `a6fac83f5c4c7197786d1833b0e27e59e18d889d` (`TASK1717_INDEPENDENT_REVIEW.md`, `1413d50b…a59f`). | A non-dependency. Its ordinary protective S/L/P scope and proofs are never common acceptance. |
+
+    **Blob identity bf → c677 (verified by `git rev-parse <pin>:<path>`).** These files are blob-identical at the two pins: `identity_gate.rs`, `remote_create.rs`, `coordination.rs`, `queue_cmd.rs`, `integrate.rs`, `solo_cmd.rs`, `session.rs`, `store_cmd.rs`, `mcp.rs`, `team_cmd.rs`, `seat_authority.rs`, `schedule_ledger.rs`, `drain_lock.rs` and `solo_lock.rs` (all `aida-cli-lib/src/`); `git_ops.rs`, `team.rs`, `alias.rs`, `node.rs` and `db/store_lock.rs` (all `aida-core/src/`).
+
+    **`aida-cli-lib/src/lib.rs` is NOT blob-identical** (bf `ada4a945…`, c677 `36e353e3…`). Its hunks are `-53241`, `+53245,2` and `~95562`. Anchors at or below 53240 are the same line at both pins. Anchors above 53246 are **+1 at c677**. Each lib.rs anchor below gives both lines where they differ.
+
+    ## 1.2 Signed and canonical inputs
+
+    **Canonical captures (amendment A1, honest freshness).** The canonical evidence is the retained normal-MCP `show_requirement` captures in `bug1808-cas-independent-evidence/`, verified byte-identical to `INPUT_AND_SOURCE_PINS.json` (`abf91e98…d2fc2`):
+    - `BUG-1808-mcp.md`: 407094 bytes, `57130bde…b3ba8`.
+    - `TASK-1332-mcp.md`: 71097 bytes, `6b971dda…944fa`.
+    - `TASK-1717-mcp.md`: 84583 bytes, `5848870b…64ba8c`.
+
+    They date from about 13:18 and predate root's canonical relay of V2 and of the V2 review. Root states those relays and their readbacks were exact; this author did not re-read canonical (canonical CLI/MCP access is out of this commission). The retained `bug1808-A2-design-canonical-readback.json` (12:45) is older still.
+
+    **Reading limit.** I did NOT read all 407 KB of BUG-1808 line by line. I read these binding sections of the capture:
+    - l.171: home-first authority writers.
+    - l.191: P4 serialization of revocation and roster writers.
+    - l.267: no invocation-owned lifecycle residue.
+    - l.300–362: the per-entrypoint issuance table, the standalone-spawn clause, the shared launch contract and the adapter table, including "Direct session attachment / role reissue".
+    - l.1247: the A2 commission proxy decision.
+
+    From `TASK-1332-mcp.md` I read l.150–220: the selected C algorithm, steps 1–6, the per-family table and the A2 obligation.
+
+    Precedence of signed sections and author prose follows the table below. Byte-identical embedded copies were treated as one decision.
+
+    **Retained files read in full (hashes verified):**
+    - V1 sketch: 53274 bytes, `4f20ee84…`.
+    - V1 READY: 6532 bytes, `77dfb3d9…`.
+    - V1 independent review: 42958 bytes, `cf95d867…`.
+    - V2 sketch: 54432 bytes, `bf21133d…`.
+    - V2 READY: 5170 bytes, `6a17a1fb…`.
+    - Final V2 review and receipt.
+    - Original commission `bug1808-store-cas-owner-join-sketch.md`: 4220 bytes, `5f108c7c…`.
+    - Rework v2 brief: 3279 bytes, `3c37be1d…`.
+    - Rework v3 brief and the cold continuation brief.
+    - The TASK-1717 verdict headers.
+
+    **Git 2.43.0** (Ubuntu `1:2.43.0-1ubuntu7.3`). Local manuals hashed:
+    - `git-push.1.gz` `98cc70c9…`
+    - `git-config.1.gz` `25a449c3…`
+    - `githooks.5.gz` `2a97622d…`
+    - `gitremote-helpers.7.gz` `ee97c4c2…`
+    - `git-send-pack.1.gz` `8f5ef89c…`
+    - `git-rebase.1.gz`, read for `--empty`
+
+    The V2 review receipt hashes the index-pack, repack and multi-pack-index manuals.
+
+    **Git source facts NOT re-verified offline (flagged).** V2 and the V2 review cite these from Git v2.43.0 `transport.c` and `transport-helper.c`, which are not available locally (no network fetch is permitted here):
+    - the exact porcelain `To <url>` header;
+    - the `Done` trailer;
+    - the `<from>` form for an OID source;
+    - the helper status mapping.
+
+    The local git-push(1) manual says the OUTPUT section "describes the output when pushing over the Git protocol (either locally or via ssh)". It therefore does NOT ground HTTPS output. These facts are decoder CONSTANTS, pinned by witnesses W1-a and W1-h (§18) before any activation. Until those witnesses run, the decoder treats any mismatch as INDETERMINATE (§8).
+
+    ## 1.3 Normative precedence (highest first)
+
+    1. BUG-1808 A–E (01a11953) and the v2/v3/v4 reviewer refinements. Strict refusal stands: a late refusal leaves no invocation-owned lifecycle residue. Acceptance is never relaxed.
+    2. The six v5 callback conditions (01a119af).
+    3. The launch-v2 conditions and supersessions (01a119b5): final P4 sample, one immutable C, and no READY/Git/network/wait under SEAT.
+    4. The six pane/containment conditions (01a119d7), including the lock order home → canonical repo → sorted seats → store → sorted queues → drain → manifests → verdict → merge → Git.
+    5. TASK-1332 V2 signoff A1–A4 and its per-family positives.
+    6. Both independent A2 reviews: the V1 review findings 1–9 with R-1/R-2/R-3/F-1, and the final V2 review findings F1–F10 with amendments A1–A6.
+    7. Unsuperseded signed author prose.
+    8. This sketch.
+
+    ## 1.4 New source facts verified for V3 (bf652209, read only)
+
+    **S-F1 (identity gate discovery).**
+    - `lib.rs:4890–4898` dispatches `identity check-push` with `find_project_root()` (`lib.rs:36730`), which calls `find_project_root_from(current_dir)` (`lib.rs:36815`). That function returns the nearest ancestor containing `.git`; a linked worktree resolves to itself.
+    - `identity_gate.rs:55 read_allowed_emails` reads `config_path_for_project(root)` = `<root>/.aida/config.toml` (`lib.rs:17117`). An absent file gives an empty list, and `handle_identity_check_push:399` returns `Ok(())` on an empty list without reading stdin.
+    - Here, `.aida-store/.git` is `gitdir: /home/joe/ai/aida/.git/worktrees/-aida-store`. `.aida-store/.aida/` has no `config.toml`, and `aida-store:.aida/config.toml` is not in the branch.
+    - The installed pre-push hook (`.git/hooks/pre-push`, SHA256 `d536291d…0ace`) is the BUG-1706 mirror-only profile, with no identity gate.
+    - The generated template (`remote_create.rs:1281 mirror_pre_push_hook_script`) is `unset GIT_DIR GIT_WORK_TREE; refs=$(cat)`, then the identity gate lines (`identity_gate.rs` `identity_gate_hook_lines`), then mirror-push. Its fail-closed fallback tests `[ -f .aida/config.toml ]` relative to the hook cwd.
+    - **Today every store push** (`git_ops::push(store_root, …)`, reached from `coordination.rs:761/870/922/1163/1304/1336` and the other families) **therefore runs an inert identity gate.** This is a pre-existing TASK-1330 gap.
+
+    **S-F2 (transport configuration observed here, read only).**
+    - `remote.origin.url = https://github.com/joemooney/aida.git` (local scope). No `pushurl`.
+    - `remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*`.
+    - `core.hooksPath = /home/joe/ai/aida/.git/hooks` (local scope).
+    - Global `credential.https://github.com.helper` (a list reset followed by `!/usr/bin/gh auth git-credential`).
+    - COMMAND-scope configuration injected through the environment (`http.proxyauthmethod`, `credential.http://localhost:3128.helper`).
+    - `gc.auto = 500` (local).
+    - `core.logAllRefUpdates = true`.
+    - The production push therefore goes through the HTTPS remote-helper path, and the effective profile includes environment-injected command scope.
+
+    **S-F3 (compaction, accurate).**
+    - `store_cmd.rs:80 store_compact` with `--squash` goes to `store_compact_squash:136`, which calls `git_ops.rs:2548 squash_orphan_to_snapshot`.
+    - That function FIRST creates and verifies a backup branch `refs/heads/aida-store-pre-squash-<ts>` at the old HEAD, then `commit-tree`s a parentless snapshot and `reset --soft`s the store branch to it. It never pushes.
+    - The command then PRINTS operator instructions: `git -C .aida-store push --force-with-lease origin aida-store`, "every other clone must re-sync their .aida-store/ (fetch + hard reset)", and the recovery `git -C .aida-store reset --hard <backup>`.
+    - Local squash therefore keeps the old history reachable through the backup branch, and through the branch reflog because `logAllRefUpdates=true`. The documented force-push, re-sync and restore are OPERATOR-RUN manual Git. AIDA executes none of them.
+    - The non-squash path is `git_ops.rs:2515 gc_aggressive` (`git gc --aggressive`; default prune expiry applies, and `.keep` packs are retained).
+
+    **S-F4 (M-unreferencing enumeration).** Every AIDA call site at bf652209 that runs `reset`, `update-ref`, `branch -D`/`-f`, `rebase` (with or without `--onto`), `--prune` or `worktree prune` (found with `git grep`) was classified. §6.6 has the result.
+    - `git_ops.rs:1636 remove_store_worktree` runs only `git worktree remove --force`. Its doc comment ("optionally delete the branch") is stale. It has no branch-delete parameter and no non-test production caller was found. It is NOT an M-unreferencing path, and there is no `--delete-branch` option or witness.
+
+    **S-F5 (F-1 callers).**
+    - `handle_session_command:26936` passes `launch` to `session_start:38335`, which claims at `38569`.
+    - When launching, `session_start` reaches `session::new_session` (`lib.rs:39581` call; `session.rs:652`), which calls `run_claude_session` (`session.rs:712`, defined at `995`).
+    - The stakeholder-persona branch (`lib.rs:38370–38380`) returns before the claim.
+    - `ensure_spec_worktree` (`lib.rs:66115`, c677 `66116`) calls `session_start` with `launch=false`. Its callers are `add:67012`, `enter:67046` and `do-guided:104573` (c677 +1).
+    - `handle_queue_integrate:14479` takes `acquire_drain_lock` (`queue_cmd.rs:14512`). It then spawns `aida queue work PR-<n> --auto-complete --from-pr` children (`integrate.rs:879 drive_args`, used at `queue_cmd.rs:15358`, with `AIDA_DRAIN_FORCE=1` and `AIDA_DRAIN_BORROW=1`), and the promotion-rebase child at `queue_cmd.rs:14849`.
+    - `solo_cmd.rs:145` takes `acquire_solo_lock` (shared claim at `solo_lock.rs:131`). It then runs the steps `burndown run` (`solo_cmd.rs:44`) and `queue integrate` (`solo_cmd.rs:48`).
+
+    **S-F6 (hijack).**
+    - `git_ops.rs:3322 hijack_node` decides reachability (same hostname, same email or either missing, and the recorded clone_path exists and is not ours). It writes `HIJACKED.toml` in the old clone BEFORE the push. On a non-writable root it returns `HijackOutcome::Reattributed{reason}` (an ordinary success).
+    - It updates the registry entry fields `{hostname, email, clone_path, registered, name}`.
+    - On acceptance it writes `node.toml` and unconditionally removes its own marker.
+    - On rejection it removes the marker by pathname and runs `reset --hard HEAD~1`.
+    - `HijackMarker` (`node.rs:629`) is `{node_id, new_owner_hostname, new_owner_email?, new_owner_clone_path?, hijacked_at}`.
+
+    **S-F7 (claims).** `coordination.rs:211 decide_claim` returns `Acquire` for a same-clone holder (clone_path equality, with node_id as fallback). It reclaims a process-backed holder on the same host whose PID-start is dead, refuses a verified-live session holder, and otherwise applies the TTL.
+
+    **S-F8 (heartbeat).**
+    - `drain_lock.rs:55 HEARTBEAT_INTERVAL_SECS = 300`.
+    - Default claim TTL is 1800 s (`AIDA_DRAIN_LOCK_STALE_SECS`).
+    - `DrainGuard::drop` (`drain_lock.rs:629–638`) stops and joins the heartbeat thread before it releases.
+
+    **S-F9 (checkpoint records, 6a1733).**
+    - `TargetRoot = {Repository, GitCommonDir, Store, HomeQueue, HomeGrants, HomeRegistry, WorktreeParent}`.
+    - `FileEffect {target: FileTarget{root, relative}, before: FileImage, after: FileImage}`, with `FileImage = Absent | Regular{payload: PayloadRef{digest, bytes}, mode}`. The mode must satisfy `mode & !0o777 == 0` and owner-read must be set. `MAX_PAYLOAD_BYTES` is 1 GiB and the aggregate is 8 GiB.
+    - `ObservationKind = {GitCallback, InstallVerification, PossibleExecution, SendOutcome, Cancellation, Settlement}`.
+    - `ObservationPlan {namespace, origin, allowed_kinds, max_records ≤ 4096, max_bytes ≤ 64 MiB}`; `Observation {kind, payload: Vec<u8>}`.
+    - `durable.rs` creates `COMMIT.json` with no-replace.
+    - There is no ref-effect type, no StoreCas codec, no open-admission index and no `RemoteObservation` kind.
+
+    **S-F10 (store size, read only).** `aida-store` has 45843 commits and `git rev-list --objects --disk-usage` reports 119.31 MiB. The last 200 commits are 8.48 MiB. The tip tree is 7176 files, 36.8 MB uncompressed.
+
+    # 2. Disposition of every finding
+
+    ## 2.1 Final V2 review findings F1–F10
+
+    | # | Finding | V3 resolution | Where |
+    |---|---|---|---|
+    | F1 | The identity gate is inert in the store-worktree context, and V2 claimed enforcement | `PrePushProfile` records the gate's ACTUAL discovery (`project_root` = canonical store worktree) and the allowlist source path `<store>/.aida/config.toml`, with its digest or proven absence. V3 states plainly that store pushes are not gated by the project allowlist at bf652209 and PRESERVES that behavior: no cwd change, no hooks-off, no `--no-verify`. The TASK-1330 decision belongs to its owner; root has relayed it canonically (FYI `8a28900d`, as supplied by root), and A2 changes nothing. | §7.3 |
+    | F2 | The endpoint was verified on the wrong repository; multi-URL and HTTPS were unbound | `get-url --all` for fetch and push. The operation REFUSES unless there is exactly one fetch URL, exactly one push URL, and the two are byte-equal after rewriting. P's effective transport, identity and hooks profile must be digest-equal to the store's under the same listing. P's `core.hooksPath` is pinned in P config AND per spawn. The decoder has separate native and HTTPS-helper profiles, and helper `[remote rejected]` and helper death are INDETERMINATE. HTTPS and smart-HTTP witnesses are paired. | §7.1, §7.2, §8 |
+    | F3 | The report class was discarded; quantifiers were undefined; compaction is a supported rewind | Each candidate is resolved separately and the lineage aggregate is defined. An accepted report followed by a tip missing C gives REWOUND_AFTER_ACCEPT, which is BLOCKED with no retry and no reallocation. The compaction and restore epochs, and the ABA bound, are explicit. An unchanged base re-pushes the SAME C under the same admission. A failed post-push fetch gives UNKNOWN (never Acquired, never installed). | §9 |
+    | F4 | No cross-invocation lineage and no bounded settlement | Open admissions are keyed by K = (store, record domain, subject digest). A join runs BEFORE any decision. ACCEPTED is adopted; PENDING is resolved by re-pushing the same C when T == R; UNKNOWN and REWOUND refuse with a named reason. Later operations settle earlier ones. Per-key and per-store caps apply. Bounded settlement is evidence-driven. The REWOUND and REWOUND_AFTER_ACCEPT schedules are UNSUPPORTED production joins and the key stays BLOCKED. No expiry, no second id or range. | §10.6–§10.8 |
+    | F5 | ADMISSION atomicity, discovery, P placement and pack effect were unspecified | Discovery is authoritative from the HOME publication record (a REQUIRED open-admission index). There are NO locator refs. A crash-point table is given. P lives at a concrete `GitCommonDir` subpath with recorded device/inode; missing or replaced gives RECOVERY-BLOCKED. P refs are outside the journal, with explicit idempotent cleanup. The kept pack is built and verified privately and installed as exact FileEffects in the order `.keep` → `.pack` → `.rev` → `.idx`. Recovery releases HOME for the network and then revalidates. M′ is defined. There is ONE `RemoteObservation` mapping: a seventh kind, a REQUIRED common extension. InstallVerification is not overloaded. | §6, §10 |
+    | F6 | closure(M) can lapse | Fence plus verification (the second option the review allowed). The accurate list of AIDA paths that could move the store branch off M is in §6.6. Only the ordinary S rebase across a rewound origin can do so. It is fenced while an admission is open, and even then the reflog and backup retention keep M. Operator-run manual Git outside AIDA is UNSUPPORTED. It is detected by a closure verification immediately before every push spawn and at install, and gives RECOVERY-BLOCKED. remove_store_worktree is correctly excluded. | §6.5, §6.6 |
+    | F7 | The install was ambiguous under ordinary sync races | The integrated set is defined exactly: `X..H` minus the admitted original→copy map, replayed onto T with union rules and `--empty=drop` semantics. Rules cover each case: H ⊒ T, C ⊑ H, L_i ⋢ H, original-L push races, and supersession by content. There is no reset, unrelated H is preserved, and no content is duplicated. | §11.2 |
+    | F8 | Three callers were mislabelled ordinary | `session start` without `--launch` stays SUPPORTED ordinary. `session start --launch`, `queue integrate` and `solo` are BLOCKED until the common owner classifies them under the signed standalone-spawn clause and drain-wrapper row. The "Direct session attachment / role reissue" row covers none of them. worktree add/enter positives are preserved. The protective family repair does not count as caller acceptance. | §14 |
+    | F9 | Peer images were captured without peer exclusion | Peer capture is a separate step before ADMISSION, holding the peer lock alone and none of ours, and is revalidated under the peer lock at delivery. A peer absent at capture gives the existing `Reattributed` positive. A peer that vanished later gives not-delivered. Current bytes equal to M_ours means already delivered (idempotent). The replacement predicate uses exact registry-lineage fields. No clocks, no nesting, never an unverified overwrite. | §13 |
+    | F10 | Per-row authority disposition; the core negative was vacuous | Each row cites the signed text that governs authority at remote acceptance. Where none requires it, an acceptance-neutral disclosure with citation. Covered claim callers stay BLOCKED through F-1/U-4. The core negative is concrete: the receipt carries no CLI-derived invocation evidence, and today's permissiveness is preserved. V1 §6(b) is WITHDRAWN. | §12.2–§12.4 |
+
+    ## 2.2 Amendments A1–A6
+
+    | # | Amendment | Resolution | Where |
+    |---|---|---|---|
+    | A1 | Self-containment; per-attempt stamp; HOME mandatory | V3 is self-contained with explicit withdrawals (§2.3). `record_stamp_k` is computed per attempt and never "once per operation". HOME is mandatory for every local step (§12.1). | §0, §2.3, §10.3, §12.1 |
+    | A2 | TASK-1717 status was stale | Latest status is REQUEST_CHANGES on `223c192a` (after REQUEST_CHANGES on `a6fac83f`). It remains a non-dependency. | §1.1 |
+    | A3 | Porcelain grammar | The `To <url>` header must match the profile's anonymized push URL. The `Done` trailer is required for ACCEPTED. "Several lines" means several ref-status lines. Bounds are given. | §8 |
+    | A4 | Long STORE hold when seeding P | P is seeded outside all locks; under STORE there is only an incremental fetch plus a check of L. Numeric P, kept-pack and STORE-delta budgets are declared. | §6.2, §6.7 |
+    | A5 | HIJACKED.toml exclude portability | Carried as witness W7 case (k): the marker is not in the store `.gitignore` and relies on local `info/exclude`. | §13.6, §18 |
+    | A6 | Heartbeat cost | The per-tick bound, the per-key cap, joining before DrainGuard, and settlement of open ticks are stated. | §12.6 |
+
+    ## 2.3 Explicit withdrawals (nothing in V1 or V2 survives implicitly)
+
+    - **V1 §6(b)** ("TTY human … invocation-scoped, never revocable … still the valid writer authority when the remote accepts") is WITHDRAWN. `require_direct_tty` (`seat_authority.rs:136`) is a terminal guardrail, not authority.
+    - **V1 §4** "record_stamp set ONCE per operation" is WITHDRAWN. Stamps are per attempt (§10.3).
+    - **V1 §5/§8** "HOME (when enlisted)" is WITHDRAWN. HOME is mandatory (§12.1).
+    - **V1 Stage A/B/C** is WITHDRAWN and replaced by the 8-gate ledger (§15).
+    - **V1 D-F1a, D-F1b, D-F1c, D-F1d** and the V1 recommendation of D-F1a are WITHDRAWN.
+    - **V1 §10** (`!` means RejectedProved) and the V1 S1b "delete private ref, then copy" lifetime are WITHDRAWN.
+    - **V1 §12** ordering by `registered_at` and the own-marker clear on `node_id == target` alone are WITHDRAWN.
+    - **V2 §5** "the identity gate … evaluates C" is WITHDRAWN as false (S-F1).
+    - **V2 §4/§6** "single supported rewriter of history … origin only fast-forwards" is WITHDRAWN (S-F3).
+    - **V2 §6** resolution steps 1–4 and "INDETERMINATE + PENDING: build C_{k+1} on T == R" are WITHDRAWN and replaced by §9.
+    - **V2 §8** "P locator refs `refs/cas/open/*`" discovery, "InstallVerification for remote state", "if the next reviewer finds that kind too narrow", "A live owner is skipped" without a same-key join, and the "64 open" bound without a per-key cap are all WITHDRAWN.
+    - **V2 §10** capturing peer images under our own locks, and the step-3 predicate `new_owner == before-owner`, are WITHDRAWN.
+    - **V2 §11** rows SUPPORTED for `session start` (all), `queue integrate` and `solo` are WITHDRAWN (§14).
+    - **V2 §9** "U-1 … the source has none" (cited no signed text) is WITHDRAWN and replaced by §12.3.
+
+    ## 2.4 Rulings and earlier-review findings carried (restated, binding as ruled)
+
+    - **R-1 (roster).** Remote-first private C, with the bounded exception to v4's retained-local-on-rejection behavior for this conditional roster path only. A rejected roster C never becomes canonical. Existing no-origin roster L remains.
+    - **R-2 (evidence).** Only the existing common receipt/observation namespace is used, with no parallel ledger or schema. The protocol is specified in §10. What the checkpoint lacks is named REQUIRED (§10.9), never presumed.
+    - **R-3 (no-origin).** A genuinely changing `hijack_node`, `unregister_node` (present target) or explicit `db block claim` with no origin REFUSES before any mutation. The absent-target unregister no-op (`Ok(false)`) and the existing L branches (BUG-40 registration, identity field, automatic block allocation, ledger, roster, alias) are preserved. Configured-but-unreachable is not no-origin.
+    - **F-1.** The confirmed pre-P4 counterexample is kept (§14.1). There is no advisory exclusion, no relaxation and no new claim feature.
+    - The V1 review's findings 1–9 are answered by §8–§9 (finding 1), §6–§7 (2), §11 (3), §10 (4), §12 (5), §13 (6), §14 (7), §15 (8) and §16–§18 (9).
+
+    # 3. Current C-family defect inventory (bf652209; source observations, not reproduced races)
+
+    | ID | Location | Behavior | Consequence |
+    |---|---|---|---|
+    | D1 | `coordination.rs:753, 1155` `commit(..).unwrap_or(true)` | A commit error is treated as committed, and then the branch is pushed | An unchanged branch "pushes" successfully, so `Acquired` is reported with no claim on origin |
+    | D2 | `coordination.rs:754–759, 1156–1161` | `Ok(false)` (nothing to commit) returns Acquired/Reclaimed without any push | A local-only claim is reported as won |
+    | D3 | `git_ops.rs:262 push` = `git push --end-of-options origin <branch>`; classifies by stderr prose (`GIT_PUSH_REJECTED`) | Pushes the mutable branch, not a pinned OID | A peer's ordinary sync can publish a retained speculative commit |
+    | D4 | `reset --hard HEAD~1`: `coordination.rs:774/784/1172/1179`; `team.rs:273/360/423`; `alias.rs:265`; `schedule_ledger.rs:399/522`; `git_ops.rs:3044/3150/3277/3469/3525`; `lib.rs:22048` | Runs after rejection, and in coordination also after a transport error | Destroys a peer commit if HEAD moved. A transport error can follow acceptance |
+    | D5 | `lib.rs:21302` (`db block claim`) | `reset --soft HEAD~1`, ignored `pull_rebase` error (21254), reload, new claim | Stale staged bytes, wedge, overlap risk |
+    | D6 | `team.rs:278/364/428`; `alias.rs:270`; `git_ops.rs:3054/3159/3286/3474/3530`; `lib.rs:21318/22053` | A transport Err leaves the speculative registry commit on the canonical branch | Local effect is immediate (`roster_allows:93` reads the local team.toml). A later sync publishes it unconfirmed |
+    | D7 | `coordination.rs:846→858`, `1317→1326` | Release decides ownership before `pull_rebase` | Stale owner sample |
+    | D8 | `coordination.rs:870/922/1304/1336` | Release, stale-release and heartbeat ignore the push result | A retained rejected delete or heartbeat later wedges or replays over a successor (`coordination/**` has no union rule) |
+    | D9 | `drain_lock.rs:497–514` | The heartbeat thread pulls, commits and pushes in the shared store with no store lock | Races other writers on index and HEAD |
+    | D10 | `drain_lock.rs:370`; `solo_lock.rs:131`; `lib.rs:38569` | The shared claim is pushed before local lock or status preflight | Post-claim local refusal leaves a remote claim (F-1) |
+    | D11 | `git_ops.rs:2909–2913`; `team.rs:241`; `alias.rs:233` | Decides on unpulled local state on the first attempt | Safe only under a true CAS push |
+    | D12 | `git_ops.rs:3322–3489` (S-F6) | Peer marker written before push; pathname delete on rejection; own-marker cleared unconditionally; no no-origin branch; retry re-decides against a successor | All A2(5) hazards |
+    | D13 | `schedule_ledger.rs:363/490` | `ensure_store_write_safe` checked without the store lock | Time-of-check gap. Offline retention at 404–411/526–531 is an existing POSITIVE policy |
+    | D14 | `git_ops.rs:343–358 pull_rebase` | Aborts any in-progress rebase after failure | Can abort a pre-existing rebase |
+    | D15 | Store `.gitignore` lists `.aida/node.toml` but not `HIJACKED.toml`; here `.git/info/exclude` covers `.aida/` | Exclusion depends on the local exclude | Portability limit (W7 (k)) |
+    | D16 | S-F1 | The identity gate is inert for store pushes | A pre-existing TASK-1330 gap. Preserved by A2, not fixed |
+
+    No family takes `db/store_lock.rs:110 acquire` (`<store>/.aida/store-write.lock`, `pub(crate)`, re-entrant per thread).
+
+    # 4. Owner, trigger, scope and seams
+
+    **Owner.** The BUG-1808 common Git/publication owner owns preparation, transport, admission, install, settlement and recovery. Each family function remains the semantic decision owner.
+
+    **Trigger.** Any row in §16, reached through the CLI, the public core API, MCP (none is exposed at bf652209) or REST (`set_team_role` stays FORBIDDEN).
+
+    **Out of scope.**
+    - TASK-1717 owns only its approved ordinary protective S/L/P scope. Nothing here is borrowed from it, and its proof is never common acceptance.
+    - The L inventory (doctor, init, dispenser, compaction), TASK-1332 parent closure and the TASK-1333 B1 profile are out of scope.
+
+    **PROPOSED seams.** All live in a new `aida-core/src/store_cas/` (native, Linux profile identical to v5), inside the common owner:
+    - `StoreCasFamily`: one variant per §16 row. Each provides `decide(view: &FamilyView, attempt: &AttemptIdentity) -> FamilyDecision`, where `FamilyDecision = Apply(FamilyEffect) | Adopt(LineageRef) | NoOp(reason) | Refuse(reason)`. `FamilyView` is read from the private B tree only.
+    - `OpKey { store_key, domain, subject_digest }` (§10.6). `AttemptIdentity { op_id, attempt k, family, intent_digest, record_stamp_k }`.
+    - `ObservedBase { branch, l, r, m, b }` and `CandidateCommit { step: git_publication::PreparedGitStep /* v5 SERVICE, purpose StoreCasCandidate */, b, c, gate_receipt }`. CandidateCommit has no method that writes a canonical ref, index or worktree.
+    - `EndpointProfile`, `PrePushProfile` and `PTransportProfile` (§7). `PushDecoder` with `TransportProfile::{Native, Helper}` (§8).
+    - `CandidateState` and `LineageAggregate` (§9). `StoreCasAdmission` and the typed observation payloads (§10).
+    - `InstallPlan`, `IntegrationSet` and `PeerCapture`/`PeerDelivery` (§11, §13).
+
+    **Existing or signed seams consumed, not duplicated.**
+    - v5 `git_publication::{SealedGitDomain, PreparedGitStep, CallbackPump, HookClient}` (signed, unimplemented).
+    - The common `PublicationGuard`, journal, COMMIT, receipts and observations (6a1733 primitives; publisher unimplemented).
+    - `db/store_lock.rs::acquire`.
+    - The family decision predicates (`decide_claim:211`, `AliasRegistry::link`, `migrate_integer_keys`, `reapply_delta`, `should_write`, block allocation).
+
+    **Call sites replaced.**
+    - `coordination::{acquire_claim:676, release_claim:839, release_stale_foreign_claim:893, acquire_lock_claim:1072, heartbeat_lock_claim:1275, release_lock_claim:1311}`.
+    - `team::{set_role_cas:217, set_allowed_seats_cas:223, allow_seat_cas:290, disallow_seat_cas:296, update_seats_cas:300 (private), unset_role_cas:380}`.
+    - `alias::link_cas:219`.
+    - `git_ops::{register_node_full_identity:2877, register_node_remote_only:3078, set_node_identity_field:3189, hijack_node:3322, unregister_node:3492}`.
+    - `lib.rs::{handle_block_command:21237 (Claim arm 21244), auto_allocate_block_inner:21965}`.
+    - `schedule_ledger::{write_cas_opts:340, write_batch_cas_opts:460}`.
+
+    Wrappers delegate to these and take no locks themselves. `suggest_free_node_id:2802` is excluded (a TASK-1332 S row).
+
+    # 5. Notation and one-operation order
+
+    **Notation.**
+
+    | Symbol | Meaning |
+    |---|---|
+    | G | Shared git common dir (`git -C <store> rev-parse --git-common-dir`; here `/home/joe/ai/aida/.git`) |
+    | W | Canonical store worktree (`.aida-store`) |
+    | b | Store branch (`aida-store`) |
+    | P | Owner-private object repository (§6.1) |
+    | S_k | v5 sealed construction gitdir for attempt k |
+    | L_k | Captured local tip |
+    | R_k | Fetched origin tip |
+    | M_k | merge-base(L_k, R_k), computed in P |
+    | B_k | L_k rebased onto R_k |
+    | C_k | Candidate |
+    | A_k | Origin's advertised old value at push time. Always R_k or an ancestor of R_k (§9.1) |
+    | T | A freshly observed origin tip |
+    | H | Current local canonical tip |
+    | K | Operation key |
+
+    **One operation (attempt k).** Each "local" step is inside `PublicationGuard::enter(home)` with HOME recovery first, then REPO, then STORE. No AIDA lock is held across any network spawn, the pre-push hook or a wait.
+
+    | Step | Action | Locks |
+    |---|---|---|
+    | 0 PLAN | Resolve W, G, b and the origin configuration. No origin → the family's no-origin policy (R-3 / L) with no network. Resolve EndpointProfile, PrePushProfile and PTransportProfile (§7) and refuse on any mismatch. Seed or refresh P outside locks (§6.2). A peer-capture step for hijack (§13.2) runs here, holding the peer lock alone. | none, or peer STORE alone |
+    | 1 JOIN + CAPTURE | Enumerate open admissions for K from the HOME index (§10.6). Run `ensure_store_write_safe` AFTER acquiring STORE. Capture L (incremental fetch into P, §6.2). Record local before-images. | HOME → REPO → STORE (finite, local) |
+    | 1n NETWORK | Release all locks. Fetch R into P (§6.3). If open same-key admissions exist, this fetch is also their T (§10.7). Failure → the family's unreachable policy; no admission. | none |
+    | 1j RESOLVE JOIN | Reacquire HOME → REPO → STORE and revalidate. Apply the §10.7 join outcome: adopt, settle, re-push the same C (after dropping locks), or refuse. | HOME → REPO → STORE |
+    | 2 PREPARE | Build B and the FamilyView in S_k from P. `decide`: NoOp/Refuse returns with no shared effect; Adopt goes to step 7; Apply builds C through a v5 `PreparedGitStep`. Pin B and C into P (§6.4). | none (v5 pump, no AIDA locks) |
+    | 3 ADMIT | The S3 recheck, then the ADMISSION publication: journal, the kept-pack FileEffects, COMMIT, a receipt marked `remote-unsettled`, readback (§10.1). | HOME → REPO → STORE |
+    | 4 SEND | Re-resolve and compare the profiles. Run the closure verification (§6.5). Append a durable `PossibleExecution` observation. Spawn the push (§7.4). | none, except brief HOME for the observation append (§10.4) |
+    | 5 DECODE + OBSERVE | Decode (§8), append `SendOutcome`, fetch T into P, resolve each candidate and the aggregate (§9), append `RemoteObservation`. | none for the network; HOME for the appends |
+    | 6 RETRY | Per §9.4, within the family's existing limit. | — |
+    | 7 INSTALL | Only for ACCEPTED(i): §11, as a common SERVICE publication. | HOME → REPO → STORE (→ `blocks.lock`) |
+    | 8 PEER | Hijack only, after the install receipt: delivery (§13.3). | HOME → peer STORE alone |
+    | 9 SETTLE | Settlement publication: remove the owned `.keep` files; idempotent cleanup of P refs (§10.5). | HOME → REPO → STORE |
+
+    Every attempt yields a new immutable C_k. Nothing is amended, reset to L/B/C, restored from an old snapshot, pushed by branch name or wildcard, forced or leased.
+
+    # 6. Object lifetime (F5, F6, amendment A4)
+
+    ## 6.1 P location and identity
+
+    - **Path.** `<G>/aida-store-cas/<store-key>/p.git`, a bare repository with mode 0700. `store-key` = hex SHA-256 of (canonical W path, `b`, device/inode of G). One P per store.
+    - **Recorded identity.** The canonical path, plus device/inode of `p.git`, `p.git/objects` and `p.git/refs`, are recorded in every admission (§10.3).
+    - **Missing or replaced P.** If P is missing, or its identity differs, at any later step that references an open admission, that admission is RECOVERY-BLOCKED(P identity) and is never treated as success or rejection. A new operation recreates P only when NO open admission references the old identity. Otherwise it refuses with "unsettled store-CAS admissions reference a missing private repository".
+    - **Generated P config** (repository scope; written once, then verified at every use):
+      - `core.bare=true`;
+      - `core.hooksPath=<p.git>/hooks-empty` (an empty directory, mode 0500);
+      - `core.fsync=objects,reference` and `core.fsyncMethod=fsync`;
+      - `gc.auto=0` and `maintenance.auto=false` (P is pruned only by explicit settlement cleanup);
+      - `HEAD` → `refs/heads/<b>` (unborn, for `onbranch:` parity);
+      - `remote.origin.url` = the store's RAW (pre-rewrite) local `remote.origin.url` value, for `hasconfig:remote.*.url:` parity only, never used by name;
+      - the store's repository-scope transport-key subset (§7.2) copied verbatim.
+    - P never holds a working tree, an index or a hook.
+
+    ## 6.2 Seeding and capture of L
+
+    - **Seed (outside all locks).** `git --git-dir=P -c core.hooksPath=<empty> fetch --no-tags --no-write-fetch-head --no-recurse-submodules <G> +refs/heads/<b>:refs/cas/seed`. This is a local transport with no network. G's upload-pack runs no repository hooks (`uploadpack.packObjectsHook` is honored only from non-repository scopes, which are included in the profile digest, §7.2). The seed is an advisory snapshot, not authority.
+    - **Capture (under HOME → REPO → STORE).** Read L = `git -C W rev-parse --verify refs/heads/<b>^{commit}`. Then `git --git-dir=P … fetch <G> refs/heads/<b>:refs/cas/<op>/<k>/L` (incremental beyond the seed). Verify that P's ref equals L, and that the fetch's own connectivity check passed.
+    - **STORE-delta bound.** If the incremental delta exceeds 4096 commits or 64 MiB, release STORE, reseed, and retry the capture once. A second excess refuses before admission with "store capture delta too large under lock".
+
+    ## 6.3 Remote observations into P
+
+    R and every T are fetched with no AIDA locks: `git --git-dir=P -c core.hooksPath=<empty> fetch --no-tags --no-write-fetch-head <fetch-url> refs/heads/<b>:refs/cas/<op>/<k>/{R|T<n>}`. The command runs with the verified PTransportProfile and a deadline. Pins exist from the moment the fetch completes. G is never touched by these fetches.
+
+    ## 6.4 Construction and pinning of B and C
+
+    - S_k (v5) is populated by hardlinking P's immutable pack and loose files (copying across filesystems). The {L, R} closure is then verified with the v5 bounded object reader before any Git runs in S_k. No alternates are used.
+    - B and C are built by the v5 SERVICE step.
+    - `git --git-dir=P fetch <S_k> <C>:refs/cas/<op>/<k>/C` (and likewise for B). S_k is destroyed (v5 domain shutdown) only after P's refs exist.
+    - The **original→copy map** `{(o, c) : o ∈ M_k..L_k, c ∈ R_k..B_k}` is recorded at ADMISSION. It is produced by the sealed rebase step, which reports each picked original and its rewritten commit (§11.2).
+
+    ## 6.5 Kept transport pack and closure verification
+
+    **Pack contents.** In P: `git pack-objects --revs --stdout` over the input `C_k`, `L_k`, `^M_k`. The pack is not thin and is self-contained.
+
+    **Private build.**
+    - Write it to `<p.git>/staging/<op>-<k>/`.
+    - Index it in a private empty bare repository there with `index-pack --stdin --rev-index`. `.rev` is written because `pack.writeReverseIndex` defaults to true in 2.43 (local manual).
+    - Write the `.keep` bytes ourselves: `aida-store-cas <store-key> <op> <k> <admission-tx>\n`.
+    - Verify (index-pack checksum, and the object count equals `rev-list --count --objects C L ^M` in P).
+    - Record the exact bytes and modes of `pack-<h>.{keep,pack,rev,idx}`. Mode 0444 passes the 6a1733 owner-read rule.
+
+    **Install.** Inside ADMISSION (§10.1), as four `FileEffect`s on `TargetRoot::GitCommonDir` with relative paths `objects/pack/pack-<h>.<ext>`. Before-images are exact (Absent, or identical bytes if a byte-identical pack already exists). Order: **`.keep` → `.pack` → `.rev` → `.idx`**, each fsynced, each followed by a directory fsync. Git finds a pack only through its `.idx`, so no concurrent repack can see an index without its keep. Git 2.43 repack and gc never delete `.keep` packs, and `gc.autoPackLimit` and `multi-pack-index expire` exempt them (manuals, as verified by the V2 review receipt).
+
+    **Budgets.** At most 64 MiB per kept pack. At most 1 GiB of owned kept packs per store. Exceeding either refuses before admission.
+
+    **Settlement** removes ONLY the owned `.keep` file: a FileEffect from before=Regular(the exact keep bytes) to after=Absent, applied only if the current bytes equal it, and otherwise preserved and reported. It never removes `.pack`, `.rev` or `.idx`. Objects now reachable from canonical refs must persist; normal gc and repack later consolidate the now-unkept pack.
+
+    **Closure verification `V(X; Y)`** runs two checks in G, both with a deadline:
+    - (i) `git --git-dir=G rev-list --objects --missing=error X --not Y` proves the objects new relative to Y. `--missing=error` is the default action per git-rev-list(1).
+    - (ii) `git --git-dir=G rev-list --objects --missing=error --no-walk Y` walks Y's complete snapshot (here about 7176 blobs plus trees).
+
+    Check (ii) exists because this design does not rely on (i) reading Y's trees to mark edges; that internal behavior is not grounded here.
+    - It runs immediately before EVERY push spawn (including re-push) as `V(C_k, L_k; M_k)`.
+    - It runs at install, after the T-pack import, as `V(T; M′)`.
+    - Failure → RECOVERY-BLOCKED(closure), retained. Never a rejection, never an acceptance.
+
+    **Definition of M′.** M′ = merge-base(T, L_i), computed in P, where i is the accepted candidate's attempt. M′ is an ancestor of L_i, so closure(M′) is pinned by the same reachability argument (§6.6).
+
+    **The T import at install** packs `T ^M′` from P in the same way (private build, exact images, the same four-file order, kept until settlement).
+
+    ## 6.6 Why closure(M) remains present, and the fence (F6, corrected)
+
+    M_k is an ancestor of L_k. L_k is an ancestor of H at ADMISSION (S3 recheck). In the shared store, M's objects therefore stay reachable from `refs/heads/<b>` and from its reflog (`core.logAllRefUpdates=true`) unless something moves the branch off M's history AND those references expire.
+
+    Enumeration of AIDA paths at bf652209 that rewrite or reset refs or prune (S-F4):
+
+    | Path (anchor) | Effect on the store branch | M-unreferencing? | Disposition while any admission on this store is open |
+    |---|---|---|---|
+    | `squash_orphan_to_snapshot` (`git_ops.rs:2548`, via `store_cmd.rs:136`) | Moves `b` to a parentless snapshot, but first creates and verifies `refs/heads/aida-store-pre-squash-<ts>` at the old HEAD. The reflog also keeps it. | No (the backup branch and the reflog retain M) | **Fenced**: refuses with "unsettled store-CAS admissions; compaction would invalidate the local base". This is required for §11/§9, not for objects. |
+    | Ordinary S `pull_rebase:343` / `pull_rebase_auto_merge:408`, via `fetch_rebase_target:305` (TASK-1717 protective S paths) | `git rebase <fetched target>`. Across a rewound origin (a peer squash), a completed rebase leaves H off M; the reflog still retains M. | Only in the rewound-origin case, and only after reflog expiry | **Fenced** through gate 4 enlistment: an enlisted S import whose fetched target does not descend from every open admission's R_i refuses with "origin rewound while store-CAS admissions are open". A bounded predicate, not a freeze. Without enlistment (today) this is an unconverted-writer race, disclosed. |
+    | `aida remote reconcile` (`remote_create.rs` ~2131–2360; `reset --hard <pre>` at 2340 restores the current tip on failure) | Fast-forward or union merge into HEAD | No | Not fenced. It is a store writer outside A2 (unconverted, disclosed). |
+    | Family `reset --hard HEAD~1` (D4) | Drops one tip commit at or above L | No (it never goes below M absent an origin rewind) | Replaced by A2 for the converted rows. Legacy race disclosed. |
+    | `reset_worktree_to` (`git_ops.rs:1849`; callers `worktree_pool.rs:531/656`, `integrate_checkout.rs:62`) | Pool code worktrees, detached HEAD | No (not the store branch) | n/a |
+    | `remove_store_worktree` (`git_ops.rs:1636`) | `git worktree remove --force` only. The "optionally delete the branch" doc comment is stale and there is no branch parameter. | No | n/a. Removing W during an open admission makes the next spawn refuse (W missing), which is not an object issue. |
+    | `gc_aggressive` (`git_ops.rs:2515`, non-squash `store compact`) | `git gc --aggressive` | No (`.keep` packs are retained; reachable objects are retained) | n/a |
+    | Code-repo branch and ref deletions (`pr_cmd.rs:274/4233/4355`, `worktree_dismiss.rs:87/104`, `compete_cmd.rs:844`, `doctor_cmd.rs:6188/7927`) | Code branches, not `b` | No | n/a |
+
+    No AIDA path at bf652209 deletes `refs/heads/aida-store`, deletes the backup branch, runs `reflog expire` or runs `gc --prune=now`.
+
+    **UNSUPPORTED: operator-run manual Git outside AIDA during an open admission.** This covers the documented "fetch + hard reset" re-sync after a peer squash, deleting the pre-squash backup branch, `git reflog expire --expire-unreachable=now`, `git gc --prune=now`, and manual `update-ref`/`branch -f`. It is not fenced. If it removes any object of `closure(C_k, L_k) ∖ closure(M_k)` or of M_k's trees, the pre-spawn or install closure verification fails and the admission is RECOVERY-BLOCKED(closure) with retained evidence. No hidden ref and no maintenance freeze are used.
+
+    ## 6.7 Numeric budgets (amendment A4)
+
+    | Resource | Budget | Basis |
+    |---|---|---|
+    | P on-disk size per store | ≤ 1 GiB; refuse new admissions beyond it (no automatic prune) | Store history is 119.31 MiB today (S-F10) |
+    | Kept pack per admission | ≤ 64 MiB | 200 commits ≈ 8.48 MiB |
+    | Owned kept packs per store | ≤ 1 GiB | — |
+    | STORE-held incremental capture | ≤ 4096 commits and ≤ 64 MiB (§6.2) | — |
+    | S_k | Hardlinks (no new bytes on the same filesystem); copy ≤ P size otherwise | — |
+    | Open keys per store | ≤ 64 | §10.8 |
+    | Open admissions per key | 1 for creation-class keys; ≤ 4 for update-class keys | §10.8 |
+
+    # 7. Endpoint, P-transport and native pre-push profiles (F1, F2)
+
+    ## 7.1 EndpointProfile (resolved in W)
+
+    - `git -C W remote get-url --all origin` (fetch list) and `git -C W remote get-url --push --all origin` (push list). Both are after `url.*.insteadOf`/`pushInsteadOf`.
+    - **Refusal before any mutation** (a named reason, never a silent choice) unless:
+      - there is exactly ONE fetch URL and exactly ONE push URL; and
+      - those two strings are byte-equal after rewriting. A different-string pair that might denote the same repository (for example ssh versus https) is UNSUPPORTED and refused.
+    - The **transport profile** is `Native` for `file://`, local paths, `ssh://`, scp-like and `git://`. It is `Helper(<scheme>)` for `http://` and `https://`. Here it is `Helper(https)`.
+    - The profile digest also covers `remote.origin.{receivepack,uploadpack,proxy,vcs,pushurl,url,fetch}` and the transport key set of §7.2.
+
+    ## 7.2 Store transport profile versus P transport profile
+
+    **Transport/identity/hook key set:**
+    - `remote.origin.*`, `url.*.insteadof`, `url.*.pushinsteadof`;
+    - `http.*` (including `http.<url>.*`), `credential.*` (including `credential.<url>.*`, with list resets);
+    - `core.sshcommand`, `core.askpass`, `core.gitproxy`;
+    - `protocol.*`, `transfer.*`, `fetch.*`, `push.*`, `uploadpack.*`, `gpg.*`;
+    - `include.*`, `includeif.*`;
+    - `core.hookspath` (store side only; see below).
+
+    **Environment subset:** `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`, `GIT_ASKPASS`, `SSH_ASKPASS`, `GIT_TERMINAL_PROMPT`, `GIT_PROXY_COMMAND`, `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`/`KEY_*`/`VALUE_*`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM`, `HOME`, `XDG_CONFIG_HOME`, `http(s)_proxy`, `HTTP(S)_PROXY`, `no_proxy`, `NO_PROXY`, `GIT_SSL_*`, `SSL_CERT_*`, `CURL_CA_BUNDLE`. This also covers the command-scope configuration observed here (S-F2).
+
+    **Store listing:** `git -C W config --list --show-scope --show-origin`, restricted to the key set.
+
+    **P listing:** `git --git-dir=P config --list --show-scope --show-origin`, restricted to the key set and run with the same environment snapshot.
+
+    **Equality rule.** The multiset of (scope, key, value) must be equal. Repository-scope origins differ by design (W's `.git/config` versus P's config), and every other origin must be equal. This includes everything that conditional includes (`gitdir:`, `gitdir/i:`, `onbranch:`, `hasconfig:remote.*.url:`) pull in for each repository. Any inequality refuses with "private transport profile differs from store profile (<key>)". The rule is checked at PLAN, and again immediately before EVERY P network spawn and every push spawn.
+
+    **hooksPath is the deliberate exception.**
+    - P's effective `core.hooksPath` must equal `<p.git>/hooks-empty`. It is pinned in P's repository config AND passed per spawn as `-c core.hooksPath=<p.git>/hooks-empty`. The latter is appended to `GIT_CONFIG_PARAMETERS` after any environment-provided value, so it wins over command scope.
+    - `hooks-empty` must be an empty directory. If any file appears in it, the spawn refuses.
+    - The store's hooks path is recorded in PrePushProfile (§7.3) and is not compared with P's.
+
+    **Spawn environment.** Every network child (P fetch, push) receives the same recorded environment subset, with no inherited lock FD and a closed FD set.
+
+    ## 7.3 PrePushProfile: actual hook context (F1)
+
+    - **Hooks directory:** `git -C W rev-parse --git-path hooks`. Here this is `/home/joe/ai/aida/.git/hooks`, from the local `core.hooksPath`.
+    - **`pre-push`:** bytes, mode and digest. Classification:
+      - absent;
+      - BUG-1706 mirror-only (installed here);
+      - generated mirror+identity (`MIRROR_HOOK_HEADER` plus `identity_gate_hook_lines`);
+      - identity-only (`IDENTITY_HOOK_HEADER`);
+      - custom (executed unchanged, digest recorded, effects never treated as AIDA evidence).
+    - **Actual discovery the hook sees.** githooks(5): pre-push runs in the root of the working tree, which is W. The generated hook unsets `GIT_DIR`/`GIT_WORK_TREE`. `aida identity check-push` then resolves `project_root = find_project_root_from(W) = W` (the linked worktree resolves to itself). The profile records:
+      - `gate_project_root = W` (canonical);
+      - `allowlist_source = W/.aida/config.toml`, with its digest, or `ABSENT`;
+      - `gate_state`:
+        - `INERT_NO_ALLOWLIST` (here);
+        - `ACTIVE(allowlist digest)` if a store-local config is present;
+        - `FAIL_CLOSED_FALLBACK` if `aida identity check-push` is unavailable and `W/.aida/config.toml` mentions `allowed_emails`.
+    - **Truthful statement.** At bf652209, store pushes from W are NOT gated by the project allowlist in `<project>/.aida/config.toml`. V3 preserves that behavior exactly: the push cwd stays W, nothing is moved to the main checkout, no allowlist is copied, no hooks are disabled, and nothing runs with `--no-verify`. Whether store pushes must enforce the project allowlist is TASK-1330's owner decision. Root relays it there (canonically relayed; peer-owner FYI `8a28900d`, as supplied by root). It is not decided in A2 and is not a Joe question.
+    - **Re-checked immediately before the push spawn:** hook bytes, the hooks path, W's `.aida/config.toml` digest or absence, and the discovery result. Any change refuses before the spawn, with Cancellation followed by settlement NOT_SENT (§10.4).
+    - **What the hook receives on stdin:** Git's own `<local-ref> <C> refs/heads/<b> <A>`. githooks(5) says an object-name source is supplied "as it was originally given", so the local-ref field is C's full OID text. W3 pins this. When the gate is ACTIVE, `commits_for_pushed_ref` (`identity_gate.rs:263`) runs `git log A..C` in W, whose object store is G, where C is kept (§6.5). The gate therefore evaluates C.
+    - **Mirror fan-out.** `mirror_push_refspecs:1315` skips `refs/heads/aida-store`, so no unconfirmed mirror can occur. Store mirroring stays the existing origin-confirmed store-leg job.
+    - **Callbacks.** No hook callback authority exists on this path; it is not v5 callback-capable Git.
+
+    ## 7.4 The push
+
+    `git -C W push --porcelain --no-force --end-of-options origin <C_k-full-oid>:refs/heads/<b>`
+
+    - It runs as an owned child with deadline D_push (default 120 s), the recorded environment subset and no lock FDs.
+    - `origin` is named so that the real remote configuration, insteadOf rules and the hook argument `$1` are exactly today's. The recorded single push URL must still be the only one (re-resolved immediately before the spawn).
+    - A re-push of the same admitted C_k (§9.4) uses the identical command.
+
+    # 8. Push decoder (F2, amendment A3)
+
+    The decoder is pinned to Git 2.43.0 by the v5 profile executable digest. Bounds: stdout ≤ 64 lines, ≤ 4 KiB per line, ≤ 64 KiB total. Stderr is retained as bounded evidence and is never classified. Exit status is recorded.
+
+    **Accepted stdout grammar.** Anything outside this grammar is INDETERMINATE:
+
+    ```
+    To <url>                                   exactly one, first; <url> must equal the profile's push URL after Git's
+                                               credential anonymization (userinfo removed)
+    <flag> TAB <from>:<to> TAB <summary>[ (<reason>)]   exactly one ref-status line; <to> == refs/heads/<b>;
+                                               <from> == C_k full OID (form pinned by W1-a)
+    Done                                       present iff Git reports overall success; required for ACCEPTED
+    ```
+
+    Several ref-status lines, zero ref-status lines, a missing or different `To` line, an unknown line, truncation, or a deadline kill all give INDETERMINATE. That includes a pre-push hook refusal, which prints no ref-status line.
+
+    | Ref-status line | Exit / Done | Native profile class | Helper profile class |
+    |---|---|---|---|
+    | ` ` (fast-forward), summary `<old>..<new>` with new a prefix of C_k | 0 / Done | ACCEPTED_REPORTED | ACCEPTED_REPORTED |
+    | `*` `[new branch]` | 0 / Done | ACCEPTED_REPORTED | ACCEPTED_REPORTED |
+    | `=` `[up to date]` | 0 / Done | REMOTE_ALREADY_C (adoption still requires observation, §9) | REMOTE_ALREADY_C |
+    | `!` `[rejected]`, reason ∈ {non-fast-forward, fetch first, stale info, needs force, already exists, remote ref updated since checkout, new shallow roots not allowed} | ≠0 | CLIENT_REJECTED (not sent) | CLIENT_REJECTED (helper-reported refusal of a not-applied update) |
+    | `!` `[remote rejected]` (any text) | ≠0 | SERVER_REJECTED_REPORTED (receive-pack `ng`) | **INDETERMINATE**. Through the helper, a lost status (for example send-pack `--helper-status` "expecting report") can surface as a remote rejection, so it is never treated as proof. |
+    | `!` `[remote failure]` | any | INDETERMINATE | INDETERMINATE |
+    | ` `/`*`/`=` without `Done`, or with nonzero exit | any | INDETERMINATE | INDETERMINATE |
+    | Helper death, helper EOF, `X`, `+`, `-`, unknown summary, wrong `<from>`/`<to>` | any | INDETERMINATE | INDETERMINATE |
+
+    - **Native grounding:** git-push(1), local manual. `rejected` means Git did not try to send the ref. `remote rejected` means the remote refused. `remote failure` means it "did not report the successful update". V2 and the V2 review additionally cite Git 2.43 `transport.c::print_one_push_report`.
+    - **Helper grounding:** gitremote-helpers(7), local manual. A helper's push reports `ok <dst>` or `error <dst> <why>?` lines followed by a blank line. The mapping from those to porcelain is in `transport-helper.c` (cited by the review, not re-verified offline). The helper column is therefore deliberately conservative: only the success forms with `Done` and the `[rejected]` forms are trusted, and everything else stays INDETERMINATE until observation.
+    - **Fail-safe:** if the W1-a or W1-h witnesses show that a constant (the `To` form, the `<from>` form, `Done`) differs from this table, the decoder constant is corrected from the witness before activation. Until then every mismatch is INDETERMINATE, which is safe because it only triggers observation (§9).
+
+    # 9. Per-candidate resolution, lineage aggregate and retry (F3)
+
+    ## 9.1 Facts used
+
+    - **What the server compares.** A sent update command carries old value A_k, the tip origin advertised at push time. Without force, Git sends a command only when the new value descends from A_k (a client-side fast-forward check). A_k is therefore R_k or an ancestor of R_k: B_k and C_k contain no other origin-visible commits, because their copies were built privately.
+    - **When a delayed command can land.** A delayed or duplicated command for C_k can land only while origin's ref equals A_k.
+
+    ## 9.2 Per-candidate state (from that candidate's report history and one observation T)
+
+    Evaluated in P, in this order:
+    1. `C_i ⊑ T` (C_i equals T or is its ancestor) → **ACCEPTED_i**.
+    2. Otherwise, if any push of C_i decoded as ACCEPTED_REPORTED or REMOTE_ALREADY_C → **REWOUND_AFTER_ACCEPT_i**. The server confirmed acceptance and the candidate is no longer in the tip.
+    3. Otherwise, if `R_i ⋢ T` → **REWOUND_i** (origin no longer descends from the base).
+    4. Otherwise, if `T == R_i` → **PENDING_i** (C_i may still land).
+    5. Otherwise (`R_i ⊏ T`, C_i ⋢ T) → **NOT_IN_TIP_i**. Origin moved past R_i, and therefore past A_i, without C_i. C_i can land only if origin returns exactly to A_i (the ABA bound, §9.5). This state never says "never accepted".
+
+    **Observation failure.** If the fetch of T fails, no per-candidate state is computed and the aggregate is **UNKNOWN** (no T).
+
+    ## 9.3 Lineage aggregate (all candidates of one key; §10.6)
+
+    In this order:
+
+    | Condition | Aggregate | Effect |
+    |---|---|---|
+    | Any ACCEPTED_i | **ACCEPTED(i)** | At most one i qualifies (argued below). Go to install (§11). |
+    | Else any REWOUND_AFTER_ACCEPT_i | **REWOUND_AFTER_ACCEPT** | BLOCKED: no retry, no reallocation, no local effect. |
+    | Else any REWOUND_i | **REWOUND** | BLOCKED. |
+    | Else any PENDING_i | **PENDING** | At most one, because the same-base rule means one candidate per base. |
+    | Else (all NOT_IN_TIP) | **NOT_IN_TIP** | Every candidate settles as SETTLED_NOT_IN_TIP. |
+    | No T | **UNKNOWN** | Stays ADMITTED, open. |
+
+    **Why at most one ACCEPTED.** A new candidate is built only on a fresh base that contains no lineage candidate; if it did, the candidate would be adopted instead. So for j > i, C_j ⊑ T and C_i ⊑ T can hold together only if C_i ⊑ R_j, which would have forced adoption.
+
+    ## 9.4 Retry policy (live operation, within the family's existing limit)
+
+    Family limits: claims 5, roster/alias 10, node `MAX_CAS_RETRIES` 10, block 3, ledger `MAX_RETRIES`.
+    - **ACCEPTED(i)** → install (§11). There is no further push.
+    - **PENDING (T == R_k) after any outcome** → re-push the SAME C_k under the SAME admission (append `PossibleExecution`, then `SendOutcome`). No new candidate, stamp or lineage entry is created, and the repeat is idempotent (`=` if C_k already landed).
+    - **NOT_IN_TIP after CLIENT_REJECTED, SERVER_REJECTED_REPORTED or INDETERMINATE** → settle C_k's admission NOT_IN_TIP. Re-run the family predicate on the fresh base T (attempt k+1, a NEW admission). Lineage adoption is checked first.
+    - **Two consecutive INDETERMINATE outcomes for the same C_k with T unchanged (== R_k)** → stop with **UNKNOWN_RETAINED**: the admission stays open and the family returns its truthful unreachable/failed result. This covers a deterministic pre-push refusal and a helper that persistently loses status, without spinning.
+    - **REWOUND or REWOUND_AFTER_ACCEPT** → stop BLOCKED and retained. The family returns a named refusal ("origin rewound during store-CAS operation; retained for settlement").
+    - **UNKNOWN (observation failed)** → stop. The family returns its existing unreachable result (claims: `Unavailable`; registry: Err; ledger: offline retention as L where that is the existing policy, labelled local-only). Never Acquired and never installed. The admission stays open.
+    - **Allocation families never allocate again** while any admission for the key is PENDING, UNKNOWN or REWOUND* (§10.7). The automatic node id and block range are therefore never duplicated.
+
+    ## 9.5 Supported rewind epochs and the ABA bound
+
+    The supported origin rewinds are those of `aida store compact --squash`: the operator force-pushes a parentless snapshot S (S-F3), and may later restore from the backup branch by force-pushing the pre-squash tip O.
+    - **Squash epoch observed (T = S, or a descendant of S).** `R_i ⋢ T`, so the result is REWOUND_i, or REWOUND_AFTER_ACCEPT_i if acceptance was reported. Never NOT_IN_TIP and never a retry.
+    - **Restore epoch (T = O or a descendant).**
+      - If C_i landed before the squash, then C_i ⊑ O → ACCEPTED_i.
+      - If C_i had not landed, its command's old value A_i ⊑ R_i ≠ S, so the command failed during the squash epoch. With T = O ⊐ R_i the result is NOT_IN_TIP_i, which is sound. If O == R_i exactly, the result is PENDING_i, which is also sound.
+    - **ABA bound (stated).** NOT_IN_TIP_i is unsound only if origin's ref returns EXACTLY to A_i after we observed a tip past R_i, and C_i's original command then executes. No supported writer does that: fast-forward pushes never return to an old tip, the squash force-push goes to a new root, and a restore goes to O, which descends from every R_i observed before the squash. The remaining case, a manual force-push of a historical tip, is UNSUPPORTED. Even then, ACCEPTED_REPORTED is never discarded: with the report it gives REWOUND_AFTER_ACCEPT, which is BLOCKED.
+    - **No global exactly-once claim.** No claim is made beyond this bound.
+
+    # 10. Admission, observations, discovery, joins and settlement (F4, F5; R-2)
+
+    ## 10.1 ADMISSION(op, k): a common SERVICE publication that must COMMIT before the push spawn
+
+    Under HOME → REPO → STORE:
+    - **(i) S3 recheck.** `ensure_store_write_safe`. L_k must be an ancestor of the current H. No commit in `L_k..H` touches the family's record paths. The local before-images must still equal their PLAN capture. The open-key caps must not be exceeded (§10.8). Any failure refuses with a named reason and sends nothing.
+    - **(ii) Journal PREPARED.** It contains the four kept-pack FileEffects (§6.5) with exact before/after images and payloads.
+    - **(iii)** Apply the FileEffects in order (`.keep` → `.pack` → `.rev` → `.idx`, fsync, then directory fsync).
+    - **(iv) P4/COMMIT.** `COMMIT.json` is created no-replace (6a1733 `durable.rs`), fsynced along with its parent directory.
+    - **(v) Retire with a retained receipt** whose disposition is `remote-unsettled`. Read the receipt back.
+
+    The push may start only after (v) has been read back AND a `PossibleExecution` observation has been appended durably (§10.4).
+
+    ## 10.2 Crash points (discovery is authoritative from HOME; there are no locator refs)
+
+    | Crash point | Durable state | Recovery disposition |
+    |---|---|---|
+    | c0: before (ii) | No HOME record. P refs and staging may exist. | Orphan cleanup (§10.5). Nothing was sent. |
+    | c1: between (ii) and (iv) | PREPARED, no COMMIT | v3 rollback restores the exact before-images. Kept-pack files are removed ONLY if their current bytes equal the recorded after-images, and are otherwise RECOVERY-BLOCKED. Then orphan cleanup. Nothing was sent. |
+    | c2: between (iv) and (v) | COMMIT, receipt not retired | v3 roll-forward completes the install and retires the receipt `remote-unsettled`. No `PossibleExecution` exists, so nothing was sent: **SETTLED_NOT_SENT** (remove the `.keep`, clean up P refs). |
+    | c3: between (v) and the `PossibleExecution` append | Retired receipt, no `PossibleExecution` | SETTLED_NOT_SENT, as above |
+    | c4: after `PossibleExecution`, before `SendOutcome` | A send may have happened | Resolve by observation (§9.2/§9.3) |
+    | c5: after `SendOutcome` or `RemoteObservation` | — | Resolve by observation |
+    | Install or peer crash | §11.4, §13.5 | — |
+
+    ## 10.3 The COMMIT decision payload `StoreCasAdmission` (fields only; no new top-level record family)
+
+    - `{op_id, attempt k, key K = (store_key, domain, subject_digest), family, intent_digest, lineage: [prior admission tx ids for K]}`.
+    - `{L_k, R_k, M_k, B_k, C_k}` and the original→copy map (§6.4).
+    - `record_stamp_k`: the EXISTING record fields actually written by C_k, **computed per attempt**. For example: the claim's `started_at`/`pid`/`pid_start_time`/`clone_path`/`heartbeat_at`; the node entry `{id, hostname, email, clone_path, registered, name}`; the exact block range computed at attempt k; the ledger delta; the hijack marker image M_ours.
+    - The EndpointProfile digest with its single fetch and push URLs and transport profile; the PTransportProfile digest; the PrePushProfile digest with discovery and gate state.
+    - The refspec, `<b>`, and the expected base R_k.
+    - The local before-images: `.aida/node.toml` (rows 9, 11, 13, 16), own `HIJACKED.toml` (row 16), `.aida/dispenser.toml` and the range view (row 13), and the peer capture (row 16, §13.2).
+    - P identity (§6.1) and P ref names `refs/cas/<op>/<k>/{L,R,B,C}`.
+    - The kept-pack file set.
+    - The owner's PID/boot/start (the existing identity convention, not a new scheme).
+    - `invocation_authorization` (§12.4).
+    - An `ObservationPlan`: namespace = admission tx; origin = the COMMIT digest; allowed kinds = {PossibleExecution, SendOutcome, RemoteObservation, InstallVerification, Cancellation, Settlement}; `max_records` 256; `max_bytes` 1 MiB.
+
+    ## 10.4 Observation mapping (one mapping, no alternatives)
+
+    | Kind | When appended | Typed payload |
+    |---|---|---|
+    | `PossibleExecution` | Durably, immediately BEFORE each push spawn, including a re-push | `{attempt, push_n, argv_digest, endpoint_digest, prepush_digest, closure_verified: true}` |
+    | `SendOutcome` | After each push | `PushReport {transport_profile, lines[] (bounded), exit, class}` |
+    | `RemoteObservation` (**seventh kind; REQUIRED common extension**) | After each T fetch, or after a fetch failure | `{fetch_n, T? , failure_class?, per_candidate: [(i, state)], aggregate}` |
+    | `InstallVerification` | Only for LOCAL installation verification by the install publication (its signed meaning) | `{install_tx, H, H', effects_digest}` |
+    | `Cancellation` | Live owner abandons before spawn (profile or closure mismatch) | `{reason}` |
+    | `Settlement` | Terminal | One of `SETTLED_INSTALLED`, `SETTLED_SUPERSEDED`, `SETTLED_NOT_IN_TIP`, `SETTLED_NOT_SENT`, `SETTLED_ADOPTED_BY(op′)`, `BLOCKED_REWOUND`, `BLOCKED_REWOUND_AFTER_ACCEPT`, `BLOCKED_RECOVERY(reason)` |
+
+    `InstallVerification` is NOT used for remote state. Adding `RemoteObservation` to `ObservationKind` extends the SIGNED common record and needs common-owner disposition: it is REQUIRED (gate 1), not presumed.
+
+    **HOME use during observation appends.** Each append takes HOME briefly, with no network inside. If HOME is unavailable before a spawn, the spawn does not happen (Cancellation is appended when possible; otherwise c3 applies).
+
+    ## 10.5 P refs and staging: outside the journal, with explicit idempotent cleanup
+
+    P refs and staging directories are private pins, not authority, and are not FileEffects (6a1733 has no ref-effect type; V3 does not add one).
+
+    Cleanup rules (idempotent; each runs at any C-family entry for the store, under HOME → REPO → STORE, after the HOME index read):
+    - **(a)** `refs/cas/<op>/*` and `staging/<op>-*` for an op with NO HOME record, whose owner is proven dead → delete.
+    - **(b)** For an op whose admissions are ALL settled → delete.
+    - **(c)** For an op with any open admission → keep. A named P ref that is missing or has a different OID → RECOVERY-BLOCKED(P ref) for that admission.
+
+    P never runs gc. Objects freed by deleting refs are reclaimed only by an explicit bounded `git --git-dir=P prune --expire=now`, run when no operation for the store is open and the P budget exceeds 75%.
+
+    ## 10.6 Cross-invocation key and open-admission index
+
+    **K = (store_key, record domain, subject digest):**
+
+    | Rows | Domain | Subject |
+    |---|---|---|
+    | 1, 3, 4 | `lease` | Normalized scope (`owns`) + clone canonical path |
+    | 2, 5, 6 | `lock` | `LockKind` + clone canonical path |
+    | 7 | `roster` | Member key (user id) |
+    | 8 | `alias` | Normalized link pair |
+    | 9 | `node-register` | Clone canonical path, plus the requested id when given |
+    | 10 | `node-register` | Clone canonical path |
+    | 11, 12 | `node` | Target node id |
+    | 13 | `blocks` | (Own node id, block type) |
+    | 14, 15 | `ledger` | Job key set |
+    | 16 | `node` | Target node id |
+
+    **Index.** `store_cas_open_index(home, store_key) -> bounded [(admission tx, K, family, owner, last aggregate)]` is derived from retained receipts whose disposition is `remote-unsettled` or `blocked`, together with their observation chains. It is a REQUIRED common-owner function (the checkpoint has no index enumerator). It is the ONLY discovery source; P refs are cross-checks.
+
+    ## 10.7 Join before decision (step 1/1n/1j)
+
+    Every new operation for key K first resolves every open admission for K, using the T fetched at step 1n:
+    - **Owner other than ourselves is alive (PID/boot/start)** → refuse with "store-CAS operation in progress for <K>". We never decide independently.
+    - **ACCEPTED(i)** → run the §11 install under that admission. The result is SETTLED_INSTALLED or SETTLED_SUPERSEDED. The new operation then decides on the fresh base, which now includes the record. When the new op is in an allocation family with an equal intent_digest, it ADOPTS: it returns the accepted id or range (`SETTLED_ADOPTED_BY(op′)`) and allocates nothing.
+    - **NOT_IN_TIP** → settle and proceed.
+    - **PENDING (T == R_i)** and the owner is dead or is us → **resolve by re-push**. Drop the locks and re-push the SAME admitted C_i under ITS admission, after re-verifying its EndpointProfile, PrePushProfile and closure. Then re-observe and resolve. This builds no candidate and allocates nothing. Landing C_i was already a possible outcome of that admitted send; the re-push only forces Git to decide it under the old value R_i. A same-clone claim that then lands is re-entrant for the new op (`decide_claim` returns Acquire for the same clone, S-F7). If the re-push is INDETERMINATE twice with T unchanged, the outcome is UNKNOWN (next item).
+    - **UNKNOWN, REWOUND or REWOUND_AFTER_ACCEPT:**
+      - **creation-class** families (1, 2, 9, 10, 13, 16) refuse with "unsettled prior store-CAS attempt for <K>: <state>";
+      - **update-class** families (3, 4, 5, 6, 7, 8, 11, 12, 14, 15) may proceed ONLY if their own decision is `Apply`. Their push on the fresh base then serializes against the earlier candidate under Git's old-value check (§9.1). A `NoOp` or `Refuse` decision while an earlier same-key candidate is unresolved refuses with the same named reason, because a NoOp cannot fence an earlier candidate that may still land. A heartbeat NoOp (the record is no longer ours) skips the tick, which is its existing behavior.
+
+    The **pure recovery pass** (at any C-family entry for the store, for keys other than the entering operation's) uses the same steps with one exception: it NEVER re-pushes. With no requesting invocation, it creates no new remote activity. It also never builds a candidate, re-runs a scheduler job, allocates, reclaims or deletes a claim, issues a grant, or reports Acquired to a dead consumer.
+
+    ## 10.8 Bounds and settlement liveness
+
+    **Caps.**
+    - Creation-class keys: one open admission per key (the join forbids a second).
+    - Update-class keys: at most 4 open admissions per key; a fifth refuses (a heartbeat skips its tick).
+    - Per store: at most 64 open keys; beyond that new keys refuse with "unsettled store-CAS operations need settlement".
+
+    **Settlement triggers (evidence-driven only; no time-based expiry).**
+    1. An owner's own later observation settles its own earlier admissions.
+    2. Any later same-key operation (§10.7).
+    3. The pure recovery pass, which fetches T with HOME released (§10.9).
+    4. Install completion.
+
+    PENDING admissions settle as soon as any writer moves origin, or by a same-key re-push. UNKNOWN admissions settle once origin is reachable.
+
+    **Unsupported production join (stated).** REWOUND, REWOUND_AFTER_ACCEPT and RECOVERY-BLOCKED admissions have no automatic settlement. Their key stays BLOCKED with retained evidence and a named refusal. Unblocking requires a common-owner operator settlement surface, which is REQUIRED-FOR-SUPPORT and NOT designed or authorized here. The affected schedule (a peer compaction rewind, or unsupported manual Git, during an open admission) is therefore an UNSUPPORTED production join for every row. No expiry permission, no second id, no second range and no reclaim is introduced.
+
+    ## 10.9 Recovery and the network
+
+    Recovery runs at any C-family entry and in the existing common recovery pass:
+    1. Under HOME → REPO → STORE: read the index, validate the records and P identity, and run cleanup (§10.5). Release ALL locks.
+    2. Fetch T into P (network; no AIDA locks).
+    3. Reacquire HOME → REPO → STORE. Revalidate: the receipt generation is unchanged and the admission is not yet settled by someone else.
+    4. Act per §10.7 (or §11).
+
+    HOME is never held across the network. A fresh invocation from another repository, or from outside the project, recovers through the same HOME index.
+
+    # 11. Install: validate before any effect (F7)
+
+    ## 11.1 Sequence
+
+    The install is a common SERVICE publication, v4 class "Store pull/rebase/structural merge", network-free, under HOME → REPO → STORE (→ `blocks.lock` for row 13, per TASK-1332 A1):
+    1. `ensure_store_write_safe` after STORE. A rebase in progress, or dirty canonical paths, gives INCOMPLETE{unsafe}. Nothing is aborted or swept.
+    2. Read H. Import T's objects (§6.5 T pack, kept). Run the closure verification `V(T; M′)`.
+    3. **Plan privately in a fresh v5 S_k** (the integration set, §11.2). A conflict on a path with no union rule (`registry/{team.toml,nodes.toml,blocks.yaml,aliases.toml}`, `coordination/**`) gives INCOMPLETE{conflict}, carrying the content evaluation of §11.2(e).
+    4. **Family validation, before any effect, against the named observation horizon T (fetched at t_obs).** Acceptance is historical; current ownership is checked only against T and H:
+       - (a) The planned result H′ and T both contain the family record exactly as C_i wrote it (`record_stamp_i`).
+       - (b) No commit in the integration set changes that record (no local same-family successor).
+       - (c) Every dependent local before-image equals its ADMISSION image.
+
+       Any failure gives SUPERSEDED (a successor exists in T or H) or INCOMPLETE (anything else), with zero local effects.
+    5. Journal PREPARED: the ref H → H′ (or no ref change), index, worktree files, node.toml, own-marker effect, dispenser view and T kept-pack files, each with exact before/after images.
+    6. **Revalidate at the owning install boundary**, immediately before the first effect and under the same locks. H must be unchanged and all before-images exact. Otherwise ABORT, with nothing installed.
+    7. Install through the adapter: the canonical ref CAS with expected-old H; the v5 callbacks through the pump; node.toml only for the accepted id; the own marker only per §13.4.
+    8. P4/COMMIT, the retained receipt, `InstallVerification`, and settlement of the admission (`SETTLED_INSTALLED`) in a following publication.
+
+    Remote changes after t_obs cannot be excluded by a local lock, and no perpetual ownership is promised. SUPERSEDED reports the successor and never reclaims. Nothing ever resets to L, B or C, and no old snapshot overwrites anything.
+
+    ## 11.2 Exact integration set and ordinary-sync races (F7)
+
+    **Definitions** (in S_k, with H and T both present):
+    - X = merge-base(H, T).
+    - The candidate set is `X..H` minus every commit that is an original in the admitted original→copy map of C_i (those are represented in T by their copies).
+    - The integration set I is that candidate set, replayed onto T in order using the existing union rules (spec objects, oplog, queue registries, schedule ledger). A commit that becomes empty is DROPPED (git-rebase(1): `--empty=drop`, the default). Commits that are clean cherry-picks of T commits are dropped.
+    - H′ is the result.
+
+    **Cases:**
+    - **(a) Normal: L_i ⊑ H and C_i ⋢ H.** X ⊑ M_i, so the candidate set is `L_i..H` (the commits made after capture) plus no originals. H′ = I replayed onto T. The ref update H → H′ has CAS expected-old H.
+    - **(b) H already contains C_i** (C_i ⊑ H, for example an ordinary sync imported T or a later tip). No ref update. Only local effects (node.toml and so on), after validation 4(a) evaluated against H's tree and T.
+    - **(c) H ⊑ T** (H fell behind, for example H == L_i with no originals outside the map). H′ = T, a fast-forward.
+    - **(d) L_i ⋢ H** (an ordinary sync rebased H during the push window onto a tip that lacks C_i, creating new copies "copies2" of L's originals). The candidate set includes the copies2. Replaying them onto T, which holds the copies1 inside C_i, reproduces content already present: union rules merge by entry id, and paths without a union rule get identical content. They therefore become empty and are DROPPED. A non-union path with differing content is a conflict and gives INCOMPLETE{conflict}, with no effect.
+    - **(e) Content rule for supersession.** After planning, 4(a)/(b) compare the family record in H′ with `record_stamp_i`. Any difference introduced by a commit of I is a local same-family successor, so SUPERSEDED. A difference coming from T (a remote successor) is SUPERSEDED with the successor reported.
+    - **(f) An ordinary sync pushed L's ORIGINALS during the window.**
+      - If the originals landed first, C_i's push is non-fast-forward or its delayed command fails the old-value check, so C_i is NOT_IN_TIP. The next attempt is built on a T that contains the originals, so B_{k+1} has nothing to rebase.
+      - If C_i landed first, the ordinary sync's own rebase onto T drops patch-identical commits and empty results. That is its existing behavior (TASK-1717 S), not A2's.
+
+      Either way the install's I contains no duplicate of C_i's content, by the map exclusion plus drop-empty.
+
+    **Guarantees.** Unrelated H commits are always preserved, unless their effect is already present in T. There is no reset and no duplicated content. Every case is witnessed (W4).
+
+    ## 11.3 Effects by family
+
+    - node.toml: rows 9, 11 (self only) and 16.
+    - Dispenser visibility: row 13. The range becomes visible only after install, and refill never runs under the dispenser lock.
+    - Own marker: row 16.
+    - Peer step: row 16, §13.
+    - Every other row: the import only.
+
+    ## 11.4 Install crash closure
+
+    - A PREPARED install restores the exact current-locked before-images (v3).
+    - A COMMITted install rolls forward.
+    - Neither undoes the remote C_i. A retained receipt plus the open admission make the install re-runnable through §10.7.
+
+    # 12. HOME, authority surfaces and per-row authority disposition (F10, amendment A6)
+
+    ## 12.1 HOME mandatory
+
+    **Scope.** Every local step of every row runs inside `PublicationGuard::enter(home)`, with HOME recovery first: capture, join resolution, ADMISSION, observation appends, install, the peer step and settlement.
+    - HOME is never acquired late beneath STORE.
+    - HOME is never dropped around provisional effects.
+    - HOME is never held across network or hook execution.
+
+    **Why this applies to every family.** A whole-store import can change `registry/team.toml` whichever family triggered it, so every install is authority-bearing. The signed text requires this: BUG-1808 capture l.171 says "store pull/rebase/import paths that can replace registry/team.toml … must acquire it BEFORE their store locks". No row may install before the common owner exists (gates 1 and 4).
+
+    **Required seams.**
+    - Readers: `seat_authority::{roster_allows:93, current_grant:104, issue_direct:159, validate_child_delegation:211, issue_child:235}` and every `TeamRoster::load` used for authorization.
+    - Writers: the 16 rows, plus the ordinary S imports, which the common owner enlists separately (gate 4).
+    - Core: `team::*_cas`, `alias::link_cas` and the `git_ops` node functions are public. They must route to the owner API, not rely on CLI wrappers.
+    - MCP: exposes none of these writers. The `session_start` tool returns CLI text only (`mcp.rs:4982–5010`).
+    - REST: `set_team_role` stays FORBIDDEN.
+
+    ## 12.2 Authority surfaces (four, kept separate)
+
+    | Surface | What it is at bf652209 | Serialized by Git? |
+    |---|---|---|
+    | (a) Invocation authorization | Roster CLI: `require_direct_tty` (`seat_authority.rs:136`, called at `team_cmd.rs:207/246/265/290`), which checks only that stdin and stderr are terminals. It is a guardrail, NOT authority and NOT proof of a human. Core `team::*_cas`: no check. Other rows: none beyond the invocation. | No. Sampled at PLAN and at ADMISSION only. |
+    | (b) Clone or local identity | `clone_path` canonicalization; `.aida/node.toml` | No. Checked as before-images at ADMISSION and at the install boundary (detected, not prevented). |
+    | (c) Remote content precondition | Records in the compared remote history | Yes (old-value check / fast-forward) |
+    | (d) Local consumer authority | Grant and roster at a consumer's P4 | No. Sampled home-first at the consumer's own P4. |
+
+    **Meaning of remote acceptance (answering the commission's "family authority at remote acceptance").** Remote acceptance is a content linearization at origin and confers NO local AIDA authority. Authority-bearing local state (the roster) changes only at the §11 HOME install. Every later grant, P4 or `roster_allows` reads that committed view home-first. A fresh local sample followed by an unlock is never presented as authority at remote success, and a local P4/C is never relabelled as a remote CAS.
+
+    ## 12.3 Signed texts governing "authority at remote acceptance" (citations)
+
+    - **[T1] BUG-1808 capture l.171.** "Every supported authority writer uses the home lock: … team::{set_role_cas,set_allowed_seats_cas,allow_seat_cas,disallow_seat_cas,unset_role_cas}; store pull/rebase/import paths that can replace registry/team.toml. They must acquire it BEFORE their store locks. Direct/grant validators and current_grant/roster_allows read the same committed view. Their lock does not freeze time."
+    - **[T2] BUG-1808 capture l.191.** "Revocation/roster writers racing P4 are serialized: if they acquire first, P4 refuses; if after, they affect subsequent commands/activations."
+    - **[T3] TASK-1332 capture l.157** (V2 step 3). "This sample does NOT establish a new authority freeze across network. Existing operations needing fresh authority through remote acceptance must be handled by their already-owned authority protocol."
+    - **[T4] TASK-1332 capture** (V2 per-family table, roster row). "Existing authority caller revalidation remains owned separately." Claim row: "decide_claim with current claimant identity, current time/TTL/PID-start/session liveness." Node row: "local node config only after corresponding accepted identity." Step 5: "Publish .aida/node.toml/dispenser identity only against the accepted matching registration/range."
+    - **[T5] BUG-1808 capture l.1247** (the A2 commission). "Fresh local sample then unlock does not establish authority at remote success; local P4/C cannot be relabeled remote CAS."
+    - **[T6] BUG-1808 A–E strict refusal, launch contract** (l.267 "no invocation-owned lifecycle residue"; l.322 standalone spawn wrappers). These apply to covered launch entrypoints.
+
+    **Finding.** None of T1–T6 requires a mutable local grant, a roster-writer authorization, a TTL or liveness sample, or a local node identity to remain valid AT remote acceptance for these families, except through T6 for covered claim callers. T1 and T2 require home-lock serialization of the writer's LOCAL effect against P4, which the §11 HOME install supplies. T3 delegates any fresh-authority need to the family's already-owned protocol; T4 shows those protocols to be decision-time (claims) and install-time (node, dispenser).
+
+    ## 12.4 Per-row disposition (U-1..U-4 are never acceptance waivers)
+
+    | Row(s) | Governing text | Disposition |
+    |---|---|---|
+    | 1, 2 (claim acquire) inside covered launch entrypoints | T6 | **BLOCKED by F-1 / U-4** (§14). Never acceptance-neutral. |
+    | 1, 2 outside covered entrypoints | T4 (claim row: decision-time TTL/liveness), T3 | **Acceptance-neutral (U-2 disclosed).** TTL and liveness are sampled on each fresh base, and Git serializes only the holder record, exactly as today. |
+    | 3, 4, 5, 6 (release, stale-release, heartbeat) | T4 (release/heartbeat row: ownership compared after refresh) | Acceptance-neutral. Content precondition (c) only. |
+    | 7 (roster) | T1, T2, T4 roster row, T5 | **Acceptance-neutral (U-1 not invoked).** No signed text requires the invocation authorization to hold at remote acceptance (T4: "caller revalidation remains owned separately"). T1/T2 serialization is supplied by the HOME install, and the committed roster view becomes authority only there. |
+    | 8 (alias) | T1 (whole-store import) | Acceptance-neutral. The import is HOME-enlisted. |
+    | 9, 10, 11, 12, 16 (node) | T4 node row / step 5 | **Acceptance-neutral (U-3 disclosed).** A local identity change during the push is detected by the before-image check and gives INCOMPLETE with no install. It is not prevented. |
+    | 13 (blocks) | T4 step 5 | Acceptance-neutral (U-3 disclosed for the node identity used). |
+    | 14, 15 (ledger) | T4 ledger rows | Acceptance-neutral. These are observations. |
+
+    **`invocation_authorization` field (concrete core-route negative, F10).** ADMISSION records exactly one of:
+    - `cli_tty_guardrail{stdin_tty, stderr_tty}` (CLI roster route; labelled guardrail);
+    - `none_recorded{route: core|mcp|internal}`.
+
+    No field is named or treated as authority. For a direct core `team::allow_seat_cas` call:
+    - the call is permitted as today (core permissiveness is preserved unless its owner records a decision);
+    - the receipt carries `none_recorded{route: core}`;
+    - the receipt carries NO CLI-derived TTY sample;
+    - no output or receipt describes the call as authorized.
+
+    That is the observable negative (W6 (f)). It is evidence hygiene, not a fake protection.
+
+    ## 12.5 Lock order (unchanged in substance)
+
+    HOME → REPO → (SEAT never) → STORE → (`blocks.lock`, row 13) → Git (local, short).
+    - A peer step holds HOME → peer STORE alone, never with our REPO or STORE.
+    - No AIDA lock is held across any network fetch, push, pre-push hook or wait.
+    - The scheduler tick flock may enclose a ledger operation (tick → HOME → STORE), never the reverse edge.
+    - No guard crosses into a child process, and no lock FD is inherited.
+
+    ## 12.6 Heartbeat cost and DrainGuard (amendment A6)
+
+    **Per-tick bound.**
+    - At most one tick operation per `HEARTBEAT_INTERVAL_SECS = 300` s.
+    - Each tick does at most 2 network fetches (R and one T, plus one more T per same-C re-push), at most 2 pushes of the same C, and finite local publications.
+    - The tick deadline is 120 s overall, including lock waits. Its lock wait uses a 30 s timeout, after which it skips the tick (existing unreachable-skip behavior).
+
+    **Thread.** The heartbeat thread enters HOME itself.
+
+    **Per-key cap.** Key `lock/<kind>/<clone>` holds at most 4 open admissions, and a fifth skips the tick. If the R fetch fails, no admission is created at all. Accumulation therefore needs repeated push or observe failures after a successful R fetch. Open ticks are settled by the next tick's own observation (§10.8, trigger 1).
+
+    **DrainGuard.** `DrainGuard::drop` (`drain_lock.rs:629–638`) sets stop and joins the thread BEFORE taking HOME or STORE, never while holding them. The join is bounded by one tick deadline (≤ 120 s).
+
+    **TTL.** The 1800 s TTL means a stuck heartbeat makes the claim reclaimable by peers, which is the existing semantics for unreachable origin.
+
+    # 13. Hijack markers: capture, delivery, own clear (F9, amendment A5)
+
+    ## 13.1 Contract
+
+    A `HIJACKED.toml` in clone X's `.aida-store/.aida/` means: origin accepted a re-attribution of `marker.node_id` away from X, and X has not since re-acquired that id locally. It is advisory, never authority, and never consulted by `seat_authority`.
+
+    ## 13.2 PeerCapture (step 0; a separate step before ADMISSION)
+
+    - It holds NONE of our locks.
+    - Under HOME, it resolves the before-owner entry `E_before` of the target at the PLAN base: `{hostname, email, clone_path, registered}`. It evaluates reachability by the existing rule (S-F6).
+    - **Absent or unreachable at capture** (different host, different user, no clone_path, path missing, or no writable `.aida-store/.aida/`) → `PeerCapture::Absent{reason}`. There is no peer step. The outcome is the existing healthy `Reattributed{reason}` positive.
+    - **Reachable** → take the peer root's permanent store lock (`<peer>/.aida-store/.aida/store-write.lock`) ALONE and record:
+      - the canonical path and device/inode of `<peer>/.aida-store` and `<peer>/.aida-store/.aida`;
+      - the exact peer marker bytes, or absent;
+      - the exact peer `.aida/node.toml` bytes.
+
+      Then release the lock.
+    - The capture goes into `record_stamp`/before-images at ADMISSION. M_ours, the marker this operation would deliver, is fixed at attempt k as `{node_id: target, new_owner_hostname/email/clone_path: ours, hijacked_at: t_k}`.
+
+    ## 13.3 PeerDelivery (step 8; a separate finite common SERVICE publication after our install receipt)
+
+    Under HOME → peer STORE, holding none of our REPO or STORE locks:
+    1. Re-resolve the peer root and prove it is the same device/inode. Otherwise → `notification-not-delivered{peer root replaced or vanished}` (it vanished after capture; remote ownership stays accepted).
+    2. If the current peer marker bytes == M_ours → **already delivered**: idempotent success, settle.
+    3. The current peer marker bytes must equal the capture image AND the current peer node.toml must equal its capture image. Otherwise → `notification-conflict{changed since capture}`, preserved.
+    4. The replacement predicate, all compared exactly:
+       - capture image Absent → install M_ours;
+       - capture image is a marker with `node_id == target` AND its `(new_owner_hostname, new_owner_email, new_owner_clone_path)` ≠ `E_before`'s `(hostname, email, clone_path)` AND ≠ our own tuple → install M_ours. Registry lineage then shows that the marker's named new owner had already lost the target before our accepted transition, so the marker is stale;
+       - any other marker (a different `node_id`, or a same-id marker naming ourselves or `E_before`) → PRESERVE and report `notification-conflict{other marker present}`.
+    5. Install by temp file, fsync, atomic rename and directory fsync. The journal holds the exact before-image and after-image, and rollback restores exactly that before-image only if the current bytes equal our after-image (never pathname deletion).
+
+    There are no clocks, no `registered_at` ordering, no nested own/peer locks, and never an overwrite outside step 4.
+
+    ## 13.4 Own-marker clear (inside the §11 install)
+
+    Allowed only if all three hold:
+    - the current own-marker bytes EQUAL the ADMISSION image;
+    - that image names `node_id == target`;
+    - its `(new_owner_hostname, new_owner_email, new_owner_clone_path)` equals `E_before`'s tuple, meaning it records the takeover we are now reversing.
+
+    Otherwise the own marker is preserved. Example: B took the id from A after A's accepted takeover. B's marker in A's clone names B, but A's later operation's `E_before` is B's entry, and A's install is SUPERSEDED anyway when T shows B. Validation 4(a) makes A SUPERSEDED whenever T shows another owner, and then nothing is cleared.
+
+    ## 13.5 Crash closure
+
+    | Crash point | Recovery |
+    |---|---|
+    | Remote accepted, before own install | Lineage → §11 |
+    | Own install committed, before delivery | Run PeerDelivery against the ADMISSION capture (§13.3) |
+    | Delivery committed, before settlement | Step 2 sees M_ours → already delivered → settle |
+    | Recovery observes a successor | SUPERSEDED: no own install, no delivery, report "not notified: superseded" |
+
+    No marker exists before acceptance, so nothing ever needs restoring for a rejected or unknown attempt.
+
+    ## 13.6 Portability (amendment A5)
+
+    `HIJACKED.toml` is not listed in the store `.gitignore` (D15). Here `.git/info/exclude` excludes `.aida/`. Whether a peer's staging could commit a marker therefore depends on that peer's local excludes. A2 never stages it (install effects are exact FileEffects), and W7 (k) witnesses both an exclude-present and an exclude-absent peer.
+
+    # 14. F-1 and the caller matrix (F8)
+
+    ## 14.1 The confirmed counterexample (kept)
+
+    For the PARTICULAR pre-P4 schedule:
+    1. A claim is accepted at origin before final P4.
+    2. A winning revoke or expiry follows.
+    3. Origin then becomes unreachable.
+
+    The result is accepted remote history that no local journal can remove. A TTL eventually expiring is not no-residue rollback. This is not claimed to be universal. There is no advisory exclusion, no acceptance relaxation and no new claim command.
+
+    ## 14.2 Matrix (bf652209; c677 anchors are identical except where noted)
+
+    | Caller | Classification | Post-claim behavior at source | Disposition |
+    |---|---|---|---|
+    | `aida session start` WITHOUT `--launch` → `handle_session_command:26936` → `session_start:38335` (claim `38569`) | Ordinary lifecycle; not a covered launcher | Ambiguous-spec and status refusal (~38600–38636), live-local-claim refusal (~38650–38690), then worktree and lease creation. A later refusal leaves the remote claim (existing residue, staleness-bounded). | **SUPPORTED** as a family C repair. Existing order and residue preserved and disclosed. No new refusal policy inherited. Not strict acceptance. |
+    | `aida session start --launch` → the same claim, then `session::new_session` (`lib.rs:39581`) → `run_claude_session` (`session.rs:712/995`), a NEW vendor process | A standalone low-level spawn outside queue work | Vendor launch after the claim | **BLOCKED** until the common owner classifies it under the signed clause (l.322): "Standalone low-level spawn wrappers still used outside queue work must either take an ActivatedAssignment or own a separate correctly preflighted launch publication". The stakeholder-persona branch (`38370–38380`) returns before the claim and is unaffected. |
+    | `aida worktree add` / `enter` → `ensure_spec_worktree:66115` (c677 `66116`), calls at `67012`/`67046` (c677 +1) → `session_start(launch=false)` | Ordinary; verified no vendor launch | As in the first row | **SUPPORTED** (positives preserved) |
+    | `aida do … guided` → `run_do_drive:104426` (c677 `104427`) → `ensure_spec_worktree(…,"do-guided")` at `104573` (c677 `104574`) | NOT CLASSIFIED in the signed table | As in the first row | **BLOCKED** until classified |
+    | `aida agent new` → `prepare_agent_launch:31043` (claim via `session_start` at `31122`) | COVERED (foreground agent-new) | Pre-P4 claim | **BLOCKED (F-1)** |
+    | `aida queue work` (all variants) → `handle_queue_work` → `session_start` (`queue_cmd.rs:12077`) | COVERED | Pre-P4 claim; pickup does a hidden push | **BLOCKED (F-1)** |
+    | Drains: `acquire_drain_lock` (`queue_cmd.rs:6231`); `handle_burndown_run:59429` (c677 `59430`) → `acquire_drain_lock_with_specs` (`lib.rs:59638`, c677 `59639`); shared claim `drain_lock.rs:370` before local `decide_lock` | COVERED (root-run / first admission; `run_auto_complete` wrapper row) | Local occupancy refusal after the claim | **BLOCKED (F-1)** |
+    | `aida queue integrate` → `handle_queue_integrate:14479` → `acquire_drain_lock` (`queue_cmd.rs:14512`) → children `aida queue work PR-<n> --auto-complete --from-pr` (`integrate.rs:879`, used at `queue_cmd.rs:15358`, `AIDA_DRAIN_BORROW=1`) and the promotion-rebase child (`14849`) | Its children are covered queue-work launchers run under its own drain claim, structurally the signed `--auto-complete` wrapper row (l.314) | Covered launches after the claim | **BLOCKED** until the common owner classifies it under that row |
+    | `aida solo` → `solo_cmd.rs:145` `acquire_solo_lock` (claim `solo_lock.rs:131`) → steps `burndown run` (`solo_cmd.rs:44`) and `queue integrate` (`48`) | Runs covered drain and integrate steps after its own claim | — | **BLOCKED** until classified |
+    | MCP `session_start` (`mcp.rs:4982`) | Returns command text only | No claim | Not applicable |
+    | Releases: `release_claim` via `lib.rs:44204`; stale release `49187`; `DrainGuard`/`SoloGuard` drop | Ordinary | — | SUPPORTED (rows 3, 4, 6) |
+
+    **The "Direct session attachment / role reissue" row** (signed adapter table, l.358: "No child launch is invented. Resolve the existing live actor …") covers attaching to an EXISTING actor. It covers none of `session start --launch` (which launches a new vendor), `queue integrate` or `solo`.
+
+    **Protective repair.** The family repair of `acquire_claim`/`acquire_lock_claim` serves every caller as a protective change. It never counts toward a BLOCKED row's acceptance, and a refusal-only fixture never closes one. Until integration, today's code keeps running for those callers.
+
+    # 15. Production gate ledger
+
+    | Gate | What A2 needs from it | Status |
+    |---|---|---|
+    | 1 Home/root discovery, exclusion, durable journal/COMMIT/receipts, object closure, cross-repo recovery | HOME for every step; ADMISSION, install, peer and settlement publications; the REQUIRED open-admission index, typed codecs and the `RemoteObservation` kind (§10.9 list) | OPEN, required |
+    | 2 Identity, authority and assignment joins; strict refusal | §12 surfaces and dispositions; install-boundary validation; F-1 and §14 BLOCKED rows | OPEN, required; F-1 rows BLOCKED |
+    | 3 Sealed Git domain, pump, real hooks, quiescence | S_k construction of B and C; install planning; the original→copy map | OPEN, required |
+    | 4 Full CLI/MCP/core/backend enlistment | Every reader and writer in §12.1; the compaction fence and the S-import rewind fence (§6.6) | OPEN, required |
+    | 5 Accepted TASK-1612 plus publisher P4/CommittedDispatch | Not needed for Git-only SERVICE CAS (no vendor release); needed for the parent. `a5e1bc4f` is PARTIAL. | OPEN; not an A2 dependency |
+    | 6 Launch/pane/containment adapters | Needed for the parent and for any §14 BLOCKED caller's classification | OPEN |
+    | 7 Complete witnesses and CI | §18 | OPEN, required |
+    | 8 Fresh final exact-head composition review, final CI, operator merge | — | OPEN, required |
+
+    No A2 production slice is dispatchable while gate 1, 2, 3, 4, 7 or 8 is open. No inactive-component permission exists or is requested. The decoder, lineage resolver, family predicates and marker planner may be CONSIDERED separately only after a NEW independent review ACCEPTS this design, and this sketch dispatches nothing. Neither TASK-1717's S/L proof nor TASK-1612's PARTIAL head is ever common acceptance.
+
+    **REQUIRED common-owner items named by this design (not presumed to exist):**
+    1. Typed `StoreCasAdmission` and payload codecs (deny-unknown-fields, fixed version, size bounds), validated before any action.
+    2. `store_cas_open_index`.
+    3. The `ObservationKind::RemoteObservation` extension.
+    4. The operator settlement surface for BLOCKED keys (REQUIRED-FOR-SUPPORT of the rewind schedules only).
+
+    # 16. Per-family closure (17 rows)
+
+    **Applies to every row unless the row says otherwise:**
+    - Owner: the BUG-1808 common store-CAS adapter around the listed decision function.
+    - Entry: the public core route, the CLI wrapper and MCP where exposed (none at bf652209), all routed to the owner API.
+    - N: the sealed v5 SERVICE construction, covering:
+      - store pre-commit early exit plus sentinel;
+      - prepare-commit-msg store-skip disposition recorded;
+      - literal commit-config;
+      - post-commit match/missing/stale sentinel;
+      - reference-transaction against the sealed private start map;
+      - post-rewrite;
+      - the notes-copy no-op;
+      - `GIT_EDITOR=:`;
+      - executable custom configuration refuses before setup, with installed and template profiles tested separately.
+    - P: §7–§8. I: §11 under HOME. Join, recovery and settlement: §10. Retry and adoption: §9.4/§10.7.
+    - "Class" is the §10.7 join class.
+
+    | Row / trigger | Class / key | Pre-send predicate (on B) and surfaces | Accept / install effects | No origin / unreachable | Healthy positive | Required negatives | Guard removed (scratch) | Authority (§12.4) |
+    |---|---|---|---|---|---|---|---|---|
+    | 1 `coordination::acquire_claim:676` (callers §14) | creation / lease | `decide_claim:211` with current clone_path, now, TTL, PID-start, `probe_session_liveness`. force and orchestrated force keep their exact scope. Surfaces: (a) none, (b) clone_path, (c) record, (d) consumer P4. | `Acquired`/`Reclaimed` only after ACCEPTED plus §11 validation. D1 and D2 removed. | No origin: existing `Unavailable("solo clone")`. Unreachable or UNKNOWN: existing `Unavailable`, never Acquired. | One winner; live foreign refusal; stale reclaim; authorized force; same-op adoption; restart adopts after re-push | Lost status after server update; `ok` then rewind gives BLOCKED; successor after acceptance; covered-caller F-1 schedule stays OPEN | Exact-OID refspec → branch push; same-key join | BLOCKED in covered callers (F-1); otherwise neutral (U-2) |
+    | 2 `acquire_lock_claim:1072` (drain, solo) | creation / lock | As row 1, with the `\|_\| false` session probe; process-backed | As row 1. The local drain/solo marker is created only after the shared outcome (existing order relative to `decide_lock`). | As row 1 | Drain and solo each win or refuse | Local occupancy race after acceptance (the claim stays accepted, disclosed); heartbeat and drop ordering | Install-before-validate ordering | As row 1 (drains, integrate and solo BLOCKED, §14) |
+    | 3 `release_claim:839` | update / lease | Record at B has OUR clone_path, evaluated after the fresh fetch (D7 removed). Absent → NoOp (refuses if an earlier same-key candidate is unresolved). | Deletion accepted by lineage only; import | Existing return / best-effort failure; no local speculative delete | Owned delete; absent no-op | Successor preserved; a lost reply then a successor never deletes the successor; release while an acquire is PENDING never reports a false no-op | Pre-fetch ownership sample | Neutral |
+    | 4 `release_stale_foreign_claim:893` | update / lease | Expected clone_path AND expected heartbeat_at at B | Deletion by lineage; `Ok(true)` only after ACCEPTED | Existing `Ok(false)` | Matching stale record deleted | A renewed heartbeat or replaced owner gives false; replay after a crash cannot delete a renewal | Heartbeat equality | Neutral |
+    | 5 `heartbeat_lock_claim:1275` | update / lock | Record at B still ours; update `heartbeat_at` only | Lineage; import; no retained rejected commit (D8 removed) | Skip the tick, retain nothing | Owned tick | Successor gives a skip; a delayed tick after release or reacquire does nothing; flaky network never strands the store (cap 4) | Ownership recheck; per-key cap | Neutral |
+    | 6 `release_lock_claim:1311` | update / lock | As row 3 for the exact lock kind | As row 3 | As row 3 | Drain and solo release | Peer reacquire retained | As row 3 | Neutral |
+    | 7 `team::{set_role_cas:217, set_allowed_seats_cas:223, allow_seat_cas:290, disallow_seat_cas:296, update_seats_cas:300, unset_role_cas:380}` | update / roster | `migrate_integer_keys` against current nodes, then the exact replace/add/remove/unset intent. Absent remove or unset → NoOp. Surfaces: (a) TTY guardrail at the CLI, none at core; (d) home-first P4. | Remote-first (R-1): the local roster changes only at the §11 HOME install | No origin: existing L inside HOME/STORE. Unreachable: Err with no local effect (D6 removed). | Disjoint members; concurrent add/remove; empty removes the member; migration | A grant/P4 race during install (T2 serialization); the core receipt has `none_recorded{core}`; a rejected C never becomes canonical | Remote-first ordering (local-first fails W1) | Neutral (cited T1, T2, T4) |
+    | 8 `alias::link_cas:219` | update / alias | `AliasRegistry::link` against current state; redundant → NoOp | Import (authority-bearing whole-store import under HOME) | L / Err | Union; redundant no-op | Concurrent roster change imported under HOME | HOME at install | Neutral |
+    | 9 `git_ops::register_node_full_identity:2877` | creation / node-register | Nodes AND blocks at B; an occupied requested id refuses; automatic picks the next free id; lineage adopts | node.toml written for the accepted id only, after §11 (c) | Existing L with node.toml (BUG-40). Unreachable: Err, no effect. | Free requested id; two automatic ids distinct | INDETERMINATE then restart → one id (join, re-push); `ok` then rewind → BLOCKED, no second id; local node.toml change → INCOMPLETE | Same-key join; validate-before-effect | Neutral (U-3) |
+    | 10 `register_node_remote_only:3078` | creation / node-register | Existing block-only backfill rule | Import only, never node.toml | Existing behavior / Err | Backfill beside a concurrent registration | No node.toml created; restart adopts | Lineage adoption | Neutral |
+    | 11 `set_node_identity_field:3189` | update / node | Target exists; exact field intent; a self target is checked against the node.toml before-image | Import; local config only for a still-current self | Existing L / Err | Self and non-self | Missing target refuses; a peer or self change survives | Before-image check | Neutral (U-3) |
+    | 12 `unregister_node:3492` | update / node | Target present → delete; absent → NoOp | Deletion by lineage | R-3: present + no origin → refuse before mutation; absent → `Ok(false)`. Unreachable: Err. | Existing delete; absent no-op | A lost reply then a successor registering the same id is never deleted | Lineage-only acceptance (content matching would wrongly adopt) | Neutral |
+    | 13 `handle_block_command:21237` Claim (21244), `auto_allocate_block_inner:21965` | creation / blocks | Current node identity, blocks/type, counter floor, OnAcquire vs OnThresholdCross; the range is computed per attempt and recorded in `record_stamp_k` | Import under HOME → STORE → `blocks.lock`; dispenser sees the range only after install; refill never under the dispenser lock | Auto: existing L (22030). Explicit claim with no origin: R-3 refuse. Unreachable: Err. | Non-overlap; manual and auto; threshold block | INDETERMINATE → at most one installed range; restart adopts, never a second; `ok` then rewind → BLOCKED; local dispenser race; D5 soft-reset gone | Install-before-validate; same-key join; range recomputation | Neutral (U-3) |
+    | 14 `schedule_ledger::write_cas_opts:340` | update / ledger | Re-run `mutate` on the fresh ledger, then `should_write`; the job is never re-run | Import | `push=false` or no origin: existing L under HOME/STORE with no network. Configured unreachable or UNKNOWN: existing offline retention as L, reported local-only. | Tick positive; debounce no-op | Concurrent peer field; INDETERMINATE does not re-run the job | Debounce on the fresh base | Neutral |
+    | 15 `write_batch_cas_opts:460` | update / ledger | `reapply_delta(base, next, fresh)` per job | As row 14 | As row 14 | Multi-entry peer fields preserved | A crash never widens the delta | `reapply_delta` | Neutral |
+    | 16 `hijack_node:3322` | creation / node | The target entry at B must equal `E_before` from PLAN (no stealing from a successor). PeerCapture before ADMISSION (§13.2). | §11 + §13.3/§13.4 | R-3 refuse before mutation. Unreachable: Err, no effect. | Takeover, own identity, peer notified; absent peer gives the Reattributed positive | A→B same-id race; peer root replaced; peer vanished after capture; already-delivered recovery; inaccessible peer; crash at every §13.5 boundary | Exact-image marker predicates; capture under the peer lock alone | Neutral (U-3) |
+    | 17 `suggest_free_node_id:2802` | — | — | — | — | — | — | — | Excluded: a TASK-1332 S row |
+
+    # 17. State transitions and API owners (all PROPOSED; none exists at bf652209 or 6a1733)
+
+    | From → To | Trigger / evidence | API owner |
+    |---|---|---|
+    | PLANNED → PROFILED | EndpointProfile, PTransportProfile and PrePushProfile resolved and equal | `store_cas::resolve_profiles` |
+    | PLANNED → PEER_CAPTURED (row 16) | PeerCapture under the peer lock alone | `store_cas::capture_peer` |
+    | PROFILED → JOINED{none \| adopt \| settle \| repush \| refuse(in-progress \| unsettled)} | HOME index read; T via step 1n; §10.7 | `store_cas::join_open` |
+    | JOINED → CAPTURED | L captured into P under HOME → REPO → STORE | `store_cas::capture_local` |
+    | CAPTURED → BASED | R fetched into P with no locks; profiles re-verified | `store_cas::observe_remote` |
+    | BASED → DECIDED{Apply \| Adopt \| NoOp \| Refuse} | Family predicate on B; lineage checked first | Family `decide` (§16 symbol) |
+    | DECIDED(Apply) → PREPARED_CANDIDATE | v5 S_k builds B and C; GateReceipt; copy map; P pins | `git_publication::PreparedGitStep` + `store_cas::pin_candidate` |
+    | PREPARED_CANDIDATE → ADMITTED | ADMISSION COMMIT and the retained receipt read back | Common SERVICE publisher + `store_cas::admit` |
+    | ADMITTED → SETTLED_NOT_SENT | Profile or closure mismatch before spawn (Cancellation), or crash points c2/c3 | `store_cas::settle` |
+    | ADMITTED → RECOVERY_BLOCKED(closure \| P identity \| P ref) | §6.5 or §10.5 verification failure | `store_cas::block` |
+    | ADMITTED → SENT | `PossibleExecution` appended; push child spawned | `store_cas::push_candidate` |
+    | SENT → REPORTED{ACCEPTED_REPORTED, REMOTE_ALREADY_C, CLIENT_REJECTED, SERVER_REJECTED_REPORTED, INDETERMINATE} | Pinned decoder (native or helper profile); `SendOutcome` | `store_cas::PushDecoder` |
+    | REPORTED → RESOLVED{ACCEPTED(i), REWOUND_AFTER_ACCEPT, REWOUND, PENDING, NOT_IN_TIP, UNKNOWN} | T fetch (or its failure); per-candidate plus aggregate; `RemoteObservation` | `store_cas::resolve_lineage` |
+    | PENDING → SENT (same C, same admission) | §9.4 re-push, or §10.7 resolve-by-repush | `store_cas::push_candidate` |
+    | NOT_IN_TIP → PLANNED(k+1) | Live op only, within the family limit | Family retry loop through the owner |
+    | ACCEPTED(i) → INSTALL_PLANNED / SUPERSEDED / INCOMPLETE | §11.1 steps 1–4 | `store_cas::validate_install` |
+    | INSTALL_PLANNED → INSTALLED | §11.1 steps 5–8 COMMIT; `InstallVerification` | Common SERVICE import publication |
+    | INSTALLED → PEER_DELIVERED / ALREADY_DELIVERED / NOTIFICATION_CONFLICT / NOT_DELIVERED (row 16) | §13.3 | `store_cas::deliver_peer` |
+    | any terminal → SETTLED_* | `Settlement`; owned `.keep` removed; P refs cleaned | `store_cas::settle` |
+    | REWOUND / REWOUND_AFTER_ACCEPT → BLOCKED (key) | Retained; no automatic settlement (§10.8) | `store_cas::block` |
+    | two INDETERMINATE with unchanged T / UNKNOWN → UNKNOWN_RETAINED (open) | Durable; settles by later evidence | `store_cas::retain_unknown` |
+    | (owner dead) ADMITTED…INSTALL_PLANNED → recovery | HOME released for the network, then revalidated; never re-pushes, builds or allocates | `store_cas::recover` within common recovery |
+
+    # 18. Witnesses (ALL PROPOSED, NONE RUN)
+
+    **Common conditions for every witness.**
+    - **Environment.** Real Git 2.43.0 with a pinned executable digest. Native-profile origins: local bare repositories with an owned receive-pack wrapper (fixture only) that can update and then drop the status, delay, or reject. Helper-profile origins: a local smart-HTTP fixture (`git http-backend` behind an owned HTTP server) that can update and then drop the response, delay, or decline.
+    - **Entrypoints and identity.** Real production entrypoints AND public core routes; fake HOME/AIDA_HOME; stripped identity.
+    - **Snapshots** before, at each barrier, and after:
+      - origin and local refs, reflogs, index and worktree;
+      - store bytes and history;
+      - roster and grants;
+      - node.toml;
+      - blocks and dispenser;
+      - own and peer markers;
+      - P refs and P identity;
+      - kept packs;
+      - receipts and observation chains;
+      - the HOME index;
+      - lock inodes.
+    - **Safety cases.** Safe state is read after lock acquisition. Dirty and pre-existing rebase states are preserved. Sibling/symlink same-root checks. Progress on a distinct store.
+    - **Nonvacuity.** Every negative has a matching healthy positive and a scratch guard removal that shows an executed assertion failure, followed by restoration and a pass.
+
+    **Witnesses:**
+
+    1. **W1-a `store_cas_porcelain_native_decoder`.**
+       - Wrapper updates, then kills status → `[remote failure]` → INDETERMINATE → T ⊒ C → ACCEPTED → one install.
+       - Paired: client non-ff; `[remote rejected]` (pre-receive decline) → SERVER_REJECTED_REPORTED; ` ` and `*` with `Done`; `=` adoption; pre-push refusal (no line) → INDETERMINATE → the two-unchanged stop.
+       - Grammar: the `To <url>` header matches the profile; a missing `Done` → INDETERMINATE; two ref-status lines → INDETERMINATE.
+       - Pins the `<from>` form.
+       - Asserts no "not accepted" text derived from the tip alone.
+       - Guard removal: trust `!` → it reports a false rejection (failure).
+    2. **W1-h `store_cas_porcelain_http_helper`.**
+       - Smart-HTTP server updates then drops the response → INDETERMINATE (including any `[remote rejected] (expecting report)` form) → ACCEPTED by lineage.
+       - Paired: healthy fast-forward with `Done`; declined update → INDETERMINATE → T == R → re-push → INDETERMINATE again → UNKNOWN_RETAINED (no spin); helper killed mid-push → INDETERMINATE.
+       - Pins the helper `To`/`Done` constants.
+       - Guard removal: map helper `[remote rejected]` to rejected → the accepted case is misreported (failure).
+    3. **W1-b `store_cas_per_candidate_lineage`.**
+       - Delayed C_1 against C_2: exactly one lands and is adopted; no second range or id.
+       - Mixed bases (C_1 on R_1, C_2 on R_2 ≠ R_1) → the defined aggregate.
+       - `ok` then a peer force-rewind → REWOUND_AFTER_ACCEPT, BLOCKED, no second range.
+       - Squash epoch → REWOUND. Restore epoch (O ⊐ R) → ACCEPTED or NOT_IN_TIP per §9.5. Restore to exactly R → PENDING.
+       - Fetch failure after `ok` → UNKNOWN, never Acquired or installed.
+       - Lost status with T == R → re-push of the SAME C → `=` adoption, exactly one lineage entry.
+       - Guard removal: drop the report-class join → the force-rewind case allocates a second range (executed failure).
+    4. **W2 `store_cas_object_lifetime_continuous`.**
+       - `gc --prune=now`, `repack -a -d` and aggressive repack at barriers: after the P seed, after the kept-pack install, during the push, before install. Push and install SUCCEED. The kept pack survives repack. `git log --all` never shows C. Settlement removes only the owned `.keep` and never the `.pack`/`.idx`. Objects stay reachable after install.
+       - The kept-pack install crash between each of the four files never leaves an `.idx` without its `.keep`.
+       - `store compact --squash` while an admission is open → named refusal.
+       - Enlisted S import of a rewound origin while open → named refusal.
+       - **UNSUPPORTED-path control:** open admission, then peer squash plus force-with-lease, then the manual documented local re-sync, `reflog expire --expire-unreachable=now` and `gc --prune=now` → the pre-spawn closure verification fails → RECOVERY-BLOCKED(closure), retained (not a healthy positive).
+       - A source deleted after the P copy does not break S_k.
+       - Guard removal: skip the pre-spawn verification → the push fails with a missing object and is misreported (failure).
+    5. **W3 `store_cas_prepush_gate_actual_discovery`** (F1).
+       - (a) An allowlist only in the project config → the gate is INERT; the profile records `allowlist_source = W/.aida/config.toml ABSENT`, `gate_state = INERT_NO_ALLOWLIST`; a forbidden author lands, faithfully preserving today's behavior and disclosed.
+       - (b) An allowlist at `W/.aida/config.toml` → a forbidden author refuses (no status line) → INDETERMINATE → the two-unchanged stop.
+       - (c) An allowed author passes.
+       - Run under both the installed mirror-only and the generated mirror+identity profiles.
+       - Exact stdin, including the local-ref field.
+       - Mirror skipped for the store branch.
+       - Guard removal: drop the recorded discovery digest → a config planted between plan and spawn is not detected (failure). Restored → refusal before spawn.
+    6. **W3-e `store_cas_endpoint_profile_p_equivalence`** (F2).
+       - An `includeIf gitdir:` setting `core.sshCommand`/`credential.helper` for the project path only → refuses (or is equal) before the P fetch.
+       - `includeIf hasconfig:remote.*.url:` → parity through P's `remote.origin.url`.
+       - A global `core.hooksPath` with a reference-transaction sentinel, and an env-injected command-scope `core.hooksPath` → the sentinel never runs in P.
+       - Two push URLs → refuses. `pushurl ≠ url` → refuses.
+       - A changed endpoint, insteadOf, credential config or hook between plan and spawn → refuses before spawn.
+       - Guard removal: verify only W → the P fetch uses a different credential path (failure).
+    7. **W4 `store_cas_install_validates_before_effects`** (F7).
+       - A local same-family successor after S3; an unrelated H advance; a remote successor after a positive report and before install; own node.toml changed; a fault at each effect boundary; conflict, dirty and pre-existing rebase.
+       - Case (a) normal. Case (b) an ordinary sync import landing first (no ref update). Case (c) fast-forward. Case (d) an ordinary sync rebase landing between ADMISSION and install (copies2 dropped as empty; no duplicated content). Case (f) an ordinary sync push of the original L commits racing C (one installed effect).
+       - Positives install exactly once. Negatives leave successors intact. Nothing resets to L or C.
+       - Guard removal: install-before-validate → the loser installs identity (failure).
+    8. **W5 `store_cas_admission_recovery`** (F4, F5).
+       - Death at c0–c5: c0/c1 are rolled back and cleaned (an orphan P ref is not BLOCKED); c2/c3 give SETTLED_NOT_SENT; c4/c5 resolve by observation.
+       - Death after the server update but before the response; after the response but before observation durability; after each install effect; before settlement.
+       - Fresh invocations from repository B and from outside the project.
+       - Missing object, payload, tail or kept pack; P replaced → RECOVERY-BLOCKED.
+       - Recovery from another repository runs NO network while holding HOME (lock instrumentation).
+       - Two open candidates. A deletion accepted and then a successor.
+       - Assert no duplicate allocation, no replay, and truthful INCOMPLETE/UNKNOWN.
+    9. **W5-r `store_cas_restart_adopts_open_same_subject`** (F4).
+       - #9 automatic, #13 automatic and manual, #1 and #2: a delayed C_1 lands after restart → exactly one id, range or claim. A second invocation adopts (ACCEPTED), resolves by re-push (PENDING), or refuses with "unsettled prior attempt" (UNKNOWN/REWOUND).
+       - A live other owner → "in progress" refusal.
+       - Release while an acquire is PENDING → no false no-op.
+       - The pure recovery pass never re-pushes.
+       - Guard removal: drop the pre-decision join → a second id appears (executed failure).
+    10. **W5-b `store_cas_open_bound_liveness`.** Flaky-network heartbeat ticks never exceed 4 open per key and never strand the store. REWOUND keys stay BLOCKED with named refusals and retained evidence, never silently expire. 64-key saturation gives a named refusal.
+    11. **W6 `store_cas_home_mandatory_imports`.**
+        - (a) Each family imports a concurrent roster change while a home reader/P4 and a foreign-repository recovery run.
+        - (b) No install without HOME.
+        - (c) A revoke after S3 is serialized per T2.
+        - (d) A local identity change during the push → INCOMPLETE.
+        - (e) No provisional exposure.
+        - (f) A direct core `team::allow_seat_cas` succeeds as today; its receipt has `none_recorded{route: core}` and no TTY sample; no output or receipt claims authorization.
+        - (g) The CLI route records only `cli_tty_guardrail`.
+    12. **W7 `hijack_marker_exact_images`** (F9, A5).
+        - (a) A→B repeated hijack of the same id: B's marker is never erased by A.
+        - (b) Peer root replaced (same path, new inode) → not-delivered.
+        - (c) Equal, backward and skewed clocks make no difference.
+        - (d) The peer writes node.toml concurrently with capture → conflict, preserved.
+        - (e) Absent peer at capture → the `Reattributed` positive (pass).
+        - (f) Peer vanished after capture → not-delivered.
+        - (g) Recovery after the delivery COMMIT → already delivered, not conflict.
+        - (h) A pre-existing different-id marker → preserved and reported.
+        - (i) A stale same-id marker naming a third party → replaced.
+        - (j) Death at each §13.5 boundary.
+        - (k) Exclude portability: a peer with and without `.aida/` in `info/exclude`. A2 never stages the marker. An ordinary peer `git add -A` behavior is reported as the D15 limit.
+        - Healthy takeover notifies the correct peer. No marker exists before acceptance.
+        - Guard removal: own clear on `node_id` only → B's marker is erased (failure).
+    13. **W8 `claim_f1_caller_matrix`** (F8).
+        - SUPPORTED rows (plain `session start`, worktree add/enter) run real entrypoint positives with the existing order and residue disclosed.
+        - BLOCKED rows: `session start --launch`, `queue integrate` (with a child `--from-pr` drive), `solo` (with burndown and integrate steps), `do guided`, `agent new`, `queue work`, drains. Each runs the pre-P4 claim → revoke/expiry → unreachable schedule and stays a recorded OPEN failure, never a pass.
+    14. **W9 `store_cas_family_matrix`.** Every §16 row with its paired positive and negative cases and the listed guard removal, through the public core route, the CLI, and MCP where exposed (none).
+    15. **W10 `store_cas_lock_order_no_network_under_guard`.** No HOME, STORE or SEAT guard is held during any fetch, push, pre-push hook or wait. No lock FD reaches a child. The heartbeat under a HOME-holding drain section waits without deadlock. `DrainGuard::drop` joins before HOME/STORE within one tick deadline.
+    16. **W11 `store_cas_sealed_candidate_hooks`.** The v5 domain with the installed and template store hook profiles; sentinel match, missing and stale; executable commit-config refuses before setup; the original→copy map equals the rebase's picks; no hooks-off path.
+    17. **W12 `store_cas_no_origin_vs_unreachable`.** Every row with no origin keeps its existing L, `Unavailable`, R-3 refusal or `Ok(false)`. A configured but unreachable origin has no speculative local effect, except ledger offline retention labelled local-only. Hook tick `push=false` does no network.
+    18. **W13 `store_cas_p_seed_and_budgets`.** First seed outside locks; STORE held only for the incremental delta; the delta bound triggers a reseed and then a refusal; P, kept-pack and store-aggregate budgets refuse before admission.
+
+    # 19. Limits and open items
+
+    **Grounding.**
+    - Design and source/manual reading only.
+    - The decoder constants (`To` form, `Done`, the `<from>` form, the helper mapping) rest on Git source cited by V2 and the V2 review that I did not re-verify offline. They are pinned by W1-a and W1-h, and are fail-safe INDETERMINATE until then.
+    - These are reasoned from documentation and source, not executed:
+      - the pre-push local-ref field (githooks(5));
+      - receive-pack behavior under the fixture wrapper;
+      - conditional-include evaluation in P;
+      - hardlink portability;
+      - `rev-list --missing=error` edge behavior.
+
+    **ABA and rewinds.**
+    - ABA is bounded only as in §9.5, and no global exactly-once claim is made.
+    - The rewind schedules (a peer compaction during an open admission, and manual Git outside AIDA) are UNSUPPORTED production joins. Their keys stay BLOCKED pending the REQUIRED operator settlement surface.
+
+    **Other limits.**
+    - Legacy speculative commits from earlier binaries (D6/D8) are indistinguishable from ordinary L history.
+    - D16 (inert identity gate for store pushes) is preserved, not fixed. It is TASK-1330's decision.
+    - U-2 and U-3 are disclosed as acceptance-neutral with citations (§12.4). The F-1 and §14 BLOCKED rows are open.
+    - Unconverted store writers (`aida remote reconcile`, any non-enlisted S path) can still race.
+    - P costs about the store history size once per store (119 MiB today).
+
+    **Status.** All eight gates remain OPEN. No component is dispatched, and no inactive-component permission exists.
+    # BUG-1808 / TASK-1332 A2 store-CAS owner join — V3 design READY for root relay
+
+    **Author.** Claude Opus 5.5, Claude Code session `01a11d82-2650-7743-9549-a2cd5bc9d7ba`, 2026-10-08 (America/Phoenix).
+    - This is the honest cold successor to the A2 design commission (lineage `bug1808-store-cas-owner-join-author`). It is NOT the original runtime `01a11d0a-1bb9-7783-a55e-752d55c00d36`, and it is NOT a context resume.
+    - The work is design only. This file is not a signoff and does not authorize dispatch, implementation, an inactive component or activation.
+    - The session's role label is not a grant.
+
+    ## Deliverable
+
+    - `BUG1808_STORE_CAS_OWNER_JOIN_SKETCH_V3.md`: 125477 bytes, SHA256 `df3ad263e5a2e874e032fd9e06a666e97c8f4b6a72850396d705d6fa1e01594a`.
+      - The whole file is the proposed canonical body. Root, as the sole relay, should post it unchanged and verify the full bytes on readback.
+      - It is self-contained. It replaces V1 and V2 in full, and its §2.3 lists every withdrawal explicitly.
+    - `BUG1808_STORE_CAS_OWNER_JOIN_V3_MANIFEST.json`: a hash manifest for the sketch, this READY and every preserved input. It is non-recursive and does not hash itself.
+
+    ## Answers
+
+    The final V2 review `BUG1808_STORE_CAS_OWNER_JOIN_V2_INDEPENDENT_REVIEW.md` (41945 bytes, `8cb6e8b75748ae223c50739afaa411f59e601cd77f4563bac41a0739447a3873`, CHANGES REQUESTED), its receipt (7344 bytes, `e3b71d44…`), and the rework brief v3 embedded in `bug1808-a2-v3-cold-continuation.md` (5928 bytes, `e94ade92…`).
+
+    ## Finding by finding (sketch section in brackets)
+
+    **F1 — identity gate [§7.3].** The gate's actual discovery is recorded: `project_root` = the store worktree, and the allowlist source is `<store>/.aida/config.toml`, with its digest or recorded absence (here it is absent, so the gate is INERT). V3 states truthfully that store pushes are not gated by the project allowlist at bf652209, and preserves that exactly:
+    - no cwd change;
+    - no hooks-off;
+    - no `--no-verify`.
+
+    Root relays the decision to TASK-1330, and A2 changes nothing.
+
+    **F2 — endpoint and transport [§7.1, §7.2, §8].**
+    - The endpoint is resolved with `get-url --all` (fetch and push). It refuses unless there is exactly one push URL, exactly one fetch URL, and the two are byte-equal after rewriting.
+    - P's effective transport, identity and hook listing must be digest-equal to the store's. Command-scope and environment configuration are included.
+    - P's `core.hooksPath` is pinned in P's config and on every spawn.
+    - The decoder has a native profile and an HTTPS-helper profile. Under the helper, `[remote rejected]` and helper death are INDETERMINATE.
+    - Paired smart-HTTP witnesses are specified.
+
+    **F3 — candidate resolution [§9].**
+    - Each candidate is resolved on its own: ACCEPTED, REWOUND_AFTER_ACCEPT, REWOUND, PENDING or NOT_IN_TIP. A lineage aggregate combines them.
+    - An accepted report followed by C missing from the tip gives REWOUND_AFTER_ACCEPT. That is BLOCKED: no retry and no reallocation.
+    - The squash and restore rewind epochs, and the ABA bound, are explicit.
+    - When T == R, the SAME C is re-pushed under the same admission.
+    - A failed observation gives UNKNOWN: never Acquired and never installed.
+
+    **F4 — cross-invocation lineage [§10.6–§10.8].**
+    - Open admissions are keyed by (store, record domain, subject), and a join runs before every decision. Its outcomes:
+      - adopt ACCEPTED;
+      - settle NOT_IN_TIP;
+      - resolve PENDING by re-pushing the same C;
+      - refuse UNKNOWN, REWOUND or "in progress", each with a named reason.
+    - Update-class rows may proceed past an unresolved candidate only when their own decision is Apply.
+    - Caps: one open admission per creation key, four per update key, 64 keys per store.
+    - Settlement is evidence-driven only. The rewind schedules are UNSUPPORTED production joins and their keys stay BLOCKED. There is no expiry, no second id and no second range.
+
+    **F5 — admission, discovery and the kept pack [§6, §10].**
+    - Discovery is authoritative from the HOME record, through a REQUIRED open-admission index. There are no locator refs.
+    - A crash-point table covers c0–c5.
+    - P lives at `<G>/aida-store-cas/<store-key>/p.git`, with its device/inode recorded. If it is missing or replaced, the result is RECOVERY-BLOCKED.
+    - P refs are kept outside the journal and have idempotent cleanup rules.
+    - The kept pack is built privately and installed as exact FileEffects in the order `.keep` → `.pack` → `.rev` → `.idx`. Settlement removes only the `.keep`.
+    - Recovery releases HOME before any network step, then revalidates.
+    - M′ is defined.
+    - `RemoteObservation` is a single seventh observation kind, named as a REQUIRED common extension. InstallVerification is not overloaded.
+
+    **F6 — closure(M) [§6.5, §6.6].** V3 chooses fence plus verification.
+    - The accurate list of AIDA paths that rewrite refs, from source:
+      - local squash keeps a backup branch and the reflog;
+      - an ordinary S rebase across a rewound origin is fenced through gate 4 enlistment;
+      - `remove_store_worktree` deletes only the worktree.
+    - Operator-run manual Git is UNSUPPORTED. It is detected by a closure verification immediately before every spawn and again at install, giving RECOVERY-BLOCKED.
+
+    **F7 — install integration [§11.2].** The integration set is `X..H` minus the admitted original→copy map, replayed onto T with union rules and drop-empty. Rules cover each case:
+    - H ⊒ T;
+    - C ⊑ H;
+    - L ⋢ H after a sync rebase;
+    - a race with an ordinary sync pushing the original L commits;
+    - supersession by content.
+
+    There is no reset, unrelated H is preserved, and no content is duplicated.
+
+    **F8 — caller classification [§14].**
+    - `session start` without `--launch` stays SUPPORTED ordinary.
+    - These stay BLOCKED until classified under the signed standalone-spawn and drain-wrapper rows: `--launch`, `queue integrate`, `solo`, `do guided`.
+    - These are BLOCKED by F-1: `agent new`, `queue work`, drains.
+    - The "Direct session attachment" row covers none of them.
+    - worktree add/enter positives are preserved.
+
+    **F9 — peer markers [§13].**
+    - The peer is captured before ADMISSION while holding only the peer's lock. It is revalidated at delivery.
+    - A peer absent at capture gives the existing `Reattributed` positive.
+    - A peer that vanished later gives not-delivered.
+    - Current bytes equal to M_ours means already delivered, which is idempotent.
+    - The replacement predicate compares exact registry-lineage fields. No clocks, no nested locks.
+
+    **F10 — authority at remote acceptance [§12.2–§12.4].**
+    - Each row cites the signed text that governs it (BUG-1808 l.171, l.191, l.267/322, l.1247; TASK-1332 l.157 and its family table).
+    - Rows 1–2 inside covered entrypoints are BLOCKED (F-1). Every other row is acceptance-neutral with a citation, and U-2/U-3 are disclosed.
+    - The core-route negative is concrete: `invocation_authorization = none_recorded{route: core}` and no TTY sample. Today's permissive core route is preserved.
+    - V1 §6(b) is WITHDRAWN.
+
+    ## Amendments
+
+    | # | Topic | Resolution | Sketch |
+    |---|---|---|---|
+    | A1 | Self-containment | Self-contained, with an explicit withdrawals list. Stamps are per attempt. HOME is mandatory. | §0, §2.3, §10.3, §12.1 |
+    | A2 | TASK-1717 | Latest is REQUEST_CHANGES on `223c192a`, after `a6fac83f`. It is a non-dependency. | §1.1 |
+    | A3 | Porcelain grammar | Grammar covers the `To <url>` header, the `Done` trailer and the ref-status-line count. | §8 |
+    | A4 | P seeding | P is seeded outside locks; STORE is held only for the incremental delta. Numeric budgets are set. | §6.2, §6.7 |
+    | A5 | HIJACKED exclude portability | Carried as witness W7 (k). | §13.6 |
+    | A6 | Heartbeat bound | Heartbeat is bounded, with cap 4 and the DrainGuard join tied to the tick deadline. | §12.6 |
+
+    ## Preserved as ruled
+
+    - R-1: remote-first roster.
+    - R-2: existing evidence namespace only, with the REQUIRED items named.
+    - R-3: changing operations with no origin refuse; ordinary L and absent no-op are kept.
+    - F-1: the counterexample is kept.
+    - All 17 row predicates, the no-origin and unreachable behavior, install, paired positive and negative cases, and guard-removal checks (§16).
+    - All eight gates OPEN (§15).
+
+    ## Source basis and freshness
+
+    - Source pin: `bf65220959`. Fresh check at c677 `c67728c1dc`: every cited non-lib.rs file is blob-identical.
+    - `lib.rs` is NOT blob-identical. Anchors above line 53246 are +1 at c677, and the sketch gives both values.
+    - New verified facts:
+      - S-F1: inert gate.
+      - S-F2: HTTPS origin, local hooksPath, command-scope config.
+      - S-F3: squash backup branch and reflog.
+      - S-F4: ref-rewrite enumeration.
+      - S-F5: callers.
+      - S-F6: hijack.
+      - S-F7: decide_claim same clone.
+      - S-F8: heartbeat 300s / TTL 1800s.
+      - S-F9: 6a1733 record types.
+      - S-F10: store size, 119 MiB.
+    - Canonical inputs are the retained 13:18 normal-MCP captures, verified against `INPUT_AND_SOURCE_PINS.json`. They predate root's relays. Only the binding sections listed in sketch §1.2 were read; there is no claim to have read all 407 KB.
+    - The Git transport.c/transport-helper.c facts were not re-verified offline. They are flagged as decoder constants pinned by W1-a/W1-h, and fail safe to INDETERMINATE.
+
+    ## Still open by design
+
+    - All eight gates.
+    - The REQUIRED common items:
+      - typed codecs;
+      - the open-admission index;
+      - the `RemoteObservation` kind;
+      - an operator settlement surface for BLOCKED keys.
+    - The F-1 and §14 BLOCKED callers.
+    - The rewind and manual-Git UNSUPPORTED schedules.
+    - D16 (the inert store identity gate), which is TASK-1330's decision.
+    - Every witness (W1-a … W13), all PROPOSED and UNRUN.
+
+    ## Actions not taken
+
+    - No code, build, Cargo, test, check-ci, SQLite, hook execution, runtime experiment, Git mutation, network fetch/push, or canonical CLI/MCP read or write.
+    - No status, queue, mail, record, grant, hold, lease, PR, commit, push, merge, install, activation or component dispatch.
+    - No subagent and no self-review.
+    - Reserved TASK-1593, TASK-1591, BUG-1811 and BUG-1812 untouched.
+    - Every earlier artifact is preserved byte-for-byte (see the manifest). The only new files are the V3 sketch, this READY and the manifest JSON.
+
+    **Next step:** root relays, then root launches a NEW, DIFFERENT, whole independent design review of these exact bytes. No question goes to Joe.
+  created_at: 2026-10-08T22:18:57.700144582Z
+  modified_at: 2026-10-08T22:18:57.700144582Z
+  relayed_from: bug1808-a2-v3-cold-continuation
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
