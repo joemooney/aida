@@ -206,10 +206,11 @@ pub(crate) fn issue_direct(
     Ok(grant)
 }
 
-pub(crate) fn issue_child(
+/// Read-only launch preflight; issuance repeats this validation after setup.
+// trace:TASK-1337 | ai:codex
+pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
-    child_subject: &str,
 ) -> Result<SeatGrant> {
     let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
     if !parent
@@ -228,6 +229,15 @@ pub(crate) fn issue_child(
     if !roster_allows(project_root, &parent.principal, requested_seat) {
         bail!("requested child seat is no longer allowed by the team roster");
     }
+    Ok(parent)
+}
+
+pub(crate) fn issue_child(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+) -> Result<SeatGrant> {
+    let parent = validate_child_delegation(project_root, requested_seat)?;
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -399,6 +409,16 @@ mod tests {
             let _env = crate::test_env::EnvVarsGuard::apply(&[(GRANT_ENV, Some(id.as_str()))]);
             assert_eq!(current_seat(root).as_deref(), Some("advisor"));
 
+            // trace:TASK-1337 | ai:codex
+            let before = std::fs::read_dir(grant_dir().unwrap()).unwrap().count();
+            validate_child_delegation(root, "implementer").unwrap();
+            validate_child_delegation(root, "reviewer")
+                .expect_err("preflight must preserve delegation gate");
+            assert_eq!(
+                std::fs::read_dir(grant_dir().unwrap()).unwrap().count(),
+                before,
+                "read-only validation must not issue a child grant"
+            );
             // The grant delegates only its explicit subset.
             let child = issue_child(root, "implementer", "child-subject")
                 .expect("delegable child seat is issuable");

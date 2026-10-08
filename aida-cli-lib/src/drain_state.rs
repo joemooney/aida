@@ -39,6 +39,23 @@ use crate::{drain_lock, process_probe};
 /// deny-by-default `.aida/*` rule — pure per-clone runtime state.
 const DRAIN_STATE_FILE: &str = "drain-state.json";
 
+/// Serialize snapshot read/modify/write across parent and pipelined children.
+/// Keep the sidecar inode permanently: unlinking it could split the lock.
+/// Readers still use the atomically replaced JSON without taking this lock.
+// trace:TASK-1603 | ai:codex
+fn lock_snapshot(project_root: &Path) -> std::io::Result<std::fs::File> {
+    let dir = project_root.join(".aida");
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(dir.join("drain-state-write.lock"))?;
+    fs2::FileExt::lock_exclusive(&file)?;
+    Ok(file) // Closing the file releases the lock on every return path.
+}
+
 /// Member state: the spec has not started its lifecycle yet.
 pub(crate) const STATE_QUEUED: &str = "queued";
 /// Member state: the spec finished its full lifecycle successfully.
@@ -98,6 +115,9 @@ impl DrainMember {
 /// starts. Best-effort like the other live drain-state updates.
 // trace:BUG-1818 | ai:codex
 pub(crate) fn set_change_binding(project_root: &Path, spec: &str, pr: u32, head_sha: &str) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -179,17 +199,13 @@ pub(crate) struct DrainState {
     /// Plain-language prediction of the post-drain state — which queue items
     /// will and won't be auto-picked-up once the drain ends.
     pub(crate) on_drain_complete: String,
-    /// TASK-336: the orchestrator's per-run UUID for the *current* spec's
-    /// orchestration. A phase child carrying `AIDA_AUTO_COMPLETE_TOKEN=<uuid>`
-    /// trusts orchestrator-mode only when this value matches the env-passed
-    /// token and [`Self::orchestrator_pid`] is alive. Empty between batch
-    /// members and before the first member starts.
+    /// Current-run telemetry UUID, empty between sequential members. Child
+    /// authority uses independent records in `.aida/orchestrator-runs/`.
+    // trace:TASK-1603 | ai:codex
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub(crate) run_uuid: String,
-    /// TASK-336 / BUG-237: whether the current spec's orchestration was
-    /// started under `--zen`. A phase child trusts an inherited
-    /// `AIDA_ZEN=1` only when [`Self::run_uuid`] corroborates *and* this is
-    /// true.
+    /// Current-run zen telemetry; each active run's authority record carries
+    /// its own zen provenance for child corroboration.
     #[serde(default, skip_serializing_if = "is_false")]
     pub(crate) zen: bool,
     /// BUG-286: orchestrator-side gh/git retry attempts during phases 3-6,
@@ -446,6 +462,7 @@ impl DrainState {
     /// Remove the drain-state file. Idempotent — a missing file is a clean
     /// success (`aida drain clear` on a project with no drain).
     pub(crate) fn clear(project_root: &Path) -> std::io::Result<()> {
+        let _snapshot_lock = lock_snapshot(project_root)?;
         match std::fs::remove_file(drain_state_path(project_root)) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -624,18 +641,78 @@ fn predict_next_n(n: usize) -> String {
     )
 }
 
-/// TASK-336: record the orchestrator run that is starting for `spec` — its
-/// per-run UUID (the BUG-233 corroboration token) and its `--zen` flag (the
-/// BUG-237 zen-provenance anchor). A phase child carrying
-/// `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` corroborates against [`DrainState::
-/// run_uuid`] read back from the file; the [`DrainState::zen`] flag plays the
-/// same role [`crate::orchestrator::RunMarker::zen`] used to play for
-/// `AIDA_ZEN`. Best-effort — a missing file is a no-op (the drain still runs,
-/// just unobservable). trace:TASK-336 | ai:claude
-pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool) {
-    let Some(mut state) = DrainState::read(project_root) else {
-        return;
-    };
+/// Publish run ownership before phase-1 status mutation or child launch.
+/// Batch/nextN runs must retain their parent's member snapshot; missing or
+/// corrupt state is an error rather than an uncorroborated child launch.
+// trace:TASK-1603 | ai:codex
+pub(crate) fn register_run(
+    project_root: &Path,
+    spec: &str,
+    run_uuid: &str,
+    zen: bool,
+    owns_drain_state: bool,
+) -> std::io::Result<()> {
+    if owns_drain_state {
+        let _snapshot_lock = lock_snapshot(project_root)?;
+        DrainState::new_single(spec, run_uuid, zen).write(project_root)?;
+    } else {
+        set_run(project_root, spec, run_uuid, zen)?;
+    }
+    let state = DrainState::read(project_root).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidData, "drain state is unreadable")
+    })?;
+    crate::orchestrator::publish_run(
+        project_root,
+        run_uuid,
+        &crate::orchestrator::RunMarker {
+            pid: std::process::id(),
+            spec: spec.to_string(),
+            started_at: state.started_at,
+            zen,
+        },
+    )?;
+    // Verify exactly the evidence the immediate child will read, including
+    // PID liveness. A stale batch snapshot must not authorize the bump.
+    if !crate::orchestrator::run_is_live(project_root, run_uuid) {
+        crate::orchestrator::remove_run(project_root, run_uuid);
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "persisted run does not corroborate a live orchestrator",
+        ));
+    }
+    Ok(())
+}
+
+/// Update the current-run telemetry in the parent snapshot. Authority and zen
+/// provenance are published separately by `register_run`, per active token.
+/// Registration errors must stop launch.
+// trace:TASK-336 trace:TASK-1603 | ai:codex
+pub(crate) fn set_run(
+    project_root: &Path,
+    spec: &str,
+    run_uuid: &str,
+    zen: bool,
+) -> std::io::Result<()> {
+    let _snapshot_lock = lock_snapshot(project_root)?;
+    let mut state = DrainState::read(project_root).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "batch drain state is missing or unreadable",
+        )
+    })?;
+    if !process_probe::pid_is_alive(state.orchestrator_pid) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "batch drain parent is not live",
+        ));
+    }
+    // Refreshed batch/nextN selectors can legitimately return work absent
+    // from the startup snapshot. Admit it before publishing/corroborating its
+    // token, never by relaxing the child's membership check.
+    // trace:TASK-1603 | ai:codex
+    if !state.members.iter().any(|member| member.spec == spec) {
+        state.members.push(DrainMember::queued(spec));
+    }
     state.current = Some(spec.to_string());
     state.run_uuid = run_uuid.to_string();
     state.zen = zen;
@@ -645,7 +722,8 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
             .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
         member.finished_at = None;
     }
-    let _ = state.write(project_root);
+    state.write(project_root)?;
+    drop(_snapshot_lock);
     // TASK-993: bound the event stream — rotate at this run-started boundary if
     // it has outgrown the size cap, so it can't grow unbounded across many
     // drains. Rotating only here (a drain/member boundary, never mid-phase)
@@ -662,6 +740,7 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
             crate::events::EventKind::RunStarted,
         ),
     );
+    Ok(())
 }
 
 /// STORY-712: best-effort snapshot of the live drain's current spec + run uuid,
@@ -676,17 +755,22 @@ pub(crate) fn current_context(project_root: &Path) -> (Option<String>, String) {
     }
 }
 
-/// TASK-336: clear the run-scoped fields a child uses to corroborate — the
-/// per-run UUID and the `--zen` flag — when the current spec's orchestration
-/// returns. Between batch members the drain-state file lives on, but a
-/// would-be child carrying a now-stale token must no longer corroborate
-/// against it (it was minted by a sibling member that has finished).
-/// `current_phase` is also cleared so a stale phase string does not outlive
-/// the run that set it. Best-effort. trace:TASK-336 | ai:claude
-pub(crate) fn clear_run(project_root: &Path) {
+/// Revoke only this run's authority. Clear telemetry only if it still names
+/// this token; a concurrent member's telemetry belongs to that member.
+// trace:TASK-336 trace:TASK-1603 | ai:codex
+pub(crate) fn clear_run(project_root: &Path, token: &str) {
+    // trace:TASK-1603 | ai:codex
+    // Authority lives in independent records; snapshot writes cannot revive it.
+    crate::orchestrator::remove_run(project_root, token);
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
+    if state.run_uuid != token {
+        return;
+    }
     state.run_uuid.clear();
     state.zen = false;
     state.current_phase = None;
@@ -850,6 +934,9 @@ fn attach_phase_session(
     session_id: &str,
     vendor: Option<&str>,
 ) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -907,6 +994,9 @@ fn set_phase_inner_with_tuning(
     effort: Option<&str>,
     pr: Option<u32>,
 ) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -930,11 +1020,9 @@ fn set_phase_inner_with_tuning(
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     state.current_session_id = session_id.map(str::to_string);
     state.current_vendor = vendor.map(str::to_string);
-    // A batch drain re-resolves its queue head between members. Work tagged
-    // into the batch after launch was therefore absent from the initial
-    // snapshot, even though it could become `current`. Phase entry is the
-    // authoritative point at which a refreshed member joins the live drain.
-    // trace:BUG-1441 | ai:codex
+    // Checked run registration already admits refreshed batch/nextN members
+    // before launch. Retain phase-only compatibility for legacy callers.
+    // trace:BUG-1441 trace:TASK-1603 | ai:codex
     if !state.members.iter().any(|m| m.spec == spec) {
         state.members.push(DrainMember::queued(spec));
     }
@@ -956,6 +1044,7 @@ fn set_phase_inner_with_tuning(
         member.pr = pr;
     }
     let _ = state.write(project_root);
+    drop(_snapshot_lock);
     // STORY-712: phase churn is the benign majority — emitted (so a `--all`
     // feed can show it) but classified silent so it never wakes the LLM.
     // Best-effort. trace:TASK-988
@@ -980,6 +1069,9 @@ fn set_phase_inner_with_tuning(
 /// Persist the canonical phase-3 hand-off chosen by auto-queue. Best-effort,
 /// matching the rest of the drain observability state. trace:BUG-1817 | ai:codex
 pub(crate) fn set_review_spec(project_root: &Path, review_spec: &str) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -993,6 +1085,9 @@ pub(crate) fn set_review_spec(project_root: &Path, review_spec: &str) {
 /// `network_retry` outside a drain do not need to know whether one exists.
 /// trace:BUG-286 | ai:claude
 pub(crate) fn append_retry(project_root: &Path, retry: DrainRetry) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -1068,6 +1163,9 @@ pub(crate) fn set_member_outcome(
     completed: bool,
     pr: Option<u32>,
 ) {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -1089,6 +1187,7 @@ pub(crate) fn set_member_outcome(
     state.phase_started_at = None;
     state.phase_attempt = None; // trace:BUG-1290 | ai:claude
     let _ = state.write(project_root);
+    drop(_snapshot_lock);
     // STORY-712: a member that shipped with a PR is an actionable wake (merge /
     // advance). The *shelved* (completed=false) case is emitted from
     // `punt::append_failure_to_ledger` instead — the one disjoint SpecShelved
@@ -1165,6 +1264,9 @@ pub(crate) fn probe(project_root: &Path) -> DrainStatus {
 /// unparseable file is a no-op. True when a record was written.
 // trace:TASK-1542 | ai:codex
 pub(crate) fn record_stopped(project_root: &Path, reason: &str) -> bool {
+    let Ok(_snapshot_lock) = lock_snapshot(project_root) else {
+        return false;
+    };
     let Some(mut state) = DrainState::read(project_root) else {
         return false;
     };
@@ -1980,6 +2082,64 @@ fn pacing_json(
 mod tests {
     use super::*;
 
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn concurrent_dynamic_admission_and_cleanup_preserve_members_and_tokens() {
+        for _ in 0..16 {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path();
+            DrainState::new_batch("dynamic", &["TASK-A".into()])
+                .write(root)
+                .unwrap();
+            let a = uuid::Uuid::now_v7().to_string();
+            let b = uuid::Uuid::now_v7().to_string();
+            let c = uuid::Uuid::now_v7().to_string();
+            register_run(root, "TASK-A", &a, true, false).unwrap();
+            let barrier = std::sync::Barrier::new(3);
+            std::thread::scope(|scope| {
+                let b_thread = scope.spawn(|| {
+                    barrier.wait();
+                    register_run(root, "TASK-B", &b, false, false)
+                });
+                let c_thread = scope.spawn(|| {
+                    barrier.wait();
+                    register_run(root, "TASK-C", &c, true, false)
+                });
+                barrier.wait();
+                set_phase(root, "TASK-A", 1, "implementer");
+                set_member_outcome(root, "TASK-A", true, None);
+                clear_run(root, &a);
+                b_thread.join().unwrap().expect("dynamic B registration");
+                c_thread.join().unwrap().expect("dynamic C registration");
+            });
+            let state = DrainState::read(root).unwrap();
+            let mut specs: Vec<_> = state.members.iter().map(|m| m.spec.as_str()).collect();
+            specs.sort_unstable();
+            assert_eq!(specs, ["TASK-A", "TASK-B", "TASK-C"]);
+            assert_eq!(
+                state
+                    .members
+                    .iter()
+                    .find(|m| m.spec == "TASK-A")
+                    .unwrap()
+                    .state,
+                STATE_COMPLETED
+            );
+            assert!(!crate::orchestrator::run_is_live(root, &a));
+            assert!(crate::orchestrator::run_is_live(root, &b));
+            assert!(crate::orchestrator::run_is_live(root, &c));
+            assert!(!crate::orchestrator::read_live_run(root, &b).unwrap().zen);
+            assert!(crate::orchestrator::read_live_run(root, &c).unwrap().zen);
+            clear_run(root, &a); // stale cleanup cannot remove live sibling tokens
+            assert!(crate::orchestrator::run_is_live(root, &b));
+            assert!(crate::orchestrator::run_is_live(root, &c));
+            clear_run(root, &b);
+            assert!(!crate::orchestrator::run_is_live(root, &b));
+            assert!(crate::orchestrator::run_is_live(root, &c));
+            clear_run(root, &c);
+        }
+    }
+
     #[test]
     // trace:BUG-1585 | ai:codex
     fn autonomous_drain_guide_matches_pipeline_depth_default() {
@@ -2630,16 +2790,16 @@ mod tests {
         assert_eq!(read.phase_started_at, None);
     }
 
-    // set_phase / set_member_outcome / set_run / clear_run on a project with
+    // set_phase / set_member_outcome / clear_run on a project with
     // no file are silent no-ops.
     #[test]
     fn updates_are_noops_without_a_file() {
         let dir = tempfile::tempdir().unwrap();
         set_phase(dir.path(), "STORY-1", 1, "implementer");
         set_member_outcome(dir.path(), "STORY-1", true, None);
-        // TASK-336: same no-op semantics for set_run / clear_run.
-        set_run(dir.path(), "STORY-1", "tok", true);
-        clear_run(dir.path());
+        // Run ownership is required even though phase telemetry is optional.
+        assert!(set_run(dir.path(), "STORY-1", "tok", true).is_err());
+        clear_run(dir.path(), "live-token");
         assert_eq!(probe(dir.path()), DrainStatus::None);
     }
 
@@ -2660,13 +2820,131 @@ mod tests {
     fn set_run_records_current_run_uuid_and_zen() {
         let dir = tempfile::tempdir().unwrap();
         batch_state().write(dir.path()).unwrap();
-        set_run(dir.path(), "STORY-285", "live-token", true);
+        set_run(dir.path(), "STORY-285", "live-token", true).unwrap();
         let read = DrainState::read(dir.path()).unwrap();
         assert_eq!(read.current.as_deref(), Some("STORY-285"));
         assert_eq!(read.run_uuid, "live-token");
         assert!(read.zen);
         let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
         assert!(member.started_at.is_some());
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_corroborates_first_and_later_members_before_phase_entry() {
+        for batch in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let specs = vec!["TASK-1603".to_string(), "TASK-1604".to_string()];
+            let initial = if batch {
+                DrainState::new_batch("launch-race", &specs)
+            } else {
+                DrainState::new_next_n(2, &specs)
+            };
+            initial.write(dir.path()).unwrap();
+            let mut previous: Option<String> = None;
+            for spec in &specs {
+                let token = uuid::Uuid::now_v7().to_string();
+                assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+                register_run(dir.path(), spec, &token, true, false).unwrap();
+                // A child can corroborate immediately, without phase telemetry
+                // or a predecessor member having populated the snapshot.
+                assert!(crate::orchestrator::run_is_live(dir.path(), &token));
+                let state = DrainState::read(dir.path()).unwrap();
+                assert_eq!(state.current.as_deref(), Some(spec.as_str()));
+                assert!(state.current_phase.is_none());
+                assert_eq!(state.members.len(), 2);
+                assert!(state.zen);
+                if let Some(stale) = previous {
+                    assert!(crate::orchestrator::run_is_live(dir.path(), &stale));
+                }
+                previous = Some(token);
+            }
+        }
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn concurrent_run_launch_and_cleanup_preserves_sibling_authority() {
+        for batch in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let specs = vec!["TASK-A".into(), "TASK-B".into()];
+            let state = if batch {
+                DrainState::new_batch("overlap", &specs)
+            } else {
+                DrainState::new_next_n(2, &specs)
+            };
+            state.write(dir.path()).unwrap();
+            let a = uuid::Uuid::now_v7().to_string();
+            let b = uuid::Uuid::now_v7().to_string();
+            register_run(dir.path(), "TASK-A", &a, true, false).unwrap();
+            register_run(dir.path(), "TASK-B", &b, false, false).unwrap();
+            // Both phase children can start after both registrations.
+            assert!(crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            assert!(
+                crate::orchestrator::read_live_run(dir.path(), &a)
+                    .unwrap()
+                    .zen
+            );
+            assert!(
+                !crate::orchestrator::read_live_run(dir.path(), &b)
+                    .unwrap()
+                    .zen
+            );
+            clear_run(dir.path(), &a);
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            assert_eq!(DrainState::read(dir.path()).unwrap().run_uuid, b);
+            // Repeated cleanup cannot revoke B. Snapshot rewrites cannot
+            // resurrect A, even if they restore its stale telemetry UUID.
+            clear_run(dir.path(), &a);
+            let mut stale = DrainState::read(dir.path()).unwrap();
+            stale.run_uuid = a.clone();
+            stale.write(dir.path()).unwrap();
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &a));
+            assert!(crate::orchestrator::run_is_live(dir.path(), &b));
+            clear_run(dir.path(), &b);
+            assert!(!crate::orchestrator::run_is_live(dir.path(), &b));
+        }
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_single_corroborates_immediately() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        register_run(dir.path(), "TASK-1603", &token, false, true).unwrap();
+        assert!(crate::orchestrator::run_is_live(dir.path(), &token));
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_rejects_missing_corrupt_or_unwritable_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, false).is_err());
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(drain_state_path(dir.path()), "corrupt").unwrap();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, false).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+        std::fs::remove_file(drain_state_path(dir.path())).unwrap();
+        // A directory at the destination reliably fails atomic replacement,
+        // including when tests run as root and permission bits don't protect it.
+        std::fs::create_dir(drain_state_path(dir.path())).unwrap();
+        assert!(register_run(dir.path(), "TASK-1603", &token, false, true).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn register_run_rejects_dead_batch_owner() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = batch_state();
+        state.orchestrator_pid = u32::MAX - 1;
+        state.write(dir.path()).unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        assert!(register_run(dir.path(), "STORY-285", &token, false, false).is_err());
+        assert!(!crate::orchestrator::run_is_live(dir.path(), &token));
     }
 
     // trace:STORY-975 | ai:codex
@@ -2703,9 +2981,9 @@ mod tests {
     fn clear_run_wipes_run_uuid_and_zen() {
         let dir = tempfile::tempdir().unwrap();
         batch_state().write(dir.path()).unwrap();
-        set_run(dir.path(), "STORY-285", "live-token", true);
+        set_run(dir.path(), "STORY-285", "live-token", true).unwrap();
         set_phase(dir.path(), "STORY-285", 3, "reviewer");
-        clear_run(dir.path());
+        clear_run(dir.path(), "live-token");
         let read = DrainState::read(dir.path()).unwrap();
         assert!(read.run_uuid.is_empty());
         assert!(!read.zen);

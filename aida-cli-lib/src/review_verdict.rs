@@ -1136,6 +1136,14 @@ pub(crate) fn build_verdict_object(
     findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    // Fix-day 2026-10-07: newly authored records need actual recorder
+    // provenance. Historical missing metadata is never inferred here.
+    if recorded_by.trim().is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "review recording requires non-empty recorded_by provenance",
+        ));
+    }
     let mut obj = std::fs::read_to_string(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())

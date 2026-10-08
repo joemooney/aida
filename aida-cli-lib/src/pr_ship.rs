@@ -151,6 +151,41 @@ pub(crate) fn wait_for_drive_release(
     }
 }
 
+// trace:TASK-1606 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub(crate) enum ShipRefusal {
+    CiRed = 20,
+    CiTimeout = 21,
+    NotMergeable = 22,
+    Review = 23,
+    StaleDefinition = 24,
+    MergeHold = 25,
+}
+
+#[derive(Debug)]
+pub(crate) struct ShipFailure {
+    pub reason: ShipRefusal,
+    pub message: String,
+}
+
+impl std::fmt::Display for ShipFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.message.fmt(formatter)
+    }
+}
+impl std::error::Error for ShipFailure {}
+
+impl ShipRefusal {
+    pub(crate) fn error(self, message: impl std::fmt::Display) -> anyhow::Error {
+        ShipFailure {
+            reason: self,
+            message: message.to_string(),
+        }
+        .into()
+    }
+}
+
 /// Flags / mode the handler resolves from the parsed clap subcommand.
 /// Kept as a value type so dry-run plan formatting can be exercised in
 /// unit tests without invoking the full handler.
@@ -1639,6 +1674,27 @@ pub(crate) fn merge_gate_verdict_candidates(
 
 #[cfg(test)]
 mod tests {
+    // trace:TASK-1606 | ai:codex
+    #[test]
+    fn ship_exit_codes_survive_error_context() {
+        use super::ShipRefusal::*;
+        for (reason, code) in [
+            (CiRed, 20),
+            (CiTimeout, 21),
+            (NotMergeable, 22),
+            (Review, 23),
+            (StaleDefinition, 24),
+            (MergeHold, 25),
+        ] {
+            let error = reason.error("refused").context("ship failed");
+            assert_eq!(crate::exit_code_for_error(&error), code);
+        }
+        assert_eq!(
+            crate::exit_code_for_error(&anyhow::anyhow!("unclassified")),
+            1
+        );
+    }
+
     // BUG-1566: pr ship's hold release obeys the integrity floor exactly like
     // `merge-hold clear` — no hold → no gate; hold + human → release; hold
     // without a human → refuse, naming the human release path.
@@ -1974,9 +2030,11 @@ mod tests {
         assert!(args.contains("read_hold_record(&main_worktree, pr_number)"));
         assert!(args.contains("crate::has_integrity_floor_authority()"));
         assert!(!args.contains("drive_specs"));
+        // Ship's single deadline now owns registration and settlement.
+        // trace:TASK-1606 | ai:codex
         let ci = src
-            .find("crate::ci_gate::wait_for_checks_to_register(")
-            .expect("ci watch present");
+            .find("crate::ci_gate::wait_for_ship_ci(")
+            .expect("ci wait present");
         let clear = src
             .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
             .expect("release site present");

@@ -720,69 +720,55 @@ mod tests {
         );
     }
 
-    /// BUG-280 regression guard — the example verdict-file JSON that the
-    /// `/aida-review` skill embeds must be valid JSON with the schema the
-    /// orchestrator's `read_verdict_file` accepts (the `verdict` field is
-    /// the only load-bearing one; everything else is metadata). A drift in
-    /// the example that produces invalid JSON or omits `verdict` would
-    /// silently let a real reviewer copy a broken template. trace:BUG-280
-    /// | ai:claude
+    /// The review handshake example must use the canonical writer so a copied
+    /// command creates provenance-bearing current and retained rounds. Raw
+    /// heredocs were the PR-2435 failure path. BUG-280's write-before-comment
+    /// order is checked separately above.
+    // trace:BUG-280 | ai:codex
     #[test]
-    fn aida_review_embeds_a_parseable_verdict_file_example() {
+    fn aida_review_embeds_a_provenance_preserving_recorder_example() {
         let review = EMBEDDED_TEMPLATES
             .get("skills/aida-review.md")
             .expect("aida-review.md embedded");
-
-        // Locate the first verdict-file write under step 6a (which lives
-        // before the PR-comment section — assertion (3) above pins the
-        // order). The first cat-EOF block in step 6a is the canonical
-        // example; later blocks demonstrate variants like the merge
-        // escalation handshake.
-        let step_6a_idx = review
-            .find("### 6a. Write the verdict file")
-            .expect("step 6a heading present (asserted elsewhere)");
-        let after_6a = &review[step_6a_idx..];
-
-        // Extract every single-line `{"verdict": ...}` JSON literal in
-        // the section and parse them all. Single-line is the right filter:
-        // the canonical heredoc examples are all on one line, and a
-        // multi-line `{...}` in the template is necessarily prose (e.g. a
-        // pseudo-JSON comment illustrating the `findings_filed` re-write
-        // shape — that block intentionally embeds shell `#` comments, so
-        // it is not literal JSON).
-        let mut examples = Vec::new();
-        let mut rest = after_6a;
-        while let Some(open) = rest.find("{\"verdict\":") {
-            let body = &rest[open..];
-            // A single-line literal closes with `}` before the next `\n`.
-            let newline = body.find('\n').unwrap_or(body.len());
-            let line = &body[..newline];
-            if let Some(close) = line.find('}') {
-                examples.push(&line[..=close]);
-            }
-            rest = &body[newline.min(body.len())..];
-        }
-        assert!(
-            !examples.is_empty(),
-            "aida-review.md step 6a must embed at least one \
-             `{{\"verdict\": ...}}` example for the skill to copy"
-        );
-        for (i, json) in examples.iter().enumerate() {
-            let parsed: serde_json::Value = serde_json::from_str(json).unwrap_or_else(|e| {
-                panic!(
-                    "aida-review.md verdict example #{i} is not valid JSON: \
-                     {e}\n  example: {json}"
-                )
-            });
-            let verdict = parsed.get("verdict").and_then(|v| v.as_str());
+        let start = review.find("### 6a. Write the verdict file").unwrap();
+        let end = review[start..]
+            .find("### 7. Post a consolidated review comment")
+            .map(|offset| start + offset)
+            .unwrap();
+        let handshake = &review[start..end];
+        let example = handshake
+            .split("```bash\n")
+            .filter_map(|block| block.split("```").next())
+            .find(|block| block.contains("aida review record"))
+            .expect("step 6a must embed a canonical recorder command");
+        for argument in [
+            "aida review record <SPEC-ID>",
+            "--pr <N>",
+            "--verdict approved",
+            "--sha <FULL-REVIEWED-SHA>",
+            "--summary \"<one-line rationale>\"",
+        ] {
             assert!(
-                matches!(verdict, Some("Approved" | "RequestChanges" | "Rejected")),
-                "aida-review.md verdict example #{i} must carry a \
-                 `verdict` field of Approved/RequestChanges/Rejected — \
-                 got {:?}",
-                verdict
+                example.contains(argument),
+                "missing recorder argument {argument}"
             );
         }
+        assert!(example.contains("request-changes") && example.contains("rejected"));
+        assert!(example.contains("--finding"));
+        for field in ["recorded_by", "recorded_at", "reviewed_sha", "rounds"] {
+            assert!(
+                handshake.contains(field),
+                "missing provenance/read-back instruction {field}"
+            );
+        }
+        assert!(
+            !handshake.contains("cat >"),
+            "direct verdict writes bypass provenance"
+        );
+        assert!(
+            !handshake.contains("<<'EOF'"),
+            "raw verdict heredocs bypass provenance"
+        );
     }
 
     /// TASK-333 regression guard — the `/aida-review` skill template must

@@ -1593,7 +1593,9 @@ pub(crate) fn pr_ship_approval_gate(
             Some(pr_number),
             &message,
         );
-        anyhow::bail!("{message} (To merge anyway, re-run with `--override-stale-approval`.)");
+        return Err(pr_ship::ShipRefusal::Review.error(format!(
+            "{message} (To merge anyway, re-run with `--override-stale-approval`.)"
+        )));
     }
     append_ship_activity_line(
         main_worktree,
@@ -1613,6 +1615,129 @@ pub(crate) fn pr_ship_approval_gate(
         .map(str::to_string))
 }
 
+// trace:TASK-1606 | ai:codex
+fn ship_stale_definition_gate(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+    override_stale_check: bool,
+) -> Result<()> {
+    let base_branch = pr_ship_target_branch(pr_number);
+    let base_ref = format!("origin/{base_branch}");
+    if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
+        if !warning.definition_files.is_empty() {
+            if override_stale_check {
+                eprintln!(
+                    "  {} PR-{}'s green predates a CI-definition change on {} \
+                         ({}) — shipping anyway (override)",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    pr_number,
+                    base_branch,
+                    warning.definition_files.join(", "),
+                );
+            } else {
+                return Err(pr_ship::ShipRefusal::StaleDefinition.error(format!(
+                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
+                         — its CI ran against an OLDER definition of that check, so the green does not \
+                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
+                         or re-run with `--override-stale-check` to ship anyway.",
+                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
+                        warning.definition_files.join(", "),
+                    )));
+            }
+        } else if !warning.test_files.is_empty() {
+            eprintln!(
+                "  {} {} commits behind; {} test files changed on main since this branch's base",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                warning.behind_commits,
+                warning.test_files.len(),
+            );
+        } else {
+            eprintln!(
+                "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
+                     usually harmless)",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                pr_number,
+                warning.behind_commits,
+                base_branch,
+            );
+        }
+    }
+    Ok(())
+}
+
+// trace:TASK-1606 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn ship_preflight_gates(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    delete_branch: bool,
+) -> Result<()> {
+    use pr_ship::ShipRefusal;
+    let forge = crate::forge::forge_for(project_root);
+    let status = forge.change_status(change)?;
+    if !status.mergeable {
+        return Err(ShipRefusal::NotMergeable.error(format!(
+            "PR-{} is not mergeable — rebase the branch and try again.",
+            change.id
+        )));
+    }
+    let mut ids: Vec<String> = ship_gate_spec_records(project_root)
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    ids.extend(pr_ship::extract_spec_ids_from_text(&change.branch));
+    if let Some(title) = &change.title {
+        ids.extend(pr_ship::extract_spec_ids_from_text(title));
+    }
+    let candidates = pr_ship::merge_gate_verdict_candidates(
+        &[project_root, main_worktree],
+        change.id,
+        &ids,
+        Some(&status.head_sha),
+    );
+    pr_ship_approval_gate(
+        main_worktree,
+        change.id,
+        &candidates,
+        Some(&status.head_sha),
+        override_stale_approval,
+        delete_branch,
+    )?;
+    crate::merge_hold::enforce_corpus_gate_before_merge(project_root, change.id, &ids, || {
+        Some(status.head_sha.clone())
+    })
+    .map_err(|e| ShipRefusal::Review.error(e))?;
+    let gate = crate::review_marker::merge_gate(main_worktree, change.id, || {
+        Some(status.head_sha.clone())
+    });
+    if let crate::review_marker::MergeGate::UnderReview(marker) = gate {
+        return Err(ShipRefusal::Review.error(crate::review_marker::refusal_message(&marker)));
+    }
+    let marker = crate::merge_hold::read_hold(hold_root, change.id);
+    let label_only =
+        marker.is_none() && crate::merge_hold::label_present(hold_root, change.id).unwrap_or(false);
+    if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
+        marker.is_some(),
+        label_only,
+        crate::has_integrity_floor_authority(),
+        change.id,
+    ) {
+        return Err(ShipRefusal::MergeHold.error(refusal));
+    }
+    ship_stale_definition_gate(
+        project_root,
+        &change.branch,
+        change.id,
+        override_stale_check,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -1921,6 +2046,9 @@ pub(crate) fn pr_ship_handler(
     let drive_seat = std::env::var("AIDA_HEADLESS").is_ok_and(|v| v == "1")
         || std::env::var(orchestrator::AUTO_COMPLETE_ENV).is_ok_and(|v| !v.trim().is_empty());
     let direct_human = crate::seat_authority::require_direct_human().is_ok() && !drive_seat;
+    // trace:TASK-1606 | ai:codex
+    // One flag and deadline cover ownership plus CI registration/settlement.
+    let wait_started = std::time::Instant::now();
     let result = pr_ship::wait_for_drive_release(
         wait.map(std::time::Duration::from_secs),
         std::time::Duration::from_secs(2),
@@ -1964,11 +2092,16 @@ pub(crate) fn pr_ship_handler(
             &pr_ship::ShipStep::Merge { delete_branch },
             &pr_ship::StepOutcome::Skipped(block.detail.clone()),
         );
-        anyhow::bail!(
+        let refusal = if block.timed_out {
+            pr_ship::ShipRefusal::CiTimeout
+        } else {
+            pr_ship::ShipRefusal::Review
+        };
+        return Err(refusal.error(format!(
             "PR-{pr_number} left OPEN — `aida pr ship` refused: {reason_text}. {} \
              Deliberate in-drive direct-publish: AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 (never bypasses a merge-hold).",
             if block.timed_out { "Drive ownership wait timed out." } else { "The independent reviewer gates the merge." },
-        );
+        )));
     }
 
     // Ownership may have been released because the drive merged the PR.
@@ -2020,7 +2153,7 @@ pub(crate) fn pr_ship_handler(
                 Some(pr_number),
                 &refusal,
             );
-            anyhow::bail!(refusal);
+            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
         }
     }
 
@@ -2055,7 +2188,9 @@ pub(crate) fn pr_ship_handler(
                 draft_only.join(", ")
             )),
         );
-        return Ok(());
+        return Err(
+            pr_ship::ShipRefusal::Review.error("PR left open — awaiting independent review")
+        );
     }
 
     // ---- BUG-727: supervised-merge gate (substrate-as-bouncer). The keystone
@@ -2104,7 +2239,28 @@ pub(crate) fn pr_ship_handler(
                     .join(", ")
             )),
         );
-        return Ok(());
+        return Err(
+            pr_ship::ShipRefusal::Review.error("PR left open — awaiting independent review")
+        );
+    }
+
+    let gate_change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: ship_branch.clone(),
+        base: retarget_base.clone(),
+        title: target_change.as_ref().and_then(|c| c.title.clone()),
+    };
+    if !already_merged {
+        ship_preflight_gates(
+            &project_root,
+            &main_worktree,
+            &hold_root,
+            &gate_change,
+            override_stale_check,
+            override_stale_approval,
+            delete_branch,
+        )?;
     }
 
     // BUG-574: if the PR is already merged (re-run on an already-shipped spec,
@@ -2153,75 +2309,25 @@ pub(crate) fn pr_ship_handler(
             title: None,
         };
         let forge = crate::forge::forge_for(&project_root);
-        // STORY-1166: the registration wait is forge-routed too (gh pr checks /
-        // glab pipelines); pure-git has no CI and returns immediately.
-        // trace:STORY-1166 | ai:claude
-        crate::ci_gate::wait_for_checks_to_register(
+        // trace:TASK-1606 | ai:codex
+        let mut red_detail: Option<String> = None;
+        let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
+        label_only_hold = !hold_present
+            && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
+        let ci_result = crate::ci_gate::wait_for_ship_ci(
+            &project_root,
             forge.as_ref(),
             &watch_change,
-            std::time::Duration::from_secs(60),
-            std::time::Duration::from_secs(10),
-        )?;
-        // Classify GitHub rows before waiting: the coarse --watch waits for
-        // every job, including hung informational workflows. Required checks
-        // still override the allow-list, and non-informational failures gate.
-        // Other forges retain their pipeline watcher and refine failed results.
-        // trace:TASK-1331 | ai:codex
-        let mut red_detail: Option<String> = None;
-        let github = forge.kind() == crate::forge::ForgeKind::GitHub;
-        let coarse_result = if github {
-            Ok(crate::forge::CiState::Pending)
-        } else {
-            forge.watch_ci(&watch_change)
-        };
-        let ci_result = if github || matches!(coarse_result, Ok(crate::forge::CiState::Failed)) {
-            let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
-            label_only_hold = !hold_present
-                && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-            let refined = crate::ci_gate::refine_red(
-                &project_root,
-                forge.as_ref(),
-                &watch_change,
-                hold_present,
-                label_only_hold,
-                std::time::Duration::from_secs(20 * 60),
-                std::time::Duration::from_secs(15),
-            )
-            .map(|r| {
-                if r.is_real() {
-                    red_detail = Some(format!(
-                        "CI is red on PR-{pr_number}: {}",
-                        r.describe(pr_number)
-                    ));
-                    crate::forge::CiState::Failed
-                } else if r.has_pending() {
-                    red_detail = Some(format!(
-                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
-                        r.pending.join(", ")
-                    ));
-                    crate::forge::CiState::Failed
-                } else {
-                    let note = r.describe(pr_number);
-                    if !note.is_empty() {
-                        eprintln!(
-                            "  {} {}",
-                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                            note
-                        );
-                    }
-                    crate::forge::CiState::Success
-                }
-            });
-            // A forge without per-check rows keeps its coarse failed verdict.
-            // trace:BUG-1180 trace:TASK-1331 | ai:codex
-            if !github && refined.is_err() {
-                coarse_result
-            } else {
-                refined
-            }
-        } else {
-            coarse_result
-        };
+            hold_present,
+            label_only_hold,
+            wait.map(|secs| {
+                std::time::Duration::from_secs(secs).saturating_sub(wait_started.elapsed())
+            }),
+            std::time::Duration::from_secs(15),
+        );
+        if let Err(error) = &ci_result {
+            red_detail = Some(format!("{error:#}"));
+        }
         let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
         // STORY-1480: the ship's CI wait reached a terminal verdict — emit
         // the same CiTerminal the drain's CI phase emits (empty run_uuid;
@@ -2253,10 +2359,12 @@ pub(crate) fn pr_ship_handler(
                 pr_number
             );
             eprintln!("  {}", hint);
-            anyhow::bail!(
-                "{}",
-                red_detail.unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}"))
-            );
+            return Err(match ci_result {
+                Err(e) => e,
+                _ => pr_ship::ShipRefusal::CiRed.error(
+                    red_detail.unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}")),
+                ),
+            });
         }
         eprintln!(
             "  {} CI green for PR-{}",
@@ -2271,61 +2379,6 @@ pub(crate) fn pr_ship_handler(
         );
     }
 
-    // ---- BUG-1468: warn (or refuse) when the PR's green predates a
-    // CI-definition change on main. A green check is evidence about the
-    // guards that existed WHEN IT RAN; nothing re-evaluates it when main
-    // gains a stricter workflow since. Two tiers (BUG-1468 follow-up):
-    // `definition_files` (a `.github/workflows/*` file, or a `scripts/`
-    // file a workflow invokes directly) REFUSE unless overridden — the
-    // check's own definition changed. `test_files` only WARN — an ordinary
-    // test file changing on main is the common, usually-harmless "base
-    // moved" case, and in this repo it's most commits, so refusing on it
-    // made `--override-stale-check` routine. `!already_merged` because a
-    // merged PR has nothing left to refuse. trace:BUG-1468 | ai:claude
-    if !already_merged {
-        let base_branch = pr_ship_target_branch(pr_number);
-        let base_ref = format!("origin/{base_branch}");
-        if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
-            if !warning.definition_files.is_empty() {
-                if override_stale_check {
-                    eprintln!(
-                        "  {} PR-{}'s green predates a CI-definition change on {} \
-                         ({}) — shipping anyway (override)",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                        pr_number,
-                        base_branch,
-                        warning.definition_files.join(", "),
-                    );
-                } else {
-                    anyhow::bail!(
-                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
-                         — its CI ran against an OLDER definition of that check, so the green does not \
-                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
-                         or re-run with `--override-stale-check` to ship anyway.",
-                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
-                        warning.definition_files.join(", "),
-                    );
-                }
-            } else if !warning.test_files.is_empty() {
-                eprintln!(
-                    "  {} {} commits behind; {} test files changed on main since this branch's base",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    warning.behind_commits,
-                    warning.test_files.len(),
-                );
-            } else {
-                eprintln!(
-                    "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
-                     usually harmless)",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    pr_number,
-                    warning.behind_commits,
-                    base_branch,
-                );
-            }
-        }
-    }
-
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
     // BUG-574: skipped entirely when the PR is already merged — the activity
@@ -2338,6 +2391,17 @@ pub(crate) fn pr_ship_handler(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    if !already_merged {
+        ship_preflight_gates(
+            &project_root,
+            &main_worktree,
+            &hold_root,
+            &gate_change,
+            override_stale_check,
+            override_stale_approval,
+            delete_branch,
+        )?;
+    }
     // STORY-1405: refuse while a reviewer is mid-way through THIS head. Asked
     // under the merge-lease, immediately before the merge, so a review that
     // started after CI settled is still seen. One local stat when no marker
@@ -2364,7 +2428,7 @@ pub(crate) fn pr_ship_handler(
                 Some(pr_number),
                 &refusal,
             );
-            anyhow::bail!("{}", refusal);
+            return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
         if let Some(note) = crate::review_marker::proceed_note(&gate) {
             eprintln!(
@@ -2518,7 +2582,7 @@ pub(crate) fn pr_ship_handler(
                 Some(pr_number),
                 &refusal,
             );
-            anyhow::bail!(refusal);
+            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
         }
         // BUG-1532 criterion 4, re-checked HERE under the merge lease against
         // the head about to land (`head_sha`, the TASK-1448 read): a refusal
@@ -2553,7 +2617,7 @@ pub(crate) fn pr_ship_handler(
                         Some(pr_number),
                         &refusal,
                     );
-                    anyhow::bail!(refusal);
+                    return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
                 }
             },
         };
@@ -2584,7 +2648,7 @@ pub(crate) fn pr_ship_handler(
                     Some(pr_number),
                     &refusal,
                 );
-                anyhow::bail!(refusal);
+                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         if let Some(reason) = marker_reason.as_deref() {

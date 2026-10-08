@@ -16,23 +16,13 @@
 //!
 //! # The corroboration token
 //!
-//! For the lifetime of each spec's orchestration the orchestrator mints a
-//! per-run UUID and records it as [`crate::drain_state::DrainState::run_uuid`]
-//! on the live drain-state file ([`crate::drain_state`]). It passes
-//! `AIDA_AUTO_COMPLETE_TOKEN=<uuid>` to every phase child alongside
-//! `AIDA_AUTO_COMPLETE=1`. TASK-336 folded the run-UUID into the drain-state
-//! file — before that this module owned a sidecar marker file
-//! `.aida/orchestrator-runs/<uuid>`, which has been removed since the drain-
-//! state file already records every other field corroboration needs (PID,
-//! current spec, `--zen` flag, started-at).
-//!
-//! A child trusts orchestrator-mode ([`OrchestratorContext::Orchestrated`])
-//! **only** when all three hold:
-//!
-//! 1. `AIDA_AUTO_COMPLETE` is set, AND
-//! 2. `AIDA_AUTO_COMPLETE_TOKEN` is set, AND
-//! 3. the token matches [`crate::drain_state::DrainState::run_uuid`] on the
-//!    live drain-state file whose recorded PID is still alive.
+//! Each active member publishes a separate UUID-keyed record under
+//! `.aida/orchestrator-runs/` before changing status or spawning children.
+//! Children corroborate that record's live member PID and the live drain
+//! snapshot's parent PID. The snapshot's current UUID is telemetry only:
+//! concurrent members cannot revoke one another's authority or zen provenance.
+//! Cleanup removes only the exiting member's record.
+//! trace:TASK-1603 | ai:codex
 //!
 //! A bare `AIDA_AUTO_COMPLETE=1` with no valid live token is
 //! [`OrchestratorContext::Uncorroborated`]: treated exactly as interactive,
@@ -59,7 +49,7 @@ use crate::process_probe;
 pub(crate) const AUTO_COMPLETE_ENV: &str = "AIDA_AUTO_COMPLETE";
 
 /// The corroboration token: a per-run UUID matching
-/// [`crate::drain_state::DrainState::run_uuid`] on the live drain-state file.
+/// the member's record in `.aida/orchestrator-runs/`.
 /// Set by the orchestrator alongside [`AUTO_COMPLETE_ENV`] on every phase
 /// child. trace:TASK-336
 pub(crate) const TOKEN_ENV: &str = "AIDA_AUTO_COMPLETE_TOKEN";
@@ -92,10 +82,9 @@ fn is_valid_token(token: &str) -> bool {
 }
 
 /// The diagnostic view of the live orchestrator run owning the current
-/// process — derived from [`crate::drain_state::DrainState`] (TASK-336). Only
-/// [`RunMarker::pid`] and the corroborated [`RunMarker::zen`] are load-bearing
-/// — `spec` and `started_at` are diagnostic.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// process, read from its UUID-keyed record. PID, membership and zen
+/// provenance are corroborated against the live parent drain snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RunMarker {
     /// PID of the orchestrator process that owns this run.
     pub(crate) pid: u32,
@@ -207,20 +196,44 @@ pub(crate) fn classify(
 }
 
 /// Is `token` owned by a live orchestrator run? True iff it is a valid UUID
-/// that matches [`crate::drain_state::DrainState::run_uuid`] on the drain-
-/// state file under `project_root` whose recorded `orchestrator_pid` is
-/// alive. trace:TASK-336 | ai:claude
+/// with a published member record, a live member PID, and a live parent
+/// drain snapshot. The current telemetry token may name a different member.
+// trace:TASK-336 trace:TASK-1603 | ai:codex
 pub(crate) fn run_is_live(project_root: &Path, token: &str) -> bool {
-    if !is_valid_token(token) {
-        return false;
+    read_live_run(project_root, token).is_some()
+}
+
+fn run_path(project_root: &Path, token: &str) -> Option<std::path::PathBuf> {
+    is_valid_token(token).then(|| project_root.join(".aida/orchestrator-runs").join(token))
+}
+
+// trace:TASK-1603 | ai:codex
+pub(crate) fn publish_run(
+    project_root: &Path,
+    token: &str,
+    marker: &RunMarker,
+) -> std::io::Result<()> {
+    let path = run_path(project_root, token)
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid run UUID"))?;
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    aida_core::write_atomic(&path, serde_json::to_string(marker)?)
+}
+
+// trace:TASK-1603 | ai:codex
+pub(crate) fn remove_run(project_root: &Path, token: &str) {
+    if let Some(path) = run_path(project_root, token) {
+        let _ = std::fs::remove_file(path);
     }
-    let Some(state) = drain_state::DrainState::read(project_root) else {
-        return false;
-    };
-    if state.run_uuid.is_empty() || state.run_uuid != token {
-        return false;
-    }
-    process_probe::pid_is_alive(state.orchestrator_pid)
+}
+
+pub(crate) fn read_live_run(project_root: &Path, token: &str) -> Option<RunMarker> {
+    let path = run_path(project_root, token)?;
+    let marker: RunMarker = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let state = drain_state::DrainState::read(project_root)?;
+    (process_probe::pid_is_alive(state.orchestrator_pid)
+        && process_probe::pid_is_alive(marker.pid)
+        && state.members.iter().any(|m| m.spec == marker.spec))
+    .then_some(marker)
 }
 
 /// The corroborated verdict for the current process, reading `AIDA_AUTO_COMPLETE`
@@ -250,19 +263,7 @@ pub(crate) fn live_run_marker(project_root: &Path) -> Option<RunMarker> {
     if token.is_empty() || !is_valid_token(&token) {
         return None;
     }
-    let state = drain_state::DrainState::read(project_root)?;
-    if state.run_uuid.is_empty() || state.run_uuid != token {
-        return None;
-    }
-    if !process_probe::pid_is_alive(state.orchestrator_pid) {
-        return None;
-    }
-    Some(RunMarker {
-        pid: state.orchestrator_pid,
-        spec: state.current.unwrap_or_default(),
-        started_at: state.started_at,
-        zen: state.zen,
-    })
+    read_live_run(project_root, &token)
 }
 
 #[cfg(test)]
@@ -361,7 +362,44 @@ mod tests {
         let mut state = drain_state::DrainState::new_single("BUG-233", token, zen);
         state.orchestrator_pid = pid;
         state.write(dir).unwrap();
+        if is_valid_token(token) {
+            publish_run(
+                dir,
+                token,
+                &RunMarker {
+                    pid,
+                    spec: "BUG-233".into(),
+                    started_at: state.started_at,
+                    zen,
+                },
+            )
+            .unwrap();
+        }
         token.to_string()
+    }
+
+    // trace:TASK-1603 | ai:codex
+    #[test]
+    fn member_record_requires_live_member_and_parent_and_valid_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let token = uuid::Uuid::now_v7().to_string();
+        write_state_with_run(dir.path(), std::process::id(), &token, false);
+        let mut marker = read_live_run(dir.path(), &token).unwrap();
+        marker.pid = u32::MAX - 1;
+        publish_run(dir.path(), &token, &marker).unwrap();
+        assert!(!run_is_live(dir.path(), &token));
+        marker.pid = std::process::id();
+        marker.spec = "OTHER-SPEC".into();
+        publish_run(dir.path(), &token, &marker).unwrap();
+        assert!(!run_is_live(dir.path(), &token));
+        marker.spec = "BUG-233".into();
+        publish_run(dir.path(), &token, &marker).unwrap();
+        assert!(run_is_live(dir.path(), &token));
+        std::fs::write(run_path(dir.path(), &token).unwrap(), "corrupt").unwrap();
+        assert!(!run_is_live(dir.path(), &token));
+        publish_run(dir.path(), &token, &marker).unwrap();
+        drain_state::DrainState::clear(dir.path()).unwrap();
+        assert!(!run_is_live(dir.path(), &token));
     }
 
     #[test]

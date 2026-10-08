@@ -1,3 +1,17 @@
+Queue pickup resolves and reports role precedence, branch occupancy, and child-seat
+delegation before persisting an implicit queue row or changing calibration, lease,
+worktree, or spec state. Occupied branches receive a manual retirement offer only
+when idle, clean, unlocked, and unleased. Setup failures retain a manual
+`aida worktree enter` and guided-session continuation.
+<!-- trace:TASK-1337 | ai:codex -->
+
+Reconciliation and live auto-bump honor legacy human reopen history as well as
+SHA markers. The latest deliberate Done/Completed → Approved decision fences
+old merge evidence even if an automated bump subsequently overwrote status;
+a later deliberate decision or later commit permits progress. Queue views
+label old evidence as reopened work instead of recommending reconciliation.
+<!-- trace:TASK-1338 | ai:codex -->
+
 # AIDA — Overview
 
 Required Ubuntu CI checks `aida-cli` with `--no-default-features` before the
@@ -88,6 +102,27 @@ mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
 commit-evidence and ledgered `--force` rules.
+
+**Drain launch ownership.** A single, batch, or nextN member publishes its
+run UUID and zen provenance before the phase-1 status bump and phase-child
+launch. Ownership persistence is required: missing/corrupt batch state or a
+failed write returns a phase-1 failure before that run changes status or
+spawns a phase child. Pipelined parents leave the bump to the registered
+member process. Each active member publishes an independent UUID record in
+`.aida/orchestrator-runs/`, including its PID and zen provenance. Children
+require that record, a live member PID and a live parent drain snapshot;
+current-run snapshot fields are telemetry only. Cleanup revokes only the
+exiting member's UUID, so overlapping members keep authority. A delayed
+child may leave its queue head Approved briefly; the scheduler waits for
+progress and retries selection without treating that duplicate as exhaustion.
+Stale or bare environment flags grant no authority. Refreshed batch/nextN
+selection can admit newly unblocked or newly tagged members; checked run
+registration adds them to the parent snapshot before token corroboration.
+Snapshot read/modify/write updates serialize on the permanent
+`.aida/drain-state-write.lock` sidecar, preserving dynamic membership through
+concurrent phase updates and sibling cleanup. The child still requires both
+live PIDs and recorded membership.
+<!-- trace:TASK-1603 | ai:codex -->
 
 **Drain ownership.** Local drain acquisition retains an observed-live PID/start
 identity regardless of launch age. Queue work, burndown and integration share
@@ -419,3 +454,11 @@ spawn. An exit-zero report therefore does not prove that an agent ran. See the
 [pinned live investigation](docs/testing/task-1327-reconstitution-launch.md);
 TASK-1-224 tracks the authority/configuration-root repair for advisor triage.
 <!-- trace:TASK-1327 | ai:codex -->
+
+`aida pr ship` checks known review, mergeability, stale CI definition, and hold
+blockers before waiting for CI, and repeats the checks before merge. An optional
+`--wait <secs>` deadline covers registration and settlement; the default is
+unbounded. Exit codes 20–25 distinguish CI red, timeout, rebase, review,
+stale definition, and hold refusals for scripts. See
+[git lifecycle](docs/cli/04-git-lifecycle.md) for the table and override behavior.
+<!-- trace:TASK-1606 | ai:codex -->
