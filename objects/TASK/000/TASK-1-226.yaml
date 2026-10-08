@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-07T23:08:38.727090240Z
+modified_at: 2026-10-08T16:48:37.877950755Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -31,6 +31,56 @@ comments:
   content: 'SKETCH REQUEST, no implementation: owning TASK-1335. Investigate forge-unavailable reconcile explanation while preserving strict title trailers, reopened-at fences and completion provenance. Distinguish referencing-commit absent from forge lookup unavailable. Specify owner/trigger, helper path and structured diagnostics, race/error semantics, tests with fake forge returning unavailable, log exact historical repro; no fallback that grants completion from prose/unrelated trailers. Record SKETCH (awaiting advisor signoff), then a DIFFERENT advisor signoff before queue/implementation. No force live reconciliation or code change.'
   created_at: 2026-10-07T23:08:38.727090240Z
   modified_at: 2026-10-07T23:08:38.727090240Z
+- id: 01a11c6a-b5f5-7fe1-b661-36e1a16a9189
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): TASK-1335 — explain unavailable reconciliation evidence without changing completion authority
+
+    Author: Codex store-reconcile-sketch-author, separate AUTHOR advisor, 2026-10-08. Unsigned; requires a NEW DIFFERENT advisor. Exact proposed canonical comment body for root relay under companion read/converse/draft gate. No canonical post, implementation, status/queue/grant/launch/merge or self-signoff.
+
+    ## Canonical finding and current evidence
+
+    Full canonical store-reconcile-evidence/TASK-1335.json: UUID 01a1116b-8bec-7f40-9e1e-beaf7f328dce, origin TASK-1-226, display TASK-1335, Approved. Preserve proxy decision 01a1189e-42e5-7350-b8ca-34423bde7362 and sketch request 01a118a0-43c7-73d2-9931-1bcb052d51f1. These are the two returned comments; no prior canonical sketch was returned.
+
+    Historical report: 2026-10-06 approximately 06:32 local, TASK-1588 Done; `aida db reconcile-status --spec TASK-1588 --dry-run` and full sweep printed no eligible flips and “unknown (forge unavailable)”; commit 978c4974292a59513f53bab40b53b10be8122ca7 has exact subject `[AI:codex] feat(ci): validate Windows weekly   on main (TASK-1588) (#2436)`. Read-only git show confirms these bytes. TASK-1327 reportedly auto-bumped at 06:18. Do not claim to have reproduced this historical runtime or that today's 200-commit window includes that commit.
+
+    Actual inspected main b46aec1e674baae5a329416d4119e67b59200a88 differs from the historical premise: lib.rs::extract_spec_ids_from_commit -> push_paren_spec_ids_from_line skips terminal (#2436) and reads the adjacent (TASK-1588) locally. No forge lookup is needed for this extraction. handle_db_reconcile_status separately calls specs_with_open_prs; None clears normal completion flips and currently prints a generic deferred diagnostic, returning Ok when otherwise empty. The sweep's “unknown (forge unavailable)” comes from count_completed_specs_with_open_prs, a separate already-Completed diagnostic. That header alone cannot identify why a Done candidate was excluded. Parser loss is a hypothesis, not established root cause.
+
+    ## Owner, trigger and precise proposal
+
+    Owner: lib.rs::handle_db_reconcile_status, reached by git_backend_cmd.rs DbCommand::ReconcileStatus. Trigger: a targeted replay or sweep has a real candidate but cannot finish a required evidence check. Preserve all existing candidate sources, strict attributed trailers, plan exclusion, unambiguous canonical resolution, eligibility, merge evidence, open-change guard, closure holds, review-story rules, SHA fence and deliberate-human-reopen history.
+
+    Introduce an internal per-candidate diagnostic outcome (proposed ReconcileCandidateOutcome, not a stored requirement field or new public schema) carrying canonical UUID/display/origin IDs when resolvable, full evidence SHA/source, stage and reason. Distinguish no-attributed-commit-in-range; unknown/ambiguous spec; ineligible/already-terminal; stale-after-reopen; open-change-found; required-forge-unavailable (missing executable, unsupported forge, spawn/exit/auth/rate-limit or malformed response); closure-held; would-complete; applied; changed-during-apply. Persist nothing merely to explain a dry-run.
+
+    Retain observations BEFORE filtering candidates/clearing flips. A pure renderer formats targeted and aggregate summaries from those outcomes; do not deduce “no match” from an empty final flips vector. Example: `TASK-1588: commit 978c4974 matched; reconciliation deferred: required open-PR check unavailable; status unchanged; retry when forge access is restored.` An already-terminal diagnostic outage must be labeled as that diagnostic, not invented as a completion refusal for another spec. Genuine no-match remains a successful no-op with explicit scanned branch/range. Required unavailable evidence makes the command return a normal nonzero error after printing reasons, including --dry-run; do not invent a new numeric exit-code reservation. A diagnostic-only outage remains a warning and does not newly block otherwise qualified work.
+
+    Replace the information-losing Option path with a typed internal lookup result/reason. Preserve specs_with_open_prs as a compatibility wrapper if other callers need its conservative Option contract; one lower-level checked helper should own actual forge parsing. Fully valid `[]` means checked/no open change. A non-array JSON value, missing/invalid row number, nonzero exit or undecodable output is unavailable, not empty. The existing aggregate all-or-nothing refusal remains conservative: if any required lookup fails, preserve all normal candidates that this call would otherwise complete, with their exact reason; successful query results for other candidates can be reported but do not create a new partial-completion policy in this patch. Pure-git ForgeKind::None retains its existing no-change-request positive; a configured unreachable/unsupported forge must never be reclassified as pure git.
+
+    No offline completion fallback. Finding an explicit local trailer proves attribution, not satisfaction of every accepted completion gate. Do not substitute body prose, a branch-head trailer, “closed” for merged, forge title text, or an unavailable lookup for evidence. TASK-1600's stricter PR-ship completion attribution and this older replay parser have distinct existing contracts; this diagnostics patch does not unify or widen them. Existing supported subject/body completion trailers remain only where their current replay gates allow them. Do not change them on the assumption that every occurrence of an ID is delivered work.
+
+    ## Races, consistency and files
+
+    Pin/log the scanned local default-branch HEAD and range; candidate reasons refer to that snapshot, never to a ref reread with a different tip. Canonical UUID resolution handles display/origin remapping without borrowing unrelated IDs. Keep retain_fresh_auto_bump_flips, retain_fresh_stale_review_flips, auto_bump_evidence_is_stale, human_reopen_after_evidence and apply_auto_bump_flip rechecks. A human reopen or hold after collection must still defeat old evidence at application; already-completed diagnostics cannot erase that decision. No forge I/O while holding the store writer lock. No cached unavailable result becomes a later positive. Report actual applied changes separately from plans; preserve existing independent paths' behavior and report any partial work if another path applied before a required-check error. Do not promise whole-sweep atomicity.
+
+    Primary edits eventually belong in aida-cli-lib/src/lib.rs (handler, lookup and outcome renderer), its existing auto-bump/reconcile tests, and docs/cli/08-reporting.md / relevant lifecycle documentation for retry/exit semantics. No command flag, public MCP tool, requirement format, new gate or new daemon. If diagnostics reveal an existing write-time reopen race beyond these seams, record it on this same task for independent disposition rather than silently relaxing the fence or claiming it fixed by prose.
+
+    ## Concrete meaningful tests (proposed, NOT RUN)
+
+    Use real CLI in disposable code/store repos, fake HOME/AIDA_HOME and fake gh/glab responses; no live reconcile, vendor, queue or remote network. Seed exact historical subject at a controlled distance from HEAD so the 200-commit default is deterministic.
+
+    1. historical_trailer_unavailable_then_clear: actual --spec --dry-run with gh missing, nonzero/auth/rate-limit and malformed JSON variants retains Done plus objects/history/store HEAD, names matched SHA and required lookup failure, and exits nonzero without “no referencing commit.” Pair valid empty open-PR response: dry-run predicts completion; normal fixture invocation completes with correct provenance. Online open PR positive-for-refusal remains Done and names PR.
+    2. genuine_no_match_vs_sweep_diagnostic_unknown: no attributed commit yields honest no-match even if an unrelated Completed diagnostic fails. Pair matching eligible spec with required check failure and already-Completed spec with successful lookup. Full sweep and --spec summaries must distinguish all three.
+    3. attribution_is_not_free_text: prose-only mention, unrelated head/body occurrence, plan commit, ambiguous/remapped collision, malformed trailing group, closed-unmerged and out-of-range evidence never acquire new credit. Pair exact (SPEC-ID) (#N), supported multi-spec trailers and unambiguous stored-origin/display mapping under existing policy. Run existing ship TASK-1600 attribution tests unchanged.
+    4. preserve_reopen_fences: SHA at/before reopened_at_sha; legacy human Done/Completed -> Approved history; subsequent automated overwrite; and reopen between scan and apply all refuse old evidence. Pair a genuinely later qualifying commit and deliberate later decision allowed by existing rules. Include stale review-story/covers paths and closure BlockedBy holds so diagnostic refactoring cannot route around them.
+    5. multi_candidate_failure_is_conservative: A lookup succeeds, B lookup fails; neither normal flip is granted under the existing batch refusal. Both reasons retained, no false aggregate “nothing matched.” Pair all-success and a mixed open/clear result. Repeat is idempotent; no duplicate completion/history note.
+    6. unavailable_is_not_empty: configured GitLab unsupported, missing gh, non-array/partial/bad-row response refuse versus authoritative [] and pure-git fixtures succeed. Verify no fixture uses network and no normal test gains an env bypass. Run real command tests, not only formatter snapshots.
+
+    ## Boundaries and open questions
+
+    Diagnostic correctness first. The historical cause still needs an isolated reproduction against the relevant source/build; current source inspection already disproves the simplistic claim that (#PR) necessarily needs a forge lookup to extract the adjacent spec. That uncertainty does not justify offline completion. Independent advisor should bind the proposed nonzero required-unavailable behavior and internal typed-result shape before implementation. No operator question needed. No author approval, live-doer inference, source changes or testing claimed. Preserve all prior finding IDs and TASK-1593/TASK-1591/BUG-1811/BUG-1812 reservations.
+  created_at: 2026-10-08T16:48:37.877950755Z
+  modified_at: 2026-10-08T16:48:37.877950755Z
+  relayed_from: store-reconcile-sketch-author
 history:
 - id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
   author: joe
