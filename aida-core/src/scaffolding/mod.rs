@@ -2346,6 +2346,7 @@ aida show <SPEC-ID>
             // prepare-commit-msg hook — pins the orphan store SHA into
             // every code commit's `Aida-Store:` trailer. Pairs with
             // `aida store status`. trace:EPIC-21 | ai:claude
+            // trace:BUG-1810 | ai:antigravity
             if self.config.include_store_pair_hook {
                 let body = crate::templates::EMBEDDED_TEMPLATES
                     .get("hooks/aida-store-pair.sh")
