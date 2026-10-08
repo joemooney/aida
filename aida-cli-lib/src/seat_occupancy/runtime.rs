@@ -135,10 +135,13 @@ impl SeatPermit {
 /// Prints the C2 notice when the call claimed the seat.
 pub(crate) fn authorize(project_root: &Path, seat: &str, op: SeatOp) -> Result<SeatPermit> {
     let caller = current_caller(project_root);
-    authorize_as(project_root, seat, op, &caller, true)
+    authorize_with_caller(project_root, seat, op, &caller, true, None, || {
+        current_caller(project_root)
+    })
 }
 
-pub(crate) fn authorize_as(
+#[cfg(test)]
+fn authorize_as(
     project_root: &Path,
     seat: &str,
     op: SeatOp,
@@ -148,16 +151,35 @@ pub(crate) fn authorize_as(
     authorize_as_scoped(project_root, seat, op, caller, announce, None)
 }
 
-/// Core entry for gateways with an existing persisted local review snapshot.
-/// Construct the graph before entry: no store refresh/network while locked.
+/// Fixture entry with an injected caller and persisted local review snapshot.
+/// Production caller resolution belongs to the locked callback below.
 // trace:TASK-1607 | ai:codex
-pub(crate) fn authorize_as_scoped(
+#[cfg(test)]
+fn authorize_as_scoped(
     project_root: &Path,
     seat: &str,
     op: SeatOp,
     caller: &Caller,
     announce: bool,
     scope: Option<&super::scope::ChildScopeGraph>,
+) -> Result<SeatPermit> {
+    authorize_with_caller(project_root, seat, op, caller, announce, scope, || {
+        caller.clone()
+    })
+}
+
+// The pre-lock caller is only a fast-path hint. The real adapter resolves its
+// local authority and process binding again under the lock; tests inject owned
+// fixture callers. No store refresh, network or forge work belongs here.
+// trace:TASK-1607 | ai:codex
+fn authorize_with_caller(
+    project_root: &Path,
+    seat: &str,
+    op: SeatOp,
+    caller: &Caller,
+    announce: bool,
+    scope: Option<&super::scope::ChildScopeGraph>,
+    locked_caller: impl FnOnce() -> Caller,
 ) -> Result<SeatPermit> {
     let claims_possible = matches!(op, SeatOp::LoopStart { .. } | SeatOp::HandoffWrite)
         || caller.grant.as_ref().is_some_and(|g| g.seat == seat);
@@ -182,6 +204,7 @@ pub(crate) fn authorize_as_scoped(
         }
     }
     let mut guard = store.lock(seat)?;
+    let caller = locked_caller();
     let gate = with_system_ctx(|ctx| {
         let ctx = Ctx {
             now: ctx.now,
@@ -189,7 +212,7 @@ pub(crate) fn authorize_as_scoped(
             scope,
             requester_valid: ctx.requester_valid,
         };
-        super::gate(&mut guard.rec, &ctx, caller, &op)
+        super::gate(&mut guard.rec, &ctx, &caller, &op)
     });
     guard.save()?;
     match gate {
@@ -300,6 +323,56 @@ mod tests {
     fn loop_op() -> SeatOp {
         SeatOp::LoopStart {
             what: "start a burndown run".into(),
+        }
+    }
+
+    // trace:TASK-1607 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn gate_resolves_caller_under_lock_instead_of_trusting_prelock_grant() {
+        use fs2::FileExt;
+        let repo = git_repo();
+        let _env = crate::test_env::AmbientGuard::hermetic(repo.path(), None);
+        let anchor = Anchor::spawn();
+        let stale = caller_at(&anchor, "holder");
+        authorize_as(repo.path(), ORCHESTRATOR, loop_op(), &stale, false).unwrap();
+        let store = SeatStore::for_project(repo.path()).unwrap();
+        let before = std::fs::read(store.dir().join("orchestrator.json")).unwrap();
+        for valid in [false, true] {
+            let result = authorize_with_caller(
+                repo.path(),
+                ORCHESTRATOR,
+                loop_op(),
+                &stale,
+                false,
+                None,
+                || {
+                    let file = std::fs::OpenOptions::new()
+                        .write(true)
+                        .open(store.dir().join("orchestrator.lock"))
+                        .unwrap();
+                    assert_eq!(
+                        file.try_lock_exclusive().unwrap_err().kind(),
+                        std::io::ErrorKind::WouldBlock,
+                        "resolve only under the seat lock"
+                    );
+                    let mut fresh = stale.clone();
+                    if !valid {
+                        fresh.grant = None;
+                    }
+                    fresh
+                },
+            );
+            assert_eq!(
+                result.is_ok(),
+                valid,
+                "gate must use the fresh authority verdict"
+            );
+            drop(result);
+            assert_eq!(
+                std::fs::read(store.dir().join("orchestrator.json")).unwrap(),
+                before
+            );
         }
     }
 

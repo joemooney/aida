@@ -109,8 +109,10 @@ fn store(project_root: &Path) -> Result<SeatStore> {
 }
 
 fn run_claim(project_root: &Path, seat: &str) -> Result<()> {
-    let caller = current_caller(project_root);
     let mut guard = store(project_root)?.lock(seat)?;
+    // Resolve local grant/roster and process binding after any lock wait.
+    // trace:TASK-1607 | ai:codex
+    let caller = current_caller(project_root);
     let out = with_system_ctx(|ctx| super::claim(&mut guard.rec, ctx, &caller));
     guard.save()?;
     match out {
@@ -160,8 +162,10 @@ fn run_release(
     generation: u64,
     request: Option<&str>,
 ) -> Result<()> {
-    let caller = current_caller(project_root);
     let mut guard = store(project_root)?.lock(seat)?;
+    // Resolve local grant/roster and process binding after any lock wait.
+    // trace:TASK-1607 | ai:codex
+    let caller = current_caller(project_root);
     let out = with_transfer_ctx(project_root, |ctx| {
         super::release(&mut guard.rec, ctx, &caller, generation, request)
     });
@@ -181,8 +185,10 @@ fn run_release(
 }
 
 fn run_ack(project_root: &Path, seat: &str, request: &str, generation: u64) -> Result<()> {
-    let caller = current_caller(project_root);
     let mut guard = store(project_root)?.lock(seat)?;
+    // Resolve local grant/roster and process binding after any lock wait.
+    // trace:TASK-1607 | ai:codex
+    let caller = current_caller(project_root);
     let out = with_transfer_ctx(project_root, |ctx| {
         super::ack(&mut guard.rec, ctx, &caller, request, generation)
     });
@@ -213,10 +219,11 @@ fn run_takeover(
         Some(secs) => validate_grace(secs)?,
         None => cfg.takeover_grace_secs,
     };
-    let caller = current_caller(project_root);
     let store = store(project_root)?;
     let step = {
         let mut guard = store.lock(seat)?;
+        // trace:TASK-1607 | ai:codex
+        let caller = current_caller(project_root);
         let step = with_system_ctx(|ctx| {
             super::takeover(
                 &mut guard.rec,
