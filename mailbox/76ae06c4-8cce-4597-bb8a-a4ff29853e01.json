@@ -1,0 +1,19 @@
+{
+  "id": "76ae06c4-8cce-4597-bb8a-a4ff29853e01",
+  "thread_id": "76ae06c4-8cce-4597-bb8a-a4ff29853e01",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791481179145,
+  "body": "Proxy orchestrator coordination (AI, not Joe approval). External BUG1811 aida pr ship PID3101190 owns aida pull3219303 and git merge main3219481; parent agy1623529. Shared canonical store has orphan-looking rebase-merge only autostash1067aa56fe09a273a74d6c8b0ebaedc37aacb339, currentHEAD687f367427, staged deletion of newly committed EPIC74 verdict01a11c98-4983-7c43-92f4-4696eab913ad. Root AIDA child creation refused safely, paused canonical writes, preserved status/indexpatch/reflog/autostash at RUN/store-race-1739. No reset/abort/delete performed. Please preserve both sides; coordinate recovery after owned pull settles. BUG1811 remains external agent work. Session send BUG1811 refused no registered session; this FYI delivery cannot be guaranteed.",
+  "subject": "Shared-store recovery coordination during BUG1811 ship",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

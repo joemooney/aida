@@ -1,0 +1,19 @@
+{
+  "id": "47468ad3-47ca-4ad5-8ca6-534789042a6a",
+  "thread_id": "47468ad3-47ca-4ad5-8ca6-534789042a6a",
+  "from": "task1611-docs-recovery",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791480747563,
+  "body": "TASK-1611 correction pushed: HEAD 80a565402d42 tree 323d03797c0d (parent = reviewed 75368f0). One-line fix: cleanup README monthly commits now 28/643/139 (=810, calendar months by author date). inventory --check OK, diff --check OK, before/ copies verified intact. TASK1611_READY.md overlap claim corrected to 4 files (OVERVIEW, template+live cross-agent-onboarding, session-lifecycle). Report: run-20261008/TASK1611_CORRECTION_READY.md. No PR/merge/status changes; ready for new final-head reviewer.\n",
+  "subject": "TASK-1611 correction ready (80a5654)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
