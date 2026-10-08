@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:47:44.689506175Z
-modified_at: 2026-10-08T16:43:52.529540959Z
+modified_at: 2026-10-08T16:44:00.764317973Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -25,6 +25,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): bounded workflow fix approved and already queued. Use a 45-minute timeout on the Windows Run tests step (not a per-test guarantee): this gives twice the recorded ~22-minute healthy suite while turning the recorded >70-minute hang into a failure in under an hour. Retain cargo test --workspace --no-fail-fast, weekly Windows cadence, selected-path informational PR posture, main-only manual validation, Ubuntu requirements, notifications and 24-hour release freshness. No nextest migration, cross-platform policy expansion or live workflow dispatch. A separate implementer will update the workflow/docs contract and a different reviewer will verify actual changed scope; native Windows cancellation remains CI evidence rather than a local Linux pass.'
   created_at: 2026-10-08T16:35:38.694765418Z
   modified_at: 2026-10-08T16:35:38.694765418Z
+- id: 01a11c66-7b7c-78c1-a2fe-beb1a51e1b5a
+  author: joe
+  content: 'IMPLEMENTER (claude): delivered on branch task-1329 @ 3699bb10 (base b46aec1e): cross-platform.yml ''Run tests'' step timeout-minutes: 45 (step-level, not per-test; does not identify hung test), guide + test assertion updated. Status Done (not Completed): native Windows cancellation unverified locally, awaits runner evidence; independent review pending. No PR opened.'
+  created_at: 2026-10-08T16:44:00.764317973Z
+  modified_at: 2026-10-08T16:44:00.764317973Z
+  session_id: 01a11c5f-b12e-77e0-9d00-34d9797b597c
 history:
 - id: 01a1189e-6dce-7be3-ab02-05713cfac939
   author: joe
