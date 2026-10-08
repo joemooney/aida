@@ -3,18 +3,37 @@ spec_id: TASK-1-225
 agreed_id: TASK-1332
 title: Store sync pre-commit and rebase need the existing writer lock
 description: 'TASK-1604 isolates the fetched rebase target from shared FETCH_HEAD and corrects the error hint. Inspection found aida db sync staging/commit/rebase in git_backend_cmd.rs does not hold db::store_lock across that window, unlike backend spec mutations. The original report also saw cannot lock ref HEAD during chore: sync pending changes. Target isolation does not fix concurrent commits/rebases on the same store worktree; follow-up should reuse the existing re-entrant store writer lock around sync, audit other network store writers, and add concurrent-process regression coverage. No race was reproduced against the live shared store during this implementation.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-06T07:25:55.876829177Z
+modified_at: 2026-10-07T23:08:36.884420627Z
 req_type: Task
 tags:
 - from-advisor:TASK-1604
 - kind:observation
 - linked:TASK-1604
 - severity:minor
+comments:
+- id: 01a1189e-559a-7dc2-8c66-06c0293a6b7f
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approve reuse of existing writer-lock discipline for store sync as a store-integrity sketch item, not implementation signoff. Sketch owner/lock acquisition/reentrancy/network window and real concurrent-process fixtures; independent advisor signoff required before queue/implementation. No live-store race experiment.'
+  created_at: 2026-10-07T23:06:32.218415926Z
+  modified_at: 2026-10-07T23:06:32.218415926Z
+- id: 01a118a0-3c94-76c0-a0d5-48b60378bace
+  author: joe
+  content: 'SKETCH REQUEST, no implementation: owning TASK-1332. Reuse existing reentrant store writer lock across sync staging/commit/rebase. Independently inspect git_backend_cmd.rs, db::store_lock, network fetch/rebase writers; specify owner/trigger, exact lock surface and reentrancy/deadlock order, fetch vs mutation boundary, failure preservation, helper symbols, concurrent-process tests with fake HOME/stores, out-of-scope store format/authority changes. Record SKETCH (awaiting advisor signoff) on spec, then obtain a DIFFERENT advisor signoff before queue/implementation. No live shared-store race test; no code or merge.'
+  created_at: 2026-10-07T23:08:36.884420627Z
+  modified_at: 2026-10-07T23:08:36.884420627Z
+history:
+- id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
+  author: joe
+  timestamp: 2026-10-07T23:06:34.233479238Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
   branch: task-1604

@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:58:29.391669890Z
-modified_at: 2026-10-06T04:01:09.937440256Z
+modified_at: 2026-10-07T23:07:55.765495616Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -30,3 +30,15 @@ filed_at:
   aida_build_sha: dafb66432e
   vendor: antigravity
   session: 8440bd1e-cba5-444c-8d52-5cfa9f3753e2
+decision_request:
+  question: Should meaningful reconstitution measurement require eight organically criterion-traced specs per subject, or should we hold the numeric threshold until a natural test corpus exists? Bulk backfill must not be treated as independent evidence.
+  choices:
+  - label: Adopt eight-spec readiness
+    consequence: Defines the product measurement threshold; normal development must supply independent tests
+    resolution: noop
+  - label: Hold numeric threshold
+    consequence: Keeps delta explicitly unknown until natural corpus evidence supports a threshold
+    resolution: noop
+  recommended: 1
+  rationale: No independent corpus currently demonstrates a meaningful delta; avoid defining success from spec-derived tests.
+  asked_at: 2026-10-07T23:07:55.765495616Z

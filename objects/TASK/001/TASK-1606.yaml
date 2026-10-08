@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:34:47.162918609Z
-modified_at: 2026-10-07T17:31:47.824531307Z
+modified_at: 2026-10-07T23:08:31.257632769Z
 req_type: Task
 tags:
 - operator-ux
@@ -171,6 +171,11 @@ comments:
   content: 'Final sole-implementer verification: source checkpoint 7e007f83dcecced4da73b5f32838a63367db56f3 on fix-day-2026-10-07 passed complete clean-environment cargo test --workspace (exit 0, 9,851 passed, 0 failed, 7 ignored, 51 suites) and make check-ci-fast (exit 0, 21 gates). Final report commit eb96823bda625d6e343d8bfbab996585541d0a79 changes only docs/plans/2026-10-07-fix-day-notes.md; production/test code is identical to verified source. Native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33, sibling /home/joe/ai/aida-fix-day-2026-10-07. Checksum manifest and raw evidence retained privately at /home/joe/ai/aida/.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/. Initial foreign-AIDA_BIN failures and obsolete raw-JSON template guard correction are documented. PR-2435 remains OPEN behind supervised-mode gate (ship exit 23); two sandbox attempts refused driver authority before launch (exit 1), so vendor end-to-end rate is unverified. TASK-1338/TASK-1337 promotion, authorized sandbox measurement, whole-branch advisor review, one PR and operator merge remain pending. No per-fix PR, gate override, real-store drain, completion status, or independent review verdict claimed.'
   created_at: 2026-10-07T17:31:47.824516118Z
   modified_at: 2026-10-07T17:31:47.824516118Z
+- id: 01a118a0-2699-75a1-bcae-087e0c64d2be
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: adopt fix-day-2026-10-07 as the FIRST unit, draft PR-2452 at exact eb96823bda625d6e343d8bfbab996585541d0a79, base 738653fb3e6de71d0975047adb143c5f31a25d85. Source/test SHA 7e007f83dcecced4da73b5f32838a63367db56f3; only evidence docs follow. All 63 evidence-file hashes matched manifest. ONE independent whole-branch review brief saved at /tmp/aida-fix-day-final-review.md; launch fix-day-final-review-2452 refused before vendor spawn because advisor grant lacks reviewer delegation. No review approval claimed. Two sandbox E2E runs remain unmeasured, original authority refusals retained. No holds cleared or authority-sensitive merge performed. Existing PR-2445 and PR-2450 remain open/held until final reviewed adoption/operator decision; avoid redispatching their implementations. Remaining routine backlog decisions authorized by latest operator instruction, superseding earlier no-backlog day scope while preserving one combined fix-day review.'
+  created_at: 2026-10-07T23:08:31.257632769Z
+  modified_at: 2026-10-07T23:08:31.257632769Z
 history:
 - id: 01a11400-c877-7e40-a909-567b18abd52c
   author: joe

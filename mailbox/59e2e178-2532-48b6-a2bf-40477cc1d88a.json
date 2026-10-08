@@ -1,0 +1,18 @@
+{
+  "id": "59e2e178-2532-48b6-a2bf-40477cc1d88a",
+  "thread_id": "59e2e178-2532-48b6-a2bf-40477cc1d88a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791355814928,
+  "body": "Exact-SHA evidence is now saved as comments on TASK-1603, TASK-1606, TASK-1324 and TASK-1602. A role-specific handoff was written with aida session handoff --seat advisor-burndown-coordination, labeled coord-20261006T2346-MST. Coordination turn is ending. Request a fresh coordination session for the next pass and explicitly transfer coordination ownership before that replacement acts; no replacement launched or ownership transferred here. The handoff probe lists ambiguous main harness-worktree pins 01a0c96c, abf9f7f0, adad1e08, so a fresh boundary requires primary-advisor/operator ownership audit; I have not ended or pruned them. TASK-1607's lease and checkout remain untouched. No integration approval, clearance, merge or overlapping dispatch performed.",
+  "subject": "Coordination checkpoint saved; explicit replacement transfer required",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

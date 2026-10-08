@@ -1,0 +1,18 @@
+{
+  "id": "63a204e3-ee98-4829-8074-219bdbd83a16",
+  "thread_id": "63a204e3-ee98-4829-8074-219bdbd83a16",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1791356155368,
+  "body": "Operator confirmed terminal mapping: backlog-implementer, backlog-regression, backlog-reviewer, backlog-verifier-1, backlog-integrator. Current assignments remain unassigned; identity/liveness awaiting terminal self-response. Do not mistake ended launcher IDs for current native session identities. First operator-delivery assignment and all lane evidence handoffs prepared in .aida/handoff/advisor-burndown-coordination/latest.md, tied to TASK-1603 source eec6fca71808f3d9f67179f1b54fb51260fd90ec. Start with sole implementer incorporating task-1603 on separate fix-day branch, keep both doc paragraphs, check delayed-child and concurrent-token P1s, deliver exact-SHA test checkpoint; preserve one end-of-day whole-branch review. No delivery to lanes/dispatch, restart, lease prune, staffing assertion, integration approval, clearance or merge. Correction verified: PR-2435 unattributed duplicate removed with audit backup; no inferred provenance. Continue existing coordination session; prior fresh-session request withdrawn per operator.",
+  "subject": "Operator-confirmed roster; TASK-1603 assignment prepared for operator delivery",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "690ccd25-8423-477e-8306-60ecb5eef880",
+  "thread_id": "690ccd25-8423-477e-8306-60ecb5eef880",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-reviewer"
+  },
+  "timestamp": 1791414520718,
+  "body": "YOUR SEAT: independent REVIEWER; do not implement or merge. One FINAL whole-branch review, not a per-fix review. Target eb96823bda625d6e343d8bfbab996585541d0a79 on fix-day-2026-10-07; base 738653fb3e6de71d0975047adb143c5f31a25d85. Read git diff BASE TARGET, owning requirements TASK-1603 TASK-1338 TASK-1606 TASK-1337 TASK-1339, approved fix-day plan, both TASK-1603 historical P1 briefs, and recorded notes. Use an independent scratch worktree/clone; do not alter implementer checkout. Production/tests match verified 7e007f83dcecced4da73b5f32838a63367db56f3; only evidence report follows. STRICT review for drain, queue, store completion, provenance and ship gates: delayed-child batch/nextN must not exhaust queue; concurrent tokens retain authority and cleanup isolation; reopen/pull fence excludes prior evidence; writers stamp new review rounds and refuse malformed retained provenance; shared ownership/CI deadline, early refusal and post-wait rechecks; role/branch/delegation checks before mutations and manual continuation; authority floors never weaken. Classify authority-changing behavior explicitly for operator merge. Run targeted checks with isolated test environment (remove inherited AIDA_BIN from test process only; preserve production grants/gates). 63-file manifest verified by coordinator, workspace 9851 passed and 21 fast gates reported at final code SHA; not a substitute for independent review. Sandbox end-to-end measurement remains unverified. Report criterion-by-criterion verified/fail/unverified with files, symbols, exact SHA, actual commands/output. Write review report and record real verdict through canonical aida review record at exact SHA, never direct JSON heredocs. Do not claim green CI or completed sandbox runs. Return VERDICT APPROVE/REQUEST_CHANGES with blockers and evidence; no hold clearance or merge.\nAdopted draft PR: https://github.com/joemooney/aida/pull/2452. Current reviewer launch refused for missing reviewer child delegation; do not claim a reviewer is staffed. This brief is ready for operator-authorized delivery after the gate is satisfied.\n",
+  "subject": "Prepared ONE final fix-day review PR-2452; launch grant gate pending",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

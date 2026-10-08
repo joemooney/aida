@@ -10,16 +10,30 @@ description: |-
   Suggested fix: honor `[drain] require_head = true` in burndown run's readiness gate (refuse, not warn), and/or accept --require-head there for parity. Secondary: `make build-fast` builds target/agent, which neither `aida dev activate` (debug|release only) nor a release-pinned PATH resolves — the warning's own fix hint cannot take effect for a release-pinned shell (separate UX gap, observed twice today).
 
   Interim operator rule (already in the seat handoff): set `[drain] require_head = true` and verify `aida --version` vs main before any launcher.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T16:43:20.104709930Z
-modified_at: 2026-10-06T16:43:20.104709930Z
+modified_at: 2026-10-07T23:07:49.846593256Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a1189f-7c68-7920-a440-091566fbc275
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): reject the missing --require-head observation as obsolete. Current main cli.rs exposes BurndownRun.require_head and lib.rs enforce_wave_launch_gate(project_root, require_head) applies it. STORY-1414 is the completed survivor for the freshness gate. dev_cmd.rs now considers target/agent in automatic selection; explicit release pinning is intentional and is not grounds to widen launcher authority. This is source verification, not a claimed native stale-binary rerun. No code or gate change required for the original missing-flag premise.'
+  created_at: 2026-10-07T23:07:47.688430481Z
+  modified_at: 2026-10-07T23:07:47.688430481Z
+history:
+- id: 01a1189f-84d6-7592-b4a4-fe043b4b519b
+  author: joe
+  timestamp: 2026-10-07T23:07:49.846586031Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 010de0e6894d84ee6d0f1ea848a85b9b1835f71c
   branch: main

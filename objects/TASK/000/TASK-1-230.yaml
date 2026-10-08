@@ -3,12 +3,12 @@ spec_id: TASK-1-230
 agreed_id: TASK-1337
 title: 'guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant — and the last failure left a half-started session'
 description: 'Operator, 2026-10-06 18:45-18:51, launching ''aida queue work TASK-1607 --guided --branch story-1485''. Failures in order: (1) lease taken under role advisor because the operator''s shell was the advisor seat; (2) after ending it, ''InProgress but no local lease'' (status left stuck by the ended lease — same shape as TASK-1603); (3) role resolved ''advisor (cluster-derived)'' from the queue entry''s for_role despite the shell being in role:implementer — the shell''s explicit role should win or the mismatch should be stated before acting; (4) ''git worktree add'' failed because story-1485 was checked out in an idle, clean, unleased worktree — queue work could detect that and offer to retire it; (5) after creating the session, lease, worktree and Approved->InProgress bump, launch failed with ''the active implementer grant does not delegate implementer'' — a check that is knowable BEFORE any side effects. Ask: run the delegation check, the branch-availability check and the role resolution as a preflight before any state change; when a launch fails post-setup, print the exact manual continuation (worktree enter + claude ''/aida-guided-implement <ID>'') rather than only the error. Also: the guided-lane tag did not keep TASK-1607 out of ''queue work --drain'' — only ''--mode guided'' did; tag and mode should not diverge silently. Operator quote: ''aargh so many attempts to get the command line right''.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:51:55.840375581Z
-modified_at: 2026-10-07T17:31:50.354113712Z
+modified_at: 2026-10-07T23:06:11.238378895Z
 req_type: Task
 tags:
 - from-advisor:TASK-1607
@@ -31,6 +31,19 @@ comments:
   content: 'Final sole-implementer verification: source checkpoint 7e007f83dcecced4da73b5f32838a63367db56f3 on fix-day-2026-10-07 passed complete clean-environment cargo test --workspace (exit 0, 9,851 passed, 0 failed, 7 ignored, 51 suites) and make check-ci-fast (exit 0, 21 gates). Final report commit eb96823bda625d6e343d8bfbab996585541d0a79 changes only docs/plans/2026-10-07-fix-day-notes.md; production/test code is identical to verified source. Native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33, sibling /home/joe/ai/aida-fix-day-2026-10-07. Checksum manifest and raw evidence retained privately at /home/joe/ai/aida/.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/. Initial foreign-AIDA_BIN failures and obsolete raw-JSON template guard correction are documented. PR-2435 remains OPEN behind supervised-mode gate (ship exit 23); two sandbox attempts refused driver authority before launch (exit 1), so vendor end-to-end rate is unverified. TASK-1338/TASK-1337 promotion, authorized sandbox measurement, whole-branch advisor review, one PR and operator merge remain pending. No per-fix PR, gate override, real-store drain, completion status, or independent review verdict claimed.'
   created_at: 2026-10-07T17:31:50.354108019Z
   modified_at: 2026-10-07T17:31:50.354108019Z
+- id: 01a1189d-fbb0-7e53-a910-854559f0061a
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: adopt the operator-approved fix-day implementation for review; promote Draft to Approved without creating a second implementation lane. Covered checkpoint c418c60fe7a58058fbea577b55e85bdbea1e1f65, final branch eb96823bda625d6e343d8bfbab996585541d0a79. Independent whole-branch review and sandbox evidence remain pending. Authority-sensitive merge stays with Joe; no gate policy approved or waived.'
+  created_at: 2026-10-07T23:06:09.200643790Z
+  modified_at: 2026-10-07T23:06:09.200643790Z
+history:
+- id: 01a1189e-03a6-7822-bef8-9bf2580cdc73
+  author: joe
+  timestamp: 2026-10-07T23:06:11.238371319Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main

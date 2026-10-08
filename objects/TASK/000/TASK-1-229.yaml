@@ -3,12 +3,12 @@ spec_id: TASK-1-229
 agreed_id: TASK-1338
 title: queue in-flight 'Stuck — PR merged, auto-bump missed' recommends reconcile-status for a deliberately reopened spec
 description: 'aida queue list (advisor, 2026-10-06 18:40) lists TASK-1538 under ''Stuck — PR merged, auto-bump missed (merged 34 hours ago)'' with Next: ''aida db reconcile-status replays the missed bumps to Completed''. TASK-1538 was deliberately REOPENED on 2026-10-05 because pr ship scraped (TASK-1538) into PR 2428''s squash subject and merge-time completion fired with ~1 of ~45 modules split. Following the hint re-completes a spec the operator reopened on purpose and defeats the reopen fence. The in-flight classifier should treat a recorded reopen after the merge (comment/oplog) as authoritative and not suggest reconcile; reconcile-status itself should likely refuse to bump a spec reopened after the referencing merge. Separately: TASK-1538 now reads status ''done'' although the 17:35 advisor handoff recorded it as Approved — provenance of that move unverified.'
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T01:43:52.190993729Z
-modified_at: 2026-10-07T17:31:45.370874875Z
+modified_at: 2026-10-07T23:06:15.265773080Z
 req_type: Task
 tags:
 - from-advisor:TASK-1538
@@ -43,6 +43,19 @@ comments:
   content: 'Final sole-implementer verification: source checkpoint 7e007f83dcecced4da73b5f32838a63367db56f3 on fix-day-2026-10-07 passed complete clean-environment cargo test --workspace (exit 0, 9,851 passed, 0 failed, 7 ignored, 51 suites) and make check-ci-fast (exit 0, 21 gates). Final report commit eb96823bda625d6e343d8bfbab996585541d0a79 changes only docs/plans/2026-10-07-fix-day-notes.md; production/test code is identical to verified source. Native Codex session 01a11712-4398-7781-a13c-d53e0e6b7e33, sibling /home/joe/ai/aida-fix-day-2026-10-07. Checksum manifest and raw evidence retained privately at /home/joe/ai/aida/.aida/handoff/fix-day-2026-10-07/01a11712-4398-7781-a13c-d53e0e6b7e33/evidence/. Initial foreign-AIDA_BIN failures and obsolete raw-JSON template guard correction are documented. PR-2435 remains OPEN behind supervised-mode gate (ship exit 23); two sandbox attempts refused driver authority before launch (exit 1), so vendor end-to-end rate is unverified. TASK-1338/TASK-1337 promotion, authorized sandbox measurement, whole-branch advisor review, one PR and operator merge remain pending. No per-fix PR, gate override, real-store drain, completion status, or independent review verdict claimed.'
   created_at: 2026-10-07T17:31:45.370868097Z
   modified_at: 2026-10-07T17:31:45.370868097Z
+- id: 01a1189e-0b93-7571-bd12-4b4744c873c4
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: adopt the operator-approved fix-day reopen-fence implementation for review; promote Draft to Approved without redispatch. Checkpoint d7aa7bf252eef32c180e50e61a6dcc6a942cfbaf, final code 7e007f83dcecced4da73b5f32838a63367db56f3. No Completed/Done credit before reviewed merge; deliberately reopened parent statuses stay authoritative.'
+  created_at: 2026-10-07T23:06:13.267489253Z
+  modified_at: 2026-10-07T23:06:13.267489253Z
+history:
+- id: 01a1189e-1361-7722-b2b2-eace2c0efa39
+  author: joe
+  timestamp: 2026-10-07T23:06:15.265765402Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: main

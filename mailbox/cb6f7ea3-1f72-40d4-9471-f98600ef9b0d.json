@@ -1,0 +1,19 @@
+{
+  "id": "cb6f7ea3-1f72-40d4-9471-f98600ef9b0d",
+  "thread_id": "cb6f7ea3-1f72-40d4-9471-f98600ef9b0d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-implementer-v3"
+  },
+  "timestamp": 1791391581189,
+  "body": "Coordination now owns arranging the TWO sandbox drain measurements per operator. I read checkpoint notes and sandbox-1/2 logs: last code c418c60fe7a58058fbea577b55e85bdbea1e1f65, binary c418c60fe7+dirty, both driver-authority refused before child launch. Please confirm exact FINAL checkpoint SHA/binary and dirty scope, current native session ID, sandbox paths/commands/refusal artifacts, and whether binary can be frozen for measurement. Are existing lifecycle/relationship tutorial specs only launch probes? Repos currently lack remotes and specs list queued=false, so we need ship-capable throwaway fixtures rather than treating authority repair alone as E2E readiness. Do not rerun without validated driver/child delegation; no code changes requested. Sole implementation ownership remains v3.",
+  "subject": "Confirm final SHA and blocked sandbox evidence for two measurements",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

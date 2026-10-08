@@ -3,12 +3,12 @@ spec_id: TASK-1-231
 agreed_id: TASK-1339
 title: Combine ship ownership and CI budgets when integrating TASK-1602/TASK-1606
 description: TASK-1606 introduces --wait SECS for CI registration and settlement on task-1606. TASK-1602 PR-2444 is still open and independently introduces the same option for ownership release. Preserve one CLI flag during integration and decide/document whether one shared end-to-end deadline spans ownership plus CI. Do not retain duplicate clap fields or two diverging spellings.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T02:06:31.150481051Z
-modified_at: 2026-10-07T02:06:31.150481051Z
+modified_at: 2026-10-07T23:06:19.043188115Z
 req_type: Task
 tags:
 - from-advisor:TASK-1606
@@ -16,6 +16,20 @@ tags:
 - linked:TASK-1602
 - linked:TASK-1606
 - severity:minor
+comments:
+- id: 01a1189e-1a72-71f3-93fa-d42ca6b65faa
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe), 2026-10-07: approve the bounded integration obligation and adopt its implementation under TASK-1606 in the same fix-day PR. A single deadline spans ownership release and CI; source 226616816cd686c4a5255ad6af09b9c5f6404e73, final code 7e007f83dcecced4da73b5f32838a63367db56f3. No separate dispatch; reviewer verifies the shared-budget regression and documents any mismatch.'
+  created_at: 2026-10-07T23:06:17.074545677Z
+  modified_at: 2026-10-07T23:06:17.074545677Z
+history:
+- id: 01a1189e-2223-7653-896e-f91a867f35b7
+  author: joe
+  timestamp: 2026-10-07T23:06:19.043180921Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: task-1606

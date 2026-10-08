@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T02:00:11.140223762Z
-modified_at: 2026-10-07T02:00:18.795776067Z
+modified_at: 2026-10-07T23:08:03.512498933Z
 req_type: Task
 tags:
 - follow-up
@@ -29,6 +29,12 @@ relationships:
   target_id: 01a11409-166a-7532-811a-eb943fe701d0
   created_at: 2026-10-07T02:00:18.795771352Z
   created_by: joe
+comments:
+- id: 01a1189f-941b-7c73-8e25-c6edcacf3320
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): retain Draft for operator disposition. This makes currently refused orchestrator-protected operations authorize on a new platform by resolving Unknown to Alive; authority-changing implementation/merge must not be rubber-stamped by proxy. Parent TASK-1607 is unmerged with RequestChanges. Native platform validation and independent sketch signoff required; no dispatch before those gates. Proposed direction remains the existing tri-state fail-closed contract, never assume Alive on errors.'
+  created_at: 2026-10-07T23:07:53.755565481Z
+  modified_at: 2026-10-07T23:07:53.755565481Z
 filed_at:
   code_sha: 70dfea6359d6556aadc97df85193d231cacd32bb
   branch: story-1485
@@ -37,3 +43,13 @@ filed_at:
   aida_build_sha: bb5572f368
   vendor: antigravity
   session: 1396dbed-b87b-4ab3-a393-3d8990561c54
+decision_request:
+  question: Authorize the proposed fail-closed native Windows process-identity probe after TASK-1607 and independent sketch review, or retain Unknown and refuse protected operations on Windows?
+  choices:
+  - label: Authorize native probe
+    consequence: Requires native identity and access-denied tests and operator-only merge
+    resolution: noop
+  - label: Retain refusal
+    consequence: No Windows protected-operation enablement yet
+    resolution: noop
+  asked_at: 2026-10-07T23:08:03.512498933Z

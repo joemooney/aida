@@ -8,12 +8,21 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T04:06:39.618553624Z
-modified_at: 2026-10-06T04:06:39.618553624Z
+modified_at: 2026-10-07T23:06:43.986155648Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:minor
+comments:
+- id: 01a1189e-7c3a-7980-8bcd-c03db40d0427
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): retain the draft observation on conditional shelf until a native Windows rerun reproduces the precise terminate_reports_survivors_and_live_pids_tracks_real_processes failure. The spec explicitly requests recurrence before promotion; one old run is not proof of a persistent defect. Deferral is unfinished work, not burndown credit.'
+  created_at: 2026-10-07T23:06:42.106466403Z
+  modified_at: 2026-10-07T23:06:42.106466403Z
+deferred: true
+deferred_at: 2026-10-07T23:06:43.986155648Z
+deferred_until: A native Windows rerun reproduces the exact terminate_reports_survivors_and_live_pids_tracks_real_processes survivor failure
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main

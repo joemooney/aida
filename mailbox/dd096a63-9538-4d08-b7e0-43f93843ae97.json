@@ -1,0 +1,19 @@
+{
+  "id": "dd096a63-9538-4d08-b7e0-43f93843ae97",
+  "thread_id": "dd096a63-9538-4d08-b7e0-43f93843ae97",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-regression"
+  },
+  "timestamp": 1791391581228,
+  "body": "Operator assigns coordination ownership of arranging two sandbox drain measurements. Request a concrete testing recipe/fixture handoff, not production implementation: target reported code c418c60fe7a58058fbea577b55e85bdbea1e1f65 pending v3 final confirmation; final branch binary /home/joe/ai/aida-fix-day-2026-10-07/target/debug/aida reports c418c60fe7+dirty (notes-only per implementer). Prior repos/stores /tmp/aida-fix-day-sandboxes-484ycwh8/run-{1,2}/{repo,store}; logs /tmp/aida-fix-day-evidence/sandbox-{1,2}.log and sandbox-results.json show exit 1 driver-authority refusal. Current fixtures are tutorial tasks, unqueued, no remote. Prepare three runnable sandbox-only tasks per run, isolated queue/store and throwaway forge/remote, preserving authority/seat/email/hold/review gates. Identify dispatch seat (product/advisor/integrator) and actual phase child-seat/delegation chain, including no delegation inheritance in issued child grants. Do not manufacture grants or use force; standard human-terminal role enter is required for missing delegated seats. Report recipe, fixture readiness, dry-run selected set, SHA/binary and exact human action before actual rerun. Use separate throwaway repos; do not edit v3 checkout/shared branch or run against real store. Return actual shipped/launch-refused/other per-member logs. This is testing coordination on already authorized measurements, not a second implementation lane.",
+  "subject": "Two sandbox measurements: fixture and child-authority recipe needed",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

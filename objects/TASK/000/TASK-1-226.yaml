@@ -10,16 +10,35 @@ description: |-
   Hypothesis: completion credit for these titles resolves through the trailing (#PR) group via a forge lookup; when that lookup fails the spec is skipped with no per-spec warning, and the operator-facing message ("no eligible spec had a referencing commit") misattributes the cause. Expected: either credit the explicit (SPEC-ID) group without the forge, or surface the forge failure as the reason and exit nonzero-ish so the operator retries.
 
   Repro: with forge unreachable, `aida db reconcile-status --spec TASK-1588 --dry-run`. Recovery check: rerun when forge calls succeed — if it still refuses, the parser is discarding the (SPEC-ID) group as title prose (TASK-1600 trailing-group rule) and that is a worse bug.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T13:33:43.276932407Z
-modified_at: 2026-10-06T13:33:43.276932407Z
+modified_at: 2026-10-07T23:08:38.727090240Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a1189e-42e5-7350-b8ca-34423bde7362
+  author: joe
+  content: 'PROXY DECISION (orchestrator for Joe): approve bounded diagnosis of missing per-spec forge-unavailable evidence. Never grant completion from ambiguous trailers or weaken the reopen fence. Because changes may cross store completion/evidence semantics, obtain a sketch and independent signoff before code or queueing; no force reconcile against real store.'
+  created_at: 2026-10-07T23:06:27.429172763Z
+  modified_at: 2026-10-07T23:06:27.429172763Z
+- id: 01a118a0-43c7-73d2-9931-1bcb052d51f1
+  author: joe
+  content: 'SKETCH REQUEST, no implementation: owning TASK-1335. Investigate forge-unavailable reconcile explanation while preserving strict title trailers, reopened-at fences and completion provenance. Distinguish referencing-commit absent from forge lookup unavailable. Specify owner/trigger, helper path and structured diagnostics, race/error semantics, tests with fake forge returning unavailable, log exact historical repro; no fallback that grants completion from prose/unrelated trailers. Record SKETCH (awaiting advisor signoff), then a DIFFERENT advisor signoff before queue/implementation. No force live reconciliation or code change.'
+  created_at: 2026-10-07T23:08:38.727090240Z
+  modified_at: 2026-10-07T23:08:38.727090240Z
+history:
+- id: 01a1189e-4aa7-77c0-86b0-25a565fa480f
+  author: joe
+  timestamp: 2026-10-07T23:06:29.415296799Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cd1aa538485b6d2c91df86ed41e04edeccbaea56
   branch: main

@@ -1,0 +1,19 @@
+{
+  "id": "fb579a9c-c0ab-4ad0-8f06-af796dba4719",
+  "thread_id": "fb579a9c-c0ab-4ad0-8f06-af796dba4719",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "backlog-implementer-v3"
+  },
+  "timestamp": 1791390748108,
+  "body": "The operator confirms backlog-implementer-v3 acknowledged instructions and owns the SOLE fix-day implementation lane; earlier implementation sessions are superseded. This is a checkpoint-evidence request on that existing assignment, not new work. Please report actual native session ID, owned scope/lease, worktree/branch, base SHA, FULL checkpoint SHA, completed fix-day items, exact commands/results/log artifacts, blockers and next action. If no ready checkpoint exists, report that without inventing a SHA. Coordination will prepare backlog-regression and backlog-verifier-1 handoffs against the reported SHA, with one final whole-branch code review. Registry repair is not required; do not restart sessions or prune ambiguous leases for this request.",
+  "subject": "Sole-owner v3 checkpoint evidence request",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
