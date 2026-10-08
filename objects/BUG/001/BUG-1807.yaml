@@ -3,12 +3,12 @@ spec_id: BUG-1807
 agreed_id: BUG-1807
 title: Use MR identifiers and reliably queue GitLab review handoffs
 description: GitLab implementer completion and handoff output must identify merge requests as MR-N, generate `aida queue work MR-N --role reviewer`, and reliably create the Review MR-N queue story before reporting completion. GitHub must continue to use PR-N. Add forge-specific regression coverage for identifier rendering, commands, and auto-queue behavior. Reproduced from qci#BUG-022 and again on MR !35, where the lifecycle envelope used PR-35 and failed to recognize the existing Review MR-35 story.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:00.555688987Z
-modified_at: 2026-10-08T05:27:49.760455819Z
+modified_at: 2026-10-08T05:36:53.361919920Z
 req_type: Bug
 tags:
 - from-qci:BUG-022
@@ -124,6 +124,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a11a03-b62c-7383-926b-70dd8c697077
+  author: aida-auto-bump
+  timestamp: 2026-10-08T05:36:53.292784180Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a11a03-b671-7120-86f9-2cf550a79560
+  timestamp: 2026-10-08T05:36:53.361912305Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-1807-2026-10-08T040129Z.md.acked
+  commit_sha: 7aa944a4b3dfff6d2e03dcdb7463f677d4c57805
+  summary: 'Independent APPROVE: classified existing strict inventory probe; only inventory count/docs changed, no authority exception or weakened guard. Exact-head trust controls, BUG-1807 and CLI fault probes passed; workflow filter passed after an unexplained queued SIGTERM. Fresh required CI 37729610953 including full workspace passed. Prior failed/interrupted local full runs remain non-green. Report: .aida/handoff/bug1807/CI_INVENTORY_INDEPENDENT_REVIEW.md.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
@@ -134,4 +149,6 @@ filed_at:
   vendor: codex
 implementation_info:
   implemented: false
+  completed_at: 2026-10-08T05:36:53.292775305Z
+  completion_sha: 7aa944a4b3dfff6d2e03dcdb7463f677d4c57805
   reopened_at_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
