@@ -3,12 +3,12 @@ spec_id: TASK-1-231
 agreed_id: TASK-1339
 title: Combine ship ownership and CI budgets when integrating TASK-1602/TASK-1606
 description: TASK-1606 introduces --wait SECS for CI registration and settlement on task-1606. TASK-1602 PR-2444 is still open and independently introduces the same option for ownership release. Preserve one CLI flag during integration and decide/document whether one shared end-to-end deadline spans ownership plus CI. Do not retain duplicate clap fields or two diverging spellings.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-07T02:06:31.150481051Z
-modified_at: 2026-10-07T23:06:19.043188115Z
+modified_at: 2026-10-08T01:11:08.994256747Z
 req_type: Task
 tags:
 - from-advisor:TASK-1606
@@ -30,6 +30,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a11910-6b48-7230-a52c-c371cb834a0b
+  author: aida-auto-bump
+  timestamp: 2026-10-08T01:11:08.872188363Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a11910-6bc2-7513-8e8d-fbd488f8db41
+  timestamp: 2026-10-08T01:11:08.994217640Z
+  agent: aida
+  commit_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
+  summary: Fresh independent scoped APPROVE; P1 corrected; review-2452-rereview.md; plan sandbox measurements and human hold clearance remain outstanding
+  review_verdict: approved
 filed_at:
   code_sha: bb5572f368699693a012c25cce72fd4e521124cb
   branch: task-1606
@@ -37,3 +51,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-08T01:11:08.872176503Z
+  completion_sha: a5cf15e9e55ba6c858ac833ac41d2eb22e0e93b1
