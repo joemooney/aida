@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-09-30T01:53:56.259546858Z
+modified_at: 2026-10-08T19:07:12.866675908Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -732,6 +732,135 @@ comments:
   created_at: 2026-09-29T22:27:29.859186716Z
   modified_at: 2026-09-29T22:27:29.859186716Z
   session_id: b2195326-c6b7-41c7-afb5-aa27b60756e2
+- id: 01a11ce9-9663-74f3-bfb5-8ecf7b1b10ca
+  author: joe
+  content: |
+    # TASK-1526 default-budget independent evidence
+
+    **Verdict: REQUESTCHANGES — the requested every-reader <2s acceptance measurement fails on the pinned source.**
+
+    Report finalized: 2026-10-08T19:02:55.760045+00:00. Evidence-only independent advisor session; no product implementation or canonical mutation.
+
+    The decisive **zero-delay** case uses the real **1500ms default**, four barrier-coordinated readers, a compatible 256-row cache exactly one Git commit stale, and **one actual incremental refresh / one actual write attempt** counted from before all constructors. The winner returned in **2.648286s**; the three useful, honestly stale losers returned in **1.528038–1.528182s**. All twelve non-mutant reader outputs across the three measured cases were independently checked for rows and pinned provenance. No injected sleep is present in the decisive case. Its libtest failure is the intended AC1 elapsed assertion, after the other assertions succeeded.
+
+    This does not establish universal slowness or identify a required implementation strategy. It is a concrete failed acceptance measurement, not missing single-flight code. **No PASS certificate is issued and no requirement is reopened.** Any subsequent disposition belongs to existing TASK-1526; this report is the finding-only handoff. The store-write pause persists.
+
+    ## Decisive result and retained case counts
+
+    The V3 test invocation ran from `2026-10-08T18:59:34.322418+00:00` to `2026-10-08T19:00:02.151822+00:00`. Reader clocks ran from approximately `2026-10-08T18:59:56.373137731+00:00` through `2026-10-08T18:59:59.021488268+00:00`. Full fixture/setup/cleanup elapsed was 27.829388s and is **not** the reader latency metric. Host load averages before/after the command were `[12.17333984375, 12.69482421875, 17.5830078125]` / `[13.12158203125, 12.8671875, 17.50927734375]` on six CPUs. Precise per-reader start/end timestamps are retained in `logs/v3-zero-first.stdout` and `results-summary.json`.
+
+    | Zero-delay reader | Elapsed seconds | Rows | Label | Incremental / write / retry sleeps |
+    | --- | ---: | ---: | --- | --- |
+    | 0 | 1.528164 | 256 | stale, worker_running | 0 / 0 / 0 |
+    | 1 | 1.528038 | 256 | stale, worker_running | 0 / 0 / 0 |
+    | 2 | 1.528182 | 256 | stale, worker_running | 0 / 0 / 0 |
+    | 3 | 2.648286 | 256 | fresh | 1 / 1 / 0 |
+
+    Zero-delay baseline head: `738b2234f2920a1cf1f7f49d3ca856e77de65b39`. Store/final cache head: `55705f5da0aecae520d0ee454a332e344aac78ca`. Pinned built_at: `2026-10-08T18:59:51.828911521+00:00`. Baseline SQLite SHA-256: `a42a2f88c86a26521cdd23527872cc4fb5a038d3c092b3ea4aafa0ad852840ae`. The winner's final head and two `gen1` rows corroborate completed refresh; the losers' two `gen0` rows and exact old head/time corroborate useful committed stale results.
+
+    | Measured case, first execution only | Deliberate hold | Reader 0 / 1 / 2 / 3 seconds | Refresh / write attempts | Stale / fresh | Actual libtest outcome |
+    | --- | ---: | --- | --- | --- | --- |
+    | v2-short-first | 250ms | 1.639699 / 1.640930 / 2.228578 / 1.641133 | 1 / 1 | 3 / 1 | exit 101: zero-retry auxiliary assertion |
+    | v2-expired-first | 1650ms | 1.647338 / 3.602919 / 1.645613 / 1.647570 | 1 / 1 | 3 / 1 | exit 101: zero-retry auxiliary assertion |
+    | v3-zero-first | 0ms | 1.528164 / 1.528038 / 1.528182 / 2.648286 | 1 / 1 | 3 / 1 | exit 101: AC1 elapsed assertion |
+
+    The 250ms and 1650ms holds are included in those clocks, so their winner times must not be presented as spontaneous delay-free regressions. V3 removes that ambiguity and still fails <2s. V2 short's actual first assertion failure was reader 3's one retry-sleep; V2 expired recorded one retry-sleep each on readers 0 and 2. Its three losers returned before the held winner was released. All cases used the unchanged 1500ms default; no all-readers-fresh assertion was imposed.
+
+    Discovered/executed counts: V1 discovered **2** private tests and attempted 4 runs, all setup timeouts with no reader sample. V2 discovered **2** private tests and executed two non-mutant cases plus two mutation controls, all exit 101 (the mutation failures are intended). V3 discovered **3** private tests and executed **only the new zero-delay case**, exit 101 at AC1. Total: **4 retained setup timeouts, 3 completed non-mutant measurements, 2 completed negative controls**. V2 executions report 1321 other tests filtered out; V3 reports 1322. No full core/workspace pass is inferred from discovery.
+
+    ## Findings and exact acceptance disposition
+
+    1. **TASK-1526 / STORY-1484 AC1: REQUESTCHANGES.** In `CachedGitBackend::open` through the list query, with real default budget and no deliberate hold, reader 3 took 2.648286s. Its refresh count and write-attempt count are each one; every other reader has zero. This directly fails the still-binding every-reader <2s criterion. The primary witness is `logs/v3-zero-first.stdout` plus `.stderr` (the AC1 panic), its execution receipt, and `probe-v3.rs`. No repair, policy amendment, raised budget or retrospective timing subtraction is proposed.
+    2. **Constructor-inclusive retry observation, finding only.** V2's eventual losers recorded real SQLite retry sleeps despite zero incremental/full-rebuild/write-attempt counts. The counter is incremented in pinned `cache.rs::with_cache_retry_observed` at line 875. `open_connection_inner` at line 719 calls that ladder outside `ReadRefreshAttempt`; constructor work therefore cannot be erased by resetting counters after open. This is consistent with open-time contention, but the existing hook does not record the individual SQLite statement/action, so that attribution is source-derived, not separately instrumented. It does not show a loser performing an incremental write. The narrower zero-delay sample had no retry sleeps and nevertheless failed elapsed acceptance. This observation is not used to invent a new policy or claim that every constructor retries.
+    3. **Single-flight and honest stale-result witnesses: demonstrated in these cases.** Exactly one real incremental update, one actual write attempt, 256 useful rows per reader, four-way pre-acquire readiness, one held real refresh path, and correct committed row/head/time labels are established. These component results do not override the elapsed failure or satisfy the remaining parent/C/show obligations.
+
+    No required primary witness is merely missing in the final result: the zero-delay fixture reached the actual reader path and failed the requested elapsed assertion. There is therefore no basis to downgrade this measured failure to a generic BLOCKED-for-missing-build report. Conversely, the four earlier setup timeouts supply no product-failure or mutation credit.
+
+    ## Scope and authority
+
+    This is independent evidence-only measurement of existing TASK-1526 code, not product implementation, a self-review of product changes, or a new closure decision. I read AGENTS.md, two-seat/rework/recovery disciplines, both full retained root JSON records (TASK-1526: 18 comments; STORY-1484: 11 comments), the original sketch, all A1–A13/Q1–Q6/B1–B6 amendments, ROLLUP_INDEPENDENT_ACCEPTANCE.md, and the cache V2 approved-design report. These retained files, not fresh canonical reads, are the requirement inputs. Their SHA-256 hashes are in `input-hashes.json`.
+
+    The exact primary criterion is STORY-1484 AC1, assigned to TASK-1526 by comment `01a0df0d-f964-78f3-a715-046e37e50915`: four concurrent readers, one-commit-stale cache, exactly one actual refresh, and **every reader <2s**. Original sketch `01a0df08-c181-7530-b249-2740141c2a0b` explicitly names the counter and elapsed requirement. B3 retains the actual **1500ms default** and shared bounded wait; B6 requires rows/provenance from one committed snapshot. Budget losers need not all return fresh. A13 scopes the no-write/no-retry requirement to losers; it does not prohibit the winner's one fast-fail incremental write.
+
+    The existing `single_flight_four_readers_one_refresh` uses 60s and resets counters after its snapshot constructor. It remains byte-unchanged. Its counter property is useful, but it is not this latency evidence. BUG-1729 is neither an elapsed waiver nor permission to select a quiet interval. No larger read budget, fast-fail override, no-detach override, outlier filtering or rerun-until-green was used.
+
+    ## Immutable source and justified private harness
+
+    Pinned commit: `ff9ac13c4fb18f2c7e63f39ef112cca8c7d8a578`. Independently compared with `b46aec1e674baae5a329416d4119e67b59200a88`: the full diff has only the previously described shell-helper and unrelated test-casing edits. Relevant cache Rust and Cargo inputs are equal. `source-identity.json` gives Git blob IDs and SHA-256 hashes; `b46-to-pin.diff` retains the comparison. Reserved work received no substantive action.
+
+    The private export was made using `git archive` of the immutable pin, then initialized as an independent Git repository, without a live-store link or shared Git metadata. All 2,089 exported blobs were independently checked. Removing the exact contiguous test-only insertion recovers the original cached_git_backend.rs bytes, SHA-256 `544e6d80e4199dd6e1d9a832e6444ee0c423556ddb1811952ab90dc582f4a5a7`. No product function or existing test was edited. The additions are inside the existing `#[cfg(test)] mod tests`.
+
+    A new focused compile was necessary: the old four-reader test hardcodes 60s, while the actual refresh counters are private `cfg(test)` thread-local hooks. A CLI executable cannot expose these counters, and the old test cannot be parameterized to measure the requested default. No full workspace suite, CI check, CLI build, installation or activation was run. Every compilation used the normal `/home/joe/.local/bin/cargo` slot wrapper, an offline locked `-p aida-core --lib` test build, and a private target directory. No slot bypass or extra slot count was set. The private runtime's Cargo-slot link points to the existing shared slot directory solely for normal compiler coordination. Rust dependencies came from the normal cached registry; the private Cargo config has the normal clang/mold linker, no credentials or shared sccache daemon.
+
+    Toolchain: rustc 1.92.0 (`ded5c06cf`, LLVM 21.1.3), x86_64 Linux, default/native core features, unoptimized test profile with debug information/assertions. Exact compiler artifact records, features, command, environment, timestamps and executable hashes are retained. This is focused core instrumentation, not a release-CLI benchmark.
+
+    ## Fixture, measured path and non-vacuity
+
+    Each completed fixture has its own real local Git store and SQLite cache. It contains 256 meaningful requirements: two `gen0` rows and 254 other descriptive titles. A committed compatible baseline is built using the pinned cache code; its SQLite database is checkpointed and copied before measurement. Exactly one subsequent Git commit retitles two canonical objects to `gen1`. The harness asserts `HEAD^ == cache_head`, two changed object paths, 256 committed cached rows, usable schema and actual staleness. Baseline SQLite hashes, both Git heads and built_at are printed before readers start. An independent Python SQLite read verifies baseline row counts, old rows, metadata, hash and integrity. The baseline copies and Git histories are retained.
+
+    Four separate reader threads each create a fresh `CacheReadScope`, assert `read_policy()` is the actual 1500ms default, and observe an initially empty counter map **before** opening the backend. No counter reset occurs after constructor work. Each clock starts before `CachedGitBackend::open` and stops only after the useful query result and its pinned head/built_at are obtained. The query invokes the same schema-retry/tolerant-read/list-summaries body as the public list method; the test closure additionally reads provenance from that identical SQLite snapshot. This adds measured observation overhead, not a bypass of the query behavior.
+
+    The existing one-shot BEFORE_ACQUIRE hook stops each reader on the actual stale path. The controller requires all four to arrive before releasing any. The existing TASK_1515_AFTER_READS hook stops the actual winning incremental path after changed-object reads, while its refresh guard is held. Another thread verifies contention through `RefreshLock`; useful-result completions are counted during the hold. No stub replaces incremental work. Its existing actual incremental counter, actual write-attempt counter, final changed rows and final current cache head jointly witness real work.
+
+    V2 adds a 250ms hold case and a 1650ms hold case. Deliberate hold time is **included**, never subtracted from reader elapsed time. These are controlled overlap/budget-expiry cases, not estimates of delay-free latency. The latter must show all three useful stale results before releasing the real winner. V3 adds a zero-delay case using the same barriers and assertions, with no deliberate hold sleep; this separates the added delay from the primary timing measurement. The default read budget is unchanged in every case.
+
+    Fresh rows must match the new head; stale rows must match the baseline head and built_at, carry `stale:true`, actual store_head and `worker_running`, and contain the old titles. All readers must return 256 rows. Fresh metadata legitimately contains only `stale:false`; the extra pinned provenance is test observation, not an invented product JSON field. Incremental refresh preserves the original built_at value here; the report does not invent a new timestamp. No full rebuild or durable request is expected in the measured phase. The winner's real write and refresh counts must each sum to one.
+
+    ## Preserved setup failures and harness changes
+
+    V1 was built successfully and discovered two tests. All four attempted executions timed out at the unchanged 45s outer process limit **during bulk fixture construction**, before PROBE_INPUT or any reader clock. Their exact intervals were:
+
+    | V1 attempt | UTC start | UTC end | Result |
+    | --- | --- | --- | --- |
+    | short-first | 18:46:51.504934 | 18:47:36.506735 | setup timeout, exit -15 |
+    | expired-first | 18:47:36.506959 | 18:48:21.508960 | setup timeout, exit -15 |
+    | mutation-skip | 18:48:21.509197 | 18:49:06.511054 | setup timeout, exit -15 |
+    | mutation-serial | 18:49:06.511287 | 18:49:51.513073 | setup timeout, exit -15 |
+
+    All dates are 2026-10-08. These are retained failures, **not latency samples, passing mutations, or evidence of a product timeout**. The partial stores showed bulk preparation still writing rows/oplog. V2 uses direct synthetic YAML preparation followed by real Git commits, rather than the unrelated per-row product filing/oplog path. It keeps the 256-row input and all reader budgets/clock boundaries, and additionally retains baseline SQLite hashes and the exact schema-retry query wrapper. V3 only adds the zero-delay test entry. The complete patches, V1/V2 executable copies and logs are preserved. No failed measured iteration was replaced or silently rerun.
+
+    ## Negative controls
+
+    Both V2 negative controls completed valid fixture setup and failed the intended assertion:
+
+    - `skip_refresh`: the private harness uses the snapshot-only constructor and raw cached query, removing the actual reader refresh path. Four useful old-row results return, but the refresh count is zero, final cache head remains old, and the test fails `PATH_WITNESS: a real incremental refresh must hold the flock`. This is not a setup failure.
+    - `serialize`: a private harness mutex serializes the readers. Exactly one reader reaches the pre-acquire barrier before its bounded readiness deadline; all four eventually return useful rows and the refresh count is one, but the test fails `NONVACUITY: all four readers must reach actual pre-acquire concurrently`. Thus counter==1 alone cannot certify the concurrent fixture.
+
+    These mutations modify only the test fixture's dispatch/call selection, not product source or production knobs. The tests do not accept their fast/serial results as latency evidence.
+
+    ## Isolation, ownership and limits
+
+    Test processes ran with an explicit allow-listed environment (equivalent to env-i), private HOME/AIDA_HOME/XDG/TMP/runtime paths and independent private Git cwd. No inherited grants, roles, credentials, worker flags or Git environment survived. Explicit Git system/global-config suppression is recorded. Forge/vendor/aida/network launchers on PATH refuse execution. Bubblewrap `--unshare-all` supplies network/PID/mount isolation; only `/usr`, synthetic `/proc` and `/dev`, a private `/tmp`, and the evidence directory are visible. The sandbox check proves `/home/joe` absent and shows an empty route table. Live canonical objects, live schedules and user config cannot be resolved there. Fixtures use explicit store/cache paths.
+
+    Supervisors own each Cargo/test child handle, wait for actual completion with bounded timeouts, and reap it. Timeout cleanup targets only the supervisor-created process group and private namespace. Reader threads join; subprocess Git operations are synchronously reaped. No unrelated PID was signalled, no pgrep/sleep polling selected work completion, and no detached worker was invoked by the measured incremental path. Fixture/executable artifacts are deliberately retained for review.
+
+    The six-CPU host was already loaded. `host.json` and every execution receipt record CPU affinity, load averages and exact UTC intervals; no quiet-load window was selected. Instrumentation, debug compilation, scheduling, filesystem latency and intentional holds are part of the reported circumstances. ReadBudget bounds polling, not all CPU/filesystem/constructor/refresh work. No universal performance result, fleet guard, whole-command CPU bound, BUG-1674 whole-show deadline/provenance proof or 24h certificate is claimed.
+
+    No canonical AIDA command, mail, queue, status/reopen, lease, review record, PR/merge, store recovery, global installation or activation was performed. Only private evidence and this requested report were written. Product and existing 60s-test source were left untouched. TASK-1526's stored Completed state supplies no new acceptance. STORY-1484 closure remains pending; TASK-1527 rework and BUG-1674 obligations remain independent. Findings are reported locally only, respecting the store-write pause.
+
+    ## Reviewable artifacts and integrity
+
+    All artifacts are in [task1526-default-budget-independent/](task1526-default-budget-independent/). Primary review files:
+
+    - [Results with complete clocks, environments and events](task1526-default-budget-independent/results-summary.json)
+    - [Zero-delay raw output](task1526-default-budget-independent/logs/v3-zero-first.stdout), [assertion failure](task1526-default-budget-independent/logs/v3-zero-first.stderr), and [execution receipt](task1526-default-budget-independent/logs/v3-zero-first.result.json)
+    - [Private test source](task1526-default-budget-independent/probe-v3.rs), [test-only patch](task1526-default-budget-independent/test-only-v3.patch), [exact source recovery proof](task1526-default-budget-independent/v3-source-proof.json)
+    - [Independent baseline/result checks](task1526-default-budget-independent/baseline-and-result-verification.json), [source identity](task1526-default-budget-independent/source-identity.json), [complete export checks](task1526-default-budget-independent/complete-export-verification.json)
+    - [V1→V2 fixture change](task1526-default-budget-independent/fixture-only-v1-to-v2.patch), retained V1/V2 binaries and all unfiltered first logs
+    - `build*.py`, `run_probe*.py`, `logs/build*-result.json`, `binary*.json`, `toolchain.txt`, `host.json`, `environment.json`, and the final nonrecursive `artifact-integrity.json`.
+
+    Executable SHA-256 hashes:
+
+    | Version | SHA-256 |
+    | --- | --- |
+    | V1 | `e03f243d24bb4e801688461621f51c435c2f43c191da489411f5c35a1dbc040a` |
+    | V2 | `ae9d9856e95f0f7def5c718687c7fc89dbe1ab7cd69a7d1164a79459ab160e16` |
+    | V3 | `8b262e2cb3b4f724b793bb29b366c784a12290d36cd4c2f8886850f1331fa87a` |
+
+    The integrity receipt is written after this report and hashes it separately; the report does not embed its own hash. Input preservation checks cover the retained reports/requirements. Hashing source is not misrepresented as exhaustive code review.
+  created_at: 2026-10-08T19:07:12.866675908Z
+  modified_at: 2026-10-08T19:07:12.866675908Z
+  relayed_from: task1526-default-budget-evidence
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
