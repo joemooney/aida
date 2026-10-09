@@ -767,3 +767,11 @@ blocks:
   range_end: 1740
   next: 1641
   allocated_at: 2026-10-04T20:43:06.789922941Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: FR
+  range_start: 756
+  range_end: 855
+  next: 756
+  allocated_at: 2026-10-09T20:10:21.550861202Z
