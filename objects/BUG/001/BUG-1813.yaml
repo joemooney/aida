@@ -1,0 +1,19 @@
+id: 01a11eea-5b47-7732-ad5a-abea8638e735
+spec_id: BUG-1813
+agreed_id: BUG-1813
+title: agent_output_mode unconditionally emits TOON hint, and fails to persist outside projects
+description: The TOON hint added in STORY-764 is emitted unconditionally on non-TTY check during cache config, and the marker fails to save if run outside a project, causing it to spam scripts.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T04:27:17.703282889Z
+modified_at: 2026-10-09T04:27:17.703282889Z
+req_type: Bug
+filed_at:
+  code_sha: 0bae734700af7b7068c80e331b6bad29126fb3f9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 199e591b07
+  vendor: antigravity
