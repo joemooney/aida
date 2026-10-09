@@ -3,13 +3,27 @@ spec_id: BUG-1814
 agreed_id: BUG-1814
 title: aida team hangs due to list_leases parsing all session TOML files
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T04:57:46.217089793Z
-modified_at: 2026-10-09T04:57:46.217089793Z
+modified_at: 2026-10-09T05:18:54.007638129Z
 req_type: Bug
+history:
+- id: 01a11f19-9a2b-7210-8a56-8489ef235d94
+  author: aida-auto-bump
+  timestamp: 2026-10-09T05:18:53.995887352Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a11f19-9a37-72a3-b8c4-f2a3bc7b6d77
+  timestamp: 2026-10-09T05:18:54.007633685Z
+  agent: aida
+  commit_sha: 734ed34061532caa04154ba81cf1e3deb3771425
+  summary: Completed via merge 734ed340
 filed_at:
   code_sha: 0d49a4d388ed2d4b82aa753c59907998e407f544
   branch: main
@@ -17,3 +31,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 199e591b07
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-09T05:18:53.995873456Z
+  completion_sha: 734ed34061532caa04154ba81cf1e3deb3771425
