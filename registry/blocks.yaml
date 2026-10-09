@@ -831,3 +831,11 @@ blocks:
   range_end: 600
   next: 501
   allocated_at: 2026-10-09T20:10:30.434051444Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: CON
+  range_start: 501
+  range_end: 600
+  next: 501
+  allocated_at: 2026-10-09T20:10:31.610786078Z
