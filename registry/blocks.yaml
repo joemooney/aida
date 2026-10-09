@@ -807,3 +807,11 @@ blocks:
   range_end: 1840
   next: 1741
   allocated_at: 2026-10-09T20:10:26.796222701Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: SPIKE
+  range_start: 605
+  range_end: 704
+  next: 605
+  allocated_at: 2026-10-09T20:10:27.916824346Z
