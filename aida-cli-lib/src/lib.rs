@@ -33963,7 +33963,12 @@ pub(crate) fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+            let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            // trace:BUG-1814 | ai:antigravity
+            if !file_name.ends_with(".toml")
+                || file_name.ends_with(".manifest.toml")
+                || file_name.ends_with(".activity.toml")
+            {
                 continue;
             }
             if let Ok(content) = std::fs::read_to_string(&p) {
