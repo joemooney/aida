@@ -823,3 +823,11 @@ blocks:
   range_end: 600
   next: 501
   allocated_at: 2026-10-09T20:10:29.153076901Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: VIS
+  range_start: 501
+  range_end: 600
+  next: 501
+  allocated_at: 2026-10-09T20:10:30.434051444Z
