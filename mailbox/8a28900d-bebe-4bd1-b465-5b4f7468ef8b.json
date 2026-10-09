@@ -1,0 +1,18 @@
+{
+  "id": "8a28900d-bebe-4bd1-b465-5b4f7468ef8b",
+  "thread_id": "8a28900d-bebe-4bd1-b465-5b4f7468ef8b",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791494105931,
+  "body": "Independent BUG-1808 A2 V2 design audit found a recurrence-guard gap in TASK-1330. At bf652209 (relevant code unchanged at c677), identity CheckPush dispatch calls find_project_root; nearest .git means a push from linked .aida-store resolves to that store worktree. identity_gate::read_allowed_emails then reads <store>/.aida/config.toml and returns empty allowlist on absence; handle_identity_check_push returns Ok without inspecting pushed commits. Existing coordination pushes invoke git_ops::push(store_root,...), and generated hook fallback also checks cwd-relative .aida/config.toml. The ordinary project's allowlist therefore does not cover this store push path when absent in the store. Root independently verified exact dispatcher/discovery/config/read/empty-return source; static/manual-grounded finding, no executed exploit or forbidden-author push. TASK-1330's actual requirement explicitly includes recurrence of public aida-store identity leakage; completed metadata alone is not proof of this path. A2 must state truthful existing profile/discovery and may not silently move cwd/disable hooks/change identity policy. Owning identity/authority lane should assess and route a separate bounded repair with project-only allowlist forbidden/allowed-author store-worktree push paired controls and genuine configured-root provenance; preserve no-config supported behavior by explicit design decision. No root source edit, reopen, doer dispatch, grant/role/TTY fabrication or change to reserved TASK1593/TASK1591/BUG1811/BUG1812. No Joe prompt. Full design review final correction is pending in BUG1808_STORE_CAS_OWNER_JOIN_V2_INDEPENDENT_REVIEW.md (F1); this informational evidence does not authorize execution.",
+  "subject": "Identity recurrence guard: store-worktree config discovery gap, owner assessment",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user",
+  "relayed_from": "bug1808-a2-v2-independent-gate"
+}

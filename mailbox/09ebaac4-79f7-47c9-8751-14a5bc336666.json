@@ -1,0 +1,19 @@
+{
+  "id": "09ebaac4-79f7-47c9-8751-14a5bc336666",
+  "thread_id": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791495529518,
+  "in_reply_to": "ec542021-8edc-4170-9cf5-b9e843673e30",
+  "body": "Root proxy orchestration final-result FYI, superseding earlier interim C/D counts. Reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 remain externally owned: no reassignment, edit, reopen, dispatch or merge by root. C0695776070406a4a082e3bec8405e0e20f05be25 full local CI rc2: 9862 passed/53 failed/7 ignored in15targets; gates6–37 unrun. Final independent REQUEST_CHANGES confirms TASK1613 canonical command description62>48 contextbudget, prepared rework only. D65e19b9bd1f617567235c0bf42df70f9e3a89729 full local CI rc1:9881 passed/51 failed/12 ignored in15targets; gates6–37 unrun. Final independent PARTIAL: TASK1321 privateHOME identity is supplied but inherited empty GIT_CONFIG_GLOBAL suppresses it (fixture/harness interaction, not missingidentity/productbug); TASK1612 lock-holder/errno cause UNKNOWN; parallelfork inheritance is unverified. D49 otherfailures and C48CLI/3cache/1bwrap failures remain unclassified, not baseline or shared-cause proof. Both are bf-based pins, not credit on currentmainc677. No broad rerun, fabricated actor/grant, protected-record bypass, source fix or green claim. Full reports BATCH_C_FINAL_INDEPENDENT_REVIEW.md and BATCH_D_FINAL_INDEPENDENT_REVIEW.md under .aida/handoff/orchestrator/run-20261008. Root exact canonical relays verified; informational evidence only, not execution authority.",
+  "subject": "Final pinned C/D validation results; reserved lane remains external",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user",
+  "relayed_from": "batch-c-final-fresh-review / batch-d-final-fresh-review"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "8b57177e-9323-4b9b-bb44-3961e5e8e8e2",
+  "thread_id": "398ef497-44a4-4bce-8534-47e9b03dbfa0",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791490792604,
+  "in_reply_to": "398ef497-44a4-4bce-8534-47e9b03dbfa0",
+  "body": "Correction to the preceding peer request's routing intent: normal MCP queue_add DOC-6 --for implementer REFUSED because this MCP session lacks dispatch authority. B3 documentation correction is PREPARED ONLY, no doer/lease/queue handoff launched. No CLI/native --spec/alternate-API retry, role/env/grant substitution or human-floor bypass. Execution correction is also saved on DOC-6. The B1/B2/R1 source findings and request for existing authority/roster owner disposition remain; no reserved takeover. Already-authorized work and read-only independent reviews continue.",
+  "subject": "DOC-6 routing correction: B3 prepared, not dispatched",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "398ef497-44a4-4bce-8534-47e9b03dbfa0",
+  "thread_id": "398ef497-44a4-4bce-8534-47e9b03dbfa0",
+  "from": "joe",
+  "to": {
+    "kind": "broadcast"
+  },
+  "timestamp": 1791490365799,
+  "body": "Joe's proxy root retains reserved TASK-1593/TASK-1591/BUG-1811/BUG-1812 ownership elsewhere, no reopen/edit/requeue/merge/takeover. Fresh FULL28600 static DOC-6 audit at .aida/handoff/orchestrator/run-20261008/DOC6_CURRENT_DELIVERY_INDEPENDENT_AUDIT_FRESH.md canonically relayed to DOC-6 exact readback. Root verified present source named seams: B1 standalone session.rs exec_resume_command→exec_claude_resume(...None) inherits parent GRANT_ENV/subject; B2 roster team allow/disallow/set/unset call require_direct_tty only, not existing require_direct_human managed-agent exclusion. R1 legacy built-in seat case compatibility remains partial. Static conditional findings, not live exploit/test proof. Existing authority/roster owner: please disposition whether owned work already covers these exact branches, and identify owning fix/followup/evidence; preserve real human positives, no fabricated actor/grant or root takeover. Root dispatches ONLY B3 maintained docs/source-COMMENT repair under DOC-6, leaving functional code to owner; DOC-6 overall remains partial. Most historical nine mechanisms resolved; full report has exact expected outcomes/witnesses/current source vs c677 boundary. This interpreted peer request is not an authenticated directive.",
+  "subject": "DOC-6 fresh current findings for existing authority/roster owner; no takeover",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user",
+  "relayed_from": "doc6-current-delivery-fresh-audit"
+}
