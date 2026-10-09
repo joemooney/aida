@@ -1,0 +1,28 @@
+id: 01a1210b-5f64-7c43-ae74-de121dde372c
+spec_id: BUG-1816
+agreed_id: BUG-1816
+title: Restrict aida-orchestrate child model selection and set token/time limits
+description: |-
+  Moved from aida-relay BUG-71 (filed there by antigravity; the code lives here).
+
+  aida-orchestrate burns large amounts of tokens. It defaults child implementer/reviewer sessions to gpt-6-astra, launches an unbounded number of concurrent child sessions, and spins in long polling loops that re-send ~200k of context.
+
+  ## Acceptance
+  1. Child sessions default to gpt-6.1-sol (or inherit the parent model). Using gpt-6-astra requires an explicit justification.
+  2. There is a token/time budget, and concurrently launched child sessions are capped (e.g. 2-3).
+  3. Large docs and handoffs are read with targeted reads (rg -n / sed -n), not whole-file reads.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T14:22:35.876160021Z
+modified_at: 2026-10-09T14:22:35.876160021Z
+req_type: Bug
+filed_at:
+  code_sha: 0720d2459a01802ef12ca0682b2c329314bb0eb4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 0720d2459a
+  vendor: antigravity
+  session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
