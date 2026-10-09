@@ -1,0 +1,32 @@
+id: 01a11f7f-67aa-7f22-a75d-2862134434e9
+spec_id: STORY-1540
+agreed_id: STORY-1540
+title: aida init at a human TTY seeds the initializer into the new store's team roster
+description: |
+  Since ADR-66 / STORY-1473, authority comes only from a validated seat grant, and `issue_direct` / `current_grant` both require the seat to be allowed by the team roster of the project the command runs in. A freshly `aida init`-ed store has no `registry/team.toml`, so a brand-new project has no one who can approve, mark done, or route work until the human runs `aida team allow-seat $USER advisor` (and implementer, etc.) at a TTY before `role enter` works.
+
+  Found via aida-tutor (STORY-62 there): the novice core loop (init, add, ..., `aida done`) now needs three extra ceremony commands before exercise 2, and a reset+init workspace can never be pre-seated, so the tutor's demo can't run unattended.
+
+  Proposal: when `aida init` runs at a direct human TTY (same is_direct_tty && !is_managed_agent test role enter uses), write the initializer into the new roster with the default seat set (at least advisor + implementer; maybe all canonical seats), and print one line saying so plus the `aida team disallow-seat` escape hatch. A non-TTY / managed-agent init stays roster-less (fail closed), so ADR-66's no-ambient-authority property holds: an agent still can't bootstrap itself a seat.
+
+  ## Acceptance
+  - `aida init` at a human TTY in a fresh repo writes registry/team.toml allowing the initializing user the default seats, and says so in its output
+  - Immediately after, `eval "$(aida role enter advisor --delegate-seat implementer)"` succeeds with no `allow-seat` step
+  - `aida init` with stdin/stdout not a TTY, or under a managed agent, writes no roster entry (regression test)
+  - Re-running init on an existing store never modifies an existing roster
+  - DOC-6 mentions the first-run seeding
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T07:10:05.738528275Z
+modified_at: 2026-10-09T07:10:05.738528275Z
+req_type: Story
+filed_at:
+  code_sha: 5fbb0bcad48ab876ad5d88c5ba53b0d8438635ac
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: cbe2c5daf3
+  vendor: antigravity
+  session: fcee9bd0-2320-40ca-915c-57193749c95d
