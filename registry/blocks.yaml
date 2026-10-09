@@ -847,3 +847,11 @@ blocks:
   range_end: 600
   next: 501
   allocated_at: 2026-10-09T20:10:32.749979912Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: TERM
+  range_start: 501
+  range_end: 600
+  next: 501
+  allocated_at: 2026-10-09T20:10:34.105338884Z
