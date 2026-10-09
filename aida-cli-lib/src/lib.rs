@@ -3739,7 +3739,6 @@ pub(crate) fn rewrite_type_alias(args: &[String]) -> Vec<String> {
             "constraint",
             "decision",
             "term",
-            "doc",
             "faq",
             "cr",
             "fr",
