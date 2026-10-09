@@ -3715,6 +3715,65 @@ pub(crate) fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+// trace:STORY-1050 | ai:antigravity
+pub(crate) fn rewrite_type_alias(args: &[String]) -> Vec<String> {
+    if args.len() >= 2 {
+        let ty = args[1].to_lowercase();
+        // AIDA's built-in requirement types
+        let valid_types = [
+            "functional",
+            "non-functional",
+            "system",
+            "user",
+            "change-request",
+            "bug",
+            "epic",
+            "story",
+            "task",
+            "spike",
+            "sprint",
+            "folder",
+            "meta",
+            "principle",
+            "vision",
+            "constraint",
+            "decision",
+            "term",
+            "faq",
+            "cr",
+            "fr",
+        ];
+
+        if valid_types.contains(&ty.as_str()) {
+            if args.len() == 2 {
+                // aida bug -> aida list --type bug
+                return vec![
+                    args[0].clone(),
+                    "list".to_string(),
+                    "--type".to_string(),
+                    ty,
+                ];
+            } else if args[2] == "list" {
+                // aida bug list ... -> aida list --type bug ...
+                let mut out = vec![
+                    args[0].clone(),
+                    "list".to_string(),
+                    "--type".to_string(),
+                    ty,
+                ];
+                out.extend_from_slice(&args[3..]);
+                return out;
+            } else if args[2] == "add" {
+                // aida bug add ... -> aida add --type bug ...
+                let mut out = vec![args[0].clone(), "add".to_string(), "--type".to_string(), ty];
+                out.extend_from_slice(&args[3..]);
+                return out;
+            }
+        }
+    }
+    args.to_vec()
+}
+
 // trace:STORY-1027 | ai:codex
 pub(crate) fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, bool)> {
     let mut flags = false;
@@ -3846,11 +3905,12 @@ pub(crate) fn run() -> Result<()> {
     // the canonical `aida groom` before clap, and capture which deprecated
     // spelling (if any) the operator typed so we can print a non-blocking hint
     // once argv parsing succeeds. trace:STORY-708 | ai:claude
-    let (after_alias_rewrites, groom_deprecated_verb) = rewrite_groom_alias(
-        &rewrite_queue_default_list(&rewrite_agent_default_new(&rewrite_list_alias(
-            &rewrite_advisor_assess(&rewrite_personal_view_alias(&expanded)),
-        ))),
-    );
+    let (after_alias_rewrites, groom_deprecated_verb) =
+        rewrite_groom_alias(&rewrite_queue_default_list(&rewrite_agent_default_new(
+            &rewrite_list_alias(&rewrite_type_alias(&rewrite_advisor_assess(
+                &rewrite_personal_view_alias(&expanded),
+            ))),
+        )));
     let mut cli = Cli::parse_from(after_alias_rewrites.clone());
 
     // STORY-764: install the explicit output-format pin before any handler
