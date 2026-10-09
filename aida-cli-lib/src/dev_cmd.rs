@@ -1383,6 +1383,16 @@ aida() {
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
+        "dev rebuild")
+            # trace:TASK-1720 | ai:antigravity
+            local _aida_repo="${AIDA_DEV_REPO:-$PWD}"
+            if ! [ -f "$_aida_repo/Makefile" ] || ! grep -q "build-fast" "$_aida_repo/Makefile" 2>/dev/null; then
+                echo "aida dev rebuild: Must be run inside the AIDA repository" >&2
+                return 1
+            fi
+            make -C "$_aida_repo" build-fast
+            return $?
+            ;;
         "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter"|"worktree exit")
             # These subcommands mutate the CALLING shell, so their shell code
             # has to be eval'd here rather than run in the subprocess. Human
