@@ -815,3 +815,11 @@ blocks:
   range_end: 704
   next: 605
   allocated_at: 2026-10-09T20:10:27.916824346Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: PRIN
+  range_start: 501
+  range_end: 600
+  next: 501
+  allocated_at: 2026-10-09T20:10:29.153076901Z
