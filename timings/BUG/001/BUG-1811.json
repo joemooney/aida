@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1811",
+  "publishes": [
+    {
+      "at": "2026-10-08T19:56:06.359724215Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T06:39:45.225017905Z",
+      "spec": "BUG-1811",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2458
+      }
+    },
+    {
+      "ts": "2026-10-08T17:17:24.473450922Z",
+      "spec": "BUG-1811",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2463
+      }
+    },
+    {
+      "ts": "2026-10-08T17:36:35.799489073Z",
+      "spec": "BUG-1811",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2463
+      }
+    },
+    {
+      "ts": "2026-10-08T19:56:06.344409653Z",
+      "spec": "BUG-1811",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-08T19:56:06.345000835Z",
+      "spec": "BUG-1811",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
