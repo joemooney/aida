@@ -791,3 +791,11 @@ blocks:
   range_end: 1914
   next: 1815
   allocated_at: 2026-10-09T20:10:24.178755032Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: EPIC
+  range_start: 509
+  range_end: 608
+  next: 509
+  allocated_at: 2026-10-09T20:10:25.451099266Z
