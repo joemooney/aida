@@ -416,6 +416,16 @@ mod tests {
             crate::rewrite_personal_view_alias(&s(&["aida", "myqueue"])),
             s(&["aida", "queue", "list"]),
         );
+
+        // STORY-1050: type aliases
+        assert_eq!(
+            crate::rewrite_type_alias(&s(&["aida", "faq", "list"])),
+            s(&["aida", "list", "--type", "faq"]),
+        );
+        assert_eq!(
+            crate::rewrite_type_alias(&s(&["aida", "bug", "add", "title"])),
+            s(&["aida", "add", "--type", "bug", "title"]),
+        );
     }
 
     /// `--json` output is valid JSON and round-trips the group shape.
