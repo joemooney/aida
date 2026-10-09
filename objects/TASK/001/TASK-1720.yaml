@@ -1,0 +1,19 @@
+id: 01a11f55-c47b-7fa2-8f63-547aa5aae669
+spec_id: TASK-1720
+agreed_id: TASK-1720
+title: 'feat(dev): add aida dev rebuild subcommand'
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T06:24:36.987259540Z
+modified_at: 2026-10-09T06:24:36.987259540Z
+req_type: Task
+filed_at:
+  code_sha: 734ed34061532caa04154ba81cf1e3deb3771425
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 5c280c6696
+  vendor: antigravity
