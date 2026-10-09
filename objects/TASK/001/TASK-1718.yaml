@@ -3,13 +3,27 @@ spec_id: TASK-1718
 agreed_id: TASK-1718
 title: add --path flag to print the current binary execution path
 description: ''
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T06:13:05.923762825Z
-modified_at: 2026-10-09T06:13:05.923762825Z
+modified_at: 2026-10-09T06:51:52.363029393Z
 req_type: Task
+history:
+- id: 01a11f6e-b89f-7fe1-a722-b35c925ec9cd
+  author: aida-auto-bump
+  timestamp: 2026-10-09T06:51:52.351351151Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a11f6e-b8ab-7173-a21b-a64661df1f05
+  timestamp: 2026-10-09T06:51:52.363025036Z
+  agent: aida
+  commit_sha: 5fbb0bcad48ab876ad5d88c5ba53b0d8438635ac
+  summary: Completed via merge 5fbb0bca
 filed_at:
   code_sha: 734ed34061532caa04154ba81cf1e3deb3771425
   branch: main
@@ -17,3 +31,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 5c280c6696
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-09T06:51:52.351336502Z
+  completion_sha: 5fbb0bcad48ab876ad5d88c5ba53b0d8438635ac
