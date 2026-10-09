@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1720",
+  "publishes": [
+    {
+      "at": "2026-10-09T06:46:33.989815159Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-09T06:32:15.098996187Z",
+      "spec": "TASK-1720",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2471
+      }
+    },
+    {
+      "ts": "2026-10-09T06:46:28.190268449Z",
+      "spec": "TASK-1720",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2471
+      }
+    },
+    {
+      "ts": "2026-10-09T06:46:33.976938881Z",
+      "spec": "TASK-1720",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "dd1a9f725341a3d2f1692e4341a7e366239618fc",
+        "pr": 2471,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
