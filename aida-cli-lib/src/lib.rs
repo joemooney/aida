@@ -2377,6 +2377,13 @@ mod story_1028_mode_alias_tests {
 /// also makes the human path testable without a real terminal. The human-at-a-
 /// TTY path is left byte-identical; everything gated on this is agent-only.
 // trace:TASK-970
+pub(crate) fn agent_output_mode_quiet() -> bool {
+    let pin = output_format_override();
+    let env = std::env::var("AIDA_AGENT_OUTPUT").ok();
+    let stdout_is_tty = std::io::stdout().is_terminal();
+    resolve_agent_mode(pin, env.as_deref(), stdout_is_tty)
+}
+
 pub(crate) fn agent_output_mode() -> bool {
     // STORY-764: an explicit `--format` / `AIDA_OUTPUT_FORMAT` pin wins over the
     // `AIDA_AGENT_OUTPUT` env + TTY default. `human` selects the human path;
@@ -2595,9 +2602,11 @@ pub(crate) fn maybe_emit_toon_switch_hint() {
         return; // already fired in this process
     }
     // Per-session/project suppression: skip if we've shown it here before.
+    // Fall back to global if run outside a project. trace:BUG-1813 | ai:antigravity
     let marker = find_project_root()
         .ok()
-        .map(|root| root.join(".aida").join(".format-hint-shown"));
+        .map(|root| root.join(".aida").join(".format-hint-shown"))
+        .or_else(|| crate::home_dir().map(|h| h.join(".aida").join(".format-hint-shown")));
     if let Some(path) = &marker {
         if path.exists() {
             return;
@@ -3852,7 +3861,8 @@ pub(crate) fn run() -> Result<()> {
     let advisory = raw_args
         .iter()
         .any(|s| s == "--notice" || s == "statusline" || s == "statusbar");
-    let machine = raw_args.iter().any(|s| s == "--json" || s == "--toon") || agent_output_mode();
+    let machine =
+        raw_args.iter().any(|s| s == "--json" || s == "--toon") || agent_output_mode_quiet();
     // A single-spec read must not inherit the 1500ms refresh wait or a
     // terminal's inline full rebuild. Its object is read canonically; the
     // existing snapshot labels disclose stale derived graph context.
