@@ -783,3 +783,11 @@ blocks:
   range_end: 2116
   next: 2017
   allocated_at: 2026-10-09T20:10:22.931888528Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: TASK
+  range_start: 1815
+  range_end: 1914
+  next: 1815
+  allocated_at: 2026-10-09T20:10:24.178755032Z
