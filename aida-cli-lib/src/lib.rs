@@ -3745,6 +3745,13 @@ pub(crate) fn run() -> Result<()> {
         return Ok(());
     }
 
+    // trace:TASK-1718 | ai:antigravity
+    if raw_args.len() == 2 && raw_args[1] == "--path" {
+        let exe = crate::resolve_aida_exe();
+        println!("{}", exe.display());
+        return Ok(());
+    }
+
     // Tiered help: bare `aida` and `aida help` LEAD with a small curated
     // "Getting started" set + a teaser of the grouped surface, so a newcomer
     // sees an approachable path instead of a flat 40-command clap dump. The
