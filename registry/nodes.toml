@@ -98,6 +98,6 @@ user_id = 1
 hostname = "spock"
 email = "redacted@node.invalid"
 clone_path = "/home/joe.mooney/ai/aida_gitlab"
-name = "spock-joe-mooney-11"
+name = "spock-joe-aida-gitlab"
 user = "joe.mooney"
 registered = "2026-10-09T20:10:19.972644418Z"
