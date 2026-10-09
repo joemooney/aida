@@ -775,3 +775,11 @@ blocks:
   range_end: 855
   next: 756
   allocated_at: 2026-10-09T20:10:21.550861202Z
+- node_id: '11'
+  owner: redacted@node.invalid
+  hostname: spock
+  type_prefix: BUG
+  range_start: 2017
+  range_end: 2116
+  next: 2017
+  allocated_at: 2026-10-09T20:10:22.931888528Z
