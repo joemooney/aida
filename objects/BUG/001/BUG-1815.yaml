@@ -1,0 +1,19 @@
+id: 01a11f76-b713-7e42-93c8-709fa71714a7
+spec_id: BUG-1815
+agreed_id: BUG-1815
+title: aida init fails on empty commit when untracked files are present and pre-commit hook is ignored
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T07:00:36.243604129Z
+modified_at: 2026-10-09T07:00:36.243604129Z
+req_type: Bug
+filed_at:
+  code_sha: 5fbb0bcad48ab876ad5d88c5ba53b0d8438635ac
+  branch: fix-git-commit-hook-error
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 734ed34061
+  vendor: antigravity
