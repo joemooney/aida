@@ -22,12 +22,12 @@ description: |-
 
   ## Related
   lifecycle short-circuit tags (TASK-525, the mechanism reused), STORY-1041 (pipelining — the safe throughput lever), build-combined-main hazard, the intake-discipline angle (groom/defer is the real fix for 3.6x filing).
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:13.951309021Z
-modified_at: 2026-09-11T17:25:17.924393566Z
+modified_at: 2026-10-09T07:24:54.119291215Z
 req_type: Story
 tags:
 - backpressure
@@ -42,6 +42,20 @@ relationships:
   target_id: 01a09075-880b-78d2-8212-ccdcd835a588
   created_at: 2026-09-11T17:19:18.700923445Z
   created_by: joe
+comments:
+- id: 01a11f8c-f5e7-7441-8155-fad1eefd0fa0
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (0720d24) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-09T07:24:54.119290187Z
+  modified_at: 2026-10-09T07:24:54.119290187Z
+history:
+- id: 01a11f8c-f5e7-7441-8155-faca90e7ae25
+  author: aida-auto-bump
+  timestamp: 2026-10-09T07:24:54.119288963Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 deferred: true
 deferred_at: 2026-09-11T17:25:17.924393566Z
 deferred_until: sustained intake>merge over a real window (not this operator's burst pattern) — backpressure addresses continuous-load, which is not the current usage
