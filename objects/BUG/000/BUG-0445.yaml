@@ -1,0 +1,29 @@
+id: 01a11e21-05fa-7c30-ac87-758f3c2c51df
+spec_id: BUG-0445
+title: Shell wrapper hides init prompts and forces piped output
+description: |-
+  The generated `aida()` shell wrapper captures stdout for `aida init` so it can consume the marker-delimited `init-cd` payload. Because the child sees stdout as a pipe, it auto-selects TOON output; when human output is explicitly pinned, prompts and progress are buffered invisibly in `_aida_out`, leaving the command apparently hung while it waits on terminal stdin.
+
+  ## Acceptance
+  - An interactive wrapped `aida init` preserves interactive human rendering unless the caller explicitly selects another format/agent mode.
+  - Init prompts and progress are visible while the command is running; the wrapper must not deadlock on an invisible prompt.
+  - Successful `init <DIR>` still consumes the marker-delimited `cd` payload and changes the calling shell directory.
+  - Explicit `--format` / `AIDA_OUTPUT_FORMAT` / `AIDA_AGENT_OUTPUT` choices remain authoritative.
+  - Piped or captured wrapper output retains non-interactive format selection.
+  - Real-shell regression coverage exercises Bash and Zsh where available.
+status: Draft
+priority: High
+owner: ''
+feature: cli
+created_at: 2026-10-09T00:47:23.130722497Z
+modified_at: 2026-10-09T00:47:23.130722497Z
+req_type: Bug
+tags:
+- papercut
+- shell-wrapper
+filed_at:
+  code_sha: c67728c1dcaf8a577539d920bdc6a3c86126cebb
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 887bf7e5fb
