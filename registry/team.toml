@@ -6,4 +6,7 @@ joe = [
     "product",
     "reviewer",
 ]
-"joe.mooney" = ["advisor"]
+"joe.mooney" = [
+    "advisor",
+    "implementer",
+]
