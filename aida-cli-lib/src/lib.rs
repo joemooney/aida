@@ -58114,10 +58114,11 @@ pub(crate) fn warn_if_pulled_binary_stale(project_root: &std::path::Path) {
     let bin_sha = binary_embedded_sha(&aida_path);
     if let (Some(h), Some(b)) = (head.as_deref(), bin_sha.as_deref()) {
         let verdict = classify_sha_match(&repo_path, b, h);
+        // trace:TASK-1719 | ai:antigravity
         if pull_binary_is_stale(dev_activated, verdict) {
             eprintln!();
             eprintln!(
-                "  {} your aida binary is now behind HEAD — run `cargo build` to pick up the pulled changes.",
+                "  {} your aida binary is now behind HEAD — run `make build-fast` to pick up the pulled changes.",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
             );
         }
