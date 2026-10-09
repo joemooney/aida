@@ -1,0 +1,19 @@
+id: 01a11f4b-3903-79a0-a51a-e706a531f6a4
+spec_id: TASK-1718
+agreed_id: TASK-1718
+title: add --path flag to print the current binary execution path
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-09T06:13:05.923762825Z
+modified_at: 2026-10-09T06:13:05.923762825Z
+req_type: Task
+filed_at:
+  code_sha: 734ed34061532caa04154ba81cf1e3deb3771425
+  branch: main
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 5c280c6696
+  vendor: antigravity
