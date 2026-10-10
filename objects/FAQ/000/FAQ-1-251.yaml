@@ -37,8 +37,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:36:44.180043936Z
-modified_at: 2026-10-10T15:36:44.180043936Z
+modified_at: 2026-10-10T15:38:48.283341824Z
 req_type: Faq
+tags:
+- topic:drain
+- topic:relay
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
