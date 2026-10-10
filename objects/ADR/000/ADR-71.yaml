@@ -1,0 +1,60 @@
+id: 01a12423-b652-7de0-8475-d057043e6ff2
+spec_id: ADR-71
+agreed_id: ADR-71
+title: 'Core/porcelain boundary: aida core admits only substrate-state capabilities; convenience composition ships as external aida-<name> extensions'
+description: |
+  STATUS
+
+  Draft. Proposed by the operator 2026-10-09 (aida-relay session) to control the growth of aida core. Not yet accepted.
+
+  CONTEXT
+
+  aida has 116 top-level subcommands, and every new convenience lands in core. The trigger was a request for named, parameterised shell recipes ("run the live OTel check, record the result on TASK-73"), discussed in aida-relay. The feature is useful, but it only composes existing commands and shell steps. Putting it in core would grow the surface every vendor's agents must learn, and the maintenance and test burden of the main CLI, for something that needs no access to core internals.
+
+  Git's split is the model. *Plumbing* is a small, stable core that owns state. *Porcelain* is the convenience layer that composes it. Git keeps porcelain outside core without making it second-class: `git foo` runs `git-foo` from PATH (cargo does the same).
+
+  Precedents:
+  - TASK-877 (user/project aliases): the operator chose maximal flexibility. The advisor-held invariant that aliases never expand for agent/headless/MCP callers protects a stable canonical command surface.
+  - EPIC-29 (split aida-tui into a companion repo): REJECTED 2026-06-06 because the TUI is the product (EPIC-26/STORY-137). This ADR does not reopen that. It governs new modules, not the TUI.
+  - STORY-266: public aida-core API audit. That is the in-process contract. This ADR's contract is the CLI machine surface instead.
+  - aida-relay is already porcelain in practice: a separate repo that composes `claude` and `aida`.
+
+  DECISION
+
+  1. Core admission rule. A capability belongs in aida core only if it reads or writes state the substrate owns: specs, store, cache, queue, roles, leases, mailbox, history. A capability that only composes existing aida commands, external tools or shell steps is porcelain and lives outside core.
+  2. The extension seat. Core gains exactly one mechanism for porcelain: git-style external subcommand dispatch. An unrecognised `aida <name>` runs `aida-<name>` from PATH (see the dispatch story). This is the only core change porcelain is allowed to need.
+  3. Contract. Porcelain talks to core only through the public CLI and its machine output (TOON/JSON) and documented environment variables. It never links core internals and never writes `.aida-store/` or `.aida/cache.db` directly. A breaking change to a machine-output field that porcelain depends on is a breaking change to core.
+  4. Canonical surface. Built-in subcommands always win. An extension can never shadow a real subcommand or built-in alias. `aida help` and `aida alias list` show installed extensions, marked by source and path, so agents can discover them. Agents may call an extension, because it is a named, reviewable executable, not a personal shorthand like a TASK-877 alias. The extension stays responsible for refusing human-only steps under agent/headless callers.
+  5. Scope. The rule applies to new capabilities from acceptance onward. Existing core commands are not migrated by this ADR. Moving any of them out needs its own spec and operator decision, and the TUI stays in core per EPIC-29's rejection.
+
+  CONSEQUENCES
+
+  - New porcelain ships and versions independently (its own repo or a shared contrib repo) and cannot bloat core's surface, tests or release cadence.
+  - First candidates: the recipe runner (`aida-recipe`, filed in its own repo once that exists) and, optionally, aida-relay as `aida relay`.
+  - Cost: a cross-repo contract to keep stable, and a second install step for users who want a module. Discoverability through `aida help` reduces the second.
+  - Risk: the admission rule is a judgment call at the edges (e.g. a porcelain that wants a new core query). The answer then is a small plumbing addition in core plus the porcelain outside, not the porcelain moving in.
+
+  ## Acceptance
+  1. The operator accepts or amends this decision. The admission rule (Decision 1) is recorded verbatim in the discipline docs or CONTRIBUTING, where spec authors and the advisor will see it.
+  2. The advisor applies the rule during triage: a draft that only composes existing commands is redirected to a porcelain home with a pointer comment, not queued in core.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T04:48:02.642963920Z
+modified_at: 2026-10-10T04:48:02.642963920Z
+req_type: Decision
+tags:
+- architecture
+- core-boundary
+- extensions
+- operator-decision
+- porcelain
+filed_at:
+  code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
+  branch: task-1538-kernel
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 430dc01de4
+  vendor: antigravity
+  session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
