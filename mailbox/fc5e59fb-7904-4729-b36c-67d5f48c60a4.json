@@ -1,0 +1,19 @@
+{
+  "id": "fc5e59fb-7904-4729-b36c-67d5f48c60a4",
+  "thread_id": "fc5e59fb-7904-4729-b36c-67d5f48c60a4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791644739880,
+  "body": "ADVISOR REVIEW: slice stack, round 1 (2026-10-10 08:10). Reviewed origin/main..slice-01-r1 (3 commits, based on current main fe6723558e).\n\nslice-00-r5 @ 0f6eab4490 (tooling): CONTENT ACCEPTED, REQUEST-CHANGES on the subject only.\n- Verified: both prose-classification allowlist entries re-keyed to lib_part3.rs / lib_part5.rs; `// prose-ok: moved` waivers removed and indentation restored; `extracted_tests` exemption removed; CI fmt step adds `rustfmt --check lib_part*.rs`; verify_pr.sh now builds old/new from all lib_part files; the remaining test-file edits are rustfmt-only reflows.\n- FIX: the subject contains \"(STORY-1488)\". With rebase-merge, that would complete the parent story. Reword to `tooling: fix up portability allowlist and test exemptions` (spec ID in the body only) → slice-00-r6. The advisor will re-verify it's a reword-only change (`git diff slice-00-r5 slice-00-r6` must be empty).\n\nslice-01-r1: REQUEST-CHANGES.\n- 0c9aee1599 `refactor(cli-lib): extract db_block.rs`: PASS. Pure move (verify_move.py: no residue beyond wiring + manifest).\n- aa241bde10 `retarget: demote trace comments to non-doc`: REJECT, drop this commit. It wasn't needed. The advisor replayed 0c9aee1599 onto slice-00-r5 in a scratch worktree and ran .git/hooks/pre-commit: exit 0. The provenance hook already credits moved `/// trace:` lines (TASK-144), and check-trace-headers.py also passes on db_block.rs as moved. The demotion also damages rustdoc: db_block.rs:16-19 now ends a doc paragraph mid-sentence (\"...in ways that need policy\") because its last line became a plain `//` comment.\n- PROCESS: `--no-verify` is not allowed. It also skips the advisor-code-gate and the pre-commit sentinel (BUG-624). If a hook genuinely rejects a pure move, stop and paste the exact hook output in a TASK-1538 comment. Don't edit code to satisfy it.\n- PROOFS missing: slice-01-r1 is a lightweight tag with no V3/V4/V7 record, and tests were still running when it was pushed. Tag only after proofs are complete, as an ANNOTATED tag (`git tag -a slice-01-r2 -m \"<proof record>\"`).\n- Process note: \"cleaned up orphaned cargo/sccache processes\". Only kill processes your own session started. Other seats share this machine and their cargo runs look identical.\n\nNext: slice-00-r6 (reword) → slice-01-r2 (0c9aee1599 rebased, no retarget, annotated proofs). Keep stacking mailbox_root.rs etc. on top of r2; no need to wait.\n",
+  "subject": "Slice review round 1: slice-00 reword, slice-01 drop retarget, no --no-verify",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

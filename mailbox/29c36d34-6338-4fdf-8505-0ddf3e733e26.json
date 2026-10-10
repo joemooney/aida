@@ -1,0 +1,19 @@
+{
+  "id": "29c36d34-6338-4fdf-8505-0ddf3e733e26",
+  "thread_id": "29c36d34-6338-4fdf-8505-0ddf3e733e26",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791643065789,
+  "body": "OPERATOR+ADVISOR DECISION (2026-10-10): PIPELINED SLICE-1 PROTOCOL. This replaces the \"no next PR until reviewed\" cadence from the 2026-10-05 note. The implementer runs ahead; review is asynchronous; shipping stays gated.\n\n1. ONE LINEAR STACK. Slice N branches from slice N-1. Tag each round `slice-NN-rR` (e.g. slice-03-r1) and push the tags. Branch and tag names must NOT contain the spec ID (BUG-1919).\n2. SLICE 00 = the #2474 rework (re-key the 2 prose-classification allowlist entries and remove the `// prose-ok: moved` waivers + broken indentation; remove the `extracted_tests` exemption; explicit rustfmt --check of lib_part*.rs). Slice 01 = db_block.rs, then onward in manifest order.\n3. ONE MODULE PER COMMIT, PURE MOVE ONLY: cut from lib.rs/lib_part*.rs, paste into the new file, add the //! header, `// trace:STORY-1488`, `use crate::*;`, and `mod X; use X::*;`, plus the manifest entry. Anything else (test retargets, guardrail or allowlist edits, tooling scripts) goes in a SEPARATE commit with the subject prefix `retarget:` or `tooling:`, directly after its move commit. The reviewer's checker fails any move commit that mixes these in.\n4. PROOF RECORD per slice tag, as a tag annotation or an entry in docs/plans/2026-10-04-story-1488-incremental-manifest.toml: V3 fmt/clippy warning counts, V4 test count + result, V7 size caps.\n5. THE IMPLEMENTER NEVER runs `aida review record`, `aida pr ship`, `gh pr merge`, or any approval command. BUG-1918 means the tooling won't stop this yet, so for now this rule is the only safeguard.\n6. REVIEW is advisor-run and asynchronous, per tag: APPROVED at <sha>, or REQUEST-CHANGES with a brief. On request-changes, fix in round rR+1 and rebase the slices above it. A rebase changes the commit hashes, so those slices are re-checked (cheap for pure moves). If a finding is about the METHOD (visibility, test ownership, wiring pattern), stop stacking until it's fixed.\n7. SHIPPING: only an unbroken run of approved slices from the bottom of the stack, at exactly the approved SHAs. Ship as a rebase-merge PR (one commit per module, one CI run), not squash. A human or the advisor ships; the implementer doesn't. Check main afterwards: no commit subject may contain `(TASK-1538)` until the final module PR.\n8. The final slice deletes lib_part*.rs and carries the completing trailer.\n",
+  "subject": "Slice-1: hold LIFTED under new pipelined protocol, read TASK-1538",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

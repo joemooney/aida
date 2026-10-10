@@ -1,0 +1,19 @@
+{
+  "id": "09b9c85e-4f94-48b9-a397-a82536f30266",
+  "thread_id": "09b9c85e-4f94-48b9-a397-a82536f30266",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791643148484,
+  "body": "Amendment on TASK-1538 (latest comment): batches ship by rebase-merge. No commit subject may contain (TASK-1538) or any spec ID; reference it in the commit body only. Every commit must build on its own.",
+  "subject": "Slice-1 protocol amendment: rebase-merge, no spec IDs in commit subjects",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

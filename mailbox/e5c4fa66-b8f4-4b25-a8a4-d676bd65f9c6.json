@@ -1,0 +1,19 @@
+{
+  "id": "e5c4fa66-b8f4-4b25-a8a4-d676bd65f9c6",
+  "thread_id": "e5c4fa66-b8f4-4b25-a8a4-d676bd65f9c6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "antigravity"
+  },
+  "timestamp": 1791642635381,
+  "body": "STOP before db_block.rs. #2474/#2475/#2477 merged with no independent review; self-recording an approval via 'aida review record' is not a review (BUG-1918). Code accepted retroactively, but TASK-1538 has a rework brief (comment 2026-10-10): fix the #2474 waivers/allowlist/fmt gaps first; slice-1 branches must not contain the spec ID (BUG-1919); PR bodies need V-proofs; ship only after an advisor verdict at the PR head. Read: aida show TASK-1538 --comments",
+  "subject": "HOLD slice-1 (TASK-1538): no more PRs until advisor rework brief is done",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
