@@ -24,15 +24,18 @@ description: |+
   9. **Lightweight FAQ table:** `aida faq list` shows `ID` and the question (title) only. Type, Status and Priority are constant for FAQs and add noise. Other knowledge types keep Status where it means something (e.g. a Decision can be superseded). Superseded or archived FAQs are hidden unless `--all` is passed.
   10. Regression tests for 7–9, plus `aida faq list` returning all 16 completed FAQs with no flags (item 3).
 
+  11. **`aida faq topics`** (added 2026-10-10 while in progress; **OPTIONAL for the in-flight PR**: if it isn't included, the orchestrator files it as a follow-up story, and reviewers must not reject the PR for its absence). A browsable index of FAQ topics: every `topic:*` tag on non-archived FAQs, with its count, sorted by name. `aida faq topics <topic>` (bare name or `topic:` prefix) lists that topic's FAQs as ID + question, sorted by numeric ID. Tags without the `topic:` prefix are ignored. Agent mode emits toon/JSON rows `{topic, count}`. Tested. The tag vocabulary lives in FAQ-11 (## Tags); this command reads tags, it doesn't enforce the vocabulary.
+
   ## Related
   BUG-1921 (FAQ IDs: no pre-allocated block), BUG-1920 (attribution + help list), TASK-1614 (faq type), FAQ-10, FAQ-11
+
 
 status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T15:32:55.008904218Z
+modified_at: 2026-10-10T15:51:48.207393816Z
 req_type: Story
 tags:
 - batch:relay-2026-10-10
