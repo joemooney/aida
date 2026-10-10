@@ -168,8 +168,8 @@ fn rs_files(dir: &Path) -> Vec<PathBuf> {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            // src/tests/ and src/extracted_tests/ hold test modules: never production.
-            if path.file_name().is_some_and(|n| n == "tests" || n == "extracted_tests") {
+            // src/tests/ holds test modules: never production.
+            if path.file_name().is_some_and(|n| n == "tests") {
                 continue;
             }
             out.extend(rs_files(&path));
