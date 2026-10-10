@@ -1,4 +1,3 @@
-
 /// TASK-804 (facet a of STORY-604): build the argv (after the `claude` program
 /// name) for the `--verbose` burndown drain. Identical base to the quiet launch
 /// (`-p <prompt> --permission-mode <mode>`) PLUS the stream-json flags so the

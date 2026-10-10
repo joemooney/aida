@@ -131,15 +131,16 @@ fn explicit_status_filter_does_not_disclose() {
 // trace:BUG-1737 trace:BUG-783 | ai:claude
 #[test]
 fn disclosure_helper_never_queries_the_backend() {
-    let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
-            include_str!("../lib.rs"),
-            include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
-            include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
-            include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
-        );
+    let src = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        include_str!("../lib.rs"),
+        include_str!("../lib_part1.rs"),
+        include_str!("../lib_part2.rs"),
+        include_str!("../lib_part3.rs"),
+        include_str!("../lib_part4.rs"),
+        include_str!("../lib_part5.rs"),
+        include_str!("../lib_part6.rs")
+    );
     let start = src
         .find("fn list_lens_scope_disclosure(")
         .expect("helper must exist");

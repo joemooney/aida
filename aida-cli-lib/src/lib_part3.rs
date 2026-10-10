@@ -1,4 +1,3 @@
-
 /// BUG-1468: a PR branch's green check is evidence about the guards that
 /// existed WHEN IT RAN. Nothing re-evaluates that green when a new required
 /// guard lands on main, so a long-lived branch can present a green check
@@ -2454,8 +2453,8 @@ pub(crate) fn resolve_session_to_end(
                 // prefix. Only treat a "no session matching" miss as a
                 // signal to fall through to branch resolution.
                 let msg = id_err.to_string();
-                // prose-ok: moved
-        if msg.contains("ambiguous") {
+                // prose-ok: classifies our own find_lease_by_id_prefix error (ambiguous-prefix vs no-match), not external text
+                if msg.contains("ambiguous") {
                     return Err(id_err);
                 }
                 find_lease_by_branch(q, leases)

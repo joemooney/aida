@@ -1,4 +1,3 @@
-
 // TASK-1297: one routed-queue row, reduced to the two fields the "what did
 // the `--batch` filter exclude" count needs — decoupled from `Storage` /
 // `QueueEntry` so the pure derivation below can be pinned with a plain

@@ -1171,7 +1171,8 @@ mod task_1244_drain_merge_lease_tests {
     /// merge. Needles are split so this file cannot match its own literals.
     #[test]
     fn drain_merge_and_wave_merge_take_the_merge_lease() {
-        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
@@ -1584,7 +1585,8 @@ mod bug_1205_ci_phase_fallthrough_tests {
     /// its own literals.
     #[test]
     fn informational_red_falls_through_to_the_green_steps() {
-        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
@@ -1711,7 +1713,8 @@ mod bug_1195_review_story_lookup_tests {
     /// fallback (the plan-builder's view), never the bare per-user list.
     #[test]
     fn review_story_lookup_uses_the_role_fallback_listing() {
-        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
@@ -1740,7 +1743,8 @@ mod bug_1173_detection_hold_tests {
     // swallowed. trace:BUG-1173 trace:BUG-1236 | ai:claude
     #[test]
     fn set_pr_number_stamps_marker_and_syncs_label_surfacing_failure() {
-        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        let src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
             include_str!("lib.rs"),
             include_str!("lib_part1.rs"),
             include_str!("lib_part2.rs"),
