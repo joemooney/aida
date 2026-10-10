@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-10T19:08:27.034756851Z
+modified_at: 2026-10-10T19:08:29.137346746Z
 req_type: Task
 tags:
 - guided-lane
@@ -41,6 +41,10 @@ relationships:
     custom: implemented-by
   target_id: 01a11921-6a77-7761-a5eb-86f42ea0b4c9
   created_at: 2026-10-08T01:30:18.545001796Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 01a12736-aff3-7661-b6e3-e0aae19cf8c8
+  created_at: 2026-10-10T19:08:29.137342165Z
   created_by: joe
 comments:
 - id: 01a11414-7a30-7c81-a448-8daae92280d9
