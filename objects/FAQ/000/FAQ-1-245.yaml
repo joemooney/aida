@@ -1,0 +1,37 @@
+id: 01a12656-ae13-7892-a19b-189a190ed046
+spec_id: FAQ-1-245
+title: Why does 'aida faq add' work when 'faq' isn't in the --type help list?
+description: |
+  **`aida <type> add|list` is shorthand. It's rewritten to `aida add --type <type>` / `aida list --type <type>` before parsing, so it works for any built-in type even where the help doesn't list it yet.**
+
+  ## Forms
+  | You type | Runs |
+  |---|---|
+  | `aida faq` | `aida list --type faq` |
+  | `aida faq list [args]` | `aida list --type faq [args]` |
+  | `aida faq add [args]` | `aida add --type faq [args]` |
+
+  This covers every built-in type (bug, task, story, epic, decision, term, faq, ...) plus the short forms `cr` and `fr`. Only `add` and `list` are rewritten. `aida faq show FAQ-3` is not; use `aida show FAQ-3`.
+
+  ## Gotchas
+  - **`doc` is excluded** so it doesn't shadow the real `aida doc` command.
+  - A mistyped type isn't rewritten, so you get the normal "unrecognized subcommand" error.
+  - `faq` is missing from the `aida add --type` help list (BUG-1920), but the alias and `--type faq` both work.
+
+  ## See also
+  STORY-1050 (type aliases), TASK-1614 (faq type)
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:02:57.299080917Z
+modified_at: 2026-10-10T15:02:57.299080917Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
