@@ -80,6 +80,7 @@
 "Prose-classification rule fixtures" = "fast"
 "File-time handle portability rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Verify pure-move slice stack fixtures" = "fast"
 "Run clippy" = "full"
 "Glyph-literal lint (block new raw glyphs)" = "fast"
 "Trace/doc-header stranding gate" = "fast"

@@ -489,6 +489,9 @@ jobs:
       - name: Executable fixture ratchet
         run: python3 -m unittest tests/test_executable_fixture_ratchet.py
 
+      - name: Verify pure-move slice stack fixtures
+        run: python3 -m unittest discover scripts/split-lib/tests/
+
       - name: Run clippy
         if: steps.changes.outputs.full_ci == 'true'
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
