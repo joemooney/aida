@@ -16,18 +16,26 @@ description: |
 
   ## See also
   `aida-cli-lib/build.rs` (computes the flag), STORY-1648 (flag main-checkout drift at session start)
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:27:20.947502433Z
-modified_at: 2026-10-10T18:27:20.947502433Z
+modified_at: 2026-10-10T18:47:52.023174510Z
 req_type: Faq
 tags:
 - audience:dev
 - audience:user
 - topic:build
 - topic:cli
+history:
+- id: 01a12724-97d7-7780-ac90-362d556679e7
+  author: joe
+  timestamp: 2026-10-10T18:47:52.023170555Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -36,3 +44,6 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T18:47:52.023160110Z
