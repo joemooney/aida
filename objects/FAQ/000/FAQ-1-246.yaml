@@ -24,8 +24,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:03:03.525771056Z
-modified_at: 2026-10-10T15:03:03.525771056Z
+modified_at: 2026-10-10T15:38:27.807059129Z
 req_type: Faq
+tags:
+- topic:review-gate
+- topic:roles
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
