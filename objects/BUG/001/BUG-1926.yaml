@@ -20,12 +20,12 @@ description: |-
   - The same pair passes through the generated hook fallback and through git_ops::push.
   - The no-config project behaviour is unchanged and covered by a test that states the decision.
   - Tests use isolated HOME, repos and fake remotes. No real pushes.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:06:37.521657356Z
-modified_at: 2026-10-10T21:06:55.550982086Z
+modified_at: 2026-10-10T21:45:24.909971971Z
 req_type: Bug
 tags:
 - identity
@@ -36,6 +36,14 @@ relationships:
   target_id: 01a10fa4-f5e8-7cf3-a456-76a11ea8ec51
   created_at: 2026-10-10T21:06:55.550980358Z
   created_by: joe
+history:
+- id: 01a127c7-24ad-72b2-a9cb-dc1e109c0bd1
+  author: joe
+  timestamp: 2026-10-10T21:45:24.909967690Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
