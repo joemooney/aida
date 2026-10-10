@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-10T18:18:26.005405554Z
+modified_at: 2026-10-10T18:18:53.880921877Z
 req_type: Story
 tags:
 - build
@@ -54,6 +54,12 @@ comments:
   content: 'Revised naming decision (2026-10-10, supersedes the previous comment''s alias plan): `aida dev build` is the incremental build, which replaces today''s `aida dev rebuild`. `aida dev rebuild` becomes a clean build: it removes the workspace crates'' artifacts for the agent profile (`cargo clean -p` for each workspace member, keeping the compiled dependencies) and then runs the same build → smoke test → promote pipeline. `--full` also wipes the dependency cache (`cargo clean --profile agent`). The two share every rule: they promote only from a clean primary checkout, and only after the smoke test passes. ORDERING CONSTRAINT: a clean build must never remove the binary that is currently live. Today `~/.local/bin/aida` symlinks straight into target/agent, so cleaning would leave a dangling `aida` for the whole build. So `rebuild` may only clean once the separate live directory and its promotion step exist, which are part of this story. Either ship them together, or make `rebuild` refuse while the live binary resolves inside target/agent.'
   created_at: 2026-10-10T18:18:26.005405554Z
   modified_at: 2026-10-10T18:18:26.005405554Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a1270a-1238-74d2-8517-2d68e71ec107
+  author: joe
+  content: 'Final naming decision (operator + advisor, 2026-10-10, supersedes both earlier naming comments): follow cargo. `aida dev build` is the only build verb: incremental, then smoke test, then promote. Remove `aida dev rebuild` (the TASK-1720 wrapper case) entirely, with no alias and no clean-build mode. For a clean build, use cargo directly (`cargo clean -p <crate>` or `cargo clean --profile agent`) and then run `aida dev build`. With the live directory separate from target/, cargo clean can no longer break the live binary, which is what made a dedicated clean mode tempting. Optionally, `aida dev build --clean` can wrap the clean step later if it is ever wanted; it is not in scope now.'
+  created_at: 2026-10-10T18:18:53.880921877Z
+  modified_at: 2026-10-10T18:18:53.880921877Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
