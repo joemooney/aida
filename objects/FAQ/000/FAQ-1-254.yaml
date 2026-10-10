@@ -1,0 +1,33 @@
+id: 01a12675-d1d2-7a92-8e7e-38050e0de3a5
+spec_id: FAQ-1-254
+title: A pre-commit hook rejected my moved code. Can I use --no-verify, or edit the code to pass?
+description: |
+  **No. Don't bypass the hook, and don't edit the moved code to satisfy it. Moved lines are already excused. If a hook truly rejects a pure move, stop and post its exact output on the spec.**
+
+  ## Why
+  - The pre-commit provenance check (`/// trace:` and bare spec IDs in doc comments) gives **move credit** (TASK-144): an added `///` line that matches a line removed in the same staged diff is excused. A pure cut-and-paste passes.
+  - `--no-verify` also skips the advisor-code guard and the pre-commit sentinel (BUG-624). It disables every check at once, not just the one in the way.
+  - Editing moved code to satisfy a hook makes the commit no longer a pure move. On 2026-10-10 a slice changed 16 `/// trace:` lines to `//`, which cut a rustdoc paragraph off mid-sentence. The advisor then replayed the original commit and the hook passed with exit 0.
+
+  ## What to do
+  1. Re-run with the hook and read its actual output.
+  2. Check that the commit really is a pure move (see the FAQ "How do I verify that a refactor commit only moves code?").
+  3. If it still fails, paste the hook output as a comment on the spec and continue with other work. It's a hook bug to fix, not something to work around.
+
+  ## See also
+  TASK-144, BUG-624, TASK-1538 (round-1 review)
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:36:58.066533849Z
+modified_at: 2026-10-10T15:36:58.066533849Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
