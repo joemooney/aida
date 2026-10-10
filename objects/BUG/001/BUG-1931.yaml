@@ -1,0 +1,36 @@
+id: 01a127f0-d373-7992-8a1d-ff74332eff31
+spec_id: BUG-1931
+agreed_id: BUG-1931
+title: 'aida init overflows the main-thread stack on Windows (task_1597 test fails on windows-latest since PR #2476)'
+description: |-
+  Observed in CI on windows-latest (debug build): aida-cli/tests/task_1597_delegation_prompt.rs:71. 'aida init --no-skills --no-hooks --no-agent-config' (AIDA_HEADLESS=1) exits with 0xC00000FD STATUS_STACK_OVERFLOW: "thread 'main' has overflowed its stack".
+
+  First seen on PR #2476 (STORY-1540, grant default seats at interactive init; run 38026650562), which merged anyway because the Windows build isn't a required check. It reproduces on PR #2480 (run 38088801924), whose changes are pure moves. Linux passes, and push-to-main CI doesn't run Windows, so main shows green.
+
+  Likely cause: Windows' 1 MiB main-thread stack, versus 8 MiB on Linux, together with large stack frames in the init path in debug builds (big match/async state or large locals), made worse by the STORY-1540 seat-grant code.
+
+  Fix options:
+  - Run the CLI entry on a spawned thread with an explicit stack size, e.g. 8 MiB (std::thread::Builder::stack_size) in main_entry. This is the standard Rust approach.
+  - Or set /STACK via a linker arg for the windows-msvc target in .cargo/config.toml.
+  - Then find the frame-size hotspot (cargo +nightly -Zprint-type-sizes, or by bisecting the init path) and box the large locals.
+
+  Acceptance: the task_1597 test passes on windows-latest. Add a Windows CI regression run of 'aida init' in a temp repo. Consider making Build (windows-latest) a required check once it's green, so a regression like this can't merge silently again.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T22:30:56.627348261Z
+modified_at: 2026-10-10T22:30:56.627348261Z
+req_type: Bug
+tags:
+- init
+- portability
+- windows
+filed_at:
+  code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
