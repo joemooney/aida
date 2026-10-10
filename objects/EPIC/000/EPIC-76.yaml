@@ -1,0 +1,44 @@
+id: 01a12736-aff3-7661-b6e3-e0aae19cf8c8
+spec_id: EPIC-76
+agreed_id: EPIC-76
+title: 'Launch & publication authority architecture: sealed launch transport, committed dispatch publication, store-CAS owner join, pane containment'
+description: |-
+  ## Origin
+  Split out of BUG-1808 on 2026-10-10 (operator + advisor decision). BUG-1808 was filed as a heft-5 bug: "refuse before mutating when the launcher can't delegate the child role." Over 2026-10-05..08 its design grew into a multi-part architecture: callback origin, launch handshake v2, pane/containment, store-CAS owner join (A2, design V3), and a common publisher-owned CommittedDispatch. That produced 28 comments, 8 open production gates, and ~3.2k lines of groundwork with no callers. BUG-1808 now carries only the narrow preflight fix. The architecture lives here.
+
+  ## Contents (carried over; signoffs remain binding)
+  - TASK-1612: sealed executable image and owned waiting-child transport (child; nearly done, see its comments and run-20261008/task1612-batch-d-lock-failure-prepared.md).
+  - Publication groundwork on branch `bug-1808-delegation-publication` (aida-core/src/publication/*, git_publication/callback_input.rs). Checkpoint approved at 6a1733a1 as groundwork only. It stays parked until a production consumer exists; don't ship it standalone.
+  - A2 store-CAS owner join, design V3: its required fresh independent review was launched ~22:20 on 2026-10-08 and never produced a report. Re-run it before any implementation.
+  - Pane/containment adapter, launch v2, callback v5: signoffs and addenda under .aida/handoff/orchestrator/ (BUG-1808-*, PANE_CONTAINMENT_*, TASK1607_LAUNCH_*).
+  - Downstream consumer: TASK-1607 (STORY-1485 slice A) production gateways and history are blocked on this epic's common owner.
+
+  ## Lane
+  Guided only. Authority-sensitive throughout: advisor reviews every step, the operator merges, no unattended drain.
+
+  ## First steps when picked up
+  1. Finish TASK-1612 (wave 3 of the 2026-10-10 plan).
+  2. Re-run the A2 V3 independent review.
+  3. Sketch the smallest production consumer path that would let the publication groundwork ship together with a caller.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T19:07:37.843699330Z
+modified_at: 2026-10-10T19:07:37.843699330Z
+req_type: Epic
+tags:
+- architecture
+- authority
+- guided
+- launch
+- publication
+- split-from:BUG-1808
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
