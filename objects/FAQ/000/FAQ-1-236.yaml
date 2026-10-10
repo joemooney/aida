@@ -1,0 +1,33 @@
+id: 01a12647-7757-7a81-8de3-d61028dbadac
+spec_id: FAQ-1-236
+title: Should a stacked mechanical refactor be squash-merged or rebase-merged?
+description: |
+  **Rebase-merge, in batches. Squash stays the default for everything else.**
+
+  ## Why
+  - **Speed:** a run of approved slices lands as one PR with one CI run, instead of one PR and one ~13-minute CI run per slice.
+  - **History:** each module move stays its own commit on main, so blame, bisect and `git log --follow` work one move at a time.
+  - **No squash subject:** nothing gets built from the title or branch name, so BUG-1919 can't fire.
+
+  ## Conditions
+  - No commit subject contains a spec ID except the final one. Every subject lands on main as written.
+  - **Every commit must build on its own.** A move commit and its `retarget:` commit go together and are approved as a pair.
+  - Merge with `gh pr merge --rebase`, run by a human or the advisor. Ship's merge path is built around squashing.
+
+  ## See also
+  FAQ on landing a multi-PR change, TASK-1538
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:46:20.247987251Z
+modified_at: 2026-10-10T14:46:20.247987251Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
