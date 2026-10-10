@@ -8,16 +8,24 @@ description: |-
   Fix: derive the displayed role from the validated grant, not the label. When the label is set but there's no valid grant (missing, expired or revoked), show e.g. 'role:advisor (no grant)' in a warning colour. Do the same in the SessionStart hook banner, which also printed 'role: advisor'. Update the shipped statusline snippet/template to use aida statusline's role field instead of $AIDA_SESSION_ROLE.
 
   Acceptance: with AIDA_SESSION_ROLE=advisor and no AIDA_SESSION_GRANT, both the statusline and the SessionStart banner show the role as ungranted. With a valid grant they show it as today. Test both cases.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:32:21.773236209Z
-modified_at: 2026-10-10T20:32:21.773236209Z
+modified_at: 2026-10-10T20:35:35.284264008Z
 req_type: Bug
 tags:
 - roles
 - statusline
+history:
+- id: 01a12787-36f4-7ab1-b554-d4942f892e3f
+  author: joe
+  timestamp: 2026-10-10T20:35:35.284260038Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
