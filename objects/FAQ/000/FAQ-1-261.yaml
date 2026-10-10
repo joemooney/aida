@@ -1,0 +1,37 @@
+id: 01a12711-cef3-7a11-981b-be8a86f24e43
+spec_id: FAQ-1-261
+title: What does '+dirty' mean in 'aida --version'?
+description: |
+  **`+dirty` means `git status --porcelain` was non-empty when the binary was built, and that includes UNTRACKED files. It doesn't necessarily mean the code differs from the commit.**
+
+  ## How to tell which
+  ```bash
+  git -C <checkout> status --porcelain | grep -v '^??'   # empty → only untracked files; the code is the commit
+  ```
+  A build from a checkout whose only changes are stray scratch files (`*.log`, `fix_*.py`) still reports `+dirty`.
+
+  ## Why it matters
+  If tracked files were modified, the binary contains uncommitted code that may be someone else's unfinished work. Find out what was modified before trusting that build.
+
+  ## See also
+  `aida-cli-lib/build.rs` (computes the flag), STORY-1648 (flag main-checkout drift at session start)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:27:20.947502433Z
+modified_at: 2026-10-10T18:27:20.947502433Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:build
+- topic:cli
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
