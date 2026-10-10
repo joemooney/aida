@@ -1,0 +1,39 @@
+id: 01a12675-6101-7f61-bf71-c99f73fe002b
+spec_id: FAQ-1-250
+title: Why doesn't the burndown pick up my approved spec, and how do I scope or hold specs in a run?
+description: |
+  **Because the burndown only drains *queued* specs. Approved but not queued shows as "awaiting advisor sign-off". Queuing it (`aida queue add <SPEC>`) is the sign-off.**
+
+  ## How
+  ```bash
+  aida burndown plan                     # look for "Awaiting advisor sign-off"
+  aida queue add <SPEC>                  # advisor blesses it into the drain (default role: implementer)
+  aida burndown plan --tag <batch-tag>   # scope a run to an exact set
+  ```
+
+  ## Scoping a run to specific specs
+  Tag the set (`aida edit <SPEC> --add-tag batch:<name>`) and use `--tag batch:<name>` on the plan. Otherwise the drain takes **everything** ready, including review stories and specs another agent owns.
+
+  ## Holding one spec back from auto-merge
+  `review:draft-only` makes `aida burndown plan` **park** the spec entirely (it isn't built at all). It is *not* "build, then hold the PR". To get build-review-but-don't-merge, keep it in the batch and say so in the run's prompt (e.g. "push the PR and stop; comment `PR #N ready for advisor review`").
+
+  ## Other reasons a spec isn't ready
+  `plan` prints the reason: supervised (architecture/keystone: work it at the keyboard), parked (epic, blocked, decision pending), or in flight (live lease or open PR).
+
+  ## See also
+  `aida burndown plan --help`, the FAQ "How do I preview what an unattended drain will pick up before running it?"
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:36:29.185583762Z
+modified_at: 2026-10-10T15:36:29.185583762Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
