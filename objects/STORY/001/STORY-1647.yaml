@@ -1,0 +1,42 @@
+id: 01a1270d-27c6-7461-b045-01fa801c6f83
+spec_id: STORY-1647
+agreed_id: STORY-1647
+title: Pre-commit refuses commits in the primary checkout on main; agents commit only in worktrees
+description: |-
+  ## Problem
+  Agents commit straight into the shared primary checkout (`~/ai/aida`) on `main`. The pre-commit worktree-scope guard (TASK-1178) is deliberately warn-only, and it only fires for worktree-scoped sessions, so these commits go through unflagged. In this repo, all feature work happens in sibling worktrees, so a commit in the primary checkout on `main` is always a mistake.
+
+  ## Change
+  Add a gate to the pre-commit hook template (`aida-core/templates/hooks/aida-pre-commit.sh`, then `make sync-templates`). It REFUSES the commit when all of these hold:
+  - the repo is the primary checkout (`git rev-parse --git-dir` == `--git-common-dir`);
+  - the current branch is `main` (or the configured default branch);
+  - the commit is not a merge, not a pull/rebase replay, and not the `.aida-store` path (which keeps its existing special case).
+
+  The refusal message says to create a worktree (`aida worktree add <SPEC>`) and how to override. The operator override is `AIDA_ALLOW_PRIMARY_COMMIT=1`.
+
+  Why hard-block when TASK-1178 is warn-only: TASK-1178 worried that a hard block pushes agents to `--no-verify`. Here there is no legitimate agent commit to protect, and the server-side backstop (GitHub requiring a PR, see the release-flow spec) catches `--no-verify`.
+
+  ## Acceptance
+  - Tests cover: primary checkout on main → refused; same with the override → allowed; merge commit → allowed; `.aida-store` commit → allowed; worktree commit on a feature branch → allowed; primary checkout on a non-main branch → allowed with a warning.
+  - The template master is the source; `make check-templates` passes.
+  - Projects other than AIDA get the gate only when their config opts in (`[hooks] block_primary_commits = true`); AIDA's own config turns it on.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:22:16.006176829Z
+modified_at: 2026-10-10T18:22:16.006176829Z
+req_type: Story
+tags:
+- dev-tooling
+- hooks
+- main-checkout
+- related:STORY-1646
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
