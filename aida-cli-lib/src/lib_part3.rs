@@ -2454,8 +2454,7 @@ pub(crate) fn resolve_session_to_end(
                 // prefix. Only treat a "no session matching" miss as a
                 // signal to fall through to branch resolution.
                 let msg = id_err.to_string();
-                // prose-ok: moved
-        if msg.contains("ambiguous") {
+                if msg.contains("ambiguous") {
                     return Err(id_err);
                 }
                 find_lease_by_branch(q, leases)
