@@ -1,0 +1,37 @@
+id: 01a127c3-4180-7531-a745-c1560c8a4546
+spec_id: BUG-1930
+agreed_id: BUG-1930
+title: Drain misreports a clean phase-1 stop as lease-conflict and keeps draining into the same systemic failure
+description: |-
+  ## Problem
+  Each implementer exited cleanly (result event, $0.52-$1.43) after explaining that writes were denied. The drain then retried phase 1, failed with 'phase 1 retry cannot reclaim predecessor lease <id> after 3 liveness re-probe(s)', and shelved the spec as 'lease-conflict — not auto-drafting a BUG'. Two problems:
+  1. Wrong classification. The real cause, the agent stopping on permission denials, is reported as a lease conflict, so triage chases the wrong thing. The headless stream already says '⚠ permission denied: Edit, Edit, …', so the drain could classify it. The reclaim failure itself looks like a recurrence of BUG-1078 (transient-retry lease reclaim races predecessor teardown), here after a clean exit.
+  2. No stop on repeated failure. The same environmental failure hit three specs in a row, and the drain burned 1.79M tokens. Two consecutive specs failing phase 1 with the same environmental cause (permission denials, sandbox unavailable) should stop the drain and tell the operator, not shelve every spec in turn.
+
+  Evidence (aida-relay, 2026-10-10, aida 0.15.0 fe67235+dirty, user ~/.aida/agents.toml [agents] contained = true): 'aida drain start --no-human' on BUG-81, BUG-83, STORY-85 shipped 0 of 3 in 7m42s, using 1.79M tokens (~$2.66). Logs: /home/joe/ai/aida-relay/.aida/headless-logs/{bug-81-01a127b3,bug-83-01a127b4,story-85-01a127b6}-*.jsonl
+
+  ## Acceptance
+  - A phase that ends with permission denials as its only blocker is shelved as 'permission-denied' (or 'environment'), naming the denied tools, and no retry is attempted.
+  - Retrying after a clean predecessor exit reclaims the lease; add a regression test next to BUG-1078's.
+  - After N (default 2) consecutive phase failures of the same environmental class, the drain halts with one message naming the cause and the fix, and leaves the rest of the queue untouched.
+  - The drain summary distinguishes 'environment blocked' from per-spec failures.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T21:41:10.144530466Z
+modified_at: 2026-10-10T21:41:10.144530466Z
+req_type: Bug
+tags:
+- drain
+- lease
+- regression
+- triage
+filed_at:
+  code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: ce7b935f-d5da-41d3-94da-7ef94d2537e4
