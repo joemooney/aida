@@ -1305,6 +1305,7 @@ pub(crate) fn project_held_pr(
     record: &crate::merge_hold::MergeHoldRecord,
     title: &str,
     approved_at_head: Option<&str>,
+    is_draft: bool,
 ) -> HeldPrItem {
     use crate::merge_hold::HoldReasonKind;
     let pr = record.pr;
@@ -1312,7 +1313,13 @@ pub(crate) fn project_held_pr(
         HoldReasonKind::Rework => {
             if let Some(head) = approved_at_head {
                 let short = crate::review_verdict::short_sha(head);
-                format!("rework approved at {short}; awaiting human: aida merge-hold clear {pr}")
+                if is_draft {
+                    format!("rework checkpoint approved at {short}; PR is Draft — finish implementation and mark ready")
+                } else {
+                    format!(
+                        "rework approved at {short}; awaiting human: aida merge-hold clear {pr}"
+                    )
+                }
             } else {
                 "implementer: address the review findings; the hold lifts after approval"
                     .to_string()
@@ -1393,6 +1400,7 @@ pub(crate) struct CorpusHoldCandidate {
     pub spec_completed: bool,
     /// A `.aida/merge-holds/PR-<n>` marker already speaks for this PR.
     pub has_marker_hold: bool,
+    pub is_draft: bool,
 }
 
 /// Derive the rework holds the verdict corpus implies, for open PRs that have no
@@ -3004,6 +3012,7 @@ mod tests {
         verdict: Option<&str>,
     ) -> OpenPrItem {
         OpenPrItem {
+            is_draft: false,
             number,
             title: format!("PR {number}"),
             head_branch: format!("branch-{number}"),
@@ -3107,7 +3116,7 @@ mod tests {
             "STORY-1397 is marked guided — merge requires review",
             None,
         );
-        let item = project_held_pr(&record, "route typed recusals", None);
+        let item = project_held_pr(&record, "route typed recusals", None, false);
         assert_eq!(item.reason_kind, "supervision");
         assert!(item.action.contains("aida merge-hold clear 2103"));
         let report = AwaitingReport {
@@ -3138,6 +3147,7 @@ mod tests {
                 &crate::merge_hold::typed_hold(7, kind, "d", None),
                 "t",
                 None,
+                false,
             )
             .action
         };
@@ -3154,6 +3164,7 @@ mod tests {
             &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             None,
+            false,
         )
         .action;
         assert!(action_unapproved.contains("implementer"));
@@ -3162,6 +3173,7 @@ mod tests {
             &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             Some("48433c6b00000000000000000000000000000000"),
+            false,
         )
         .action;
         assert!(action_approved.contains("rework approved at 48433c6"));
@@ -3309,7 +3321,7 @@ mod tests {
         };
         let mut rendered = Vec::new();
         assert!(report.render(false, &mut rendered).unwrap());
-        let rendered = String::from_utf8(rendered).unwrap();
+        let rendered = strip_ansi(&String::from_utf8(rendered).unwrap());
         assert!(rendered.contains("PR-2035 CI failing with no owner or route"));
         assert!(rendered.contains("gh pr checks 2035"));
 
@@ -3886,7 +3898,7 @@ mod tests {
         assert_eq!(r.total(), 2);
         let mut buf = Vec::new();
         assert!(r.render(false, &mut buf).unwrap());
-        let out = String::from_utf8(buf).unwrap();
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
         assert!(out.contains("PR-2061") && out.contains("blocked"), "{out}");
         assert!(
             out.contains("PR-2060") && out.contains("TASK-1298"),
@@ -4486,7 +4498,7 @@ mod tests {
 
         let mut buf = Vec::new();
         assert!(r.render(false, &mut buf).unwrap());
-        let out = String::from_utf8(buf).unwrap();
+        let out = strip_ansi(&String::from_utf8(buf).unwrap());
         assert!(out.contains("PR-2014"), "{out}");
         assert!(out.contains("TASK-1298"), "{out}");
         assert!(

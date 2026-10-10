@@ -4375,12 +4375,41 @@ pub(crate) fn handle_init_distributed_worktree(
         );
     }
 
+    // STORY-1540: seed the initializer into the new store's team roster if at a direct human TTY.
+    let mut roster_seeded = false;
+    let mut seeded_user = String::new();
+    if crate::seat_authority::require_direct_human().is_ok() {
+        let current_user = crate::current_user_id(None);
+        seeded_user = current_user.clone();
+        std::fs::create_dir_all(store_path.join("registry")).ok();
+        // Seed default seats
+        for seat in &[
+            "advisor",
+            "implementer",
+            "product",
+            "reviewer",
+            "integrator",
+        ] {
+            let _ = crate::team::allow_seat_cas(&store_path, &current_user, seat);
+        }
+        roster_seeded = true;
+    }
+
     // Create initial commit on the orphan branch
     git_ops::add(&store_path, &["metadata.yaml"])?;
     std::fs::create_dir_all(store_path.join("objects"))?;
     std::fs::write(store_path.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_path, &["objects/.gitkeep"])?;
     git_ops::add(&store_path, &["objects"])?;
+    if roster_seeded {
+        let _ = git_ops::add(&store_path, &["registry"]);
+        println!(
+            "  {} Seeded {} into the team roster with default seats",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            seeded_user.bold()
+        );
+        println!("    (manage seats later with `aida team`)");
+    }
     git_ops::commit(&store_path, "chore: initialize AIDA distributed store")?;
 
     // Auto-push to origin/<branch_name> if origin exists, so subsequent
@@ -5903,5 +5932,47 @@ mod bug_1653_memory_lane_header_tests {
                 assert_eq!(&on_disk, expected, "{}", rel.display());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod init_roster_tests {
+    use super::*;
+
+    // trace:STORY-1540 | ai:antigravity
+    #[test]
+    fn init_at_non_tty_writes_no_team_roster() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_NAME", Some("test-agent")),
+            ("AIDA_AGENT_TYPE", Some("test")),
+        ]);
+        let prev_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(root).unwrap();
+
+        std::process::Command::new("git")
+            .arg("init")
+            .current_dir(root)
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "--allow-empty", "-m", "init"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+
+        super::handle_init_distributed_worktree(
+            false, false, None, false, false, false, None, false, false, None, None,
+        )
+        .expect("init should succeed");
+
+        let team_toml = root.join(".aida-store/registry/team.toml");
+        assert!(
+            !team_toml.exists(),
+            "no roster should be written without a direct TTY"
+        );
+
+        std::env::set_current_dir(prev_cwd).unwrap();
     }
 }

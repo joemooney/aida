@@ -3588,7 +3588,16 @@ mod tests {
         assert_eq!(clearance.cleared_by, "human:joe");
         assert_eq!(clearance.detail, LABEL_ONLY_REASON);
 
-        let lib_source = include_str!("lib.rs");
+        let lib_source = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         let clear = lib_source
             .split("crate::cli::MergeHoldAction::Clear { pr, stale } =>")
             .nth(1)
@@ -3636,7 +3645,16 @@ mod tests {
     // trace:BUG-1693 | ai:claude
     #[test]
     fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
-        let lib_source = include_str!("lib.rs");
+        let lib_source = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         let list = lib_source
             .split("crate::cli::MergeHoldAction::List { json, fix } =>")
             .nth(1)
@@ -4431,7 +4449,17 @@ mod tests {
         // Normalise CRLF (Windows autocrlf checkout) so the column-0
         // closing-brace split below still finds the body end.
         // trace:BUG-1556 | ai:claude
-        let lib_source = include_str!("lib.rs").replace("\r\n", "\n");
+        let lib_source = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        )
+        .replace("\r\n", "\n");
         let awaiting = lib_source
             .split("fn collect_awaiting_report_inner(")
             .nth(1)
