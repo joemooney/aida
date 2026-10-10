@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-10T19:08:33.018285990Z
+modified_at: 2026-10-10T23:59:14.946464305Z
 req_type: Task
 tags:
 - guided-lane
@@ -742,6 +742,12 @@ comments:
   created_at: 2026-10-10T19:08:33.018285990Z
   modified_at: 2026-10-10T19:08:33.018285990Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12841-ac02-7d91-bddd-4fbbf70d1003
+  author: joe
+  content: 'Advisor 2026-10-10 17:00: operator cleared merge-hold on PR #2451 (approved rework head 56f7b55b32). Not mergeable yet: draft, DIRTY vs main (36 commits behind, including the lib.rs module split #2480), and Build(ubuntu) red on the stale base. Needs an implementer: rebase story-1485 onto main (expect lib.rs conflicts; move code into the extracted modules), re-run make check-ci-fast, mark ready, and post ''PR #2451 ready for advisor review''. The rebase invalidates the 56f7b55 approval, so I re-review the rebased diff before merge.'
+  created_at: 2026-10-10T23:59:14.946464305Z
+  modified_at: 2026-10-10T23:59:14.946464305Z
+  session_id: d1ebc976-deb4-4770-b036-20a1547772ad
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
