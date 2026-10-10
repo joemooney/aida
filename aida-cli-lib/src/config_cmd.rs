@@ -4916,9 +4916,19 @@ mod bug_1667_bypass_gate_tests {
             "the dedicated bypass writer must have one gate-owned caller"
         );
 
+        let lib_src = format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         for (name, source) in [
             ("doctor_cmd.rs", include_str!("doctor_cmd.rs")),
-            ("lib.rs", include_str!("lib.rs")),
+            ("lib.rs", lib_src.as_str()),
         ] {
             let mut rest = source;
             while let Some((_, after)) = rest.split_once("apply_permission_posture(") {

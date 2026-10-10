@@ -1200,7 +1200,15 @@ mod task_1244_drain_merge_lease_tests {
     /// merge. Needles are split so this file cannot match its own literals.
     #[test]
     fn drain_merge_and_wave_merge_take_the_merge_lease() {
-        let src = include_str!("lib.rs");
+        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
             .expect("wave fn");
@@ -1605,7 +1613,15 @@ mod bug_1205_ci_phase_fallthrough_tests {
     /// its own literals.
     #[test]
     fn informational_red_falls_through_to_the_green_steps() {
-        let src = include_str!("lib.rs");
+        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
         // so searching the file for the first `fn finish_ci` now lands on a mock
         // whose body is a one-line delegation. Anchor on the REAL impl block
@@ -1724,7 +1740,15 @@ mod bug_1195_review_story_lookup_tests {
     /// fallback (the plan-builder's view), never the bare per-user list.
     #[test]
     fn review_story_lookup_uses_the_role_fallback_listing() {
-        let src = include_str!("lib.rs");
+        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         let start = src
             .find(concat!("fn queued_review_story_for_pr", "("))
             .unwrap();
@@ -1745,7 +1769,15 @@ mod bug_1173_detection_hold_tests {
     // swallowed. trace:BUG-1173 trace:BUG-1236 | ai:claude
     #[test]
     fn set_pr_number_stamps_marker_and_syncs_label_surfacing_failure() {
-        let src = include_str!("lib.rs");
+        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         // build the needle from split pieces so this test's own source cannot self-match
         // (the test module sits before the real function in the file).
         let needle = concat!("fn set_pr_number", "(&mut self, pr: u32) {");

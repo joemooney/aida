@@ -14926,7 +14926,15 @@ mod story_1436_gate_held_tests {
 
     #[test]
     fn merge_hold_clear_floor_refusal_is_recorded_before_the_bail() {
-        let src = include_str!("lib.rs");
+        let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("lib.rs"),
+            include_str!("lib_part1.rs"),
+            include_str!("lib_part2.rs"),
+            include_str!("lib_part3.rs"),
+            include_str!("lib_part4.rs"),
+            include_str!("lib_part5.rs"),
+            include_str!("lib_part6.rs")
+        );
         let clear = src
             .find(concat!("MergeHoldAction::", "Clear { pr, stale }"))
             .expect("clear arm");
