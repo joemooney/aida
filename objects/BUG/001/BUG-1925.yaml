@@ -1,0 +1,36 @@
+id: 01a1278b-8ca4-7172-bb7a-7324edb9dca7
+spec_id: BUG-1925
+agreed_id: BUG-1925
+title: 'Pre-commit doc-provenance gate takes 20+ minutes on large diffs: one grep subprocess per diff line plus a quadratic move-matching scan'
+description: |-
+  Observed 2026-10-10. The wave-1 relay merged origin/main into docs/task-1611-library-cleanup, and the merge brought in the TASK-1538 lib.rs split: 56 files, +129,784/-116,950 lines. The pre-commit hook (master: aida-core/templates/hooks/aida-pre-commit.sh, installed as .git/hooks/pre-commit) has been in pure-bash CPU for 23+ minutes (7+ min CPU) with no child processes, which blocks the relay. The cost is in the TASK-144/BUG-624 provenance passes:
+  - For every removed and added .rs diff line, the hook runs printf | grep -qE $DOC_COMMENT_RE: about 250k process spawns.
+  - For every added provenance line, __aida_consume_moved_line linearly scans the removed-provenance array, which is O(added × removed) on a large move.
+
+  Fix:
+  1. Make both passes one awk (or Rust: `aida dev hook pre-commit`) pass over the diff, with no per-line subprocesses. Use a hash of removed provenance lines with a count, for O(1) move credits.
+  2. For a merge commit (MERGE_HEAD present), check only lines that differ from both parents (the conflict resolution), not content that already passed the hook on main. git diff --cached against the merge's first parent re-counts all of main's changes.
+  3. Add a time budget or progress line so an agent can tell a slow hook from a hang.
+
+  Edit the template master, then run make sync-templates / make check-templates.
+
+  Acceptance: committing a staged diff of about 250k changed .rs lines (e.g. a synthetic file move) finishes the hook in under 10 s. A merge of main into a branch checks only the resolution delta. The existing TASK-144/BUG-624 hook tests still pass.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:40:19.364053755Z
+modified_at: 2026-10-10T20:40:19.364053755Z
+req_type: Bug
+tags:
+- hooks
+- performance
+- templates
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
