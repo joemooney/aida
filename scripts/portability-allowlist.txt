@@ -183,8 +183,6 @@ unattributed	aida-tui/tests/launcher_intent.rs:&aida_tui::__test_only::Intent::L
 # functions carrying `// external-prose-classifier:` (the BUG-1310 inventory),
 # `starts_with`/`==`/regex matches, and a lowered copy whose error-shaped
 # source is more than 12 lines above the match.
-prose-classification	aida-cli-lib/src/lib_part3.rs:if msg.contains("ambiguous") {
-prose-classification	aida-cli-lib/src/lib_part5.rs:if stderr.contains("branch not protected") {
 prose-classification	aida-cli-lib/src/maintenance_schedule.rs:if stderr.contains("no crontab") {
 prose-classification	aida-cli-lib/src/mcp.rs:let code = if lower.contains("missing required parameter")
 prose-classification	aida-cli-lib/src/mcp.rs:|| lower.contains("cannot be empty")

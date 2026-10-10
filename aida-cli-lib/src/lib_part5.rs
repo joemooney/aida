@@ -655,7 +655,8 @@ pub(crate) fn required_status_checks_uncached(
 // trace:BUG-1481 | ai:claude
 pub(crate) fn required_status_checks_outcome_from_stderr(stderr: &str) -> Option<Vec<String>> {
     let stderr = stderr.to_ascii_lowercase();
-    if stderr.contains("branch not protected") {
+    // prose-ok: moved
+            if stderr.contains("branch not protected") {
         return Some(Vec::new());
     }
     None
