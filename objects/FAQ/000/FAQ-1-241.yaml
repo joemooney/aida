@@ -36,7 +36,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:51:00.655559946Z
-modified_at: 2026-10-10T14:57:01.958100516Z
+modified_at: 2026-10-10T15:00:04.557259652Z
 req_type: Faq
 comments:
 - id: 01a1264c-ab7f-72f3-94b7-23df7909e3ed
@@ -44,6 +44,12 @@ comments:
   content: 'Interim, until the block-allocation bug is fixed: after any ''aida faq add'', run ''aida db merge-gate'' to get the canonical FAQ-N.'
   created_at: 2026-10-10T14:52:01.279023593Z
   modified_at: 2026-10-10T14:52:01.279023593Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12654-0b4d-7af2-ab57-0198952bd7f7
+  author: joe
+  content: 'Update 2026-10-10: file FAQs with --status completed (not approved), see FAQ-11. Still run ''aida db merge-gate'' afterwards until BUG-1921 is fixed.'
+  created_at: 2026-10-10T15:00:04.557259652Z
+  modified_at: 2026-10-10T15:00:04.557259652Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a12651-4206-7771-acfd-b66ea352e18f
