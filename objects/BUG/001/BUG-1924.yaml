@@ -1,0 +1,28 @@
+id: 01a12784-430d-70b1-a3b9-9a38adb15a88
+spec_id: BUG-1924
+agreed_id: BUG-1924
+title: Statusline shows role:advisor when the shell has no seat grant, so a session can't tell it lacks authority
+description: |-
+  Observed 2026-10-10. A Claude Code session started from a shell with AIDA_SESSION_ROLE=advisor but no AIDA_SESSION_GRANT. The statusline showed (role:advisor), yet every advisor-gated command refused with 'No active role. Last-used role: advisor', and aida role show said no role was active. The statusline command in ~/.claude/settings.json prints $AIDA_SESSION_ROLE directly, and aida statusline / statusbar also read the AIDA_SESSION_ROLE label (statusline_cmd.rs:51, statusbar_cmd.rs:191). Authority comes from the AIDA_SESSION_GRANT token (seat_authority.rs:12, current_grant).
+
+  Fix: derive the displayed role from the validated grant, not the label. When the label is set but there's no valid grant (missing, expired or revoked), show e.g. 'role:advisor (no grant)' in a warning colour. Do the same in the SessionStart hook banner, which also printed 'role: advisor'. Update the shipped statusline snippet/template to use aida statusline's role field instead of $AIDA_SESSION_ROLE.
+
+  Acceptance: with AIDA_SESSION_ROLE=advisor and no AIDA_SESSION_GRANT, both the statusline and the SessionStart banner show the role as ungranted. With a valid grant they show it as today. Test both cases.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:32:21.773236209Z
+modified_at: 2026-10-10T20:32:21.773236209Z
+req_type: Bug
+tags:
+- roles
+- statusline
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
