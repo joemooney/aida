@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T01:45:02.314618175Z
-modified_at: 2026-10-10T19:08:29.137346746Z
+modified_at: 2026-10-10T19:08:33.018285990Z
 req_type: Task
 tags:
 - guided-lane
@@ -736,6 +736,12 @@ comments:
     PROXY DECISION (orchestrator for Joe): Read the complete actual PANE_CONTAINMENT_INDEPENDENT_SIGNOFF.md and exact canonical posting/readback receipt from NEW independent reviewer01a119ca-46b5-7222-9e0d-6eefaa699fc4. Accept all six binding conditions and the explicit judgment that common BUG-1808 production publication architecture is coherently designed AS AMENDED, with no remaining reviewed design blocker. Earlier actual callback and launch signoffs and A–E/ADR/C7 supersessions remain binding. This permits guided common-owner implementation, not readiness/completion/production activation/merge. TASK-1612 transport component remains separately under implementation/review and production release unavailable there; broader doer must not copy unreviewed dependency or duplicate schemas. Common BUG-1808 first, TASK-1607 occupancy consumer second, BUG-1802 provenance policy later. Preserve default no-PID containment; the bounded existing anchored process-group cleanup and PTY pause/resume obligation applies, not an invented arbitrary-descendant sandbox/cgroup requirement. All real entrypoint positives/negative witnesses, history, strict before-P4 residue-free refusal, durable immutable commitment, identity, independent exact-head review, CI and final operator-owned authority merge remain. Dispatch brief bug1808-common-implementation.md; no gate is waived.
   created_at: 2026-10-08T04:52:35.384315562Z
   modified_at: 2026-10-08T04:52:35.384315562Z
+- id: 01a12737-877a-7730-b6e7-abc0fa61af7e
+  author: joe
+  content: 'Parked 2026-10-10 (operator + advisor): in-progress → approved, blocked by EPIC-76. The C7 core (probe, seat store/state machine, seat commands, --kill refusal) was independently approved at 56f7b55 as a checkpoint. Not started: gateway audit and binding (steps 4–5), history projection (step 6), the full witness matrix, guard-removal proofs. Per the 2026-10-08 decisions those wait on the common owner now tracked in EPIC-76 (previously BUG-1808). Draft PR #2451 stays open. Resume plan: merge origin/main (conflicts: two small lib.rs hunks now in lib_part*, plus AGENTS.md and OVERVIEW.md), then steps 4–6 per task1607-production-gateways.md, then check-ci-fast, then a fresh full review, then the operator merges. CI note: the test_show_latency.py ''.aida not empty'' failure looks like a flaky cleanup race; recheck after the rebase.'
+  created_at: 2026-10-10T19:08:33.018285990Z
+  modified_at: 2026-10-10T19:08:33.018285990Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a1140a-3149-7e43-9551-1cfd2b4737cb
   author: joe
