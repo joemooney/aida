@@ -15,13 +15,21 @@ description: |
 
   ## See also
   FAQ on why a spec flipped to done when only part of the work merged
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:47.029699404Z
-modified_at: 2026-10-10T14:46:47.029699404Z
+modified_at: 2026-10-10T14:56:23.432945057Z
 req_type: Faq
+history:
+- id: 01a12650-ab88-7c11-b6ff-2b9b85a74540
+  author: joe
+  timestamp: 2026-10-10T14:56:23.432919630Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -30,3 +38,6 @@ filed_at:
   aida_build_sha: a6d9bc8815
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T14:56:23.432881475Z
