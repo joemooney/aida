@@ -749,7 +749,7 @@ blocks:
   type_prefix: BUG
   range_start: 1917
   range_end: 2016
-  next: 1921
+  next: 1922
   allocated_at: 2026-10-03T19:52:46.886893873Z
 - node_id: '1'
   owner: joe
