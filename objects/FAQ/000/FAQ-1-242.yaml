@@ -1,0 +1,43 @@
+id: 01a12653-d3e5-75f3-911e-30dbcb7d2cc2
+spec_id: FAQ-1-242
+title: What's the convention for writing and filing an FAQ entry?
+description: |
+  **An FAQ is reference material, not work. File it as `completed`, skip the lifecycle, and find it with `aida faq list` or `aida search`.**
+
+  ## Convention
+  - **Title** = the question, worded the way someone would search for it.
+  - **Body (markdown)**: a bold one-line answer first, then `## Why`, `## How`, and `## See also` with spec IDs. Add a `## Caveat` when the answer depends on an open bug, and update it when the bug is fixed.
+  - **Status `completed` at birth.** No draft → approved step, no AI evaluation, no acceptance criteria, no trace comments.
+  - **Stale answer?** Edit it in place, or mark it `superseded --superseded-by FAQ-N` if a new entry replaces it.
+
+  ## Commands (interim, until STORY-1642 and BUG-1921 land)
+  ```bash
+  aida faq add --title "How do I ...?" --description-from-file answer.md --status completed
+  aida db merge-gate          # promote FAQ-1-NNN → canonical FAQ-N (see FAQ-10)
+  aida faq list completed     # list them (the open lens hides completed)
+  aida search "<words>"       # find an answer
+  ```
+
+  ## Why not `approved`?
+  Today the burndown and backlog pickers treat FAQ as **work**. Approved FAQs showed up in `aida burndown plan` as "ready to fan out" (2026-10-10), so an unattended drain would have assigned implementers to answer them. `completed` keeps them out until STORY-1642 makes FAQ a knowledge type.
+
+  ## Where FAQs (and other knowledge types) show up
+  Once STORY-1642 lands, the default `aida list` shows work only. Decision, Vision, Term, Principle and FAQ appear with `aida <type> list`, `--type`, or `--include-knowledge`, and always in `aida search`.
+
+  ## See also
+  STORY-1642, BUG-1921, FAQ-10
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:59:50.373064089Z
+modified_at: 2026-10-10T14:59:50.373064089Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
