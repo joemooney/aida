@@ -63,3 +63,22 @@ items = [
   "fn strip_toml_inline_comment",
   "mod test_ambient"
 ]
+
+[module.output_format]
+purpose = "Output format configurations (STORY-1488 slice 1)"
+items = [
+  "fn agent_output_mode_quiet",
+  "fn agent_output_mode",
+  "static OUTPUT_FORMAT_OVERRIDE",
+  "fn set_output_format_override",
+  "fn output_format_from_env",
+  "fn parse_output_format",
+  "fn output_format_override",
+  "fn output_format_is_json",
+  "fn handle_tail_cli",
+  "fn agent_output_mode_from",
+  "fn toon_list_fields",
+  "fn toon_list_cell",
+  "fn render_list_fields_table",
+  "mod task970_agent_output_tests"
+]
