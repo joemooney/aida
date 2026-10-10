@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T15:51:57.278346282Z
+modified_at: 2026-10-10T18:07:50.385088198Z
 req_type: Story
 tags:
 - batch:relay-2026-10-10
@@ -61,6 +61,25 @@ comments:
   content: 'Scope addition 2026-10-10 (operator): acceptance item 11 ''aida faq topics'' is OPTIONAL for the in-flight PR. Implementer: include it if it fits cleanly; otherwise the orchestrator files a follow-up story with item 11''s text, tagged batch:relay-2026-10-10 is NOT required. Reviewers: don''t reject for its absence.'
   created_at: 2026-10-10T15:51:57.278346282Z
   modified_at: 2026-10-10T15:51:57.278346282Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a126ff-f271-7ad0-afde-68679ec67c72
+  author: joe
+  content: |-
+    Advisor review of the UNCOMMITTED work in ../aida-story1642 (branch story-1642-work, 0 behind origin/main), 2026-10-10. The implementer session crashed before committing. Verdict: NEEDS-WORK, but it is close. Items 1-7 and 9 are met. Tests pass: story_1642 9/9, lifecycle 27, pickability 25, alias 77. fmt is clean. Traces present, no stubs, no SPEC IDs in user-facing prose.
+
+    Blocking
+    1. Regression: `aida doc` is hijacked. lib_part1.rs:3045 now uses the shared BUILTIN_TYPE_WORDS (knowledge_list.rs:22-45), which includes "doc". So `aida doc add/list` is rewritten to `aida add/list --type doc` and never reaches DocCommand (cli.rs:12955). This reintroduces the bug fixed in 93badc1fdb (STORY-1050). Exclude "doc" from the alias rewrite and add a regression test: rewrite_type_alias(["aida","doc","add",...]) leaves the args unchanged.
+    2. Run the full `cargo test --workspace` and `make check-ci-fast`. Only targeted tests have run so far. The knowledge-type check at the top of pickability could affect burndown/queue tests that use Decision/Vision fixtures.
+
+    Scope ruling (advisor)
+    3. Item 8 (numeric FAQ sort) is not implemented. Do NOT special-case it here. STORY-1644 makes natural numeric ID sort the default for all of `aida list`, which covers FAQs. Note in the PR body that item 8 is delivered by STORY-1644. Note that the existing SortOrder::IdAsc sorts as text (aida-core/src/db/cache.rs:2064), so STORY-1644 must fix that.
+    4. Item 11 (`aida faq topics`) is deferred to a follow-up story, filed as a draft.
+
+    Nice to have
+    5. An end-to-end test: seed completed FAQs plus one superseded and one archived; `aida faq list` with no flags returns only the live ones, showing only the id and question columns; `aida list faq` gives the same result.
+    6. Minor: `--type faq,decision` is not recognised as knowledge. The footer says "rows" even for a single row.
+  created_at: 2026-10-10T18:07:50.385088198Z
+  modified_at: 2026-10-10T18:07:50.385088198Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a12672-1c60-7022-9d27-29ef50ea8e08
