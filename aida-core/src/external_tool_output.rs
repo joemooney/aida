@@ -88,7 +88,8 @@ pub const GIT_INDEX_LOCK: &[&str] = &[
     "another git process seems to be running",
 ];
 /// Git 2.43.x: a commit had no staged tree change.
-pub const GIT_NOTHING_TO_COMMIT: &[&str] = &["nothing to commit"];
+// trace:BUG-1815 | ai:antigravity
+pub const GIT_NOTHING_TO_COMMIT: &[&str] = &["nothing to commit", "nothing added to commit"];
 /// Git 2.43.x: a push was rejected because the remote ref moved.
 pub const GIT_PUSH_REJECTED: &[&str] = &["non-fast-forward", "rejected", "fetch first"];
 /// Git 2.43.x: fetch refused because another worktree owns the branch.

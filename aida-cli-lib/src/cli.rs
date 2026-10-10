@@ -117,6 +117,11 @@ pub struct Cli {
     #[clap(long, value_name = "TITLE", requires = "asciinema")]
     pub cast_title: Option<String>,
 
+    /// Print the absolute path to the current aida binary and exit.
+    // trace:TASK-1718 | ai:antigravity
+    #[clap(long)]
+    pub path: bool,
+
     /// Pin the output format regardless of whether stdout is a terminal:
     /// human = tables, toon = compact agent output, json = machine JSON.
     /// Default (unset) is human at a TTY, toon when piped/captured. Also

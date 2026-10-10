@@ -1105,7 +1105,7 @@ mod task_1450_edit_event_tests {
     #[test]
     fn disposition_change_emits_seat_tagged_before_after() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
 
         emit_edit_disposition_changed(tmp.path(), "TASK-1", "Draft".into(), "Approved".into());
 
@@ -1127,7 +1127,7 @@ mod task_1450_edit_event_tests {
     #[test]
     fn execution_mode_change_emits_seat_tagged_before_after() {
         let tmp = tempfile::tempdir().unwrap();
-        let _seat = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
 
         emit_edit_execution_mode_changed(tmp.path(), "TASK-2", None, Some("drain".into()));
 

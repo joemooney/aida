@@ -252,6 +252,7 @@ fn a_qualified_approval_at_the_head_is_surfaced_not_released() {
 
 fn candidate(pr: u64, bodies: Vec<String>, has_marker_hold: bool) -> CorpusHoldCandidate {
     CorpusHoldCandidate {
+        is_draft: false,
         pr,
         title: format!("PR {pr}"),
         head_sha: Some(HEAD.to_string()),
@@ -363,6 +364,7 @@ fn the_bug_1705_witness_shape_is_held_although_it_records_no_sha() {
     );
     // And the seam surfaces it as a row, not just the predicate.
     let items = corpus_held_prs(&[CorpusHoldCandidate {
+        is_draft: false,
         pr: 2242,
         title: "BUG-1673".to_string(),
         head_sha: Some(HEAD.to_string()),

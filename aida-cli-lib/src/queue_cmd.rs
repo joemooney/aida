@@ -14185,6 +14185,7 @@ mod bug_1581_integration_probe_tests {
                 head_sha: Some("ac772eaca9d389fa762a232156df996023bfdf7a".into()),
                 labels: Vec::new(),
                 created_at: None,
+                is_draft: false,
             },
         );
         snapshot
