@@ -6415,33 +6415,6 @@ pub(crate) fn reconcile_orchestrated_branch(
     }
 }
 
-/// Resolve the aida binary path for all in-process `aida` subprocesses, once
-/// per process so a mid-flight binary replacement cannot invalidate it.
-///
-/// Why this matters (BUG-217): the orchestrator drives multiple phases over
-/// 15-30 minutes. The implementer's phase-1 Claude session often runs
-/// `cargo build` (rebuilding the dev binary at `target/debug/aida`). On
-/// Linux, `/proc/self/exe` then returns the original path with " (deleted)"
-/// appended once the file is unlinked — and `Command::new("<path>
-/// (deleted)").spawn()` fails with ENOENT. By resolving once at the start
-/// (before phase 1 can rebuild) and stripping any pre-existing suffix, we
-/// stabilise the path for the whole parent process.
-///
-/// Falls back to the bare "aida" name (PATH search) if the OS lookup
-/// failed or the resolved path doesn't exist on disk.
-///
-/// trace:BUG-217 | ai:claude
-pub(crate) fn aida_exe_path() -> std::path::PathBuf {
-    static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-    AIDA_EXE
-        .get_or_init(|| {
-            aida_bin::process()
-                .map(|r| r.path)
-                .unwrap_or_else(|_| resolve_aida_exe_from(std::env::current_exe().ok()))
-        })
-        .clone()
-}
-
 // trace:BUG-1199 trace:TASK-1262 | ai:codex
 pub(crate) fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std::path::PathBuf {
     if let Some(p) = current {
@@ -6459,10 +6432,6 @@ pub(crate) fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std:
     // Fall back to PATH search. Either the OS lookup failed, or the
     // resolved path no longer points at an existing file.
     std::path::PathBuf::from("aida")
-}
-
-pub(crate) fn resolve_aida_exe() -> std::path::PathBuf {
-    aida_exe_path()
 }
 
 /// BUG-766: make every child process resolve `aida` to THIS build.
@@ -15404,27 +15373,6 @@ pub(crate) fn resolve_drain_alias(
         // fall back to 99 when the size is unknown (the spec's "--max 99").
         max: Some(max.unwrap_or(if queue_size > 0 { queue_size } else { 99 })),
     }
-}
-
-/// TASK-84: quote-aware strip of an inline TOML comment.
-/// Returns the slice of `s` before the first unquoted `#`. Tracks both
-/// `"` and `'` so `key = "value with # inside"` round-trips correctly.
-/// Spec-compliant TOML allows trailing `# comment` on key/value lines;
-/// without this helper, a line like `permission_mode = "auto" # ...`
-/// would parse to the literal string `auto" # ...` and get rejected by
-/// `claude --permission-mode`. trace:TASK-84 | ai:claude
-pub(crate) fn strip_toml_inline_comment(s: &str) -> &str {
-    let mut in_dquote = false;
-    let mut in_squote = false;
-    for (i, c) in s.char_indices() {
-        match c {
-            '"' if !in_squote => in_dquote = !in_dquote,
-            '\'' if !in_dquote => in_squote = !in_squote,
-            '#' if !in_dquote && !in_squote => return &s[..i],
-            _ => {}
-        }
-    }
-    s
 }
 
 /// TASK-84: read `[behavior] permission_mode = "..."` from
