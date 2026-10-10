@@ -29,12 +29,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:07.316035550Z
-modified_at: 2026-10-10T04:48:07.316035550Z
+modified_at: 2026-10-10T04:48:14.894996930Z
 req_type: Story
 tags:
 - cli
 - extensions
 - porcelain
+relationships:
+- rel_type: References
+  target_id: 01a12423-b652-7de0-8475-d057043e6ff2
+  created_at: 2026-10-10T04:48:14.894992619Z
+  created_by: joe
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
