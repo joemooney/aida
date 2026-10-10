@@ -1,0 +1,47 @@
+id: 01a1264b-beaf-71d0-9dff-62d77b82fca6
+spec_id: FAQ-1-241
+title: Why does a new FAQ (or other spec) get an ID like FAQ-1-232 instead of FAQ-9, and which one should I use?
+description: |
+  **Every spec has two IDs. `FAQ-1-232` is its node-aware ID, issued offline by clone (node) 1. `FAQ-9` is its agreed ID, assigned by the merge gate. The agreed `TYPE-N` form is the canonical one: use it in trace comments, commit trailers, and prose.**
+
+  ## The two forms
+  | Form | Example | Issued by | When |
+  |---|---|---|---|
+  | Node-aware | `FAQ-1-232` (`<TYPE>-<NODE>-<SEQ>`) | the clone that ran `aida add` | immediately, offline, can't collide across clones |
+  | Agreed (canonical) | `FAQ-9` (`<TYPE>-<N>`) | `aida db merge-gate` | at promotion, or immediately if the clone holds a pre-allocated block for that type |
+
+  ## How it resolves
+  - Promotion doesn't rename anything. It adds `agreed_id: FAQ-9` next to `spec_id: FAQ-1-232` in the object's YAML, and the file keeps its node-aware name.
+  - `aida show`, `aida list` and `aida search` display the agreed ID once it exists. **Both forms keep resolving**, so `aida show FAQ-1-232` shows FAQ-9.
+  - Agreed numbers are unpadded and per type (`FAQ-9`, `BUG-1918`), never `FAQ-009`.
+
+  ## Why some new specs get a short ID straight away and others don't
+  With the default `[id_format] policy = "blocks-then-fallback"`, `aida add` uses a pre-allocated block of agreed IDs if this clone holds one for the type (`aida node acquire`). Otherwise it falls back to a node-aware ID. A **new type** like `faq` has no block, so its first entries came out as `FAQ-1-NNN` until merge-gate ran.
+
+  ## What to do after adding node-aware specs
+  1. Check what's unpromoted. Only objects with no `agreed_id` are touched: `aida list` rows still showing `TYPE-N-NNN`.
+  2. Run `aida db merge-gate`. It prints the `old → new` mapping and commits it to the store.
+  3. Switch references to the agreed ID: trace comments, commit trailers, cross-links in other specs. Old references still resolve, but prefer the canonical form.
+
+  ## Gotchas
+  - **merge-gate doesn't number in creation order.** The 9 FAQs added on 2026-10-10 were promoted in a different order (the first one became FAQ-9). Don't assume `FAQ-1` was written first.
+  - **`FAQ-1` (agreed) and `FAQ-1-232` (node-aware, node 1) look alike.** The node-aware form always has two numbers. Check which one you mean.
+  - merge-gate promotes **every** unpromoted object in the store, not just yours. Check the list first if other sessions are adding specs.
+
+  ## See also
+  OVERVIEW.md, "Distributed identity" section; `aida db merge-gate --help`; `aida node --help`
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:51:00.655559946Z
+modified_at: 2026-10-10T14:51:00.655559946Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
