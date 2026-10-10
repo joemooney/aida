@@ -2,13 +2,24 @@ id: 01a11874-024a-71b2-935d-56a2a7e89778
 spec_id: BUG-1808
 agreed_id: BUG-1808
 title: Preflight child-seat delegation before queue-work mutations
-description: 'Validate that the active launcher seat may delegate the routed child role before changing requirement status, queue membership, branch/worktree, lease, or manifest state. A refusal must leave all pre-command state unchanged. Add regression coverage for implementer launching implementer-routed work. Diagnostics must distinguish queue selection from child-role delegation and tell an authorized advisor/product/integrator launcher to use an explicit role selector. Reproduced from qci#BUG-021. Authority-class: requires sketch and independent advisor signoff before implementation; never proxy-merge.'
-status: InProgress
+description: |
+  Validate that the active launcher seat may delegate the routed child role before changing requirement status, queue membership, branch/worktree, lease, or manifest state. A refusal must leave all pre-command state unchanged. Add regression coverage for implementer launching implementer-routed work. Diagnostics must distinguish queue selection from child-role delegation and tell an authorized advisor/product/integrator launcher to use an explicit role selector. Reproduced from qci#BUG-021. Authority-class: requires sketch and independent advisor signoff before implementation; never proxy-merge.
+
+  ## Scope ruling (operator + advisor, 2026-10-10)
+  This bug is the NARROW fix described above, and nothing more.
+  - A read-only delegation check runs BEFORE any mutation: status, queue, branch/worktree, lease, manifest.
+  - A refusal leaves state byte-identical; a test snapshots the state before and after.
+  - Regression test: implementer launching implementer-routed work → refused.
+  - The diagnostics described above.
+  It must not depend on the publication, CommittedDispatch, store-CAS, launch transport or pane/containment architecture. All of that moved to EPIC-76 (with TASK-1612), along with the parked groundwork branch `bug-1808-delegation-publication`. Do not build on that branch.
+  Authority-class still applies: write a short NEW sketch for the narrow fix (one page: where the check runs, which inputs it reads, how "no mutation" is proved), get independent advisor signoff, implement in the guided lane, and the operator merges.
+  Comments before 2026-10-10 describe the architecture now owned by EPIC-76. They are history for this bug, not its acceptance.
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-10T19:07:56.582184698Z
+modified_at: 2026-10-10T19:08:19.258987443Z
 req_type: Bug
 tags:
 - atomicity
@@ -4106,6 +4117,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12737-51ba-7000-a14f-00910ff2686d
+  author: joe
+  timestamp: 2026-10-10T19:08:19.258983523Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: guided
 filed_at:
   code_sha: 54407257b57aecc1bd85778e19ce00431e3cf758
