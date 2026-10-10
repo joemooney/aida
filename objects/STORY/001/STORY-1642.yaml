@@ -32,12 +32,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T15:15:22.189619683Z
+modified_at: 2026-10-10T15:15:23.308127204Z
 req_type: Story
 tags:
 - faq
 - knowledge-types
 - list
+- related:STORY-1644
 comments:
 - id: 01a1265d-81ab-7602-84b8-c918820abd1c
   author: joe
