@@ -664,7 +664,11 @@ fn destructive_callers_do_not_use_tolerant_cache_reads() {
     assert!(files.len() > 10, "lint must see the crate sources");
     // The scanner must see real bodies: worker gc's strict read is found.
     let mut lib = std::fs::read_to_string(src_root.join("lib.rs")).unwrap();
-    for i in 1..=6 { if let Ok(s) = std::fs::read_to_string(src_root.join(format!("lib_part{i}.rs"))) { lib.push_str(&s); } }
+    for i in 1..=6 {
+        if let Ok(s) = std::fs::read_to_string(src_root.join(format!("lib_part{i}.rs"))) {
+            lib.push_str(&s);
+        }
+    }
     assert!(
         functions(&lib)
             .iter()

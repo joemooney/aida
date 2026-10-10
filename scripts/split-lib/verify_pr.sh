@@ -18,11 +18,17 @@ gate() { # gate <label> <cmd...>
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 git show "$BASE:$LIB" > "$T/lib.old.rs"
+for p in 1 2 3 4 5 6; do
+  if git ls-tree -r "$BASE" | grep -q "aida-cli-lib/src/lib_part${p}.rs"; then
+    git show "$BASE:aida-cli-lib/src/lib_part${p}.rs" >> "$T/lib.old.rs"
+  fi
+done
 
 if [[ -n "$MODULE" ]]; then
   # V2 pure move
+  cat "$LIB" aida-cli-lib/src/lib_part*.rs > "$T/lib.new.rs"
   gate "V2 multiset ($MODULE)" python3 scripts/split-lib/check_v2_multiset.py \
-      "$T/lib.old.rs" "$LIB" "aida-cli-lib/src/$MODULE.rs" "$MODULE"
+      "$T/lib.old.rs" "$T/lib.new.rs" "aida-cli-lib/src/$MODULE.rs" "$MODULE"
   # V7 size caps: new file <= 6000 lines
   n=$(wc -l < "aida-cli-lib/src/$MODULE.rs")
   if (( n <= 6000 )); then note "PASS: V7 size cap ($MODULE.rs = $n lines)"; else note "FAIL: V7 size cap ($MODULE.rs = $n lines > 6000)"; FAIL=1; fi
@@ -32,6 +38,7 @@ fi
 
 # V3 fmt (the repo must already be fmt-clean; a pure move keeps column 0)
 gate "V3 cargo fmt --check" cargo fmt --all -- --check
+gate "V3 rustfmt --check lib_part*.rs" rustfmt --edition 2021 --check aida-cli-lib/src/lib_part*.rs
 
 # Build + V4 tests with count parity
 gate "build aida-cli" cargo build -p aida-cli
