@@ -95,7 +95,7 @@ ALLOW_LIST = {
     # then trace:STORY-776 (the shipped dispatcher). Read in full: the doc
     # covers the whole design across all three specs, not a different
     # function. No bare sibling in this file claims any part of it.
-    "aida-cli-lib/src/lib.rs:run_do_drive",
+    "aida-cli-lib/src/lib_part6.rs:run_do_drive",
     # lock_cmd.rs: handle_lock_command carries trace:TASK-661 (the
     # per-scope disposition lease design), then a doc paragraph describing
     # the `aida lock` dispatcher itself, then trace:STORY-711 (the slice
