@@ -1,0 +1,38 @@
+id: 01a127c3-30c4-74c0-9483-bb173cce2c53
+spec_id: BUG-1929
+agreed_id: BUG-1929
+title: 'Contained/pool worktree sessions can''t write the AIDA store or cache: .aida-store is a symlink to the main checkout, outside the write boundary'
+description: |-
+  ## Problem
+  In pool worktrees, .aida-store is a symlink to <main>/.aida-store, and the cache is the main checkout's .aida/cache.db. Both are outside the contained session's writable area. So from inside a drained session:
+  - 'aida edit <ID> --status in-progress' errored ('cache not writable'), although the card then showed In Progress.
+  - 'aida comment add' and status reverts failed on .aida-store/.aida/store-write.lock.
+  - 'aida queue done' can't run.
+  The pickup skill's mandatory first step (claim the spec) already half-fails. A session can't record why it stopped, so its plan is lost except in the headless log (the advisor recovered three plans by hand).
+
+  Evidence (aida-relay, 2026-10-10, aida 0.15.0 fe67235+dirty, user ~/.aida/agents.toml [agents] contained = true): 'aida drain start --no-human' on BUG-81, BUG-83, STORY-85 shipped 0 of 3 in 7m42s, using 1.79M tokens (~$2.66). Logs: /home/joe/ai/aida-relay/.aida/headless-logs/{bug-81-01a127b3,bug-83-01a127b4,story-85-01a127b6}-*.jsonl
+
+  ## Acceptance
+  - A contained session can run the AIDA write verbs its skills require: edit status, comment add, queue done, findings. Either the store and cache paths are added to the write boundary as narrowly as possible, or those writes go through a broker outside the sandbox.
+  - If a store write does fail inside a session, the CLI exits non-zero with one clear message, not a partial success (status shown as changed but the error printed).
+  - A test: a contained session claims a spec and adds a comment, and both are visible from the main checkout.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T21:41:05.860398049Z
+modified_at: 2026-10-10T21:41:05.860398049Z
+req_type: Bug
+tags:
+- contained
+- drain
+- sandbox
+- store
+filed_at:
+  code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: ce7b935f-d5da-41d3-94da-7ef94d2537e4
