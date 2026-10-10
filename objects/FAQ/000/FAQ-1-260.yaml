@@ -1,0 +1,36 @@
+id: 01a12711-bebb-7fb2-998b-7f76f2454fdb
+spec_id: FAQ-1-260
+title: The AIDA build fails with errors that don't match the source. What do I do?
+description: |
+  **Usually a stale incremental cache. Delete only `target/agent/incremental` and build again. The compiled dependencies are kept, so it costs minutes, not a full rebuild.**
+
+  ## Why
+  `make build-fast` deliberately builds with `CARGO_INCREMENTAL=1` to iterate quickly (TASK-1154, BUG-1684). Rustc's incremental cache can occasionally go stale or get corrupted. You'll see errors that don't match the source, which persist across clean-looking edits, or very rarely a miscompiled binary.
+
+  ## How
+  ```bash
+  rm -rf target/agent/incremental && make build-fast     # usual fix
+  cargo clean --profile agent && make build-fast         # if that isn't enough
+  ```
+  In the MAIN checkout, mind the caveat in the FAQ on setting up the dev binary: cleaning deletes the live binary until the build finishes. Prefer doing this when no agents are running.
+
+  ## Coming
+  STORY-1646 adds `aida dev build --clean` (incremental cache only) and `--clean=full`. A failed build will suggest it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:27:16.795119617Z
+modified_at: 2026-10-10T18:27:16.795119617Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:build
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
