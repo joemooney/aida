@@ -24,17 +24,25 @@ description: |
 
   ## Related
   `aida drain resume` re-drives a shelved spec from the phase that failed. `aida drain status --clear` removes the state left by a dead drain.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:38:38.227085615Z
-modified_at: 2026-10-10T20:38:38.227085615Z
+modified_at: 2026-10-10T20:38:48.382882277Z
 req_type: Faq
 tags:
 - audience:user
 - topic:drain
 - topic:queue
+history:
+- id: 01a1278a-293e-70e1-b770-77740e22924f
+  author: joe
+  timestamp: 2026-10-10T20:38:48.382878621Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
@@ -43,3 +51,6 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T20:38:48.382864085Z
