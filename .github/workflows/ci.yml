@@ -439,7 +439,9 @@ jobs:
 
       - name: Check formatting
         if: steps.changes.outputs.full_ci == 'true'
-        run: cargo fmt --all -- --check
+        run: |
+          cargo fmt --all -- --check
+          rustfmt --check aida-cli-lib/src/lib_part*.rs
 
       - name: Removed mode-flag spelling guard
         if: steps.changes.outputs.full_ci == 'true'

@@ -32,6 +32,7 @@ fi
 
 # V3 fmt (the repo must already be fmt-clean; a pure move keeps column 0)
 gate "V3 cargo fmt --check" cargo fmt --all -- --check
+gate "V3 rustfmt --check lib_part*.rs" rustfmt --check aida-cli-lib/src/lib_part*.rs
 
 # Build + V4 tests with count parity
 gate "build aida-cli" cargo build -p aida-cli
