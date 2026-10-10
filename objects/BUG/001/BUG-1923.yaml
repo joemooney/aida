@@ -1,0 +1,33 @@
+id: 01a1277c-172e-76c2-956e-25a85ea8ea0e
+spec_id: BUG-1923
+agreed_id: BUG-1923
+title: History index catch-up stalls permanently and makes aida history events slower than having no index
+description: |-
+  Observed 2026-10-10. .aida/history-v6-4.db was complete=1 but its tip_sha (09b1b8f0, 2026-10-03 20:26) was 3,072 commits behind aida-store HEAD (c634e18b), and it is an ancestor, so a catch-up was possible. Every query refreshed updated_at/last_append_at without advancing the tip. It spent the 1.5 s inline budget (AIDA_HISTORY_INDEX_BUDGET_MS) on catch-up, rolled back, then fell back to the git walk.
+
+  Timings for aida history events --status-changes: 3.5 s with the index, 1.95 s with AIDA_HISTORY_CACHE=0, and 0.088 s after aida cache rebuild --history (94 s).
+
+  Suspects: the budgeted catch-up never commits a chunk when the gap is large. Either the boundary probes (MAX_BOUNDARY_PROBES=32) fail across merge regions, or the first chunk can't finish inside the budget, so the work is thrown away each time and the next query starts from the same tip.
+
+  Separately: aida history events --status-changes --since 7d still takes ~2 s after the rebuild, so the --since window seems not to be served from a complete index. Verify.
+
+  Fix expectations:
+  - A budgeted catch-up must make durable forward progress: commit smaller chunks, or keep partial progress.
+  - Once the inline path has failed to advance N times, detach a background catch-up (or print a one-line hint to run aida cache rebuild --history) instead of paying the budget on every query.
+  - aida cache status should report the history index's lag (commits behind HEAD).
+  - Regression test: an index 3,000+ commits behind, including merges, reaches HEAD within a bounded number of queries.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:23:26.254154450Z
+modified_at: 2026-10-10T20:23:26.254154450Z
+req_type: Bug
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
