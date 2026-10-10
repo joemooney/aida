@@ -1,0 +1,36 @@
+id: 01a12656-97e3-78b0-bdea-380e3d52fc9a
+spec_id: FAQ-1-244
+title: How do I preview what an unattended drain will pick up before running it?
+description: |
+  **Run `aida burndown plan`. It's read-only and lists which specs are ready to fan out and which are parked, and why.**
+
+  ## Why bother
+  An unattended drain (`/aida-drain-queue`, `/aida-burndown`) acts on whatever the picker considers buildable. On 2026-10-10 the plan showed ten *approved FAQs* as "ready to fan out", because FAQ wasn't yet treated as a knowledge type (STORY-1642). A drain would have assigned implementer seats to them.
+
+  ## How
+  ```bash
+  aida burndown plan                        # + = ready to fan out, others parked with a reason
+  aida burndown plan | grep -E '^\s+\+ '    # just the ready set
+  ```
+  Check the `+` rows for anything that isn't buildable work: FAQs, decisions, terms, umbrella stories, specs still awaiting signoff. Fix the spec (status, type, blocker), don't just skip it.
+
+  ## When
+  Before starting any unattended drain, and after filing a batch of specs of a new or unusual type.
+
+  ## See also
+  STORY-1642, FAQ-11, the FAQ "Which spec types count as work, and which as knowledge?"
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:02:51.619383714Z
+modified_at: 2026-10-10T15:02:51.619383714Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
