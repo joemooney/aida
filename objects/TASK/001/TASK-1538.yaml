@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T03:16:23.499753680Z
+modified_at: 2026-10-10T05:30:58.437980083Z
 req_type: Task
 tags:
 - closure:pending
@@ -117,6 +117,11 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit a6d9bc8), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit TASK-1538 --description ...` / `aida edit TASK-1538 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1538 --since a6d9bc8^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1538 --status completed`. (merge sha: a6d9bc88154bc68f8959f32c775d39fe547384b3)'
   created_at: 2026-10-10T03:16:23.557674428Z
   modified_at: 2026-10-10T03:16:23.557674428Z
+- id: 01a1244b-0517-7842-b351-d6ec83211331
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 9bd6d8a), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit TASK-1538 --description ...` / `aida edit TASK-1538 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-1538 --since 9bd6d8a^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-1538 --status completed`. (merge sha: 9bd6d8abbc400feb3ecd31f5d5860b7ab454bf6b)'
+  created_at: 2026-10-10T05:30:58.711671643Z
+  modified_at: 2026-10-10T05:30:58.711671643Z
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
