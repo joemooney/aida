@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1321",
+  "publishes": [
+    {
+      "at": "2026-10-10T19:40:43.508164800Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T16:17:46.567112790Z",
+      "spec": "TASK-1321",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T16:55:50.713308256Z",
+      "spec": "TASK-1321",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1321",
+        "branch": "task-1321",
+        "first_seen": "2026-10-08T16:55:50.713120962+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-10T19:40:43.495705661Z",
+      "spec": "TASK-1321",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cea715b91e5f4d357164d681600ccac5668131d3",
+        "pr": 2478,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
