@@ -1,5 +1,6 @@
 id: 01a12656-ae13-7892-a19b-189a190ed046
 spec_id: FAQ-1-245
+agreed_id: FAQ-15
 title: Why does 'aida faq add' work when 'faq' isn't in the --type help list?
 description: |
   **`aida <type> add|list` is shorthand. It's rewritten to `aida add --type <type>` / `aida list --type <type>` before parsing, so it works for any built-in type even where the help doesn't list it yet.**

@@ -1,5 +1,6 @@
 id: 01a12656-d655-7ad3-b473-eb8c50bc2e93
 spec_id: FAQ-1-247
+agreed_id: FAQ-12
 title: Which spec types count as work, and which as knowledge?
 description: |
   **Work types become things someone builds. Knowledge types record what's true or decided. Knowledge types are never offered as work, and (once STORY-1642 lands) stay out of the default `aida list`.**

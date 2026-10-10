@@ -1,5 +1,6 @@
 id: 01a12656-97e3-78b0-bdea-380e3d52fc9a
 spec_id: FAQ-1-244
+agreed_id: FAQ-13
 title: How do I preview what an unattended drain will pick up before running it?
 description: |
   **Run `aida burndown plan`. It's read-only and lists which specs are ready to fan out and which are parked, and why.**

@@ -1,5 +1,6 @@
 id: 01a12656-86e6-7770-97f8-1463eacd6d27
 spec_id: FAQ-1-243
+agreed_id: FAQ-16
 title: What's the difference between 'done' and 'completed'?
 description: |
   **`done` means the work is finished but not closed. `completed` means it has merged *and* nothing is holding it open.**
