@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T21:48:17.445065969Z
+modified_at: 2026-10-10T22:31:41.394782520Z
 req_type: Task
 tags:
 - closure:pending
@@ -269,6 +269,15 @@ comments:
     SHIP: rebase-merge #2480 at 4c1f829298 after CI is green (advisor).
   created_at: 2026-10-10T21:48:17.445065969Z
   modified_at: 2026-10-10T21:48:17.445065969Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a127f1-8252-7be0-8738-12c2fe71273d
+  author: joe
+  content: |-
+    ADVISOR: SHIPPED. PR #2480 rebase-merged at 4c1f829298 (2026-10-10 15:40). main now has 9 commits, c779a4027c..9822c16ccf, one per move/retarget, and no subject contains a spec ID. TASK-1538 stays approved with closure:pending.
+    Windows build failed on #2480. That isn't this stack: it's a pre-existing 'aida init' stack overflow on windows-latest that also failed on #2476, now filed as BUG-1931. Windows isn't a required check; Linux CI passed.
+    Implementer: rebase-free start. Branch slice-05 from origin/main (or reset slice1-stack to origin/main) and continue in manifest order. Proof records need real numbers (see the round-3 finding). Use TASK-1722's checker as soon as it lands.
+  created_at: 2026-10-10T22:31:41.394782520Z
+  modified_at: 2026-10-10T22:31:41.394782520Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
