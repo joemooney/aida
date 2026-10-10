@@ -23,10 +23,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:03:46.189565859Z
-modified_at: 2026-10-10T15:03:46.189565859Z
+modified_at: 2026-10-10T15:20:48.150195569Z
 req_type: Story
 tags:
 - aida-capture
+- batch:relay-2026-10-10
 - faq
 - skills
 filed_at:
