@@ -19,12 +19,37 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-10T15:33:26.995115322Z
+modified_at: 2026-10-10T18:06:38.848644686Z
 req_type: Bug
 tags:
 - batch:relay-2026-10-10
 - review-gate
 - two-seat
+comments:
+- id: 01a126fe-db00-70c2-b3d0-e66dff82bca4
+  author: joe
+  content: |-
+    Advisor review of the UNCOMMITTED work in ../aida-bug1918 (branch bug-1918-work, 0 behind origin/main), 2026-10-10. The implementer session crashed before committing. Verdict: NEEDS-WORK. The design is right: a separate approval-authority gate that fails closed, a recorder attestation, and an opt-out for fasttrack only. Keep it and finish it.
+
+    Blocking
+    1. Test target does not compile. pr_cmd.rs:5233-5283: the TASK-1458 tests call with 6 args, but 7 are needed (the new policy arg). The :5242 `&[]` → Ok case must now expect a NoApproval refusal. review_verdict_tests.rs:11 is missing the `attestation` field. `cargo fmt --check` fails at pr_ship.rs:1566/3623/3728/3759. None of the new tests have run yet.
+    2. Bypass by changing directory. creator_shell_pid() is the immediate parent pid, and agent Bash calls each get a new shell, so the only binding that works is "cwd is inside the lease worktree". `cd <main checkout> && aida review record --verdict approved` is not treated as the author. Bind to an identity that persists across shell calls (the session/agent id or lease id from env, or the ancestor walk the lease already uses).
+    3. Bypass by releasing the lease. Authorship is computed only from LIVE leases. Also check durable records: commit authors and trailers on the PR head range, and who claimed the spec (moved it to in-progress).
+    4. Attestation can be forged. recorder_attestation is unsigned JSON in .aida/review-verdicts/, which the same user can write. At minimum, re-validate at ship time against the grant store (the grant exists, was valid at recorded_at, and is not an implementer seat) instead of trusting the stored booleans.
+
+    Also required
+    5. Tests for review_author_refusal, is_authoring_lease_for, ship_approval_policy (fasttrack tags), plus an end-to-end self-approval case through the ship gate.
+    6. Migration note: approvals not written by `aida review record` will now refuse as Unattested. That covers the `aida review` stamp path, reviewer-skill direct writes, and PRs approved before upgrading. Document it in the PR body.
+
+    Design questions for the advisor (do not guess; propose in the PR body)
+    A. Solo-human mode: a human who claimed the spec is currently refused as author everywhere. What is the explicit policy, and which test covers it?
+    B. The drain merge path (drain_merge_match_head, lib_part1.rs:8871) skips the new gate. Intended or not?
+    C. AIDA_SESSION_GRANT env trust (an existing issue): an implementer could export the advisor's grant id. Fix in scope or file a separate bug?
+
+    Still on HOLD: push the PR, then stop. Do not merge.
+  created_at: 2026-10-10T18:06:38.848644686Z
+  modified_at: 2026-10-10T18:06:38.848644686Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
   author: joe
