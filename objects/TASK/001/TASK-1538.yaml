@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T14:30:28.549112476Z
+modified_at: 2026-10-10T14:37:44.990609816Z
 req_type: Task
 tags:
 - closure:pending
@@ -133,6 +133,22 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-10-10), required before the next slice-1 module PR (db_block.rs) may ship: (1) #2474 follow-up PR: re-key the 2 prose-classification portability-allowlist entries to their new paths and remove the ''// prose-ok: moved'' waivers and their broken indentation; remove the nonexistent ''extracted_tests'' exemption in bug_1723_config_trust_tests.rs; add an explicit rustfmt --check of lib_part*.rs to the fmt gate. (2) Every slice-1 PR: branch name must not contain the spec ID (BUG-1919: ship derives the completing trailer from the branch), e.g. ''slice1-db-block''; PR body carries the V2/V3/V4/V5/V7 proof record; no ''aida review record'' by the authoring seat (BUG-1918). Ship only after an advisor/reviewer verdict at the PR head. After merge, confirm the squash subject has no ''(TASK-1538)''. (3) lib_part*.rs scaffolding (#2474, accepted retroactively as transitional only) must be fully drained and deleted by the final module PR, which alone carries the completing ID. Retro reviews: #2474 https://github.com/joemooney/aida/pull/2474#issuecomment-6098543012 · #2475 https://github.com/joemooney/aida/pull/2475#issuecomment-6098542595 · #2477 https://github.com/joemooney/aida/pull/2477#issuecomment-6098519599'
   created_at: 2026-10-10T14:30:28.549112476Z
   modified_at: 2026-10-10T14:30:28.549112476Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a1263f-9a9e-7051-b8cb-0f86f0b9dbff
+  author: joe
+  content: |-
+    OPERATOR+ADVISOR DECISION (2026-10-10): PIPELINED SLICE-1 PROTOCOL. This replaces the "no next PR until reviewed" cadence from the 2026-10-05 note. The implementer runs ahead; review is asynchronous; shipping stays gated.
+
+    1. ONE LINEAR STACK. Slice N branches from slice N-1. Tag each round `slice-NN-rR` (e.g. slice-03-r1) and push the tags. Branch and tag names must NOT contain the spec ID (BUG-1919).
+    2. SLICE 00 = the #2474 rework (re-key the 2 prose-classification allowlist entries and remove the `// prose-ok: moved` waivers + broken indentation; remove the `extracted_tests` exemption; explicit rustfmt --check of lib_part*.rs). Slice 01 = db_block.rs, then onward in manifest order.
+    3. ONE MODULE PER COMMIT, PURE MOVE ONLY: cut from lib.rs/lib_part*.rs, paste into the new file, add the //! header, `// trace:STORY-1488`, `use crate::*;`, and `mod X; use X::*;`, plus the manifest entry. Anything else (test retargets, guardrail or allowlist edits, tooling scripts) goes in a SEPARATE commit with the subject prefix `retarget:` or `tooling:`, directly after its move commit. The reviewer's checker fails any move commit that mixes these in.
+    4. PROOF RECORD per slice tag, as a tag annotation or an entry in docs/plans/2026-10-04-story-1488-incremental-manifest.toml: V3 fmt/clippy warning counts, V4 test count + result, V7 size caps.
+    5. THE IMPLEMENTER NEVER runs `aida review record`, `aida pr ship`, `gh pr merge`, or any approval command. BUG-1918 means the tooling won't stop this yet, so for now this rule is the only safeguard.
+    6. REVIEW is advisor-run and asynchronous, per tag: APPROVED at <sha>, or REQUEST-CHANGES with a brief. On request-changes, fix in round rR+1 and rebase the slices above it. A rebase changes the commit hashes, so those slices are re-checked (cheap for pure moves). If a finding is about the METHOD (visibility, test ownership, wiring pattern), stop stacking until it's fixed.
+    7. SHIPPING: only an unbroken run of approved slices from the bottom of the stack, at exactly the approved SHAs. Ship as a rebase-merge PR (one commit per module, one CI run), not squash. A human or the advisor ships; the implementer doesn't. Check main afterwards: no commit subject may contain `(TASK-1538)` until the final module PR.
+    8. The final slice deletes lib_part*.rs and carries the completing trailer.
+  created_at: 2026-10-10T14:37:44.990609816Z
+  modified_at: 2026-10-10T14:37:44.990609816Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
