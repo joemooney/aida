@@ -1,0 +1,42 @@
+id: 01a12653-7e17-79a1-ad0c-cb7f19a31bd0
+spec_id: STORY-1642
+agreed_id: STORY-1642
+title: 'Knowledge types (faq, decision, vision, term, principle) are reference, not work: hide from default list and never pickable'
+description: |
+  ## Decision (operator + advisor, 2026-10-10)
+  Default `aida list` shows **work** only. Knowledge types (Decision, Vision, Term, Principle, FAQ) are reference material. They are shown only when asked for and are never pickable as work. FAQ is lightweight: no lifecycle ceremony.
+
+  ## Problem
+  - `is_work_item_type` (aida-core/src/lifecycle.rs:428) treats FAQ as work. On 2026-10-10 `aida burndown plan` listed all ten approved FAQs as "ready to fan out", so an unattended drain would have assigned implementers to answer FAQs. Interim workaround: the FAQs were set to `completed`.
+  - Its guard test (`work_item_type_class_excludes_only_the_knowledge_types`) hardcodes the types it checks and leaves out `Faq`, so adding the type (TASK-1614) didn't fail it.
+  - The default `aida list` and the burndown/backlog pickers decide "what is work" separately.
+
+  ## Acceptance
+  1. `is_work_item_type` → false for `Faq` (alongside Decision, Vision, Term, Principle). The guard test iterates **every** `RequirementType` variant, so adding a new type forces an explicit work/knowledge choice.
+  2. Default `aida list` (and the open lens) hides knowledge types using that same rule, the way META is hidden. Shown with: `--type <knowledge-type>`, `aida <type> list` (e.g. `aida faq list`, `aida decision list`), or `--include-knowledge`. The footer note says how many knowledge rows were hidden and how to show them.
+  3. `aida faq list` (and other knowledge `<type> list` aliases) shows every status except archived by default. FAQs live as `completed`, so the open lens would hide them all.
+  4. FAQ is lightweight: `aida faq add` defaults to status `completed`, skips AI evaluation/acceptance prompts, and doesn't need trace comments. FAQ is in the `aida add --type` help list.
+  5. `aida search` keeps returning knowledge rows (that's how answers are found).
+  6. Doc stays a work type (unchanged).
+
+  ## Related
+  BUG-1921 (FAQ IDs: no pre-allocated block), BUG-1920 (attribution + help list), TASK-1614 (faq type), FAQ-10, FAQ-11
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:59:28.407494046Z
+modified_at: 2026-10-10T14:59:28.407494046Z
+req_type: Story
+tags:
+- faq
+- knowledge-types
+- list
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
