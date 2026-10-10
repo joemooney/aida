@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T16:22:50.927871368Z
-modified_at: 2026-09-21T19:47:10.501667993Z
+modified_at: 2026-10-10T19:08:41.104259736Z
 req_type: Epic
 tags:
 - audit
@@ -54,3 +54,9 @@ comments:
   created_at: 2026-09-16T16:23:29.367294212Z
   modified_at: 2026-09-16T16:23:29.367294212Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a12737-a710-7861-b905-afd350c7f9dd
+  author: joe
+  content: 'Closed 2026-10-10 (operator + advisor). Core /aida-away delivered: STORY-1173 (proxy-approval ledger), STORY-1353 (dispatch vs advisor authority) and BUG-1566 (merge-hold human floor) are completed. STORY-1217 (time-limited dispositional grant) is deferred with a revisit trigger, not dropped. Reopen the epic if it is undeferred.'
+  created_at: 2026-10-10T19:08:41.104259736Z
+  modified_at: 2026-10-10T19:08:41.104259736Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
