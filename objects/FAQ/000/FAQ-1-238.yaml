@@ -1,5 +1,6 @@
 id: 01a12647-b5f8-7cb3-83e8-bd2765c7abe0
 spec_id: FAQ-1-238
+agreed_id: FAQ-3
 title: Why isn't 'cargo fmt --check' catching formatting in include!'d files?
 description: |
   **Because `cargo fmt` only follows `mod` declarations, not `include!`.** Files pulled in with `include!("lib_part1.rs")` are never visited, so formatting drift in them goes unnoticed.

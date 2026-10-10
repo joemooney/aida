@@ -1,5 +1,6 @@
 id: 01a12647-dff5-7aa0-a9a2-446113158a0b
 spec_id: FAQ-1-240
+agreed_id: FAQ-6
 title: What does the 'closure:pending' tag do, and when should I use it?
 description: |
   **It stops a merge from fully completing the spec.** Merge-time completion stops at **done** instead of **completed** and posts an `[aida:closure-held]` comment.

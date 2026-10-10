@@ -1,5 +1,6 @@
 id: 01a12647-a19c-7743-bccd-38232eb698f0
 spec_id: FAQ-1-237
+agreed_id: FAQ-7
 title: How do I verify that a refactor commit only moves code?
 description: |
   **Compare the lines the commit removes with the lines it adds. In a pure move they're the same set.**

@@ -1,5 +1,6 @@
 id: 01a12647-5ea3-77b0-a082-f7b2d943eb49
 spec_id: FAQ-1-235
+agreed_id: FAQ-4
 title: Can the implementer keep working while its earlier work waits for review?
 description: |
   **Yes, as long as nothing ships until it's reviewed.** The two-seat rule controls who approves and who ships. It doesn't make the implementer wait.

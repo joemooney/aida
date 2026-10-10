@@ -1,5 +1,6 @@
 id: 01a12647-cbb1-7a73-abc2-695a424f6a96
 spec_id: FAQ-1-239
+agreed_id: FAQ-5
 title: When I move code, can I replace its portability-allowlist entry with an inline '// prose-ok:' waiver?
 description: |
   **No. Re-key the allowlist entry to the new path instead.**

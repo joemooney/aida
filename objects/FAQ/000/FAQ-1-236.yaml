@@ -1,5 +1,6 @@
 id: 01a12647-7757-7a81-8de3-d61028dbadac
 spec_id: FAQ-1-236
+agreed_id: FAQ-8
 title: Should a stacked mechanical refactor be squash-merged or rebase-merged?
 description: |
   **Rebase-merge, in batches. Squash stays the default for everything else.**

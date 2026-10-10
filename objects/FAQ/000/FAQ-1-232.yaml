@@ -1,5 +1,6 @@
 id: 01a12646-3604-73e1-af94-289e9e5a321d
 spec_id: FAQ-1-232
+agreed_id: FAQ-9
 title: Can an implementer approve its own PR with 'aida review record'?
 description: |
   **No.** An approval only counts if it comes from a seat other than the one that wrote the code: the advisor, a reviewer, or a human.

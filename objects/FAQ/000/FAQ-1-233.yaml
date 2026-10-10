@@ -1,5 +1,6 @@
 id: 01a12647-055e-7e02-87bd-e9c9d801c4af
 spec_id: FAQ-1-233
+agreed_id: FAQ-1
 title: Why did my spec flip to 'done' when only part of the work had merged?
 description: |
   **Because a merge commit carried the spec ID.** Merge-time completion marks a spec done when a commit on the default branch ends in `(SPEC-ID)`, and `aida pr ship` can add that ID even when you didn't.
