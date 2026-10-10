@@ -1,0 +1,29 @@
+id: 01a12424-ab16-7640-beec-98c568eb66a1
+spec_id: BUG-1917
+agreed_id: BUG-1917
+title: aida push --help swaps the --code-only and --store-only descriptions
+description: |-
+  Observed 2026-10-09 in ~/ai/aida (aida 0.15.0). `aida push --help` documents `--code-only` as "Skip the code push (only sync the orphan store)" and `--store-only` as "Skip the orphan-store sync (only `git push`)". The behaviour matches the flag NAMES, not the descriptions: `aida push --code-only` pushed the code branch (and mirrored it to gitlab) and left the store 5 commits ahead of origin. An agent that trusted the help text to push only the store pushed someone else's working branch instead.
+
+  ## Acceptance
+  1. Each flag's help text describes what it does (`--code-only` pushes only the code branch; `--store-only` only syncs the store).
+  2. A test pins help text to behaviour, e.g. by asserting each flag's description names the leg it pushes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T04:49:05.302626163Z
+modified_at: 2026-10-10T04:49:05.302626163Z
+req_type: Bug
+tags:
+- cli
+- help-text
+- push
+filed_at:
+  code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
+  branch: task-1538-kernel
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 430dc01de4
+  vendor: antigravity
+  session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
