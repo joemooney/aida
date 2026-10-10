@@ -1,0 +1,48 @@
+id: 01a12675-9b94-7aa3-938c-5e9093b2d6a4
+spec_id: FAQ-1-251
+title: How does claude_relay.sh fit with AIDA's drain, burndown and orchestrate, and how do I run a scoped burn-down under it?
+description: |
+  **They work at different levels and combine cleanly. The relay manages *sessions* (context size, rate limits, restarting with fresh context). AIDA's drain/orchestrate manages *work* (what's next, worktrees, review, merge).**
+
+  | Layer | Owns | State lives in |
+  |---|---|---|
+  | `claude_relay.sh` (outer) | session lifetime, context zones, rate-limit pauses, rotation | the handoff file |
+  | `/aida-orchestrate` or `/aida-burndown` (inner) | selection, leases, implementer + fresh reviewer per branch, merges | the substrate: queue, leases, PRs, verdicts |
+
+  Because work state lives in the substrate, a fresh session rebuilds its picture from `aida burndown plan`, `aida ps` and the open PRs. The handoff only needs to carry what's in flight. Subagents have their own context, so the relay mainly manages the orchestrator's.
+
+  ## Recipe (2026-10-10)
+  ```bash
+  cd <project>
+  eval "$(aida role enter integrator --delegate-seat implementer --delegate-seat reviewer)"
+  ~/ai/aida-relay/bin/claude_relay.sh --batch --archive-existing \
+    --handoff-file <project>/.aida/handoff/orchestrator/latest.md \
+    --sessions-dir <project>/.aida/relay-sessions \
+    --max-sessions 6 -c 100k-180k --prompt-file <prompt.md>
+  ```
+  The prompt scopes the batch (tag), invokes /aida-orchestrate, names any spec to hold at PR stage, and defines the line-1 markers `TASK_COMPLETE` / `BLOCKED_ON_HUMAN`.
+
+  ## Gotchas
+  - **Absolute paths:** the relay resolves default handoff and sessions paths from *its own* repo (aida-relay BUG-76).
+  - **`--batch`, not `--interactive`:** the interactive watchdog ends the session as soon as the handoff file exists, and orchestrate refreshes its handoff after every batch (aida-relay BUG-78).
+  - **`--archive-existing`:** otherwise a stale `orchestrator/latest.md` from an older run is injected as the prior handoff.
+  - Batch mode runs `claude -p --dangerously-skip-permissions`, so the prompt's rules are the only guardrails.
+  - Don't use a "pick an approved item, implement it, review it, commit" prompt. That's self-review, has no lease, and has unbounded scope.
+
+  ## See also
+  aida-relay BUG-76/77/78, STORY-79; the FAQ "Why doesn't the burndown pick up my approved spec?"
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:36:44.180043936Z
+modified_at: 2026-10-10T15:36:44.180043936Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
