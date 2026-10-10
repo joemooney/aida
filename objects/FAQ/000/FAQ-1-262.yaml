@@ -1,0 +1,41 @@
+id: 01a12711-e04d-7940-bd8a-cc2a8e35911a
+spec_id: FAQ-1-262
+title: Can I edit or commit in the main checkout (e.g. ~/ai/aida)?
+description: |
+  **No. Never commit, and avoid editing, in the primary checkout. Create a worktree per spec (`aida worktree add <SPEC>`) and work there. The primary checkout stays on a clean `main` that tracks origin.**
+
+  ## Why
+  - The primary checkout is shared by every session, and in a single-binary dev setup it is also where the live `aida` gets built. Stray edits there end up in everyone's binary.
+  - Commits made directly on `main` skip the PR, the independent review, and merge-time completion.
+  - Leftover scratch files (logs, one-off scripts) make the build report `+dirty`, which hides a real tracked change.
+
+  ## How
+  ```bash
+  aida worktree add STORY-123          # sibling worktree + lease
+  cd ../aida-story-123 && ...          # edit, build, test, commit here
+  git -C ~/ai/aida status --short      # should be empty
+  ```
+  Clean up scratch files in the session that created them, or ask whoever created them. Don't delete another agent's files without checking.
+
+  ## Coming
+  STORY-1647 (pre-commit refuses primary-checkout commits on main), STORY-1648 (drift warning at session start and in the status line), TASK-1721 (GitHub requires a PR on main).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:27:25.389515257Z
+modified_at: 2026-10-10T18:27:25.389515257Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:build
+- topic:ci
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
