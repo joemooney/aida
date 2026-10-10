@@ -1,5 +1,6 @@
 id: 01a1270e-ab01-74a1-a8c1-55521b646318
 spec_id: FAQ-1-258
+agreed_id: FAQ-27
 title: Which aida binary am I running, and why is it older than I expect?
 description: |
   **Run `type -a aida` (and `aida dev status`). The first path wins. `~/.local/bin` comes before `~/.cargo/bin` on a typical PATH, so a copy left in `~/.local/bin` shadows anything newer that `make install` puts in `~/.cargo/bin`.**

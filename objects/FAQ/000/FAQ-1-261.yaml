@@ -1,5 +1,6 @@
 id: 01a12711-cef3-7a11-981b-be8a86f24e43
 spec_id: FAQ-1-261
+agreed_id: FAQ-24
 title: What does '+dirty' mean in 'aida --version'?
 description: |
   **`+dirty` means `git status --porcelain` was non-empty when the binary was built, and that includes UNTRACKED files. It doesn't necessarily mean the code differs from the commit.**

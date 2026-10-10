@@ -1,5 +1,6 @@
 id: 01a1270e-801d-75e0-9b6c-a0a106ca560f
 spec_id: FAQ-1-257
+agreed_id: FAQ-30
 title: Why does 'aida list --search' fail?
 description: |
   **`aida list` has no `--search` flag. Use `aida search "<words>"`.**

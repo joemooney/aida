@@ -1,5 +1,6 @@
 id: 01a12711-ad81-7df1-9cf4-3e544f005688
 spec_id: FAQ-1-259
+agreed_id: FAQ-25
 title: How should I set up the aida binary while developing AIDA itself?
 description: |
   **Symlink `~/.local/bin/aida` and `~/.local/bin/aida-server` to the main checkout's `target/agent/` builds, keep the main checkout on a clean `main`, and do all feature work in worktrees.**

@@ -1,5 +1,6 @@
 id: 01a12711-bebb-7fb2-998b-7f76f2454fdb
 spec_id: FAQ-1-260
+agreed_id: FAQ-31
 title: The AIDA build fails with errors that don't match the source. What do I do?
 description: |
   **Usually a stale incremental cache. Delete only `target/agent/incremental` and build again. The compiled dependencies are kept, so it costs minutes, not a full rebuild.**

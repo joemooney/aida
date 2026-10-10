@@ -1,5 +1,6 @@
 id: 01a1270e-3a1c-76e2-884e-3e5b4a0933f7
 spec_id: FAQ-1-255
+agreed_id: FAQ-28
 title: How do I watch a batch relay session in a human-readable form instead of raw JSON?
 description: |
   **A batch relay prints raw stream-json, so don't read the relay's own terminal. Follow its session log through a jq renderer in a second terminal.**

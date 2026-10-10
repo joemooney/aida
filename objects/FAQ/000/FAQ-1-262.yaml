@@ -1,5 +1,6 @@
 id: 01a12711-e04d-7940-bd8a-cc2a8e35911a
 spec_id: FAQ-1-262
+agreed_id: FAQ-29
 title: Can I edit or commit in the main checkout (e.g. ~/ai/aida)?
 description: |
   **No. Never commit, and avoid editing, in the primary checkout. Create a worktree per spec (`aida worktree add <SPEC>`) and work there. The primary checkout stays on a clean `main` that tracks origin.**

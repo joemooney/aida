@@ -1,5 +1,6 @@
 id: 01a1270e-5c08-7882-b2be-ab9aecdbf8f2
 spec_id: FAQ-1-256
+agreed_id: FAQ-26
 title: My relay or orchestrator session crashed mid-batch. How do I resume without redoing or losing work?
 description: |
   **Nothing is lost. Work state lives in the substrate and in the worktrees, not in the dead session. Inspect what's there, re-enter your role in a new shell, tell the next run where to resume, and relaunch the same command.**
