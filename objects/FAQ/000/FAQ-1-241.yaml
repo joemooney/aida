@@ -1,5 +1,6 @@
 id: 01a1264b-beaf-71d0-9dff-62d77b82fca6
 spec_id: FAQ-1-241
+agreed_id: FAQ-10
 title: Why does a new FAQ (or other spec) get an ID like FAQ-1-232 instead of FAQ-9, and which one should I use?
 description: |
   **Every spec has two IDs. `FAQ-1-232` is its node-aware ID, issued offline by clone (node) 1. `FAQ-9` is its agreed ID, assigned by the merge gate. The agreed `TYPE-N` form is the canonical one: use it in trace comments, commit trailers, and prose.**
