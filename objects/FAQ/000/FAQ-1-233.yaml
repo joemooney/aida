@@ -15,13 +15,21 @@ description: |
 
   ## See also
   TASK-1600 (stopped taking IDs from the middle of titles), BUG-1919 (the branch-name fallback)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:45:51.070074114Z
-modified_at: 2026-10-10T14:45:51.070074114Z
+modified_at: 2026-10-10T14:55:20.198933132Z
 req_type: Faq
+history:
+- id: 01a1264f-b486-77c3-a6d0-b9938e1e9980
+  author: joe
+  timestamp: 2026-10-10T14:55:20.198916831Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -30,3 +38,6 @@ filed_at:
   aida_build_sha: a6d9bc8815
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T14:55:20.198891305Z
