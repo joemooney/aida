@@ -19,10 +19,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:44.641679561Z
-modified_at: 2026-10-10T14:30:11.767239154Z
+modified_at: 2026-10-10T15:20:03.333505064Z
 req_type: Bug
 tags:
 - review-gate
+- review:draft-only
 - two-seat
 history:
 - id: 01a12638-b037-7c13-bff2-1cd7e39976f3
