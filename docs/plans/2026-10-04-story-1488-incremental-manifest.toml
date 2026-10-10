@@ -82,3 +82,27 @@ items = [
   "fn render_list_fields_table",
   "mod task970_agent_output_tests"
 ]
+
+[module.db_block]
+purpose = "handle_db_check_collisions, handle_block_command, block auto-allocation (STORY-1488 slice 1)"
+items = [
+  "fn handle_db_check_collisions",
+  "struct MergedBlockRow",
+  "fn merge_contiguous_blocks",
+  "fn fold_run",
+  "fn handle_block_command",
+  "const PHASE3_AUTO_ALLOC_TYPES",
+  "fn auto_allocate_initial_blocks",
+  "fn auto_allocate_initial_blocks_with_scope",
+  "enum BlockClaimReason",
+  "fn auto_allocate_block_with_size",
+  "fn auto_allocate_block_for_type",
+  "fn auto_allocate_block_inner",
+  "fn read_block_allocation_config",
+  "fn auto_claim_summary",
+  "fn global_auto_claim_summary",
+  "struct AutoClaimOutcome",
+  "fn ensure_block_capacity",
+  "mod block_allocation_reader_tests",
+  "mod merge_contiguous_blocks_tests"
+]

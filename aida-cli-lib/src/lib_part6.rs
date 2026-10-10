@@ -16218,10 +16218,6 @@ mod queue_json_rows_tests;
 #[path = "tests/phase_heartbeat_tests.rs"]
 mod phase_heartbeat_tests;
 
-#[cfg(test)]
-#[path = "tests/merge_contiguous_blocks_tests.rs"]
-mod merge_contiguous_blocks_tests;
-
 // trace:STORY-716 | ai:claude
 #[cfg(test)]
 #[path = "tests/worktree_handler_tests.rs"]
