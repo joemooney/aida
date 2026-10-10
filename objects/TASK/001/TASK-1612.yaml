@@ -22,8 +22,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:13:23.384864566Z
-modified_at: 2026-10-10T19:07:57.171598328Z
+modified_at: 2026-10-10T19:07:58.604158510Z
 req_type: Task
+relationships:
+- rel_type: Child
+  target_id: 01a12736-aff3-7661-b6e3-e0aae19cf8c8
+  created_at: 2026-10-10T19:07:58.604150337Z
+  created_by: joe
 comments:
 - id: 01a11a0c-6605-7ca3-9a79-52899ca8ebe7
   author: joe
