@@ -3,12 +3,12 @@ spec_id: TASK-1611
 agreed_id: TASK-1611
 title: Audit, consolidate, and archive repository documentation after August–October evolution
 description: 'Operator-directed comprehensive documentation cleanup in an isolated worktree. Research git history from 2026-08-01 through 2026-10-07; inventory tracked documentation; reduce navigation and root clutter; archive superseded plans, reports, proposals, and historical guides while preserving provenance and links; revise maintained entry points against current source. Acceptance: an auditable per-file disposition inventory, documented evolution evidence and archive policy, coherent current navigation, no introduced broken local links or build/runtime documentation references, documentation checks pass or baseline failures are recorded, committed and pushed branch with reviewable PR. Preserve generated templates, live agent instructions, normative ADRs, and untracked main-worktree files. Independent review required before merge.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T16:16:03.568950798Z
-modified_at: 2026-10-10T21:01:19.608791854Z
+modified_at: 2026-10-10T21:27:03.152879587Z
 req_type: Task
 tags:
 - batch:idle-wave1
@@ -48,6 +48,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a127b6-54e5-75a2-9a71-27384dcc3c08
+  author: aida-auto-bump
+  timestamp: 2026-10-10T21:27:03.141277090Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a127b6-54f0-7a51-9ead-cd5863fc9413
+  timestamp: 2026-10-10T21:27:03.152875606Z
+  agent: implementer
+  commit_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
+  summary: Completed via merge 968168df
 filed_at:
   code_sha: 738653fb3e6de71d0975047adb143c5f31a25d85
   branch: main
@@ -55,3 +68,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T21:27:03.141262618Z
+  completion_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
