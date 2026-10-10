@@ -20,13 +20,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T21:41:10.144530466Z
-modified_at: 2026-10-10T21:41:10.144530466Z
+modified_at: 2026-10-10T21:41:20.198280080Z
 req_type: Bug
 tags:
 - drain
 - lease
 - regression
 - triage
+relationships:
+- rel_type: References
+  target_id: 01a09264-472d-77a0-a07a-34fe474beb25
+  created_at: 2026-10-10T21:41:20.198278391Z
+  created_by: joe
 filed_at:
   code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
   branch: main
