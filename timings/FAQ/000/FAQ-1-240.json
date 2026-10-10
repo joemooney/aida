@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "FAQ-1-240",
+  "publishes": [
+    {
+      "at": "2026-10-10T14:56:27.115086757Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T14:56:26.968360473Z",
+      "spec": "FAQ-1-240",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-10T14:56:26.981750743Z",
+      "spec": "FAQ-1-240",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
