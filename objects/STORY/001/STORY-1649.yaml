@@ -1,0 +1,48 @@
+id: 01a12770-b9f5-7340-9b62-31711f62d67f
+spec_id: STORY-1649
+agreed_id: STORY-1649
+title: 'Agents can''t see where a spec shipped, and nothing checks it when a spec is completed: show git linkage in TOON aida show and warn when a code spec is completed with no shipped commit'
+description: |-
+  ## Problem
+
+  `aida show` already works out where a spec shipped: the `git_linkage` section lists its commits, the merged PR (`shipped_pr`), and the files that carry its trace comments. But two gaps stop agents from relying on it:
+
+  1. **Agents never see it.** The compact TOON output (TASK-964), which is the default whenever output is piped, includes no linkage at all. Observed 2026-10-10 in aida-relay: an agent completed nine specs (BUG-76..TASK-26, PRs #51..#59). It confirmed each merge through `gh` and `git log`, then wrote "Fixed in PR #53 (f0c4d11)" comments by hand. All of that was already in `aida show BUG-77 --format json` (`shipped: true, shipped_pr: 53`, commit f0c4d11). The hand-written comments are a second copy that can go stale.
+  2. **Setting a spec to completed is not checked.** `aida edit <ID> --status completed` succeeds even if no shipped commit or merged PR references the spec. The `completed-without-commit` doctor scan (TASK-1089) catches this later, but only when someone runs `aida doctor`. Nothing tells the agent at the moment it marks the spec complete.
+
+  ## Proposal
+
+  1. TOON `aida show` adds one compact `linkage` line: `shipped`, `shipped_pr`, the newest commit's short hash, and the commit and file counts. If the full `git_linkage` computation is too slow for the default read path (BUG-1480, BUG-1594), use a cheap form (the shipped flag, PR and newest commit only), or print a pointer to `--format json`. Either way, agents must be able to see that the section exists. `--no-git` still turns it off.
+  2. When `aida edit --status completed` (or Done) is run, reuse the doctor scan's rule (`completed_without_commit_expects_code`, plus the opt-out tag) on that single spec. If the spec expects code and git finds no shipped commit, print a warning that names the spec and says how to opt out. Warn only: work can legitimately be completed outside git, for example a change that lands in another repo.
+
+  ## Out of scope
+
+  Storing the linkage on the spec. Git stays the source of truth, and a stored copy would drift. A frozen snapshot taken at completion is only worth adding if specs need to be read without the code repo; that would be a separate spec if it is ever needed.
+
+  ## Acceptance
+
+  - AC1: `AIDA_AGENT_OUTPUT=toon aida show <SPEC>`, for a spec with a merged `(SPEC-ID) (#N)` commit on main, prints a line containing `shipped_pr` N and the merge commit's short hash.
+  - AC2: `aida show --no-git` in TOON mode prints no linkage line.
+  - AC3: `aida edit X --status completed`, for a code-type spec with no referencing commit on the default branch, exits 0 and prints a warning naming X and the opt-out tag.
+  - AC4: the same command, for a spec with a shipped commit, or for a non-code type (decision, faq, …), prints no warning.
+  - AC5: the warning and the doctor scan use the same rule, so the two cannot disagree. Test both on the same fixture.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:11:01.493042018Z
+modified_at: 2026-10-10T20:11:01.493042018Z
+req_type: Story
+tags:
+- agent-surface
+- aida:edit
+- aida:show
+- completed-without-commit
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
