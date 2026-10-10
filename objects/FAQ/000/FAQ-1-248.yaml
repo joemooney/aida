@@ -1,5 +1,6 @@
 id: 01a12675-32f2-72e0-97bd-c7cf3f231ab7
 spec_id: FAQ-1-248
+agreed_id: FAQ-21
 title: What's the difference between a role seat and a handoff seat?
 description: |
   **A role seat is who you're allowed to act as, and it's enforced. A handoff "seat" is just a folder name under `.aida/handoff/` and grants nothing.**

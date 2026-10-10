@@ -1,5 +1,6 @@
 id: 01a12675-9b94-7aa3-938c-5e9093b2d6a4
 spec_id: FAQ-1-251
+agreed_id: FAQ-20
 title: How does claude_relay.sh fit with AIDA's drain, burndown and orchestrate, and how do I run a scoped burn-down under it?
 description: |
   **They work at different levels and combine cleanly. The relay manages *sessions* (context size, rate limits, restarting with fresh context). AIDA's drain/orchestrate manages *work* (what's next, worktrees, review, merge).**

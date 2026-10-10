@@ -1,5 +1,6 @@
 id: 01a12675-6101-7f61-bf71-c99f73fe002b
 spec_id: FAQ-1-250
+agreed_id: FAQ-19
 title: Why doesn't the burndown pick up my approved spec, and how do I scope or hold specs in a run?
 description: |
   **Because the burndown only drains *queued* specs. Approved but not queued shows as "awaiting advisor sign-off". Queuing it (`aida queue add <SPEC>`) is the sign-off.**

@@ -1,5 +1,6 @@
 id: 01a12675-d1d2-7a92-8e7e-38050e0de3a5
 spec_id: FAQ-1-254
+agreed_id: FAQ-23
 title: A pre-commit hook rejected my moved code. Can I use --no-verify, or edit the code to pass?
 description: |
   **No. Don't bypass the hook, and don't edit the moved code to satisfy it. Moved lines are already excused. If a hook truly rejects a pure move, stop and post its exact output on the spec.**

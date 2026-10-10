@@ -1,5 +1,6 @@
 id: 01a12675-ad56-7be3-b98b-90aee3d51ed1
 spec_id: FAQ-1-252
+agreed_id: FAQ-17
 title: Why does piped 'aida list' show only 30 rows?
 description: |
   **Because agent-mode output (piped, or the toon format) caps a bare `aida list` at 30 rows. The header says so: `count: 30 of 42 open`. The terminal view isn't capped.**

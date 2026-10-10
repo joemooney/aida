@@ -1,5 +1,6 @@
 id: 01a12675-4cd1-7821-8456-67b043cf627d
 spec_id: FAQ-1-249
+agreed_id: FAQ-18
 title: Do I need --delegate-seat when entering a role for an orchestrator, burndown or relay run?
 description: |
   **Yes, if the run will have AIDA launch child sessions. Enter the role with every seat its children will need: `eval "$(aida role enter integrator --delegate-seat implementer --delegate-seat reviewer)"`.**

@@ -1,5 +1,6 @@
 id: 01a12675-c11d-7bf1-b8c1-d1b9c0c1205a
 spec_id: FAQ-1-253
+agreed_id: FAQ-22
 title: How do I list all FAQs?
 description: |
   **Use `aida faq list completed` (or `aida faq list --all`). Plain `aida faq list` shows nothing, because FAQs are filed as `completed` and the default view hides completed specs.**
