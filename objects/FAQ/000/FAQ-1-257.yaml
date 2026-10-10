@@ -1,0 +1,36 @@
+id: 01a1270e-801d-75e0-9b6c-a0a106ca560f
+spec_id: FAQ-1-257
+title: Why does 'aida list --search' fail?
+description: |
+  **`aida list` has no `--search` flag. Use `aida search "<words>"`.**
+
+  ## Why
+  Search is its own command and ranks matches across titles, descriptions and comments. Some skills and docs (e.g. `/aida-capture`'s dedup step) still say `aida list --search`, which fails with `unexpected argument '--search'`.
+
+  ## How
+  ```bash
+  aida search "faq topics"
+  aida faq list --tags topic:relay   # filter one type by tag instead
+  ```
+
+  ## Caveat
+  BUG-1922 tracks fixing the stale skill/doc text and adding a lint so made-up flags in skill templates fail CI.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:23:44.157272849Z
+modified_at: 2026-10-10T18:23:44.157272849Z
+req_type: Faq
+tags:
+- audience:user
+- topic:cli
+- topic:list
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
