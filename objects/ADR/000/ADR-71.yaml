@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:02.642963920Z
-modified_at: 2026-10-10T04:48:16.578874143Z
+modified_at: 2026-10-10T04:48:17.337802376Z
 req_type: Decision
 tags:
 - architecture
@@ -54,6 +54,10 @@ relationships:
 - rel_type: References
   target_id: 019ede69-d218-70a1-b82d-37aa3843e8d5
   created_at: 2026-10-10T04:48:16.578868875Z
+  created_by: joe
+- rel_type: References
+  target_id: 019e3383-3b25-78c2-b59c-f06bd6b44c07
+  created_at: 2026-10-10T04:48:17.337799165Z
   created_by: joe
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
