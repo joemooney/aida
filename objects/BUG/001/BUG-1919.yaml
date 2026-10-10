@@ -14,16 +14,24 @@ description: |
   - Alternatively, or as well: the branch-name fallback is not used when the spec has `closure:pending` or open slice children. The spec ID is then traced in the PR body only.
   - Ship prints the derived trailer and where it came from (title / branch) before merging.
   - Regression test: title with no ID + branch `task-1538-x` + non-completing marker → subject has no trailer.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:29:51.794153285Z
-modified_at: 2026-10-10T14:29:51.794153285Z
+modified_at: 2026-10-10T14:30:12.982491108Z
 req_type: Bug
 tags:
 - completion
 - pr-ship
+history:
+- id: 01a12638-b4f6-79a3-9136-4d928974533f
+  author: joe
+  timestamp: 2026-10-10T14:30:12.982473489Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
