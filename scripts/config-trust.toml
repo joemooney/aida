@@ -117,6 +117,10 @@ sites = 1
 # The shared `config_path_for_project` helper plus the per-feature readers
 # that never grew their own module. The worktree keys they parse are all
 # enumerated under [keys.worktree.*] below.
+[readers."aida-cli-lib/src/mailbox_root.rs"]
+channels = ["worktree"]
+sites = 2
+
 [readers."aida-cli-lib/src/db_block.rs"]
 channels = ["worktree"]
 sites = 1
@@ -131,7 +135,7 @@ channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
 # does not open a candidate or select an executable, command, or credential.
 # No new key class or authority exception is introduced.
 # trace:BUG-1807 | ai:codex
-sites = 47
+sites = 45
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
