@@ -26,9 +26,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T15:02:57.299080917Z
-modified_at: 2026-10-10T15:38:31.074889143Z
+modified_at: 2026-10-10T18:35:22.786084137Z
 req_type: Faq
 tags:
+- audience:user
 - topic:cli
 - topic:faq
 filed_at:
