@@ -1,0 +1,33 @@
+id: 01a12647-2191-7510-bb38-a044ff5da8e0
+spec_id: FAQ-1-234
+title: How do I land a multi-PR change without completing the spec early?
+description: |
+  **Keep the spec ID out of every branch name, tag name and commit subject except the final one, and put `closure:pending` on the spec.**
+
+  ## How
+  - Branches like `slice1-stack`, tags like `slice-03-r1`. Never `task-1538-...`.
+  - Commit subjects: `[AI:tool] refactor(cli-lib): extract db_block.rs`. Mention the spec in the commit or PR **body** only.
+  - Tag the spec `closure:pending` so a stray trailer stops at *done* rather than *completed*.
+  - Only the last PR or commit carries `(SPEC-ID)` in its subject, on purpose.
+  - After each merge, check: `git log --oneline origin/main -5 | grep SPEC-ID` should print nothing until the final PR.
+
+  ## Why
+  `aida pr ship` takes completing IDs from the PR title's ending **and from the branch name**. With rebase-merge, every commit subject lands on main as written. Any of these can complete the spec early.
+
+  ## See also
+  BUG-1919, TASK-1600, TASK-1538 (the slice-1 protocol comments)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:45:58.289193724Z
+modified_at: 2026-10-10T14:45:58.289193724Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
