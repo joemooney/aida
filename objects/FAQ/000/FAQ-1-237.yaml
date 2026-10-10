@@ -26,8 +26,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:31.068509132Z
-modified_at: 2026-10-10T14:56:35.771291984Z
+modified_at: 2026-10-10T15:37:50.486691005Z
 req_type: Faq
+tags:
+- topic:refactor
+- topic:review-gate
 history:
 - id: 01a12650-dbbb-78c2-8446-3d14439db5e2
   author: joe
