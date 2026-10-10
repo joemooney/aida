@@ -1,0 +1,54 @@
+id: 01a1278e-c4c9-7282-abe7-b5dca2627f57
+spec_id: STORY-1652
+agreed_id: STORY-1652
+title: Render markdown in aida show's human output (headings, emphasis, code, lists, aligned tables) instead of printing raw markdown
+description: |
+  ## Why
+  `aida show <ID>` prints descriptions and comments as raw markdown: literal `**bold**`, `## headings`, pipe tables and backticks. That's fine for agents but hard for a person to read, and it matters most for FAQs and other knowledge types, whose whole value is being read. Example: `aida show FAQ-1-263`.
+
+  ## What we have today
+  - `pulldown-cmark` (aida-core): parsing only, used for HTML in report.rs.
+  - `tui-markdown` (aida-tui): ratatui widgets, TUI only.
+  - `crossterm` is already a dependency of aida-cli-lib.
+
+  No CLI path renders markdown to the terminal.
+
+  ## Proposal
+  Render markdown in the human output of `aida show` (description, comments, and the knowledge-type body) at an interactive TTY:
+  - Bold and italic become terminal styles, `inline code` gets a distinct style, and fenced code blocks are indented with a dim gutter.
+  - Headings are styled; bulleted and numbered lists are indented with hanging wraps.
+  - Tables become aligned box-drawn tables, wrapped to the terminal width. Links show their text with the URL dimmed after it.
+
+  Library: prefer `termimad`, which is built on crossterm (already a dependency), renders tables and wraps to width. If that's too much dependency weight, use a small renderer over `pulldown-cmark`, which is already in the workspace. Whichever is chosen, the choice and its weight go in a short note on this spec before implementing.
+
+  ## Rules
+  - Only `--format human` at a TTY is rendered. TOON, JSON and piped/captured output stay byte-identical raw markdown, because agents and scripts need the source.
+  - `--raw` (or `AIDA_MARKDOWN=raw`) forces raw markdown in human output. `NO_COLOR` keeps the layout (wrapping, table alignment) with no styling.
+  - Rendering never fails the command. On any renderer error, print the raw text.
+  - One shared helper (e.g. `render_markdown_for_terminal(&str, width)`), so other human surfaces (`aida faq`, `aida digest` previews, comment listings) can adopt it later. This story wires it into `aida show` only.
+
+  ## Acceptance
+  - `aida show FAQ-1-263` at a TTY shows styled headings and bold, and an aligned table that fits the terminal width.
+  - Piped output (`aida show FAQ-1-263 | cat`), `--format toon` and `--format json` are unchanged (golden tests).
+  - `--raw` restores today's human output exactly.
+  - Snapshot tests cover headings, bold/italic/code, nested lists, a wide table at 80 and 120 columns, and malformed markdown falling back to raw.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:43:50.345052560Z
+modified_at: 2026-10-10T20:43:50.345052560Z
+req_type: Story
+tags:
+- cli
+- knowledge
+- show
+- ux
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
