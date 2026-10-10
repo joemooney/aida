@@ -3,12 +3,12 @@ spec_id: TASK-1-213
 agreed_id: TASK-1321
 title: aida rebase --dry-run --json run inside a linked git worktree (sibling dir from…
 description: 'aida rebase --dry-run --json run inside a linked git worktree (sibling dir from ''git worktree add'') classified against the PRIMARY checkout: reported branch=main ahead=0 behind=0 clean, while the worktree''s actual branch bug-1803 was 1 ahead / 3 behind origin/main with doc conflicts. Reproduced 2026-10-05 in aida-wt-bug-1803-review. Plain git rebase in the same worktree behaved correctly.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:48:11.551846892Z
-modified_at: 2026-10-10T19:24:40.001599612Z
+modified_at: 2026-10-10T19:40:42.658241439Z
 req_type: Task
 tags:
 - batch:idle-wave1
@@ -324,6 +324,19 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a12754-f8ed-7223-a77b-71be45fdbfcc
+  author: aida-auto-bump
+  timestamp: 2026-10-10T19:40:42.605559325Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a12754-f922-7ff2-b5c8-744004d2abd9
+  timestamp: 2026-10-10T19:40:42.658239247Z
+  agent: implementer
+  commit_sha: cea715b91e5f4d357164d681600ccac5668131d3
+  summary: Completed via merge cea715b9
 filed_at:
   code_sha: 2ab2b58d01cda563730a510301298719688a9b81
   branch: main
@@ -332,3 +345,7 @@ filed_at:
   aida_build_sha: 62e3374e51
   vendor: antigravity
   session: 8440bd1e-cba5-444c-8d52-5cfa9f3753e2
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T19:40:42.605554898Z
+  completion_sha: cea715b91e5f4d357164d681600ccac5668131d3
