@@ -1,0 +1,29 @@
+id: 01a12647-b5f8-7cb3-83e8-bd2765c7abe0
+spec_id: FAQ-1-238
+title: Why isn't 'cargo fmt --check' catching formatting in include!'d files?
+description: |
+  **Because `cargo fmt` only follows `mod` declarations, not `include!`.** Files pulled in with `include!("lib_part1.rs")` are never visited, so formatting drift in them goes unnoticed.
+
+  ## How
+  While `include!` files exist, run `rustfmt --check` on them explicitly in the fmt gate, e.g. `rustfmt --check --edition 2021 aida-cli-lib/src/lib_part*.rs`.
+
+  ## Context
+  The `lib_part1..6.rs` split (PR #2474) is temporary scaffolding so codegraph can index `lib.rs`. The part files must be emptied and deleted by the final slice-1 PR. Clippy and the compiler still see the code; only formatting is skipped.
+
+  ## See also
+  STORY-1488, TASK-1538
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:46:36.280987736Z
+modified_at: 2026-10-10T14:46:36.280987736Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
