@@ -1,0 +1,25 @@
+id: 01a126ff-f611-7cc3-9e80-111aa110140c
+spec_id: STORY-1645
+agreed_id: STORY-1645
+title: 'aida faq topics: list FAQ topic tags with counts'
+description: 'Deferred item 11 of STORY-1642. `aida faq topics` lists the tags in use on live FAQs, with a count per tag, so a reader can browse FAQs by topic (then `aida faq list --tag <topic>`). Acceptance: tags come from live (non-superseded/archived) FAQs only; sorted by count desc then name; agent output is a compact id-less table; test covers counts and exclusion of superseded FAQs.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:07:51.313331759Z
+modified_at: 2026-10-10T18:07:51.313331759Z
+req_type: Story
+tags:
+- faq
+- knowledge-types
+- list
+- related:STORY-1642
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 430dc01de4
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
