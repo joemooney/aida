@@ -15,12 +15,12 @@ description: |
   - `aida init` with stdin/stdout not a TTY, or under a managed agent, writes no roster entry (regression test)
   - Re-running init on an existing store never modifies an existing roster
   - DOC-6 mentions the first-run seeding
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-09T07:10:05.738528275Z
-modified_at: 2026-10-10T04:59:03.830820093Z
+modified_at: 2026-10-10T05:30:58.441030447Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -35,6 +35,19 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1244b-0406-7c23-a085-a552a89e4cc3
+  author: aida-auto-bump
+  timestamp: 2026-10-10T05:30:58.438136911Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1244b-0409-7742-898c-33c6afec0d2b
+  timestamp: 2026-10-10T05:30:58.441028608Z
+  agent: aida
+  commit_sha: e79ec9721cdf327b174bddc079a8f5438b2f2107
+  summary: Completed via merge e79ec972
 filed_at:
   code_sha: 5fbb0bcad48ab876ad5d88c5ba53b0d8438635ac
   branch: main
@@ -43,3 +56,7 @@ filed_at:
   aida_build_sha: cbe2c5daf3
   vendor: antigravity
   session: fcee9bd0-2320-40ca-915c-57193749c95d
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T05:30:58.438132560Z
+  completion_sha: e79ec9721cdf327b174bddc079a8f5438b2f2107
