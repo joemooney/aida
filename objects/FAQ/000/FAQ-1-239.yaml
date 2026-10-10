@@ -1,0 +1,30 @@
+id: 01a12647-cbb1-7a73-abc2-695a424f6a96
+spec_id: FAQ-1-239
+title: When I move code, can I replace its portability-allowlist entry with an inline '// prose-ok:' waiver?
+description: |
+  **No. Re-key the allowlist entry to the new path instead.**
+
+  ## Why
+  `scripts/portability-allowlist.txt` lists known debt, and `check-portability-growth.py` makes sure it only shrinks. An inline `// prose-ok: <why>` comment is a permanent, reviewed opt-out for a site that is genuinely fine. Moving code doesn't fix debt, so converting the entry into an inline waiver hides it, and "moved" isn't a real reason.
+
+  ## How
+  - Update the allowlist line's path (e.g. `aida-cli-lib/src/lib.rs:...` to `aida-cli-lib/src/<new>.rs:...`) in a `retarget:` commit right after the move.
+  - Don't change the code's indentation to make a pattern match. Seen in PR #2474, where an inline waiver also broke the indentation.
+
+  ## See also
+  `scripts/portability-rules.json` (`optout` / `exempt` fields), STORY-1488 retarget list (1a-1n)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:46:41.841389006Z
+modified_at: 2026-10-10T14:46:41.841389006Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
