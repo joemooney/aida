@@ -13,7 +13,7 @@
   "intent": "fyi",
   "retracted": false,
   "deleted": false,
-  "archived": false,
+  "archived": true,
   "from_source": "session_role",
   "from_role": "advisor"
 }

@@ -11,5 +11,7 @@
   "urgent": false,
   "intent": "request",
   "retracted": false,
-  "deleted": false
+  "deleted": false,
+  "archived": true,
+  "from_source": "legacy"
 }

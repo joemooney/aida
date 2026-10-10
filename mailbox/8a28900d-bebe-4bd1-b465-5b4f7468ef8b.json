@@ -12,7 +12,7 @@
   "intent": "fyi",
   "retracted": false,
   "deleted": false,
-  "archived": false,
+  "archived": true,
   "from_source": "shell_user",
   "relayed_from": "bug1808-a2-v2-independent-gate"
 }

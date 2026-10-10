@@ -13,6 +13,6 @@
   "intent": "handoff",
   "retracted": false,
   "deleted": false,
-  "archived": false,
+  "archived": true,
   "from_source": "explicit"
 }
