@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-10-10T20:54:04.877454356Z
+modified_at: 2026-10-10T20:54:22.106411216Z
 req_type: Story
 tags:
 - closure:pending
@@ -35,10 +35,6 @@ relationships:
 - rel_type: Parent
   target_id: 01a0dfce-b62e-7e60-a10d-30531aaa30a4
   created_at: 2026-09-26T22:21:42.948191768Z
-- rel_type: Child
-  target_id: 01a12797-ea80-7bc2-8e1f-711b7f047743
-  created_at: 2026-10-10T20:54:04.877451357Z
-  created_by: joe
 comments:
 - id: 01a0dfb3-fed1-7473-aacc-9045d61d8434
   author: joe
