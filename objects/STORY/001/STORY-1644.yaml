@@ -1,0 +1,45 @@
+id: 01a12661-dd85-7532-a696-c88cacfb06c4
+spec_id: STORY-1644
+agreed_id: STORY-1644
+title: 'aida list: default sort by natural numeric ID (FAQ-2 before FAQ-11); configurable sort and agent row cap (30 → 100) with explicit truncation notice'
+description: |
+  ## Decision (operator + advisor, 2026-10-10)
+  `aida list` sorts by ID by default, using **natural numeric** order, and sorting is identical for humans and agents. The agent-mode row cap goes up, becomes configurable, and announces itself when it cuts rows.
+
+  ## Problem
+  - Default `--sort modified` reorders listings whenever anything is touched. `aida faq list --all` printed FAQ-12, 14, 15, 13, 16, 10, 11, 9…
+  - The existing `--sort id` is **alphabetical**, so TASK-1000 sorts before TASK-2 and FAQ-11 before FAQ-2.
+  - Agent mode (piped/toon) caps a bare `aida list` at `AGENT_LIST_DEFAULT_LIMIT = 30` (aida-cli-lib/src/lib_part1.rs:859, TASK-970). That's too low, and it's hardcoded. Under an ID-ascending default, the cap would silently drop the **newest** specs, which are the ones agents most need.
+
+  ## Acceptance
+  1. **Natural ID sort:** compare the type prefix as a string, then each numeric segment as an integer. `FAQ-2` < `FAQ-11`; `TASK-2` < `TASK-1000`; mixed types group by prefix (ADR, BUG, EPIC, FAQ, STORY, TASK…).
+  2. **Agreed ID is the sort key** when present. Unpromoted node-aware IDs (`FAQ-1-232`) sort after all agreed IDs of their type, so they don't fall between FAQ-1 and FAQ-2.
+  3. **Default `--sort id` ascending** for both TTY and agent mode. `modified`, `created`, `heft`, `weight` and `completed` remain available.
+  4. **Configurable default:** `[list] default_sort = "id"` (KnobSpec in config_cmd.rs beside `show_hidden_hints`; shows in `aida config` policy view). An explicit `--sort` always wins.
+  5. **Agent-mode cap:** default raised from 30 to **100**. Configurable via `[list] agent_limit` (0 = unbounded) and env `AIDA_LIST_LIMIT`. The flag `--limit`/`--all` beats env, which beats config, which beats the default.
+  6. **Truncation is never silent:** when the cap cuts rows, the header/footer says what was cut and how to see it, e.g. `count: 100 of 142 open — showing first 100 by id; newest hidden: --sort modified, or --limit 0`. JSON output carries `truncated: true` plus `total`.
+  7. Help text: `--sort` documents the natural ordering and the configurable default. `--limit` documents the agent cap, its config key and env var.
+  8. Tests: natural-sort ordering (incl. node-aware + mixed types), default sort, config/env/flag precedence for both knobs, truncation notice in toon + JSON.
+  9. **Audit sibling defaults:** list the other hardcoded default row limits (`HISTORY_DEFAULT_LIMIT = 20` in history_timeline.rs, `aida search` 200, awaiting/notice caps 5). Make `aida history`'s limit configurable the same way (`[history] limit`). Record the rest as a follow-up comment with a recommendation; don't change them in this story.
+
+  ## Related
+  STORY-1642 item 8 (knowledge listings sort by numeric ID): satisfied by this story. TASK-970 (agent output cap).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:15:10.341474628Z
+modified_at: 2026-10-10T15:15:10.341474628Z
+req_type: Story
+tags:
+- agent-output
+- config
+- list
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
