@@ -83,6 +83,9 @@ fn allowed_direct_writes() -> BTreeMap<&'static str, usize> {
         // GitHub import creates a record born Completed from a closed issue:
         // not a transition, so no ship record.
         ("aida-cli-lib/tracker_cmd.rs", 1),
+        // `aida faq add` files an FAQ born Completed (FAQ is reference, not
+        // work): not a transition, so no ship record. trace:STORY-1642 | ai:claude
+        ("aida-cli-lib/git_backend_cmd.rs", 1),
     ])
 }
 

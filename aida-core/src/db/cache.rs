@@ -1960,9 +1960,20 @@ impl Cache {
                 args.extend(normalized);
             }
         }
+        // A comma-separated type spec is a logical OR within the type axis
+        // (`faq,decision` → Faq OR Decision), mirroring the status axis above.
+        // trace:STORY-1642 | ai:claude
         if let Some(t) = &filter.req_type {
-            sql.push_str(" AND LOWER(req_type) = LOWER(?)");
-            args.push(t.clone());
+            let types: Vec<String> = t
+                .split(',')
+                .map(|w| w.trim().to_string())
+                .filter(|w| !w.is_empty())
+                .collect();
+            if !types.is_empty() {
+                let ored = vec!["LOWER(req_type) = LOWER(?)"; types.len()].join(" OR ");
+                sql.push_str(&format!(" AND ({})", ored));
+                args.extend(types);
+            }
         }
         // trace:TASK-1-107 | ai:claude — priority filter that was
         // missing before.

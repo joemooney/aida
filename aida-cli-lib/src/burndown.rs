@@ -2547,7 +2547,8 @@ mod tests {
     // trace:BUG-784 | ai:claude
     #[test]
     fn knowledge_class_types_are_never_candidates_by_default() {
-        for ty in ["decision", "vision", "term", "principle"] {
+        // FAQ is reference, not work. trace:STORY-1642 | ai:claude
+        for ty in ["decision", "vision", "term", "principle", "faq"] {
             let d = classify_spec(&SpecClassifyInput {
                 archived: false,
                 deferred: false,
@@ -2743,7 +2744,6 @@ mod tests {
             "meta",
             "constraint",
             "doc",
-            "faq",
             // An unknown token is never silently dropped.
             "somefuturetype",
         ] {
