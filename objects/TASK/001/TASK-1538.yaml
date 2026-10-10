@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T14:37:44.990609816Z
+modified_at: 2026-10-10T14:39:07.719221981Z
 req_type: Task
 tags:
 - closure:pending
@@ -149,6 +149,12 @@ comments:
     8. The final slice deletes lib_part*.rs and carries the completing trailer.
   created_at: 2026-10-10T14:37:44.990609816Z
   modified_at: 2026-10-10T14:37:44.990609816Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12640-ddc7-7523-bd19-f14d13f61f33
+  author: joe
+  content: 'AMENDMENT to the pipelined protocol, rule 7 (2026-10-10, operator-agreed): approved runs ship with REBASE-MERGE via ''gh pr merge --rebase'', run by a human or the advisor, not ''aida pr ship''. Conditions: (a) NO slice commit subject contains ''(TASK-1538)'' or any spec ID; the final slice alone carries it. Reference STORY-1488/TASK-1538 only in commit bodies and PR bodies. (b) Every commit must build on its own (it lands on main individually). A move commit and its retarget: commit are adjacent and approved as a pair, and the move should build by itself where possible. (c) Each run gets one PR, from a branch named without the spec ID.'
+  created_at: 2026-10-10T14:39:07.719221981Z
+  modified_at: 2026-10-10T14:39:07.719221981Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
