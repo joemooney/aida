@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-10T18:21:53.127030250Z
+modified_at: 2026-10-10T18:21:54.351662226Z
 req_type: Story
 tags:
 - build
@@ -71,6 +71,12 @@ comments:
   content: 'Amendment to the final naming decision (2026-10-10): keep a clean-build escape hatch, because `make build-fast` deliberately builds with CARGO_INCREMENTAL=1 (TASK-1154/BUG-1684), and rustc''s incremental cache can go stale or get corrupted. That shows up as baffling compile errors, or rarely a miscompile. Shape: `aida dev build --clean` is a flag, not a separate verb, so there is still one build command. By default `--clean` deletes only `target/agent/incremental` (3.5G today), which removes the usual cause while keeping the compiled dependencies. `--clean=full` runs `cargo clean --profile agent`. Both then run the normal smoke test and promote. When a build or smoke test fails, the error message suggests `aida dev build --clean`. `aida dev rebuild` is still removed (no alias). The live directory has to be separate from target/ before `--clean` can ship.'
   created_at: 2026-10-10T18:20:11.619765465Z
   modified_at: 2026-10-10T18:20:11.619765465Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a1270c-d32f-7463-96d1-63102945407f
+  author: joe
+  content: Description consolidated (2026-10-10) from the four naming and design comments below, which are now historical; the description is authoritative. The pre-commit, drift-indicator and release-flow parts have been split into their own specs.
+  created_at: 2026-10-10T18:21:54.351662226Z
+  modified_at: 2026-10-10T18:21:54.351662226Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
