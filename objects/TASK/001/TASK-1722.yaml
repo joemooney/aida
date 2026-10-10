@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:53:49.824465012Z
-modified_at: 2026-10-10T20:54:03.714420178Z
+modified_at: 2026-10-10T20:54:06.967369156Z
 req_type: Task
 tags:
 - refactor
@@ -60,6 +60,93 @@ relationships:
   target_id: 01a0dfb2-d7e1-7273-9e11-dabe3bf74b86
   created_at: 2026-10-10T20:54:03.714417387Z
   created_by: joe
+comments:
+- id: 01a12798-2d77-7b52-9bd9-c2ebd3d87dce
+  author: joe
+  content: |-
+    Starting point: the advisor's scratch reviewer script (round 1 and round 2 of the slice stack). Port its MOVE-purity logic.
+
+    ```python
+    #!/usr/bin/env python3
+    """Reviewer-side pure-move checker for STORY-1488 slice-1 commits.
+
+    usage: verify_move.py <rev-range-or-commit> [--repo PATH]
+      e.g. verify_move.py origin/main..slice-07-r1
+
+    Per commit: multiset(removed lines) vs multiset(added lines) across the whole
+    commit, after dropping allowed wiring (//! header, trace comment,
+    use crate::*, mod X; use X::*;). Flags files outside the move set and
+    whitespace-only residue. Exit 1 if any commit is not a pure move.
+    """
+    import collections, re, subprocess, sys
+
+    ALLOWED_ADD = [re.compile(p) for p in (
+        r"^//!", r"^// trace:", r"^use crate::\*;$",
+        r"^(pub(\(crate\))? )?mod \w+;$", r"^(pub(\(crate\))? )?use \w+::\*;$", r"^$")]
+    EXPECTED_FILE = re.compile(r"^aida-cli-lib/src/[a-z0-9_]+\.rs$|^docs/plans/.*manifest\.toml$")
+
+
+    def git(repo, *args):
+        return subprocess.run(["git", "-C", repo, *args], check=True,
+                              capture_output=True, text=True).stdout
+
+
+    def check(repo, sha):
+        subj = git(repo, "log", "-1", "--format=%h %s", sha).strip()
+        files = git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", sha).split()
+        added, removed = collections.Counter(), collections.Counter()
+        cur = ""
+        for line in git(repo, "show", "--format=", "-U0", "--no-color", sha).splitlines():
+            if line.startswith("diff --git "):
+                cur = line.split(" b/", 1)[-1]
+                continue
+            if line.startswith(("+++", "---")) or cur.endswith("manifest.toml"):
+                continue  # manifest entries are declarations, not moved code
+            if line.startswith("+"):
+                added[line[1:]] += 1
+            elif line.startswith("-"):
+                removed[line[1:]] += 1
+        extra_add = collections.Counter({l: n for l, n in (added - removed).items()
+                                         if not any(p.match(l.strip()) for p in ALLOWED_ADD)})
+        extra_rem = collections.Counter({l: n for l, n in (removed - added).items() if l.strip()})
+        norm = lambda c: collections.Counter({re.sub(r"\s+", " ", l.strip()): n for l, n in c.items()})
+        reindent_only = bool(extra_add or extra_rem) and norm(extra_add) == norm(extra_rem)
+        odd_files = [f for f in files if not EXPECTED_FILE.match(f)]
+        ok = not extra_add and not extra_rem and not odd_files
+        print(f"{'PASS' if ok else 'FAIL'}  {subj}")
+        print(f"      files: {len(files)}; +{sum(added.values())} -{sum(removed.values())}")
+        for f in odd_files:
+            print(f"      ! file outside move set: {f}")
+        if reindent_only:
+            print("      ~ residue is whitespace-only (reindent)")
+        for l, n in list(extra_add.items())[:25]:
+            print(f"      + x{n} {l}")
+        for l, n in list(extra_rem.items())[:25]:
+            print(f"      - x{n} {l}")
+        return ok
+
+
+    def main():
+        args = sys.argv[1:]
+        repo = "."
+        if "--repo" in args:
+            i = args.index("--repo"); repo = args[i + 1]; del args[i:i + 2]
+        if len(args) != 1:
+            sys.exit(__doc__)
+        rng = args[0]
+        shas = (git(repo, "rev-list", "--reverse", rng).split() if ".." in rng
+                else [git(repo, "rev-parse", rng).strip()])
+        results = [check(repo, s) for s in shas]
+        print(f"\n{sum(results)}/{len(results)} commits are pure moves")
+        sys.exit(0 if all(results) else 1)
+
+
+    if __name__ == "__main__":
+        main()
+    ```
+  created_at: 2026-10-10T20:54:06.967369156Z
+  modified_at: 2026-10-10T20:54:06.967369156Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
