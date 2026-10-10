@@ -35,7 +35,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T15:51:48.207393816Z
+modified_at: 2026-10-10T15:51:57.278346282Z
 req_type: Story
 tags:
 - batch:relay-2026-10-10
@@ -55,6 +55,12 @@ comments:
   content: Item 8 (numeric ID sort for knowledge listings) is delivered by STORY-1644 (natural ID sort as the default for all of aida list). Implement it there, not here.
   created_at: 2026-10-10T15:15:22.189619683Z
   modified_at: 2026-10-10T15:15:22.189619683Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12683-8a5e-7d01-96af-5d3d07d94e34
+  author: joe
+  content: 'Scope addition 2026-10-10 (operator): acceptance item 11 ''aida faq topics'' is OPTIONAL for the in-flight PR. Implementer: include it if it fits cleanly; otherwise the orchestrator files a follow-up story with item 11''s text, tagged batch:relay-2026-10-10 is NOT required. Reviewers: don''t reject for its absence.'
+  created_at: 2026-10-10T15:51:57.278346282Z
+  modified_at: 2026-10-10T15:51:57.278346282Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a12672-1c60-7022-9d27-29ef50ea8e08
