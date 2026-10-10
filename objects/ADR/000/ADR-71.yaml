@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T04:48:02.642963920Z
-modified_at: 2026-10-10T04:48:18.149093575Z
+modified_at: 2026-10-10T04:48:18.906319835Z
 req_type: Decision
 tags:
 - architecture
@@ -63,6 +63,13 @@ relationships:
   target_id: 019e3385-356b-7fd3-8f1e-8a719b93c30b
   created_at: 2026-10-10T04:48:18.149089891Z
   created_by: joe
+comments:
+- id: 01a12423-f5da-7c70-8a73-cc5aa15774dc
+  author: joe
+  content: 'Dispatch seat filed as STORY-1641. The recipe runner (motivating case: named shell recipes that record evidence on a spec) will be filed in its own porcelain repo once its home is decided (own repo vs shared aida-contrib).'
+  created_at: 2026-10-10T04:48:18.906319835Z
+  modified_at: 2026-10-10T04:48:18.906319835Z
+  session_id: 1f1b1091-58e6-4039-9486-4955e4e23ac7
 filed_at:
   code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
   branch: task-1538-kernel
