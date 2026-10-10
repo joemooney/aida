@@ -17,13 +17,21 @@ description: |
 
   ## See also
   FAQ on landing a multi-PR change, TASK-1538
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:20.247987251Z
-modified_at: 2026-10-10T14:46:20.247987251Z
+modified_at: 2026-10-10T14:56:44.334554943Z
 req_type: Faq
+history:
+- id: 01a12650-fd2e-7d33-9b38-495f731f07e8
+  author: joe
+  timestamp: 2026-10-10T14:56:44.334540493Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -32,3 +40,6 @@ filed_at:
   aida_build_sha: a6d9bc8815
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-10T14:56:44.334515232Z
