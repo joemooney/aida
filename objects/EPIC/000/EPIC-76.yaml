@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T19:07:37.843699330Z
-modified_at: 2026-10-10T19:07:59.503815737Z
+modified_at: 2026-10-10T19:08:30.442650052Z
 req_type: Epic
 tags:
 - architecture
@@ -42,6 +42,10 @@ relationships:
 - rel_type: References
   target_id: 01a11874-024a-71b2-935d-56a2a7e89778
   created_at: 2026-10-10T19:07:59.503813015Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a11409-166a-7532-811a-eb943fe701d0
+  created_at: 2026-10-10T19:08:30.442646388Z
   created_by: joe
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
