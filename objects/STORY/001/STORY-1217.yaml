@@ -33,12 +33,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-10-04T20:52:39.444549417Z
+modified_at: 2026-10-10T20:35:17.686575903Z
 req_type: Story
 tags:
 - audit
 - authority
 - keyboard
+- operator-held
 - parent:EPIC-62
 - parent:EPIC-69
 - proxy
@@ -336,4 +337,8 @@ comments:
   content: 'SKETCH UPDATE (awaiting advisor signoff): Updated sketch drafted at docs/plans/2026-10-04-story-1217-grant-mechanism-sketch.md. It incorporates the requested changes: holder keyed on per-session seat (STORY-1473), archive/reject dropped from v1 enum, never-grantable list updated, DAG verification atomic commit specified with require_signed knob reserved, and 5(c) stamping struck.'
   created_at: 2026-10-04T20:52:39.444549417Z
   modified_at: 2026-10-04T20:52:39.444549417Z
+deferred: true
+deferred_at: 2026-10-10T20:35:17.686575903Z
+deferred_until: when grant expiry or unattended-session authority becomes a real operational need (e.g. long-lived relays holding seats)
+deferred_reason: 'Time-boxed seat grants aren''t needed now: per-shell grants are adequate for current operation. Deferred so EPIC-69 can close (operator decision 2026-10-10).'
 execution_mode: guided
