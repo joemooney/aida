@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T14:39:07.719221981Z
+modified_at: 2026-10-10T15:05:38.584388846Z
 req_type: Task
 tags:
 - closure:pending
@@ -155,6 +155,26 @@ comments:
   content: 'AMENDMENT to the pipelined protocol, rule 7 (2026-10-10, operator-agreed): approved runs ship with REBASE-MERGE via ''gh pr merge --rebase'', run by a human or the advisor, not ''aida pr ship''. Conditions: (a) NO slice commit subject contains ''(TASK-1538)'' or any spec ID; the final slice alone carries it. Reference STORY-1488/TASK-1538 only in commit bodies and PR bodies. (b) Every commit must build on its own (it lands on main individually). A move commit and its retarget: commit are adjacent and approved as a pair, and the move should build by itself where possible. (c) Each run gets one PR, from a branch named without the spec ID.'
   created_at: 2026-10-10T14:39:07.719221981Z
   modified_at: 2026-10-10T14:39:07.719221981Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
+- id: 01a12659-2418-7162-8667-2775ea53b360
+  author: joe
+  content: |-
+    ADVISOR REVIEW: slice stack, round 1 (2026-10-10 08:10). Reviewed origin/main..slice-01-r1 (3 commits, based on current main fe6723558e).
+
+    slice-00-r5 @ 0f6eab4490 (tooling): CONTENT ACCEPTED, REQUEST-CHANGES on the subject only.
+    - Verified: both prose-classification allowlist entries re-keyed to lib_part3.rs / lib_part5.rs; `// prose-ok: moved` waivers removed and indentation restored; `extracted_tests` exemption removed; CI fmt step adds `rustfmt --check lib_part*.rs`; verify_pr.sh now builds old/new from all lib_part files; the remaining test-file edits are rustfmt-only reflows.
+    - FIX: the subject contains "(STORY-1488)". With rebase-merge, that would complete the parent story. Reword to `tooling: fix up portability allowlist and test exemptions` (spec ID in the body only) → slice-00-r6. The advisor will re-verify it's a reword-only change (`git diff slice-00-r5 slice-00-r6` must be empty).
+
+    slice-01-r1: REQUEST-CHANGES.
+    - 0c9aee1599 `refactor(cli-lib): extract db_block.rs`: PASS. Pure move (verify_move.py: no residue beyond wiring + manifest).
+    - aa241bde10 `retarget: demote trace comments to non-doc`: REJECT, drop this commit. It wasn't needed. The advisor replayed 0c9aee1599 onto slice-00-r5 in a scratch worktree and ran .git/hooks/pre-commit: exit 0. The provenance hook already credits moved `/// trace:` lines (TASK-144), and check-trace-headers.py also passes on db_block.rs as moved. The demotion also damages rustdoc: db_block.rs:16-19 now ends a doc paragraph mid-sentence ("...in ways that need policy") because its last line became a plain `//` comment.
+    - PROCESS: `--no-verify` is not allowed. It also skips the advisor-code-gate and the pre-commit sentinel (BUG-624). If a hook genuinely rejects a pure move, stop and paste the exact hook output in a TASK-1538 comment. Don't edit code to satisfy it.
+    - PROOFS missing: slice-01-r1 is a lightweight tag with no V3/V4/V7 record, and tests were still running when it was pushed. Tag only after proofs are complete, as an ANNOTATED tag (`git tag -a slice-01-r2 -m "<proof record>"`).
+    - Process note: "cleaned up orphaned cargo/sccache processes". Only kill processes your own session started. Other seats share this machine and their cargo runs look identical.
+
+    Next: slice-00-r6 (reword) → slice-01-r2 (0c9aee1599 rebased, no retarget, annotated proofs). Keep stacking mailbox_root.rs etc. on top of r2; no need to wait.
+  created_at: 2026-10-10T15:05:38.584388846Z
+  modified_at: 2026-10-10T15:05:38.584388846Z
   session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
