@@ -32,9 +32,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T15:15:23.308127204Z
+modified_at: 2026-10-10T15:20:40.544477954Z
 req_type: Story
 tags:
+- batch:relay-2026-10-10
 - faq
 - knowledge-types
 - list
