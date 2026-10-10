@@ -1,0 +1,34 @@
+id: 01a12675-ad56-7be3-b98b-90aee3d51ed1
+spec_id: FAQ-1-252
+title: Why does piped 'aida list' show only 30 rows?
+description: |
+  **Because agent-mode output (piped, or the toon format) caps a bare `aida list` at 30 rows. The header says so: `count: 30 of 42 open`. The terminal view isn't capped.**
+
+  ## Why
+  TASK-970: a project with ~900 specs blew agents' context when they read the full listing. The cap is `AGENT_LIST_DEFAULT_LIMIT = 30`, applied after sorting and filtering.
+
+  ## How to see everything
+  - `aida list --limit 0` or `--all` (`--all` also includes archived and deferred)
+  - `aida list --limit 100`
+  - Narrow it instead: `--status`, `--type`, `--tag`, `--parent`
+
+  ## Coming
+  STORY-1644 raises the default to 100, makes it configurable (`[list] agent_limit`, `AIDA_LIST_LIMIT`), switches the default sort to numeric ID, and prints an explicit "rows hidden" notice when the cap cuts.
+
+  ## See also
+  STORY-1644
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T15:36:48.726874374Z
+modified_at: 2026-10-10T15:36:48.726874374Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
