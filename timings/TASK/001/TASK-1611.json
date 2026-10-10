@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1611",
+  "publishes": [
+    {
+      "at": "2026-10-10T21:27:04.068117276Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T16:16:21.936729301Z",
+      "spec": "TASK-1611",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T16:44:48.471053678Z",
+      "spec": "TASK-1611",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1611",
+        "branch": "docs/task-1611-library-cleanup",
+        "first_seen": "2026-10-08T16:44:48.471010755+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-10T21:27:04.055336444Z",
+      "spec": "TASK-1611",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "968168df6acf2180a7dd3cf0a14a8a11fb399c4b",
+        "pr": 2481,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
