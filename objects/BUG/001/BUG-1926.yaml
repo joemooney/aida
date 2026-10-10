@@ -1,0 +1,41 @@
+id: 01a127a3-a151-79c1-9a11-594e48ca935a
+spec_id: BUG-1926
+agreed_id: BUG-1926
+title: 'Identity push guard is skipped for pushes from the .aida-store worktree: project root resolves to the store, its config has no allowlist, so the check returns OK'
+description: |-
+  Recurrence-guard gap in TASK-1330 (public aida-store identity leakage), found by the independent BUG-1808 A2 V2 design audit on 2026-10-08 (mail 8a28900d; recorded as a comment on TASK-1330, but never filed as its own spec).
+
+  Path (static source finding; the code was unchanged as of c677):
+  - Identity CheckPush dispatch calls find_project_root, which picks the nearest .git. For a push from the linked .aida-store worktree, that resolves to the store worktree itself.
+  - identity_gate::read_allowed_emails reads <store>/.aida/config.toml. When that file is absent it returns an empty allowlist, and handle_identity_check_push returns Ok without inspecting the pushed commits.
+  - Coordination pushes go through git_ops::push(store_root, ...), and the generated hook fallback also reads a cwd-relative .aida/config.toml. So the project's configured author allowlist doesn't cover pushes to the store, which is the branch TASK-1330 exists to protect.
+
+  Fix:
+  - Resolve the governing allowlist from the owning project root (the store worktree's configured parent project), with real provenance for where it came from. Never use the store worktree's own config.
+  - An empty or absent allowlist must be an explicit, documented 'no-config' policy decision, not an accidental pass.
+  - Don't change cwd, disable hooks, or change identity policy as a side effect.
+
+  Acceptance (paired controls):
+  - With a project allowlist, a store-worktree push of a commit by a forbidden author is refused, and one by an allowed author succeeds.
+  - The same pair passes through the generated hook fallback and through git_ops::push.
+  - The no-config project behaviour is unchanged and covered by a test that states the decision.
+  - Tests use isolated HOME, repos and fake remotes. No real pushes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T21:06:37.521657356Z
+modified_at: 2026-10-10T21:06:37.521657356Z
+req_type: Bug
+tags:
+- identity
+- security
+- store
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
