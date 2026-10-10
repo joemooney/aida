@@ -1,0 +1,62 @@
+id: 01a1283c-0780-70e1-a2a4-04fe8268a4be
+spec_id: STORY-1653
+agreed_id: STORY-1653
+title: Show who is driving each in-progress spec (relay, drain, agent, queued, or idle) so live work is distinguishable from abandoned work
+description: |
+  ## Why
+  The operator can't tell which in-progress specs are actually being worked. Observed 2026-10-10 16:51:
+  - `aida ps` showed STORY-1642, BUG-1918 and BUG-1925 as dormant/stalled/salvageable while two relays were actively working them through subagents.
+  - The relays' sessions appeared only as an unattributed "harness-worktree (2 sessions)".
+  - `aida drain status` said none.
+  - Meanwhile TASK-1335, TASK-1612 and TASK-1717 really were idle, with no visible difference from the live ones.
+
+  Causes:
+  - Relays (aida-relay) aren't registered in AIDA.
+  - A lease taken by a relay subagent through `aida worktree add` records no live owning process, so liveness falls back to "no branch movement means stalled".
+  - Batch tags aren't linked to whatever is draining them.
+
+  ## Design
+  1. **Driver registry.** Add `.aida/drivers/<id>.json` (or a cache table) holding kind (relay | drain | agent), id, pid, the batch/tag selector, start time, seat and handoff path. Liveness = pid alive plus heartbeat freshness.
+     - Drains already hold the drain lock, so register them from it.
+     - Relays register through `aida driver register --kind relay --run <id> --tag batch:X --pid <pid>`. This is called by aida-relay at startup, keyed by the BUG-84 run ID and refreshed each session. They deregister on exit; a dead pid makes the entry stale automatically.
+  2. **Lease attribution.** `aida worktree add` / claim records an owner chain: the session's own pid, plus the driver id from `AIDA_RELAY_RUN` / `AIDA_DRIVER` in the environment, which the relay exports to its sessions. A lease whose own pid is gone but whose driver is alive is `driven`, not `dormant`/`stalled`.
+  3. **Driver column.** Each in-progress (or queued) spec resolves to exactly one of:
+     - `relay:<run>`: a live relay holds its lease, or its batch tag matches a live relay's selector
+     - `drain:<pid>`
+     - `agent:<pid|session>`: a live interactive or headless session holds the lease directly
+     - `queued`: in a batch or queue that no live driver covers
+     - `idle`: nothing will pick it up
+
+     Show it in `aida ps`, add `aida list --driver` (column) and `aida list --status in-progress --driver idle` (filter), and include it in `aida awaiting`. Replace the misleading orphaned/stalled hints for driven specs.
+  4. **Staleness signal.** `idle` specs that have been in-progress longer than N hours (configurable; default 24h) are listed in `aida awaiting` as "in-progress but nothing is working it", with the time since last activity.
+
+  ## Acceptance
+  - With a registered relay (fake pid) whose batch contains spec A, and A's lease taken by a subagent whose own pid has exited, `aida ps` and `aida list --driver` show A as `relay:<run>`, not dormant/stalled.
+  - Killing the relay pid flips A to `queued` (if its tag is still queued) or `idle`, with no manual cleanup.
+  - A drain shows `drain:<pid>` for its members.
+  - A spec with no lease and no covering driver shows `idle`, and appears in `aida awaiting` once it passes the threshold.
+  - TOON and JSON include `driver` and `driver_kind`. Tests use fake pids and isolated HOME.
+
+  ## Related
+  - aida-relay BUG-84 (run ID): relays need it to register and to export `AIDA_RELAY_RUN`.
+  - aida-relay STORY-85 (operator addenda): the same run directory.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T23:53:05.152941407Z
+modified_at: 2026-10-10T23:53:05.152941407Z
+req_type: Story
+tags:
+- leases
+- observability
+- ps
+- relay
+filed_at:
+  code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
