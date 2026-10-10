@@ -17,10 +17,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T18:53:37.922387427Z
-modified_at: 2026-10-08T17:26:47.819106564Z
+modified_at: 2026-10-10T19:09:04.026272692Z
 req_type: Task
 tags:
 - analytics
+- batch:idle-wave1
 - docs
 - effort:open:4h
 - presentation
