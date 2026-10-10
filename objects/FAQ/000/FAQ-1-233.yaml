@@ -1,0 +1,31 @@
+id: 01a12647-055e-7e02-87bd-e9c9d801c4af
+spec_id: FAQ-1-233
+title: Why did my spec flip to 'done' when only part of the work had merged?
+description: |
+  **Because a merge commit carried the spec ID.** Merge-time completion marks a spec done when a commit on the default branch ends in `(SPEC-ID)`, and `aida pr ship` can add that ID even when you didn't.
+
+  ## Why
+  When building the squash subject, `aida pr ship` takes spec IDs from the end of the PR title. If the title has none, it takes them **from the branch name** (`derive_squash_subject_spec_ids_resolving` in `pr_ship.rs`). A branch called `task-1538-output-format` therefore produced `... (TASK-1538)` and marked TASK-1538 done with ~42 of 45 modules still to extract (2026-10-10).
+
+  ## How
+  - If the spec has a `closure:pending` tag, it stops at **done** instead of **completed** and the bot leaves a `[aida:closure-held]` comment. That tag is what saved TASK-1538.
+  - To undo it: `aida edit <SPEC> --status approved` (or `in-progress`), plus a comment explaining why.
+  - To prevent it, see the FAQ on landing a multi-PR change without completing the spec.
+
+  ## See also
+  TASK-1600 (stopped taking IDs from the middle of titles), BUG-1919 (the branch-name fallback)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T14:45:51.070074114Z
+modified_at: 2026-10-10T14:45:51.070074114Z
+req_type: Faq
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a6d9bc8815
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
