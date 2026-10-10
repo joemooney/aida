@@ -298,109 +298,178 @@ SPEC_ID_RE='(^|[^A-Za-z0-9_])(STORY|TASK|BUG|EPIC|SPIKE|FR|CR|SPEC|ADR|PRIN|DOC)
 # trace:BUG-1661 | ai:claude
 DOC_COMMENT_RE='^[[:space:]]*///([^/]|$)'
 
-# Bare-ID / `trace:` provenance check (the cli.rs CI guard is intentionally
-# stricter — see above; only the id pattern is shared). Input: a `///`-prefixed doc
-# line. Returns 0 (leak → reject) when it carries `trace:` or is a bare SPEC-ID;
-# returns 1 (allow) for a descriptive prose mention or no SPEC-ID at all.
-__aida_doc_is_provenance_leak() {
-    local docline="$1"
-    # No SPEC-ID at all → nothing to leak.
-    printf '%s\n' "$docline" | grep -qE "$SPEC_ID_RE" || return 1
-    # A `trace:` marker on a `///` line is always provenance.
-    case "$docline" in *trace:*) return 0 ;; esac
-    # Strip the leading `///`, then delete every SPEC-ID token (plus the single
-    # boundary char before it). If an alphabetic word (2+ ascii letters)
-    # survives, this is descriptive prose → allow. Otherwise only
-    # punctuation/digits remain → bare SPEC-ID → reject. POSIX awk (not
-    # `sed -E`) keeps this portable to BSD/macOS and bash 3.2.
-    local residual
-    residual="$(printf '%s\n' "$docline" \
-        | awk -v re="$SPEC_ID_RE" '{ sub(/^[[:space:]]*\/\/\/+/, ""); gsub(re, " "); print }')"
-    if printf '%s\n' "$residual" | grep -qE '[A-Za-z]{2,}'; then
-        return 1
+# Both passes below run as ONE POSIX-awk program over the staged diff (BUG-1925).
+# The old shell loop spawned `printf | grep` for every `+`/`-` diff line and
+# scanned the removal-credit array linearly for every added candidate, so a
+# 250k-line move (the TASK-1538 lib.rs split) held the hook for 20+ minutes. In
+# awk the doc-comment test is an in-process regex, and removal credits are a
+# hash of trimmed line -> count, so each move credit is O(1). Only the BSD/macOS
+# baseline is used: POSIX awk (no gawk extensions), bash 3.2 (no `declare -A`,
+# no `mapfile`). trace:BUG-1925 | ai:claude
+#
+# `__aida_doc_is_provenance_leak` is the bare-ID / `trace:` provenance check
+# (the cli.rs CI guard is intentionally stricter — see above; only the id
+# pattern is shared). Input: a `///`-prefixed doc line. Returns 1 (leak →
+# reject) when it carries `trace:` or is a bare SPEC-ID; 0 (allow) for a
+# descriptive prose mention or no SPEC-ID at all. It strips the leading `///`,
+# deletes every SPEC-ID token (plus the single boundary char before it), and
+# allows the line if an alphabetic word (2+ ascii letters) survives.
+#
+# Move matching (TASK-144) is per diff: every `-`-removed `///` provenance line,
+# trimmed of BOTH leading and trailing whitespace (indentation often changes
+# when a line moves, e.g. into an impl block, and that does not make relocated
+# debt new), adds one credit. Each added candidate, in diff order, consumes one
+# credit for its trimmed text and is excused; with no credit left it is NEW
+# debt and refused, including extra copies beyond the number removed. Credits
+# are settled at the end of each diff, so a removal later in the diff still
+# credits an earlier addition, exactly as the old two-pass loop did.
+#
+# MERGE COMMITS (BUG-1925): `git diff --cached` compares the index with the
+# first parent only, so merging main into a branch re-checked every line main
+# brought in, content that already passed this hook on main. With MERGE_HEAD
+# present the staged tree is diffed against EVERY parent, and an offender is
+# reported only as many times as it appears in all of those diffs: a line taken
+# verbatim from either side is absent from that side's diff, so only lines that
+# differ from every parent (the conflict resolution) are checked.
+#
+# Progress: the scan reports on stderr every 100000 diff lines, and the shell
+# reports the total when it took 3 s or more, so an agent can tell a slow hook
+# from a hung one. trace:BUG-1925 | ai:claude
+__aida_prov_parents=""
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
+    && git rev-parse -q --verify HEAD >/dev/null 2>&1; then
+    __aida_merge_head_file=$(git rev-parse --git-path MERGE_HEAD 2>/dev/null)
+    __aida_prov_parents="HEAD"
+    if [ -n "$__aida_merge_head_file" ] && [ -f "$__aida_merge_head_file" ]; then
+        while IFS= read -r __aida_parent || [ -n "$__aida_parent" ]; do
+            case "$__aida_parent" in
+                ''|*[!0-9a-fA-F]*) ;;
+                *) __aida_prov_parents="$__aida_prov_parents $__aida_parent" ;;
+            esac
+        done < "$__aida_merge_head_file"
     fi
+    if [ "$__aida_prov_parents" = "HEAD" ]; then
+        __aida_prov_parents=""
+    else
+        printf 'pre-commit: merge commit; checking /// provenance only on lines that differ from every parent (the conflict resolution).\n' >&2
+    fi
+fi
+
+# Emit the staged `*.rs` diff(s), each introduced by a `#AIDA-DIFF` boundary
+# line (no unified-diff line starts with `#`). `D` is included so lines removed
+# by deleting a whole source file still register as move credits; deleted files
+# contribute no `+` lines, so the added-lines side is unaffected.
+# trace:TASK-144 trace:BUG-1925 | ai:claude
+__aida_staged_rs_diffs() {
+    local parent
+    if [ -z "$__aida_prov_parents" ]; then
+        printf '#AIDA-DIFF index\n'
+        git diff --cached --unified=0 --no-color --diff-filter=ACDMR -- '*.rs' 2>/dev/null
+        return 0
+    fi
+    for parent in $__aida_prov_parents; do
+        printf '#AIDA-DIFF %s\n' "$parent"
+        git diff --cached --unified=0 --no-color --diff-filter=ACDMR "$parent" -- '*.rs' 2>/dev/null
+    done
     return 0
 }
 
-# Trim BOTH leading and trailing whitespace — the move-match key. Indentation
-# often changes when a line moves (e.g. into an impl block), and that does not
-# make relocated debt new. trace:TASK-144 | ai:claude
-__aida_trim_ws() {
-    local s="$1"
-    s="${s#"${s%%[![:space:]]*}"}"
-    s="${s%"${s##*[![:space:]]}"}"
-    printf '%s' "$s"
-}
-
-# One capture of the staged diff feeds BOTH passes below so they can never
-# disagree. `D` is included so lines removed by deleting a whole source file
-# still register in the removal pass; deleted files contribute no `+` lines,
-# so the added-lines pass is unaffected. trace:TASK-144 | ai:claude
-__aida_staged_rs_diff=$(git diff --cached --unified=0 --no-color --diff-filter=ACDMR -- '*.rs' 2>/dev/null || true)
-
-# Pass 1 (TASK-144): collect the `-`-removed lines that are themselves `///`
-# provenance, trimmed, as an indexed array (bash-3.2-safe; no `declare -A`).
-# Each entry is one removal credit an identical added line may consume.
-# trace:TASK-144 | ai:claude
-__aida_removed_prov_lines=()
-while IFS= read -r line; do
-    case "$line" in
-        # Old-side file header ("--- a/file") — not removed content. Must be
-        # matched BEFORE the generic "-"* arm.
-        "--- "*) ;;
-        "-"*)
-            removed="${line#-}"
-            if printf '%s\n' "$removed" | grep -qE "$DOC_COMMENT_RE" \
-                && __aida_doc_is_provenance_leak "$removed"; then
-                __aida_removed_prov_lines+=("$(__aida_trim_ws "$removed")")
-            fi
-            ;;
-    esac
-done <<< "$__aida_staged_rs_diff"
-
-# Consume one removal credit matching the (trimmed) added line. Returns 0 and
-# deletes the credit when found (a MOVE — excused); 1 when no credit remains
-# (genuinely NEW debt — still refused). trace:TASK-144 | ai:claude
-__aida_consume_moved_line() {
-    local needle="$1" i
-    for i in "${!__aida_removed_prov_lines[@]}"; do
-        if [ "${__aida_removed_prov_lines[$i]}" = "$needle" ]; then
-            unset "__aida_removed_prov_lines[$i]"
-            return 0
-        fi
-    done
+__aida_prov_started=$SECONDS
+__aida_prov_offenders=$(__aida_staged_rs_diffs | awk -v spec_re="$SPEC_ID_RE" -v doc_re="$DOC_COMMENT_RE" '
+function __aida_doc_is_provenance_leak(doc,    residual) {
+    if (doc !~ spec_re) return 0
+    if (index(doc, "trace:") > 0) return 1
+    residual = doc
+    sub(/^[[:space:]]*\/\/\/+/, "", residual)
+    gsub(spec_re, " ", residual)
+    if (residual ~ /[A-Za-z][A-Za-z]/) return 0
     return 1
 }
+function trim_ws(s) {
+    sub(/^[[:space:]]+/, "", s)
+    sub(/[[:space:]]+$/, "", s)
+    return s
+}
+# Settle one diff: spend move credits on its candidates in diff order, then
+# fold the surviving offenders into the cross-parent intersection.
+function settle(    i, key, off) {
+    if (ndiff == 0) return
+    split("", seen_now)
+    for (i = 1; i <= ncand; i++) {
+        key = cand_key[i]
+        if (credit[key] > 0) { credit[key]--; continue }
+        off = cand_off[i]
+        if (ndiff == 1) {
+            nfirst++
+            first_off[nfirst] = off
+            allowed[off]++
+        } else {
+            seen_now[off]++
+        }
+    }
+    if (ndiff > 1) {
+        for (off in allowed) {
+            if (seen_now[off] + 0 < allowed[off]) allowed[off] = seen_now[off] + 0
+        }
+    }
+    split("", credit)
+    split("", cand_key)
+    split("", cand_off)
+    ncand = 0
+}
+/^#AIDA-DIFF / { settle(); ndiff++; current_file = ""; next }
+{
+    lines++
+    if (lines % 100000 == 0) {
+        printf "pre-commit: /// provenance scan: %d staged diff lines checked...\n", lines | "cat 1>&2"
+    }
+}
+# Old-side file header ("--- a/file") is not removed content: match it BEFORE
+# the generic "-" rule.
+/^--- / { next }
+/^-/ {
+    text = substr($0, 2)
+    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) credit[trim_ws(text)]++
+    next
+}
+# New-side file header: remember which file the following "+" lines belong to.
+/^\+\+\+ / {
+    current_file = substr($0, 5)
+    if (substr(current_file, 1, 2) == "b/") current_file = substr(current_file, 3)
+    next
+}
+/^\+/ {
+    text = substr($0, 2)
+    if (text ~ doc_re && __aida_doc_is_provenance_leak(text)) {
+        ncand++
+        cand_key[ncand] = trim_ws(text)
+        lead = text
+        sub(/^[[:space:]]+/, "", lead)
+        cand_off[ncand] = (current_file == "" ? "<staged>" : current_file) ": " lead
+    }
+    next
+}
+END {
+    settle()
+    for (i = 1; i <= nfirst; i++) {
+        off = first_off[i]
+        if (emitted[off] + 0 < allowed[off]) {
+            emitted[off]++
+            print off
+        }
+    }
+}')
+__aida_prov_elapsed=$((SECONDS - __aida_prov_started))
+if [ "$__aida_prov_elapsed" -ge 3 ]; then
+    printf 'pre-commit: /// provenance scan took %ss.\n' "$__aida_prov_elapsed" >&2
+fi
 
 DOC_TRACE_OFFENDERS=()
-current_file=""
-while IFS= read -r line; do
-    case "$line" in
-        # New-side file header in the unified diff: remember which file the
-        # following `+` lines belong to. Strip the "+++ b/" prefix (this branch
-        # is tested BEFORE the generic "+"* arm so the header never counts as an
-        # added content line).
-        "+++ "*)
-            current_file="${line#+++ }"
-            current_file="${current_file#b/}"
-            ;;
-        # Any other line starting with "+" is added content. Strip the leading
-        # "+" and apply the shared provenance criterion to the added line: a
-        # `///` doc comment that is provenance (a `trace:` marker or a bare
-        # SPEC-ID), but NOT a descriptive prose mention. A candidate whose
-        # trimmed content matches an unconsumed staged removal is a MOVE, not
-        # new debt, and is excused (TASK-144).
-        "+"*)
-            added="${line#+}"
-            if printf '%s\n' "$added" | grep -qE "$DOC_COMMENT_RE" \
-                && __aida_doc_is_provenance_leak "$added" \
-                && ! __aida_consume_moved_line "$(__aida_trim_ws "$added")"; then
-                trimmed="${added#"${added%%[![:space:]]*}"}"
-                DOC_TRACE_OFFENDERS+=("${current_file:-<staged>}: ${trimmed}")
-            fi
-            ;;
-    esac
-done <<< "$__aida_staged_rs_diff"
+if [ -n "$__aida_prov_offenders" ]; then
+    while IFS= read -r off; do
+        DOC_TRACE_OFFENDERS+=("$off")
+    done <<< "$__aida_prov_offenders"
+fi
 
 if [ ${#DOC_TRACE_OFFENDERS[@]} -gt 0 ]; then
     echo -e "${RED}Refusing commit: SPEC-ID provenance is on a \`///\` doc comment." >&2

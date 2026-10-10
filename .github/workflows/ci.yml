@@ -289,6 +289,12 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_move.sh
 
+      # BUG-1925: the provenance gate stays fast on a ~250k-line staged move and
+      # checks only the conflict-resolution delta of a merge commit.
+      - name: Run pre-commit provenance perf and merge-delta test
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash tests/test_precommit_provenance_perf.sh
+
       # BUG-1762: the agent-skill-hook installer behind the build prerequisite
       # must install idempotently, never clobber a foreign hook, and skip
       # (quietly in --best-effort mode) from linked worktrees and non-repos.

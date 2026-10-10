@@ -67,6 +67,8 @@
 "Run normal two-remote pull byte identical fixture" = "full"
 "Run advisor-code-gate substrate test" = "full"
 "Run pre-commit provenance move-detection test" = "fast"
+# trace:BUG-1925 | ai:claude
+"Run pre-commit provenance perf and merge-delta test" = "fast"
 "Run agent-skill-hook installer fixtures" = "fast"
 "Run distributed / sibling-store integration tests" = "full"
 "Run ~/.aida home-guard self-test" = "fast"
