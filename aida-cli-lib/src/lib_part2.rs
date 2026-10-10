@@ -673,52 +673,6 @@ impl std::fmt::Display for MailboxResolveFailure {
 
 impl std::error::Error for MailboxResolveFailure {}
 
-pub(crate) fn statusline_project_root() -> std::path::PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
-    statusline_project_root_from_with_roots(&cwd, &aida_core::store_locate::real_temp_roots())
-}
-
-/// [`statusline_project_root`], parameterized on the starting directory and
-/// the temp roots to guard against.
-///
-/// BUG-1598: `aida role` / `aida statusline` (this function's callers —
-/// `handle_role_command`, `statusline_cmd.rs`, and the init tail:
-/// `scaffold_starter_roles`, `refresh_agent_packs`,
-/// `register_project_in_global_registry`) must not adopt a stray
-/// `.aida/config.toml` sitting directly in a temp root when run from a
-/// `mktemp -d`-rooted cwd. The guard breaks the walk-up at a temp root and
-/// falls through to the SAME `cwd` fallback already used when no marker is
-/// found at all — a temp root is treated exactly like "nothing found up
-/// there", never a special error. Factored out as `_with_roots` so a test
-/// can exercise the guard against a fake root without mutating `TMPDIR` or
-/// touching the real, shared system temp dir.
-// trace:BUG-1598 | ai:claude
-pub(crate) fn statusline_project_root_from_with_roots(
-    cwd: &std::path::Path,
-    temp_roots: &[std::path::PathBuf],
-) -> std::path::PathBuf {
-    // Roles + statusline live in the project that is the user's CWD
-    // (or any ancestor with `.aida/config.toml`). Falls back to CWD if
-    // no marker is found — including when the walk-up hits a temp root.
-    // Canonicalize the root set ONCE, before the loop — not on every
-    // ancestor level.
-    let canonical_roots = aida_core::store_locate::canonicalize_roots(temp_roots);
-    let mut probe = cwd.to_path_buf();
-    for _ in 0..8 {
-        if aida_core::store_locate::is_in_canonical_roots(&probe, &canonical_roots) {
-            break;
-        }
-        if probe.join(".aida").join("config.toml").exists() {
-            return probe;
-        }
-        match probe.parent() {
-            Some(p) => probe = p.to_path_buf(),
-            None => break,
-        }
-    }
-    cwd.to_path_buf()
-}
-
 /// True if `line` (already trimmed) looks like a TOML `key = value`
 /// assignment — a bare-key identifier followed by `=`. The role-file
 /// salvage path uses it to tell a real field from injected junk such as

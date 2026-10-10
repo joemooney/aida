@@ -108,6 +108,7 @@ mod role;
 mod runaway_seats;
 mod solo_cmd;
 mod status_cmd;
+mod statusline_root;
 mod supervise_cmd;
 mod supervisor;
 // trace:STORY-1218 | ai:claude
@@ -132,6 +133,7 @@ use queue_cmd::*;
 use role::*;
 use solo_cmd::*;
 use status_cmd::*;
+use statusline_root::*;
 use tui_entry::*;
 use zen_cmd::*;
 // trace:TASK-967 | ai:claude
