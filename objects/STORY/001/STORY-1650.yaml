@@ -1,0 +1,36 @@
+id: 01a1277d-ee46-7340-9032-d87fae0744a1
+spec_id: STORY-1650
+agreed_id: STORY-1650
+title: aida history defaults to the status flow (one line per status change); the per-spec digest moves to --digest
+description: |-
+  ## Why
+  The operator wants to see the flow of events: a spec that went Draft → Approved → InProgress → Completed today should show as several lines, not one row with its current status. The status-change events are already in the history index. Served from the index, aida history events --status-changes takes ~0.09 s (measured 2026-10-10 after a rebuild), which is faster than today's digest (~0.15 s). So the default can change without losing speed.
+
+  ## Behaviour
+  1. aida history with no SPEC-ID and no mode flags shows status transitions, newest first: one line per transition, with the time, SPEC-ID, from → to and the title. A spec appears once for every transition in the window. Spec creation (Added) shows as '(new) → <status>'.
+  2. The current one-row-per-spec digest stays available as aida history --digest, with unchanged output for all formats.
+  3. The existing window flags (--since/--until/--limit/--author/--to/--from/--opened) apply to the new default the same way they apply to the events feed today.
+  4. Speed: the default must be served from the history index. If the index can't serve the query (it's behind HEAD or disabled), don't do a multi-second git walk. Fall back to the digest and print a one-line note naming the cause and the fix (aida cache rebuild --history). Depends on BUG-1923, so the index stays caught up.
+  5. aida history <SPEC-ID> and aida history events are unchanged.
+  6. Human, TOON and JSON outputs all follow the new default. In --help and docs/cli, say that the default changed and that --digest restores the old view. Update the MCP tool description if it describes the default.
+
+  ## Acceptance
+  - With a current index, aida history returns in < 200 ms on this repository and lists multiple lines for a spec with multiple transitions in the window.
+  - aida history --digest is byte-identical to today's default.
+  - With AIDA_HISTORY_CACHE=0 or a stale index, aida history returns the digest plus the note within the digest's current time, and never runs the full git walk.
+  - Tests cover the multi-transition spec, the fallback path, and all three output formats.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:25:26.854357322Z
+modified_at: 2026-10-10T20:25:26.854357322Z
+req_type: Story
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
