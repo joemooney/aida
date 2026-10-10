@@ -1,0 +1,45 @@
+id: 01a1278a-0193-7253-a302-51c6dbe54750
+spec_id: FAQ-1-263
+title: What's the difference between 'aida queue work --auto-complete' and 'aida drain start'?
+description: |
+  **Both run the same lifecycle engine. `aida drain start` is a thin launcher that calls `aida queue work … --auto-complete` for you, with unattended defaults, a "one drain at a time" guard, and a clean way to stop.**
+
+  ## What they share
+  Each spec goes through the same six phases: implementer → CI → reviewer → merge → pull → build, with the same failure budget, shelving and exit codes. `aida drain start` prints the exact command it runs (`aida drain start -> aida queue work …`).
+
+  ## Where they differ
+  | | `aida queue work --auto-complete` | `aida drain start` |
+  |---|---|---|
+  | No selector | The head of your role's queue: one spec | The whole queue (`--drain`): every spec that can run unattended, skipping blocked, human-only or in-flight ones |
+  | Sessions | Interactive by default: you can talk to each phase's session | Headless by default (`--no-human=both`) |
+  | Already-running drain | Not checked up front | Refused, with the running drain's pid and start time |
+  | Stopping | Ctrl-C, or the budgets (`--max`, `--max-failures`, `--max-tokens`, `--max-runtime`) | Those budgets, plus `aida drain stop`, which finishes the current spec and stops at the boundary |
+  | Partial runs | `--auto-complete=through-ci`, `through-merge`, `skip-build`; `--plan`; `--max N` | Not exposed: always the full lifecycle |
+  | Other selectors | SPEC id, `next`/`nextN`, `batch:NAME`, an epic or story with queued children | SPEC id, `next`/`nextN`, `batch:NAME`, `--once` (just the queue head) |
+
+  ## Which to use
+  - **Leaving it to run on its own** (overnight, or a whole batch): `aida drain start --batch NAME`, or plain `aida drain start` for the whole queue. Watch it with `aida drain status` / `aida drain tail`, and end it with `aida drain stop`.
+  - **Driving one spec while you watch or step in**, or stopping early (e.g. `through-ci` so a human reviews): `aida queue work <SPEC> --auto-complete[=MODE]`.
+  - Supervised specs (guided/operator) run under neither. Use `aida queue work <SPEC> --guided`, or de-risk them first with `aida derisk <SPEC>`.
+
+  ## Related
+  `aida drain resume` re-drives a shelved spec from the phase that failed. `aida drain status --clear` removes the state left by a dead drain.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T20:38:38.227085615Z
+modified_at: 2026-10-10T20:38:38.227085615Z
+req_type: Faq
+tags:
+- audience:user
+- topic:drain
+- topic:queue
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
