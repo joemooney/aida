@@ -1,0 +1,28 @@
+id: 01a127b2-7be0-7cb3-8d72-99fa8e1c7c61
+spec_id: BUG-1927
+agreed_id: BUG-1927
+title: aida pr list hides open PRs that map to no spec ID, so an approved spec-less PR (e.g. a refactor stack) is invisible
+description: |-
+  Observed 2026-10-10. aida pr list showed 4 open PRs but not #2480, the TASK-1538 lib.rs split stack. That PR is open with failing CI, and it deliberately carries no spec ID in its title or commit subjects: the pipelined slice protocol forbids spec IDs there so that rebase-merge doesn't complete the spec early. aida pr list maps PRs to spec IDs and silently drops the ones that don't map, so the operator can't see an open PR that needs attention.
+
+  Fix: list every open PR. Unmapped ones get Spec ID '—', or the spec found through the PR body, branch or lease if one exists (PR #2480's body names STORY-1488/TASK-1538), shown as 'body:TASK-1538'. Add a --mapped-only flag for the old behaviour. Do the same in the TOON/JSON outputs, with spec_id null and a mapping_source field.
+
+  Acceptance: with one open PR whose title has no spec ID, aida pr list shows it with its CI/rebase columns. A test covers a body-only reference and a PR with no reference at all.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T21:22:50.976734054Z
+modified_at: 2026-10-10T21:22:50.976734054Z
+req_type: Bug
+tags:
+- cli
+- pr
+filed_at:
+  code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
