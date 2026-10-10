@@ -1,41 +1,46 @@
 id: 01a12705-7e4e-7863-a9e9-af577992cc21
 spec_id: STORY-1646
 agreed_id: STORY-1646
-title: 'Single live dev binary: aida dev rebuild builds, smoke-tests and promotes atomically with rollback; keep the main checkout clean'
-description: |-
+title: 'aida dev build: one build command that smoke-tests and atomically promotes a single live dev binary, with --clean and rollback'
+description: |
   ## Problem
-  The operator's PATH `aida` and `aida-server` are now symlinks to `~/ai/aida/target/agent/{aida,aida-server}` (2026-10-10), so there is a single binary during development. That makes the main checkout's build the binary every session, hook, MCP server and relay runs. Two ways this breaks:
-  1. Uncommitted edits leak in. Any agent that edits or builds in `~/ai/aida` ships its unfinished work to every session. Observed: the binary in use was built from `430dc01de4+dirty` (another agent's uncommitted lib.rs split), and the main checkout currently has 21 untracked agent scratch files.
-  2. A bad build goes live with no rollback. A failed compile keeps the old binary, which is fine. A build that compiles but misbehaves goes live for everyone immediately, and there is no one-step rollback. A plain `cargo build --profile agent` also bypasses `aida dev build-guard`.
+  During development the operator's PATH `aida` and `aida-server` are symlinks into `~/ai/aida/target/agent/` (set up 2026-10-10 so there is a single dev binary). As a result, whatever the main checkout last compiled is what every session, hook, MCP server and relay runs:
+  - Uncommitted work leaks into the live binary. Observed: the live binary was built from `430dc01de4+dirty`, another agent's unfinished lib.rs split.
+  - A build that compiles but misbehaves goes live for everyone immediately, and there is no rollback.
+  - `cargo clean` (or any stray `cargo build --profile agent`) deletes or replaces the live binary in place.
+  - The incremental build (CARGO_INCREMENTAL=1, TASK-1154/BUG-1684) can occasionally corrupt its cache, and the only remedy today is a manual `cargo clean`, which hits the problem above.
 
-  ## Proposal
-  A. `aida dev rebuild` becomes the only way to update the live binary: build, smoke-test, then promote atomically.
-     - Today it is a shell-wrapper case that runs `make build-fast`, so hooks and non-interactive shells can't use it. Make it a real subcommand (keep the wrapper as a pass-through).
-     - Build with `--profile agent` as now. Then smoke-test the new binaries: `aida --version`, plus a read-only command against the current store (e.g. `aida list --limit 1`), and `aida-server --version`.
-     - Only after the smoke test passes, atomically rename the new binaries into a separate live directory (e.g. `target/live/`), keeping the previous pair as `target/live/prev/`. `~/.local/bin/aida` points at the live directory, not at `target/agent/`, so raw cargo builds can no longer change the live binary.
-     - Add `aida dev rollback`, which swaps prev back in, and have `aida dev status` show which commit is live versus built.
-     - Keep the existing live-wave build guard and the MCP-server restart (restart only after promotion).
-  B. Promotion refuses to run from a main checkout that isn't clean: it requires the main checkout on `main` with no tracked modifications and HEAD == origin/main. An explicit override (`--allow-dirty`, which records the dirty SHA in `aida dev status`) is allowed. Untracked files warn but do not block. Rebuilds in worktrees are unaffected (they never promote).
-  C. Pre-commit HARD-refuses commits in the primary checkout (git-dir == git-common-dir) on `main`, with an env override for the operator. Merges, pulls and `.aida-store` commits are exempt. This is deliberately different from TASK-1178's warn-only worktree-scope check: in the primary checkout there is no legitimate agent commit, so blocking is the only safe choice. Note that `--no-verify` still bypasses it; the server-side backstop is D.
-  D. Show it: the session-start hook and status line show `main checkout: dirty (N files)` or `not on main` when the primary checkout drifts. This covers edits that aren't commits, which no git hook can see.
-
-  ## Server-side (operator action, not code)
-  GitHub branch protection on `main` currently requires checks (merge-hold-gate, Build) with enforce_admins on, but "require a pull request" is OFF. Audit (2026-10-10): all of the last 200 first-parent commits on main came from merged PRs; none were direct pushes. One blocker: `scripts/release.sh` (lines 382-384, 430-433, 479-482) commits `chore: release vX` and pushes it directly to main. Before enabling "require PR", either change the release flow to open and merge a release PR, or add a bypass actor for releases.
+  ## Design (decided by the operator and advisor, 2026-10-10)
+  `aida dev build` is the only build command. It is a real subcommand, not a shell-wrapper case, so hooks and non-interactive shells can use it too.
+  1. Build: an incremental build of the workspace with `--profile agent`, as `make build-fast` does today. Keep the existing live-wave build guard.
+  2. Smoke test the new binaries: `aida --version`, one read-only command against the current store (e.g. `aida list --limit 1`), and `aida-server --version`.
+  3. Promote, only if the smoke test passes: atomically rename the new binaries into a live directory OUTSIDE target/ (e.g. `~/.local/share/aida/live/`), keeping the previous pair in `live/prev/`. `~/.local/bin/{aida,aida-server}` point at the live directory. Then restart stale MCP servers.
+  4. Gate promotion on a clean checkout. Promote only when run in the primary checkout, on `main`, with no tracked modifications and HEAD == origin/main. Untracked files warn but don't block. `--allow-dirty` overrides, and `aida dev status` then shows the dirty SHA. In a worktree, build and smoke test only, never promote, and print how to try that build (`aida dev activate`). `--no-promote` builds and tests anywhere without promoting.
+  5. `--clean`: escape hatch for incremental-cache trouble. By default it deletes only `target/agent/incremental` and keeps the compiled dependencies. `--clean=full` runs `cargo clean --profile agent`. After cleaning it runs the same build → smoke test → promote. When a build or smoke test fails, the error message suggests `aida dev build --clean`.
+  6. `aida dev rollback` swaps `live/prev` back in, in one step.
+  7. `aida dev status` shows the live SHA, the previous SHA, and the latest built SHA, and flags when they differ.
+  8. Remove `aida dev rebuild` (TASK-1720 wrapper case) entirely, with no alias.
+  9. A setup step (e.g. `aida dev build --install-links`, or part of `aida dev activate`) creates the `~/.local/bin` symlinks to the live directory. It replaces a real file or a stale link there only after showing what it will replace.
 
   ## Acceptance
-  - `aida dev rebuild` is a real subcommand. A failed build or failed smoke test leaves the live binary untouched and exits non-zero with the reason.
-  - `aida dev rollback` restores the previous live pair in one step, and `aida dev status` shows the live and previous SHAs.
-  - Raw `cargo build` / `make build-fast` never change the live binary.
-  - Promotion refuses a dirty or diverged main checkout without `--allow-dirty`. Tests cover clean, tracked-dirty, untracked-only, off-main and behind-origin.
-  - Pre-commit refuses in the primary checkout on main, with tests for the refusal, the override, merge/pull, and a worktree commit (allowed).
-  - Session start and the status line flag primary-checkout drift.
-  - Docs: CLAUDE.md "Develop AIDA itself" plus the dev-activate docs describe the single-binary symlink setup.
+  - A failed build or a failed smoke test leaves the live binaries untouched, exits non-zero, and names the reason (suggesting `--clean`).
+  - `cargo clean` and raw `cargo build` / `make build-fast` never change or remove the live binaries.
+  - Promotion refuses without `--allow-dirty` in each refusal case: tracked-dirty, off-main, and behind or diverged from origin. Tests cover those plus a clean checkout and untracked-only (warns). A worktree build never promotes.
+  - `--clean` and `--clean=full` delete exactly what they say, with a test using a temporary target dir.
+  - `aida dev rollback` restores the previous pair; tests cover it plus the case where no `prev` exists.
+  - `aida dev rebuild` is gone from the binary, the shell wrapper, the help text and the docs.
+  - `make build-fast` stays as a build-only target (it does not promote) and its help text points to `aida dev build`.
+  - Docs: CLAUDE.md "Develop AIDA itself" and the dev-activate docs describe the single live binary, `aida dev build`, `--clean` and rollback.
+
+  ## Split out
+  - Pre-commit refusal in the primary checkout, and the session-start/status-line drift indicator: separate specs, related:STORY-1646.
+  - Changing the release flow so GitHub "require a pull request" can be enabled: a separate spec.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:13:53.870469505Z
-modified_at: 2026-10-10T18:20:11.619765465Z
+modified_at: 2026-10-10T18:21:53.127030250Z
 req_type: Story
 tags:
 - build
