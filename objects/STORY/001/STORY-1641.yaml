@@ -1,0 +1,45 @@
+id: 01a12423-c894-7791-b0fa-042d44788c9d
+spec_id: STORY-1641
+agreed_id: STORY-1641
+title: 'Git-style external subcommand dispatch: unrecognised aida <name> runs aida-<name> from PATH'
+description: |
+  Implements the extension seat from the core/porcelain boundary ADR (filed alongside). Today `aida foo` fails with "unrecognized subcommand"; there is no way to add a command without changing core.
+
+  ## Behaviour
+  - When argv[1] is not a built-in subcommand, built-in alias or user alias (TASK-877), aida looks for an executable `aida-<name>` on PATH. If found, it executes it with the remaining arguments and returns its exit status unchanged. On Unix, exec replaces the process, so signals and the TTY pass straight through.
+  - Resolution order is fixed and documented: built-in subcommand, then built-in alias, then user alias (human callers only, as in TASK-877), then external `aida-<name>`. An external can never shadow anything earlier in the list.
+  - The extension receives context through environment variables, so it doesn't have to rediscover it: `AIDA_PROJECT_ROOT`, `AIDA_STORE_PATH`, `AIDA_OUTPUT_FORMAT` (resolved), the caller kind (human / agent / headless, the same classification TASK-877 uses), and `AIDA_BIN` (path of the invoking aida) so it calls the same version back. Names are final in the plan; reuse existing variable names where they exist.
+  - Discovery: `aida help` and `aida alias list` list installed extensions in their own group, marked `external` with their resolved path. `aida help <ext>` delegates to `aida-<ext> --help`.
+  - Not found: keep the current error, plus a hint when a near match exists among built-ins *or* externals (reuse the EPIC-52 fuzzy matcher).
+
+  ## Acceptance
+  1. With a stub `aida-hello` on PATH, `aida hello a "b c"` runs it with argv `["a", "b c"]`. Its stdout, stderr and exit status (including non-zero and 128+signal) pass through unchanged.
+  2. A stub named after a built-in (e.g. `aida-list`) is never run by `aida list`. A stub named after a user alias is not run while the alias resolves for that caller.
+  3. The extension sees the context variables above with correct values, from the project root and from a subdirectory. Outside any AIDA project, the project and store variables are unset rather than wrong.
+  4. Agent/headless callers can invoke an extension (unlike user aliases), and the caller-kind variable reports them correctly.
+  5. `aida help` and `aida alias list` (human, toon and json formats) show installed extensions marked `external` with their path, and show nothing extra when there are none.
+  6. An unknown name with no extension keeps today's error and exit code.
+  7. Works on Linux and macOS. On Windows, resolve `aida-<name>.exe` (and `.cmd`/`.bat` if cheap) or document the gap.
+  8. Docs describe how to write an extension, including the contract (CLI and machine output only, never direct writes to the store or cache).
+
+  ## Out of scope
+  The recipe runner itself, moving any existing command out of core, and an extension registry or installer.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T04:48:07.316035550Z
+modified_at: 2026-10-10T04:48:07.316035550Z
+req_type: Story
+tags:
+- cli
+- extensions
+- porcelain
+filed_at:
+  code_sha: a6d9bc88154bc68f8959f32c775d39fe547384b3
+  branch: task-1538-kernel
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 430dc01de4
+  vendor: antigravity
+  session: 1f1b1091-58e6-4039-9486-4955e4e23ac7
