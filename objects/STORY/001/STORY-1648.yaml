@@ -1,0 +1,39 @@
+id: 01a1270d-37d4-7241-b35a-54feb1a9133d
+spec_id: STORY-1648
+agreed_id: STORY-1648
+title: Flag primary-checkout drift at session start and in the status line
+description: |-
+  ## Problem
+  No git hook can see uncommitted edits. Today `~/ai/aida` has 21 untracked agent scratch files (fix_*.py, *.log, story-1488.yaml, ...). Earlier, another agent's unfinished edits were built into the live binary, and nobody noticed until the advisor checked by hand.
+
+  ## Change
+  - The session-start hook (`aida-session-context.sh` template) adds one line when the primary checkout has drifted: `main checkout: N tracked changes, M untracked · on <branch> · <ahead/behind origin>`. It is silent when clean.
+  - The status line shows a compact marker (e.g. `⌂!`) for the same condition.
+  - `aida doctor` adds a check that lists the drifting paths and suggests who to ask. Where it can, it attributes untracked files to the session or lease that created them (by mtime vs session windows); otherwise it lists them.
+  - It reads state only and never deletes anything.
+
+  ## Acceptance
+  - Tests for clean, tracked-dirty, untracked-only, off-main, and behind origin.
+  - The hook adds less than 50ms (one `git status --porcelain` plus `rev-parse`).
+  - Template masters are edited, then `make sync-templates` and `make check-templates`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:22:20.116652715Z
+modified_at: 2026-10-10T18:22:20.116652715Z
+req_type: Story
+tags:
+- dev-tooling
+- hooks
+- main-checkout
+- related:STORY-1646
+- statusline
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
