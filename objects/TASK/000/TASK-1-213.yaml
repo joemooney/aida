@@ -8,9 +8,10 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T02:48:11.551846892Z
-modified_at: 2026-10-08T21:33:53.426189381Z
+modified_at: 2026-10-10T19:09:03.090493537Z
 req_type: Task
 tags:
+- batch:idle-wave1
 - from-advisor:general
 - kind:observation
 comments:
