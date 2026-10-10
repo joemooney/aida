@@ -1,0 +1,44 @@
+id: 01a1270e-ab01-74a1-a8c1-55521b646318
+spec_id: FAQ-1-258
+title: Which aida binary am I running, and why is it older than I expect?
+description: |
+  **Run `type -a aida` (and `aida dev status`). The first path wins. `~/.local/bin` comes before `~/.cargo/bin` on a typical PATH, so a copy left in `~/.local/bin` shadows anything newer that `make install` puts in `~/.cargo/bin`.**
+
+  ## How
+  ```bash
+  type -a aida aida-server            # every copy on PATH, in priority order
+  aida --version                      # build time + sha (+dirty = see FAQ on +dirty)
+  aida dev status                     # resolved binary, activation state
+  git rev-list --count <sha>..origin/main   # how far behind it is
+  ```
+
+  ## Where copies come from
+  - `make install` / `make install-cli` → `~/.cargo/bin`
+  - `make install-released` / `scripts/install.sh` → `~/.local/bin` (released binaries)
+  - `aida dev activate` → prepends the repo's `target/<profile>` to PATH in the current interactive shell only. Hooks, MCP servers and relay subprocesses don't see it.
+
+  ## Before deleting one
+  Check it isn't the ONLY `aida` on PATH. Hooks, the status line, MCP and running agents all call `aida` by name, so removing the last copy breaks every session at once. Install or link the replacement first, then remove the old copy.
+
+  ## See also
+  FAQ "How should I set up the aida binary while developing AIDA itself?"
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T18:23:55.137500363Z
+modified_at: 2026-10-10T18:23:55.137500363Z
+req_type: Faq
+tags:
+- audience:dev
+- audience:user
+- topic:build
+- topic:cli
+filed_at:
+  code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
