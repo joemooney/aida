@@ -16,7 +16,7 @@ use crate::*;
 /// a collision typically means picking a winner manually because
 /// "automatically re-gate the later claimant" interacts with the
 /// pre-allocated block registry (FR-2-005) in ways that need policy
-/// decisions, not just code. trace:TASK-80 | ai:claude
+// decisions, not just code. trace:TASK-80 | ai:claude
 pub(crate) fn handle_db_check_collisions(
     backend: &aida_core::CachedGitBackend,
     _store_path: &std::path::Path,
@@ -676,8 +676,8 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
 /// `aida db merge-gate` to promote them — friction the user shouldn't
 /// have to think about. Includes the five docs-layer types from FR-1-074
 /// so new clones get short ADR-1, PRIN-1, VIS-1, etc., out of the box.
-/// trace:FR-1-073 | ai:claude
-/// trace:FR-1-074 | ai:claude
+// trace:FR-1-073 | ai:claude
+// trace:FR-1-074 | ai:claude
 pub(crate) const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
     "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE", "PRIN", "VIS", "CON", "ADR", "TERM",
 ];
@@ -690,8 +690,8 @@ pub(crate) const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
 ///
 /// Default block size is 100. Each block claim goes through its own CAS
 /// push loop so a stray contention on one type doesn't block the others.
-/// trace:EPIC-1-052 Phase 3 | ai:claude
-/// trace:FR-1-073 | ai:claude
+// trace:EPIC-1-052 Phase 3 | ai:claude
+// trace:FR-1-073 | ai:claude
 pub(crate) fn auto_allocate_initial_blocks(
     store_path: &std::path::Path,
     node_id: &str,
@@ -711,7 +711,7 @@ pub(crate) fn auto_allocate_initial_blocks(
 
 /// Same as `auto_allocate_initial_blocks` but with an explicit scope —
 /// for use by `aida init` which decides scope before writing config.toml.
-/// trace:FR-271 | ai:claude
+// trace:FR-271 | ai:claude
 pub(crate) fn auto_allocate_initial_blocks_with_scope(
     store_path: &std::path::Path,
     node_id: &str,
@@ -749,7 +749,7 @@ pub(crate) fn auto_allocate_initial_blocks_with_scope(
 /// Why a block is being claimed — controls the idempotency guard and the
 /// commit message in `auto_allocate_block_inner`.
 ///
-/// trace:TASK-281 | ai:claude
+// trace:TASK-281 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BlockClaimReason {
     /// Initial allocation on `aida node acquire` — idempotent. Returns
@@ -762,7 +762,7 @@ pub(crate) enum BlockClaimReason {
 
 /// Like `auto_allocate_block_for_type` but with an explicit size — used
 /// by the Global counter-scope path which wants a larger shared block.
-/// trace:FR-271 | ai:claude
+// trace:FR-271 | ai:claude
 pub(crate) fn auto_allocate_block_with_size(
     store_path: &std::path::Path,
     node_id: &str,
@@ -785,7 +785,7 @@ pub(crate) fn auto_allocate_block_with_size(
 /// Allocate a single block for the given (node_id, type_prefix) if one
 /// doesn't already exist. Returns Some("<TYPE>-<start>..<end>") on a fresh
 /// claim, None if the node already had a block for that type.
-/// trace:FR-1-073 | ai:claude
+// trace:FR-1-073 | ai:claude
 pub(crate) fn auto_allocate_block_for_type(
     store_path: &std::path::Path,
     node_id: &str,
@@ -815,8 +815,8 @@ pub(crate) fn auto_allocate_block_for_type(
 /// claims a fresh block alongside any existing ones (the TASK-281 auto-
 /// claim refill).
 ///
-/// trace:FR-271 | ai:claude
-/// trace:TASK-281 | ai:claude
+// trace:FR-271 | ai:claude
+// trace:TASK-281 | ai:claude
 pub(crate) fn auto_allocate_block_inner(
     store_path: &std::path::Path,
     node_id: &str,
@@ -919,7 +919,7 @@ pub(crate) fn auto_allocate_block_inner(
 /// subsections) from `.aida/config.toml`. Returns the project's auto-claim
 /// defaults when the file or section is absent.
 ///
-/// trace:TASK-281 | ai:claude
+// trace:TASK-281 | ai:claude
 pub(crate) fn read_block_allocation_config(
     project_dir: &std::path::Path,
 ) -> Result<aida_core::BlockAllocationConfig> {
@@ -972,7 +972,7 @@ pub(crate) fn read_block_allocation_config(
 /// vs `per-type opt-out`) so a user troubleshooting "why didn't a fresh
 /// block claim?" doesn't have to grep `.aida/config.toml` to find out.
 ///
-/// trace:TASK-444 | ai:claude
+// trace:TASK-444 | ai:claude
 pub(crate) fn auto_claim_summary(
     cfg: &aida_core::BlockAllocationConfig,
     type_prefix: &str,
@@ -1007,7 +1007,7 @@ pub(crate) fn auto_claim_summary(
 /// `(configured)` tag fires whenever the user has any per-type section
 /// in `.aida/config.toml` (signal that `[block_allocation]` is wired up).
 ///
-/// trace:TASK-449 | ai:claude
+// trace:TASK-449 | ai:claude
 pub(crate) fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) -> String {
     if !cfg.auto_claim {
         // TASK-467: a per-type re-enable (e.g. `[block_allocation.bug]
@@ -1035,7 +1035,7 @@ pub(crate) fn global_auto_claim_summary(cfg: &aida_core::BlockAllocationConfig) 
 /// print the one-line info notice ("Auto-claimed BUG-517..616 (threshold
 /// crossed: 18 remaining → 118)"). `previous_remaining` is the aggregate
 /// before the claim; `new_remaining` is the aggregate after.
-/// trace:TASK-281 | ai:claude
+// trace:TASK-281 | ai:claude
 #[derive(Debug, Clone)]
 pub(crate) struct AutoClaimOutcome {
     pub(crate) label: String,
@@ -1057,7 +1057,7 @@ pub(crate) struct AutoClaimOutcome {
 ///   stale local block, because continuing there can recreate the cross-clone
 ///   ID collision that lost specs during the PR-270 pull.
 ///
-/// trace:TASK-281 | ai:claude
+// trace:TASK-281 | ai:claude
 pub(crate) fn ensure_block_capacity(
     store_path: &std::path::Path,
     project_dir: &std::path::Path,
