@@ -25,7 +25,7 @@ you're writing the code yourself, the graph never gets big enough to pay for
 itself. You'll spend more time filing specs than you save querying them.
 
 **Use instead:** plain git plus a `TODO.md`, or — if you want first-feature
-structure — [GitHub Spec Kit](vs-spec-kit.md) to scaffold a spec → plan → tasks
+structure — [GitHub Spec Kit](../archive/positioning/vs-spec-kit.md) to scaffold a spec → plan → tasks
 flow with zero infrastructure. AIDA's added machinery (cache, orphan branch, MCP
 server, queue, lifecycle) wouldn't earn its keep at that scale.
 
@@ -44,7 +44,7 @@ all-in on a single agent and will never run a second vendor against the same
 specs, that differentiator doesn't pay.
 
 **Use instead:** your agent's native coordination, layered on Spec Kit. Claude
-Code's [Agent Teams](vs-agent-teams.md) ships a native mailbox, a shared
+Code's [Agent Teams](../archive/positioning/vs-agent-teams.md) ships a native mailbox, a shared
 self-claiming task list, dependency auto-unblocking, and a plan-approval gate —
 within a session, in one vendor's tooling, with zero extra infrastructure. For a
 single-vendor team that question ("multi-vendor?") is the whole decision: answer
@@ -66,7 +66,7 @@ does well.
 **Use instead:** Linear, Jira, Notion, or GitHub Projects for the live board and
 real-time editing. AIDA can mirror to and from GitHub Issues (`aida github
 push` / `pull`) if you want the durable graph *and* a live board — but the live
-board itself should be the SaaS tool. See [vs-saas-pm.md](vs-saas-pm.md) for that
+board itself should be the SaaS tool. See [vs-saas-pm.md](../archive/positioning/vs-saas-pm.md) for that
 split in full.
 
 ---
@@ -96,7 +96,7 @@ it.
 
 If you won't maintain even a structured `REQUIREMENTS.md` by hand, AIDA's graph
 won't maintain itself either. The
-["structured markdown an agent can read"](vs-karpathy-md.md) approach is the
+["structured markdown an agent can read"](../archive/positioning/vs-karpathy-md.md) approach is the
 floor; AIDA adds the relationship graph, stable IDs, and enforcement *on top of*
 a discipline you're already willing to keep. No discipline, no graph.
 
@@ -138,9 +138,9 @@ AIDA will still be here when your project grows into it.
 ## See also
 
 - [How AIDA compares](README.md) — the full one-neighbor-at-a-time index.
-- [vs Spec Kit](vs-spec-kit.md) — AIDA's nearest competitor; the clearest
+- [vs Spec Kit](../archive/positioning/vs-spec-kit.md) — AIDA's nearest competitor; the clearest
   "scaffold first-feature vs maintain the cross-cutting graph" contrast.
-- [vs Claude Code Agent Teams](vs-agent-teams.md) — single-vendor native
+- [vs Claude Code Agent Teams](../archive/positioning/vs-agent-teams.md) — single-vendor native
   coordination vs cross-vendor durable substrate.
 - [Composition recipes](composition.md) — when the answer is "use AIDA *with* X,"
   not "instead of."

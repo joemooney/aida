@@ -88,6 +88,6 @@ graph of intent — and layer them when you want both.
 
 ## See also
 
-- [composition.md](composition.md) — the general "use AIDA *with* an editor" recipe.
+- [composition.md](../../positioning/composition.md) — the general "use AIDA *with* an editor" recipe.
 - [vs-aider.md](vs-aider.md) — the auto-commit-per-turn editor neighbor.
-- [when-not-to-use-aida.md](when-not-to-use-aida.md) — when Continue alone is enough.
+- [when-not-to-use-aida.md](../../positioning/when-not-to-use-aida.md) — when Continue alone is enough.

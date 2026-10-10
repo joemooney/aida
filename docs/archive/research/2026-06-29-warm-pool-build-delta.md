@@ -2,7 +2,7 @@
 
 *Date: 2026-06-29 · Status: finding (single-run pilot) · Specs: STORY-714, TASK-985, BUG-652 · Author: claude (implementer)*
 
-> A research note for the **agent-fleet** line, not just a STORY-714 implementation log. The question it answers — *what does it actually cost to give every fanned-out agent its own worktree, and what does recycling them buy back?* — bears directly on whether wide, parallel agent fan-out is economical. Pairs with [`2026-07-08-coordinating-multi-vendor-agent-fleets.md`](2026-07-08-coordinating-multi-vendor-agent-fleets.md).
+> A research note for the **agent-fleet** line, not just a STORY-714 implementation log. The question it answers — *what does it actually cost to give every fanned-out agent its own worktree, and what does recycling them buy back?* — bears directly on whether wide, parallel agent fan-out is economical. Pairs with [`2026-07-08-coordinating-multi-vendor-agent-fleets.md`](../../research/2026-07-08-coordinating-multi-vendor-agent-fleets.md).
 
 ## 1. Question & hypothesis
 

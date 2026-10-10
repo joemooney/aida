@@ -50,7 +50,7 @@ These symptoms are the **entry conditions for AIDA.** The threshold isn't "X req
 
 ## What AIDA adds on top
 
-AIDA's defensible niche statement (from [OVERVIEW.md](../../OVERVIEW.md) and [CLAUDE.md](../../CLAUDE.md)):
+AIDA's defensible niche statement (from [OVERVIEW.md](../../../OVERVIEW.md) and [CLAUDE.md](../../../CLAUDE.md)):
 
 > The agent-collaboration layer: **stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents.** Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph + identifier stability + enforcement loop.
 
@@ -71,8 +71,8 @@ The realistic deployment is not *"replace markdown with AIDA."* It's **"keep you
 
 In this repo:
 
-- [CLAUDE.md](../../CLAUDE.md) — orientation prose for new sessions. Not in the graph.
-- [OVERVIEW.md](../../OVERVIEW.md) — vision document. Not in the graph.
+- [CLAUDE.md](../../../CLAUDE.md) — orientation prose for new sessions. Not in the graph.
+- [OVERVIEW.md](../../../OVERVIEW.md) — vision document. Not in the graph.
 - `aida-store` orphan branch — the graph. Source of truth for *which specs exist*, *how they relate*, *what status they're in*.
 - `docs/positioning/` (this directory) — narrative built from `aida doc` entries; renders the graph's "why" into prose.
 - `aida docs build` — projects the graph into a layered docs tree (constitution / vision / decisions / quality / glossary) for human reading.
@@ -97,6 +97,6 @@ You'll know you've hit the threshold when grep stops being enough.
 
 ## See also
 
-- [CLAUDE.md](../../CLAUDE.md) — orientation prose this repo uses alongside AIDA.
-- [OVERVIEW.md](../../OVERVIEW.md) — vision document, also written as markdown not graph records.
+- [CLAUDE.md](../../../CLAUDE.md) — orientation prose this repo uses alongside AIDA.
+- [OVERVIEW.md](../../../OVERVIEW.md) — vision document, also written as markdown not graph records.
 - [vs-saas-pm.md](vs-saas-pm.md) — when AIDA's graph layer competes with Linear/Jira instead of with markdown.

@@ -49,7 +49,7 @@ not a project memory.
 - You want the fastest path from "change this" to a committed diff.
 - The unit of work is a conversation, not a tracked feature graph.
 - You're solo or one-off, and the durable "why" doesn't need to outlive the
-  session. (See [when *not* to use AIDA](when-not-to-use-aida.md) — this is one
+  session. (See [when *not* to use AIDA](../../positioning/when-not-to-use-aida.md) — this is one
   of those cases.)
 
 If that's your shape, **use Aider.** AIDA's graph wouldn't earn its keep.
@@ -90,6 +90,6 @@ to stay tied to *why* — and run Aider *inside* AIDA when you want both.
 
 ## See also
 
-- [composition.md](composition.md) — the general "use AIDA *with* an editor" recipe.
-- [when-not-to-use-aida.md](when-not-to-use-aida.md) — when Aider alone is enough.
+- [composition.md](../../positioning/composition.md) — the general "use AIDA *with* an editor" recipe.
+- [when-not-to-use-aida.md](../../positioning/when-not-to-use-aida.md) — when Aider alone is enough.
 - [vs-continue.md](vs-continue.md) — the other CI-native editor neighbor.

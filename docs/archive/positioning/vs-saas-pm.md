@@ -1,6 +1,6 @@
 # AIDA vs hosted SaaS PM (Linear / Jira / GitHub Projects)
 
-*Last updated: 2026-07-19 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/marketplace-roster.md](../competitive-analysis/marketplace-roster.md) (the current 2026-07-07 roster) before any procurement-facing use.*
+*Last updated: 2026-07-19 — pricing and feature comparisons should be re-verified against [docs/competitive-analysis/marketplace-roster.md](../../competitive-analysis/marketplace-roster.md) (the current 2026-07-07 roster) before any procurement-facing use.*
 
 The TL;DR: **AIDA is not trying to replace your project-management suite.** Linear, Jira, and GitHub Projects do things AIDA explicitly doesn't try to do — multi-team coordination, customer-facing roadmaps, SLAs, sprint reporting, OKR alignment. AIDA's pitch is the *intent-graph layer that lives in the repo*. You'll often want both, with each owning a different scope of the same work.
 

@@ -84,7 +84,7 @@ Terminal-based, 2M token effective context, sandbox diff review, configurable au
 
 **Best at**: large, multi-file changes with reviewable diff before commit. The closest tool reviewed here to AIDA's *"structured artifact + branched exploration"* pattern.
 
-**AIDA contrast**: AIDA's [docs/plans/](../plans/) directory + `aida plan verify` + `docs/plans/_TEMPLATE.md` is the same pattern Plandex implements in-product. AIDA puts plans in version-controlled markdown that travels with the repo; Plandex puts them in a local-cached plan store. **Plandex's sandbox-diff-before-commit is something AIDA doesn't have** — `aida queue work` writes commits directly. **Opportunity**: `aida queue work --dry-run-diff` that surfaces the planned diff before any file edit lands on the worktree. Useful for the headless drain path where the operator can't watch in real time.
+**AIDA contrast**: AIDA's [docs/plans/](../../plans/) directory + `aida plan verify` + `docs/plans/_TEMPLATE.md` is the same pattern Plandex implements in-product. AIDA puts plans in version-controlled markdown that travels with the repo; Plandex puts them in a local-cached plan store. **Plandex's sandbox-diff-before-commit is something AIDA doesn't have** — `aida queue work` writes commits directly. **Opportunity**: `aida queue work --dry-run-diff` that surfaces the planned diff before any file edit lands on the worktree. Useful for the headless drain path where the operator can't watch in real time.
 
 ### Goose (github.com/block/goose)
 
@@ -209,4 +209,4 @@ Three properties AIDA has that none of these tools have:
 - [`2026-03-17-landscape-scan.md`](2026-03-17-landscape-scan.md) — broader landscape with these tools at lighter detail (March 2026 data).
 - [`2026-05-26-agent-memory-libraries.md`](2026-05-26-agent-memory-libraries.md) — memory-library category (companion analysis, same date).
 - [`../positioning/vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) — AIDA vs Claude Code's `/agents` catalog.
-- [`signals-to-watch.md`](signals-to-watch.md) — already names Goose/Codex skill-registry as a signal worth watching.
+- [`signals-to-watch.md`](../../competitive-analysis/signals-to-watch.md) — already names Goose/Codex skill-registry as a signal worth watching.

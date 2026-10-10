@@ -147,8 +147,8 @@ But LangGraph's strength also sharpens AIDA's positioning. As execution runtimes
 
 ## See also
 
-- [agent-decision-matrix.md](agent-decision-matrix.md) — build/buy/ride-native across the coordination stack.
-- [composition.md](composition.md) — recipes for composing AIDA with adjacent tools.
+- [agent-decision-matrix.md](../../positioning/agent-decision-matrix.md) — build/buy/ride-native across the coordination stack.
+- [composition.md](../../positioning/composition.md) — recipes for composing AIDA with adjacent tools.
 - [../research/2026-06-16-layered-evaluation-framework.md](../research/2026-06-16-layered-evaluation-framework.md) — L0-L5 evaluation framework.
 - [../research/2026-06-28-orchestration-articles-docs-audit.md](../research/2026-06-28-orchestration-articles-docs-audit.md) — orchestration vocabulary and production checklist applied to AIDA research.
-- [../competitive-analysis/marketplace-roster.md](../competitive-analysis/marketplace-roster.md) — current landscape roster.
+- [../competitive-analysis/marketplace-roster.md](../../competitive-analysis/marketplace-roster.md) — current landscape roster.

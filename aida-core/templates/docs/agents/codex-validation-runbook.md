@@ -15,7 +15,7 @@ It is the executable companion to three reference docs — read them once before
   authoritative source for registration, tool discovery, and response-shape expectations.
 - `docs/agents/cross-agent-onboarding.md` — the shared MCP operating model and the full
   tool/resource catalog for any non-Claude agent.
-- `docs/agents/porting-claude-code-to-codex.md` — the migration gap analysis: which
+- `docs/archive/audits/porting-claude-code-to-codex.md` — the migration gap analysis: which
   Claude Code runtime controls (hook `defer`, input/output rewriting, command-backed
   status lines) do **not** port directly, and the replacement paths.
 
@@ -404,7 +404,7 @@ Practical consequence for a migrating team: a flow that relied on Claude's
 **punt → external decision → new Codex run after approval**, not an in-session resume.
 Confirm your team's headless approval flows do not assume in-session deferral on Codex. The
 full mapping table (`allow`/`deny`/`ask`/`defer`, input/output rewriting) is in
-`docs/agents/porting-claude-code-to-codex.md`; the cross-agent pause/abort/defer semantics
+`docs/archive/audits/porting-claude-code-to-codex.md`; the cross-agent pause/abort/defer semantics
 are in `docs/agents/session-communication.md`. Do not assume a later hook can ask whether to
 continue after an earlier hook has halted the run.
 
@@ -460,7 +460,7 @@ or "phase complete" checkpoints (those belong in `add_comment` or the session ma
 | 7 | Trace gate didn't reject a malformed message | The gate is permissive by default. Set `AIDA_COMMIT_STRICT=true` to enforce. |
 | 8 | Spec stuck at `Done` after merge | You used raw `git pull`. The auto-bump lives in `aida pull`. Recover: `aida db reconcile-status --spec <SPEC>`. |
 | any | MCP responses look stale after a rebuild | `aida mcp-serve` self-respawns on a newer on-disk `aida --version` or build SHA. If still stale, kill the agent's `aida mcp-serve` process and let Codex respawn it. |
-| 9b | Headless approval flow hangs on Codex | No Codex `defer` — re-express as punt → external decision → new Codex run. See `docs/agents/porting-claude-code-to-codex.md`. |
+| 9b | Headless approval flow hangs on Codex | No Codex `defer` — re-express as punt → external decision → new Codex run. See `docs/archive/audits/porting-claude-code-to-codex.md`. |
 
 ---
 

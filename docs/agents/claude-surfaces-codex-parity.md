@@ -9,7 +9,7 @@ This is the gap map for the migration-readiness epic: a complete catalogue of
 every place AIDA currently depends on a Claude-specific surface, what the
 surface does, the nearest non-Claude (Codex) equivalent, and the concrete gap
 plus the spec that covers it. The companion conceptual analysis is
-`docs/agents/porting-claude-code-to-codex.md`; the durable hook/defer reference
+`docs/archive/audits/porting-claude-code-to-codex.md`; the durable hook/defer reference
 is `docs/agents/session-communication.md`. This file is deliberately concrete:
 file and symbol references so a future implementer can find the exact code that
 hardcodes a vendor.
@@ -213,7 +213,7 @@ bite — everything else is convenience or already covered.
 
 ## References
 
-- `docs/agents/porting-claude-code-to-codex.md` — conceptual migration analysis
+- `docs/archive/audits/porting-claude-code-to-codex.md` — conceptual migration analysis
 - `docs/agents/session-communication.md` — durable hook/defer/resume reference
 - `docs/agents/cross-agent-onboarding.md` — MCP onboarding for non-Claude agents
 - `docs/agents/codex-mcp-setup.md` — working Codex MCP registration

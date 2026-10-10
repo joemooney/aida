@@ -488,16 +488,16 @@ Run `aida` (no args) for the full CLI surface.
 
 <!-- trace:TASK-276 | ai:claude -->
 
-You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) carries one focused comparison per neighbouring tool, each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
+You've tried AIDA — so *what is it actually for, next to the tools you already reach for?* [`docs/positioning/`](docs/positioning/README.md) indexes one focused comparison per neighbouring tool (dated snapshots, kept under [`docs/archive/positioning/`](docs/archive/positioning/)), each answering *"why AIDA instead of X?"* — always honestly, including when X is the better call. **Start with the two nearest competitors:**
 
-- [**AIDA vs GitHub Spec Kit**](docs/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
-- [**AIDA vs AWS Kiro**](docs/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.
-- [**AIDA vs Claude Code Agent Teams**](docs/positioning/vs-agent-teams.md) — native *within-session* multi-agent coordination vs AIDA's *cross-session, cross-vendor* graph + lifecycle. The closest provider overlap yet — and why the gap persists on incentive, not capability.
-- [**AIDA vs Claude Code subagents / workflows**](docs/positioning/vs-claude-code-subagents.md) — within-conversation primitives vs AIDA's cross-conversation lifecycle layer; AIDA composes them inside its roles. <!-- trace:TASK-337 | ai:claude -->
-- [**AIDA vs `/ultraplan` & `/ultrareview`**](docs/positioning/vs-ultraplan.md) — AIDA layers persistent requirement structure on top of Claude's planning/review primitives, which it composes with rather than replaces.
-- [**AIDA vs Karpathy-style markdown**](docs/positioning/vs-karpathy-md.md) — structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
-- [**AIDA vs SaaS PM tools**](docs/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
-- **AI code-editor neighbors** — [Aider](docs/positioning/vs-aider.md), [Continue](docs/positioning/vs-continue.md) — a different layer entirely: they *edit*, AIDA is the spec graph + lifecycle *above* the editing.
+- [**AIDA vs GitHub Spec Kit**](docs/archive/positioning/vs-spec-kit.md) — *(nearest competitor)* Spec Kit scaffolds a great first-feature `spec → plan → tasks`; AIDA keeps specs a maintained, cross-cutting graph — stable IDs, typed relationships, trace enforcement, lifecycle — for the project's whole life. They compose.
+- [**AIDA vs AWS Kiro**](docs/archive/positioning/vs-kiro.md) — *(nearest competitor)* Kiro's polished agentic IDE with EARS requirements + per-feature traceability vs AIDA's vendor-neutral, git-canonical graph readable by *any* agent over MCP, independent of the editor that produced the specs.
+- [**AIDA vs Claude Code Agent Teams**](docs/archive/positioning/vs-agent-teams.md) — native *within-session* multi-agent coordination vs AIDA's *cross-session, cross-vendor* graph + lifecycle. The closest provider overlap yet — and why the gap persists on incentive, not capability.
+- [**AIDA vs Claude Code subagents / workflows**](docs/archive/positioning/vs-claude-code-subagents.md) — within-conversation primitives vs AIDA's cross-conversation lifecycle layer; AIDA composes them inside its roles. <!-- trace:TASK-337 | ai:claude -->
+- [**AIDA vs `/ultraplan` & `/ultrareview`**](docs/archive/positioning/vs-ultraplan.md) — AIDA layers persistent requirement structure on top of Claude's planning/review primitives, which it composes with rather than replaces.
+- [**AIDA vs Karpathy-style markdown**](docs/archive/positioning/vs-karpathy-md.md) — structured markdown queryable by Claude is the floor; AIDA adds the relationship graph, stable IDs, MCP, queue, and lifecycle.
+- [**AIDA vs SaaS PM tools**](docs/archive/positioning/vs-saas-pm.md) — Linear/Jira-style PMs assume humans drive tickets; AIDA is built for agent collaboration with humans in the loop.
+- **AI code-editor neighbors** — [Aider](docs/archive/positioning/vs-aider.md), [Continue](docs/archive/positioning/vs-continue.md) — a different layer entirely: they *edit*, AIDA is the spec graph + lifecycle *above* the editing.
 
 **Deciding whether to adopt at all?** Two cross-cutting guides cut through it:
 

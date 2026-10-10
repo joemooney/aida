@@ -64,7 +64,7 @@ If the description is accurate, the practical implications are:
 
 **AIDA's contrast:** `/aida-plan` runs in a single local Claude session — same context window throughout, no parallel exploration, no separate critic. The local model can be prompted to "consider three approaches, then evaluate," but anchoring bias persists because all three approaches share the same context. This is a real asymmetry; AIDA shouldn't claim parity here.
 
-**AIDA does apply the same insight elsewhere:** the implementer/reviewer split in AIDA's session model is the critic-must-be-separate principle internalized — a reviewer Claude session never shares context with the implementer Claude session whose work it's reviewing, precisely to prevent the anchoring bias that single-context self-review would suffer. See [`docs/session-lifecycle.md` "Why roles don't share Claude sessions"](../session-lifecycle.md) for how that architectural commitment shapes AIDA's role boundaries and the (future) TUI orchestration vision.
+**AIDA does apply the same insight elsewhere:** the implementer/reviewer split in AIDA's session model is the critic-must-be-separate principle internalized — a reviewer Claude session never shares context with the implementer Claude session whose work it's reviewing, precisely to prevent the anchoring bias that single-context self-review would suffer. See [`docs/session-lifecycle.md` "Why roles don't share Claude sessions"](../../session-lifecycle.md) for how that architectural commitment shapes AIDA's role boundaries and the (future) TUI orchestration vision.
 
 ### Browser review surface — separate from the prose strength
 
@@ -240,4 +240,4 @@ Both fit in most workflows. The point of this doc is that picking *one* in a bin
 - TASK-95 — `aida queue work` pre-populates session manifest from matching plan file
 - TASK-96 — `aida queue done` extracts Followups section, offers to file as TASKs
 - `docs/plans/2026-05-13-story-86-done-status.md` — worked example: the actual `Ultraplan` output that prompted this doc
-- [composition.md](composition.md) — generic guidance on layering AIDA with other tools (future page)
+- [composition.md](../../positioning/composition.md) — generic guidance on layering AIDA with other tools (future page)

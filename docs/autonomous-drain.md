@@ -968,7 +968,7 @@ first fork (~$4 for a 1.3 MB / 225K-token transcript on Opus 4.7), then
 ~$0.03 for each additional fork within the 5-minute cache TTL. Cold-boot
 runs at ~$0.50-$1.00 per advise. So fork-from-live is 4-8× more expensive
 per invocation in exchange for full in-flight context. SPIKE-11 has the
-full empirical writeup at `docs/spikes/2026-05-20-spike-11-session-forking.md`.
+full empirical writeup at `docs/archive/spikes/2026-05-20-spike-11-session-forking.md`.
 
 **Discovery cascade** (highest-confidence first):
 

@@ -167,7 +167,7 @@ can receive routed work (`aida queue add <id> --for <role>`), and supplies the
 context and authority used by its sessions.
 
 A role is **not** a Claude Code subagent — see
-[`vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) for
+[`vs-claude-code-subagents.md`](../archive/positioning/vs-claude-code-subagents.md) for
 the within-conversation (subagent) vs cross-conversation (AIDA role) layer
 distinction.
 

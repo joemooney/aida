@@ -160,6 +160,6 @@ may **NOT** start work, take a lease, merge, or send keys into a pane.
   Fleet-watch watches them run; it never takes their actions.
 
 Related: **SPIKE-77** (parent — cmux UX signals), the driving research doc
-`docs/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md`, and the
+`docs/archive/research/2026-07-07-spike-77-cmux-ux-signals-fleet-watch.md`, and the
 autonomy/escalation contract `docs/architecture/autonomy-and-escalation.md`
 (where any future nudge/auto-action tier is specified).

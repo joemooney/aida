@@ -198,4 +198,4 @@ The tables above are about *autonomy* — how much AIDA does unattended. There's
 
 ---
 
-**What changed lately?** See [`whats-new-2026-06.md`](whats-new-2026-06.md) for the June 2026 round of refinements — organized by who benefits (human, agent, cockpit).
+**What changed lately?** See [`whats-new-2026-06.md`](release-notes/2026-06.md) for the June 2026 round of refinements — organized by who benefits (human, agent, cockpit).
