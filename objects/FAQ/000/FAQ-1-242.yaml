@@ -1,5 +1,6 @@
 id: 01a12653-d3e5-75f3-911e-30dbcb7d2cc2
 spec_id: FAQ-1-242
+agreed_id: FAQ-11
 title: What's the convention for writing and filing an FAQ entry?
 description: |
   **An FAQ is reference material, not work. File it as `completed`, skip the lifecycle, and find it with `aida faq list` or `aida search`.**
