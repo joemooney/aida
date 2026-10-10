@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T21:50:34.977218919Z
-modified_at: 2026-10-07T22:21:15.594085589Z
+modified_at: 2026-10-10T14:30:29.180424493Z
 req_type: Story
 tags:
 - closure:pending
@@ -264,6 +264,12 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 2dc90ca), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit STORY-1488 --description ...` / `aida edit STORY-1488 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec STORY-1488 --since 2dc90ca^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit STORY-1488 --status completed`. (merge sha: 2dc90ca81f5fcf0d38262dae16dadaa7b480eb09)'
   created_at: 2026-10-06T02:17:05.765527871Z
   modified_at: 2026-10-06T02:17:05.765527871Z
+- id: 01a12638-f43c-7032-9d89-e11abd09c833
+  author: joe
+  content: 'ADVISOR RULING (2026-10-10): the include!-based lib.rs split (PR #2474, a6d9bc8) was not in the signed sketch and merged unreviewed. Accepted retroactively as transitional scaffolding for codegraph indexing only. Conditions are on TASK-1538 (rework brief 2026-10-10). The final slice-1 state is the signed named-module map with no lib_part*.rs.'
+  created_at: 2026-10-10T14:30:29.180424493Z
+  modified_at: 2026-10-10T14:30:29.180424493Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a10f00-13e5-776c-8059-11570f9e9c98
   author: aida-auto-bump
