@@ -20,8 +20,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:47.029699404Z
-modified_at: 2026-10-10T14:56:23.432945057Z
+modified_at: 2026-10-10T15:37:47.117949332Z
 req_type: Faq
+tags:
+- topic:completion
 history:
 - id: 01a12650-ab88-7c11-b6ff-2b9b85a74540
   author: joe
