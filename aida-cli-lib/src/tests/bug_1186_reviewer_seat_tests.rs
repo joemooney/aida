@@ -84,15 +84,17 @@ fn review_envelope_targets_pr_requires_truthy_flag_and_matching_number() {
 #[test]
 fn review_phase_sets_the_review_envelope_unconditionally() {
     // trace:BUG-1193 | ai:codex
-    let src = format!("{}\n{}\n{}\n{}\n{}\n{}\n{}",
-            include_str!("../lib.rs"),
-            include_str!("../lib_part1.rs"),
-            include_str!("../lib_part2.rs"),
-            include_str!("../lib_part3.rs"),
-            include_str!("../lib_part4.rs"),
-            include_str!("../lib_part5.rs"),
-            include_str!("../lib_part6.rs")
-        ).replace("\r\n", "\n");
+    let src = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        include_str!("../lib.rs"),
+        include_str!("../lib_part1.rs"),
+        include_str!("../lib_part2.rs"),
+        include_str!("../lib_part3.rs"),
+        include_str!("../lib_part4.rs"),
+        include_str!("../lib_part5.rs"),
+        include_str!("../lib_part6.rs")
+    )
+    .replace("\r\n", "\n");
     let gated = concat!(
         "if self.from_pr {\n            cmd.env(\"AIDA_FROM_PR_REVIEW\"",
         ", \"1\")"
