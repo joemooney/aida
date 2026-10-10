@@ -15,17 +15,26 @@ description: |-
   Edit the template master, then run make sync-templates / make check-templates.
 
   Acceptance: committing a staged diff of about 250k changed .rs lines (e.g. a synthetic file move) finishes the hook in under 10 s. A merge of main into a branch checks only the resolution delta. The existing TASK-144/BUG-624 hook tests still pass.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:40:19.364053755Z
-modified_at: 2026-10-10T20:40:19.364053755Z
+modified_at: 2026-10-10T20:41:37.851788558Z
 req_type: Bug
 tags:
+- batch:history-2026-10-10
 - hooks
 - performance
 - templates
+history:
+- id: 01a1278c-bf3b-7233-bbcd-54f7523e666a
+  author: joe
+  timestamp: 2026-10-10T20:41:37.851773544Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
