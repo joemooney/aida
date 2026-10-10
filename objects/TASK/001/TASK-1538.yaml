@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T16:50:38.916397859Z
+modified_at: 2026-10-10T20:53:19.665970421Z
 req_type: Task
 tags:
 - closure:pending
@@ -185,6 +185,32 @@ comments:
     slice-04-r1 fcc61390e1 statusline_root.rs — proofs: warnings 0/0, tests 9916/9916 green, size 193
   created_at: 2026-10-10T16:50:38.916397859Z
   modified_at: 2026-10-10T16:50:38.916397859Z
+- id: 01a12797-74b1-7d73-a936-d22adb669e05
+  author: joe
+  content: |-
+    ADVISOR REVIEW: slice stack, round 2 (2026-10-10 13:55). Reviewed origin/main..slice1-stack @ fcc61390e1 (9 commits on fe6723558e). VERDICT: APPROVED, all five tags, at these SHAs:
+    - slice-00-r6 @ 4bbb7f29fb (tooling): APPROVED. `git diff slice-00-r5 slice-00-r6` is empty, so it's a reword only. The subject no longer carries a spec ID. Round-1 content acceptance stands.
+    - slice-01-r2 @ d4567d9d0a (db_block.rs, move c1b0193a53 + retarget): APPROVED. verify_move.py PASS (+1144/-1138, wiring and manifest only). The rejected trace-demotion commit is gone, and the db_block.rs:6-19 doc paragraph is intact.
+    - slice-02-r1 @ 523b3352b4 (mailbox_root.rs, move 24be3ac9e1 + retarget): APPROVED. verify_move.py PASS (+437/-431).
+    - slice-03-r1 @ ff30bb0e19 (role.rs, move 3c57a7bb2e + retarget): APPROVED. verify_move.py PASS (+1565/-1559).
+    - slice-04-r1 @ fcc61390e1 (statusline_root.rs, move a475984c79 + retarget): APPROVED. verify_move.py PASS (+195/-189).
+
+    Checked:
+    - Linear stack.
+    - Every tag annotated with a V3/V4/V7 record.
+    - No commit subject contains a spec ID. Move/retarget pairs are adjacent.
+    - Each retarget touches only scripts/config-trust.toml, moving exactly the counted sites from the lib.rs entry to the new module (db_block 48→47 +1; statusline_root 44→41 +3; totals balance).
+    - Branch slice1-stack carries no spec ID.
+    - main has moved by #2478 and #2479 since fe6723558e, but neither touches lib.rs or lib_part*.rs, so the stack rebase-merges cleanly.
+
+    Not independently re-run: the implementer's V4 (9916/9916). CI on the ship PR is the independent test run.
+
+    SHIP (rule 7): one PR, slice1-stack → main, rebase-merge (`gh pr merge --rebase --match-head-commit fcc61390e1`), by a human or the advisor, only after CI is green at fcc61390e1. Afterwards, confirm no new main subject contains (TASK-1538) and that TASK-1538 stays approved with closure:pending.
+
+    Implementer: keep stacking from slice-04-r1, starting with slice-05 (next module in manifest order). Process note: reviews should no longer take hours. A pure-move checker is being filed so each round is mechanical.
+  created_at: 2026-10-10T20:53:19.665970421Z
+  modified_at: 2026-10-10T20:53:19.665970421Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
