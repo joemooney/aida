@@ -1,0 +1,39 @@
+id: 01a127c3-1763-75c2-b672-1b09af6c9250
+spec_id: BUG-1928
+agreed_id: BUG-1928
+title: Contained drain implementers are denied Edit/Write on their own worktree, so every contained headless phase 1 ships nothing
+description: |-
+  ## Problem
+  With [agents] contained = true, the headless implementer starts with --permission-mode dontAsk plus the contained --settings. Every Edit and Write, and some sandboxed Bash writes, were denied with "Permission to use Edit has been denied because Claude Code is running in don't ask mode". That includes files inside the session's own lease worktree. In the BUG-81 log: 9 Edit denials and 3 Write denials. The agents correctly refused to work around it and stopped. As a result the contained posture can't ship any code, which is the opposite of STORY-567's acceptance (writes confined to the worktree, not blocked everywhere).
+
+  Evidence (aida-relay, 2026-10-10, aida 0.15.0 fe67235+dirty, user ~/.aida/agents.toml [agents] contained = true): 'aida drain start --no-human' on BUG-81, BUG-83, STORY-85 shipped 0 of 3 in 7m42s, using 1.79M tokens (~$2.66). Logs: /home/joe/ai/aida-relay/.aida/headless-logs/{bug-81-01a127b3,bug-83-01a127b4,story-85-01a127b6}-*.jsonl
+
+  ## Hypotheses (unverified, check first)
+  1. contained_settings_json (aida-cli-lib/src/session.rs:2261) grants 'Edit(/**)'. Check Claude Code's rule syntax: a single leading '/' may be anchored to the settings or project root, not the filesystem root (absolute paths need '//'). If so, the rule doesn't cover the pool worktree. The intended rule is the worktree itself, e.g. 'Edit(//<abs worktree>/**)', which is the STORY-567 'lease scope = write boundary' intent.
+  2. The drain announced 'phase 1 workspace: /home/joe/ai/aida-relay-bug-81' (doesn't exist), then ran in the warm-pool worktree /home/joe/ai/aida-pool-aida-relay-0. Any boundary derived from the announced path would miss the real cwd. Same mismatch for all three specs.
+  3. Tests only assert that the rule string is present (session.rs ~6001). Nothing proves that a contained session can actually edit a worktree file.
+
+  ## Acceptance
+  - A contained headless session can Edit and Write files inside its lease worktree, and is denied outside it. An integration test drives real claude, or the closest available harness, through both cases.
+  - The write boundary is derived from the worktree the session actually runs in (pool or named), never from a path that wasn't created.
+  - Contained mode also grants what the AIDA CLI needs to write the store and cache (see the companion bug), or that bug is fixed first.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-10T21:40:59.363859672Z
+modified_at: 2026-10-10T21:40:59.363859672Z
+req_type: Bug
+tags:
+- contained
+- drain
+- regression-test-gap
+- sandbox
+filed_at:
+  code_sha: 968168df6acf2180a7dd3cf0a14a8a11fb399c4b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: fe6723558e
+  vendor: antigravity
+  session: ce7b935f-d5da-41d3-94da-7ef94d2537e4
