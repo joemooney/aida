@@ -1882,6 +1882,7 @@ pub(crate) fn handle_git_backend_command(
             no_scope,
             show_origin,
             include_meta,
+            include_knowledge,
             parent,
             recursive,
             sync,
@@ -1913,6 +1914,26 @@ pub(crate) fn handle_git_backend_command(
             // upstream by `agent_output_mode()`, so only the json axis needs to be
             // OR'd in here. trace:STORY-764 | ai:claude
             let effective_json = *json || output_format_is_json();
+            // STORY-1642 item 7: a built-in type word in the positional is a
+            // type filter — `aida list faq` == `aida list --type faq` — rather
+            // than an "Unknown status filter" error. No type word collides with
+            // a status, alias, lens or user token, so peeling it off here
+            // shadows nothing. trace:STORY-1642 | ai:claude
+            let positional_type = crate::knowledge_list::positional_type_word(shortcut.as_deref());
+            let type_filter: Option<String> = match (positional_type.clone(), r#type.clone()) {
+                (Some(p), Some(t)) => anyhow::bail!(
+                    "Pass the type filter once: either the positional `aida list {p}` \
+                     or `--type {t}`, not both."
+                ),
+                (Some(t), None) | (None, Some(t)) => Some(t),
+                (None, None) => None,
+            };
+            let r#type: &Option<String> = &type_filter;
+            let shortcut: Option<String> = if positional_type.is_some() {
+                None
+            } else {
+                shortcut.clone()
+            };
             // STORY-562: `aida list human` (positional alias) and `aida list
             // --human` both resolve to the "what needs me?" view — every open
             // spec the `burndown explain` classifier flags as needing a human
@@ -2185,8 +2206,14 @@ pub(crate) fn handle_git_backend_command(
             // None, so the defer axis is what has to stop the open-lens default
             // from re-hiding a deferred-and-Completed row the caller asked for.
             // trace:BUG-1687 | ai:claude
+            // STORY-1642 item 3: a knowledge-typed listing (`aida faq list`,
+            // `aida list --type decision`) shows every status except archived —
+            // FAQs live as `completed`, so the open lens would hide them all.
+            // trace:STORY-1642 | ai:claude
+            let knowledge_type_listing =
+                crate::knowledge_list::type_filter_is_knowledge(r#type.as_deref());
             let default_open_lens = list_default_open_lens(
-                effective_status.is_some(),
+                effective_status.is_some() || knowledge_type_listing,
                 *all,
                 *archived,
                 want_deferred_only,
@@ -2424,6 +2451,22 @@ pub(crate) fn handle_git_backend_command(
             if !*include_meta && !user_asked_for_meta {
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
+
+            // STORY-1642 item 2: knowledge types (faq, decision, vision, term,
+            // principle — the `is_work_item_type` rule) are reference, not
+            // work. Hidden from the default list the way META is, under every
+            // lens including `--all`; shown for a knowledge `--type`, the
+            // `aida <type> list` alias, or `--include-knowledge`. Runs before
+            // the TASK-773 standing-type pass so the footer count includes
+            // the vision/term/principle rows that pass would also drop.
+            // Item 9: the FAQ listing hides superseded FAQs unless `--all`.
+            // trace:STORY-1642 | ai:claude
+            let knowledge_hidden = crate::knowledge_list::hide_knowledge_rows(
+                &mut reqs,
+                *include_knowledge,
+                r#type.as_deref(),
+            );
+            crate::knowledge_list::hide_superseded_faqs(&mut reqs, r#type.as_deref(), *all);
 
             // TASK-773: `aida list` / `aida list open` is a WORK view, so
             // perpetual standing-artifact types — vision, principle, term,
@@ -2697,6 +2740,13 @@ pub(crate) fn handle_git_backend_command(
                         .dimmed()
                     );
                 }
+                // STORY-1642 item 2: say how many knowledge rows were hidden
+                // and how to show them. trace:STORY-1642 | ai:claude
+                if let Some(line) =
+                    crate::knowledge_list::knowledge_hidden_hint_line(knowledge_hidden)
+                {
+                    println!("{}", line.dimmed());
+                }
             };
 
             // BUG-684: a truly empty listing dead-ends the FIRST command a new
@@ -2707,11 +2757,13 @@ pub(crate) fn handle_git_backend_command(
             // `--all` — the specs exist, they're just filtered out).
             // trace:BUG-684 | ai:claude
             let print_empty_list_hint = || {
+                // STORY-1642: hidden knowledge rows also mean "the project is
+                // not empty", so they suppress the file-your-first-spec nudge.
                 if let Some(line) = empty_list_hint_line(
                     closed_hidden_count,
                     archived_hidden_count,
                     deferred_hidden_count,
-                    accepted_decisions_hidden,
+                    accepted_decisions_hidden + knowledge_hidden,
                 ) {
                     println!(
                         "{} {}",
@@ -2897,7 +2949,15 @@ pub(crate) fn handle_git_backend_command(
             // the minimal id/title/status/type schema. trace:TASK-964
             if agent_output_mode() && !*tree {
                 // trace:BUG-1520 | ai:claude — one validation, hoisted above.
-                let selected = selected_fields.clone();
+                // STORY-1642 item 9: the FAQ table is `id` + question only.
+                // trace:STORY-1642 | ai:claude
+                let selected = match crate::knowledge_list::faq_default_fields(
+                    r#type.as_deref(),
+                    fields.as_deref(),
+                ) {
+                    Some(faq_fields) => toon_list_fields(Some(faq_fields))?,
+                    None => selected_fields.clone(),
+                };
                 let rows: Vec<Vec<String>> = reqs
                     .iter()
                     .map(|r| {
@@ -2953,6 +3013,12 @@ pub(crate) fn handle_git_backend_command(
                     println!(
                         "note: {machine_drafts_hidden} machine-filed drafts hidden — `aida list --status draft --machine-drafts`"
                     );
+                }
+                // trace:STORY-1642 | ai:claude
+                if let Some(note) =
+                    crate::knowledge_list::knowledge_hidden_agent_note(knowledge_hidden)
+                {
+                    println!("{note}");
                 }
                 // TASK-1456: the agent-mode row for a folded-in Done+refusal
                 // spec renders `status: Done`, same as an ordinary
@@ -3184,7 +3250,15 @@ pub(crate) fn handle_git_backend_command(
             // then render the dynamic column table and skip the fixed layouts
             // below. Default (no `--fields`) drops straight through, unchanged.
             // trace:STORY-734 | ai:claude
-            if let Some(csv) = fields.as_deref() {
+            // STORY-1642 item 9: the FAQ table defaults to `id,title` through
+            // this same path. trace:STORY-1642 | ai:claude
+            let human_fields = fields
+                .as_deref()
+                .or(crate::knowledge_list::faq_default_fields(
+                    r#type.as_deref(),
+                    fields.as_deref(),
+                ));
+            if let Some(csv) = human_fields {
                 let selected = toon_list_fields(Some(csv))?;
                 if reqs.is_empty() {
                     println!("No requirements found.");
@@ -3456,6 +3530,8 @@ pub(crate) fn handle_git_backend_command(
                     "decision",
                     "constraint",
                     "term",
+                    // trace:STORY-1642 | ai:claude
+                    "faq",
                     "sprint",
                     "folder",
                     "meta",
@@ -3476,6 +3552,13 @@ pub(crate) fn handle_git_backend_command(
                 .clone()
                 .or(interactive_type)
                 .or_else(|| Some("task".to_string()));
+            // STORY-1642 item 4: an FAQ is lightweight — no lifecycle ceremony.
+            // It is filed `completed` (an answered question), skips the
+            // priority prompt (priority is meaningless for an FAQ), is exempt
+            // from the approved+ advisor intake gate (knowledge is never
+            // pickable work, so there is nothing to gate), and its add footer
+            // carries no trace-comment breadcrumb. trace:STORY-1642 | ai:claude
+            let is_faq = crate::knowledge_list::type_filter_is_faq(effective_type.as_deref());
 
             // Description — open the user's $EDITOR when not provided.
             // trace:BUG-17 | ai:claude
@@ -3500,17 +3583,18 @@ pub(crate) fn handle_git_backend_command(
             };
 
             // Priority — picker when not provided.
-            let interactive_priority: Option<String> = if priority.is_none() && interactive_mode {
-                let pick = inquire::Select::new("Priority:", vec!["medium", "high", "low"])
-                    .with_help_message(
-                        "medium covers most things; high for blockers; low for nice-to-haves.",
-                    )
-                    .prompt()
-                    .context("Priority prompt cancelled")?;
-                Some(pick.to_string())
-            } else {
-                None
-            };
+            let interactive_priority: Option<String> =
+                if priority.is_none() && interactive_mode && !is_faq {
+                    let pick = inquire::Select::new("Priority:", vec!["medium", "high", "low"])
+                        .with_help_message(
+                            "medium covers most things; high for blockers; low for nice-to-haves.",
+                        )
+                        .prompt()
+                        .context("Priority prompt cancelled")?;
+                    Some(pick.to_string())
+                } else {
+                    None
+                };
             let effective_priority: Option<String> = priority.clone().or(interactive_priority);
 
             // STORY-1427: `--gates` runs named library gates over the draft text
@@ -3534,26 +3618,32 @@ pub(crate) fn handle_git_backend_command(
                     anyhow::bail!(msg);
                 }
                 req.set_status_from_str(canonical);
+            } else if is_faq {
+                // trace:STORY-1642 | ai:claude
+                req.status = RequirementStatus::Completed;
             }
             // TASK-647 (ADR-3): advisor-gate the production of approved+ specs.
             // A non-advisor, non-TTY caller (headless agent, drain/auto
             // capture) can only file `draft`; a requested approved+ status is
             // downgraded with a one-line triage notice. An interactive human
             // (TTY) or the advisor role is unaffected. trace:TASK-647 | ai:claude
-            let intake_downgraded_from =
-                if status_requires_advisor_authority(&req.status) && !has_advisor_authority() {
-                    let from = req.status;
-                    req.status = RequirementStatus::Draft;
-                    Some(from)
-                } else {
-                    // BUG-498: a non-downgraded approved+ intake exercised
-                    // advisor authority — nudge the operator to seat the
-                    // advisor role if it came from an env prefix.
-                    if status_requires_advisor_authority(&req.status) {
-                        maybe_hint_advisor_seat();
-                    }
-                    None
-                };
+            let intake_downgraded_from = if status_requires_advisor_authority(&req.status)
+                && !has_advisor_authority()
+                // trace:STORY-1642 | ai:claude — an FAQ is never pickable.
+                && !is_faq
+            {
+                let from = req.status;
+                req.status = RequirementStatus::Draft;
+                Some(from)
+            } else {
+                // BUG-498: a non-downgraded approved+ intake exercised
+                // advisor authority — nudge the operator to seat the
+                // advisor role if it came from an env prefix.
+                if status_requires_advisor_authority(&req.status) && !is_faq {
+                    maybe_hint_advisor_seat();
+                }
+                None
+            };
             if let Some(p) = &effective_priority {
                 let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_priority_from_str(canonical);
@@ -3562,7 +3652,7 @@ pub(crate) fn handle_git_backend_command(
                 // BUG-48: surface the error instead of dropping silently.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
+                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq",
                         e
                     )
                 })?;
@@ -4229,6 +4319,13 @@ pub(crate) fn handle_git_backend_command(
                     if agent_output_mode() {
                         let next = crate::help_next::spec_next(&last.status.to_string(), sid);
                         if let Some(block) = crate::help_next::render(&next) {
+                            println!("{block}");
+                        }
+                    } else if is_faq {
+                        // trace:STORY-1642 | ai:claude — no trace breadcrumb.
+                        if let Some(block) = crate::help_next::render_human(
+                            &crate::help_next::spec_next(&last.status.to_string(), sid),
+                        ) {
                             println!("{block}");
                         }
                     } else {
@@ -6328,7 +6425,7 @@ pub(crate) fn handle_git_backend_command(
                 // valid-list hint as --status / --priority.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
+                        "{} — expected one of: functional, non-functional, system, user, change-request, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc, faq",
                         e
                     )
                 })?;

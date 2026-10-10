@@ -3044,32 +3044,15 @@ pub(crate) fn rewrite_list_alias(args: &[String]) -> Vec<String> {
 pub(crate) fn rewrite_type_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 2 {
         let ty = args[1].to_lowercase();
-        // AIDA's built-in requirement types
-        let valid_types = [
-            "functional",
-            "non-functional",
-            "system",
-            "user",
-            "change-request",
-            "bug",
-            "epic",
-            "story",
-            "task",
-            "spike",
-            "sprint",
-            "folder",
-            "meta",
-            "principle",
-            "vision",
-            "constraint",
-            "decision",
-            "term",
-            "faq",
-            "cr",
-            "fr",
-        ];
+        // AIDA's built-in requirement types — one table shared with the
+        // `aida list <type>` positional. trace:STORY-1642 | ai:claude
+        let valid_types = crate::knowledge_list::BUILTIN_TYPE_WORDS;
+        // `doc` is a real top-level subcommand (`aida doc add/list`), so it
+        // must never be rewritten into `--type doc` (regression of the
+        // STORY-1050 fix). trace:STORY-1642 | ai:claude
+        let is_type_alias = ty != "doc" && valid_types.contains(&ty.as_str());
 
-        if valid_types.contains(&ty.as_str()) {
+        if is_type_alias {
             if args.len() == 2 {
                 // aida bug -> aida list --type bug
                 return vec![

@@ -6638,7 +6638,12 @@ pub(crate) fn list_human_count_footer(
             );
         }
     }
-    format!("{visible} requirements")
+    // trace:STORY-1642 | ai:claude — singular for exactly one row.
+    if visible == 1 {
+        "1 requirement".to_string()
+    } else {
+        format!("{visible} requirements")
+    }
 }
 
 /// Print the count footer for an empty human list only when an explicit limit

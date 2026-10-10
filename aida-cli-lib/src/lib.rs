@@ -71,6 +71,8 @@ mod drain_failure_note;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod kernel;
+// trace:STORY-1642 | ai:claude
+mod knowledge_list;
 mod mailbox_root;
 mod output_format;
 mod project_capabilities;
