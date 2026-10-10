@@ -426,6 +426,15 @@ mod tests {
             crate::rewrite_type_alias(&s(&["aida", "bug", "add", "title"])),
             s(&["aida", "add", "--type", "bug", "title"]),
         );
+        // `doc` is a real subcommand (`aida doc add/list`); the type-alias
+        // rewrite must leave it alone. trace:STORY-1642 | ai:claude
+        for argv in [
+            s(&["aida", "doc", "add", "--title", "x"]),
+            s(&["aida", "doc", "list"]),
+            s(&["aida", "doc"]),
+        ] {
+            assert_eq!(crate::rewrite_type_alias(&argv), argv);
+        }
     }
 
     /// `--json` output is valid JSON and round-trips the group shape.
