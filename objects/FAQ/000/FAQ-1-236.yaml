@@ -22,9 +22,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:46:20.247987251Z
-modified_at: 2026-10-10T15:37:54.081908218Z
+modified_at: 2026-10-10T18:35:07.676800189Z
 req_type: Faq
 tags:
+- audience:user
 - topic:merge
 - topic:refactor
 history:
