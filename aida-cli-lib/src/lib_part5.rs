@@ -8565,25 +8565,6 @@ pub(crate) fn shorten_title(s: &str, max: usize) -> String {
     }
 }
 
-/// Best-effort resolution of the Claude/AIDA session id for the shell that
-/// is adding a comment. Reads the session id AIDA exports on the launch path
-/// (`AIDA_SESSION_ID`), falling back to Claude Code's own `CLAUDE_CODE_SESSION_ID`.
-/// Returns `None` (never errors) when neither is set — comments added outside
-/// a tracked session simply carry no session id. Stamping it lets tooling
-/// correlate a comment back to the session that produced it.
-// trace:TASK-330 | ai:claude
-pub(crate) fn resolve_current_session_id() -> Option<String> {
-    for var in ["AIDA_SESSION_ID", "CLAUDE_CODE_SESSION_ID"] {
-        if let Ok(val) = std::env::var(var) {
-            let trimmed = val.trim();
-            if !trimmed.is_empty() {
-                return Some(trimmed.to_string());
-            }
-        }
-    }
-    None
-}
-
 /// Result of the STORY-63 scope-fallback resolver.
 /// trace:STORY-63 | ai:claude
 pub(crate) struct ScopeFallback<'a> {
@@ -17225,33 +17206,6 @@ pub(crate) fn print_grep_match(m: &GrepMatch) {
     for ctx_line in &m.context_after {
         println!("  {} {}", field_display.dimmed(), ctx_line.dimmed());
     }
-}
-
-/// Resolve the queue's "current user" identifier. Used by EVERY queue path
-/// (add, list, next, done, remove, move, work, role-show queue head, …) so
-/// items added in one shell are immediately visible in the same shell's
-/// `aida queue list` without flags.
-///
-/// Resolution order:
-///   1. Explicit `--user <id>` flag (override)
-///   2. `AIDA_USER` env var (set by sessions / agent harnesses)
-///   3. `USER` env var (POSIX shell convention)
-///   4. `USERNAME` env var (Windows fallback)
-///   5. The literal string "default" (last-ditch)
-///
-/// IMPORTANT: this is the SHELL's user identity, not the node identity from
-/// `~/.aida/node.toml`, the email in `[node]`, or the role's stored user_id.
-/// Those are different identity domains; mixing them caused BUG-89 (items
-/// invisible to their own queuer because list resolved to one identity and
-/// add resolved to another).
-/// trace:BUG-89 | ai:claude
-pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
-    user_override.map(str::to_string).unwrap_or_else(|| {
-        std::env::var("AIDA_USER")
-            .or_else(|_| std::env::var("USER"))
-            .or_else(|_| std::env::var("USERNAME"))
-            .unwrap_or_else(|_| "default".to_string())
-    })
 }
 
 /// Resolve the mailbox `from` identity at send time (BUG-1533): the same

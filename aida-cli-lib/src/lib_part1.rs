@@ -126,19 +126,6 @@ pub(crate) struct SpecIdClaimant {
     pub(crate) title: String,
 }
 
-/// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
-/// Format recommendation: "ai:claude:username" for AI-assisted work
-pub(crate) fn get_default_author() -> String {
-    if let Ok(author) = std::env::var("AIDA_AUTHOR") {
-        author
-    } else {
-        // Fall back to system username
-        std::env::var("USER")
-            .or_else(|_| std::env::var("USERNAME")) // Windows fallback
-            .unwrap_or_else(|_| "Unknown".to_string())
-    }
-}
-
 /// BUG-1637: record a caller-authored (human-class) status transition
 /// `from -> req.status` under the caller's identity ([`get_default_author`])
 /// through the one shared helper, `aida_core::conflict::record_status_transition`.
@@ -833,22 +820,6 @@ pub(crate) fn cwd_is_aida_source_repo() -> bool {
             })
         })
         .unwrap_or(false)
-}
-
-/// Short build SHA for telemetry tagging. Reads the same banner that
-/// `--version` prints (set by build.rs). Returns None if the banner
-/// helper isn't available. Cheap — just substring extraction.
-pub(crate) fn build_sha_short() -> Option<String> {
-    let banner = build_banner();
-    // build_banner format: "<version> (built <ts>, sha <sha>[+dirty])"
-    let sha = banner.split("sha ").nth(1)?;
-    let sha = sha.split([')', '+']).next()?;
-    let trimmed = sha.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
 }
 
 pub(crate) const ASCIINEMA_WRAPPED_ENV: &str = "AIDA_ASCIINEMA_WRAPPED";
@@ -15500,24 +15471,6 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
     }
 }
 
-/// String form of [`is_terminal_status`] — used by `aida list` / `aida
-/// history` to hide the archive by default (TASK-64). Case-insensitive;
-/// tolerates display vs storage casing. Companion to the enum version
-/// at line ~4807 (BUG-64); both live here so the list/history surface
-/// and the parent-guard share the same notion of "this is closed work".
-/// trace:TASK-64 | ai:claude
-pub fn is_terminal_status_str(s: &str) -> bool {
-    // trace:STORY-86 | ai:claude — "Done" is NOT terminal anymore (work
-    // finished on a branch; auto-bumps to Completed once merged to main).
-    let t = s.trim();
-    // trace:TASK-1176 | ai:claude — Superseded is terminal too: adopted, then
-    // replaced by a successor spec. Closed for every gate that asks "is this
-    // still open?"; it differs from Rejected only in meaning and rendering.
-    t.eq_ignore_ascii_case("completed")
-        || t.eq_ignore_ascii_case("rejected")
-        || t.eq_ignore_ascii_case("superseded")
-}
-
 pub(crate) fn create_agent_brief(
     project_root: &std::path::Path,
     store: &RequirementsStore,
@@ -18513,21 +18466,6 @@ pub(crate) fn git_init_decision(git_init_flag: bool, at_tty: bool) -> GitInitDec
     } else {
         GitInitDecision::Bail
     }
-}
-
-/// Read y/n from stdin with a default. Treats empty input as the default,
-/// any 'y'/'yes' as true, anything else as false.
-pub(crate) fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool> {
-    use std::io::Write;
-    print!("{}", prompt);
-    std::io::stdout().flush()?;
-    let mut answer = String::new();
-    std::io::stdin().read_line(&mut answer)?;
-    let trimmed = answer.trim().to_ascii_lowercase();
-    if trimmed.is_empty() {
-        return Ok(default_yes);
-    }
-    Ok(matches!(trimmed.as_str(), "y" | "yes"))
 }
 
 /// Get a git config value from the global config.

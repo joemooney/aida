@@ -30,3 +30,36 @@ purpose = "`aida tui` entry: the cfg(feature = \"tui\") / stub pair (STORY-1488 
 items = [
   "fn handle_tui_command",   # matches BOTH cfg-gated twins; they move as a pair
 ]
+
+[module.kernel]
+purpose = "aida-cli-lib core helpers (STORY-1488 slice 1)"
+items = [
+  "fn find_project_root",
+  "fn find_project_root_from",
+  "fn authority_stdin_is_terminal",
+  "fn authority_stdout_is_terminal",
+  "fn home_dir",
+  "fn aida_home_dir",
+  "fn aida_exe_path",
+  "fn resolve_aida_exe",
+  "fn current_user_id",
+  "fn get_default_author",
+  "fn build_sha_short",
+  "fn read_project_config_value",
+  "fn config_lookup",
+  "fn canonical_role_name",
+  "fn sh_single_quote",
+  "fn command_output_with_timeout",
+  "fn resolve_forge_cli",
+  "fn resolve_gh_binary",
+  "fn resolve_forge_binary",
+  "fn prompt_yes_no",
+  "fn copy_to_clipboard",
+  "fn parse_days_arg",
+  "fn resolve_current_session_id",
+  "fn is_terminal_status",
+  "fn is_terminal_status_str",
+  "fn parse_requirement_id",
+  "fn strip_toml_inline_comment",
+  "mod test_ambient"
+]

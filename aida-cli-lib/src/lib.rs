@@ -69,6 +69,7 @@ mod digest_cmd;
 mod drain_failure_note;
 mod gitlab_mirror_link;
 mod graph_cmd;
+mod kernel;
 mod project_capabilities;
 mod protocol_gate;
 // trace:TASK-1090 | ai:claude — per-row dispatch-health classifier for `aida ps`.
@@ -115,6 +116,7 @@ mod tui_entry;
 mod zen_cmd;
 use claim::*;
 use drain_cmd::*;
+use kernel::*;
 use mcp_cmd::*;
 use orchestrator_cmd::*;
 use pr_cmd::*;

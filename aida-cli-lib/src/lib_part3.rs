@@ -4134,176 +4134,6 @@ pub(crate) enum PrLookup {
     GhUnreachable(String),
 }
 
-/// Walk PATH (plus a handful of common install locations) looking for a
-/// real, executable forge CLI binary (`exe_base`, e.g. `gh` or `glab`).
-/// Returns the resolved path or None.
-///
-/// The original code (pre-BUG-74) used `Command::new("gh")` and trusted
-/// `ErrorKind::NotFound` to flag "gh isn't installed." That trust
-/// produced false-negatives when the spawned Rust process inherited a
-/// PATH that didn't include the user's install dir — a common outcome
-/// when shell helpers mutate PATH only inside the shell and non-login
-/// process launches see a stripped environment.
-///
-/// `debug_env`=1 (AIDA_DEBUG_GH / AIDA_DEBUG_GLAB) prints the search trace
-/// to stderr; `test_env` (AIDA_TEST_GH_BINARY / AIDA_TEST_GLAB_BINARY)
-/// overrides resolution in tests. trace:BUG-74 trace:STORY-621 | ai:claude
-pub(crate) fn resolve_forge_binary(
-    exe_base: &str,
-    test_env: &str,
-    debug_env: &str,
-) -> Option<std::path::PathBuf> {
-    if let Ok(test_path) = std::env::var(test_env) {
-        return Some(std::path::PathBuf::from(test_path));
-    }
-    let debug = std::env::var(debug_env)
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false);
-    let dbg_label = format!("{debug_env}:");
-    let mut tried: Vec<std::path::PathBuf> = Vec::new();
-    let mut spawn_failures: Vec<(std::path::PathBuf, String)> = Vec::new();
-
-    let exe_name = if cfg!(windows) {
-        format!("{exe_base}.exe")
-    } else {
-        exe_base.to_string()
-    };
-
-    // BUG-79: closure that checks `is_executable` AND a sanity-spawn of
-    // `gh --version`. The metadata check is necessary but not sufficient:
-    // stale install records, broken symlinks, container mounts, and
-    // bash-hash-table caching can all produce a path whose metadata
-    // looks fine but whose spawn yields ENOENT. The sanity-spawn is the
-    // ground truth — if it fails, we fall back to the next candidate
-    // instead of returning a path that the real caller will choke on.
-    let mut check_candidate =
-        |candidate: &std::path::Path, source: &str| -> Option<std::path::PathBuf> {
-            tried.push(candidate.to_path_buf());
-            if !is_executable(candidate) {
-                return None;
-            }
-            match std::process::Command::new(candidate)
-                .arg("--version")
-                .output_retrying_etxtbsy()
-            {
-                Ok(o) if o.status.success() => {
-                    if debug {
-                        eprintln!(
-                            "{} found {} {} at {}",
-                            dbg_label.dimmed(),
-                            exe_base,
-                            source,
-                            candidate.display()
-                        );
-                    }
-                    Some(candidate.to_path_buf())
-                }
-                Ok(o) => {
-                    let reason = format!(
-                        "exit {} stderr={}",
-                        o.status,
-                        String::from_utf8_lossy(&o.stderr).trim()
-                    );
-                    if debug {
-                        eprintln!(
-                            "{} is_executable({}) ok but `--version` reported {} — falling back",
-                            dbg_label.dimmed(),
-                            candidate.display(),
-                            reason
-                        );
-                    }
-                    spawn_failures.push((candidate.to_path_buf(), reason));
-                    None
-                }
-                Err(e) => {
-                    let reason = format!("{}", e);
-                    if debug {
-                        eprintln!(
-                            "{} is_executable({}) ok but spawn failed: {} — falling back",
-                            dbg_label.dimmed(),
-                            candidate.display(),
-                            reason
-                        );
-                    }
-                    spawn_failures.push((candidate.to_path_buf(), reason));
-                    None
-                }
-            }
-        };
-
-    // Pass 1: walk $PATH.
-    if let Ok(path) = std::env::var("PATH") {
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        for dir in path.split(sep) {
-            if dir.is_empty() {
-                continue;
-            }
-            let candidate = std::path::PathBuf::from(dir).join(&exe_name);
-            if let Some(p) = check_candidate(&candidate, "on PATH") {
-                return Some(p);
-            }
-        }
-    }
-
-    // Pass 2: common absolute paths, in case PATH was mangled or the
-    // child process inherited an empty PATH. Conservative list — only
-    // dirs where gh is regularly installed by the official installers
-    // or distros.
-    let fallbacks: Vec<std::path::PathBuf> = {
-        let mut v = vec![
-            std::path::PathBuf::from("/usr/bin").join(&exe_name),
-            std::path::PathBuf::from("/usr/local/bin").join(&exe_name),
-            std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
-            std::path::PathBuf::from("/snap/bin").join(&exe_name),
-        ];
-        if let Some(home) = crate::home_dir() {
-            v.push(home.join(".local").join("bin").join(&exe_name));
-            v.push(home.join("bin").join(&exe_name));
-        }
-        v
-    };
-    for candidate in &fallbacks {
-        if let Some(p) = check_candidate(candidate, "via absolute-path fallback") {
-            return Some(p);
-        }
-    }
-
-    if debug {
-        eprintln!(
-            "{} {} not found after searching {} location(s):",
-            dbg_label.dimmed(),
-            exe_base,
-            tried.len()
-        );
-        eprintln!(
-            "{} PATH = {}",
-            dbg_label.dimmed(),
-            std::env::var("PATH").unwrap_or_default()
-        );
-        for p in &tried {
-            eprintln!("  - {}", p.display());
-        }
-        if !spawn_failures.is_empty() {
-            eprintln!(
-                "{} {} candidate(s) passed is_executable but failed to spawn:",
-                dbg_label.dimmed(),
-                spawn_failures.len()
-            );
-            for (p, reason) in &spawn_failures {
-                eprintln!("  - {} ({})", p.display(), reason);
-            }
-        }
-    }
-    None
-}
-
-/// Resolve the `gh` (GitHub CLI) binary — thin wrapper over the
-/// forge-generic resolver, preserving pre-Slice-0 behavior byte-for-byte.
-/// trace:BUG-74 trace:STORY-621 | ai:claude
-pub(crate) fn resolve_gh_binary() -> Option<std::path::PathBuf> {
-    resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
-}
-
 /// BUG-1288: the wall-clock ceiling a single forge-CLI subprocess (`gh`/`glab`)
 /// may run before [`command_output_with_timeout`] gives up on it. Measured
 /// cause of this spec's `aida status --full` / `aida awaiting --json` stall:
@@ -4332,46 +4162,6 @@ pub(crate) fn kill_process_group(pid: u32) {
     // no aliasing concerns.
     unsafe {
         libc::killpg(pid as libc::pid_t, libc::SIGKILL);
-    }
-}
-
-/// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a
-/// portable (`Child::kill` works on every target) alternative to
-/// `Command::output()` for a subprocess whose peer (a forge API) can stall
-/// arbitrarily long. stdout/stderr are drained on background threads so the
-/// child can never deadlock on a full pipe while the caller polls for exit;
-/// on timeout the child (and, on unix, its whole process group — see
-/// `kill_process_group`) is killed and `None` is returned — every existing
-/// caller already treats `output().ok()` failure as "unknown, not zero"
-/// (PRIN-5), so a timeout degrades exactly like any other unreachable-forge
-/// failure already does.
-///
-/// Two review follow-ups folded in here, both about NOT hanging past
-/// `timeout` even when the direct child has an uncooperative descendant:
-/// - unix: spawned with `process_group(0)` and killed with `killpg` (see
-///   `kill_process_group`) instead of `Child::kill`, which only ever
-///   signals the one direct child. Windows keeps the pre-existing
-///   direct-child-only `Child::kill` — no job-object process-tree kill
-///   implemented yet, so a grandchild there can still outlive the timeout
-///   and hold the pipes open; see the bounded read below for why that no
-///   longer means blocking forever.
-/// - the reader threads are joined through a channel with a BOUNDED wait,
-///   not an unconditional `JoinHandle::join()`. On the happy path (child
-///   exited on its own) the bound is generous and never realistically hit;
-///   after a kill it is short, so a pipe that somehow stayed open past the
-///   process-group kill (Windows; a grandchild that double-forked out of
-///   the group) degrades to a partial/empty read instead of wedging this
-///   function — and the caller — indefinitely.
-// trace:BUG-1288 | ai:claude
-// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link's bounded
-// `git`/`gh` calls reuse this instead of a second timeout implementation.
-pub(crate) fn command_output_with_timeout(
-    cmd: std::process::Command,
-    timeout: std::time::Duration,
-) -> Option<std::process::Output> {
-    match command_output_with_timeout_detail(cmd, timeout) {
-        BoundedCommandOutput::Completed(output) => Some(output),
-        BoundedCommandOutput::SpawnFailed | BoundedCommandOutput::TimedOut => None,
     }
 }
 
@@ -4540,18 +4330,6 @@ pub(crate) fn forge_lookup_output(
 #[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
 pub(crate) fn resolve_glab_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("glab", "AIDA_TEST_GLAB_BINARY", "AIDA_DEBUG_GLAB")
-}
-
-/// Forge-keyed CLI binary dispatch: GitHub → `gh`, GitLab → `glab`. `None`
-/// (pure-git) names no forge CLI. The foundation for routing the main.rs gh
-/// call sites through the configured forge. trace:STORY-621 | ai:claude
-pub(crate) fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf> {
-    use crate::forge::ForgeKind;
-    match kind {
-        ForgeKind::GitHub => resolve_gh_binary(),
-        ForgeKind::GitLab => resolve_glab_binary(),
-        ForgeKind::None => None,
-    }
 }
 
 #[cfg(test)]
@@ -11746,45 +11524,6 @@ pub(crate) fn ensure_cache_dir() -> Option<std::path::PathBuf> {
     Some(cache)
 }
 
-/// TASK-32: cross-platform home-dir lookup with an `AIDA_HOME` override.
-/// On Windows, `dirs::home_dir()` resolves via `SHGetKnownFolderPath`,
-/// which ignores env vars — that breaks bg_worker tests that need to
-/// isolate writes from the real user profile. Checking `AIDA_HOME` first
-/// gives tests a deterministic hook on every platform without changing
-/// the production lookup. trace:TASK-32 | ai:claude
-pub(crate) fn aida_home_dir() -> Option<std::path::PathBuf> {
-    if let Ok(p) = std::env::var("AIDA_HOME") {
-        if !p.is_empty() {
-            let p = std::path::PathBuf::from(p);
-            // trace:BUG-1642 | ai:claude
-            #[cfg(test)]
-            crate::test_home::assert_hermetic(&p);
-            return Some(p);
-        }
-    }
-    crate::home_dir()
-}
-
-/// BUG-1642: the one home-directory lookup for this crate. Production defers
-/// to [`aida_core::home::home_dir`], which honours `$HOME` / `$USERPROFILE`
-/// before the platform lookup so the answer is overridable on Windows too.
-/// Under `cfg(test)` it resolves the temp `HOME` the lib test binary installs
-/// before `main` and panics rather than return the operator's real home, so no
-/// lib test can read or write the real `~/.aida`. Call this instead of the
-/// `dirs` crate (a source-scan test enforces it).
-// trace:BUG-1642 | ai:claude
-// trace:TASK-1513 | ai:claude
-pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
-    #[cfg(test)]
-    {
-        crate::test_home::home_dir()
-    }
-    #[cfg(not(test))]
-    {
-        aida_core::home::home_dir()
-    }
-}
-
 /// Should statusline kick off a fresh background fetch for this project?
 /// Returns true when ALL conditions hold: feature enabled, no recent
 /// fetch attempt (per `last-fetch.toml`), and no live lockfile.
@@ -16646,42 +16385,6 @@ pub(crate) fn build_reusable_helpers_section(
 // concrete requirements instead of a terse user prompt.
 // trace:TASK-113 | ai:claude
 // ============================================================================
-
-/// Copy `text` to the system clipboard, trying the platform tools in turn.
-/// Returns false when none is available (caller falls back to stdout).
-pub(crate) fn copy_to_clipboard(text: &str) -> bool {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    // Linux (Wayland then X11), macOS, Windows.
-    let tools: &[(&str, &[&str])] = &[
-        ("wl-copy", &[]),
-        ("xclip", &["-selection", "clipboard"]),
-        ("xsel", &["--clipboard", "--input"]),
-        ("pbcopy", &[]),
-        ("clip", &[]),
-    ];
-    for (cmd, args) in tools {
-        let Ok(mut child) = Command::new(cmd)
-            .args(*args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn_retrying_etxtbsy()
-        else {
-            continue;
-        };
-        let write_ok = match child.stdin.take() {
-            Some(mut stdin) => stdin.write_all(text.as_bytes()).is_ok(),
-            None => false,
-        };
-        // stdin dropped above → EOF; now wait for the tool to finish.
-        match child.wait() {
-            Ok(status) if write_ok && status.success() => return true,
-            _ => continue,
-        }
-    }
-    false
-}
 
 /// The AIDA plan-template section list, inlined into the planning prompt so
 /// the returned plan already matches `docs/plans/_TEMPLATE.md` (TASK-92) and

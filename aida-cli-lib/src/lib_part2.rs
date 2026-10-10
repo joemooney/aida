@@ -207,19 +207,6 @@ pub(crate) fn delete_requirement(
     Ok(())
 }
 
-/// True when a requirement's status means "this work is done — no new
-/// children should be filed under it without explicit override". Used by
-/// the BUG-64 guard on `aida add --parent` and `aida rel add --type
-/// child` to refuse parenting under closed work, and to keep `aida show
-/// --tree` / `aida list --parent` views from accumulating mixed-status
-/// trees. trace:BUG-64 | ai:claude
-pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
-    // TASK-741: "terminal" is single-sourced in the lifecycle model so the
-    // archive invariant, the BUG-64 parent guard, and the diagram all read the
-    // same definition. trace:TASK-741 | ai:claude
-    aida_core::lifecycle::State::from_status(status).is_terminal()
-}
-
 /// BUG-773: `queue add` must not report success for work that the default queue
 /// projection will immediately hide. Deferred and archived specs are parked
 /// outside the work queue; unlike terminal rows, there is no queue-list widening
@@ -327,38 +314,6 @@ pub(crate) fn classify_queue_move_target(
     Ok(())
 }
 
-/// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
-/// SQLite path; the git-canonical dispatch resolves IDs directly via
-/// `get_requirement_by_spec_id` and uses `not_found::requirement_not_found`
-/// at the call site (with the actual store path).
-///
-/// trace:FR-1-011 | ai:claude
-pub(crate) fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid> {
-    // Try parsing as UUID first
-    if let Ok(uuid) = Uuid::parse_str(id_str) {
-        return Ok(uuid);
-    }
-
-    // Try as SPEC-ID. TASK-1468: an ambiguous id refuses (these callers
-    // write comments and relationships). trace:TASK-1468 | ai:claude
-    if let Some(req) = store.get_requirement_unambiguous(id_str)? {
-        return Ok(req.id);
-    }
-
-    // BUG-601: a loaded, non-empty store proves the store IS attached, so the
-    // failure is a simply-nonexistent spec — emit the "check the spec ID" hint
-    // rather than the misleading "no aida store found / cd into project root"
-    // guidance that the None-path variant prints. The store-path isn't threaded
-    // through this legacy helper, but store-emptiness is the signal we need:
-    // non-empty ⇒ store present (spec-missing), empty ⇒ likely no store / wrong
-    // directory (the original common failure mode). trace:BUG-601 | ai:claude
-    if store.requirements.is_empty() {
-        Err(not_found::requirement_not_found(id_str, None))
-    } else {
-        Err(not_found::requirement_not_found_in_loaded_store(id_str))
-    }
-}
-
 pub(crate) fn parse_status(status_str: &str) -> Result<RequirementStatus> {
     match status_str.to_lowercase().as_str() {
         "draft" => Ok(RequirementStatus::Draft),
@@ -412,42 +367,6 @@ pub(crate) fn parse_type(type_str: &str) -> Result<RequirementType> {
         "faq" => Ok(RequirementType::Faq),
         _ => anyhow::bail!("Invalid requirement type: {}", type_str),
     }
-}
-
-/// Handle feature management subcommands
-/// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
-/// only when absent (so a missing file just means "all defaults"). Parse errors
-/// are printed with file/line context before callers fall back, so malformed
-/// config is never silently treated as default config.
-/// trace:BUG-533 | ai:claude
-pub(crate) fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
-    let path = config_path_for_project(project_root);
-    let body = match std::fs::read_to_string(&path) {
-        Ok(body) => body,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(e) => {
-            eprintln!("{}: failed to read AIDA config: {e}", path.display());
-            return None;
-        }
-    };
-    match toml::from_str(&body) {
-        Ok(value) => Some(value),
-        Err(err) => {
-            // trace:BUG-1025 | ai:codex
-            eprintln!("{}", config_parse_error_message(&path, &body, &err));
-            None
-        }
-    }
-}
-
-/// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
-/// when present. trace:BUG-533 | ai:claude
-pub(crate) fn config_lookup<'a>(
-    cfg: Option<&'a toml::Value>,
-    section: &str,
-    key: &str,
-) -> Option<&'a toml::Value> {
-    cfg?.get(section)?.get(key)
 }
 
 /// Handle requirement type commands
@@ -3230,46 +3149,9 @@ pub(crate) fn format_role_picker_launch_status(row: &RolePickerRow) -> Option<St
     }
 }
 
-/// Escape an arbitrary string for safe interpolation inside a
-/// single-quoted shell word: every `'` becomes `'\''` (close-quote,
-/// escaped-quote, reopen-quote). Any value emitted into the `eval`-able
-/// shell of `aida role enter` MUST pass through this — free-text role
-/// purposes and spec titles routinely contain apostrophes/parens, and an
-/// unescaped apostrophe closes the quote and exposes the rest to bare
-/// bash (`syntax error near unexpected token )`). trace:BUG-427 | ai:claude
-pub(crate) fn sh_single_quote(s: &str) -> String {
-    s.replace('\'', "'\\''")
-}
-
 #[cfg(test)]
 #[path = "tests/sh_single_quote_tests.rs"]
 mod sh_single_quote_tests;
-
-/// Canonicalize a role name. TASK-586 made `advisor` the canonical
-/// identifier; `dialog` (TASK-279's old internal token) is now a
-/// deprecated, silently-accepted alias so existing config / shells
-/// (`AIDA_SESSION_ROLE=dialog`) / `dialog`-routed queue items / legacy
-/// `dialog.toml` role files on not-yet-migrated machines keep resolving.
-/// Applied at every role-name boundary: load, list, input resolution,
-/// and queue routing. trace:TASK-586 | ai:claude
-pub(crate) fn canonical_role_name(raw: &str) -> String {
-    if raw.eq_ignore_ascii_case("dialog") {
-        "advisor".to_string()
-    } else if is_human_route(raw) {
-        // SPIKE-57 / TASK-747: `human` is a first-class route target, the
-        // escalation-cascade terminus, symmetric with the agent roles. Normalize
-        // any casing to the lowercase canonical form so `--for Human` /
-        // `--for HUMAN` route identically and surface together in the view.
-        HUMAN_ROUTE.to_string()
-    } else if raw.eq_ignore_ascii_case("guest") || raw.eq_ignore_ascii_case("requester") {
-        // Stakeholder roles are identities, not build-loop seats. Canonicalize
-        // casing so the least-privilege gate applies uniformly from env, team
-        // roster, and queue target validation. trace:STORY-1110 | ai:codex
-        raw.to_ascii_lowercase()
-    } else {
-        raw.to_string()
-    }
-}
 
 /// The canonical first-class route target for "a human is required" — the
 /// escalation-cascade terminus (implementer → advisor → human). `aida queue add
@@ -16249,104 +16131,6 @@ pub(crate) fn ambiguous_id_in_chain(
 ) -> Option<&aida_core::id_collisions::AmbiguousIdError> {
     err.chain()
         .find_map(|e| e.downcast_ref::<aida_core::id_collisions::AmbiguousIdError>())
-}
-
-pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
-    // BUG-1618: a test that pinned a hermetic project root (see
-    // `test_env::AmbientGuard`) resolves here instead of walking up from the
-    // process cwd, which inside a leased `aida worktree add` checkout reaches a
-    // `.aida-store` symlink to the LIVE store (its team roster, drain state).
-    // Compiled out of release builds. trace:BUG-1618 | ai:claude
-    #[cfg(test)]
-    if let Some(root) = test_ambient::project_root() {
-        return Ok(root);
-    }
-    find_project_root_from(&std::env::current_dir()?)
-}
-
-/// BUG-1618: whether stdin is an interactive terminal, as the advisor-authority
-/// checks see it. Production reads the real stdin; a test that pinned a
-/// hermetic ambient context gets its injected answer, so running `cargo test`
-/// from an interactive shell cannot grant the TTY carve-out to a test that
-/// asserts a refusal.
-// trace:BUG-1618 | ai:claude
-pub(crate) fn authority_stdin_is_terminal() -> bool {
-    #[cfg(test)]
-    if let Some(tty) = test_ambient::stdin_is_terminal() {
-        return tty;
-    }
-    std::io::stdin().is_terminal()
-}
-
-/// Whether stdout is an interactive terminal, through the same test seam as
-/// [`authority_stdin_is_terminal`]. A human-at-terminal gate checks both: an
-/// agent that pipes stdout (or stdin) is not a person at a terminal.
-// trace:BUG-1667 | ai:claude
-pub(crate) fn authority_stdout_is_terminal() -> bool {
-    #[cfg(test)]
-    if let Some(tty) = test_ambient::stdout_is_terminal() {
-        return tty;
-    }
-    std::io::stdout().is_terminal()
-}
-
-/// BUG-1618: test-only, per-thread override of the ambient inputs the
-/// authority checks read (project root discovered from cwd, stdin TTY-ness).
-/// Thread-local, so a test pinning it never leaks into a sibling test running
-/// on another libtest thread, and no process-global `chdir` is needed. Set
-/// through `test_env::AmbientGuard`, never directly.
-// trace:BUG-1618 | ai:claude
-#[cfg(test)]
-pub(crate) mod test_ambient {
-    use std::cell::RefCell;
-    use std::path::PathBuf;
-
-    #[derive(Clone, Debug)]
-    pub(crate) struct Ambient {
-        pub(crate) project_root: PathBuf,
-        pub(crate) stdin_is_terminal: bool,
-        // trace:BUG-1667 | ai:claude
-        pub(crate) stdout_is_terminal: bool,
-    }
-
-    thread_local! {
-        static AMBIENT: RefCell<Option<Ambient>> = const { RefCell::new(None) };
-    }
-
-    /// Install `next`, returning the previous value for the caller to restore.
-    pub(crate) fn replace(next: Option<Ambient>) -> Option<Ambient> {
-        AMBIENT.with(|a| a.replace(next))
-    }
-
-    pub(crate) fn project_root() -> Option<PathBuf> {
-        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.project_root.clone()))
-    }
-
-    pub(crate) fn stdin_is_terminal() -> Option<bool> {
-        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdin_is_terminal))
-    }
-
-    // trace:BUG-1667 | ai:claude
-    pub(crate) fn stdout_is_terminal() -> Option<bool> {
-        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdout_is_terminal))
-    }
-}
-
-/// [`find_project_root`] from an explicit start directory: the nearest
-/// ancestor holding `.git` (a directory in the main checkout, a file in a
-/// linked worktree, so a linked worktree resolves to ITSELF).
-// trace:TASK-1470 | ai:claude
-pub(crate) fn find_project_root_from(start: &std::path::Path) -> Result<std::path::PathBuf> {
-    let mut cur = start.to_path_buf();
-    loop {
-        if cur.join(".git").exists() {
-            return Ok(cur);
-        }
-        match cur.parent() {
-            Some(p) => cur = p.to_path_buf(),
-            None => anyhow::bail!("not inside a git repository"),
-        }
-    }
 }
 
 /// TASK-475: how many commits the local `aida-store` branch is behind

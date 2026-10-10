@@ -11252,15 +11252,6 @@ pub(crate) fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::pa
 // trace:STORY-122 | ai:claude
 // ----------------------------------------------------------------------------
 
-/// Parse a `--since` lookback window for the usage, health and metrics
-/// surfaces: how far before now the bound lies. Uses the shared time-bound
-/// grammar (`30d`, `12h`, `2w`, `24 hours ago`, an ISO date or datetime in
-/// local time, or RFC3339). Returns an error on malformed input.
-// trace:TASK-1509 | ai:claude
-pub(crate) fn parse_days_arg(raw: &str) -> Result<chrono::Duration> {
-    queue_cmd::parse_lookback(raw, "--since")
-}
-
 /// Split a non-empty string into `(prefix, last_char_str)` on a valid
 /// UTF-8 char boundary. Cheaper than `chars().last()` for the parsing
 /// path because it avoids an extra allocation. The empty-string case is
