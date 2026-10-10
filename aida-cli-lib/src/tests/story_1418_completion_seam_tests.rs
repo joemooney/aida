@@ -501,8 +501,8 @@ fn the_scan_sees_the_routed_paths() {
     let files: BTreeMap<String, String> = scanned_files().into_iter().collect();
     let stamp = concat!("completion::mark_", "completed(");
     let transition = concat!("transition_to_", "completed(");
-    assert!(files["aida-cli-lib/lib.rs"].contains(stamp));
-    assert!(files["aida-cli-lib/lib.rs"].contains(transition));
+    assert!(files["aida-cli-lib/lib.rs"].contains(stamp) || files.iter().any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(stamp)));
+    assert!(files["aida-cli-lib/lib.rs"].contains(transition) || files.iter().any(|(k, v)| k.starts_with("aida-cli-lib/lib_part") && v.contains(transition)));
     assert!(files["aida-cli-lib/queue_cmd.rs"].contains(transition));
     assert!(files["aida-cli-lib/git_backend_cmd.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));

@@ -50,18 +50,21 @@ fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
     let mut files = Vec::new();
     visit(&src_dir, &mut files);
     let needle = concat!("current_", "exe()");
+    let mut lib_total = 0;
     for path in files {
         let source = std::fs::read_to_string(&path).unwrap();
         let count = source.matches(needle).count();
-        let allowed =
-            usize::from(path == src_dir.join("lib.rs") || path == src_dir.join("aida_bin.rs"));
+        let is_lib = path == src_dir.join("lib.rs") || path.file_name().unwrap().to_string_lossy().starts_with("lib_part");
+        let allowed = if path == src_dir.join("aida_bin.rs") { 1 } else if is_lib { count } else { 0 };
         assert_eq!(
             count,
             allowed,
             "raw executable lookup in {}",
             path.display()
         );
+        if is_lib { lib_total += count; }
     }
+    assert_eq!(lib_total, 1, "exactly one raw lookup in lib.rs / lib_partX.rs");
 }
 
 #[test]

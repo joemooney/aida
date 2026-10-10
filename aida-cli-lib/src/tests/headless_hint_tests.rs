@@ -136,7 +136,19 @@ fn headless_env_launches_route_through_shared_argv_builders() {
 
     assert_env_setter_has_builder_context("session.rs", include_str!("../session.rs"));
     // STORY-772: the CLI body lives in lib.rs; main.rs is a 3-line stub.
-    assert_env_setter_has_builder_context("lib.rs", include_str!("../lib.rs"));
+    assert_env_setter_has_builder_context(
+        "lib.rs",
+        &format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("../lib.rs"),
+            include_str!("../lib_part1.rs"),
+            include_str!("../lib_part2.rs"),
+            include_str!("../lib_part3.rs"),
+            include_str!("../lib_part4.rs"),
+            include_str!("../lib_part5.rs"),
+            include_str!("../lib_part6.rs")
+        ),
+    );
     // STORY-771: the queue-work launch machinery lives in queue_cmd.rs.
     assert_env_setter_has_builder_context("queue_cmd.rs", include_str!("../queue_cmd.rs"));
 }
@@ -152,7 +164,16 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
     // queue_cmd.rs; the advisor resume stays in lib.rs. Scan both.
     let src = format!(
         "{}{}",
-        include_str!("../lib.rs"),
+        format!(
+            "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            include_str!("../lib.rs"),
+            include_str!("../lib_part1.rs"),
+            include_str!("../lib_part2.rs"),
+            include_str!("../lib_part3.rs"),
+            include_str!("../lib_part4.rs"),
+            include_str!("../lib_part5.rs"),
+            include_str!("../lib_part6.rs")
+        ),
         include_str!("../queue_cmd.rs")
     )
     .replace("\r\n", "\n");
