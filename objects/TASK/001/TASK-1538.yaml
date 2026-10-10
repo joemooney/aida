@@ -3,12 +3,12 @@ spec_id: TASK-1538
 agreed_id: TASK-1538
 title: 'Slice 1: mechanical split of lib.rs into ~45 flat modules (STORY-1488 T2)'
 description: 'Per the ADVISOR SIGNOFF on STORY-1488: V1-V10 as amended, the 14 non-move retargets (1a-1n incl. include_str guards, adr9 guardrail, trace-header and portability allowlists + check-portability-growth crediting moves, pub use shims), trait-impl methods excluded from pub(crate), explicit test-module ownership in the manifest, rebase helper + note; landed as the only PR in a declared quiet window.'
-status: Done
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T05:30:58.437980083Z
+modified_at: 2026-10-10T14:28:08.068984223Z
 req_type: Task
 tags:
 - closure:pending
@@ -305,6 +305,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a12636-cd04-7680-95b9-4e96c301e35f
+  author: joe
+  timestamp: 2026-10-10T14:28:08.068962804Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 processing_record:
 - id: 01a10caf-6400-7440-9444-fb3c90eb3ecd
   timestamp: 2026-10-05T15:29:43.424798491Z
@@ -325,4 +332,4 @@ processing_record:
 implementation_info:
   implemented: false
   completion_sha: 887bf7e5fba50ec5c510910ee5a3c2e472541d43
-  reopened_at_sha: 2722961da71e153c83eda06d96d44f328897209a
+  reopened_at_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
