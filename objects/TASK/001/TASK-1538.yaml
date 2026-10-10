@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:13.781726062Z
-modified_at: 2026-10-10T21:45:49.023296792Z
+modified_at: 2026-10-10T21:48:17.445065969Z
 req_type: Task
 tags:
 - closure:pending
@@ -254,6 +254,22 @@ comments:
     slice-04-r2 4c1f829298 statusline_root.rs — proofs: warnings 0/0, tests 9916/9916 green, size 193
   created_at: 2026-10-10T21:45:49.023296792Z
   modified_at: 2026-10-10T21:45:49.023296792Z
+- id: 01a127c9-c6a5-7a73-b067-67fce7fafe52
+  author: joe
+  content: |-
+    ADVISOR REVIEW: round 3 (2026-10-10 14:50). VERDICT: APPROVED at slice1-stack @ 4c1f829298, all five tags (slice-00-r7 5fe1c4c97e, slice-01-r3 17a3829a00, slice-02-r2 266c58388d, slice-03-r2 8b47d4a965, slice-04-r2 4c1f829298).
+    - r6→r7 is exactly the round-3 brief: the 2 allowlist rows removed, and the 2 `// prose-ok:` opt-outs restored at the right indentation with the specified reasons.
+    - `git diff slice-04-r1 slice-04-r2` equals that r7 change and nothing else.
+    - verify_move.py: 4/4 moves PASS, with the same +/- counts as round 2.
+    - The retargets touch only config-trust.toml.
+    - Independently re-run at the head: the growth check against origin/main PASS, scripts/check-portability.sh PASS, rustfmt --check on lib_part*.rs and the 4 modules PASS.
+
+    FINDING (process, non-blocking this round): the five tag proof records are unfilled template text ('V3 warnings A/A, V4 tests N/N green, V7 sizes'), so no test or warning results were actually recorded. A tag's proof record must contain real numbers, or say 'not run'. Placeholder text reads as a claim. For this round, CI's full workspace run on PR #2480 is the V4 evidence, and merge waits for it to be green. From slice-05 on, the advisor rejects tags with placeholder proofs.
+
+    SHIP: rebase-merge #2480 at 4c1f829298 after CI is green (advisor).
+  created_at: 2026-10-10T21:48:17.445065969Z
+  modified_at: 2026-10-10T21:48:17.445065969Z
+  session_id: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
 history:
 - id: 01a105cb-77a3-73d3-931d-ffe35845ecf1
   author: aida-session-start
