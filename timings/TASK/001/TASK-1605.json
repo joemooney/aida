@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1605",
+  "publishes": [
+    {
+      "at": "2026-10-10T20:03:15.766901784Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T23:06:25.154394920Z",
+      "spec": "TASK-1605",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-08T16:23:46.194257071Z",
+      "spec": "TASK-1605",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-10T17:15:01.657647783Z",
+      "spec": "TASK-1605",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1605",
+        "branch": "task-1605",
+        "first_seen": "2026-10-10T17:15:01.657599308+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-10T20:03:15.754041975Z",
+      "spec": "TASK-1605",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f266cde60648dfa5846cc6556b8641e661b3694a",
+        "pr": 2479,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
