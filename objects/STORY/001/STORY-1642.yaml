@@ -2,7 +2,7 @@ id: 01a12653-7e17-79a1-ad0c-cb7f19a31bd0
 spec_id: STORY-1642
 agreed_id: STORY-1642
 title: 'Knowledge types (faq, decision, vision, term, principle) are reference, not work: hide from default list and never pickable'
-description: |
+description: |+
   ## Decision (operator + advisor, 2026-10-10)
   Default `aida list` shows **work** only. Knowledge types (Decision, Vision, Term, Principle, FAQ) are reference material. They are shown only when asked for and are never pickable as work. FAQ is lightweight: no lifecycle ceremony.
 
@@ -19,14 +19,20 @@ description: |
   5. `aida search` keeps returning knowledge rows (that's how answers are found).
   6. Doc stays a work type (unchanged).
 
+  7. **Type words in the `aida list` positional.** `aida list faq` (and any built-in type word) works as `aida list --type faq`. Today it errors "Unknown status filter 'faq'". A word that is both a status and a type is not a concern: no type name collides with a status/lens word. At minimum, the error must suggest `aida faq list` / `--type faq` when the word is a type.
+  8. **Knowledge listings sort by numeric ID ascending** (FAQ-1, FAQ-2, … FAQ-16), not by modified time or merge-gate assignment order. Observed 2026-10-10: `aida faq list --all` printed 12, 14, 15, 13, 16, 10, 11, 9…
+  9. **Lightweight FAQ table:** `aida faq list` shows `ID` and the question (title) only. Type, Status and Priority are constant for FAQs and add noise. Other knowledge types keep Status where it means something (e.g. a Decision can be superseded). Superseded or archived FAQs are hidden unless `--all` is passed.
+  10. Regression tests for 7–9, plus `aida faq list` returning all 16 completed FAQs with no flags (item 3).
+
   ## Related
   BUG-1921 (FAQ IDs: no pre-allocated block), BUG-1920 (attribution + help list), TASK-1614 (faq type), FAQ-10, FAQ-11
+
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T14:59:28.407494046Z
-modified_at: 2026-10-10T14:59:28.407494046Z
+modified_at: 2026-10-10T15:10:19.120594402Z
 req_type: Story
 tags:
 - faq
