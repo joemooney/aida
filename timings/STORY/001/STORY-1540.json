@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1540",
+  "publishes": [
+    {
+      "at": "2026-10-10T05:30:59.445964092Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-10T04:59:04.393183110Z",
+      "spec": "STORY-1540",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-10T05:05:41.919070986Z",
+      "spec": "STORY-1540",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2476
+      }
+    },
+    {
+      "ts": "2026-10-10T05:07:44.520378333Z",
+      "spec": "STORY-1540",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T05:30:42.225414534Z",
+      "spec": "STORY-1540",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-10T05:30:52.668159269Z",
+      "spec": "STORY-1540",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2476
+      }
+    },
+    {
+      "ts": "2026-10-10T05:30:59.432306283Z",
+      "spec": "STORY-1540",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e79ec9721cdf327b174bddc079a8f5438b2f2107",
+        "pr": 2476,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
