@@ -28,12 +28,12 @@ description: |-
 
   ## Sequencing
   Starts after TASK-1611 merges. It builds on that branch's moves and inventory.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-10-10T20:31:05.275146574Z
+modified_at: 2026-10-10T20:35:12.612220368Z
 req_type: Story
 tags:
 - docs
@@ -43,6 +43,14 @@ relationships:
   target_id: 01a11726-87f0-7bb1-94dc-75c40b901e9d
   created_at: 2026-10-10T20:31:05.275143580Z
   created_by: joe
+history:
+- id: 01a12786-de64-7f61-81ce-787aedc7543e
+  author: joe
+  timestamp: 2026-10-10T20:35:12.612216555Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
